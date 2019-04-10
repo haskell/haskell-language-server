@@ -23,6 +23,9 @@ module Development.IDE.State.Shake(
     setPriority,
     sendEvent,
     shakeLogDebug,
+    shakeLogInfo,
+    shakeLogWarning,
+    shakeLogError,
     ) where
 
 import           Development.Shake
@@ -36,7 +39,7 @@ import           Data.Maybe
 import           Data.Either
 import           Data.List.Extra
 import qualified Data.Text as T
-import qualified Development.IDE.Logger as Logger
+import Development.IDE.Logger as Logger
 import Development.IDE.Types.LSP
 import           Development.IDE.Types.Diagnostics
 import           Control.Concurrent.Extra
@@ -275,12 +278,12 @@ uses_ key files = do
 reportSeriousError :: String -> Action ()
 reportSeriousError t = do
     ShakeExtras{logger} <- getShakeExtras
-    liftIO $ Logger.logInfo logger $ T.pack t
+    liftIO $ Logger.logError logger $ T.pack t
 
 reportSeriousErrorDie :: String -> Action a
 reportSeriousErrorDie t = do
     ShakeExtras{logger} <- getShakeExtras
-    liftIO $ Logger.logInfo logger $ T.pack t
+    liftIO $ Logger.logError logger $ T.pack t
     fail t
 
 
@@ -385,5 +388,13 @@ sendEvent e = do
     ShakeExtras{eventer} <- getShakeExtras
     liftIO $ eventer e
 
-shakeLogDebug :: IdeState -> T.Text -> IO ()
-shakeLogDebug IdeState{shakeExtras=ShakeExtras{logger}} msg = Logger.logDebug logger msg
+-- | bit of an odd signature because we're trying to remove priority
+sl :: (Handle IO -> T.Text -> IO ()) -> IdeState -> T.Text -> IO ()
+sl f IdeState{shakeExtras=ShakeExtras{logger}} p = f logger p
+
+shakeLogDebug, shakeLogInfo, shakeLogWarning, shakeLogError
+    :: IdeState -> T.Text -> IO ()
+shakeLogDebug = sl logDebug
+shakeLogInfo = sl logInfo
+shakeLogWarning = sl logWarning
+shakeLogError = sl logError
