@@ -13,10 +13,13 @@ module Development.IDE.Logger
 import qualified Data.Text as T
 import GHC.Stack
 
-data Handle m = Handle
-    { logInfo :: HasCallStack => T.Text -> m ()
+data Handle m = Handle {
+      logError :: HasCallStack => T.Text -> m ()
+    , logWarning :: HasCallStack => T.Text -> m ()
+    , logInfo :: HasCallStack => T.Text -> m ()
     , logDebug :: HasCallStack => T.Text -> m ()
     }
 
 makeNopHandle :: Monad m => Handle m
-makeNopHandle = Handle (const $ pure ()) (const $ pure ())
+makeNopHandle = Handle e e e e where
+    e _ = pure ()
