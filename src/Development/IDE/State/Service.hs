@@ -16,7 +16,7 @@ module Development.IDE.State.Service(
     setFilesOfInterest,
     writeProfile,
     getDiagnostics, unsafeClearDiagnostics,
-    logDebug
+    logDebug, logInfo, logWarning, logError
     ) where
 
 import           Control.Concurrent.Extra
@@ -120,5 +120,8 @@ setFilesOfInterest state files = do
 getServiceEnv :: Action Env
 getServiceEnv = getIdeGlobalAction
 
-logDebug :: IdeState -> T.Text -> IO ()
+logDebug, logInfo, logWarning, logError :: IdeState -> T.Text -> IO ()
 logDebug = shakeLogDebug
+logInfo = shakeLogInfo
+logWarning = shakeLogWarning
+logError = shakeLogError
