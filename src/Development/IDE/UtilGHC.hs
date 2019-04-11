@@ -94,7 +94,6 @@ wOptsSet =
 wOptsSetFatal :: [ WarningFlag ]
 wOptsSetFatal =
   [ Opt_WarnMissingFields
-  , Opt_WarnOverflowedLiterals
   ]
 
 -- | Warning options unset for DAML compilation. Note that these can be modified
@@ -103,6 +102,7 @@ wOptsSetFatal =
 wOptsUnset :: [ WarningFlag ]
 wOptsUnset =
   [ Opt_WarnMissingMonadFailInstances -- failable pattern plus RebindableSyntax raises this error
+  , Opt_WarnOverflowedLiterals -- this does not play well with -ticky and the error message is misleading
   ]
 
 
