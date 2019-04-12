@@ -4,38 +4,38 @@
 load("//bazel_tools:haskell.bzl", "da_haskell_library")
 
 da_haskell_library(
-    name = "haskell-ide-core"
-  , srcs = glob(["src/**/*.hs"])
-  , src_strip_prefix = "src"
-  , deps = [
-      "//libs-haskell/prettyprinter-syntax",
-  ]
-  , hazel_deps = [
-      "aeson",
-      "base",
-      "binary",
-      "bytestring",
-      "containers",
-      "deepseq",
-      "directory",
-      "either",
-      "extra",
-      "filepath",
-      "ghc-lib",
-      "ghc-lib-parser",
-      "hashable",
-      "mtl",
-      "pretty",
-      "safe-exceptions",
-      "shake",
-      "stm",
-      "syb",
-      "text",
-      "time",
-      "transformers",
-      "uniplate",
-      "unordered-containers",
-      "uri-encode",
-  ]
-  , visibility = ["//visibility:public"]
+    name = "haskell-ide-core",
+    srcs = glob(["src/**/*.hs"]),
+    hazel_deps = [
+        "aeson",
+        "base",
+        "binary",
+        "bytestring",
+        "containers",
+        "deepseq",
+        "directory",
+        "either",
+        "extra",
+        "filepath",
+        "ghc-lib",
+        "ghc-lib-parser",
+        "hashable",
+        "mtl",
+        "pretty",
+        "safe-exceptions",
+        "shake",
+        "stm",
+        "syb",
+        "text",
+        "time",
+        "transformers",
+        "uniplate",
+        "unordered-containers",
+        "uri-encode",
+    ],
+    src_strip_prefix = "src",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//libs-haskell/prettyprinter-syntax",
+    ],
 )
