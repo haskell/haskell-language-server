@@ -58,8 +58,8 @@ toIdeResultNew :: Either [Diagnostic] v -> IdeResult v
 toIdeResultNew = either (, Nothing) (([],) . Just)
 
 -- Convert to a legacy Ide result but dropping dependencies
-toIdeResultSilent :: IdeResult v -> Either [Diagnostic] v
-toIdeResultSilent (_, val) = maybe (Left []) Right val
+toIdeResultSilent :: Maybe v -> Either [Diagnostic] v
+toIdeResultSilent val = maybe (Left []) Right val
 
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
@@ -198,7 +198,7 @@ rawDependencyInformation f = go (Set.singleton f) Map.empty Map.empty
             Nothing -> pure (RawDependencyInformation modGraph pkgs)
             Just (f, fs) -> do
               importsOrErr <- lift $ use GetLocatedImports f
-              case snd importsOrErr of
+              case importsOrErr of
                 Nothing ->
                   let modGraph' = Map.insert f (Left ModuleParseError) modGraph
                   in go fs modGraph' pkgs

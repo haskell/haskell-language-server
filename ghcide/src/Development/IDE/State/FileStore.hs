@@ -42,13 +42,13 @@ instance IsIdeGlobal GlobalDirtyFiles
 
 
 -- | Get the modification time of a file.
-type instance RuleResult GetModificationTime = IdeResult UTCTime
+type instance RuleResult GetModificationTime = UTCTime
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or from disk.
-type instance RuleResult GetFileContents = IdeResult (UTCTime, StringBuffer)
+type instance RuleResult GetFileContents = (UTCTime, StringBuffer)
 
 -- | Does the file exist.
-type instance RuleResult GetFileExists = IdeResult Bool
+type instance RuleResult GetFileExists = Bool
 
 
 data GetFileExists = GetFileExists
