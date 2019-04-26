@@ -201,6 +201,9 @@ setValues state key file val = modifyVar state $ \inVal -> do
         f = concatMap fst . Map.elems
     return (outVal, (f <$> Map.lookup file inVal, f $ outVal Map.! file))
 
+-- | The outer Maybe is Nothing if this function hasn't been computed before
+--   the inner Maybe is Nothing if the result of the previous computation failed to produce
+--   a value
 getValues :: forall k v. IdeRule k v => Var Values -> k -> FilePath -> IO (Maybe (Maybe v))
 getValues state key file = do
     vs <- readVar state
