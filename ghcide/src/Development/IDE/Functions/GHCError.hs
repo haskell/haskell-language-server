@@ -1,6 +1,6 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-
+{-# LANGUAGE DuplicateRecordFields #-}
 module Development.IDE.Functions.GHCError
   ( mkDiag
   , toDiagnostics
@@ -26,6 +26,7 @@ module Development.IDE.Functions.GHCError
   , noSpan
   ) where
 
+import Control.Lens
 import                     Development.IDE.Types.Diagnostics as D
 import qualified           Data.Text as T
 import Development.IDE.UtilGHC()
@@ -36,6 +37,7 @@ import Data.Maybe
 import           "ghc-lib-parser" ErrUtils
 import           "ghc-lib-parser" SrcLoc
 import qualified "ghc-lib-parser" Outputable                 as Out
+import qualified Language.Haskell.LSP.Types as LSP
 
 
 
@@ -48,18 +50,19 @@ mkDiag dflags src e =
   case toDSeverity $ errMsgSeverity e of
     Nothing        -> Nothing
     Just bSeverity ->
-      Just
+      Just $ set dLocation (Just $ srcSpanToLocation $ errMsgSpan e)
         Diagnostic
-        { dFilePath = srcSpanToFilename $ errMsgSpan e
-        , dRange    = srcSpanToRange $ errMsgSpan e
-        , dSeverity = bSeverity
-        , dSource   = src
-        , dMessage  = T.pack $ Out.showSDoc dflags (ErrUtils.pprLocErrMsg e)
+        { _range    = srcSpanToRange $ errMsgSpan e
+        , _severity = Just bSeverity
+        , _source   = Just src
+        , _message  = T.pack $ Out.showSDoc dflags (ErrUtils.pprLocErrMsg e)
+        , _code     = Nothing
+        , _relatedInformation = Nothing
         }
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
 srcSpanToRange :: SrcSpan -> Range
-srcSpanToRange (UnhelpfulSpan _)  = lRange noLocation
+srcSpanToRange (UnhelpfulSpan _)  = noRange
 srcSpanToRange (RealSrcSpan real) = realSrcSpanToRange real
 
 realSrcSpanToRange :: RealSrcSpan -> Range
@@ -74,18 +77,19 @@ srcSpanToFilename (UnhelpfulSpan fs) = FS.unpackFS fs
 srcSpanToFilename (RealSrcSpan real) = FS.unpackFS $ srcSpanFile real
 
 srcSpanToLocation :: SrcSpan -> Location
-srcSpanToLocation src = Location (srcSpanToFilename src) (srcSpanToRange src)
+srcSpanToLocation src =
+  Location (LSP.filePathToUri $ srcSpanToFilename src) (srcSpanToRange src)
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
-toDSeverity :: GHC.Severity -> Maybe D.Severity
+toDSeverity :: GHC.Severity -> Maybe D.DiagnosticSeverity
 toDSeverity SevOutput      = Nothing
 toDSeverity SevInteractive = Nothing
 toDSeverity SevDump        = Nothing
-toDSeverity SevInfo        = Nothing
-toDSeverity SevWarning     = Just D.Warning
-toDSeverity SevError       = Just Error
-toDSeverity SevFatal       = Just Error
+toDSeverity SevInfo        = Just DsInfo
+toDSeverity SevWarning     = Just DsWarning
+toDSeverity SevError       = Just DsError
+toDSeverity SevFatal       = Just DsError
 
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given

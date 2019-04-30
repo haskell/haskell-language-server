@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -24,6 +25,7 @@ module Development.IDE.State.Rules(
 
 import           Control.Concurrent.Extra
 import Control.Exception (evaluate)
+import Control.Lens (set)
 import           Control.Monad.Except
 import Control.Monad.Extra (whenJust)
 import qualified Development.IDE.Functions.Compile             as Compile
@@ -239,12 +241,13 @@ reportImportCyclesRule =
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
-          toDiag imp mods = Diagnostic
-            { dFilePath = lFilePath loc
-            , dRange = lRange loc
-            , dSeverity = Error
-            , dSource = "Import cycle detection"
-            , dMessage = "Cyclic module dependency between " <> showCycle mods
+          toDiag imp mods = set dLocation (Just loc) $ Diagnostic
+            { _range = (_range :: Location -> Range) loc
+            , _severity = Just DsError
+            , _source = Just "Import cycle detection"
+            , _message = "Cyclic module dependency between " <> showCycle mods
+            , _code = Nothing
+            , _relatedInformation = Nothing
             }
             where loc = srcSpanToLocation (getLoc imp)
           getModuleName file = do
