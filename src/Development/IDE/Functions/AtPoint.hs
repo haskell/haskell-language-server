@@ -80,8 +80,8 @@ locationsAtPoint pos = map srcSpanToLocation
 
 spansAtPoint :: Position -> [SpanInfo] -> [SpanInfo]
 spansAtPoint pos = filter atp where
-  line = positionLine pos + 1
-  cha = positionCharacter pos + 1
+  line = _line pos + 1
+  cha = _character pos + 1
   atp SpanInfo{..} =    spaninfoStartLine <= line
                      && spaninfoEndLine >= line
                      && spaninfoStartCol <= cha
