@@ -20,11 +20,11 @@ module Development.IDE.State.Service(
     ) where
 
 import           Control.Concurrent.Extra
-import           Control.Concurrent.STM
 import           Control.Monad.Except
 import Development.IDE.Functions.Compile (CompileOpts(..))
 import           Development.IDE.State.FileStore
 import qualified Development.IDE.Logger as Logger
+import Data.Maybe
 import           Data.Set                                 (Set)
 import qualified Data.Set                                 as Set
 import qualified Data.Text as T
@@ -71,13 +71,13 @@ unsafeClearDiagnostics = unsafeClearAllDiagnostics
 
 -- | Initialise the Compiler Service.
 initialise :: Rules ()
-           -> Maybe (Event -> STM ())
+           -> Maybe (Event -> IO ())
            -> Logger.Handle IO
            -> CompileOpts
            -> IO IdeState
 initialise mainRule toDiags logger options =
     shakeOpen
-        (maybe (const $ pure ()) (atomically .) toDiags)
+        (fromMaybe (const $ pure ()) toDiags)
         logger
         (setProfiling options $
         shakeOptions { shakeThreads = optThreads options
