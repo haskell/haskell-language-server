@@ -86,7 +86,7 @@ xFlagsSet = [
 wOptsSet :: [ WarningFlag ]
 wOptsSet =
   [ Opt_WarnUnusedImports
---, Opt_WarnPrepositiveQualifiedModule
+  , Opt_WarnPrepositiveQualifiedModule
   , Opt_WarnOverlappingPatterns
   , Opt_WarnIncompletePatterns
   ]
