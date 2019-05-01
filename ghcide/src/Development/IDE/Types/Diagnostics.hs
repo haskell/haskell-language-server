@@ -24,8 +24,8 @@ module Development.IDE.Types.Diagnostics (
   ideErrorPretty,
   errorDiag,
   ideTryIOException,
-  prettyFileDiagnostics,
-  prettyDiagnostic,
+  showDiagnostics,
+  showDiagnosticsColored,
   prettyDiagnosticStore,
   defDiagnostic,
   addDiagnostics,
@@ -162,35 +162,45 @@ type FileDiagnostics = (Uri, [Diagnostic])
 
 prettyRange :: Range -> Doc SyntaxClass
 prettyRange Range{..} =
-  label_ "Range" $ vcat
-  [ label_ "Start:" $ prettyPosition _start
-  , label_ "End:  " $ prettyPosition _end
+  slabel_ "Range" $ vcat
+  [ slabel_ "Start:" $ prettyPosition _start
+  , slabel_ "End:  " $ prettyPosition _end
   ]
 
 prettyPosition :: Position -> Doc SyntaxClass
-prettyPosition Position{..} = label_ "Position" $ vcat
-   [ label_ "Line:" $ pretty _line
-   , label_ "Character:" $ pretty _character
+prettyPosition Position{..} = slabel_ "Position" $ vcat
+   [ slabel_ "Line:" $ pretty _line
+   , slabel_ "Character:" $ pretty _character
    ]
 
 stringParagraphs :: T.Text -> Doc a
 stringParagraphs = vcat . map (fillSep . map pretty . T.words) . T.lines
 
+showDiagnostics :: [LSP.Diagnostic] -> T.Text
+showDiagnostics = srenderPlain . prettyDiagnostics
+
+showDiagnosticsColored :: [LSP.Diagnostic] -> T.Text
+showDiagnosticsColored = srenderColored . prettyDiagnostics
+
+
+prettyDiagnostics :: [LSP.Diagnostic] -> Doc SyntaxClass
+prettyDiagnostics = vcat . map prettyDiagnostic
+
 prettyDiagnostic :: LSP.Diagnostic -> Doc SyntaxClass
 prettyDiagnostic LSP.Diagnostic{..} =
     vcat
-        [label_ "Range:   "
+        [slabel_ "Range:   "
             $ prettyRange _range
-        , label_ "Source:  " $ pretty _source
-        , label_ "Severity:" $ pretty $ show sev
-        , label_ "Message: "
+        , slabel_ "Source:  " $ pretty _source
+        , slabel_ "Severity:" $ pretty $ show sev
+        , slabel_ "Message: "
             $ case sev of
               LSP.DsError -> annotate ErrorSC
               LSP.DsWarning -> annotate WarningSC
               LSP.DsInfo -> annotate InfoSC
               LSP.DsHint -> annotate HintSC
             $ stringParagraphs _message
-        , label_ "Code:" $ pretty _code
+        , slabel_ "Code:" $ pretty _code
         ]
     where
         sev = fromMaybe LSP.DsError _severity
@@ -204,18 +214,18 @@ prettyDiagnosticStore ds =
 
 prettyFileDiagnostics :: FileDiagnostics -> Doc SyntaxClass
 prettyFileDiagnostics (uri, diags) =
-    label_ "Compiler error in" $ vcat
-        [ label_ "File:" $ pretty filePath
-        , label_ "Errors:" $ vcat $ map prettyDiagnostic diags
+    slabel_ "Compiler error in" $ vcat
+        [ slabel_ "File:" $ pretty filePath
+        , slabel_ "Errors:" $ vcat $ map prettyDiagnostic diags
         ] where
 
     -- prettyFileDiags :: (FilePath, [(T.Text, [LSP.Diagnostic])]) -> Doc SyntaxClass
     -- prettyFileDiags (fp,stages) =
-    --     label_ ("File: "<>fp) $ vcat $ map prettyStage stages
+    --     slabel_ ("File: "<>fp) $ vcat $ map prettyStage stages
 
     -- prettyStage :: (T.Text, [LSP.Diagnostic]) -> Doc SyntaxClass
     -- prettyStage (stage,diags) =
-    --     label_ ("Stage: "<>T.unpack stage) $ vcat $ map prettyDiagnostic diags
+    --     slabel_ ("Stage: "<>T.unpack stage) $ vcat $ map prettyDiagnostic diags
 
     filePath :: FilePath
     filePath = fromMaybe dontKnow $ uriToFilePath uri
