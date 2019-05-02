@@ -25,6 +25,7 @@ import Development.IDE.UtilGHC
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           GHC.Generics
+import System.IO.Error
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Diagnostics
 import           Data.Time
@@ -86,15 +87,15 @@ showTimePrecise UTCTime{..} = show (toModifiedJulianDay utctDay, diffTimeToPicos
 getModificationTimeRule :: Var DirtyFiles -> Rules ()
 getModificationTimeRule dirty =
     defineEarlyCutoff $ \GetModificationTime file -> do
+        let wrap time = (Just $ BS.pack $ showTimePrecise time, ([], Just time))
         alwaysRerun
-        res <- liftIO $ ideTryIOException file $ do
-            mp <- readVar dirty
-            case Map.lookup file mp of
-                Just (time, _) -> return time
-                Nothing -> Dir.getModificationTime file
-        case res of
-            Left err -> return (Nothing, ([err], Nothing))
-            Right time -> return (Just $ BS.pack $ showTimePrecise time, ([], Just time))
+        mp <- liftIO $ readVar dirty
+        case Map.lookup file mp of
+            Just (time, _) -> return $ wrap time
+            Nothing -> liftIO $ fmap wrap (Dir.getModificationTime file) `catch` \(e :: IOException) -> do
+                let err | isDoesNotExistError e = "File does not exist: " ++ file
+                        | otherwise = "IO error while reading " ++ file ++ ", " ++ displayException e
+                return (Nothing, ([ideErrorText file $ T.pack err], Nothing))
 
 
 getFileContentsRule :: Var DirtyFiles -> Rules ()
