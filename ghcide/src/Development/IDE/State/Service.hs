@@ -59,7 +59,7 @@ mkEnv options = do
         , envUniqSupplyVar = uniqSupplyVar
         }
 
-getDiagnostics :: IdeState -> IO [Diagnostic]
+getDiagnostics :: IdeState -> IO [FileDiagnostic]
 getDiagnostics = getAllDiagnostics
 
 unsafeClearDiagnostics :: IdeState -> IO ()

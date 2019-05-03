@@ -8,6 +8,7 @@
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   FileDiagnostics,
+  FileDiagnostic,
   Location(..),
   Range(..),
   LSP.DiagnosticSeverity(..),
@@ -30,21 +31,17 @@ module Development.IDE.Types.Diagnostics (
   defDiagnostic,
   addDiagnostics,
   filterSeriousErrors,
-  dLocation,
-  dFilePath,
   filePathToUri,
   getDiagnosticsFromStore
   ) where
 
 import Control.Exception
-import Control.Lens (Lens', lens, set, view)
 import Data.Either.Combinators
 import Data.Maybe as Maybe
 import Data.Foldable
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Syntax
-import Data.String (IsString(..))
 import qualified Text.PrettyPrint.Annotated.HughesPJClass as Pretty
 import           Language.Haskell.LSP.Types as LSP (
     DiagnosticSeverity(..)
@@ -59,15 +56,15 @@ import Language.Haskell.LSP.Diagnostics
 
 import Development.IDE.Types.Location
 
-ideErrorText :: FilePath -> T.Text -> LSP.Diagnostic
+ideErrorText :: FilePath -> T.Text -> FileDiagnostic
 ideErrorText fp = errorDiag fp "Ide Error"
 
-ideErrorPretty :: Pretty.Pretty e => FilePath -> e -> LSP.Diagnostic
+ideErrorPretty :: Pretty.Pretty e => FilePath -> e -> FileDiagnostic
 ideErrorPretty fp = ideErrorText fp . T.pack . Pretty.prettyShow
 
-errorDiag :: FilePath -> T.Text -> T.Text -> LSP.Diagnostic
-errorDiag fp src =
-  set dFilePath (Just fp) . diagnostic noRange LSP.DsError src
+errorDiag :: FilePath -> T.Text -> T.Text -> FileDiagnostic
+errorDiag fp src msg =
+  (fp,  diagnostic noRange LSP.DsError src msg)
 
 -- | This is for compatibility with our old diagnostic type
 diagnostic :: Range
@@ -99,33 +96,6 @@ defDiagnostic _range _message = LSP.Diagnostic {
   , _relatedInformation = Nothing
   }
 
--- | setLocation but with no range information
-dFilePath ::
-  Lens' LSP.Diagnostic (Maybe FilePath)
-dFilePath = lens g s where
-    g :: LSP.Diagnostic -> Maybe FilePath
-    g d = (uriToFilePath . _uri) =<< view dLocation d
-    s :: LSP.Diagnostic -> Maybe FilePath -> LSP.Diagnostic
-    s d@Diagnostic{..} fp = set dLocation
-        (Location <$> (filePathToUri <$> fp) <*> pure _range) d
-
--- | This adds location information to the diagnostics but this is only used in
---   the case of serious errors to give some context to what went wrong
-dLocation ::
-  Lens' LSP.Diagnostic (Maybe Location)
-dLocation = lens g s where
-    s :: LSP.Diagnostic -> Maybe Location -> LSP.Diagnostic
-    s d = \case
-        Just loc ->
-            d {LSP._range=(_range :: Location -> Range) loc
-              , LSP._relatedInformation = Just $ LSP.List [DiagnosticRelatedInformation loc "dLocation: Unknown error"]}
-        Nothing -> d {LSP._range = noRange, LSP._relatedInformation = Nothing}
-    g :: LSP.Diagnostic -> Maybe Location
-    g Diagnostic{..} = case _relatedInformation of
-        Just (List [DiagnosticRelatedInformation loc _]) -> Just loc
-        Just (List xs) -> error $ "Diagnostic created, expected 1 related information but got" <> show xs
-        Nothing -> Nothing
-
 filterSeriousErrors ::
     FilePath ->
     [LSP.Diagnostic] ->
@@ -148,7 +118,7 @@ addDiagnostics fp diags ds =
     Nothing $
     partitionBySource diags
 
-ideTryIOException :: FilePath -> IO a -> IO (Either LSP.Diagnostic a)
+ideTryIOException :: FilePath -> IO a -> IO (Either FileDiagnostic a)
 ideTryIOException fp act =
   mapLeft (\(e :: IOException) -> ideErrorText fp $ T.pack $ show e) <$> try act
 
@@ -158,7 +128,8 @@ ideTryIOException fp act =
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
-type FileDiagnostics = (Uri, [Diagnostic])
+type FileDiagnostics = (FilePath, [Diagnostic])
+type FileDiagnostic = (FilePath, Diagnostic)
 
 prettyRange :: Range -> Doc SyntaxClass
 prettyRange Range{..} = f _start <> "-" <> f _end
@@ -167,20 +138,20 @@ prettyRange Range{..} = f _start <> "-" <> f _end
 stringParagraphs :: T.Text -> Doc a
 stringParagraphs = vcat . map (fillSep . map pretty . T.words) . T.lines
 
-showDiagnostics :: [LSP.Diagnostic] -> T.Text
+showDiagnostics :: [FileDiagnostic] -> T.Text
 showDiagnostics = srenderPlain . prettyDiagnostics
 
-showDiagnosticsColored :: [LSP.Diagnostic] -> T.Text
+showDiagnosticsColored :: [FileDiagnostic] -> T.Text
 showDiagnosticsColored = srenderColored . prettyDiagnostics
 
 
-prettyDiagnostics :: [LSP.Diagnostic] -> Doc SyntaxClass
+prettyDiagnostics :: [FileDiagnostic] -> Doc SyntaxClass
 prettyDiagnostics = vcat . map prettyDiagnostic
 
-prettyDiagnostic :: LSP.Diagnostic -> Doc SyntaxClass
-prettyDiagnostic d@LSP.Diagnostic{..} =
+prettyDiagnostic :: FileDiagnostic -> Doc SyntaxClass
+prettyDiagnostic (fp, LSP.Diagnostic{..}) =
     vcat
-        [ slabel_ "File:    " $ pretty $ view dFilePath d
+        [ slabel_ "File:    " $ pretty fp
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev
@@ -199,38 +170,16 @@ prettyDiagnostic d@LSP.Diagnostic{..} =
 prettyDiagnosticStore :: DiagnosticStore -> Doc SyntaxClass
 prettyDiagnosticStore ds =
     vcat $
-    map prettyFileDiagnostics $
+    map (\(uri, diags) -> prettyFileDiagnostics (fromMaybe noFilePath $ uriToFilePath uri, diags)) $
     Map.assocs $
     Map.map getDiagnosticsFromStore ds
 
 prettyFileDiagnostics :: FileDiagnostics -> Doc SyntaxClass
-prettyFileDiagnostics (uri, diags) =
+prettyFileDiagnostics (filePath, diags) =
     slabel_ "Compiler error in" $ vcat
         [ slabel_ "File:" $ pretty filePath
-        , slabel_ "Errors:" $ vcat $ map prettyDiagnostic diags
-        ] where
-
-    -- prettyFileDiags :: (FilePath, [(T.Text, [LSP.Diagnostic])]) -> Doc SyntaxClass
-    -- prettyFileDiags (fp,stages) =
-    --     slabel_ ("File: "<>fp) $ vcat $ map prettyStage stages
-
-    -- prettyStage :: (T.Text, [LSP.Diagnostic]) -> Doc SyntaxClass
-    -- prettyStage (stage,diags) =
-    --     slabel_ ("Stage: "<>T.unpack stage) $ vcat $ map prettyDiagnostic diags
-
-    filePath :: FilePath
-    filePath = fromMaybe dontKnow $ uriToFilePath uri
-
-    -- storeContents ::
-    --     (FilePath, [(T.Text, [LSP.Diagnostic])])
-    --     -- ^ Source File, Stage Source, Diags
-    -- storeContents = (fromMaybe dontKnow $ uriToFilePath uri, getDiags diags)
-
-    dontKnow :: IsString s => s
-    dontKnow = "<unknown>"
-
-    -- getDiags :: DiagnosticsBySource -> [(T.Text, [LSP.Diagnostic])]
-    -- getDiags = map (\(ds, diag) -> (fromMaybe dontKnow ds, toList diag)) . Map.assocs
+        , slabel_ "Errors:" $ vcat $ map (prettyDiagnostic . (filePath,)) diags
+        ]
 
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) =
