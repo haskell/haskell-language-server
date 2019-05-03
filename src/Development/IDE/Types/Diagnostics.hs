@@ -161,17 +161,8 @@ ideTryIOException fp act =
 type FileDiagnostics = (Uri, [Diagnostic])
 
 prettyRange :: Range -> Doc SyntaxClass
-prettyRange Range{..} =
-  slabel_ "Range" $ vcat
-  [ slabel_ "Start:" $ prettyPosition _start
-  , slabel_ "End:  " $ prettyPosition _end
-  ]
-
-prettyPosition :: Position -> Doc SyntaxClass
-prettyPosition Position{..} = slabel_ "Position" $ vcat
-   [ slabel_ "Line:" $ pretty _line
-   , slabel_ "Character:" $ pretty _character
-   ]
+prettyRange Range{..} = f _start <> "-" <> f _end
+    where f Position{..} = pretty (_line+1) <> colon <> pretty _character
 
 stringParagraphs :: T.Text -> Doc a
 stringParagraphs = vcat . map (fillSep . map pretty . T.words) . T.lines
