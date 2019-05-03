@@ -39,7 +39,7 @@ data Import
 getImportsParsed :: Monad m =>
                DynFlags ->
                GHC.ParsedSource ->
-               Ex.ExceptT [Diagnostic] m
+               Ex.ExceptT [FileDiagnostic] m
                           (M.ModuleName, [(Maybe FastString, Located M.ModuleName)])
 getImportsParsed dflags (L loc parsed) = do
   let modName = maybe (GHC.mkModuleName "Main") GHC.unLoc $ GHC.hsmodName parsed
@@ -82,7 +82,7 @@ locateModule
     -> (FilePath -> m Bool)
     -> Located ModuleName
     -> Maybe FastString
-    -> m (Either [Diagnostic] Import)
+    -> m (Either [FileDiagnostic] Import)
 locateModule dflags doesExist modName mbPkgName = do
   case mbPkgName of
     -- if a package name is given we only go look for a package
@@ -101,7 +101,7 @@ locateModule dflags doesExist modName mbPkgName = do
         reason -> return $ Left $ notFoundErr dfs modName reason
 
 -- | Don't call this on a found module.
-notFoundErr :: DynFlags -> Located M.ModuleName -> LookupResult -> [Diagnostic]
+notFoundErr :: DynFlags -> Located M.ModuleName -> LookupResult -> [FileDiagnostic]
 notFoundErr dfs modName reason =
   mkError' $ ppr' $ cannotFindModule dfs modName0 $ lookupToFindResult reason
   where

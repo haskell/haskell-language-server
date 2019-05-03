@@ -123,14 +123,14 @@ parseModule
     -> PackageState
     -> FilePath
     -> (UTCTime, SB.StringBuffer)
-    -> IO ([Diagnostic], Maybe ParsedModule)
+    -> IO ([FileDiagnostic], Maybe ParsedModule)
 parseModule opt@CompileOpts{..} packageState file =
     fmap (either (, Nothing) (second Just)) . Ex.runExceptT .
     -- We need packages since imports fail to resolve otherwise.
     runGhcSessionExcept opt Nothing packageState . parseFileContents optPreprocessor file
 
 computePackageDeps ::
-     CompileOpts -> PackageState -> InstalledUnitId -> IO (Either [Diagnostic] [InstalledUnitId])
+     CompileOpts -> PackageState -> InstalledUnitId -> IO (Either [FileDiagnostic] [InstalledUnitId])
 computePackageDeps opts packageState iuid =
   Ex.runExceptT $
   runGhcSessionExcept opts Nothing packageState $
@@ -155,7 +155,7 @@ typecheckModule
     -> [TcModuleResult]
     -> [LoadPackageResult]
     -> ParsedModule
-    -> IO ([Diagnostic], Maybe TcModuleResult)
+    -> IO ([FileDiagnostic], Maybe TcModuleResult)
 typecheckModule opt mod packageState uniqSupply deps pkgs pm =
     fmap (either (, Nothing) (second Just)) $ Ex.runExceptT $
     runGhcSessionExcept opt (Just mod) packageState $
@@ -173,7 +173,7 @@ loadPackage ::
   -> UniqSupply
   -> [LoadPackageResult]
   -> InstalledUnitId
-  -> IO (Either [Diagnostic] LoadPackageResult)
+  -> IO (Either [FileDiagnostic] LoadPackageResult)
 loadPackage opt packageState us lps p =
   Ex.runExceptT $
   runGhcSessionExcept opt Nothing packageState $
@@ -202,7 +202,7 @@ compileModule
     -> [TcModuleResult]
     -> [LoadPackageResult]
     -> TcModuleResult
-    -> IO ([Diagnostic], Maybe GhcModule)
+    -> IO ([FileDiagnostic], Maybe GhcModule)
 compileModule opt mod packageState uniqSupply deps pkgs tmr =
     fmap (either (, Nothing) (second Just)) $ Ex.runExceptT $
     runGhcSessionExcept opt (Just mod) packageState $
@@ -406,7 +406,7 @@ getModSummaryFromBuffer
     -> (SB.StringBuffer, UTCTime)
     -> DynFlags
     -> GHC.ParsedSource
-    -> Ex.ExceptT [Diagnostic] m ModSummary
+    -> Ex.ExceptT [FileDiagnostic] m ModSummary
 getModSummaryFromBuffer fp (contents, fileDate) dflags parsed = do
   (modName, imports) <- FindImports.getImportsParsed dflags parsed
 
@@ -445,7 +445,7 @@ parseFileContents
        => (GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource))
        -> FilePath  -- ^ the filename (for source locations)
        -> (UTCTime, SB.StringBuffer) -- ^ Haskell module source text (full Unicode is supported)
-       -> Ex.ExceptT [Diagnostic] m ([Diagnostic], ParsedModule)
+       -> Ex.ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
 parseFileContents preprocessor filename (time, contents) = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    dflags  <- parsePragmasIntoDynFlags filename contents
@@ -479,7 +479,7 @@ parsePragmasIntoDynFlags
     :: GhcMonad m
     => FilePath
     -> SB.StringBuffer
-    -> Ex.ExceptT [Diagnostic] m DynFlags
+    -> Ex.ExceptT [FileDiagnostic] m DynFlags
 parsePragmasIntoDynFlags fp contents = catchSrcErrors $ do
     dflags0  <- getSessionDynFlags
     let opts = Hdr.getOptions dflags0 contents fp
@@ -494,7 +494,7 @@ generatePackageState paths hideAllPkgs pkgImports = do
 
 -- | Run something in a Ghc monad and catch the errors (SourceErrors and
 -- compiler-internal exceptions like Panic or InstallationError).
-catchSrcErrors :: GhcMonad m => m a -> Ex.ExceptT [Diagnostic] m a
+catchSrcErrors :: GhcMonad m => m a -> Ex.ExceptT [FileDiagnostic] m a
 catchSrcErrors ghcM = do
       dflags <- getDynFlags
       Ex.ExceptT $
