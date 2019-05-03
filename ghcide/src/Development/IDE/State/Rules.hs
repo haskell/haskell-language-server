@@ -25,7 +25,6 @@ module Development.IDE.State.Rules(
 
 import           Control.Concurrent.Extra
 import Control.Exception (evaluate)
-import Control.Lens (set)
 import           Control.Monad.Except
 import Control.Monad.Extra (whenJust)
 import qualified Development.IDE.Functions.Compile             as Compile
@@ -56,11 +55,11 @@ import Development.IDE.State.Shake
 
 -- LEGACY STUFF ON THE OLD STYLE
 
-toIdeResultNew :: Either [Diagnostic] v -> IdeResult v
+toIdeResultNew :: Either [FileDiagnostic] v -> IdeResult v
 toIdeResultNew = either (, Nothing) (([],) . Just)
 
 -- Convert to a legacy Ide result but dropping dependencies
-toIdeResultSilent :: Maybe v -> Either [Diagnostic] v
+toIdeResultSilent :: Maybe v -> Either [FileDiagnostic] v
 toIdeResultSilent val = maybe (Left []) Right val
 
 
@@ -116,17 +115,17 @@ getDefinition file pos = do
 
 useE
     :: IdeRule k v
-    => k -> FilePath -> ExceptT [Diagnostic] Action v
+    => k -> FilePath -> ExceptT [FileDiagnostic] Action v
 useE k = ExceptT . fmap toIdeResultSilent . use k
 
 -- picks the first error
 usesE
     :: IdeRule k v
-    => k -> [FilePath] -> ExceptT [Diagnostic] Action [v]
+    => k -> [FilePath] -> ExceptT [FileDiagnostic] Action [v]
 usesE k = ExceptT . fmap (mapM toIdeResultSilent) . uses k
 
 -- | Generate the GHC Core for the supplied file and its dependencies.
-coresForFile :: FilePath -> ExceptT [Diagnostic] Action [CoreModule]
+coresForFile :: FilePath -> ExceptT [FileDiagnostic] Action [CoreModule]
 coresForFile file = do
     files <- transitiveModuleDeps <$> useE  GetDependencies file
     pms   <- usesE GetParsedModule $ files ++ [file]
@@ -141,14 +140,14 @@ coresForFile file = do
 getAtPointForFile
   :: FilePath
   -> Position
-  -> ExceptT [Diagnostic] Action (Maybe (Maybe Range, [HoverText]))
+  -> ExceptT [FileDiagnostic] Action (Maybe (Maybe Range, [HoverText]))
 getAtPointForFile file pos = do
   files <- transitiveModuleDeps <$> useE GetDependencies file
   tms   <- usesE TypeCheck (file : files)
   spans <- useE  GetSpanInfo file
   return $ AtPoint.atPoint (map Compile.tmrModule tms) spans pos
 
-getDefinitionForFile :: FilePath -> Position -> ExceptT [Diagnostic] Action (Maybe Location)
+getDefinitionForFile :: FilePath -> Position -> ExceptT [FileDiagnostic] Action (Maybe Location)
 getDefinitionForFile file pos = do
     spans <- useE GetSpanInfo file
     return $ AtPoint.gotoDefinition spans pos
@@ -193,7 +192,7 @@ getLocatedImportsRule =
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: FilePath -> ExceptT [Diagnostic] Action RawDependencyInformation
+rawDependencyInformation :: FilePath -> ExceptT [FileDiagnostic] Action RawDependencyInformation
 rawDependencyInformation f = go (Set.singleton f) Map.empty Map.empty
   where go fs !modGraph !pkgs =
           case Set.minView fs of
@@ -241,7 +240,7 @@ reportImportCyclesRule =
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
-          toDiag imp mods = set dLocation (Just loc) $ Diagnostic
+          toDiag imp mods = (fp ,) $ Diagnostic
             { _range = (_range :: Location -> Range) loc
             , _severity = Just DsError
             , _source = Just "Import cycle detection"
@@ -250,6 +249,7 @@ reportImportCyclesRule =
             , _relatedInformation = Nothing
             }
             where loc = srcSpanToLocation (getLoc imp)
+                  fp = srcSpanToFilename (getLoc imp)
           getModuleName file = do
            pm <- useE GetParsedModule file
            pure (moduleNameString . moduleName . ms_mod $ pm_mod_summary pm)

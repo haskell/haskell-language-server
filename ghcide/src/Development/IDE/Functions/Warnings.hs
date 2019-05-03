@@ -26,7 +26,7 @@ import           Development.IDE.Functions.GHCError
 --   https://github.com/ghc/ghc/blob/5f1d949ab9e09b8d95319633854b7959df06eb58/compiler/main/GHC.hs#L623-L640
 --   which basically says that log_action is taken from the ModSummary when GHC feels like it.
 --   The given argument lets you refresh a ModSummary log_action
-withWarnings :: GhcMonad m => T.Text -> ((ModSummary -> ModSummary) -> m a) -> m ([Diagnostic], a)
+withWarnings :: GhcMonad m => T.Text -> ((ModSummary -> ModSummary) -> m a) -> m ([FileDiagnostic], a)
 withWarnings phase action = do
   warnings <- liftIO $ newVar []
   oldFlags <- getDynFlags

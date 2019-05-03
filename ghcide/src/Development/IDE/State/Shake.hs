@@ -61,7 +61,6 @@ import           Development.IDE.Types.Diagnostics
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.DeepSeq
-import           Control.Lens (view, set)
 import           System.Time.Extra
 import           Data.Typeable
 import           Data.Tuple.Extra
@@ -149,7 +148,7 @@ instance Hashable Key where
 --
 --   A rule on a file should only return diagnostics for that given file. It should
 --   not propagate diagnostic errors through multiple phases.
-type IdeResult v = ([Diagnostic], Maybe v)
+type IdeResult v = ([FileDiagnostic], Maybe v)
 
 type IdeRule k v =
   ( Shake.RuleResult k ~ v
@@ -198,7 +197,7 @@ setValues :: IdeRule k v
           -> k
           -> FilePath
           -> IdeResult v
-          -> IO (Maybe [Diagnostic], [Diagnostic]) -- ^ (before, after)
+          -> IO (Maybe [FileDiagnostic], [FileDiagnostic]) -- ^ (before, after)
 setValues state key file val = modifyVar state $ \inVal -> do
     let k = Key key
         outVal = Map.insertWith Map.union file (Map.singleton k $ second (fmap toDyn) val) inVal
@@ -261,7 +260,7 @@ useStale IdeState{shakeExtras=ShakeExtras{state}} k fp =
     join <$> getValues state k fp
 
 
-getAllDiagnostics :: IdeState -> IO [Diagnostic]
+getAllDiagnostics :: IdeState -> IO [FileDiagnostic]
 getAllDiagnostics IdeState{shakeExtras = ShakeExtras{state}} = do
     val <- readVar state
     return $ concatMap (concatMap fst . Map.elems) $ Map.elems val
@@ -362,7 +361,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) old m
             (bs, res) <- actionCatch
                 (do v <- op key file; liftIO $ evaluate $ force v) $
                 \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-            res <- return $ first (map $ set dFilePath $ Just file) res
+            res <- return $ first (map $ \(_,d) -> (file,d)) res
 
             (before, after) <- liftIO $ setValues state key file res
             updateFileDiagnostics file before after
@@ -380,8 +379,8 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) old m
 
 updateFileDiagnostics ::
      FilePath
-  -> Maybe [Diagnostic] -- ^ previous results for this file
-  -> [Diagnostic] -- ^ current results
+  -> Maybe [FileDiagnostic] -- ^ previous results for this file
+  -> [FileDiagnostic] -- ^ current results
   -> Action ()
 updateFileDiagnostics afp previousAll currentAll = do
     -- TODO (MK) We canonicalize to make sure that the two files agree on use of
@@ -392,13 +391,13 @@ updateFileDiagnostics afp previousAll currentAll = do
     let filtM diags = do
             diags' <-
                 filterM
-                    (\x -> fmap (== Just afp') (traverse canonicalizePath $ view dFilePath x))
+                    (\x -> fmap (== afp') (canonicalizePath $ fst x))
                     diags
             pure (Set.fromList diags')
     previous <- liftIO $ traverse filtM previousAll
     current <- liftIO $ filtM currentAll
     when (Just current /= previous) $
-        sendEvent $ EventFileDiagnostics $ (filePathToUri afp, Set.toList current)
+        sendEvent $ EventFileDiagnostics $ (afp, map snd $ Set.toList current)
 
 
 setPriority :: (Enum a) => a -> Action ()
