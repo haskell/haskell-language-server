@@ -187,10 +187,10 @@ prettyDiagnostics :: [LSP.Diagnostic] -> Doc SyntaxClass
 prettyDiagnostics = vcat . map prettyDiagnostic
 
 prettyDiagnostic :: LSP.Diagnostic -> Doc SyntaxClass
-prettyDiagnostic LSP.Diagnostic{..} =
+prettyDiagnostic d@LSP.Diagnostic{..} =
     vcat
-        [slabel_ "Range:   "
-            $ prettyRange _range
+        [ slabel_ "File:    " $ pretty $ view dFilePath d
+        , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev
         , slabel_ "Message: "
