@@ -30,8 +30,8 @@ import GHC.Generics (Generic)
 import Development.IDE.Types.Diagnostics
 import Development.IDE.UtilGHC ()
 
-import "ghc-lib" GHC
-import "ghc-lib-parser" Module
+import GHC
+import Module
 
 -- | Unprocessed results that we get from following all imports recursively starting from a module.
 data RawDependencyInformation = RawDependencyInformation

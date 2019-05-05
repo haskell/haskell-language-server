@@ -3,9 +3,9 @@
 
 module Development.IDE.Functions.Warnings(withWarnings) where
 
-import "ghc-lib-parser" ErrUtils
-import "ghc-lib-parser" GhcMonad
-import "ghc-lib" GhcPlugins as GHC hiding (Var)
+import ErrUtils
+import GhcMonad
+import GhcPlugins as GHC hiding (Var)
 
 import qualified Data.Text as T
 import           Data.Maybe

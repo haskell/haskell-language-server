@@ -29,22 +29,22 @@ import           Development.IDE.Functions.GHCError
 import           Development.IDE.Functions.SpanInfo
 import Development.IDE.UtilGHC
 
-import           "ghc-lib" GHC hiding (parseModule, typecheckModule)
-import qualified "ghc-lib-parser" Parser
-import           "ghc-lib-parser" Lexer
-import           "ghc-lib-parser" Bag
+import           GHC hiding (parseModule, typecheckModule)
+import qualified Parser
+import           Lexer
+import           Bag
 
-import qualified "ghc-lib" GHC
-import           "ghc-lib-parser" Panic
-import           "ghc-lib-parser" GhcMonad
-import           "ghc-lib" GhcPlugins                     as GHC hiding (PackageState, fst3, (<>))
-import qualified "ghc-lib" HeaderInfo                     as Hdr
-import           "ghc-lib" MkIface
-import           "ghc-lib-parser" NameCache
-import           "ghc-lib-parser" StringBuffer                   as SB
-import           "ghc-lib" TidyPgm
-import           "ghc-lib-parser" InstEnv
-import           "ghc-lib-parser" FamInstEnv
+import qualified GHC
+import           Panic
+import           GhcMonad
+import           GhcPlugins                     as GHC hiding (PackageState, fst3, (<>))
+import qualified HeaderInfo                     as Hdr
+import           MkIface
+import           NameCache
+import           StringBuffer                   as SB
+import           TidyPgm
+import           InstEnv
+import           FamInstEnv
 
 import Control.DeepSeq
 import           Control.Exception                        as E

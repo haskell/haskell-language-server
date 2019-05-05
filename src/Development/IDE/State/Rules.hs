@@ -45,9 +45,9 @@ import           Development.Shake                        hiding (Diagnostic, En
 import           Development.IDE.Types.LSP as Compiler
 import Development.IDE.State.RuleTypes
 
-import           "ghc-lib" GHC
-import           "ghc-lib-parser" UniqSupply
-import           "ghc-lib-parser" Module                         as M
+import           GHC
+import           UniqSupply
+import           Module                         as M
 
 import qualified Development.IDE.Functions.AtPoint as AtPoint
 import Development.IDE.State.Service
