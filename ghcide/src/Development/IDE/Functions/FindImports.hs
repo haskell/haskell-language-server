@@ -12,16 +12,16 @@ module Development.IDE.Functions.FindImports
 import           Development.IDE.Functions.GHCError as ErrUtils
 
 -- GHC imports
-import           "ghc-lib-parser" BasicTypes                  (StringLiteral(..))
-import           "ghc-lib-parser" DynFlags
-import           "ghc-lib-parser" FastString
-import           "ghc-lib" GHC
-import qualified "ghc-lib" HeaderInfo                  as Hdr
-import qualified "ghc-lib-parser" Module                      as M
-import qualified "ghc-lib-parser" GHC.LanguageExtensions.Type as GHC
-import           "ghc-lib-parser" Packages
-import           "ghc-lib-parser" Outputable                  (showSDoc, ppr, pprPanic)
-import           "ghc-lib" Finder
+import           BasicTypes                  (StringLiteral(..))
+import           DynFlags
+import           FastString
+import           GHC
+import qualified HeaderInfo                  as Hdr
+import qualified Module                      as M
+import qualified GHC.LanguageExtensions.Type as GHC
+import           Packages
+import           Outputable                  (showSDoc, ppr, pprPanic)
+import           Finder
 
 -- standard imports
 import           Control.Monad.Extra

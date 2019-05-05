@@ -18,10 +18,10 @@ import           Development.IDE.Types.LSP
 import           Development.IDE.Types.SpanInfo as SpanInfo
 
 -- GHC API imports
-import "ghc-lib" GHC
-import "ghc-lib-parser" DynFlags
-import "ghc-lib-parser" Outputable hiding ((<>))
-import "ghc-lib-parser" Name
+import GHC
+import DynFlags
+import Outputable hiding ((<>))
+import Name
 
 import           Data.Maybe
 import           Data.List

@@ -31,13 +31,13 @@ module Development.IDE.Functions.GHCError
 import                     Development.IDE.Types.Diagnostics as D
 import qualified           Data.Text as T
 import Development.IDE.UtilGHC()
-import qualified "ghc-lib-parser" FastString as FS
-import "ghc-lib"           GHC
-import "ghc-lib-parser"           Bag
+import qualified FastString as FS
+import           GHC
+import           Bag
 import Data.Maybe
-import           "ghc-lib-parser" ErrUtils
-import           "ghc-lib-parser" SrcLoc
-import qualified "ghc-lib-parser" Outputable                 as Out
+import           ErrUtils
+import           SrcLoc
+import qualified Outputable                 as Out
 import qualified Language.Haskell.LSP.Types as LSP
 
 
