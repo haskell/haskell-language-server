@@ -13,20 +13,20 @@
 -- * Call setSessionDynFlags, use modifyDynFlags instead. It's faster and avoids loading packages.
 module Development.IDE.UtilGHC(module Development.IDE.UtilGHC) where
 
-import           "ghc-lib-parser" Config
-import qualified "ghc-lib-parser" CmdLineParser as Cmd (warnMsg)
-import           "ghc-lib-parser" DynFlags (parseDynamicFilePragma)
-import           "ghc-lib-parser" Fingerprint
-import           "ghc-lib" GHC                         hiding (convertLit)
-import           "ghc-lib-parser" GHC.LanguageExtensions.Type
-import           "ghc-lib-parser" GhcMonad
-import           "ghc-lib" GhcPlugins                  as GHC hiding (PackageState, fst3, (<>))
-import           "ghc-lib" HscMain
-import qualified "ghc-lib-parser" Packages
-import           "ghc-lib-parser" Panic (throwGhcExceptionIO)
-import           "ghc-lib-parser" Platform
-import qualified "ghc-lib-parser" StringBuffer                as SB
-import qualified "ghc-lib-parser" EnumSet
+import           Config
+import qualified CmdLineParser as Cmd (warnMsg)
+import           DynFlags (parseDynamicFilePragma)
+import           Fingerprint
+import           GHC                         hiding (convertLit)
+import           GHC.LanguageExtensions.Type
+import           GhcMonad
+import           GhcPlugins                  as GHC hiding (PackageState, fst3, (<>))
+import           HscMain
+import qualified Packages
+import           Panic (throwGhcExceptionIO)
+import           Platform
+import qualified StringBuffer                as SB
+import qualified EnumSet
 
 import           Control.DeepSeq
 import           Control.Monad

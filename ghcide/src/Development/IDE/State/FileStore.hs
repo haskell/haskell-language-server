@@ -11,7 +11,7 @@ module Development.IDE.State.FileStore(
 
 
 
-import           "ghc-lib-parser" StringBuffer
+import           StringBuffer
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T

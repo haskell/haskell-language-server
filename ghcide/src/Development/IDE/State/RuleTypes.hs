@@ -24,8 +24,8 @@ import           Data.Typeable
 import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)
 
-import           "ghc-lib" GHC
-import           "ghc-lib-parser" Module
+import           GHC
+import           Module
 
 import           Development.IDE.Types.SpanInfo
 
