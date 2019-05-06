@@ -24,7 +24,9 @@ module Development.IDE.UtilGHC(
     importGenerated,
     mkImport,
     runGhcFast,
-    Development.IDE.UtilGHC.RealLocated,
+    setImports,
+    setPackageState,
+    setThisInstalledUnitId,
     modIsInternal
     ) where
 
@@ -168,6 +170,23 @@ fakeLlvmConfig :: (LlvmTargets, LlvmPasses)
 fakeLlvmConfig = ([], [])
 
 
+setThisInstalledUnitId :: UnitId -> DynFlags -> DynFlags
+setThisInstalledUnitId unitId dflags =
+  dflags {thisInstalledUnitId = toInstalledUnitId unitId}
+
+setImports :: [FilePath] -> DynFlags -> DynFlags
+setImports paths dflags = dflags { importPaths = paths }
+
+setPackageState :: PackageState -> DynFlags -> DynFlags
+setPackageState state dflags =
+  dflags
+    { pkgDatabase = pkgStateDb state
+    , pkgState = pkgStateState state
+    , thisUnitIdInsts_ = pkgThisUnitIdInsts state
+    }
+
+
+
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = prettyPrint
 instance NFData CoreModule where rnf !_ = ()
@@ -194,5 +213,3 @@ instance Show (GenLocated SrcSpan ModuleName) where show = prettyPrint
 instance Show PackageName where show = prettyPrint
 instance Show Packages.PackageState where show _ = "PackageState"
 instance Show Name where show = prettyPrint
-
-type RealLocated = GenLocated RealSrcSpan

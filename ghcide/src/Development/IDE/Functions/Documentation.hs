@@ -13,9 +13,10 @@ import           Data.Maybe
 import qualified Data.Text as T
 import           Development.IDE.Functions.GHCError
 import           Development.IDE.Functions.SpanInfo
-import Development.IDE.UtilGHC
 import           FastString
 import           GHC
+import SrcLoc
+
 
 getDocumentation
  ::  Name -- ^ The name you want documentation for.
