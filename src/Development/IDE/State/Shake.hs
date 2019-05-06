@@ -152,7 +152,11 @@ type IdeResult v = ([FileDiagnostic], Maybe v)
 
 type IdeRule k v =
   ( Shake.RuleResult k ~ v
-  , Shake.ShakeValue k
+  , Show k
+  , Typeable k
+  , NFData k
+  , Hashable k
+  , Eq k
   , Show v
   , Typeable v
   , NFData v
@@ -320,7 +324,12 @@ isBadDependency x
 
 
 newtype Q k = Q (k, FilePath)
-    deriving (Eq,Hashable,Binary,NFData)
+    deriving (Eq,Hashable,NFData)
+
+-- Using Database we don't need Binary instances for keys
+instance Binary (Q k) where
+    put _ = return ()
+    get = fail "Binary.get not defined for type Development.IDE.State.Shake.Q"
 
 instance Show k => Show (Q k) where
     show (Q (k, file)) = show k ++ "; " ++ file
