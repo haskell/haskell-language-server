@@ -80,7 +80,7 @@ getDocumentation targetName tcs = fromMaybe [] $ do
 -- | Shows this part of the documentation
 docHeaders :: [RealLocated AnnotationComment]
            -> [T.Text]
-docHeaders = mapMaybe (wrk . unRealSrcSpan)
+docHeaders = mapMaybe (\(L _ x) -> wrk x)
   where
   wrk = \case
     AnnDocCommentNext s -> Just $ T.pack s
