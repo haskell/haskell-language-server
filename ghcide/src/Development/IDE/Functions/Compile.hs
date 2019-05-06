@@ -3,6 +3,7 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP #-}
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
@@ -414,7 +415,9 @@ getModSummaryFromBuffer fp (contents, fileDate) dflags parsed = do
           { ml_hs_file  = Just fp
           , ml_hi_file  = replaceExtension fp "hi"
           , ml_obj_file = replaceExtension fp "o"
+#ifndef USE_GHC
           , ml_hie_file = replaceExtension fp "hie"
+#endif
           -- This does not consider the dflags configuration
           -- (-osuf and -hisuf, object and hi dir.s).
           -- However, we anyway don't want to generate them.
@@ -433,7 +436,9 @@ getModSummaryFromBuffer fp (contents, fileDate) dflags parsed = do
     , ms_hsc_src      = HsSrcFile
     , ms_obj_date     = Nothing
     , ms_iface_date   = Nothing
+#ifndef USE_GHC
     , ms_hie_date     = Nothing
+#endif
     , ms_srcimps      = []        -- source imports are not allowed
     , ms_parsed_mod   = Nothing
     }
@@ -450,8 +455,13 @@ parseFileContents preprocessor filename (time, contents) = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    dflags  <- parsePragmasIntoDynFlags filename contents
    case unP Parser.parseModule (mkPState dflags contents loc) of
+#ifdef USE_GHC
+     PFailed getMessages _ _ ->
+       Ex.throwE $ toDiagnostics dflags $ snd $ getMessages dflags
+#else
      PFailed s ->
        Ex.throwE $ toDiagnostics dflags $ snd $ getMessages s dflags
+#endif
      POk pst rdr_module ->
          let hpm_annotations =
                (Map.fromListWith (++) $ annotations pst,

@@ -36,7 +36,7 @@ getSpanInfo mods tcm =
   do let tcs = tm_typechecked_source tcm
          bs  = listifyAllSpans  tcs :: [LHsBind GhcTc]
          es  = listifyAllSpans  tcs :: [LHsExpr GhcTc]
-         ps  = listifyAllSpans' tcs :: [LPat GhcTc]
+         ps  = listifyAllSpans' tcs :: [Pat GhcTc]
      bts <- mapM (getTypeLHsBind tcm) bs -- binds
      ets <- mapM (getTypeLHsExpr tcm) es -- expressions
      pts <- mapM (getTypeLPat tcm)    ps -- patterns
