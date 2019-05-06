@@ -17,8 +17,6 @@ import           Development.IDE.Functions.Compile             (TcModuleResult, 
 import qualified Development.IDE.Functions.Compile             as Compile
 import           Development.IDE.Functions.FindImports         (Import(..))
 import           Development.IDE.Functions.DependencyInformation
-import           Data.Binary                              (Binary)
-import qualified Data.Binary                              as Binary
 import           Data.Hashable
 import           Data.Typeable
 import           Development.Shake                        hiding (Env, newCache)
@@ -63,7 +61,7 @@ type instance RuleResult GenerateCore = GhcModule
 
 -- | We capture the subset of `DynFlags` that is computed by package initialization in a rule to
 -- make session initialization cheaper by reusing it.
-type instance RuleResult GeneratePackageState = Compile.PackageState
+type instance RuleResult LoadPackageState = Compile.PackageState
 
 -- | Resolve the imports in a module to the list of either external packages or absolute file paths
 -- for modules in the same package.
@@ -77,69 +75,58 @@ type instance RuleResult ReportImportCycles = ()
 
 data OfInterest = OfInterest
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   OfInterest
 instance Hashable OfInterest
 instance NFData   OfInterest
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   GetParsedModule
 instance Hashable GetParsedModule
 instance NFData   GetParsedModule
 
 data GetLocatedImports = GetLocatedImports
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   GetLocatedImports
 instance Hashable GetLocatedImports
 instance NFData   GetLocatedImports
 
 data GetDependencyInformation = GetDependencyInformation
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   GetDependencyInformation
 instance Hashable GetDependencyInformation
 instance NFData   GetDependencyInformation
 
 data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   ReportImportCycles
 instance Hashable ReportImportCycles
 instance NFData   ReportImportCycles
 
 data GetDependencies = GetDependencies
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   GetDependencies
 instance Hashable GetDependencies
 instance NFData   GetDependencies
 
 data TypeCheck = TypeCheck
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   TypeCheck
 instance Hashable TypeCheck
 instance NFData   TypeCheck
 
 data LoadPackage = LoadPackage InstalledUnitId
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   LoadPackage
 instance Hashable LoadPackage
 instance NFData   LoadPackage
 
 data GetSpanInfo = GetSpanInfo
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   GetSpanInfo
 instance Hashable GetSpanInfo
 instance NFData   GetSpanInfo
 
 data GenerateCore = GenerateCore
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   GenerateCore
 instance Hashable GenerateCore
 instance NFData   GenerateCore
 
-data GeneratePackageState = GeneratePackageState [FilePath] Bool [(String, [(String, String)])]
+data LoadPackageState = LoadPackageState
     deriving (Eq, Show, Typeable, Generic)
-instance Binary   GeneratePackageState
-instance Hashable GeneratePackageState
-instance NFData   GeneratePackageState
+instance Hashable LoadPackageState
+instance NFData   LoadPackageState
 
 ------------------------------------------------------------
 -- Orphan Instances
@@ -170,10 +157,6 @@ instance NFData SpanInfo where
 
 instance NFData Import where
   rnf = rwhnf
-
-instance Binary InstalledUnitId where
-  get = fmap stringToInstalledUnitId Binary.get
-  put = Binary.put . installedUnitIdString
 
 instance Hashable InstalledUnitId where
   hashWithSalt salt = hashWithSalt salt . installedUnitIdString

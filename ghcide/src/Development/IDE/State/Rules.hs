@@ -172,7 +172,7 @@ getParsedModuleRule :: Rules ()
 getParsedModuleRule =
     define $ \GetParsedModule file -> do
         contents <- getFileContents file
-        packageState <- getPackageState
+        packageState <- use_ LoadPackageState ""
         opt <- getOpts
         liftIO $ Compile.parseModule opt packageState file contents
 
@@ -182,7 +182,7 @@ getLocatedImportsRule =
         pm <- use_ GetParsedModule file
         let ms = pm_mod_summary pm
         let imports = ms_textual_imps ms
-        packageState <- getPackageState
+        packageState <- use_ LoadPackageState ""
         opt <- getOpts
         dflags <- liftIO $ Compile.getGhcDynFlags opt pm packageState
         xs <- forM imports $ \(mbPkgName, modName) ->
@@ -204,7 +204,7 @@ rawDependencyInformation f = go (Set.singleton f) Map.empty Map.empty
                   let modGraph' = Map.insert f (Left ModuleParseError) modGraph
                   in go fs modGraph' pkgs
                 Just imports -> do
-                  packageState <- lift getPackageState
+                  packageState <- lift $ use_ LoadPackageState ""
                   opt <- lift getOpts
                   modOrPkgImports <- forM imports $ \imp -> do
                     case imp of
@@ -272,7 +272,7 @@ getSpanInfoRule =
         pm <- use_ GetParsedModule file
         tc <- use_ TypeCheck file
         imports <- use_ GetLocatedImports file
-        packageState <- getPackageState
+        packageState <- use_ LoadPackageState ""
         opt <- getOpts
         x <- liftIO $ Compile.getSrcSpanInfos opt pm packageState (fileImports imports) tc
         return ([], Just x)
@@ -287,7 +287,7 @@ typeCheckRule =
         tms <- uses_ TypeCheck (transitiveModuleDeps deps)
         setPriority PriorityTypeCheck
         us <- getUniqSupply
-        packageState <- getPackageState
+        packageState <- use_ LoadPackageState ""
         opt <- getOpts
         liftIO $ Compile.typecheckModule opt pm packageState us tms lps pm
 
@@ -295,7 +295,7 @@ typeCheckRule =
 loadPackageRule :: Rules ()
 loadPackageRule =
   defineNoFile $ \(LoadPackage pkg) -> do
-      packageState <- getPackageState
+      packageState <- use_ LoadPackageState ""
       opt <- getOpts
       pkgs <- liftIO $ Compile.computePackageDeps opt packageState pkg
       case pkgs of
@@ -319,14 +319,16 @@ generateCoreRule =
         let pm = tm_parsed_module . Compile.tmrModule $ tm
         setPriority PriorityGenerateDalf
         us <- getUniqSupply
-        packageState <- getPackageState
+        packageState <- use_ LoadPackageState ""
         opt <- getOpts
         liftIO $ Compile.compileModule opt pm packageState us tms lps tm
 
-generatePackageStateRule :: Rules ()
-generatePackageStateRule =
-    defineNoFile $ \(GeneratePackageState paths hideAllPkgs pkgImports) -> do
-        liftIO $ Compile.generatePackageState paths hideAllPkgs pkgImports
+loadPackageStateRule :: Rules ()
+loadPackageStateRule =
+    defineNoFile $ \LoadPackageState -> do
+        opts <- envOptions <$> getServiceEnv
+        liftIO $ Compile.generatePackageState
+            (Compile.optPackageDbs opts) (Compile.optHideAllPkgs opts) (Compile.optPackageImports opts)
 
 -- | A rule that wires per-file rules together
 mainRule :: Rules ()
@@ -339,18 +341,13 @@ mainRule = do
     typeCheckRule
     getSpanInfoRule
     generateCoreRule
-    generatePackageStateRule
+    loadPackageStateRule
     loadPackageRule
 
 ------------------------------------------------------------
 
 fileFromParsedModule :: ParsedModule -> IO FilePath
 fileFromParsedModule = pure . ms_hspp_file . pm_mod_summary
-
-getPackageState :: Action PackageState
-getPackageState = do
-  opts <- envOptions <$> getServiceEnv
-  use_ (GeneratePackageState (Compile.optPackageDbs opts) (Compile.optHideAllPkgs opts) (Compile.optPackageImports opts)) ""
 
 fileImports ::
      [(Located ModuleName, Maybe Import)]

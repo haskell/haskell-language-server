@@ -72,7 +72,7 @@ data CompileOpts = CompileOpts
 
   , optPackageDbs :: [FilePath]
   , optHideAllPkgs :: Bool
-  , optPackageImports :: [(String, [(String, String)])]
+  , optPackageImports :: [(String, ModRenaming)]
 
   , optThreads :: Int
   , optShakeProfiling :: Maybe FilePath
@@ -486,7 +486,7 @@ parsePragmasIntoDynFlags fp contents = catchSrcErrors $ do
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
     return dflags
 
-generatePackageState :: [FilePath] -> Bool -> [(String, [(String, String)])] -> IO PackageState
+generatePackageState :: [FilePath] -> Bool -> [(String, ModRenaming)] -> IO PackageState
 generatePackageState paths hideAllPkgs pkgImports = do
   let dflags = setPackageImports hideAllPkgs pkgImports $ setPackageDbs paths (defaultDynFlags fakeSettings fakeLlvmConfig)
   (newDynFlags, _) <- initPackages dflags

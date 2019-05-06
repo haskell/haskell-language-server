@@ -58,3 +58,4 @@ data Event
     | EventFatalError !T.Text
       -- ^ @EventFatalError reason@: A fatal error occurred in the compiler and
       -- the compiler cannot continue.
+      deriving Show
