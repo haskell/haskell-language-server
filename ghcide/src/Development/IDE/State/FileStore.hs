@@ -54,19 +54,16 @@ type instance RuleResult GetFileExists = Bool
 
 data GetFileExists = GetFileExists
     deriving (Eq, Show, Generic)
-instance Binary   GetFileExists
 instance Hashable GetFileExists
 instance NFData   GetFileExists
 
 data GetModificationTime = GetModificationTime
     deriving (Eq, Show, Generic)
-instance Binary   GetModificationTime
 instance Hashable GetModificationTime
 instance NFData   GetModificationTime
 
 data GetFileContents = GetFileContents
     deriving (Eq, Show, Generic)
-instance Binary   GetFileContents
 instance Hashable GetFileContents
 instance NFData   GetFileContents
 

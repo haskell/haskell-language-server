@@ -156,12 +156,11 @@ setPackageDbs paths dflags =
         }
     }
 
-setPackageImports :: Bool -> [(String, [(String, String)])] -> DynFlags -> DynFlags
+setPackageImports :: Bool -> [(String, ModRenaming)] -> DynFlags -> DynFlags
 setPackageImports hideAllPkgs pkgImports dflags = dflags {
     packageFlags = packageFlags dflags ++
-        [ExposePackage pkgName (UnitIdArg $ stringToUnitId pkgName)
-          (ModRenaming False [(mkModuleName mod, mkModuleName alias) | (mod, alias) <- aliases])
-        | (pkgName, aliases) <- pkgImports
+        [ExposePackage pkgName (UnitIdArg $ stringToUnitId pkgName) renaming
+        | (pkgName, renaming) <- pkgImports
         ]
     , generalFlags = if hideAllPkgs
                       then Opt_HideAllPackages `EnumSet.insert` generalFlags dflags
