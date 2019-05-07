@@ -15,6 +15,7 @@ module Development.IDE.State.RuleTypes(
 import           Control.DeepSeq
 import           Development.IDE.Functions.Compile             (TcModuleResult, GhcModule, LoadPackageResult(..))
 import qualified Development.IDE.Functions.Compile             as Compile
+import qualified Development.IDE.UtilGHC as Compile
 import           Development.IDE.Functions.FindImports         (Import(..))
 import           Development.IDE.Functions.DependencyInformation
 import           Data.Hashable
@@ -61,7 +62,7 @@ type instance RuleResult GenerateCore = GhcModule
 
 -- | We capture the subset of `DynFlags` that is computed by package initialization in a rule to
 -- make session initialization cheaper by reusing it.
-type instance RuleResult LoadPackageState = Compile.PackageState
+type instance RuleResult LoadPackageState = Compile.PackageDynFlags
 
 -- | Resolve the imports in a module to the list of either external packages or absolute file paths
 -- for modules in the same package.
