@@ -10,6 +10,7 @@
 -- * Call setSessionDynFlags, use modifyDynFlags instead. It's faster and avoids loading packages.
 module Development.IDE.UtilGHC(
     PackageDynFlags(..), setPackageDynFlags, getPackageDynFlags,
+    lookupPackageConfig,
     modifyDynFlags,
     setPackageImports,
     setPackageDbs,
@@ -85,6 +86,16 @@ getPackageDynFlags DynFlags{..} = PackageDynFlags
     , pdfPkgState = pkgState
     , pdfThisUnitIdInsts = thisUnitIdInsts_
     }
+
+lookupPackageConfig :: UnitId -> PackageDynFlags -> Maybe PackageConfig
+lookupPackageConfig unitId PackageDynFlags {..} =
+    lookupPackage' False pkgConfigMap unitId
+    where
+        pkgConfigMap =
+            -- For some weird reason, the GHC API does not provide a way to get the PackageConfigMap
+            -- from PackageState so we have to wrap it in DynFlags first.
+            getPackageConfigMap fakeDynFlags { pkgState = pdfPkgState }
+
 
 
 prettyPrint :: Outputable a => a -> String
