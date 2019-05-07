@@ -13,6 +13,7 @@ module Development.IDE.Functions.DependencyInformation
 
 import Control.DeepSeq
 import Data.Bifunctor
+import Development.IDE.Orphans()
 import Data.Either
 import Data.Foldable
 import Data.Graph

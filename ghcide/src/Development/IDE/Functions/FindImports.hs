@@ -10,7 +10,7 @@ module Development.IDE.Functions.FindImports
   ) where
 
 import           Development.IDE.Functions.GHCError as ErrUtils
-
+import Development.IDE.Orphans()
 -- GHC imports
 import           BasicTypes                  (StringLiteral(..))
 import           DynFlags
