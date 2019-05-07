@@ -24,6 +24,7 @@ import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)
 
 import           GHC
+import HieTypes
 import           Module
 
 import           Development.IDE.Types.SpanInfo
@@ -72,6 +73,9 @@ type instance RuleResult GetLocatedImports = [(Located ModuleName, Maybe Import)
 -- We cannot report the cycles directly from GetDependencyInformation since
 -- we can only report diagnostics for the current file.
 type instance RuleResult ReportImportCycles = ()
+
+-- | Read the given HIE file.
+type instance RuleResult GetHieFile = HieFile
 
 
 data OfInterest = OfInterest
@@ -129,6 +133,13 @@ data LoadPackageState = LoadPackageState
 instance Hashable LoadPackageState
 instance NFData   LoadPackageState
 
+-- Note that we embed the filepath here instead of using the filepath associated with Shake keys.
+-- Otherwise we will garbage collect the result since files in package dependencies will not be declared reachable.
+data GetHieFile = GetHieFile FilePath
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetHieFile
+instance NFData   GetHieFile
+
 ------------------------------------------------------------
 -- Orphan Instances
 
@@ -166,4 +177,10 @@ instance Show LoadPackageResult where
   show = installedUnitIdString . lprInstalledUnitId
 
 instance NFData LoadPackageResult where
+    rnf = rwhnf
+
+instance Show HieFile where
+    show = show . hie_module
+
+instance NFData HieFile where
     rnf = rwhnf

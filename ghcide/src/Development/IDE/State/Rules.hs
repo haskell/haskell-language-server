@@ -46,8 +46,10 @@ import           Development.IDE.Types.LSP as Compiler
 import Development.IDE.State.RuleTypes
 
 import           GHC
+import HieBin
 import           UniqSupply
 import           Module                         as M
+import NameCache
 
 import qualified Development.IDE.Functions.AtPoint as AtPoint
 import Development.IDE.State.Service
@@ -151,7 +153,9 @@ getAtPointForFile file pos = do
 getDefinitionForFile :: FilePath -> Position -> ExceptT [FileDiagnostic] Action (Maybe Location)
 getDefinitionForFile file pos = do
     spans <- useE GetSpanInfo file
-    return $ AtPoint.gotoDefinition spans pos
+    pkgState <- useE LoadPackageState ""
+    opts <- lift getOpts
+    lift $ AtPoint.gotoDefinition opts pkgState spans pos
 
 getOpts :: Action Compile.IdeOptions
 getOpts = envOptions <$> getServiceEnv
@@ -331,6 +335,13 @@ loadPackageStateRule =
         liftIO $ Compile.generatePackageState
             (Compile.optPackageDbs opts) (Compile.optHideAllPkgs opts) (Compile.optPackageImports opts)
 
+getHieFileRule :: Rules ()
+getHieFileRule =
+    defineNoFile $ \(GetHieFile f) -> do
+        u <- liftIO $ mkSplitUniqSupply 'a'
+        let nameCache = initNameCache u []
+        liftIO $ fmap fst $ readHieFile nameCache f
+
 -- | A rule that wires per-file rules together
 mainRule :: Rules ()
 mainRule = do
@@ -344,6 +355,7 @@ mainRule = do
     generateCoreRule
     loadPackageStateRule
     loadPackageRule
+    getHieFileRule
 
 ------------------------------------------------------------
 
