@@ -29,6 +29,9 @@ import           Development.IDE.Functions.SpanInfo
 import Development.IDE.UtilGHC
 import Development.IDE.Types.Options
 
+import HieBin
+import HieAst
+
 import           GHC hiding (parseModule, typecheckModule)
 import qualified Parser
 import           Lexer
@@ -270,9 +273,13 @@ mkTcModuleResult (WriteInterface writeIface) tcm = do
     session   <- getSession
     nc        <- liftIO $ readIORef (hsc_NC session)
     (iface,_) <- liftIO $ mkIfaceTc session Nothing Sf_None details tcGblEnv
-    when writeIface $
-      liftIO $ do
+    liftIO $ when writeIface $ do
         writeIfaceFile (hsc_dflags session) (replaceExtension (file tcm) ".hi") iface
+        -- For now, we write .hie files whenever we write .hi files which roughly corresponds to
+        -- when we are building a package. It should be easily decoupable if that turns out to be
+        -- useful.
+        hieFile <- runHsc session $ mkHieFile (tcModSummary tcm) tcGblEnv (fromJust $ renamedSource tcm)
+        writeHieFile (replaceExtension (file tcm) ".hie") hieFile
     let mod_info = HomeModInfo iface details Nothing
         origNc = nsNames nc
     case lookupModuleEnv origNc (tcmModule tcm) of
