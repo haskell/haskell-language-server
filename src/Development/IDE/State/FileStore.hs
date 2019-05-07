@@ -12,6 +12,7 @@ module Development.IDE.State.FileStore(
 
 
 import           StringBuffer
+import Development.IDE.UtilGHC()
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
@@ -21,12 +22,12 @@ import qualified System.Directory as Dir
 import           Development.Shake
 import           Development.Shake.Classes
 import           Development.IDE.State.Shake
-import Development.IDE.UtilGHC
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           GHC.Generics
 import System.IO.Error
 import qualified Data.ByteString.Char8 as BS
+import qualified StringBuffer as SB
 import Development.IDE.Types.Diagnostics
 import           Data.Time
 
@@ -141,7 +142,13 @@ setBufferModified state absFile (mcontents, !time) = do
     -- update vars synchronously
     modifyVar_ envDirtyFiles $ evaluate . case mcontents of
         Nothing -> Map.delete absFile
-        Just contents -> Map.insert absFile $ strictPair time (textToStringBuffer contents)
+        Just contents -> Map.insert absFile $ strictPair time $ textToStringBuffer contents
 
     -- run shake to update results regarding the files of interest
     void $ shakeRun state []
+
+
+-- would be nice to do this more efficiently...
+textToStringBuffer :: T.Text -> SB.StringBuffer
+-- would be nice to do this more efficiently...
+textToStringBuffer = SB.stringToStringBuffer . T.unpack

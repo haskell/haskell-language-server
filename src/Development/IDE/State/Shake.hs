@@ -38,10 +38,8 @@ module Development.IDE.State.Shake(
     garbageCollect,
     setPriority,
     sendEvent,
-    shakeLogDebug,
-    shakeLogInfo,
-    shakeLogWarning,
-    shakeLogError,
+    Development.IDE.State.Shake.logDebug,
+    Development.IDE.State.Shake.logSeriousError,
     ) where
 
 import           Development.Shake
@@ -78,7 +76,7 @@ import           Numeric.Extra
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
     {eventer :: Event -> IO ()
-    ,logger :: Logger.Handle IO
+    ,logger :: Logger.Handle
     ,globals :: Var (Map.HashMap TypeRep Dynamic)
     ,state :: Var Values
     }
@@ -221,7 +219,7 @@ getValues state key file = do
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: (Event -> IO ()) -- ^ diagnostic handler
-          -> Logger.Handle IO
+          -> Logger.Handle
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
@@ -245,13 +243,13 @@ shakeRun :: IdeState -> [Action a] -> IO (IO [a])
 --        not even start, which would make issues with async exceptions less problematic.
 shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts = modifyVar shakeAbort $ \stop -> do
     (stopTime,_) <- duration stop
-    Logger.logInfo logger $ T.pack $ "Starting shakeRun (aborting the previous one took " ++ showDuration stopTime ++ ")"
+    Logger.logDebug logger $ T.pack $ "Starting shakeRun (aborting the previous one took " ++ showDuration stopTime ++ ")"
     bar <- newBarrier
     start <- offsetTime
     thread <- forkFinally (shakeRunDatabaseProfile shakeDb acts) $ \res -> do
         signalBarrier bar res
         runTime <- start
-        Logger.logInfo logger $ T.pack $
+        Logger.logDebug logger $ T.pack $
             "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ (if isLeft res then "exception" else "completed") ++ ")"
     -- important: we send an async exception to the thread, then wait for it to die, before continuing
     return (do killThread thread; void $ waitBarrier bar, either throwIO return =<< waitBarrier bar)
@@ -302,12 +300,12 @@ uses_ key files = do
 reportSeriousError :: String -> Action ()
 reportSeriousError t = do
     ShakeExtras{logger} <- getShakeExtras
-    liftIO $ Logger.logError logger $ T.pack t
+    liftIO $ Logger.logSeriousError logger $ T.pack t
 
 reportSeriousErrorDie :: String -> Action a
 reportSeriousErrorDie t = do
     ShakeExtras{logger} <- getShakeExtras
-    liftIO $ Logger.logError logger $ T.pack t
+    liftIO $ Logger.logSeriousError logger $ T.pack t
     fail t
 
 
@@ -419,12 +417,10 @@ sendEvent e = do
     liftIO $ eventer e
 
 -- | bit of an odd signature because we're trying to remove priority
-sl :: (Handle IO -> T.Text -> IO ()) -> IdeState -> T.Text -> IO ()
+sl :: (Handle -> T.Text -> IO ()) -> IdeState -> T.Text -> IO ()
 sl f IdeState{shakeExtras=ShakeExtras{logger}} p = f logger p
 
-shakeLogDebug, shakeLogInfo, shakeLogWarning, shakeLogError
+logDebug, logSeriousError
     :: IdeState -> T.Text -> IO ()
-shakeLogDebug = sl logDebug
-shakeLogInfo = sl logInfo
-shakeLogWarning = sl logWarning
-shakeLogError = sl logError
+logDebug = sl Logger.logDebug
+logSeriousError = sl Logger.logSeriousError

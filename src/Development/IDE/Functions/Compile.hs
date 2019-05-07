@@ -8,9 +8,7 @@
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
 module Development.IDE.Functions.Compile
-  ( CompileOpts(..)
-  , PackageState(..)
-  , GhcModule(..)
+  ( GhcModule(..)
   , TcModuleResult(..)
   , LoadPackageResult(..)
   , getGhcDynFlags
@@ -29,6 +27,7 @@ import qualified Development.IDE.Functions.FindImports as FindImports
 import           Development.IDE.Functions.GHCError
 import           Development.IDE.Functions.SpanInfo
 import Development.IDE.UtilGHC
+import Development.IDE.Types.Options
 
 import           GHC hiding (parseModule, typecheckModule)
 import qualified Parser
@@ -38,7 +37,7 @@ import           Bag
 import qualified GHC
 import           Panic
 import           GhcMonad
-import           GhcPlugins                     as GHC hiding (PackageState, fst3, (<>))
+import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
 import           MkIface
 import           NameCache
@@ -60,24 +59,6 @@ import           Data.Time
 import           Development.IDE.Types.SpanInfo
 import GHC.Generics (Generic)
 import           System.FilePath
-
--- TODO (MK) Move to a separate Options module
-data CompileOpts = CompileOpts
-  { optPreprocessor :: GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource)
-  , optRunGhcSession :: forall a. Maybe ParsedModule -> PackageState -> Ghc a -> IO a
-  -- ^ Setup a GHC session using a given package state. If a `ParsedModule` is supplied,
-  -- the import path should be setup for that module.
-  , optWriteIface :: Bool
-
-  , optMbPackageName :: Maybe String
-
-  , optPackageDbs :: [FilePath]
-  , optHideAllPkgs :: Bool
-  , optPackageImports :: [(String, ModRenaming)]
-
-  , optThreads :: Int
-  , optShakeProfiling :: Maybe FilePath
-  }
 
 -- | 'CoreModule' together with some additional information required for the
 -- conversion to DAML-LF.
@@ -106,9 +87,9 @@ data LoadPackageResult = LoadPackageResult
 
 -- | Get source span info, used for e.g. AtPoint and Goto Definition.
 getSrcSpanInfos
-    :: CompileOpts
+    :: IdeOptions
     -> ParsedModule
-    -> PackageState
+    -> PackageDynFlags
     -> [(Located ModuleName, Maybe FilePath)]
     -> TcModuleResult
     -> IO [SpanInfo]
@@ -120,18 +101,18 @@ getSrcSpanInfos opt mod packageState imports tc =
 
 -- | Given a string buffer, return a pre-processed @ParsedModule@.
 parseModule
-    :: CompileOpts
-    -> PackageState
+    :: IdeOptions
+    -> PackageDynFlags
     -> FilePath
     -> (UTCTime, SB.StringBuffer)
     -> IO ([FileDiagnostic], Maybe ParsedModule)
-parseModule opt@CompileOpts{..} packageState file =
+parseModule opt@IdeOptions{..} packageState file =
     fmap (either (, Nothing) (second Just)) . Ex.runExceptT .
     -- We need packages since imports fail to resolve otherwise.
     runGhcSessionExcept opt Nothing packageState . parseFileContents optPreprocessor file
 
 computePackageDeps ::
-     CompileOpts -> PackageState -> InstalledUnitId -> IO (Either [FileDiagnostic] [InstalledUnitId])
+     IdeOptions -> PackageDynFlags -> InstalledUnitId -> IO (Either [FileDiagnostic] [InstalledUnitId])
 computePackageDeps opts packageState iuid =
   Ex.runExceptT $
   runGhcSessionExcept opts Nothing packageState $
@@ -149,9 +130,9 @@ getPackage dflags p =
 
 -- | Typecheck a single module using the supplied dependencies and packages.
 typecheckModule
-    :: CompileOpts
+    :: IdeOptions
     -> ParsedModule
-    -> PackageState
+    -> PackageDynFlags
     -> UniqSupply
     -> [TcModuleResult]
     -> [LoadPackageResult]
@@ -169,8 +150,8 @@ typecheckModule opt mod packageState uniqSupply deps pkgs pm =
 
 -- | Load a pkg and populate the name cache and external package state.
 loadPackage ::
-     CompileOpts
-  -> PackageState
+     IdeOptions
+  -> PackageDynFlags
   -> UniqSupply
   -> [LoadPackageResult]
   -> InstalledUnitId
@@ -196,9 +177,9 @@ loadPackage opt packageState us lps p =
 -- | Compile a single type-checked module to a 'CoreModule' value, or
 -- provide errors.
 compileModule
-    :: CompileOpts
+    :: IdeOptions
     -> ParsedModule
-    -> PackageState
+    -> PackageDynFlags
     -> UniqSupply
     -> [TcModuleResult]
     -> [LoadPackageResult]
@@ -233,27 +214,27 @@ compileModule opt mod packageState uniqSupply deps pkgs tmr =
 -- | Evaluate a GHC session using a new environment constructed with
 -- the supplied options.
 runGhcSessionExcept
-    :: CompileOpts
+    :: IdeOptions
     -> Maybe ParsedModule
-    -> PackageState
+    -> PackageDynFlags
     -> Ex.ExceptT e Ghc a
     -> Ex.ExceptT e IO a
 runGhcSessionExcept opts mbMod pkg m =
     Ex.ExceptT $ runGhcSession opts mbMod pkg $ Ex.runExceptT m
 
 
-getGhcDynFlags :: CompileOpts -> ParsedModule -> PackageState -> IO DynFlags
+getGhcDynFlags :: IdeOptions -> ParsedModule -> PackageDynFlags -> IO DynFlags
 getGhcDynFlags opts mod pkg = runGhcSession opts (Just mod) pkg getSessionDynFlags
 
 -- | Evaluate a GHC session using a new environment constructed with
 -- the supplied options.
 runGhcSession
-    :: CompileOpts
+    :: IdeOptions
     -> Maybe ParsedModule
-    -> PackageState
+    -> PackageDynFlags
     -> Ghc a
     -> IO a
-runGhcSession CompileOpts{..} = optRunGhcSession
+runGhcSession IdeOptions{..} = optRunGhcSession
 
 -- When we make a fresh GHC environment, the OrigNameCache comes already partially
 -- populated. So to be safe, we simply extend this one.
@@ -496,11 +477,11 @@ parsePragmasIntoDynFlags fp contents = catchSrcErrors $ do
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
     return dflags
 
-generatePackageState :: [FilePath] -> Bool -> [(String, ModRenaming)] -> IO PackageState
+generatePackageState :: [FilePath] -> Bool -> [(String, ModRenaming)] -> IO PackageDynFlags
 generatePackageState paths hideAllPkgs pkgImports = do
   let dflags = setPackageImports hideAllPkgs pkgImports $ setPackageDbs paths (defaultDynFlags fakeSettings fakeLlvmConfig)
   (newDynFlags, _) <- initPackages dflags
-  pure $ PackageState (pkgDatabase newDynFlags) (pkgState newDynFlags) (thisUnitIdInsts_ newDynFlags)
+  pure $ getPackageDynFlags newDynFlags
 
 -- | Run something in a Ghc monad and catch the errors (SourceErrors and
 -- compiler-internal exceptions like Panic or InstallationError).

@@ -12,9 +12,8 @@
 --
 -- * Call setSessionDynFlags, use modifyDynFlags instead. It's faster and avoids loading packages.
 module Development.IDE.UtilGHC(
-    PackageState(..),
+    PackageDynFlags(..), setPackageDynFlags, getPackageDynFlags,
     modifyDynFlags,
-    textToStringBuffer,
     removeTypeableInfo,
     setPackageImports,
     setPackageDbs,
@@ -25,7 +24,6 @@ module Development.IDE.UtilGHC(
     mkImport,
     runGhcFast,
     setImports,
-    setPackageState,
     setThisInstalledUnitId,
     modIsInternal
     ) where
@@ -34,18 +32,17 @@ import           Config
 import           Fingerprint
 import           GHC                         hiding (convertLit)
 import           GhcMonad
-import           GhcPlugins                  as GHC hiding (PackageState, fst3, (<>))
+import           GhcPlugins                  as GHC hiding (fst3, (<>))
 import           HscMain
 import qualified Packages
 import           Platform
-import qualified StringBuffer                as SB
 import qualified EnumSet
 
 import           Control.DeepSeq
 import           Data.IORef
 import           Data.List
-import qualified Data.Text as T
 import GHC.Generics (Generic)
+import qualified StringBuffer as SB
 
 ----------------------------------------------------------------------
 -- GHC setup
@@ -82,15 +79,29 @@ modifyDynFlags f = do
   modifySession $ \h ->
     h { hsc_dflags = newFlags, hsc_IC = (hsc_IC h) {ic_dflags = newFlags} }
 
--- | This is the subset of `DynFlags` that is computed by package initialization.
-data PackageState = PackageState
-  { pkgStateDb :: !(Maybe [(FilePath, [Packages.PackageConfig])])
-  , pkgStateState :: !Packages.PackageState
-  , pkgThisUnitIdInsts :: !(Maybe [(ModuleName, Module)])
-  } deriving (Generic, Show)
+-- | The subset of @DynFlags@ computed by package initialization.
+data PackageDynFlags = PackageDynFlags
+    { pdfPkgDatabase :: !(Maybe [(FilePath, [Packages.PackageConfig])])
+    , pdfPkgState :: !Packages.PackageState
+    , pdfThisUnitIdInsts :: !(Maybe [(ModuleName, Module)])
+    } deriving (Generic, Show)
 
-instance NFData PackageState where
-  rnf (PackageState db state insts) = db `seq` state `seq` rnf insts
+instance NFData PackageDynFlags where
+  rnf (PackageDynFlags db state insts) = db `seq` state `seq` rnf insts
+
+setPackageDynFlags :: PackageDynFlags -> DynFlags -> DynFlags
+setPackageDynFlags PackageDynFlags{..} dflags = dflags
+    { pkgDatabase = pdfPkgDatabase
+    , pkgState = pdfPkgState
+    , thisUnitIdInsts_ = pdfThisUnitIdInsts
+    }
+
+getPackageDynFlags :: DynFlags -> PackageDynFlags
+getPackageDynFlags DynFlags{..} = PackageDynFlags
+    { pdfPkgDatabase = pkgDatabase
+    , pdfPkgState = pkgState
+    , pdfThisUnitIdInsts = thisUnitIdInsts_
+    }
 
 
 -- | A version of `showSDoc` that uses default flags (to avoid uses of
@@ -101,10 +112,6 @@ showSDocDefault = showSDoc dynFlags
 
 prettyPrint :: Outputable a => a -> String
 prettyPrint = showSDocDefault . ppr
-
-textToStringBuffer :: T.Text -> SB.StringBuffer
--- would be nice to do this more efficiently...
-textToStringBuffer = SB.stringToStringBuffer . T.unpack
 
 -- FIXME(#1203): This must move out of `haskell-ide-core` and into `damlc`.
 internalModules :: [String]
@@ -176,14 +183,6 @@ setThisInstalledUnitId unitId dflags =
 
 setImports :: [FilePath] -> DynFlags -> DynFlags
 setImports paths dflags = dflags { importPaths = paths }
-
-setPackageState :: PackageState -> DynFlags -> DynFlags
-setPackageState state dflags =
-  dflags
-    { pkgDatabase = pkgStateDb state
-    , pkgState = pkgStateState state
-    , thisUnitIdInsts_ = pkgThisUnitIdInsts state
-    }
 
 
 
