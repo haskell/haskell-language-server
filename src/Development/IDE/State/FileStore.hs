@@ -12,7 +12,7 @@ module Development.IDE.State.FileStore(
 
 
 import           StringBuffer
-import Development.IDE.UtilGHC()
+import Development.IDE.Orphans()
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
@@ -150,5 +150,4 @@ setBufferModified state absFile (mcontents, !time) = do
 
 -- would be nice to do this more efficiently...
 textToStringBuffer :: T.Text -> SB.StringBuffer
--- would be nice to do this more efficiently...
 textToStringBuffer = SB.stringToStringBuffer . T.unpack

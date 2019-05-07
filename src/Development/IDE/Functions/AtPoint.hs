@@ -11,6 +11,7 @@ module Development.IDE.Functions.AtPoint (
 
 import           Development.IDE.Functions.Documentation
 import           Development.IDE.Functions.GHCError
+import Development.IDE.Orphans()
 
 -- DAML compiler and infrastructure
 import           Development.IDE.Types.Diagnostics
