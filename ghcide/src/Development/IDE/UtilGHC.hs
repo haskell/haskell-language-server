@@ -29,6 +29,7 @@ import qualified Packages
 import           Platform
 import qualified EnumSet
 import           Data.IORef
+import           System.FilePath
 import GHC.Generics (Generic)
 
 ----------------------------------------------------------------------
@@ -38,7 +39,7 @@ setPackageDbs :: [FilePath] -> DynFlags -> DynFlags
 setPackageDbs paths dflags =
   dflags
     { packageDBFlags =
-        [PackageDB $ PkgConfFile path | path <- paths] ++ [NoGlobalPackageDB, ClearPackageDBs]
+        [PackageDB $ PkgConfFile $ path </> "package.conf.d" | path <- paths] ++ [NoGlobalPackageDB, ClearPackageDBs]
     , pkgDatabase = if null paths then Just [] else Nothing
       -- if we don't load any packages set the package database to empty and loaded.
     , settings = (settings dflags)
