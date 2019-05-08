@@ -191,7 +191,7 @@ getLocatedImportsRule =
         opt <- getOpts
         dflags <- liftIO $ Compile.getGhcDynFlags opt pm packageState
         xs <- forM imports $ \(mbPkgName, modName) ->
-            (modName, ) <$> locateModule dflags getFileExists modName mbPkgName
+            (modName, ) <$> locateModule dflags (Compile.optExtensions opt) getFileExists modName mbPkgName
         return (concat $ lefts $ map snd xs, Just $ map (second eitherToMaybe) xs)
 
 
