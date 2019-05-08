@@ -444,8 +444,8 @@ parseFileContents preprocessor filename (time, contents) = do
    dflags  <- parsePragmasIntoDynFlags filename contents
    case unP Parser.parseModule (mkPState dflags contents loc) of
 #ifdef USE_GHC
-     PFailed getMessages _ _ ->
-       Ex.throwE $ toDiagnostics dflags $ snd $ getMessages dflags
+     PFailed _ logMsg msgErr ->
+      Ex.throwE $ mkErrorDoc dflags locErr msgErr
 #else
      PFailed s ->
        Ex.throwE $ toDiagnostics dflags $ snd $ getMessages s dflags
