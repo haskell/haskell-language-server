@@ -448,6 +448,7 @@ parseFileContents preprocessor filename (time, contents) = do
       Ex.throwE $ mkErrorDoc dflags locErr msgErr
 #else
      PFailed s ->
+       -- A fatal parse error was encountered.
        Ex.throwE $ toDiagnostics dflags $ snd $ getMessages s dflags
 #endif
      POk pst rdr_module ->
@@ -455,9 +456,22 @@ parseFileContents preprocessor filename (time, contents) = do
                (Map.fromListWith (++) $ annotations pst,
                  Map.fromList ((noSrcSpan,comment_q pst)
                                   :annotations_comments pst))
-             (warns,_) = getMessages pst dflags
+             (warns, errs) = getMessages pst dflags
          in
            do
+               -- Just because we got a `POk`, it doesn't mean there
+               -- weren't errors! To clarify, the GHC parser
+               -- distinguishes between fatal and non-fatal
+               -- errors. Non-fatal errors are the sort that don't
+               -- prevent parsing from continuing (that is, a parse
+               -- tree can still be produced despite the error so that
+               -- further errors/warnings can be collected). Fatal
+               -- errors are those from which a parse tree just can't
+               -- be produced.
+               unless (null errs) $
+                 Ex.throwE $ toDiagnostics dflags $ snd $ getMessages pst dflags
+
+               -- Ok, we got here. It's safe to continue.
                let (errs, parsed) = preprocessor rdr_module
                unless (null errs) $ Ex.throwE $ mkErrors dflags errs
                ms <- getModSummaryFromBuffer filename (contents, time) dflags parsed
