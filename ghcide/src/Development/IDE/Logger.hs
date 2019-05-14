@@ -7,6 +7,7 @@
 -- framework they want to.
 module Development.IDE.Logger
   ( Handle(..)
+  , makeOneHandle
   , makeNopHandle
   ) where
 
@@ -19,5 +20,7 @@ data Handle = Handle {
     }
 
 makeNopHandle :: Handle
-makeNopHandle = Handle e e where
-    e _ = pure ()
+makeNopHandle = makeOneHandle $ const $ pure ()
+
+makeOneHandle :: (HasCallStack => T.Text -> IO ()) -> Handle
+makeOneHandle x = Handle x x
