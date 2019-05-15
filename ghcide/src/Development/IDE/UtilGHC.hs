@@ -129,6 +129,7 @@ fakeDynFlags = defaultDynFlags settings ([], [])
                 {pc_DYNAMIC_BY_DEFAULT = False
                 ,pc_WORD_SIZE = 8
                 }
+            ,sIntegerLibraryType = IntegerSimple
             ,sProjectVersion = cProjectVersion
             ,sProgramName = "ghc"
             ,sOpt_P_fingerprint = fingerprint0
