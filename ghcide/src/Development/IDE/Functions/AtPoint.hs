@@ -16,6 +16,7 @@ import Development.IDE.Orphans()
 -- DAML compiler and infrastructure
 import Development.Shake
 import Development.IDE.UtilGHC
+import Development.IDE.Compat
 import Development.IDE.State.Shake
 import Development.IDE.State.RuleTypes
 import           Development.IDE.Types.Diagnostics
@@ -27,7 +28,6 @@ import           Development.IDE.Types.SpanInfo as SpanInfo
 import Avail
 import GHC
 import DynFlags
-import HieTypes
 import FastString
 import Name
 import Outputable hiding ((<>))
