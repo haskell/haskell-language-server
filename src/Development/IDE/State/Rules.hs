@@ -46,7 +46,7 @@ import           Development.IDE.Types.LSP as Compiler
 import Development.IDE.State.RuleTypes
 
 import           GHC
-import HieBin
+import Development.IDE.Compat
 import           UniqSupply
 import           Module                         as M
 import NameCache

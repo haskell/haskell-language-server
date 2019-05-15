@@ -49,7 +49,11 @@ doCpp dflags raw input_fn output_fn = do
     let verbFlags = getVerbFlags dflags
 
     let cpp_prog args | raw       = SysTools.runCpp dflags args
-                      | otherwise = SysTools.runCc Nothing dflags (SysTools.Option "-E" : args)
+                      | otherwise = SysTools.runCc
+#ifndef GHC_STABLE
+                                          Nothing
+#endif
+                                          dflags (SysTools.Option "-E" : args)
 
     let target_defs = [] {-
           [ "-D" ++ HOST_OS     ++ "_BUILD_OS",
