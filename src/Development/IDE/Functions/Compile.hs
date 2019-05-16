@@ -95,12 +95,12 @@ data LoadPackageResult = LoadPackageResult
 getSrcSpanInfos
     :: IdeOptions
     -> ParsedModule
-    -> PackageDynFlags
+    -> HscEnv
     -> [(Located ModuleName, Maybe FilePath)]
     -> TcModuleResult
     -> IO [SpanInfo]
-getSrcSpanInfos opt mod packageState imports tc =
-    runGhcSession opt (Just mod) packageState
+getSrcSpanInfos opt mod env imports tc =
+    runGhcSession opt (Just mod) env
         . getSpanInfo imports
         $ tmrModule tc
 
@@ -108,7 +108,7 @@ getSrcSpanInfos opt mod packageState imports tc =
 -- | Given a string buffer, return a pre-processed @ParsedModule@.
 parseModule
     :: IdeOptions
-    -> PackageDynFlags
+    -> HscEnv
     -> FilePath
     -> (UTCTime, SB.StringBuffer)
     -> IO ([FileDiagnostic], Maybe ParsedModule)
@@ -118,7 +118,7 @@ parseModule opt@IdeOptions{..} packageState file =
     runGhcSessionExcept opt Nothing packageState . parseFileContents optPreprocessor file
 
 computePackageDeps ::
-     IdeOptions -> PackageDynFlags -> InstalledUnitId -> IO (Either [FileDiagnostic] [InstalledUnitId])
+     IdeOptions -> HscEnv -> InstalledUnitId -> IO (Either [FileDiagnostic] [InstalledUnitId])
 computePackageDeps opts packageState iuid =
   Ex.runExceptT $
   runGhcSessionExcept opts Nothing packageState $
@@ -138,7 +138,7 @@ getPackage dflags p =
 typecheckModule
     :: IdeOptions
     -> ParsedModule
-    -> PackageDynFlags
+    -> HscEnv
     -> UniqSupply
     -> [TcModuleResult]
     -> [LoadPackageResult]
@@ -157,7 +157,7 @@ typecheckModule opt mod packageState uniqSupply deps pkgs pm =
 -- | Load a pkg and populate the name cache and external package state.
 loadPackage ::
      IdeOptions
-  -> PackageDynFlags
+  -> HscEnv
   -> UniqSupply
   -> [LoadPackageResult]
   -> InstalledUnitId
@@ -185,7 +185,7 @@ loadPackage opt packageState us lps p =
 compileModule
     :: IdeOptions
     -> ParsedModule
-    -> PackageDynFlags
+    -> HscEnv
     -> UniqSupply
     -> [TcModuleResult]
     -> [LoadPackageResult]
@@ -222,14 +222,14 @@ compileModule opt mod packageState uniqSupply deps pkgs tmr =
 runGhcSessionExcept
     :: IdeOptions
     -> Maybe ParsedModule
-    -> PackageDynFlags
+    -> HscEnv
     -> Ex.ExceptT e Ghc a
     -> Ex.ExceptT e IO a
 runGhcSessionExcept opts mbMod pkg m =
     Ex.ExceptT $ runGhcSession opts mbMod pkg $ Ex.runExceptT m
 
 
-getGhcDynFlags :: IdeOptions -> ParsedModule -> PackageDynFlags -> IO DynFlags
+getGhcDynFlags :: IdeOptions -> ParsedModule -> HscEnv -> IO DynFlags
 getGhcDynFlags opts mod pkg = runGhcSession opts (Just mod) pkg getSessionDynFlags
 
 -- | Evaluate a GHC session using a new environment constructed with
@@ -237,10 +237,27 @@ getGhcDynFlags opts mod pkg = runGhcSession opts (Just mod) pkg getSessionDynFla
 runGhcSession
     :: IdeOptions
     -> Maybe ParsedModule
-    -> PackageDynFlags
+    -> HscEnv
     -> Ghc a
     -> IO a
-runGhcSession IdeOptions{..} = optRunGhcSession
+runGhcSession IdeOptions{..} modu env act = runGhcEnv env $ do
+    modifyDynFlags $ \x -> x{importPaths = maybe [] moduleImportPaths modu ++ importPaths x}
+    act
+
+
+moduleImportPaths :: GHC.ParsedModule -> [FilePath]
+moduleImportPaths pm =
+    maybe [] (\modRoot -> [modRoot]) mbModuleRoot
+  where
+    ms   = GHC.pm_mod_summary pm
+    file = GHC.ms_hspp_file ms
+    mod'  = GHC.ms_mod ms
+    rootPathDir  = takeDirectory file
+    rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
+    mbModuleRoot
+        | rootModDir == "." = Just rootPathDir
+        | otherwise = dropTrailingPathSeparator <$> stripSuffix rootModDir rootPathDir
+
 
 -- When we make a fresh GHC environment, the OrigNameCache comes already partially
 -- populated. So to be safe, we simply extend this one.

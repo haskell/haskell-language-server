@@ -41,7 +41,7 @@ import qualified Data.Text as T
 -- | Locate the definition of the name at a given position.
 gotoDefinition
   :: IdeOptions
-  -> PackageDynFlags
+  -> HscEnv
   -> [SpanInfo]
   -> Position
   -> Action (Maybe Location)
@@ -86,7 +86,7 @@ atPoint tcs srcSpans pos = do
         Just name -> any (`isInfixOf` show name) ["==", "showsPrec"]
         Nothing -> False
 
-locationsAtPoint :: IdeOptions -> PackageDynFlags -> Position -> [SpanInfo] -> Action [Location]
+locationsAtPoint :: IdeOptions -> HscEnv -> Position -> [SpanInfo] -> Action [Location]
 locationsAtPoint IdeOptions{..} pkgState pos =
     fmap (map srcSpanToLocation) .
     mapMaybeM (getSpan . spaninfoSource) .
