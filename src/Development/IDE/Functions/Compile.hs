@@ -172,6 +172,7 @@ loadPackage opt packageState us lps p =
     let mods =
           [ Module (DefiniteUnitId (DefUnitId p)) mod
           | (mod, _mbParent) <- exposedMods
+          , False {- HLINT ignore "Short-circuited list comprehension" -}
           ]
     forM_ mods $ \mod -> GHC.getModuleInfo mod
     -- this populates the namecache and external package state
@@ -336,12 +337,13 @@ setupEnv uniqSupply tms lps = do
         foldl' (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) fc
             $ zip ims ifrs
 
-    -- construct a new NameCache
-    nc' <- mkNameCache uniqSupply tms lps
-    -- update the name cache
-    liftIO $ modifyIORef (hsc_NC session) $ const nc'
-    -- update the external package state
-    liftIO $ modifyIORef (hsc_EPS session) (updateEps lps)
+    when False $ do
+        -- construct a new NameCache
+        nc' <- mkNameCache uniqSupply tms lps
+        -- update the name cache
+        liftIO $ modifyIORef (hsc_NC session) $ const nc'
+        -- update the external package state
+        liftIO $ modifyIORef (hsc_EPS session) (updateEps lps)
     -- load dependent modules, which must be in topological order.
     mapM_ loadModuleHome tms
 
