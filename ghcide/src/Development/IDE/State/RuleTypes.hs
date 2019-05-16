@@ -51,9 +51,6 @@ type instance RuleResult GetDependencies = TransitiveDependencies
 -- | The type checked version of this file, requires TypeCheck+
 type instance RuleResult TypeCheck = TcModuleResult
 
--- | The result of loading a module from a package.
-type instance RuleResult LoadPackage = LoadPackageResult
-
 -- | Information about what spans occur where, requires TypeCheck
 type instance RuleResult GetSpanInfo = [SpanInfo]
 
@@ -110,11 +107,6 @@ data TypeCheck = TypeCheck
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable TypeCheck
 instance NFData   TypeCheck
-
-data LoadPackage = LoadPackage InstalledUnitId
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable LoadPackage
-instance NFData   LoadPackage
 
 data GetSpanInfo = GetSpanInfo
     deriving (Eq, Show, Typeable, Generic)
