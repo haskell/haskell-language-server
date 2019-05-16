@@ -241,22 +241,21 @@ runGhcSession
     -> Ghc a
     -> IO a
 runGhcSession IdeOptions{..} modu env act = runGhcEnv env $ do
-    modifyDynFlags $ \x -> x{importPaths = maybe [] moduleImportPaths modu ++ importPaths x}
+    modifyDynFlags $ \x -> x
+        {importPaths = nubOrd $ maybeToList (moduleImportPaths =<< modu) ++ importPaths x}
     act
 
 
-moduleImportPaths :: GHC.ParsedModule -> [FilePath]
-moduleImportPaths pm =
-    maybe [] (\modRoot -> [modRoot]) mbModuleRoot
+moduleImportPaths :: GHC.ParsedModule -> Maybe FilePath
+moduleImportPaths pm
+  | rootModDir == "." = Just rootPathDir
+  | otherwise = dropTrailingPathSeparator <$> stripSuffix rootModDir rootPathDir
   where
     ms   = GHC.pm_mod_summary pm
     file = GHC.ms_hspp_file ms
     mod'  = GHC.ms_mod ms
     rootPathDir  = takeDirectory file
     rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
-    mbModuleRoot
-        | rootModDir == "." = Just rootPathDir
-        | otherwise = dropTrailingPathSeparator <$> stripSuffix rootModDir rootPathDir
 
 
 -- When we make a fresh GHC environment, the OrigNameCache comes already partially
