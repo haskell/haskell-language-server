@@ -17,7 +17,8 @@ module Development.IDE.UtilGHC(
     setPackageDbs,
     fakeDynFlags,
     prettyPrint,
-    runGhcFast
+    runGhcFast,
+    runGhcEnv
     ) where
 
 import           Config
@@ -89,19 +90,25 @@ getPackageDynFlags DynFlags{..} = PackageDynFlags
     , pdfThisUnitIdInsts = thisUnitIdInsts_
     }
 
-lookupPackageConfig :: UnitId -> PackageDynFlags -> Maybe PackageConfig
-lookupPackageConfig unitId PackageDynFlags {..} =
+lookupPackageConfig :: UnitId -> HscEnv -> Maybe PackageConfig
+lookupPackageConfig unitId env =
     lookupPackage' False pkgConfigMap unitId
     where
         pkgConfigMap =
             -- For some weird reason, the GHC API does not provide a way to get the PackageConfigMap
             -- from PackageState so we have to wrap it in DynFlags first.
-            getPackageConfigMap fakeDynFlags { pkgState = pdfPkgState }
+            getPackageConfigMap $ hsc_dflags env
 
 
 
 prettyPrint :: Outputable a => a -> String
 prettyPrint = showSDoc fakeDynFlags . ppr
+
+runGhcEnv :: HscEnv -> Ghc a -> IO a
+runGhcEnv env act = do
+    ref <- newIORef env
+    unGhc act $ Session ref
+
 
 -- | Like 'runGhc' but much faster (400x), with less IO and no file dependency
 runGhcFast :: Ghc a -> IO a
