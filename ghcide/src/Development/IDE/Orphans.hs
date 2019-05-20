@@ -38,11 +38,3 @@ instance Show (GenLocated SrcSpan ModuleName) where show = prettyPrint
 instance Show PackageName where show = prettyPrint
 instance Show PackageState where show _ = "PackageState"
 instance Show Name where show = prettyPrint
-
-
--- Things which are defined in this module, but still orphan since I need
--- the definitions in this module
-
-deriving instance Show PackageDynFlags
-instance NFData PackageDynFlags where
-    rnf (PackageDynFlags db state insts) = db `seq` state `seq` rnf insts
