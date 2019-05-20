@@ -18,7 +18,6 @@ module Development.IDE.Functions.Compile
   , typecheckModule
   , loadPackage
   , computePackageDeps
-  , generatePackageState
   ) where
 
 import           Development.IDE.Functions.Warnings
@@ -441,12 +440,6 @@ parsePragmasIntoDynFlags fp contents = catchSrcErrors $ do
     let opts = Hdr.getOptions dflags0 contents fp
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
     return dflags
-
-generatePackageState :: [FilePath] -> Bool -> [(String, ModRenaming)] -> IO PackageDynFlags
-generatePackageState paths hideAllPkgs pkgImports = do
-  let dflags = setPackageImports hideAllPkgs pkgImports $ setPackageDbs paths fakeDynFlags
-  (newDynFlags, _) <- initPackages dflags
-  pure $ getPackageDynFlags newDynFlags
 
 -- | Run something in a Ghc monad and catch the errors (SourceErrors and
 -- compiler-internal exceptions like Panic or InstallationError).
