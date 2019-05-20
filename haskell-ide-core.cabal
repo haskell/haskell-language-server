@@ -1,0 +1,118 @@
+cabal-version:      >= 1.18
+build-type:         Simple
+name:               haskell-ide-core
+version:            0
+license:            BSD3
+x-license:          BSD3 OR Apache2
+author:             Digital Asset
+maintainer:         Digital Asset
+copyright:          Digital Asset 2018-2019
+synopsis:           The core of an IDE
+description:
+    A library for building Haskell IDE's on top of the GHC API.
+homepage:           https://github.com/digital-asset/daml#readme
+bug-reports:        https://github.com/digital-asset/daml/issues
+tested-with:        GHC==8.6.5
+
+source-repository head
+    type:     git
+    location: https://github.com/digital-asset/daml.git
+
+library
+    default-language:   Haskell2010
+    build-depends:
+        aeson,
+        base == 4.*,
+        binary,
+        bytestring,
+        containers,
+        deepseq,
+        directory,
+        either,
+        extra,
+        filepath,
+        ghc,
+        ghc-boot-th,
+        ghc-boot,
+        hashable,
+        haskell-lsp,
+        haskell-lsp-types,
+        mtl,
+        pretty,
+        safe-exceptions,
+        shake,
+        stm,
+        syb,
+        text,
+        time,
+        prettyprinter,
+        prettyprinter-ansi-terminal,
+        transformers,
+        uniplate,
+        unordered-containers,
+        uri-encode
+
+    cpp-options: -DGHC_STABLE
+    default-extensions:
+        LambdaCase
+        BangPatterns
+        DeriveGeneric
+        RecordWildCards
+        ScopedTypeVariables
+        NamedFieldPuns
+        TupleSections
+        TypeApplications
+        ViewPatterns
+        GeneralizedNewtypeDeriving
+        StandaloneDeriving
+
+    hs-source-dirs:
+        src
+        ../../libs-haskell/prettyprinter-syntax/src
+    exposed-modules:
+        Development.IDE.Logger
+        Development.IDE.UtilGHC
+        Development.IDE.Functions.AtPoint
+        Development.IDE.Functions.Compile
+        Development.IDE.Functions.CPP
+        Development.IDE.Orphans
+        Development.IDE.Functions.DependencyInformation
+        Development.IDE.Functions.Documentation
+        Development.IDE.Functions.FindImports
+        Development.IDE.Functions.GHCError
+        Development.IDE.Functions.SpanInfo
+        Development.IDE.Functions.Warnings
+        Development.IDE.State.FileStore
+        Development.IDE.State.Rules
+        Development.IDE.Compat
+        Development.IDE.Types.Options
+        Development.IDE.State.RuleTypes
+        Development.IDE.State.Service
+        Development.IDE.State.Shake
+        Development.IDE.Types.Diagnostics
+        Development.IDE.Types.Location
+        Development.IDE.Types.LSP
+        Development.IDE.Types.SpanInfo
+    other-modules:
+        Data.Text.Prettyprint.Doc.Syntax
+
+executable ide-demo
+    default-language:   Haskell2010
+    main-is: Demo.hs
+    ghc-options: -main-is Demo.main
+    build-depends:
+        base == 4.*,
+        filepath,
+        containers,
+        shake,
+        ghc-paths,
+        ghc,
+        extra,
+        text,
+        haskell-ide-core
+
+    default-extensions:
+        TupleSections
+        RecordWildCards
+
+    hs-source-dirs:     test
