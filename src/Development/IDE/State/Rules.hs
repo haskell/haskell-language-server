@@ -33,7 +33,6 @@ import           Development.IDE.State.FileStore
 import           Development.IDE.Types.Diagnostics as Base
 import Data.Bifunctor
 import Data.Either.Extra
-import Development.IDE.UtilGHC
 import Data.Maybe
 import           Data.Foldable
 import qualified Data.Map.Strict                          as Map
@@ -45,7 +44,6 @@ import           Development.IDE.Types.LSP as Compiler
 import Development.IDE.State.RuleTypes
 
 import           GHC
-import HscTypes
 import Development.IDE.Compat
 import           UniqSupply
 import           Module                         as M
@@ -300,10 +298,7 @@ loadGhcSession :: Rules ()
 loadGhcSession =
     defineNoFile $ \GhcSession -> do
         opts <- envOptions <$> getServiceEnv
-        env <- Compile.optGhcSession opts
-        pkg <- liftIO $ Compile.generatePackageState
-            (Compile.optPackageDbs opts) (Compile.optHideAllPkgs opts) (Compile.optPackageImports opts)
-        return env{hsc_dflags = setPackageDynFlags pkg $ hsc_dflags env}
+        Compile.optGhcSession opts
 
 
 getHieFileRule :: Rules ()
