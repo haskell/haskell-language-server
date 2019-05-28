@@ -21,6 +21,7 @@ depends = [
     "mtl",
     "pretty",
     "safe-exceptions",
+    "sorted-list",
     "shake",
     "stm",
     "syb",

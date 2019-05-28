@@ -27,12 +27,16 @@ module Development.IDE.Types.Diagnostics (
   ideTryIOException,
   showDiagnostics,
   showDiagnosticsColored,
-  prettyDiagnosticStore,
   defDiagnostic,
-  addDiagnostics,
-  filterSeriousErrors,
   filePathToUri,
-  getDiagnosticsFromStore
+  uriToFilePath',
+  ProjectDiagnostics,
+  emptyDiagnostics,
+  setStageDiagnostics,
+  getAllDiagnostics,
+  filterDiagnostics,
+  getFileDiagnostics,
+  prettyDiagnostics
   ) where
 
 import Control.Exception
@@ -40,14 +44,17 @@ import Data.Either.Combinators
 import Data.Maybe as Maybe
 import Data.Foldable
 import qualified Data.Map as Map
+import Data.Time.Clock
+import Data.Time.Clock.POSIX
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Syntax
+import qualified Data.SortedList as SL
 import qualified Text.PrettyPrint.Annotated.HughesPJClass as Pretty
-import           Language.Haskell.LSP.Types as LSP (
+import qualified Language.Haskell.LSP.Types as LSP
+import Language.Haskell.LSP.Types as LSP (
     DiagnosticSeverity(..)
   , Diagnostic(..)
   , filePathToUri
-  , uriToFilePath
   , List(..)
   , DiagnosticRelatedInformation(..)
   , Uri(..)
@@ -55,6 +62,15 @@ import           Language.Haskell.LSP.Types as LSP (
 import Language.Haskell.LSP.Diagnostics
 
 import Development.IDE.Types.Location
+
+-- | We use an empty string as a filepath when we don’t have a file.
+-- However, haskell-lsp doesn’t support that in uriToFilePath and given
+-- that it is not a valid filepath it does not make sense to upstream a fix.
+-- So we have our own wrapper here that supports empty filepaths.
+uriToFilePath' :: Uri -> Maybe FilePath
+uriToFilePath' uri
+    | uri == filePathToUri "" = Just ""
+    | otherwise = LSP.uriToFilePath uri
 
 ideErrorText :: FilePath -> T.Text -> FileDiagnostic
 ideErrorText fp = errorDiag fp "Ide Error"
@@ -95,28 +111,6 @@ defDiagnostic _range _message = LSP.Diagnostic {
   , _source = Nothing
   , _relatedInformation = Nothing
   }
-
-filterSeriousErrors ::
-    FilePath ->
-    [LSP.Diagnostic] ->
-    [LSP.Diagnostic]
-filterSeriousErrors fp =
-    filter (maybe False hasSeriousErrors . LSP._relatedInformation)
-    where
-        hasSeriousErrors :: List DiagnosticRelatedInformation -> Bool
-        hasSeriousErrors (List a) = any ((/=) uri . _uri . _location) a
-        uri = LSP.filePathToUri fp
-
-addDiagnostics ::
-  FilePath ->
-  [LSP.Diagnostic] ->
-  DiagnosticStore -> DiagnosticStore
-addDiagnostics fp diags ds =
-    updateDiagnostics
-    ds
-    (LSP.filePathToUri fp)
-    Nothing $
-    partitionBySource diags
 
 ideTryIOException :: FilePath -> IO a -> IO (Either FileDiagnostic a)
 ideTryIOException fp act =
@@ -167,20 +161,61 @@ prettyDiagnostic (fp, LSP.Diagnostic{..}) =
     where
         sev = fromMaybe LSP.DsError _severity
 
-prettyDiagnosticStore :: DiagnosticStore -> Doc SyntaxClass
-prettyDiagnosticStore ds =
-    vcat $
-    map (\(uri, diags) -> prettyFileDiagnostics (fromMaybe noFilePath $ uriToFilePath uri, diags)) $
-    Map.assocs $
-    Map.map getDiagnosticsFromStore ds
-
-prettyFileDiagnostics :: FileDiagnostics -> Doc SyntaxClass
-prettyFileDiagnostics (filePath, diags) =
-    slabel_ "Compiler error in" $ vcat
-        [ slabel_ "File:" $ pretty filePath
-        , slabel_ "Errors:" $ vcat $ map (prettyDiagnostic . (filePath,)) diags
-        ]
-
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) =
     toList =<< Map.elems diags
+
+-- | This represents every diagnostic in a LSP project, the stage type variable is
+--   the type of the compiler stages, in this project that is always the Key data
+--   type found in Development.IDE.State.Shake
+newtype ProjectDiagnostics stage = ProjectDiagnostics {getStore :: DiagnosticStore}
+    deriving Show
+
+emptyDiagnostics :: ProjectDiagnostics stage
+emptyDiagnostics = ProjectDiagnostics mempty
+
+-- | Sets the diagnostics for a file and compilation step
+--   if you want to clear the diagnostics call this with an empty list
+setStageDiagnostics ::
+  Show stage =>
+  FilePath ->
+  Maybe UTCTime ->
+  -- ^ the time that the file these diagnostics originate from was last edited
+  stage ->
+  [LSP.Diagnostic] ->
+  ProjectDiagnostics stage ->
+  ProjectDiagnostics stage
+setStageDiagnostics fp timeM stage diags (ProjectDiagnostics ds) =
+    ProjectDiagnostics $ updateDiagnostics ds uri posixTime diagsBySource
+    where
+        diagsBySource = Map.singleton (Just $ T.pack $ show stage) (SL.toSortedList diags)
+        posixTime :: Maybe Int
+        posixTime = fmap (fromEnum . utcTimeToPOSIXSeconds) timeM
+        uri = filePathToUri fp
+
+fromUri :: LSP.Uri -> FilePath
+fromUri = fromMaybe noFilePath . uriToFilePath'
+
+getAllDiagnostics ::
+    ProjectDiagnostics stage ->
+    [FileDiagnostic]
+getAllDiagnostics =
+    concatMap (\(k,v) -> map (fromUri k,) $ getDiagnosticsFromStore v) . Map.toList . getStore
+
+getFileDiagnostics ::
+    FilePath ->
+    ProjectDiagnostics stage ->
+    [LSP.Diagnostic]
+getFileDiagnostics fp ds =
+    maybe [] getDiagnosticsFromStore $
+    Map.lookup (filePathToUri fp) $
+    getStore ds
+
+filterDiagnostics ::
+    (FilePath -> Bool) ->
+    ProjectDiagnostics stage ->
+    ProjectDiagnostics stage
+filterDiagnostics keep =
+    ProjectDiagnostics .
+    Map.filterWithKey (\uri _ -> maybe True keep $ uriToFilePath' uri) .
+    getStore

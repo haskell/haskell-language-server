@@ -24,7 +24,7 @@
 --   useStale.
 module Development.IDE.State.Shake(
     IdeState,
-    IdeRule, IdeResult,
+    IdeRule, IdeResult, GetModificationTime(..),
     shakeOpen, shakeShut,
     shakeRun,
     shakeProfile,
@@ -55,19 +55,18 @@ import           Data.List.Extra
 import qualified Data.Text as T
 import Development.IDE.Logger as Logger
 import Development.IDE.Types.LSP
-import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Diagnostics hiding (getAllDiagnostics)
+import qualified Development.IDE.Types.Diagnostics as D
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.DeepSeq
 import           System.Time.Extra
 import           Data.Typeable
-import           Data.Tuple.Extra
-import System.Directory
-import           System.FilePath
+import           System.FilePath hiding (makeRelative)
 import qualified Development.Shake as Shake
 import           Control.Monad.Extra
-import qualified Data.Set as Set
 import           Data.Time
+import           GHC.Generics
 import           System.IO.Unsafe
 import           Numeric.Extra
 
@@ -79,6 +78,7 @@ data ShakeExtras = ShakeExtras
     ,logger :: Logger.Handle
     ,globals :: Var (Map.HashMap TypeRep Dynamic)
     ,state :: Var Values
+    ,diagnostics :: Var (ProjectDiagnostics Key)
     }
 
 getShakeExtras :: Action ShakeExtras
@@ -116,12 +116,7 @@ getIdeGlobalState = getIdeGlobalExtras . shakeExtras
 
 
 -- | The state of the all values - nested so you can easily find all errors at a given file.
-type Values =
-    Map.HashMap FilePath
-        (Map.HashMap Key
-            (IdeResult Dynamic)
-        )
-
+type Values = Map.HashMap (FilePath, Key) (Maybe Dynamic)
 
 -- | Key type
 data Key = forall k . (Typeable k, Hashable k, Eq k, Show k) => Key k
@@ -198,13 +193,10 @@ setValues :: IdeRule k v
           => Var Values
           -> k
           -> FilePath
-          -> IdeResult v
-          -> IO (Maybe [FileDiagnostic], [FileDiagnostic]) -- ^ (before, after)
-setValues state key file val = modifyVar state $ \inVal -> do
-    let k = Key key
-        outVal = Map.insertWith Map.union file (Map.singleton k $ second (fmap toDyn) val) inVal
-        f = concatMap fst . Map.elems
-    return (outVal, (f <$> Map.lookup file inVal, f $ outVal Map.! file))
+          -> Maybe v
+          -> IO ()
+setValues state key file val = modifyVar_ state $
+    pure . Map.insert (file, Key key) (fmap toDyn val)
 
 -- | The outer Maybe is Nothing if this function hasn't been computed before
 --   the inner Maybe is Nothing if the result of the previous computation failed to produce
@@ -213,9 +205,8 @@ getValues :: forall k v. IdeRule k v => Var Values -> k -> FilePath -> IO (Maybe
 getValues state key file = do
     vs <- readVar state
     return $ do
-        f <- Map.lookup file vs
-        v <- Map.lookup (Key key) f
-        pure $ fmap (fromJust . fromDynamic @v) $ snd v
+        v <- Map.lookup (file, Key key) vs
+        pure $ fmap (fromJust . fromDynamic @v) v
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: (Event -> IO ()) -- ^ diagnostic handler
@@ -223,8 +214,12 @@ shakeOpen :: (Event -> IO ()) -- ^ diagnostic handler
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen diags shakeLogger opts rules = do
-    shakeExtras <- ShakeExtras diags shakeLogger <$> newVar Map.empty <*> newVar Map.empty
+shakeOpen eventer logger opts rules = do
+    shakeExtras <- do
+        globals <- newVar Map.empty
+        state <- newVar Map.empty
+        diagnostics <- newVar emptyDiagnostics
+        pure ShakeExtras{..}
     (shakeDb, shakeClose) <- shakeOpenDatabase opts{shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts} rules
     shakeAbort <- newVar $ return ()
     shakeDb <- shakeDb
@@ -263,20 +258,22 @@ useStale IdeState{shakeExtras=ShakeExtras{state}} k fp =
 
 
 getAllDiagnostics :: IdeState -> IO [FileDiagnostic]
-getAllDiagnostics IdeState{shakeExtras = ShakeExtras{state}} = do
-    val <- readVar state
-    return $ concatMap (concatMap fst . Map.elems) $ Map.elems val
+getAllDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
+    val <- readVar diagnostics
+    return $ D.getAllDiagnostics val
 
 -- | FIXME: This function is temporary! Only required because the files of interest doesn't work
 unsafeClearAllDiagnostics :: IdeState -> IO ()
-unsafeClearAllDiagnostics IdeState{shakeExtras = ShakeExtras{state}} = modifyVar_ state $
-    return . Map.map (Map.map (\(_, x) -> ([], x)))
+unsafeClearAllDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
+    writeVar diagnostics emptyDiagnostics
 
 -- | Clear the results for all files that do not match the given predicate.
 garbageCollect :: (FilePath -> Bool) -> Action ()
 garbageCollect keep = do
-    ShakeExtras{state} <- getShakeExtras
-    liftIO $ modifyVar_ state $ return . Map.filterWithKey (\file _ -> keep file)
+    ShakeExtras{state, diagnostics} <- getShakeExtras
+    liftIO $
+        do modifyVar_ state $ return . Map.filterWithKey (\(file, _) _ -> keep file)
+           modifyVar_ diagnostics $ return . filterDiagnostics keep
 
 define
     :: IdeRule k v
@@ -354,7 +351,7 @@ defineEarlyCutoff
     => (k -> FilePath -> Action (Maybe BS.ByteString, IdeResult v))
     -> Rules ()
 defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) old mode -> do
-    ShakeExtras{state} <- getShakeExtras
+    extras@ShakeExtras{state} <- getShakeExtras
     val <- case old of
         Just old | mode == RunDependenciesSame -> do
             v <- liftIO $ getValues state key file
@@ -365,46 +362,39 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) old m
     case val of
         Just res -> return res
         Nothing -> do
-            (bs, res) <- actionCatch
+            (bs, (diags, res)) <- actionCatch
                 (do v <- op key file; liftIO $ evaluate $ force v) $
                 \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-            res <- return $ first (map $ \(_,d) -> (file,d)) res
 
-            (before, after) <- liftIO $ setValues state key file res
-            updateFileDiagnostics file before after
+            liftIO $ setValues state key file res
+            updateFileDiagnostics file (Key key) extras $ map snd diags
             let eq = case (bs, fmap unwrap old) of
                     (Just a, Just (Just b)) -> a == b
                     _ -> False
             return $ RunResult
                 (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                 (wrap bs)
-                $ A (snd res) bs
+                $ A res bs
     where
         wrap = maybe BS.empty (BS.cons '_')
         unwrap x = if BS.null x then Nothing else Just $ BS.tail x
 
-
 updateFileDiagnostics ::
      FilePath
-  -> Maybe [FileDiagnostic] -- ^ previous results for this file
-  -> [FileDiagnostic] -- ^ current results
+  -> Key
+  -> ShakeExtras
+  -> [Diagnostic] -- ^ current results
   -> Action ()
-updateFileDiagnostics afp previousAll currentAll = do
-    -- TODO (MK) We canonicalize to make sure that the two files agree on use of
-    -- / and \ and other shenanigans.
-    -- Once we have finished the migration to haskell-lsp we should make sure that
-    -- this is no longer necessary.
-    afp' <- liftIO $ canonicalizePath afp
-    let filtM diags = do
-            diags' <-
-                filterM
-                    (\x -> fmap (== afp') (canonicalizePath $ fst x))
-                    diags
-            pure (Set.fromList diags')
-    previous <- liftIO $ traverse filtM previousAll
-    current <- liftIO $ filtM currentAll
-    when (Just current /= previous) $
-        sendEvent $ EventFileDiagnostics $ (afp, map snd $ Set.toList current)
+updateFileDiagnostics fp k ShakeExtras{diagnostics, state} current = do
+    (newDiags, oldDiags) <- liftIO $ do
+        modTime <- join <$> getValues state GetModificationTime fp
+        modifyVar diagnostics $ \old -> do
+            let oldDiags = getFileDiagnostics fp old
+            let newDiagsStore = setStageDiagnostics fp modTime k current old
+            let newDiags = getFileDiagnostics fp newDiagsStore
+            pure (newDiagsStore, (newDiags, oldDiags))
+    when (newDiags /= oldDiags) $
+        sendEvent $ EventFileDiagnostics (fp, newDiags)
 
 
 setPriority :: (Enum a) => a -> Action ()
@@ -424,3 +414,11 @@ logDebug, logSeriousError
     :: IdeState -> T.Text -> IO ()
 logDebug = sl Logger.logDebug
 logSeriousError = sl Logger.logSeriousError
+
+data GetModificationTime = GetModificationTime
+    deriving (Eq, Show, Generic)
+instance Hashable GetModificationTime
+instance NFData   GetModificationTime
+
+-- | Get the modification time of a file.
+type instance RuleResult GetModificationTime = UTCTime
