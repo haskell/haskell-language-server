@@ -42,10 +42,6 @@ newtype GlobalDirtyFiles = GlobalDirtyFiles (Var DirtyFiles)
 instance IsIdeGlobal GlobalDirtyFiles
 
 
-
--- | Get the modification time of a file.
-type instance RuleResult GetModificationTime = UTCTime
-
 -- | Get the contents of a file, either dirty (if the buffer is modified) or from disk.
 type instance RuleResult GetFileContents = (UTCTime, StringBuffer)
 
@@ -57,11 +53,6 @@ data GetFileExists = GetFileExists
     deriving (Eq, Show, Generic)
 instance Hashable GetFileExists
 instance NFData   GetFileExists
-
-data GetModificationTime = GetModificationTime
-    deriving (Eq, Show, Generic)
-instance Hashable GetModificationTime
-instance NFData   GetModificationTime
 
 data GetFileContents = GetFileContents
     deriving (Eq, Show, Generic)
