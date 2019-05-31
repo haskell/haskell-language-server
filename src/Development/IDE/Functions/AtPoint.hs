@@ -58,7 +58,7 @@ atPoint tcs srcSpans pos = do
     SpanInfo{..} <- listToMaybe $ orderSpans $ spansAtPoint pos srcSpans
     ty <- spaninfoType
     let mbName  = getNameM spaninfoSource
-        mbDefinedAt = HoverHeading . ("Defined " <>) . T.pack . showSDocUnsafe . pprNameDefnLoc <$> mbName
+        mbDefinedAt = fmap (\name -> HoverMarkdown $ "**Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "**\n") mbName
         mbDocs  = fmap (\name -> getDocumentation name tcs) mbName
         docInfo = maybe [] (map HoverMarkdown . docHeaders) mbDocs
         range = Range

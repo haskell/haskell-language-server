@@ -16,9 +16,7 @@ import Development.IDE.Types.Diagnostics
 
 -- | Different types of content we can show on hover.
 data HoverText
-    = HoverHeading !T.Text
-      -- ^ A header that explains the content below it.
-    | HoverDamlCode !T.Text
+    = HoverDamlCode !T.Text
       -- ^ Highlighted DAML-Code
     | HoverMarkdown !T.Text
       -- ^ Markdown text.
@@ -26,7 +24,6 @@ data HoverText
 
 getHoverTextContent :: HoverText -> T.Text
 getHoverTextContent = \case
-    HoverHeading t -> t
     HoverDamlCode t -> t
     HoverMarkdown t -> t
 
