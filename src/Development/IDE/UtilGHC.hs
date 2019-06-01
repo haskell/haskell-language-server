@@ -22,10 +22,13 @@ import Fingerprint
 import GHC
 import GhcMonad
 import GhcPlugins
-import Platform
 import Data.IORef
 import Control.Exception
 import FileCleanup
+import Platform
+#ifndef GHC_STABLE
+import ToolSettings
+#endif
 
 ----------------------------------------------------------------------
 -- GHC setup
@@ -62,25 +65,40 @@ runGhcEnv env act = do
         cleanTempFiles dflags
         cleanTempDirs dflags
 
-
--- Fake DynFlags which are mostly undefined, but define enough to do a little bit
+-- Fake DynFlags which are mostly undefined, but define enough to do a
+-- little bit.
 fakeDynFlags :: DynFlags
 fakeDynFlags = defaultDynFlags settings ([], [])
     where
         settings = Settings
-            {sTargetPlatform = Platform
-                {platformWordSize = 8
-                ,platformOS = OSUnknown
-                ,platformUnregisterised = True
-                }
-            ,sPlatformConstants = PlatformConstants
-                {pc_DYNAMIC_BY_DEFAULT = False
-                ,pc_WORD_SIZE = 8
-                }
-#ifndef GHC_STABLE
-            ,sIntegerLibraryType = IntegerSimple
+                   { sTargetPlatform = platform
+                   , sPlatformConstants = platformConstants
+#ifdef GHC_STABLE
+                   , sProgramName = "ghc"
+                   , sProjectVersion = cProjectVersion
+                   , sOpt_P_fingerprint = fingerprint0
+#else
+                   , sGhcNameVersion = GhcNameVersion
+                       { ghcNameVersion_programName = "ghc"
+                       , ghcNameVersion_projectVersion = cProjectVersion
+                       }
+                   , sFileSettings = FileSettings
+                       { -- fileSettings_tmpDir = "."
+                       }
+                   , sPlatformMisc = PlatformMisc
+                       { platformMisc_integerLibraryType = IntegerSimple
+                       }
+                   , sToolSettings = ToolSettings
+                       { toolSettings_opt_P_fingerprint = fingerprint0
+                       }
 #endif
-            ,sProjectVersion = cProjectVersion
-            ,sProgramName = "ghc"
-            ,sOpt_P_fingerprint = fingerprint0
-            }
+                   }
+        platform = Platform
+          { platformWordSize=8
+          , platformOS=OSUnknown
+          , platformUnregisterised=True
+          }
+        platformConstants = PlatformConstants
+          { pc_DYNAMIC_BY_DEFAULT=False
+          , pc_WORD_SIZE=8
+          }
