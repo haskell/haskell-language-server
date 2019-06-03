@@ -164,7 +164,7 @@ data Priority
 getParsedModuleRule :: Rules ()
 getParsedModuleRule =
     define $ \GetParsedModule file -> do
-        contents <- getFileContents file
+        (_, contents) <- getFileContents file
         packageState <- use_ GhcSession ""
         opt <- getOpts
         liftIO $ Compile.parseModule opt packageState file contents
