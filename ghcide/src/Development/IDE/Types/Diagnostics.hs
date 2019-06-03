@@ -44,8 +44,6 @@ import Data.Either.Combinators
 import Data.Maybe as Maybe
 import Data.Foldable
 import qualified Data.Map as Map
-import Data.Time.Clock
-import Data.Time.Clock.POSIX
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Syntax
 import qualified Data.SortedList as SL
@@ -179,18 +177,16 @@ emptyDiagnostics = ProjectDiagnostics mempty
 setStageDiagnostics ::
   Show stage =>
   FilePath ->
-  Maybe UTCTime ->
+  Maybe Int ->
   -- ^ the time that the file these diagnostics originate from was last edited
   stage ->
   [LSP.Diagnostic] ->
   ProjectDiagnostics stage ->
   ProjectDiagnostics stage
 setStageDiagnostics fp timeM stage diags (ProjectDiagnostics ds) =
-    ProjectDiagnostics $ updateDiagnostics ds uri posixTime diagsBySource
+    ProjectDiagnostics $ updateDiagnostics ds uri timeM diagsBySource
     where
         diagsBySource = Map.singleton (Just $ T.pack $ show stage) (SL.toSortedList diags)
-        posixTime :: Maybe Int
-        posixTime = fmap (fromEnum . utcTimeToPOSIXSeconds) timeM
         uri = filePathToUri fp
 
 fromUri :: LSP.Uri -> FilePath

@@ -40,6 +40,8 @@ module Development.IDE.State.Shake(
     sendEvent,
     Development.IDE.State.Shake.logDebug,
     Development.IDE.State.Shake.logSeriousError,
+    FileVersion(..),
+    vfsVersion
     ) where
 
 import           Development.Shake
@@ -390,7 +392,7 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, state} current = do
         modTime <- join <$> getValues state GetModificationTime fp
         modifyVar diagnostics $ \old -> do
             let oldDiags = getFileDiagnostics fp old
-            let newDiagsStore = setStageDiagnostics fp modTime k current old
+            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) k current old
             let newDiags = getFileDiagnostics fp newDiagsStore
             pure (newDiagsStore, (newDiags, oldDiags))
     when (newDiags /= oldDiags) $
@@ -421,4 +423,13 @@ instance Hashable GetModificationTime
 instance NFData   GetModificationTime
 
 -- | Get the modification time of a file.
-type instance RuleResult GetModificationTime = UTCTime
+type instance RuleResult GetModificationTime = FileVersion
+
+data FileVersion = VFSVersion Int | ModificationTime UTCTime
+    deriving (Show, Generic)
+
+instance NFData FileVersion
+
+vfsVersion :: FileVersion -> Maybe Int
+vfsVersion (VFSVersion i) = Just i
+vfsVersion (ModificationTime _) = Nothing

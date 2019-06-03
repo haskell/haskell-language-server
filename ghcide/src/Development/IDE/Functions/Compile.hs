@@ -55,7 +55,6 @@ import           Data.List.Extra
 import           Data.Maybe
 import           Data.Tuple.Extra
 import qualified Data.Map.Strict                          as Map
-import           Data.Time
 import           Development.IDE.Types.SpanInfo
 import GHC.Generics (Generic)
 import           System.FilePath
@@ -107,7 +106,7 @@ parseModule
     :: IdeOptions
     -> HscEnv
     -> FilePath
-    -> (UTCTime, SB.StringBuffer)
+    -> SB.StringBuffer
     -> IO ([FileDiagnostic], Maybe ParsedModule)
 parseModule opt@IdeOptions{..} packageState file =
     fmap (either (, Nothing) (second Just)) . Ex.runExceptT .
@@ -325,11 +324,11 @@ loadModuleHome tmr = modifySession $ \e ->
 getModSummaryFromBuffer
     :: GhcMonad m
     => FilePath
-    -> (SB.StringBuffer, UTCTime)
+    -> SB.StringBuffer
     -> DynFlags
     -> GHC.ParsedSource
     -> Ex.ExceptT [FileDiagnostic] m ModSummary
-getModSummaryFromBuffer fp (contents, fileDate) dflags parsed = do
+getModSummaryFromBuffer fp contents dflags parsed = do
   (modName, imports) <- FindImports.getImportsParsed dflags parsed
 
   let modLoc = ModLocation
@@ -347,7 +346,11 @@ getModSummaryFromBuffer fp (contents, fileDate) dflags parsed = do
   return $ ModSummary
     { ms_mod          = mkModule (fsToUnitId unitId) modName
     , ms_location     = modLoc
-    , ms_hs_date      = fileDate
+    , ms_hs_date      = error "Rules should not depend on ms_hs_date"
+    -- ^ When we are working with a virtual file we do not have a file date.
+    -- To avoid silent issues where something is not processed because the date
+    -- has not changed, we make sure that things blow up if they depend on the
+    -- date.
     , ms_textual_imps = imports
     , ms_hspp_file    = fp
     , ms_hspp_opts    = dflags
@@ -370,9 +373,9 @@ parseFileContents
        :: GhcMonad m
        => (GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource))
        -> FilePath  -- ^ the filename (for source locations)
-       -> (UTCTime, SB.StringBuffer) -- ^ Haskell module source text (full Unicode is supported)
+       -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> Ex.ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
-parseFileContents preprocessor filename (time, contents) = do
+parseFileContents preprocessor filename contents = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    dflags  <- parsePragmasIntoDynFlags filename contents
 
@@ -422,7 +425,7 @@ parseFileContents preprocessor filename (time, contents) = do
                -- Ok, we got here. It's safe to continue.
                let (errs, parsed) = preprocessor rdr_module
                unless (null errs) $ Ex.throwE $ mkErrors dflags errs
-               ms <- getModSummaryFromBuffer filename (contents, time) dflags parsed
+               ms <- getModSummaryFromBuffer filename contents dflags parsed
                let pm =
                      ParsedModule {
                          pm_mod_summary = ms

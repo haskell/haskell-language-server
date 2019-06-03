@@ -6,6 +6,7 @@ module Demo(main) where
 import Control.Concurrent.Extra
 import Control.Monad
 import System.Time.Extra
+import Development.IDE.State.FileStore
 import Development.IDE.State.Service
 import Development.IDE.State.Rules
 import Development.IDE.State.Shake
@@ -38,6 +39,7 @@ main = do
     -- lock to avoid overlapping output on stdout
     lock <- newLock
 
+    vfs <- makeVFSHandle
     ide <- initialise
         mainRule
         (Just $ showEvent lock)
@@ -51,6 +53,7 @@ main = do
             ,optThreads = 0
             ,optShakeProfiling = Nothing -- Just "output.html"
             }
+        vfs
     setFilesOfInterest ide $ Set.fromList files
     _ <- runAction ide $ uses_ TypeCheck files
     -- shake now writes an async message that it is completed with timing info,
