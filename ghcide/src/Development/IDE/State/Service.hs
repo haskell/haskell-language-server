@@ -73,8 +73,9 @@ initialise :: Rules ()
            -> Maybe (Event -> IO ())
            -> Logger.Handle
            -> IdeOptions
+           -> VFSHandle
            -> IO IdeState
-initialise mainRule toDiags logger options =
+initialise mainRule toDiags logger options vfs =
     shakeOpen
         (fromMaybe (const $ pure ()) toDiags)
         logger
@@ -83,7 +84,7 @@ initialise mainRule toDiags logger options =
                      , shakeFiles   = "/dev/null"
                      }) $ do
             addIdeGlobal =<< liftIO (mkEnv options)
-            fileStoreRules
+            fileStoreRules vfs
             mainRule
 
 writeProfile :: IdeState -> FilePath -> IO ()

@@ -20,6 +20,7 @@ depends = [
     "haskell-lsp-types",
     "mtl",
     "pretty",
+    "rope-utf16-splay",
     "safe-exceptions",
     "sorted-list",
     "shake",

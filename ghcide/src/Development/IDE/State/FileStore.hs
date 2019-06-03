@@ -6,7 +6,10 @@
 module Development.IDE.State.FileStore(
     getFileExists, getFileContents,
     setBufferModified,
-    fileStoreRules
+    fileStoreRules,
+    VFSHandle(..),
+    makeVFSHandle,
+    makeLSPVFSHandle,
     ) where
 
 
@@ -14,7 +17,9 @@ module Development.IDE.State.FileStore(
 import           StringBuffer
 import Development.IDE.Orphans()
 
+import Control.Concurrent.Extra
 import qualified Data.Map.Strict as Map
+import Data.Maybe
 import qualified Data.Text as T
 import           Data.Time.Clock
 import           Control.Monad.Extra
@@ -22,28 +27,54 @@ import qualified System.Directory as Dir
 import           Development.Shake
 import           Development.Shake.Classes
 import           Development.IDE.State.Shake
-import           Control.Concurrent.Extra
 import           Control.Exception
 import           GHC.Generics
 import System.IO.Error
 import qualified Data.ByteString.Char8 as BS
 import qualified StringBuffer as SB
 import Development.IDE.Types.Diagnostics
+import qualified Data.Rope.UTF16 as Rope
 import           Data.Time
 
+import Language.Haskell.LSP.Core
+import Language.Haskell.LSP.VFS
 
--- This module stores the changed files in memory, and answers file system questions
--- from either the memory changes OR the file system itself
+-- | haskell-lsp manages the VFS internally and automatically so we cannot use
+-- the builtin VFS without spawning up an LSP server. To be able to test things
+-- like `setBufferModified` we abstract over the VFS implementation.
+data VFSHandle = VFSHandle
+    { getVirtualFile :: Uri -> IO (Maybe VirtualFile)
+    , setVirtualFileContents :: Uri -> T.Text -> IO ()
+    , removeVirtualFile :: Uri -> IO ()
+    }
 
-type DirtyFiles = Map.Map FilePath (UTCTime, StringBuffer) -- when it was modified, it's current value
+instance IsIdeGlobal VFSHandle
 
--- Store the DirtyFiles globally, so we can get at it through setBufferModified
-newtype GlobalDirtyFiles = GlobalDirtyFiles (Var DirtyFiles)
-instance IsIdeGlobal GlobalDirtyFiles
+makeVFSHandle :: IO VFSHandle
+makeVFSHandle = do
+    vfsVar <- newVar (1, Map.empty)
+    pure VFSHandle
+        { getVirtualFile = \uri -> do
+              (_nextVersion, vfs) <- readVar vfsVar
+              pure $ Map.lookup uri vfs
+        , setVirtualFileContents = \uri content ->
+              modifyVar_ vfsVar $ \(nextVersion, vfs) ->
+                  pure (nextVersion + 1, Map.insert uri (VirtualFile nextVersion (Rope.fromText content) Nothing) vfs)
+        , removeVirtualFile = \uri -> modifyVar_ vfsVar $ \(nextVersion, vfs) -> pure (nextVersion, Map.delete uri vfs)
+        }
+
+makeLSPVFSHandle :: LspFuncs c -> VFSHandle
+makeLSPVFSHandle lspFuncs = VFSHandle
+    { getVirtualFile = getVirtualFileFunc lspFuncs
+    , setVirtualFileContents = \_ _ -> pure ()
+    -- ^ Handled internally by haskell-lsp.
+    , removeVirtualFile = \_ -> pure ()
+    -- ^ Handled internally by haskell-lsp.
+    }
 
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or from disk.
-type instance RuleResult GetFileContents = (UTCTime, StringBuffer)
+type instance RuleResult GetFileContents = (FileVersion, StringBuffer)
 
 -- | Does the file exist.
 type instance RuleResult GetFileExists = Bool
@@ -60,12 +91,12 @@ instance Hashable GetFileContents
 instance NFData   GetFileContents
 
 
-getFileExistsRule :: Var DirtyFiles -> Rules ()
-getFileExistsRule dirty =
+getFileExistsRule :: VFSHandle -> Rules ()
+getFileExistsRule vfs =
     defineEarlyCutoff $ \GetFileExists file -> do
         alwaysRerun
         res <- liftIO $ handle (\(_ :: IOException) -> return False) $
-            (Map.member file <$> readVar dirty) ||^
+            (isJust <$> getVirtualFile vfs (filePathToUri file)) ||^
             Dir.doesFileExist file
         return (Just $ if res then BS.singleton '1' else BS.empty, ([], Just res))
 
@@ -73,36 +104,36 @@ getFileExistsRule dirty =
 showTimePrecise :: UTCTime -> String
 showTimePrecise UTCTime{..} = show (toModifiedJulianDay utctDay, diffTimeToPicoseconds utctDayTime)
 
-getModificationTimeRule :: Var DirtyFiles -> Rules ()
-getModificationTimeRule dirty =
+getModificationTimeRule :: VFSHandle -> Rules ()
+getModificationTimeRule vfs =
     defineEarlyCutoff $ \GetModificationTime file -> do
-        let wrap time = (Just $ BS.pack $ showTimePrecise time, ([], Just time))
+        let wrap time = (Just $ BS.pack $ showTimePrecise time, ([], Just $ ModificationTime time))
         alwaysRerun
-        mp <- liftIO $ readVar dirty
-        case Map.lookup file mp of
-            Just (time, _) -> return $ wrap time
+        mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri file
+        case mbVirtual of
+            Just (VirtualFile ver _ _) -> pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
             Nothing -> liftIO $ fmap wrap (Dir.getModificationTime file) `catch` \(e :: IOException) -> do
                 let err | isDoesNotExistError e = "File does not exist: " ++ file
                         | otherwise = "IO error while reading " ++ file ++ ", " ++ displayException e
                 return (Nothing, ([ideErrorText file $ T.pack err], Nothing))
 
 
-getFileContentsRule :: Var DirtyFiles -> Rules ()
-getFileContentsRule dirty =
+getFileContentsRule :: VFSHandle -> Rules ()
+getFileContentsRule vfs =
     define $ \GetFileContents file -> do
         -- need to depend on modification time to introduce a dependency with Cutoff
         time <- use_ GetModificationTime file
         res <- liftIO $ ideTryIOException file $ do
-            mp <- readVar dirty
-            case Map.lookup file mp of
-                Just (_, contents) -> return contents
+            mbVirtual <- getVirtualFile vfs $ filePathToUri file
+            case mbVirtual of
+                Just (VirtualFile _ rope _) -> return $ textToStringBuffer $ Rope.toText rope
                 Nothing -> hGetStringBuffer file
         case res of
             Left err -> return ([err], Nothing)
             Right contents -> return ([], Just (time, contents))
 
 
-getFileContents :: FilePath -> Action (UTCTime, StringBuffer)
+getFileContents :: FilePath -> Action (FileVersion, StringBuffer)
 getFileContents = use_ GetFileContents
 
 getFileExists :: FilePath -> Action Bool
@@ -113,29 +144,21 @@ getFileExists =
     use_ GetFileExists
 
 
-fileStoreRules :: Rules ()
-fileStoreRules = do
-    dirty <- liftIO $ newVar Map.empty
-    addIdeGlobal $ GlobalDirtyFiles dirty
-    getModificationTimeRule dirty
-    getFileContentsRule dirty
-    getFileExistsRule dirty
-
-
-strictPair :: a -> b -> (a, b)
-strictPair !a !b = (a,b)
+fileStoreRules :: VFSHandle -> Rules ()
+fileStoreRules vfs = do
+    addIdeGlobal vfs
+    getModificationTimeRule vfs
+    getFileContentsRule vfs
+    getFileExistsRule vfs
 
 
 -- | Notify the compiler service of a modified buffer
-setBufferModified :: IdeState -> FilePath -> (Maybe T.Text, UTCTime) -> IO ()
-setBufferModified state absFile (mcontents, !time) = do
-    GlobalDirtyFiles envDirtyFiles <- getIdeGlobalState state
-    -- update vars synchronously
-    modifyVar_ envDirtyFiles $ evaluate . case mcontents of
-        Nothing -> Map.delete absFile
-        Just contents -> Map.insert absFile $ strictPair time $ textToStringBuffer contents
-
-    -- run shake to update results regarding the files of interest
+setBufferModified :: IdeState -> FilePath -> Maybe T.Text -> IO ()
+setBufferModified state absFile mbContents = do
+    VFSHandle{..} <- getIdeGlobalState state
+    case mbContents of
+        Nothing -> removeVirtualFile (filePathToUri absFile)
+        Just contents -> setVirtualFileContents (filePathToUri absFile) contents
     void $ shakeRun state []
 
 
