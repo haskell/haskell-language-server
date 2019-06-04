@@ -96,7 +96,7 @@ getFileExistsRule vfs =
     defineEarlyCutoff $ \GetFileExists file -> do
         alwaysRerun
         res <- liftIO $ handle (\(_ :: IOException) -> return False) $
-            (isJust <$> getVirtualFile vfs (filePathToUri file)) ||^
+            (isJust <$> getVirtualFile vfs (filePathToUri' file)) ||^
             Dir.doesFileExist file
         return (Just $ if res then BS.singleton '1' else BS.empty, ([], Just res))
 
@@ -109,7 +109,7 @@ getModificationTimeRule vfs =
     defineEarlyCutoff $ \GetModificationTime file -> do
         let wrap time = (Just $ BS.pack $ showTimePrecise time, ([], Just $ ModificationTime time))
         alwaysRerun
-        mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri file
+        mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
         case mbVirtual of
             Just (VirtualFile ver _ _) -> pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
             Nothing -> liftIO $ fmap wrap (Dir.getModificationTime file) `catch` \(e :: IOException) -> do
@@ -124,7 +124,7 @@ getFileContentsRule vfs =
         -- need to depend on modification time to introduce a dependency with Cutoff
         time <- use_ GetModificationTime file
         res <- liftIO $ ideTryIOException file $ do
-            mbVirtual <- getVirtualFile vfs $ filePathToUri file
+            mbVirtual <- getVirtualFile vfs $ filePathToUri' file
             case mbVirtual of
                 Just (VirtualFile _ rope _) -> return $ textToStringBuffer $ Rope.toText rope
                 Nothing -> hGetStringBuffer file
@@ -157,8 +157,8 @@ setBufferModified :: IdeState -> FilePath -> Maybe T.Text -> IO ()
 setBufferModified state absFile mbContents = do
     VFSHandle{..} <- getIdeGlobalState state
     case mbContents of
-        Nothing -> removeVirtualFile (filePathToUri absFile)
-        Just contents -> setVirtualFileContents (filePathToUri absFile) contents
+        Nothing -> removeVirtualFile (filePathToUri' absFile)
+        Just contents -> setVirtualFileContents (filePathToUri' absFile) contents
     void $ shakeRun state []
 
 

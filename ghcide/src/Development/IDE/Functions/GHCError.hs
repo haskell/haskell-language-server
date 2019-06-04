@@ -38,7 +38,6 @@ import Data.Maybe
 import           ErrUtils
 import           SrcLoc
 import qualified Outputable                 as Out
-import qualified Language.Haskell.LSP.Types as LSP
 
 
 
@@ -79,7 +78,7 @@ srcSpanToFilename (RealSrcSpan real) = FS.unpackFS $ srcSpanFile real
 
 srcSpanToLocation :: SrcSpan -> Location
 srcSpanToLocation src =
-  Location (LSP.filePathToUri $ srcSpanToFilename src) (srcSpanToRange src)
+  Location (D.filePathToUri' $ srcSpanToFilename src) (srcSpanToRange src)
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
