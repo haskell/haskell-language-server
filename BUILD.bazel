@@ -19,6 +19,7 @@ depends = [
     "haskell-lsp",
     "haskell-lsp-types",
     "mtl",
+    "network-uri",
     "pretty",
     "rope-utf16-splay",
     "safe-exceptions",
