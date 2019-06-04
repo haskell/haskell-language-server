@@ -42,7 +42,7 @@ main = do
     vfs <- makeVFSHandle
     ide <- initialise
         mainRule
-        (Just $ showEvent lock)
+        (showEvent lock)
         (makeOneHandle $ withLock lock . T.putStrLn)
         IdeOptions
             {optPreprocessor = (,) []

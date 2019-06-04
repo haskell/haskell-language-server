@@ -52,7 +52,4 @@ data Event
     | EventFileValidation Int Int
       -- ^ @EventFileValidation finishedValidations totalValidations @
       -- How many validations have we finished of how many total.
-    | EventFatalError !T.Text
-      -- ^ @EventFatalError reason@: A fatal error occurred in the compiler and
-      -- the compiler cannot continue.
       deriving Show
