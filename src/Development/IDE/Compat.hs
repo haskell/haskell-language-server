@@ -6,6 +6,7 @@
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.Compat(
     HieFile(..),
+    HieFileResult(..),
     mkHieFile,
     writeHieFile,
     readHieFile
@@ -30,9 +31,11 @@ mkHieFile _ _ _ = return (HieFile () [])
 writeHieFile :: FilePath -> HieFile -> IO ()
 writeHieFile _ _ = return ()
 
-readHieFile :: NameCache -> FilePath -> IO (HieFile, ())
-readHieFile _ _ = return (HieFile () [], ())
+readHieFile :: NameCache -> FilePath -> IO (HieFileResult, ())
+readHieFile _ _ = return (HieFileResult $ HieFile () [], ())
 
 data HieFile = HieFile {hie_module :: (), hie_exports :: [AvailInfo]}
+
+data HieFileResult = HieFileResult {hie_file_result :: HieFile}
 
 #endif
