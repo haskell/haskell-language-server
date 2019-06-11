@@ -56,7 +56,6 @@ import           Data.Either
 import           Data.List.Extra
 import qualified Data.Text as T
 import Development.IDE.Logger as Logger
-import Development.IDE.Types.LSP
 import           Development.IDE.Types.Diagnostics hiding (getAllDiagnostics)
 import qualified Development.IDE.Types.Diagnostics as D
 import           Control.Concurrent.Extra
@@ -64,6 +63,8 @@ import           Control.Exception
 import           Control.DeepSeq
 import           System.Time.Extra
 import           Data.Typeable
+import qualified Language.Haskell.LSP.Messages as LSP
+import qualified Language.Haskell.LSP.Types as LSP
 import           System.FilePath hiding (makeRelative)
 import qualified Development.Shake as Shake
 import           Control.Monad.Extra
@@ -76,7 +77,7 @@ import           Numeric.Extra
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
-    {eventer :: Event -> IO ()
+    {eventer :: LSP.FromServerMessage -> IO ()
     ,logger :: Logger.Handle
     ,globals :: Var (Map.HashMap TypeRep Dynamic)
     ,state :: Var Values
@@ -211,7 +212,7 @@ getValues state key file = do
         pure $ fmap (fromJust . fromDynamic @v) v
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
-shakeOpen :: (Event -> IO ()) -- ^ diagnostic handler
+shakeOpen :: (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
           -> Logger.Handle
           -> ShakeOptions
           -> Rules ()
@@ -396,14 +397,19 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, state} current = do
             let newDiags = getFileDiagnostics fp newDiagsStore
             pure (newDiagsStore, (newDiags, oldDiags))
     when (newDiags /= oldDiags) $
-        sendEvent $ EventFileDiagnostics (fp, newDiags)
+        sendEvent $ publishDiagnosticsNotification fp newDiags
 
+publishDiagnosticsNotification :: FilePath -> [Diagnostic] -> LSP.FromServerMessage
+publishDiagnosticsNotification fp diags =
+    LSP.NotPublishDiagnostics $
+    LSP.NotificationMessage "2.0" LSP.TextDocumentPublishDiagnostics $
+    LSP.PublishDiagnosticsParams (filePathToUri' fp) (List diags)
 
 setPriority :: (Enum a) => a -> Action ()
 setPriority p =
     deprioritize (fromIntegral . negate $ fromEnum p)
 
-sendEvent :: Event -> Action ()
+sendEvent :: LSP.FromServerMessage -> Action ()
 sendEvent e = do
     ShakeExtras{eventer} <- getShakeExtras
     liftIO $ eventer e
