@@ -26,9 +26,6 @@ import Data.IORef
 import Control.Exception
 import FileCleanup
 import Platform
-#ifndef GHC_STABLE
-import ToolSettings
-#endif
 
 ----------------------------------------------------------------------
 -- GHC setup
@@ -73,25 +70,9 @@ fakeDynFlags = defaultDynFlags settings ([], [])
         settings = Settings
                    { sTargetPlatform = platform
                    , sPlatformConstants = platformConstants
-#ifdef GHC_STABLE
                    , sProgramName = "ghc"
                    , sProjectVersion = cProjectVersion
                    , sOpt_P_fingerprint = fingerprint0
-#else
-                   , sGhcNameVersion = GhcNameVersion
-                       { ghcNameVersion_programName = "ghc"
-                       , ghcNameVersion_projectVersion = cProjectVersion
-                       }
-                   , sFileSettings = FileSettings
-                       { -- fileSettings_tmpDir = "."
-                       }
-                   , sPlatformMisc = PlatformMisc
-                       { platformMisc_integerLibraryType = IntegerSimple
-                       }
-                   , sToolSettings = ToolSettings
-                       { toolSettings_opt_P_fingerprint = fingerprint0
-                       }
-#endif
                    }
         platform = Platform
           { platformWordSize=8
