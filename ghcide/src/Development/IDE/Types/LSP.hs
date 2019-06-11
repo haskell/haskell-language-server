@@ -1,18 +1,19 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-
+{-# LANGUAGE PatternSynonyms #-}
 module Development.IDE.Types.LSP
     ( HoverText(..)
-    , Event(..)
     , VirtualResource(..)
     , getHoverTextContent
+    , pattern EventFileDiagnostics
     ) where
 
 import Control.DeepSeq
 import qualified Data.Text as T
+import Development.IDE.Types.Diagnostics (uriToFilePath')
 import GHC.Generics
-
-import Development.IDE.Types.Diagnostics
+import Language.Haskell.LSP.Messages
+import Language.Haskell.LSP.Types
 
 -- | Different types of content we can show on hover.
 data HoverText
@@ -38,15 +39,9 @@ data VirtualResource = VRScenario
 
 instance NFData VirtualResource
 
--- | Compiler service events
-data Event
-    = EventFileDiagnostics !FileDiagnostics
-      -- ^ @EventFileDiagnostics fileDiagnostics@
-      -- How many validations have we finished of how many total
-      -- together with new file diagnostics for a given file.
-    | EventVirtualResourceChanged !VirtualResource T.Text
-      -- ^ @EventVirtualResourceChanged resource contents@ a virtual
-      -- resource @resource@ changed to @contents
-      -- NOTE(JM,MH): Keep the contents lazy as we rely on it in
-      -- 'manageOpenVRs'.
-      deriving Show
+-- | Pattern synonym to make it a bit more convenient to match on diagnostics
+-- in things like damlc test.
+pattern EventFileDiagnostics :: FilePath -> [Diagnostic] -> FromServerMessage
+pattern EventFileDiagnostics fp diags <-
+    NotPublishDiagnostics
+        (NotificationMessage _ _ (PublishDiagnosticsParams (uriToFilePath' -> Just fp) (List diags)))

@@ -75,6 +75,7 @@ da_haskell_binary(
         "filepath",
         "ghc-paths",
         "ghc",
+        "haskell-lsp",
         "shake",
         "text",
     ],
