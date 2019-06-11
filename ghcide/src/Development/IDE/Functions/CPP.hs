@@ -50,9 +50,6 @@ doCpp dflags raw input_fn output_fn = do
 
     let cpp_prog args | raw       = SysTools.runCpp dflags args
                       | otherwise = SysTools.runCc
-#ifndef GHC_STABLE
-                                          Nothing
-#endif
                                           dflags (SysTools.Option "-E" : args)
 
     let target_defs = [] {-

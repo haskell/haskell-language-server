@@ -306,7 +306,7 @@ getHieFileRule =
     defineNoFile $ \(GetHieFile f) -> do
         u <- liftIO $ mkSplitUniqSupply 'a'
         let nameCache = initNameCache u []
-        liftIO $ fmap (hie_file_result . fst) $ readHieFile nameCache f
+        liftIO $ fmap fst $ readHieFile nameCache f
 
 -- | A rule that wires per-file rules together
 mainRule :: Rules ()

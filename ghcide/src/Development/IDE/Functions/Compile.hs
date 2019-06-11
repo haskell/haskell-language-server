@@ -394,14 +394,8 @@ parseFileContents preprocessor filename contents = do
           return (contents, dflags)
 
    case unP Parser.parseModule (mkPState dflags contents loc) of
-#ifdef GHC_STABLE
      PFailed _ locErr msgErr ->
       Ex.throwE $ mkErrorDoc dflags locErr msgErr
-#else
-     PFailed s ->
-       -- A fatal parse error was encountered.
-       Ex.throwE $ toDiagnostics dflags $ snd $ getMessages s dflags
-#endif
      POk pst rdr_module ->
          let hpm_annotations =
                (Map.fromListWith (++) $ annotations pst,
