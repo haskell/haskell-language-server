@@ -49,7 +49,4 @@ data Event
       -- resource @resource@ changed to @contents
       -- NOTE(JM,MH): Keep the contents lazy as we rely on it in
       -- 'manageOpenVRs'.
-    | EventFileValidation Int Int
-      -- ^ @EventFileValidation finishedValidations totalValidations @
-      -- How many validations have we finished of how many total.
       deriving Show
