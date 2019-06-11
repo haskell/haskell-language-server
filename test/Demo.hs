@@ -15,6 +15,7 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Logger
 import qualified Data.Text.IO as T
+import Language.Haskell.LSP.Messages
 import System.Environment
 import Data.List
 import Data.Maybe
@@ -63,9 +64,9 @@ main = do
 
 
 -- | Print an LSP event.
-showEvent :: Lock -> Event -> IO ()
-showEvent _ (EventFileDiagnostics (_, [])) = return ()
-showEvent lock (EventFileDiagnostics (file, diags)) =
+showEvent :: Lock -> FromServerMessage -> IO ()
+showEvent _ (EventFileDiagnostics _ []) = return ()
+showEvent lock (EventFileDiagnostics file diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,) diags
 showEvent lock e = withLock lock $ print e
 

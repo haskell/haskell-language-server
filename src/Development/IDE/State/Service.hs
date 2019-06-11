@@ -28,7 +28,7 @@ import           Data.Set                                 (Set)
 import qualified Data.Set                                 as Set
 import           Development.IDE.Functions.GHCError
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
-import           Development.IDE.Types.LSP as Compiler
+import qualified Language.Haskell.LSP.Messages as LSP
 
 import           UniqSupply
 
@@ -69,7 +69,7 @@ unsafeClearDiagnostics = unsafeClearAllDiagnostics
 
 -- | Initialise the Compiler Service.
 initialise :: Rules ()
-           -> (Event -> IO ())
+           -> (LSP.FromServerMessage -> IO ())
            -> Logger.Handle
            -> IdeOptions
            -> VFSHandle
