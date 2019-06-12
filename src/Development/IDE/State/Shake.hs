@@ -403,7 +403,7 @@ publishDiagnosticsNotification :: FilePath -> [Diagnostic] -> LSP.FromServerMess
 publishDiagnosticsNotification fp diags =
     LSP.NotPublishDiagnostics $
     LSP.NotificationMessage "2.0" LSP.TextDocumentPublishDiagnostics $
-    LSP.PublishDiagnosticsParams (filePathToUri' fp) (List diags)
+    LSP.PublishDiagnosticsParams (fromNormalizedUri $ filePathToUri' fp) (List diags)
 
 setPriority :: (Enum a) => a -> Action ()
 setPriority p =

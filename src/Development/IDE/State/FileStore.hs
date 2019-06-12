@@ -43,9 +43,9 @@ import Language.Haskell.LSP.VFS
 -- the builtin VFS without spawning up an LSP server. To be able to test things
 -- like `setBufferModified` we abstract over the VFS implementation.
 data VFSHandle = VFSHandle
-    { getVirtualFile :: Uri -> IO (Maybe VirtualFile)
-    , setVirtualFileContents :: Uri -> T.Text -> IO ()
-    , removeVirtualFile :: Uri -> IO ()
+    { getVirtualFile :: NormalizedUri -> IO (Maybe VirtualFile)
+    , setVirtualFileContents :: NormalizedUri -> T.Text -> IO ()
+    , removeVirtualFile :: NormalizedUri -> IO ()
     }
 
 instance IsIdeGlobal VFSHandle

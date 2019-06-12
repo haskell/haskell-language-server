@@ -78,7 +78,7 @@ srcSpanToFilename (RealSrcSpan real) = FS.unpackFS $ srcSpanFile real
 
 srcSpanToLocation :: SrcSpan -> Location
 srcSpanToLocation src =
-  Location (D.filePathToUri' $ srcSpanToFilename src) (srcSpanToRange src)
+  Location (fromNormalizedUri $ D.filePathToUri' $ srcSpanToFilename src) (srcSpanToRange src)
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
