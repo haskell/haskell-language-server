@@ -39,8 +39,10 @@ library
         haskell-lsp-types,
         mtl,
         pretty,
+        rope-utf16-splay,
         safe-exceptions,
         shake,
+        sorted-list,
         stm,
         syb,
         text,
@@ -108,11 +110,13 @@ executable ide-demo
         ghc-paths,
         ghc,
         extra,
+        haskell-lsp,
         text,
         haskell-ide-core
 
     default-extensions:
         TupleSections
         RecordWildCards
+        ViewPatterns
 
     hs-source-dirs:     test
