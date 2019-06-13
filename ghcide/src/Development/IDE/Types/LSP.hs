@@ -10,7 +10,7 @@ module Development.IDE.Types.LSP
 
 import Control.DeepSeq
 import qualified Data.Text as T
-import Development.IDE.Types.Diagnostics (uriToFilePath')
+import Development.IDE.Types.Diagnostics
 import GHC.Generics
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
@@ -30,9 +30,9 @@ getHoverTextContent = \case
 
 -- | Virtual resources
 data VirtualResource = VRScenario
-    { vrScenarioFile :: !FilePath
+    { vrScenarioFile :: !NormalizedFilePath
     , vrScenarioName :: !T.Text
-    } deriving (Eq, Ord, Read, Show, Generic)
+    } deriving (Eq, Ord, Show, Generic)
     -- ^ VRScenario identifies a scenario in a given file.
     -- This virtual resource is associated with the HTML result of
     -- interpreting the corresponding scenario.

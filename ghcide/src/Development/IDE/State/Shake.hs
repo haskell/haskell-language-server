@@ -119,7 +119,7 @@ getIdeGlobalState = getIdeGlobalExtras . shakeExtras
 
 
 -- | The state of the all values - nested so you can easily find all errors at a given file.
-type Values = Map.HashMap (FilePath, Key) (Maybe Dynamic)
+type Values = Map.HashMap (NormalizedFilePath, Key) (Maybe Dynamic)
 
 -- | Key type
 data Key = forall k . (Typeable k, Hashable k, Eq k, Show k) => Key k
@@ -195,7 +195,7 @@ profileCounter = unsafePerformIO $ newVar 0
 setValues :: IdeRule k v
           => Var Values
           -> k
-          -> FilePath
+          -> NormalizedFilePath
           -> Maybe v
           -> IO ()
 setValues state key file val = modifyVar_ state $
@@ -204,7 +204,7 @@ setValues state key file val = modifyVar_ state $
 -- | The outer Maybe is Nothing if this function hasn't been computed before
 --   the inner Maybe is Nothing if the result of the previous computation failed to produce
 --   a value
-getValues :: forall k v. IdeRule k v => Var Values -> k -> FilePath -> IO (Maybe (Maybe v))
+getValues :: forall k v. IdeRule k v => Var Values -> k -> NormalizedFilePath -> IO (Maybe (Maybe v))
 getValues state key file = do
     vs <- readVar state
     return $ do
@@ -255,7 +255,7 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts = modifyVar shakeAbort $
 -- | Use the last stale value, if it's ever been computed.
 useStale
     :: IdeRule k v
-    => IdeState -> k -> FilePath -> IO (Maybe v)
+    => IdeState -> k -> NormalizedFilePath -> IO (Maybe v)
 useStale IdeState{shakeExtras=ShakeExtras{state}} k fp =
     join <$> getValues state k fp
 
@@ -271,7 +271,7 @@ unsafeClearAllDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
     writeVar diagnostics emptyDiagnostics
 
 -- | Clear the results for all files that do not match the given predicate.
-garbageCollect :: (FilePath -> Bool) -> Action ()
+garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
 garbageCollect keep = do
     ShakeExtras{state, diagnostics} <- getShakeExtras
     liftIO $
@@ -280,17 +280,17 @@ garbageCollect keep = do
 
 define
     :: IdeRule k v
-    => (k -> FilePath -> Action (IdeResult v)) -> Rules ()
+    => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
 define op = defineEarlyCutoff $ \k v -> (Nothing,) <$> op k v
 
 use :: IdeRule k v
-    => k -> FilePath -> Action (Maybe v)
+    => k -> NormalizedFilePath -> Action (Maybe v)
 use key file = head <$> uses key [file]
 
-use_ :: IdeRule k v => k -> FilePath -> Action v
+use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
 use_ key file = head <$> uses_ key [file]
 
-uses_ :: IdeRule k v => k -> [FilePath] -> Action [v]
+uses_ :: IdeRule k v => k -> [NormalizedFilePath] -> Action [v]
 uses_ key files = do
     res <- uses key files
     case sequence res of
@@ -321,7 +321,7 @@ isBadDependency x
     | otherwise = False
 
 
-newtype Q k = Q (k, FilePath)
+newtype Q k = Q (k, NormalizedFilePath)
     deriving (Eq,Hashable,NFData)
 
 -- Using Database we don't need Binary instances for keys
@@ -330,7 +330,7 @@ instance Binary (Q k) where
     get = fail "Binary.get not defined for type Development.IDE.State.Shake.Q"
 
 instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ file
+    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
 
 -- | Invariant: the 'v' must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
@@ -346,12 +346,12 @@ type instance RuleResult (Q k) = A (RuleResult k)
 
 -- | Compute the value
 uses :: IdeRule k v
-    => k -> [FilePath] -> Action [Maybe v]
+    => k -> [NormalizedFilePath] -> Action [Maybe v]
 uses key files = map (\(A value _) -> value) <$> apply (map (Q . (key,)) files)
 
 defineEarlyCutoff
     :: IdeRule k v
-    => (k -> FilePath -> Action (Maybe BS.ByteString, IdeResult v))
+    => (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
     -> Rules ()
 defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) old mode -> do
     extras@ShakeExtras{state} <- getShakeExtras
@@ -383,7 +383,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) old m
         unwrap x = if BS.null x then Nothing else Just $ BS.tail x
 
 updateFileDiagnostics ::
-     FilePath
+     NormalizedFilePath
   -> Key
   -> ShakeExtras
   -> [Diagnostic] -- ^ current results
@@ -397,13 +397,13 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, state} current = do
             let newDiags = getFileDiagnostics fp newDiagsStore
             pure (newDiagsStore, (newDiags, oldDiags))
     when (newDiags /= oldDiags) $
-        sendEvent $ publishDiagnosticsNotification fp newDiags
+        sendEvent $ publishDiagnosticsNotification (fromNormalizedFilePath fp) newDiags
 
 publishDiagnosticsNotification :: FilePath -> [Diagnostic] -> LSP.FromServerMessage
 publishDiagnosticsNotification fp diags =
     LSP.NotPublishDiagnostics $
     LSP.NotificationMessage "2.0" LSP.TextDocumentPublishDiagnostics $
-    LSP.PublishDiagnosticsParams (fromNormalizedUri $ filePathToUri' fp) (List diags)
+    LSP.PublishDiagnosticsParams (LSP.filePathToUri fp) (List diags)
 
 setPriority :: (Enum a) => a -> Action ()
 setPriority p =
