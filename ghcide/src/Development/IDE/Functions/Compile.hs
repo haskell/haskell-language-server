@@ -92,7 +92,7 @@ getSrcSpanInfos
     :: IdeOptions
     -> ParsedModule
     -> HscEnv
-    -> [(Located ModuleName, Maybe FilePath)]
+    -> [(Located ModuleName, Maybe NormalizedFilePath)]
     -> TcModuleResult
     -> IO [SpanInfo]
 getSrcSpanInfos opt mod env imports tc =

@@ -21,6 +21,7 @@ import           Desugar
 import           GHC
 import           GhcMonad
 import           FastString (mkFastString)
+import           Development.IDE.Types.Diagnostics
 import           Development.IDE.Types.SpanInfo
 import           Development.IDE.Functions.GHCError (zeroSpan)
 import           Prelude hiding (mod)
@@ -29,7 +30,7 @@ import           Var
 
 -- | Get ALL source spans in the module.
 getSpanInfo :: GhcMonad m
-            => [(Located ModuleName, Maybe FilePath)] -- ^ imports
+            => [(Located ModuleName, Maybe NormalizedFilePath)] -- ^ imports
             -> TypecheckedModule
             -> m [SpanInfo]
 getSpanInfo mods tcm =
@@ -94,17 +95,17 @@ getTypeLPat _ pat =
       (Named (dataConName dc), spn)
     getSpanSource _ = (NoSource, noSrcSpan)
 
-importInfo :: [(Located ModuleName, Maybe FilePath)]
+importInfo :: [(Located ModuleName, Maybe NormalizedFilePath)]
            -> [(SpanSource, SrcSpan, Maybe Type)]
 importInfo = mapMaybe (uncurry wrk) where
-  wrk :: Located ModuleName -> Maybe FilePath -> Maybe (SpanSource, SrcSpan, Maybe Type)
+  wrk :: Located ModuleName -> Maybe NormalizedFilePath -> Maybe (SpanSource, SrcSpan, Maybe Type)
   wrk modName = \case
     Nothing -> Nothing
-    Just afp -> Just (afpToSpanSource afp, getLoc modName, Nothing)
+    Just fp -> Just (fpToSpanSource $ fromNormalizedFilePath fp, getLoc modName, Nothing)
 
   -- TODO make this point to the module name
-  afpToSpanSource :: FilePath -> SpanSource
-  afpToSpanSource afp = Span $ RealSrcSpan $ zeroSpan $ mkFastString afp
+  fpToSpanSource :: FilePath -> SpanSource
+  fpToSpanSource fp = Span $ RealSrcSpan $ zeroSpan $ mkFastString fp
 
 -- | Get ALL source spans in the source.
 listifyAllSpans :: Typeable a

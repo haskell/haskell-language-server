@@ -97,7 +97,7 @@ getFileExistsRule vfs =
         alwaysRerun
         res <- liftIO $ handle (\(_ :: IOException) -> return False) $
             (isJust <$> getVirtualFile vfs (filePathToUri' file)) ||^
-            Dir.doesFileExist file
+            Dir.doesFileExist (fromNormalizedFilePath file)
         return (Just $ if res then BS.singleton '1' else BS.empty, ([], Just res))
 
 
@@ -107,14 +107,16 @@ showTimePrecise UTCTime{..} = show (toModifiedJulianDay utctDay, diffTimeToPicos
 getModificationTimeRule :: VFSHandle -> Rules ()
 getModificationTimeRule vfs =
     defineEarlyCutoff $ \GetModificationTime file -> do
+        let file' = fromNormalizedFilePath file
         let wrap time = (Just $ BS.pack $ showTimePrecise time, ([], Just $ ModificationTime time))
         alwaysRerun
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
         case mbVirtual of
             Just (VirtualFile ver _ _) -> pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
-            Nothing -> liftIO $ fmap wrap (Dir.getModificationTime file) `catch` \(e :: IOException) -> do
-                let err | isDoesNotExistError e = "File does not exist: " ++ file
-                        | otherwise = "IO error while reading " ++ file ++ ", " ++ displayException e
+            Nothing -> liftIO $ fmap wrap (Dir.getModificationTime file')
+              `catch` \(e :: IOException) -> do
+                let err | isDoesNotExistError e = "File does not exist: " ++ file'
+                        | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
                 return (Nothing, ([ideErrorText file $ T.pack err], Nothing))
 
 
@@ -127,16 +129,16 @@ getFileContentsRule vfs =
             mbVirtual <- getVirtualFile vfs $ filePathToUri' file
             case mbVirtual of
                 Just (VirtualFile _ rope _) -> return $ textToStringBuffer $ Rope.toText rope
-                Nothing -> hGetStringBuffer file
+                Nothing -> hGetStringBuffer (fromNormalizedFilePath file)
         case res of
             Left err -> return ([err], Nothing)
             Right contents -> return ([], Just (time, contents))
 
 
-getFileContents :: FilePath -> Action (FileVersion, StringBuffer)
+getFileContents :: NormalizedFilePath -> Action (FileVersion, StringBuffer)
 getFileContents = use_ GetFileContents
 
-getFileExists :: FilePath -> Action Bool
+getFileExists :: NormalizedFilePath -> Action Bool
 getFileExists =
     -- we deliberately and intentionally wrap the file as an FilePath WITHOUT mkAbsolute
     -- so that if the file doesn't exist, is on a shared drive that is unmounted etc we get a properly
@@ -153,7 +155,7 @@ fileStoreRules vfs = do
 
 
 -- | Notify the compiler service of a modified buffer
-setBufferModified :: IdeState -> FilePath -> Maybe T.Text -> IO ()
+setBufferModified :: IdeState -> NormalizedFilePath -> Maybe T.Text -> IO ()
 setBufferModified state absFile mbContents = do
     VFSHandle{..} <- getIdeGlobalState state
     case mbContents of

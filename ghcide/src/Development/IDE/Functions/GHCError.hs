@@ -50,7 +50,7 @@ mkDiag dflags src e =
   case toDSeverity $ errMsgSeverity e of
     Nothing        -> Nothing
     Just bSeverity ->
-      Just $ (srcSpanToFilename $ errMsgSpan e,)
+      Just $ (toNormalizedFilePath $ srcSpanToFilename (errMsgSpan e),)
         Diagnostic
         { _range    = srcSpanToRange $ errMsgSpan e
         , _severity = Just bSeverity
@@ -78,7 +78,7 @@ srcSpanToFilename (RealSrcSpan real) = FS.unpackFS $ srcSpanFile real
 
 srcSpanToLocation :: SrcSpan -> Location
 srcSpanToLocation src =
-  Location (fromNormalizedUri $ D.filePathToUri' $ srcSpanToFilename src) (srcSpanToRange src)
+  Location (filePathToUri $ srcSpanToFilename src) (srcSpanToRange src)
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).

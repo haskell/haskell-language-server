@@ -36,20 +36,20 @@ import Module
 
 -- | Unprocessed results that we get from following all imports recursively starting from a module.
 data RawDependencyInformation = RawDependencyInformation
-  { moduleDependencies :: Map FilePath (Either ModuleParseError [(Located ModuleName, Maybe FilePath)])
-  , pkgDependencies :: Map FilePath (Set InstalledUnitId)
+  { moduleDependencies :: Map NormalizedFilePath (Either ModuleParseError [(Located ModuleName, Maybe NormalizedFilePath)])
+  , pkgDependencies :: Map NormalizedFilePath (Set InstalledUnitId)
   -- ^ Transitive dependencies on pkgs of this file, i.e. immidiate package dependencies and the
   -- transitive package dependencies of those packages.
   }
 
 data DependencyInformation =
   DependencyInformation
-    { depErrorNodes :: Map FilePath (NonEmpty NodeError)
+    { depErrorNodes :: Map NormalizedFilePath (NonEmpty NodeError)
     -- ^ Nodes that cannot be processed correctly.
-    , depModuleDeps :: Map FilePath (Set FilePath)
+    , depModuleDeps :: Map NormalizedFilePath (Set NormalizedFilePath)
     -- ^ For a non-error node, this contains the set of module immediate dependencies
     -- in the same package.
-    , depPkgDeps :: Map FilePath (Set InstalledUnitId)
+    , depPkgDeps :: Map NormalizedFilePath (Set InstalledUnitId)
     -- ^ For a non-error node, this contains the set of immediate pkg deps.
     } deriving (Show, Generic)
 
@@ -69,7 +69,7 @@ instance NFData LocateError
 
 -- | An error attached to a node in the dependency graph.
 data NodeError
-  = PartOfCycle (Located ModuleName) [FilePath]
+  = PartOfCycle (Located ModuleName) [NormalizedFilePath]
   -- ^ This module is part of an import cycle. The module name corresponds
   -- to the import that enters the cycle starting from this module.
   -- The list of filepaths represents the elements
@@ -94,10 +94,12 @@ instance NFData NodeError where
 -- `ErrorNode`. Otherwise it is a `SuccessNode`.
 data NodeResult
   = ErrorNode (NonEmpty NodeError)
-  | SuccessNode [(Located ModuleName, FilePath)]
+  | SuccessNode [(Located ModuleName, NormalizedFilePath)]
   deriving Show
 
-partitionNodeResults :: [(a, NodeResult)] -> ([(a, NonEmpty NodeError)], [(a, [(Located ModuleName, FilePath)])])
+partitionNodeResults
+    :: [(a, NodeResult)]
+    -> ([(a, NonEmpty NodeError)], [(a, [(Located ModuleName, NormalizedFilePath)])])
 partitionNodeResults = partitionEithers . map f
   where f (a, ErrorNode errs) = Left (a, errs)
         f (a, SuccessNode imps) = Right (a, imps)
@@ -116,7 +118,7 @@ processDependencyInformation rawResults =
     , depPkgDeps = pkgDependencies rawResults
     }
   where resultGraph = buildResultGraph rawResults
-        successEdges :: [(FilePath, FilePath, [FilePath])]
+        successEdges :: [(NormalizedFilePath, NormalizedFilePath, [NormalizedFilePath])]
         successEdges = map (\(k,ks) -> (k,k,ks)) $ MS.toList $
           MS.map (map snd) $ MS.mapMaybe successNode resultGraph
         moduleDeps =
@@ -131,22 +133,22 @@ processDependencyInformation rawResults =
 -- 2. Mark each node that has a parse error as an error node.
 -- 3. Mark each node whose immediate children could not be located as an error.
 -- 4. Recursively propagate errors to parents if they are not already error nodes.
-buildResultGraph :: RawDependencyInformation -> Map FilePath NodeResult
+buildResultGraph :: RawDependencyInformation -> Map NormalizedFilePath NodeResult
 buildResultGraph g = propagatedErrors
     where
         sccs = stronglyConnComp (graphEdges g)
         (_, cycles) = partitionSCC sccs
-        cycleErrors :: Map FilePath NodeResult
+        cycleErrors :: Map NormalizedFilePath NodeResult
         cycleErrors = MS.unionsWith (<>) $ map errorsForCycle cycles
-        errorsForCycle :: [FilePath] -> Map FilePath NodeResult
+        errorsForCycle :: [NormalizedFilePath] -> Map NormalizedFilePath NodeResult
         errorsForCycle files =
           MS.fromListWith (<>) (concatMap (cycleErrorsForFile files) files)
-        cycleErrorsForFile :: [FilePath] -> FilePath -> [(FilePath,NodeResult)]
+        cycleErrorsForFile :: [NormalizedFilePath] -> NormalizedFilePath -> [(NormalizedFilePath,NodeResult)]
         cycleErrorsForFile cycle f =
           let entryPoints = mapMaybe (findImport f) cycle
           in map (\imp -> (f, ErrorNode (PartOfCycle imp cycle :| []))) entryPoints
         otherErrors = MS.map otherErrorsForFile (moduleDependencies g)
-        otherErrorsForFile :: Either ModuleParseError [(Located ModuleName, Maybe FilePath)] -> NodeResult
+        otherErrorsForFile :: Either ModuleParseError [(Located ModuleName, Maybe NormalizedFilePath)] -> NodeResult
         otherErrorsForFile (Left err) = ErrorNode (ParseError err :| [])
         otherErrorsForFile (Right imports) =
           let toEither (imp, Nothing) = Left imp
@@ -171,17 +173,17 @@ buildResultGraph g = propagatedErrors
           in case nonEmpty errs of
                Nothing -> n
                Just errs' -> ErrorNode (NonEmpty.map (ParentOfErrorNode . fst) errs')
-        findImport :: FilePath -> FilePath -> Maybe (Located ModuleName)
+        findImport :: NormalizedFilePath -> NormalizedFilePath -> Maybe (Located ModuleName)
         findImport file importedFile =
           case moduleDependencies g MS.! file of
             Left _ -> error "Tried to call findImport on a module with a parse error"
             Right imports ->
               fmap fst $ find (\(_, resolvedImp) -> resolvedImp == Just importedFile) imports
 
-graphEdges :: RawDependencyInformation -> [(FilePath, FilePath, [FilePath])]
+graphEdges :: RawDependencyInformation -> [(NormalizedFilePath, NormalizedFilePath, [NormalizedFilePath])]
 graphEdges g =
   map (\(k, ks) -> (k, k, ks)) $ MS.toList $ MS.map deps $ moduleDependencies g
-  where deps :: Either e [(i, Maybe FilePath)] -> [FilePath]
+  where deps :: Either e [(i, Maybe NormalizedFilePath)] -> [NormalizedFilePath]
         deps (Left _) = []
         deps (Right imports) = mapMaybe snd imports
 
@@ -190,17 +192,17 @@ partitionSCC (CyclicSCC xs:rest) = second (xs:) $ partitionSCC rest
 partitionSCC (AcyclicSCC x:rest) = first (x:)   $ partitionSCC rest
 partitionSCC []                  = ([], [])
 
-transitiveDeps :: DependencyInformation -> FilePath -> Maybe TransitiveDependencies
+transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} f = do
   reachableVs <- Set.delete f . Set.fromList . map (fst3 . fromVertex) . reachable g <$> toVertex f
   let transitiveModuleDeps = filter (\v -> v `Set.member` reachableVs) $ map (fst3 . fromVertex) vs
   let transitivePkgDeps = Set.toList $ foldMap (\f -> MS.findWithDefault Set.empty f depPkgDeps) (f : transitiveModuleDeps)
-  pure $ TransitiveDependencies {..}
+  pure TransitiveDependencies {..}
   where (g, fromVertex, toVertex) = graphFromEdges (map (\(f, fs) -> (f, f, Set.toList fs)) $ MS.toList depModuleDeps)
         vs = topSort g
 
 data TransitiveDependencies = TransitiveDependencies
-  { transitiveModuleDeps :: [FilePath]
+  { transitiveModuleDeps :: [NormalizedFilePath]
   -- ^ Transitive module dependencies in topological order.
   -- The module itself is not included.
   , transitivePkgDeps :: [InstalledUnitId]
