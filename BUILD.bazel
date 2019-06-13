@@ -6,10 +6,12 @@ load("@os_info//:os_info.bzl", "is_windows")
 
 depends = [
     "aeson",
+    "async",
     "base",
     "binary",
     "bytestring",
     "containers",
+    "data-default",
     "deepseq",
     "directory",
     "either",
@@ -21,6 +23,7 @@ depends = [
     "mtl",
     "network-uri",
     "pretty",
+    "prettyprinter",
     "rope-utf16-splay",
     "safe-exceptions",
     "sorted-list",
