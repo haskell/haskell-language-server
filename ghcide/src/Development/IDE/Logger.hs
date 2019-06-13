@@ -16,11 +16,13 @@ import GHC.Stack
 
 data Handle = Handle {
       logSeriousError :: HasCallStack => T.Text -> IO ()
+    , logInfo :: HasCallStack => T.Text -> IO ()
     , logDebug :: HasCallStack => T.Text -> IO ()
+    , logWarning :: HasCallStack => T.Text -> IO ()
     }
 
 makeNopHandle :: Handle
 makeNopHandle = makeOneHandle $ const $ pure ()
 
 makeOneHandle :: (HasCallStack => T.Text -> IO ()) -> Handle
-makeOneHandle x = Handle x x
+makeOneHandle x = Handle x x x x
