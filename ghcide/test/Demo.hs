@@ -39,13 +39,9 @@ main = do
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
+    let logger = makeOneHandle $ withLock lock . T.putStrLn
 
-    vfs <- makeVFSHandle
-    ide <- initialise
-        mainRule
-        (showEvent lock)
-        (makeOneHandle $ withLock lock . T.putStrLn)
-        IdeOptions
+    let options = IdeOptions
             {optPreprocessor = (,) []
             ,optWriteIface = False
             ,optGhcSession = liftIO $ newSession ghcOptions
@@ -54,13 +50,23 @@ main = do
             ,optThreads = 0
             ,optShakeProfiling = Nothing -- Just "output.html"
             }
-        vfs
-    setFilesOfInterest ide $ Set.fromList files
-    _ <- runAction ide $ uses_ TypeCheck files
-    -- shake now writes an async message that it is completed with timing info,
-    -- so we sleep briefly to wait for it to have been written
-    sleep 0.01
-    putStrLn "Done"
+
+    if null files then
+        runLanguageServer logger $ \event vfs ->
+            initialise mainRule event logger options vfs
+    else do
+        vfs <- makeVFSHandle
+        ide <- initialise mainRule (showEvent lock) logger options vfs
+        setFilesOfInterest ide $ Set.fromList files
+        _ <- runAction ide $ uses_ TypeCheck files
+        -- shake now writes an async message that it is completed with timing info,
+        -- so we sleep briefly to wait for it to have been written
+        sleep 0.01
+        putStrLn "Done"
+
+
+runLanguageServer :: a
+runLanguageServer = undefined
 
 
 -- | Print an LSP event.
