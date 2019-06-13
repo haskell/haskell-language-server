@@ -11,6 +11,7 @@ module Development.IDE.Functions.FindImports
 
 import           Development.IDE.Functions.GHCError as ErrUtils
 import Development.IDE.Orphans()
+import Development.IDE.Types.Diagnostics
 -- GHC imports
 import           BasicTypes                  (StringLiteral(..))
 import           DynFlags
@@ -30,7 +31,7 @@ import qualified Control.Monad.Trans.Except            as Ex
 import           System.FilePath
 
 data Import
-  = FileImport FilePath
+  = FileImport NormalizedFilePath
   | PackageImport M.InstalledUnitId
   deriving (Show)
 
@@ -67,11 +68,11 @@ getImportsParsed dflags (L loc parsed) = do
 locateModuleFile :: MonadIO m
              => DynFlags
              -> [String]
-             -> (FilePath -> m Bool)
+             -> (NormalizedFilePath -> m Bool)
              -> ModuleName
-             -> m (Maybe FilePath)
+             -> m (Maybe NormalizedFilePath)
 locateModuleFile dflags exts doesExist modName = do
-  let candidates = [ prefix </> M.moduleNameSlashes modName <.> ext | prefix <- importPaths dflags, ext <- exts]
+  let candidates = [ toNormalizedFilePath (prefix </> M.moduleNameSlashes modName <.> ext) | prefix <- importPaths dflags, ext <- exts]
   findM doesExist candidates
 
 -- | locate a module in either the file system or the package database. Where we go from *daml to
@@ -80,7 +81,7 @@ locateModule
     :: MonadIO m
     => DynFlags
     -> [String]
-    -> (FilePath -> m Bool)
+    -> (NormalizedFilePath -> m Bool)
     -> Located ModuleName
     -> Maybe FastString
     -> m (Either [FileDiagnostic] Import)

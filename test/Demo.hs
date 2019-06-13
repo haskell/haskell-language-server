@@ -35,7 +35,7 @@ import GHC.Paths
 
 main :: IO ()
 main = do
-    (ghcOptions, files) <- getCmdLine
+    (ghcOptions, map toNormalizedFilePath -> files) <- getCmdLine
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
@@ -66,7 +66,7 @@ main = do
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
 showEvent _ (EventFileDiagnostics _ []) = return ()
-showEvent lock (EventFileDiagnostics file diags) =
+showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,) diags
 showEvent lock e = withLock lock $ print e
 

@@ -27,6 +27,7 @@ import qualified Development.IDE.Logger as Logger
 import           Data.Set                                 (Set)
 import qualified Data.Set                                 as Set
 import           Development.IDE.Functions.GHCError
+import Development.IDE.Types.Diagnostics (NormalizedFilePath)
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
 import qualified Language.Haskell.LSP.Messages as LSP
 
@@ -39,7 +40,7 @@ import           Development.IDE.State.Shake
 data Env = Env
     { envOptions       :: IdeOptions
       -- ^ Compiler options.
-    , envOfInterestVar :: Var (Set FilePath)
+    , envOfInterestVar :: Var (Set NormalizedFilePath)
       -- ^ The files of interest.
     , envUniqSupplyVar :: Var UniqSupply
       -- ^ The unique supply of names used by the compiler.
@@ -107,7 +108,7 @@ runActions x = join . shakeRun x
 
 
 -- | Set the files-of-interest which will be built and kept-up-to-date.
-setFilesOfInterest :: IdeState -> Set FilePath -> IO ()
+setFilesOfInterest :: IdeState -> Set NormalizedFilePath -> IO ()
 setFilesOfInterest state files = do
     Env{..} <- getIdeGlobalState state
     -- update vars synchronously
