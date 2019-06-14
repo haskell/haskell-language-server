@@ -1,3 +1,10 @@
 resolver: nightly-2019-05-20
 packages:
 - .
+
+extra-deps:
+- git: https://github.com/alanz/haskell-lsp.git
+  commit: d73e2ccb518724e6766833ee3d7e73289cbe0018
+  subdirs:
+  - .
+  - haskell-lsp-types
