@@ -11,6 +11,7 @@ import Development.IDE.State.Service
 import Development.IDE.State.Rules
 import Development.IDE.State.Shake
 import Development.IDE.State.RuleTypes
+import Data.String
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Logger
@@ -39,6 +40,9 @@ getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
 
 main :: IO ()
 main = do
+    -- WARNING: If you write to stdout before runLanguageServer
+    --          then the language server will not work
+    hPutStrLn stderr "Starting haskell-ide-core Demo"
     (ghcOptions, map toNormalizedFilePath -> files, isIde) <- getCmdLine
 
     -- lock to avoid overlapping output on stdout
@@ -56,20 +60,25 @@ main = do
             }
 
     if isIde then do
-        putStrLn "Starting IDE server"
+        hPutStrLn stderr "Starting running the IDE server"
         runLanguageServer logger $ \event vfs -> do
-            putStrLn "Server started"
-            initialise mainRule event logger options vfs
+            hPutStrLn stderr "Server started"
+            initialise (mainRule >> action kick) event logger options vfs
     else do
         vfs <- makeVFSHandle
         ide <- initialise mainRule (showEvent lock) logger options vfs
         setFilesOfInterest ide $ Set.fromList files
-        _ <- runAction ide $ uses_ TypeCheck files
+        runAction ide kick
         -- shake now writes an async message that it is completed with timing info,
         -- so we sleep briefly to wait for it to have been written
         sleep 0.01
         putStrLn "Done"
 
+
+kick :: Action ()
+kick = do
+    files <- use_ GetFilesOfInterest $ fromString ""
+    void $ uses TypeCheck $ Set.toList files
 
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
