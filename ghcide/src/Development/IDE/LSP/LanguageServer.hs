@@ -59,6 +59,7 @@ handleRequest loggerH compilerH makeResponse makeErrorResponse = \case
 
     Definition params -> RspDefinition . makeResponse <$> LS.Definition.handle loggerH compilerH params
     Hover params -> RspHover . makeResponse <$> LS.Hover.handle loggerH compilerH params
+    CodeLens _params -> pure $ RspCodeLens $ makeResponse mempty
 
     req -> do
         Logger.logWarning loggerH ("Method not found" <> T.pack (show req))
