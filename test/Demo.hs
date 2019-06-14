@@ -36,7 +36,7 @@ import GHC.Paths
 
 main :: IO ()
 main = do
-    (ghcOptions, map toNormalizedFilePath -> files) <- getCmdLine
+    (ghcOptions, map toNormalizedFilePath -> files, isIde) <- getCmdLine
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
@@ -52,8 +52,10 @@ main = do
             ,optShakeProfiling = Nothing -- Just "output.html"
             }
 
-    if null files then
-        runLanguageServer logger $ \event vfs ->
+    if isIde then do
+        putStrLn "Starting IDE server"
+        runLanguageServer logger $ \event vfs -> do
+            putStrLn "Server started"
             initialise mainRule event logger options vfs
     else do
         vfs <- makeVFSHandle
@@ -92,16 +94,17 @@ newSession flags = runGhc (Just libdir) $ do
 
 
 -- | Convert the command line into GHC options and files to load.
-getCmdLine :: IO ([String], [FilePath])
+getCmdLine :: IO ([String], [FilePath], Bool)
 getCmdLine = do
     args <- getArgs
-    args <- return $ if null args then [".ghci"] else args
+    let isIde = "--ide" `elem` args
+    args <- return $ delete "--ide" $ if null args then [".ghci"] else args
     let (flags, files) = partition ("-" `isPrefixOf`) args
     let (ghci, hs) = partition ((==) ".ghci" . takeExtension) files
     (flags, files) <- both concat . unzip . ((flags,hs):) <$> mapM readGhci ghci
     when (null files) $
         fail "Expected some files to load, but didn't find any"
-    return (flags, files)
+    return (flags, files, isIde)
 
 readGhci :: FilePath -> IO ([String], [FilePath])
 readGhci file = do
