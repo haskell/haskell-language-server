@@ -22,10 +22,12 @@ library
     default-language:   Haskell2010
     build-depends:
         aeson,
+        async,
         base == 4.*,
         binary,
         bytestring,
         containers,
+        data-default,
         deepseq,
         directory,
         either,
@@ -38,6 +40,7 @@ library
         haskell-lsp,
         haskell-lsp-types,
         mtl,
+        network-uri,
         pretty,
         rope-utf16-splay,
         safe-exceptions,
@@ -87,6 +90,11 @@ library
         Development.IDE.State.FileStore
         Development.IDE.State.Rules
         Development.IDE.Compat
+        Development.IDE.LSP.LanguageServer
+        Development.IDE.LSP.Definition
+        Development.IDE.LSP.Hover
+        Development.IDE.LSP.Protocol
+        Development.IDE.LSP.Server
         Development.IDE.Types.Options
         Development.IDE.State.RuleTypes
         Development.IDE.State.Service
