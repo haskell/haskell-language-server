@@ -16,6 +16,7 @@ import Development.IDE.Types.Options
 import Development.IDE.Logger
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
+import Development.IDE.LSP.LanguageServer
 import System.Environment
 import Data.List
 import Data.Maybe
@@ -63,10 +64,6 @@ main = do
         -- so we sleep briefly to wait for it to have been written
         sleep 0.01
         putStrLn "Done"
-
-
-runLanguageServer :: a
-runLanguageServer = undefined
 
 
 -- | Print an LSP event.
