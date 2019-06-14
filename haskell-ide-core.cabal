@@ -55,6 +55,7 @@ library
         transformers,
         uniplate,
         unordered-containers,
+        utf8-string,
         uri-encode
 
     cpp-options: -DGHC_STABLE

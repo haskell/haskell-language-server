@@ -19,6 +19,8 @@ import           Development.IDE.Functions.FindImports         (Import(..))
 import           Development.IDE.Functions.DependencyInformation
 import           Data.Hashable
 import           Data.Typeable
+import Development.IDE.Types.Diagnostics
+import Data.Set(Set)
 import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)
 
@@ -32,9 +34,6 @@ import           Development.IDE.Types.SpanInfo
 -- NOTATION
 --   Foo+ means Foo for the dependencies
 --   Foo* means Foo for me and Foo+
-
--- | Kick off things
-type instance RuleResult OfInterest = ()
 
 -- | The parse tree for the file using GetFileContents
 type instance RuleResult GetParsedModule = ParsedModule
@@ -73,10 +72,13 @@ type instance RuleResult ReportImportCycles = ()
 type instance RuleResult GetHieFile = HieFile
 
 
-data OfInterest = OfInterest
+type instance RuleResult GetFilesOfInterest = Set NormalizedFilePath
+
+
+data GetFilesOfInterest = GetFilesOfInterest
     deriving (Eq, Show, Typeable, Generic)
-instance Hashable OfInterest
-instance NFData   OfInterest
+instance Hashable GetFilesOfInterest
+instance NFData   GetFilesOfInterest
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
