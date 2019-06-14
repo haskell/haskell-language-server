@@ -35,6 +35,7 @@ depends = [
     "transformers",
     "uniplate",
     "unordered-containers",
+    "utf8-string",
     "uri-encode",
 ]
 
