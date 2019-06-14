@@ -31,8 +31,11 @@ import CmdLineParser
 import DynFlags
 import Panic
 import GHC
-import GHC.Paths
+import qualified GHC.Paths
 
+-- Set the GHC libdir to the nix libdir if it's present.
+getLibdir :: IO FilePath
+getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
 
 main :: IO ()
 main = do
@@ -78,7 +81,7 @@ showEvent lock e = withLock lock $ print e
 
 -- | Create a GHC session that will be subsequently reused.
 newSession :: [String] -> IO HscEnv
-newSession flags = runGhc (Just libdir) $ do
+newSession flags = getLibdir >>= \libdir -> runGhc (Just libdir) $ do
     damlDFlags <- getSessionDynFlags
     (dflags', leftover, warns) <- parseDynamicFlagsCmdLine damlDFlags $ map noLoc flags
 
