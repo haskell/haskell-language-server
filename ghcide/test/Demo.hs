@@ -59,7 +59,7 @@ main = do
             ,optWriteIface = False
             ,optGhcSession = liftIO $ newSession' cradle
             ,optExtensions = ["hs"]
-            ,optPkgLocationOpts = error "optPkgLocationOpts not implemented yet"
+            ,optPkgLocationOpts = defaultIdePkgLocationOptions
             ,optThreads = 0
             ,optShakeProfiling = Nothing -- Just "output.html"
             }
