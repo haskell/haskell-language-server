@@ -115,6 +115,8 @@ executable ide-demo
         base == 4.*,
         filepath,
         containers,
+        directory,
+        hie-bios,
         shake,
         ghc-paths,
         ghc,
