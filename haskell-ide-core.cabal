@@ -107,7 +107,7 @@ library
     other-modules:
         Data.Text.Prettyprint.Doc.Syntax
 
-executable ide-demo
+executable haskell-ide-core
     default-language:   Haskell2010
     main-is: Demo.hs
     ghc-options: -main-is Demo.main
