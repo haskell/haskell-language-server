@@ -3,6 +3,7 @@
 
 module Demo(main) where
 
+import Data.Maybe
 import Control.Concurrent.Extra
 import Control.Monad
 import System.Time.Extra
@@ -18,21 +19,20 @@ import Development.IDE.Logger
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
 import Development.IDE.LSP.LanguageServer
+import System.Directory
 import System.Environment
-import Data.List
-import Data.Maybe
-import System.FilePath
-import Data.Tuple.Extra
-import System.IO.Extra
+import System.IO
 import Development.IDE.Types.LSP
 import Development.Shake hiding (Env)
 import qualified Data.Set as Set
 
-import CmdLineParser
-import DynFlags
-import Panic
+-- import CmdLineParser
+-- import DynFlags
+-- import Panic
 import GHC
 import qualified GHC.Paths
+
+import HIE.Bios
 
 -- Set the GHC libdir to the nix libdir if it's present.
 getLibdir :: IO FilePath
@@ -43,28 +43,34 @@ main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
     hPutStrLn stderr "Starting haskell-ide-core Demo"
-    (ghcOptions, map toNormalizedFilePath -> files, isIde) <- getCmdLine
+    args <- getArgs
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
     let logger = makeOneHandle $ withLock lock . T.putStrLn
 
+    dir <- getCurrentDirectory
+    hPutStrLn stderr dir
+
+    cradle <- findCradle (dir <> "/")
+
     let options = IdeOptions
             {optPreprocessor = (,) []
             ,optWriteIface = False
-            ,optGhcSession = liftIO $ newSession ghcOptions
+            ,optGhcSession = liftIO $ newSession' cradle
             ,optExtensions = ["hs"]
             ,optPkgLocationOpts = error "optPkgLocationOpts not implemented yet"
             ,optThreads = 0
             ,optShakeProfiling = Nothing -- Just "output.html"
             }
 
-    if isIde then do
-        hPutStrLn stderr "Starting running the IDE server"
+    if "--ide" `elem` args then do
+        hPutStrLn stderr "Starting IDE server"
         runLanguageServer logger $ \event vfs -> do
             hPutStrLn stderr "Server started"
             initialise (mainRule >> action kick) event logger options vfs
     else do
+        let files = map toNormalizedFilePath $ filter (/= "--ide") args
         vfs <- makeVFSHandle
         ide <- initialise mainRule (showEvent lock) logger options vfs
         setFilesOfInterest ide $ Set.fromList files
@@ -87,40 +93,7 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,) diags
 showEvent lock e = withLock lock $ print e
 
-
--- | Create a GHC session that will be subsequently reused.
-newSession :: [String] -> IO HscEnv
-newSession flags = getLibdir >>= \libdir -> runGhc (Just libdir) $ do
-    damlDFlags <- getSessionDynFlags
-    (dflags', leftover, warns) <- parseDynamicFlagsCmdLine damlDFlags $ map noLoc flags
-
-    let leftoverError = CmdLineError $
-            (unlines . ("Unable to parse custom flags:":) . map unLoc) leftover
-    unless (null leftover) $ liftIO $ throwGhcExceptionIO leftoverError
-
-    unless (null warns) $
-        liftIO $ putStrLn $ unlines $ "Warnings:" : map (unLoc . warnMsg) warns
-
-    _ <- setSessionDynFlags dflags'
+newSession' :: Cradle -> IO HscEnv
+newSession' cradle = getLibdir >>= \libdir -> runGhc (Just libdir) $ do
+    initializeFlagsWithCradle "" cradle
     getSession
-
-
--- | Convert the command line into GHC options and files to load.
-getCmdLine :: IO ([String], [FilePath], Bool)
-getCmdLine = do
-    args <- getArgs
-    let isIde = "--ide" `elem` args
-    args <- return $ delete "--ide" $ if null args then [".ghci"] else args
-    let (flags, files) = partition ("-" `isPrefixOf`) args
-    let (ghci, hs) = partition ((==) ".ghci" . takeExtension) files
-    (flags, files) <- both concat . unzip . ((flags,hs):) <$> mapM readGhci ghci
-    when (null files) $
-        fail "Expected some files to load, but didn't find any"
-    return (flags, files, isIde)
-
-readGhci :: FilePath -> IO ([String], [FilePath])
-readGhci file = do
-    xs <- lines <$> readFileUTF8' file
-    let flags = concatMap words $ mapMaybe (stripPrefix ":set ") xs
-    let files = concatMap words $ mapMaybe (stripPrefix ":load ") xs
-    return (flags, files)
