@@ -14,7 +14,7 @@ There are more details [in this blog post](https://4ta.uk/p/shaking-up-the-ide).
 Let's assume you want to load the `haskell-ide-core` source code in a VS Code IDE.
 
 1. `git clone https://github.com/digital-asset/daml.git`
-2. `cd compiler/haskell-ide-core`
+2. `cd daml/compiler/haskell-ide-core`
 3. `stack build`
 4. `cd extension`
 5. `npm install`
