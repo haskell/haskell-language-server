@@ -8,3 +8,7 @@ extra-deps:
   subdirs:
   - .
   - haskell-lsp-types
+- git: https://github.com/mpickering/hie-bios.git
+  commit: 9f9fe00591c429c410475349560252ca7e622f1b
+nix:
+  packages: [zlib]

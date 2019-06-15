@@ -75,11 +75,13 @@ da_haskell_binary(
     hazel_deps = [
         "base",
         "containers",
+        "directory",
         "extra",
         "filepath",
         "ghc-paths",
         "ghc",
         "haskell-lsp",
+        "hie-bios",
         "shake",
         "text",
     ],
