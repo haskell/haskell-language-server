@@ -25,3 +25,9 @@ Let's assume you want to load the `haskell-ide-core` source code in a VS Code ID
 10. Run the Reload Window command in VS Code.
 
 Now you should have a working IDE dealing with itself.
+
+## Installing the IDE permanently
+
+1. `cd compiler/haskell-ide-core/extension`
+2. `vsce package`
+3. `code --install-extension haskell-ide-core-0.0.1.vsix`
