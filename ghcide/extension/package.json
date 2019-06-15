@@ -1,6 +1,11 @@
 {
 	"name": "haskell-ide-core",
 	"displayName": "haskell-ide-core",
+	"publisher": "digitalasset",
+	"repository": {
+		"type" : "git",
+		"url" : "https://github.com/digitalasset/daml.git"
+	},
 	"description": "A simple extension to test out haskell ide core",
 	"version": "0.0.1",
 	"engines": {
@@ -26,12 +31,12 @@
 			"properties": {
 				"hic.executablePath": {
 					"type": "string",
-					"default": "--ide .ghci",
+					"default": "haskell-ide-core",
 					"description": "The location of your haskell-ide-core executable"
 				},
 				"hic.arguments": {
 					"type": "string",
-					"default": "",
+					"default": "--ide",
 					"description": "The arguments you would like to pass to the executable"
 				}
 			}
