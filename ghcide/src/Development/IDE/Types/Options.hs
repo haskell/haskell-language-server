@@ -7,6 +7,7 @@
 module Development.IDE.Types.Options
   ( IdeOptions(..)
   , IdePkgLocationOptions(..)
+  , defaultIdePkgLocationOptions
   ) where
 
 import Development.Shake
@@ -38,3 +39,7 @@ data IdePkgLocationOptions = IdePkgLocationOptions
   -- used to lookup settings like importDirs. For DAML, we place them in the package DB.
   -- For cabal this could point somewhere in ~/.cabal/packages.
   }
+
+defaultIdePkgLocationOptions :: IdePkgLocationOptions
+defaultIdePkgLocationOptions = IdePkgLocationOptions f f
+    where f _ _ = return Nothing
