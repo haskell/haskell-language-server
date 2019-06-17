@@ -133,14 +133,13 @@ getPackage dflags p =
 -- | Typecheck a single module using the supplied dependencies and packages.
 typecheckModule
     :: IdeOptions
-    -> ParsedModule
     -> HscEnv
     -> [TcModuleResult]
     -> ParsedModule
     -> IO ([FileDiagnostic], Maybe TcModuleResult)
-typecheckModule opt mod packageState deps pm =
+typecheckModule opt packageState deps pm =
     fmap (either (, Nothing) (second Just)) $ Ex.runExceptT $
-    runGhcSessionExcept opt (Just mod) packageState $
+    runGhcSessionExcept opt (Just pm) packageState $
         catchSrcErrors $ do
             setupEnv deps
             (warnings, tcm) <- withWarnings "Typechecker" $ \tweak ->
