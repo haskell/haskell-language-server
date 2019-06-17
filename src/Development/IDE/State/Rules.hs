@@ -288,7 +288,7 @@ typeCheckRule =
         setPriority PriorityTypeCheck
         packageState <- use_ GhcSession ""
         opt <- getOpts
-        liftIO $ Compile.typecheckModule opt pm packageState tms pm
+        liftIO $ Compile.typecheckModule opt packageState tms pm
 
 
 generateCoreRule :: Rules ()
