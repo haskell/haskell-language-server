@@ -28,6 +28,7 @@ import FileCleanup
 import System.Directory
 import System.FilePath
 import Control.Monad
+import System.Info
 import Data.List        ( intercalate )
 import Data.Maybe
 import Data.Version
@@ -52,11 +53,12 @@ doCpp dflags raw input_fn output_fn = do
                       | otherwise = SysTools.runCc
                                           dflags (SysTools.Option "-E" : args)
 
-    let target_defs = [] {-
-          [ "-D" ++ HOST_OS     ++ "_BUILD_OS",
-            "-D" ++ HOST_ARCH   ++ "_BUILD_ARCH",
-            "-D" ++ TARGET_OS   ++ "_HOST_OS",
-            "-D" ++ TARGET_ARCH ++ "_HOST_ARCH" ] -}
+    let target_defs =
+          -- NEIL: Patched to use System.Info instead of constants from CPP
+          [ "-D" ++ os     ++ "_BUILD_OS",
+            "-D" ++ arch   ++ "_BUILD_ARCH",
+            "-D" ++ os     ++ "_HOST_OS",
+            "-D" ++ arch   ++ "_HOST_ARCH" ]
         -- remember, in code we *compile*, the HOST is the same our TARGET,
         -- and BUILD is the same as our HOST.
 
