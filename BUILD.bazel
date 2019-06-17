@@ -62,6 +62,12 @@ da_haskell_library(
         "ghc-boot",
         "ghc-boot-th",
     ],
+    # Override the -hide-package flags defined in WORKSPACE
+    #   -hide-package=ghc-boot-th -hide-package=ghc-boot
+    repl_ghci_args = [
+        "-package=ghc-boot",
+        "-package=ghc-boot-th",
+    ],
     src_strip_prefix = "src",
     visibility = ["//visibility:public"],
     deps = [
