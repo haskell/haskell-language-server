@@ -13,6 +13,7 @@ module Development.IDE.State.Service(
     getServiceEnv,
     IdeState, initialise, shutdown,
     runAction, runActions,
+    runActionSync, runActionsSync,
     setFilesOfInterest, modifyFilesOfInterest,
     writeProfile,
     getDiagnostics, unsafeClearDiagnostics,
@@ -100,14 +101,32 @@ setProfiling opts shakeOpts =
 shutdown :: IdeState -> IO ()
 shutdown = shakeShut
 
--- | Run a single action using the supplied service.
+-- | Run a single action using the supplied service. See `runActions`
+-- for more details.
 runAction :: IdeState -> Action a -> IO a
 runAction service action = head <$> runActions service [action]
 
 -- | Run a list of actions in parallel using the supplied service.
+-- This will return as soon as the results of the actions are
+-- available.  There might still be other rules running at this point,
+-- e.g., the ofInterestRule.
 runActions :: IdeState -> [Action a] -> IO [a]
-runActions x = join . shakeRun x
+runActions x acts = do
+    var <- newBarrier
+    _ <- shakeRun x acts (signalBarrier var)
+    waitBarrier var
 
+-- | This is a synchronous variant of `runAction`. See
+-- `runActionsSync` of more details.
+runActionSync :: IdeState -> Action a -> IO a
+runActionSync s a = head <$> runActionsSync s [a]
+
+-- | `runActionsSync` is similar to `runActions` but it will
+-- wait for all rules (so in particular the `ofInterestRule`) to
+-- finish running. This is mainly useful in tests, where you want
+-- to wait for all rules to fire so you can check diagnostics.
+runActionsSync :: IdeState -> [Action a] -> IO [a]
+runActionsSync s acts = join $ shakeRun s acts (const $ pure ())
 
 -- | Set the files-of-interest which will be built and kept-up-to-date.
 setFilesOfInterest :: IdeState -> Set NormalizedFilePath -> IO ()
@@ -118,7 +137,7 @@ modifyFilesOfInterest state f = do
     Env{..} <- getIdeGlobalState state
     files <- modifyVar envOfInterestVar $ pure . dupe . f
     logDebug state $ "Set files of interest to: " <> T.pack (show $ Set.toList files)
-    void $ shakeRun state []
+    void $ shakeRun state [] (const $ pure ())
 
 getServiceEnv :: Action Env
 getServiceEnv = getIdeGlobalAction
