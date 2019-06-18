@@ -36,7 +36,7 @@
 				},
 				"hic.arguments": {
 					"type": "string",
-					"default": "--ide",
+					"default": "--lsp",
 					"description": "The arguments you would like to pass to the executable"
 				}
 			}
