@@ -44,7 +44,6 @@ main = do
     --          then the language server will not work
     hPutStrLn stderr "Starting haskell-ide-core Demo"
     args <- getArgs
-
     -- lock to avoid overlapping output on stdout
     lock <- newLock
     let logger = makeOneHandle $ withLock lock . T.putStrLn
@@ -64,13 +63,13 @@ main = do
             ,optShakeProfiling = Nothing -- Just "output.html"
             }
 
-    if "--ide" `elem` args then do
+    if "--lsp" `elem` args then do
         hPutStrLn stderr "Starting IDE server"
         runLanguageServer logger $ \event vfs -> do
             hPutStrLn stderr "Server started"
             initialise (mainRule >> action kick) event logger options vfs
     else do
-        let files = map toNormalizedFilePath $ filter (/= "--ide") args
+        let files = map toNormalizedFilePath $ filter (/= "--lsp") args
         vfs <- makeVFSHandle
         ide <- initialise mainRule (showEvent lock) logger options vfs
         setFilesOfInterest ide $ Set.fromList files
