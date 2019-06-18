@@ -11,23 +11,36 @@ There are more details [in this blog post](https://4ta.uk/p/shaking-up-the-ide).
 
 ## How to use it
 
-Let's assume you want to load the `haskell-ide-core` source code in a VS Code IDE.
+### Installing the binary
 
 1. `git clone https://github.com/digital-asset/daml.git`
 2. `cd daml/compiler/haskell-ide-core`
 3. `stack build`
-4. `cd extension`
-5. `npm install`
-6. `code .`
-7. Press F5 to start the extension.
-8. In the spawned extension, open the folder `haskell-ide-core`.
-9. In the preferences, set the Haskell IDE Core executable preference to `stack` and the arguments to `exec -- ide-demo --ide .ghci`
-10. Run the Reload Window command in VS Code.
 
-Now you should have a working IDE dealing with itself.
+### Using the VSCode extension
 
-## Installing the IDE permanently
+1. `cd extension`
+2. `npm install`
+3. `code .`
+4. Press F5 to start the extension.
+5. In the spawned extension, open the folder `haskell-ide-core`.
+6. In the preferences, set the Haskell IDE Core executable preference to `stack` and the arguments to `exec -- ide-demo --lsp .ghci`
+7. Run the Reload Window command in VS Code.
+
+### Installing the VSCode extension permanently
 
 1. `cd compiler/haskell-ide-core/extension`
 2. `vsce package`
 3. `code --install-extension haskell-ide-core-0.0.1.vsix`
+
+### Installing in emacs
+1. Install lsp and haskell-lsp
+2. Add this elisp to your .emacs.el
+```elisp
+(require 'lsp)
+(require 'lsp-haskell)
+(require 'yasnippet)
+(add-hook 'haskell-mode-hook #'lsp)
+(setq lsp-haskell-process-path-hie "haskell-ide-core")
+(setq lsp-haskell-process-args-hie '())
+```
