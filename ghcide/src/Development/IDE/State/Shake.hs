@@ -52,7 +52,7 @@ import qualified Data.HashMap.Strict as Map
 import qualified Data.ByteString.Char8 as BS
 import           Data.Dynamic
 import           Data.Maybe
-import           Data.Either
+import           Data.Either.Extra
 import           Data.List.Extra
 import qualified Data.Text as T
 import Development.IDE.Logger as Logger
@@ -232,20 +232,31 @@ shakeProfile :: IdeState -> FilePath -> IO ()
 shakeProfile IdeState{..} = shakeProfileDatabase shakeDb
 
 shakeShut :: IdeState -> IO ()
-shakeShut = shakeClose
+shakeShut IdeState{..} = withVar shakeAbort $ \stop -> do
+    -- Shake gets unhappy if you try to close when there is a running
+    -- request so we first abort that.
+    stop
+    shakeClose
 
 -- | Spawn immediately, add an action to collect the results syncronously.
 --   If you are already inside a call to shakeRun that will be aborted with an exception.
-shakeRun :: IdeState -> [Action a] -> IO (IO [a])
+-- The callback will be fired as soon as the results are available
+-- even if there are still other rules running while the IO action that is
+-- being returned will wait for all rules to finish.
+shakeRun :: IdeState -> [Action a] -> ([a] -> IO ()) -> IO (IO [a])
 -- FIXME: If there is already a shakeRun queued up and waiting to send me a kill, I should probably
 --        not even start, which would make issues with async exceptions less problematic.
-shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts = modifyVar shakeAbort $ \stop -> do
+shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts callback = modifyVar shakeAbort $ \stop -> do
     (stopTime,_) <- duration stop
     Logger.logDebug logger $ T.pack $ "Starting shakeRun (aborting the previous one took " ++ showDuration stopTime ++ ")"
     bar <- newBarrier
     start <- offsetTime
-    thread <- forkFinally (shakeRunDatabaseProfile shakeDb acts) $ \res -> do
-        signalBarrier bar res
+    let act = do
+            res <- parallel acts
+            liftIO $ callback res
+            pure res
+    thread <- forkFinally (shakeRunDatabaseProfile shakeDb [act]) $ \res -> do
+        signalBarrier bar (mapRight head res)
         runTime <- start
         Logger.logDebug logger $ T.pack $
             "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ (if isLeft res then "exception" else "completed") ++ ")"

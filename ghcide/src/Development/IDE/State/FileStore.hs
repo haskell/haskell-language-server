@@ -161,7 +161,7 @@ setBufferModified state absFile mbContents = do
     case mbContents of
         Nothing -> removeVirtualFile (filePathToUri' absFile)
         Just contents -> setVirtualFileContents (filePathToUri' absFile) contents
-    void $ shakeRun state []
+    void $ shakeRun state [] (const $ pure ())
 
 
 -- would be nice to do this more efficiently...
