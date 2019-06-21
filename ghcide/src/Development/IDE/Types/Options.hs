@@ -7,7 +7,7 @@
 module Development.IDE.Types.Options
   ( IdeOptions(..)
   , IdePkgLocationOptions(..)
-  , defaultIdePkgLocationOptions
+  , defaultIdeOptions
   ) where
 
 import Development.Shake
@@ -26,7 +26,22 @@ data IdeOptions = IdeOptions
 
   , optThreads :: Int
   , optShakeProfiling :: Maybe FilePath
+  , optLanguageSyntax :: String -- ^ the ```language to use
+  , optNewColonConvention :: Bool -- ^ whether to use new colon convention
   }
+
+defaultIdeOptions :: Action HscEnv -> IdeOptions
+defaultIdeOptions session = IdeOptions
+    {optPreprocessor = (,) []
+    ,optWriteIface = False
+    ,optGhcSession = session
+    ,optExtensions = ["hs"]
+    ,optPkgLocationOpts = defaultIdePkgLocationOptions
+    ,optThreads = 0
+    ,optShakeProfiling = Nothing
+    ,optLanguageSyntax = "haskell"
+    ,optNewColonConvention = False
+    }
 
 
 -- | The set of options used to locate files belonging to external packages.

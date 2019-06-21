@@ -21,7 +21,7 @@ import           Desugar
 import           GHC
 import           GhcMonad
 import           FastString (mkFastString)
-import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
 import           Development.IDE.Types.SpanInfo
 import           Development.IDE.Functions.GHCError (zeroSpan)
 import           Prelude hiding (mod)

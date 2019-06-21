@@ -31,6 +31,7 @@ import Development.IDE.Functions.DependencyInformation
 import Development.IDE.Functions.FindImports
 import           Development.IDE.State.FileStore
 import           Development.IDE.Types.Diagnostics as Base
+import Development.IDE.Types.Location
 import qualified Data.ByteString.UTF8 as BS
 import Control.Exception
 import Control.Concurrent.Extra
@@ -43,7 +44,6 @@ import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
 import           Development.IDE.Functions.GHCError
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
-import           Development.IDE.Types.LSP as Compiler
 import Development.IDE.State.RuleTypes
 
 import           GHC
@@ -103,12 +103,13 @@ getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
 getDependencies file = fmap transitiveModuleDeps <$> use GetDependencies file
 
 -- | Try to get hover text for the name under point.
-getAtPoint :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [HoverText]))
+getAtPoint :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 getAtPoint file pos = fmap join $ runMaybeT $ do
+  opts <- lift getOpts
   files <- transitiveModuleDeps <$> useE GetDependencies file
   tms   <- usesE TypeCheck (file : files)
   spans <- useE GetSpanInfo file
-  return $ AtPoint.atPoint (map Compile.tmrModule tms) spans pos
+  return $ AtPoint.atPoint opts (map Compile.tmrModule tms) spans pos
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
