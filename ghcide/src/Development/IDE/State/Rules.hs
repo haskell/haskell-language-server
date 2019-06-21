@@ -129,7 +129,7 @@ getOpts = envOptions <$> getServiceEnv
 -- Rules
 -- These typically go from key to value and are oracles.
 
--- TODO (MK) This should be independent of DAML or move out of haskell-ide-core.
+-- TODO (MK) This should be independent of DAML or move out of hie-core.
 -- | We build artefacts based on the following high-to-low priority order.
 data Priority
     = PriorityTypeCheck

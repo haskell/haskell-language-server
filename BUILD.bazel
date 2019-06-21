@@ -40,7 +40,7 @@ depends = [
 ]
 
 da_haskell_library(
-    name = "haskell-ide-core",
+    name = "hie-core",
     srcs = glob(["src/**/*.hs"]),
     hazel_deps = depends + [
         "ghc-lib",
@@ -54,7 +54,7 @@ da_haskell_library(
 )
 
 da_haskell_library(
-    name = "haskell-ide-core-public",
+    name = "hie-core-public",
     srcs = glob(["src/**/*.hs"]),
     compiler_flags = ["-DGHC_STABLE"],
     hazel_deps = depends + [
@@ -76,7 +76,7 @@ da_haskell_library(
 )
 
 da_haskell_binary(
-    name = "haskell-ide-core-demo",
+    name = "hie-core-demo",
     srcs = glob(["test/**/*.hs"]),
     hazel_deps = [
         "base",
@@ -95,7 +95,7 @@ da_haskell_binary(
     src_strip_prefix = "test",
     visibility = ["//visibility:public"],
     deps = [
-        "haskell-ide-core-public",
+        "hie-core-public",
         "//libs-haskell/prettyprinter-syntax",
     ],
 ) if not is_windows else None  # Disable on Windows until ghc-paths is fixed upstream
