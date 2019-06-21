@@ -331,7 +331,6 @@ isBadDependency x
     | Just (_ :: BadDependency) <- fromException x = True
     | otherwise = False
 
-
 newtype Q k = Q (k, NormalizedFilePath)
     deriving (Eq,Hashable,NFData)
 
