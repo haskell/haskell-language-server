@@ -9,7 +9,6 @@ module Development.IDE.Types.SpanInfo(
     SpanInfo(..)
   , SpanSource(..)
   , getNameM
-  , getSrcSpan
   ) where
 
 import GHC
@@ -55,9 +54,3 @@ getNameM :: SpanSource -> Maybe Name
 getNameM = \case
   Named name -> Just name
   _ -> Nothing
-
-getSrcSpan :: SpanSource -> Maybe SrcSpan
-getSrcSpan = \case
-  NoSource -> Nothing
-  Span sp -> Just sp
-  Named name -> Just $ nameSrcSpan name

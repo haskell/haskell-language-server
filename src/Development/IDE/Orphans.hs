@@ -30,11 +30,5 @@ instance NFData SB.StringBuffer where rnf = rwhnf
 instance Show Module where
     show = moduleNameString . moduleName
 
-instance Show RdrName where show = prettyPrint
-instance Show ComponentId where show = prettyPrint
-instance Show SourcePackageId where show = prettyPrint
-instance Show ModuleName where show = prettyPrint
 instance Show (GenLocated SrcSpan ModuleName) where show = prettyPrint
-instance Show PackageName where show = prettyPrint
-instance Show PackageState where show _ = "PackageState"
 instance Show Name where show = prettyPrint

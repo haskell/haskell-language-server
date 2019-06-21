@@ -29,6 +29,7 @@ import           Development.IDE.Functions.SpanInfo
 import Development.IDE.UtilGHC
 import Development.IDE.Compat
 import Development.IDE.Types.Options
+import Development.IDE.Types.Location
 
 import           GHC hiding (parseModule, typecheckModule)
 import qualified Parser

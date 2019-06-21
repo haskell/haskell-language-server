@@ -19,7 +19,7 @@ import           Development.IDE.Functions.FindImports         (Import(..))
 import           Development.IDE.Functions.DependencyInformation
 import           Data.Hashable
 import           Data.Typeable
-import Development.IDE.Types.Diagnostics
+import Development.IDE.Types.Location
 import Data.Set(Set)
 import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)

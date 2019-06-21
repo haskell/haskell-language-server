@@ -29,6 +29,7 @@ import Data.Tuple.Extra (fst3)
 import GHC.Generics (Generic)
 
 import Development.IDE.Types.Diagnostics
+import Development.IDE.Types.Location
 import Development.IDE.UtilGHC ()
 
 import GHC

@@ -2,7 +2,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# OPTIONS_GHC -Wno-missing-fields #-} -- to enable prettyPrint
-{-# LANGUAGE CPP #-}
 
 -- | GHC utility functions. Importantly, code using our GHC should never:
 --

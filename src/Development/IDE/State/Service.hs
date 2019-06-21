@@ -30,7 +30,7 @@ import qualified Data.Set                                 as Set
 import qualified Data.Text as T
 import Data.Tuple.Extra
 import           Development.IDE.Functions.GHCError
-import Development.IDE.Types.Diagnostics (NormalizedFilePath)
+import Development.IDE.Types.Location (NormalizedFilePath)
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
 import qualified Language.Haskell.LSP.Messages as LSP
 

@@ -10,6 +10,7 @@ module Development.IDE.LSP.Hover
 
 import Development.IDE.LSP.Protocol hiding (Hover)
 import Language.Haskell.LSP.Types (Hover(..))
+import Development.IDE.Types.Location
 
 import qualified Development.IDE.Logger as Logger
 
@@ -18,8 +19,6 @@ import Data.Text.Prettyprint.Doc
 import Data.Text.Prettyprint.Doc.Render.Text
 
 import Development.IDE.State.Rules
-import Development.IDE.Types.LSP as Compiler
-import Development.IDE.Types.Diagnostics
 
 -- | Display information on hover.
 handle
@@ -40,16 +39,7 @@ handle loggerH compilerH (TextDocumentPositionParams (TextDocumentIdentifier uri
     case mbResult of
         Just (mbRange, contents) ->
             pure $ Just $ Hover
-                        (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator $ map showHoverInformation contents)
+                        (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents)
                         mbRange
 
         Nothing -> pure Nothing
-  where
-    showHoverInformation :: Compiler.HoverText -> T.Text
-    showHoverInformation = \case
-        Compiler.HoverDamlCode damlCode -> T.unlines
-            [ "```daml"
-            , damlCode
-            , "```"
-            ]
-        Compiler.HoverMarkdown md -> md

@@ -12,6 +12,8 @@ import Development.IDE.State.Service
 import Development.IDE.State.Rules
 import Development.IDE.State.Shake
 import Development.IDE.State.RuleTypes
+import Development.IDE.LSP.Protocol
+import Development.IDE.Types.Location
 import Data.String
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
@@ -22,7 +24,6 @@ import Development.IDE.LSP.LanguageServer
 import System.Directory
 import System.Environment
 import System.IO
-import Development.IDE.Types.LSP
 import Development.Shake hiding (Env)
 import qualified Data.Set as Set
 
@@ -53,15 +54,7 @@ main = do
 
     cradle <- findCradle (dir <> "/")
 
-    let options = IdeOptions
-            {optPreprocessor = (,) []
-            ,optWriteIface = False
-            ,optGhcSession = liftIO $ newSession' cradle
-            ,optExtensions = ["hs"]
-            ,optPkgLocationOpts = defaultIdePkgLocationOptions
-            ,optThreads = 0
-            ,optShakeProfiling = Nothing -- Just "output.html"
-            }
+    let options = defaultIdeOptions $ liftIO $ newSession' cradle
 
     if "--lsp" `elem` args then do
         hPutStrLn stderr "Starting IDE server"
