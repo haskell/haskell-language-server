@@ -42,12 +42,30 @@ getSpanInfo mods tcm =
      ets <- mapM (getTypeLHsExpr tcm) es -- expressions
      pts <- mapM (getTypeLPat tcm)    ps -- patterns
      let imports = importInfo mods
-     let exprs = imports ++ concat bts ++ catMaybes (ets ++ pts)
+     let exports = getExports tcm
+     let exprs = exports ++ imports ++ concat bts ++ catMaybes (ets ++ pts)
      return (mapMaybe toSpanInfo (sortBy cmp exprs))
   where cmp (_,a,_) (_,b,_)
           | a `isSubspanOf` b = LT
           | b `isSubspanOf` a = GT
           | otherwise = EQ
+
+getExports :: TypecheckedModule -> [(SpanSource, SrcSpan, Maybe Type)]
+getExports m
+    | Just (_, _, Just exports, _) <- renamedSource m =
+    [ (Named $ unLoc n, getLoc n, Nothing)
+    | (e, _) <- exports
+    , n <- ieLNames $ unLoc e
+    ]
+getExports _ = []
+
+-- | Variant of GHC’s ieNames that produces LIdP instead of IdP
+ieLNames :: IE pass -> [LIdP pass]
+ieLNames (IEVar       _ n   )     = [ieLWrappedName n]
+ieLNames (IEThingAbs  _ n   )     = [ieLWrappedName n]
+ieLNames (IEThingAll  _ n   )     = [ieLWrappedName n]
+ieLNames (IEThingWith _ n _ ns _) = ieLWrappedName n : map ieLWrappedName ns
+ieLNames _ = []
 
 -- | Get the name and type of a binding.
 getTypeLHsBind :: (GhcMonad m)
