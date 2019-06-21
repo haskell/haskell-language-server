@@ -13,7 +13,7 @@ module Development.IDE.State.Rules(
     IdeState, GetDependencies(..), GetParsedModule(..), TransitiveDependencies(..),
     Priority(..),
     runAction, runActions, useE, usesE,
-    toIdeResultNew, defineNoFile,
+    toIdeResult, defineNoFile,
     mainRule,
     getGhcCore,
     getAtPoint,
@@ -25,7 +25,7 @@ module Development.IDE.State.Rules(
     ) where
 
 import           Control.Monad.Except
-import Control.Monad.Extra (whenJust)
+import Control.Monad.Trans.Maybe
 import qualified Development.IDE.Functions.Compile             as Compile
 import qualified Development.IDE.Types.Options as Compile
 import Development.IDE.Functions.DependencyInformation
@@ -57,15 +57,19 @@ import qualified Development.IDE.Functions.AtPoint as AtPoint
 import Development.IDE.State.Service
 import Development.IDE.State.Shake
 
--- LEGACY STUFF ON THE OLD STYLE
+-- | This is useful for rules to convert rules that can only produce errors or
+-- a result into the more general IdeResult type that supports producing
+-- warnings while also producing a result.
+toIdeResult :: Either [FileDiagnostic] v -> IdeResult v
+toIdeResult = either (, Nothing) (([],) . Just)
 
-toIdeResultNew :: Either [FileDiagnostic] v -> IdeResult v
-toIdeResultNew = either (, Nothing) (([],) . Just)
+-- | useE is useful to implement functions that aren’t rules but need shortcircuiting
+-- e.g. getDefinition.
+useE :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
+useE k = MaybeT . use k
 
--- Convert to a legacy Ide result but dropping dependencies
-toIdeResultSilent :: Maybe v -> Either [FileDiagnostic] v
-toIdeResultSilent val = maybe (Left []) Right val
-
+usesE :: IdeRule k v => k -> [NormalizedFilePath] -> MaybeT Action [v]
+usesE k = MaybeT . fmap sequence . uses k
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
 defineNoFile f = define $ \k file -> do
@@ -85,13 +89,9 @@ getFilesOfInterestRule = do
         pure (Just $ BS.fromString $ show filesOfInterest, ([], Just filesOfInterest))
 
 
--- | Get GHC Core for the supplied file.
-getGhcCore :: NormalizedFilePath -> Action (Maybe [CoreModule])
-getGhcCore file = eitherToMaybe <$> runExceptT (coresForFile file)
-
 -- | Generate the GHC Core for the supplied file and its dependencies.
-coresForFile :: NormalizedFilePath -> ExceptT [FileDiagnostic] Action [CoreModule]
-coresForFile file = do
+getGhcCore :: NormalizedFilePath -> Action (Maybe [CoreModule])
+getGhcCore file = runMaybeT $ do
     files <- transitiveModuleDeps <$> useE GetDependencies file
     pms   <- usesE GetParsedModule $ files ++ [file]
     cores <- usesE GenerateCore $ map fileFromParsedModule pms
@@ -102,61 +102,30 @@ coresForFile file = do
 -- | Get all transitive file dependencies of a given module.
 -- Does not include the file itself.
 getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
-getDependencies file =
-  eitherToMaybe <$>
-  (runExceptT $ transitiveModuleDeps <$> useE GetDependencies file)
+getDependencies file = fmap transitiveModuleDeps <$> use GetDependencies file
 
 getDalfDependencies :: NormalizedFilePath -> Action (Maybe [InstalledUnitId])
-getDalfDependencies file =
-  eitherToMaybe <$>
-  (runExceptT $ transitivePkgDeps <$> useE GetDependencies file)
+getDalfDependencies file = fmap transitivePkgDeps <$> use GetDependencies file
 
--- | Documentation at point.
+-- | -- | Try to get hover text for the name under point.
 getAtPoint :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [HoverText]))
-getAtPoint file pos = do
-    fmap (either (const Nothing) id) . runExceptT $ getAtPointForFile file pos
+getAtPoint file pos = fmap join $ runMaybeT $ do
+  files <- transitiveModuleDeps <$> useE GetDependencies file
+  tms   <- usesE TypeCheck (file : files)
+  spans <- useE GetSpanInfo file
+  return $ AtPoint.atPoint (map Compile.tmrModule tms) spans pos
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
-getDefinition file pos = do
-    fmap (either (const Nothing) id) . runExceptT $ getDefinitionForFile file pos
-
--- | Parse the contents of a daml file.
-getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
-getParsedModule file =
-    eitherToMaybe <$> (runExceptT $ useE GetParsedModule file)
-
-------------------------------------------------------------
--- Internal Actions
-
-useE
-    :: IdeRule k v
-    => k -> NormalizedFilePath -> ExceptT [FileDiagnostic] Action v
-useE k = ExceptT . fmap toIdeResultSilent . use k
-
--- picks the first error
-usesE
-    :: IdeRule k v
-    => k -> [NormalizedFilePath] -> ExceptT [FileDiagnostic] Action [v]
-usesE k = ExceptT . fmap (mapM toIdeResultSilent) . uses k
-
--- | Try to get hover text for the name under point.
-getAtPointForFile
-  :: NormalizedFilePath
-  -> Position
-  -> ExceptT [FileDiagnostic] Action (Maybe (Maybe Range, [HoverText]))
-getAtPointForFile file pos = do
-  files <- transitiveModuleDeps <$> useE GetDependencies file
-  tms   <- usesE TypeCheck (file : files)
-  spans <- useE  GetSpanInfo file
-  return $ AtPoint.atPoint (map Compile.tmrModule tms) spans pos
-
-getDefinitionForFile :: NormalizedFilePath -> Position -> ExceptT [FileDiagnostic] Action (Maybe Location)
-getDefinitionForFile file pos = do
+getDefinition file pos = fmap join $ runMaybeT $ do
     spans <- useE GetSpanInfo file
     pkgState <- useE GhcSession ""
     opts <- lift getOpts
     lift $ AtPoint.gotoDefinition opts pkgState spans pos
+
+-- | Parse the contents of a daml file.
+getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
+getParsedModule file = use GetParsedModule file
 
 getOpts :: Action Compile.IdeOptions
 getOpts = envOptions <$> getServiceEnv
@@ -227,22 +196,22 @@ rawDependencyInformation f = go (Set.singleton f) Map.empty Map.empty
 
 getDependencyInformationRule :: Rules ()
 getDependencyInformationRule =
-    define $ \GetDependencyInformation file -> fmap toIdeResultNew $ runExceptT $ do
+    define $ \GetDependencyInformation file -> fmap toIdeResult $ runExceptT $ do
        rawDepInfo <- rawDependencyInformation file
        pure $ processDependencyInformation rawDepInfo
 
 reportImportCyclesRule :: Rules ()
 reportImportCyclesRule =
-    define $ \ReportImportCycles file -> fmap toIdeResultNew $ runExceptT $ do
-        DependencyInformation{..} <- useE GetDependencyInformation file
-        whenJust (Map.lookup file depErrorNodes) $ \errs -> do
-            let cycles = mapMaybe (cycleErrorInFile file) (toList errs)
-            when (not $ null cycles) $ do
-              -- Convert cycles of files into cycles of module names
-              diags <- forM cycles $ \(imp, files) -> do
-                modNames <- mapM getModuleName files
-                pure $ toDiag imp modNames
-              throwError diags
+    define $ \ReportImportCycles file -> fmap (\errs -> if null errs then ([], Just ()) else (errs, Nothing)) $ do
+        DependencyInformation{..} <- use_ GetDependencyInformation file
+        case Map.lookup file depErrorNodes of
+            Nothing -> pure []
+            Just errs -> do
+                let cycles = mapMaybe (cycleErrorInFile file) (toList errs)
+                -- Convert cycles of files into cycles of module names
+                forM cycles $ \(imp, files) -> do
+                    modNames <- mapM getModuleName files
+                    pure $ toDiag imp modNames
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
@@ -257,7 +226,7 @@ reportImportCyclesRule =
             where loc = srcSpanToLocation (getLoc imp)
                   fp = toNormalizedFilePath $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
-           pm <- useE GetParsedModule file
+           pm <- use_ GetParsedModule file
            pure (moduleNameString . moduleName . ms_mod $ pm_mod_summary pm)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
