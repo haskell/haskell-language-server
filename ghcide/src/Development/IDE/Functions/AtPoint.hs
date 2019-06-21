@@ -12,6 +12,7 @@ module Development.IDE.Functions.AtPoint (
 import           Development.IDE.Functions.Documentation
 import           Development.IDE.Functions.GHCError
 import Development.IDE.Orphans()
+import Development.IDE.Types.Location
 
 -- DAML compiler and infrastructure
 import Development.Shake
@@ -19,8 +20,6 @@ import Development.IDE.UtilGHC
 import Development.IDE.Compat
 import Development.IDE.State.Shake
 import Development.IDE.State.RuleTypes
-import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.LSP
 import Development.IDE.Types.Options
 import           Development.IDE.Types.SpanInfo as SpanInfo
 
@@ -50,25 +49,28 @@ gotoDefinition ideOpts pkgState srcSpans pos =
 
 -- | Synopsis for the name at a given position.
 atPoint
-  :: [TypecheckedModule]
+  :: IdeOptions
+  -> [TypecheckedModule]
   -> [SpanInfo]
   -> Position
-  -> Maybe (Maybe Range, [HoverText])
-atPoint tcs srcSpans pos = do
+  -> Maybe (Maybe Range, [T.Text])
+atPoint IdeOptions{..} tcs srcSpans pos = do
     SpanInfo{..} <- listToMaybe $ orderSpans $ spansAtPoint pos srcSpans
     ty <- spaninfoType
     let mbName  = getNameM spaninfoSource
-        mbDefinedAt = fmap (\name -> HoverMarkdown $ "**Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "**\n") mbName
+        mbDefinedAt = fmap (\name -> "**Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "**\n") mbName
         mbDocs  = fmap (\name -> getDocumentation name tcs) mbName
-        docInfo = maybe [] (map HoverMarkdown . docHeaders) mbDocs
+        docInfo = maybe [] docHeaders mbDocs
         range = Range
                   (Position spaninfoStartLine spaninfoStartCol)
                   (Position spaninfoEndLine spaninfoEndCol)
-        typeSig = HoverDamlCode $ case mbName of
-          Nothing -> ": " <> showName ty
+        colon = if optNewColonConvention then ":" else "::"
+        wrapLanguageSyntax x = T.unlines [ "```" <> T.pack optLanguageSyntax, x, "```"]
+        typeSig = wrapLanguageSyntax $ case mbName of
+          Nothing -> colon <> " " <> showName ty
           Just name ->
             let modulePrefix = maybe "" (<> ".") (getModuleNameAsText name)
-            in  modulePrefix <> showName name <> "\n  : " <> showName ty
+            in  modulePrefix <> showName name <> "\n  " <> colon <> " " <> showName ty
         hoverInfo = docInfo <> [typeSig] <> maybeToList mbDefinedAt
     return (Just range, hoverInfo)
   where

@@ -58,6 +58,7 @@ import qualified Data.Text as T
 import Development.IDE.Logger as Logger
 import           Development.IDE.Types.Diagnostics hiding (getAllDiagnostics)
 import qualified Development.IDE.Types.Diagnostics as D
+import Development.IDE.Types.Location
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.DeepSeq
@@ -81,7 +82,7 @@ data ShakeExtras = ShakeExtras
     ,logger :: Logger.Handle
     ,globals :: Var (Map.HashMap TypeRep Dynamic)
     ,state :: Var Values
-    ,diagnostics :: Var (ProjectDiagnostics Key)
+    ,diagnostics :: Var DiagnosticStore
     }
 
 getShakeExtras :: Action ShakeExtras
@@ -221,7 +222,7 @@ shakeOpen eventer logger opts rules = do
     shakeExtras <- do
         globals <- newVar Map.empty
         state <- newVar Map.empty
-        diagnostics <- newVar emptyDiagnostics
+        diagnostics <- newVar mempty
         pure ShakeExtras{..}
     (shakeDb, shakeClose) <- shakeOpenDatabase opts{shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts} rules
     shakeAbort <- newVar $ return ()
@@ -279,7 +280,7 @@ getAllDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
 -- | FIXME: This function is temporary! Only required because the files of interest doesn't work
 unsafeClearAllDiagnostics :: IdeState -> IO ()
 unsafeClearAllDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
-    writeVar diagnostics emptyDiagnostics
+    writeVar diagnostics mempty
 
 -- | Clear the results for all files that do not match the given predicate.
 garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
@@ -403,7 +404,7 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, state} current = do
         modTime <- join <$> getValues state GetModificationTime fp
         modifyVar diagnostics $ \old -> do
             let oldDiags = getFileDiagnostics fp old
-            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) k current old
+            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) (T.pack $ show k) current old
             let newDiags = getFileDiagnostics fp newDiagsStore
             pure (newDiagsStore, (newDiags, oldDiags))
     when (newDiags /= oldDiags) $

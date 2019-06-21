@@ -30,6 +30,7 @@ module Development.IDE.Functions.GHCError
 
 import                     Development.IDE.Types.Diagnostics as D
 import qualified           Data.Text as T
+import Development.IDE.Types.Location
 import Development.IDE.Orphans()
 import qualified FastString as FS
 import           GHC

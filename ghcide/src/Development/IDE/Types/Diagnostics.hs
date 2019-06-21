@@ -7,38 +7,17 @@
 {-# LANGUAGE BlockArguments #-}
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
-  FileDiagnostics,
   FileDiagnostic,
-  Location(..),
-  Range(..),
   LSP.DiagnosticSeverity(..),
-  Position(..),
   DiagnosticStore,
   DiagnosticRelatedInformation(..),
   List(..),
   StoreItem(..),
-  Uri(..),
-  NormalizedUri,
-  LSP.toNormalizedUri,
-  LSP.fromNormalizedUri,
-  NormalizedFilePath,
-  toNormalizedFilePath,
-  fromNormalizedFilePath,
-  noLocation,
-  noRange,
-  noFilePath,
   ideErrorText,
   ideErrorPretty,
   errorDiag,
-  ideTryIOException,
   showDiagnostics,
   showDiagnosticsColored,
-  defDiagnostic,
-  filePathToUri,
-  filePathToUri',
-  uriToFilePath',
-  ProjectDiagnostics,
-  emptyDiagnostics,
   setStageDiagnostics,
   getAllDiagnostics,
   filterDiagnostics,
@@ -46,66 +25,24 @@ module Development.IDE.Types.Diagnostics (
   prettyDiagnostics
   ) where
 
-import Control.DeepSeq
-import Control.Exception
-import Data.Either.Combinators
 import Data.Maybe as Maybe
 import Data.Foldable
-import Data.Hashable
 import qualified Data.Map as Map
-import Data.String
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc.Syntax
 import qualified Data.SortedList as SL
-import System.FilePath
 import qualified Text.PrettyPrint.Annotated.HughesPJClass as Pretty
 import qualified Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types as LSP (
     DiagnosticSeverity(..)
   , Diagnostic(..)
-  , filePathToUri
   , List(..)
   , DiagnosticRelatedInformation(..)
-  , NormalizedUri(..)
-  , Uri(..)
-  , toNormalizedUri
-  , fromNormalizedUri
   )
 import Language.Haskell.LSP.Diagnostics
 
 import Development.IDE.Types.Location
 
--- | Newtype wrapper around FilePath that always has normalized slashes.
-newtype NormalizedFilePath = NormalizedFilePath FilePath
-    deriving (Eq, Ord, Show, Hashable, NFData)
-
-instance IsString NormalizedFilePath where
-    fromString = toNormalizedFilePath
-
-toNormalizedFilePath :: FilePath -> NormalizedFilePath
-toNormalizedFilePath "" = NormalizedFilePath ""
-toNormalizedFilePath fp = NormalizedFilePath $ normalise' fp
-    where
-        -- We do not use System.FilePath’s normalise here since that
-        -- also normalises things like the case of the drive letter
-        -- which NormalizedUri does not normalise so we get VFS lookup failures.
-        normalise' :: FilePath -> FilePath
-        normalise' = map (\c -> if isPathSeparator c then pathSeparator else c)
-
-fromNormalizedFilePath :: NormalizedFilePath -> FilePath
-fromNormalizedFilePath (NormalizedFilePath fp) = fp
-
--- | We use an empty string as a filepath when we don’t have a file.
--- However, haskell-lsp doesn’t support that in uriToFilePath and given
--- that it is not a valid filepath it does not make sense to upstream a fix.
--- So we have our own wrapper here that supports empty filepaths.
-uriToFilePath' :: Uri -> Maybe FilePath
-uriToFilePath' uri
-    | uri == filePathToUri "" = Just ""
-    | otherwise = LSP.uriToFilePath uri
-
-filePathToUri' :: NormalizedFilePath -> NormalizedUri
-filePathToUri' = toNormalizedUri . filePathToUri . fromNormalizedFilePath
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
 ideErrorText fp = errorDiag fp "Ide Error"
@@ -133,25 +70,6 @@ diagnostic rng sev src msg
           _relatedInformation = Nothing
           }
 
--- | Any optional field is instantiated to Nothing
-defDiagnostic ::
-  Range ->
-  T.Text -> -- ^ error message
-  LSP.Diagnostic
-defDiagnostic _range _message = LSP.Diagnostic {
-    _range
-  , _message
-  , _severity = Nothing
-  , _code = Nothing
-  , _source = Nothing
-  , _relatedInformation = Nothing
-  }
-
-ideTryIOException :: NormalizedFilePath -> IO a -> IO (Either FileDiagnostic a)
-ideTryIOException fp act =
-  mapLeft
-      (\(e :: IOException) -> ideErrorText fp $ T.pack $ show e)
-      <$> try act
 
 -- | Human readable diagnostics for a specific file.
 --
@@ -159,7 +77,6 @@ ideTryIOException fp act =
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
-type FileDiagnostics = (NormalizedFilePath, [Diagnostic])
 type FileDiagnostic = (NormalizedFilePath, Diagnostic)
 
 prettyRange :: Range -> Doc SyntaxClass
@@ -202,55 +119,40 @@ getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) =
     toList =<< Map.elems diags
 
--- | This represents every diagnostic in a LSP project, the stage type variable is
---   the type of the compiler stages, in this project that is always the Key data
---   type found in Development.IDE.State.Shake
-newtype ProjectDiagnostics stage = ProjectDiagnostics {getStore :: DiagnosticStore}
-    deriving Show
-
-emptyDiagnostics :: ProjectDiagnostics stage
-emptyDiagnostics = ProjectDiagnostics mempty
 
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
 setStageDiagnostics ::
-  Show stage =>
   NormalizedFilePath ->
   Maybe Int ->
   -- ^ the time that the file these diagnostics originate from was last edited
-  stage ->
+  T.Text ->
   [LSP.Diagnostic] ->
-  ProjectDiagnostics stage ->
-  ProjectDiagnostics stage
-setStageDiagnostics fp timeM stage diags (ProjectDiagnostics ds) =
-    ProjectDiagnostics $ updateDiagnostics ds uri timeM diagsBySource
+  DiagnosticStore ->
+  DiagnosticStore
+setStageDiagnostics fp timeM stage diags ds  =
+    updateDiagnostics ds uri timeM diagsBySource
     where
-        diagsBySource = Map.singleton (Just $ T.pack $ show stage) (SL.toSortedList diags)
+        diagsBySource = Map.singleton (Just stage) (SL.toSortedList diags)
         uri = filePathToUri' fp
 
-fromUri :: LSP.NormalizedUri -> NormalizedFilePath
-fromUri = toNormalizedFilePath . fromMaybe noFilePath . uriToFilePath' . fromNormalizedUri
-
 getAllDiagnostics ::
-    ProjectDiagnostics stage ->
+    DiagnosticStore ->
     [FileDiagnostic]
 getAllDiagnostics =
-    concatMap (\(k,v) -> map (fromUri k,) $ getDiagnosticsFromStore v) . Map.toList . getStore
+    concatMap (\(k,v) -> map (fromUri k,) $ getDiagnosticsFromStore v) . Map.toList
 
 getFileDiagnostics ::
     NormalizedFilePath ->
-    ProjectDiagnostics stage ->
+    DiagnosticStore ->
     [LSP.Diagnostic]
 getFileDiagnostics fp ds =
     maybe [] getDiagnosticsFromStore $
-    Map.lookup (filePathToUri' fp) $
-    getStore ds
+    Map.lookup (filePathToUri' fp) ds
 
 filterDiagnostics ::
     (NormalizedFilePath -> Bool) ->
-    ProjectDiagnostics stage ->
-    ProjectDiagnostics stage
+    DiagnosticStore ->
+    DiagnosticStore
 filterDiagnostics keep =
-    ProjectDiagnostics .
-    Map.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri) .
-    getStore
+    Map.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)

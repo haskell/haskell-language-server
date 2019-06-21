@@ -102,7 +102,6 @@ library
         Development.IDE.State.Shake
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Location
-        Development.IDE.Types.LSP
         Development.IDE.Types.SpanInfo
     other-modules:
         Data.Text.Prettyprint.Doc.Syntax

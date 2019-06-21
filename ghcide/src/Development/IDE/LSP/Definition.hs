@@ -9,7 +9,7 @@ module Development.IDE.LSP.Definition
     ) where
 
 import           Development.IDE.LSP.Protocol
-import Development.IDE.Types.Diagnostics
+import Development.IDE.Types.Location
 
 import qualified Development.IDE.Logger as Logger
 import Development.IDE.State.Rules
