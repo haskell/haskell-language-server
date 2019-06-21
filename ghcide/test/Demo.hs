@@ -42,7 +42,7 @@ main :: IO ()
 main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    hPutStrLn stderr "Starting haskell-ide-core Demo"
+    hPutStrLn stderr "Starting hie-core Demo"
     args <- getArgs
     -- lock to avoid overlapping output on stdout
     lock <- newLock
