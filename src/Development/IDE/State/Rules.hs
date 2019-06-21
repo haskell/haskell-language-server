@@ -19,7 +19,6 @@ module Development.IDE.State.Rules(
     getAtPoint,
     getDefinition,
     getDependencies,
-    getDalfDependencies,
     getParsedModule,
     fileFromParsedModule
     ) where
@@ -50,7 +49,6 @@ import Development.IDE.State.RuleTypes
 import           GHC
 import Development.IDE.Compat
 import           UniqSupply
-import           Module                         as M
 import NameCache
 
 import qualified Development.IDE.Functions.AtPoint as AtPoint
@@ -104,10 +102,7 @@ getGhcCore file = runMaybeT $ do
 getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
 getDependencies file = fmap transitiveModuleDeps <$> use GetDependencies file
 
-getDalfDependencies :: NormalizedFilePath -> Action (Maybe [InstalledUnitId])
-getDalfDependencies file = fmap transitivePkgDeps <$> use GetDependencies file
-
--- | -- | Try to get hover text for the name under point.
+-- | Try to get hover text for the name under point.
 getAtPoint :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [HoverText]))
 getAtPoint file pos = fmap join $ runMaybeT $ do
   files <- transitiveModuleDeps <$> useE GetDependencies file
