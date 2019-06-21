@@ -1,6 +1,6 @@
 {
-	"name": "haskell-ide-core",
-	"displayName": "haskell-ide-core",
+	"name": "hie-core",
+	"displayName": "hie-core",
 	"publisher": "digitalasset",
 	"repository": {
 		"type" : "git",
@@ -31,8 +31,8 @@
 			"properties": {
 				"hic.executablePath": {
 					"type": "string",
-					"default": "haskell-ide-core",
-					"description": "The location of your haskell-ide-core executable"
+					"default": "hie-core",
+					"description": "The location of your hie-core executable"
 				},
 				"hic.arguments": {
 					"type": "string",
