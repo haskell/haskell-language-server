@@ -7,17 +7,17 @@ import Data.Maybe
 import Control.Concurrent.Extra
 import Control.Monad
 import System.Time.Extra
-import Development.IDE.State.FileStore
-import Development.IDE.State.Service
-import Development.IDE.State.Rules
-import Development.IDE.State.Shake
-import Development.IDE.State.RuleTypes
+import Development.IDE.Core.FileStore
+import Development.IDE.Core.Service
+import Development.IDE.Core.Rules
+import Development.IDE.Core.Shake
+import Development.IDE.Core.RuleTypes
 import Development.IDE.LSP.Protocol
 import Development.IDE.Types.Location
 import Data.String
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
-import Development.IDE.Logger
+import Development.IDE.Types.Logger
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
 import Development.IDE.LSP.LanguageServer

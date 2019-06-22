@@ -1,28 +1,18 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE DuplicateRecordFields #-}
-module Development.IDE.Functions.GHCError
-  ( mkDiag
-  , toDiagnostics
+{-# LANGUAGE OverloadedStrings #-}
+module Development.IDE.GHC.Error
+  (
+    -- * Producing Diagnostic values
+    diagFromErrMsgs
+  , diagFromErrMsg
+  , diagFromString
+  , diagFromStrings
+  , diagFromGhcException
+
+  -- * utilities working with spans
   , srcSpanToLocation
   , srcSpanToFilename
-
-    -- * Producing GHC ErrorMessages
-  , mkErrors
-  , mkError
-  , mkErrorDoc
-  , mkErrorsGhcException
-
-  -- * Handling errors in the GHC monad (SourceError, ErrorMessages)
-  , Diagnostic
-  , FileDiagnostic
-  , ErrorMessages -- included in module export below
-  , ErrMsg
-  , errMsgSpan
-  , errMsgSeverity
-  , mkPlainErrMsg
-
-  -- * utilities working with 'ErrMsg' and 'ErrorMessages'
   , zeroSpan
   , realSpan
   , noSpan
@@ -31,35 +21,37 @@ module Development.IDE.Functions.GHCError
 import                     Development.IDE.Types.Diagnostics as D
 import qualified           Data.Text as T
 import Development.IDE.Types.Location
-import Development.IDE.Orphans()
+import Development.IDE.GHC.Orphans()
 import qualified FastString as FS
 import           GHC
 import           Bag
-import Data.Maybe
 import           ErrUtils
 import           SrcLoc
 import qualified Outputable                 as Out
 
 
 
-toDiagnostics :: DynFlags -> ErrorMessages -> [FileDiagnostic]
-toDiagnostics dflags = mapMaybe (mkDiag dflags $ T.pack "Compiler") . bagToList
+diagFromText :: D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
+diagFromText sev loc msg = (toNormalizedFilePath $ srcSpanToFilename loc,)
+    Diagnostic
+    { _range    = srcSpanToRange loc
+    , _severity = Just sev
+    , _source   = Just "compiler" -- should really be 'daml' or 'haskell', but not shown in the IDE so who cares
+    , _message  = msg
+    , _code     = Nothing
+    , _relatedInformation = Nothing
+    }
+
+-- | Produce a GHC-style error from a source span and a message.
+diagFromErrMsg :: DynFlags -> ErrMsg -> [FileDiagnostic]
+diagFromErrMsg dflags e =
+    [ diagFromText sev (errMsgSpan e) $ T.pack $ Out.showSDoc dflags $ ErrUtils.pprLocErrMsg e
+    | Just sev <- [toDSeverity $ errMsgSeverity e]]
 
 
-mkDiag :: DynFlags -> T.Text -> ErrMsg -> Maybe FileDiagnostic
-mkDiag dflags src e =
-  case toDSeverity $ errMsgSeverity e of
-    Nothing        -> Nothing
-    Just bSeverity ->
-      Just $ (toNormalizedFilePath $ srcSpanToFilename (errMsgSpan e),)
-        Diagnostic
-        { _range    = srcSpanToRange $ errMsgSpan e
-        , _severity = Just bSeverity
-        , _source   = Just src
-        , _message  = T.pack $ Out.showSDoc dflags (ErrUtils.pprLocErrMsg e)
-        , _code     = Nothing
-        , _relatedInformation = Nothing
-        }
+diagFromErrMsgs :: DynFlags -> Bag ErrMsg -> [FileDiagnostic]
+diagFromErrMsgs dflags = concatMap (diagFromErrMsg dflags) . bagToList
+
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
 srcSpanToRange :: SrcSpan -> Range
@@ -95,16 +87,12 @@ toDSeverity SevFatal       = Just DsError
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given
 --   (optional) locations and message strings.
-mkErrors :: DynFlags -> [(SrcSpan, String)] -> [FileDiagnostic]
-mkErrors dflags = concatMap (uncurry $ mkError dflags)
+diagFromStrings :: [(SrcSpan, String)] -> [FileDiagnostic]
+diagFromStrings = concatMap (uncurry diagFromString)
 
 -- | Produce a GHC-style error from a source span and a message.
-mkError :: DynFlags -> SrcSpan -> String -> [FileDiagnostic]
-mkError dflags sp = toDiagnostics dflags . Bag.listToBag . pure . mkPlainErrMsg dflags sp . Out.text
-
--- | Produce a GHC-style error from a source span and a message.
-mkErrorDoc :: DynFlags -> SrcSpan -> Out.SDoc -> [FileDiagnostic]
-mkErrorDoc dflags sp = toDiagnostics dflags . Bag.listToBag . pure . mkPlainErrMsg dflags sp
+diagFromString :: SrcSpan -> String -> [FileDiagnostic]
+diagFromString sp x = [diagFromText DsError sp $ T.pack x]
 
 
 -- | Produces an "unhelpful" source span with the given string.
@@ -124,8 +112,8 @@ realSpan = \case
   UnhelpfulSpan _ -> Nothing
 
 
-mkErrorsGhcException :: DynFlags -> GhcException -> [FileDiagnostic]
-mkErrorsGhcException dflags exc = mkErrors dflags [(noSpan "<Internal>", showGHCE dflags exc)]
+diagFromGhcException :: DynFlags -> GhcException -> [FileDiagnostic]
+diagFromGhcException dflags exc = diagFromString (noSpan "<Internal>") (showGHCE dflags exc)
 
 showGHCE :: DynFlags -> GhcException -> String
 showGHCE dflags exc = case exc of

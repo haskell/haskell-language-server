@@ -76,33 +76,33 @@ library
         src
         ../../libs-haskell/prettyprinter-syntax/src
     exposed-modules:
-        Development.IDE.Logger
-        Development.IDE.UtilGHC
-        Development.IDE.Functions.AtPoint
-        Development.IDE.Functions.Compile
-        Development.IDE.Functions.CPP
-        Development.IDE.Orphans
-        Development.IDE.Functions.DependencyInformation
-        Development.IDE.Functions.Documentation
-        Development.IDE.Functions.FindImports
-        Development.IDE.Functions.GHCError
-        Development.IDE.Functions.SpanInfo
-        Development.IDE.Functions.Warnings
-        Development.IDE.State.FileStore
-        Development.IDE.State.Rules
-        Development.IDE.Compat
+        Development.IDE.Types.Logger
+        Development.IDE.GHC.Util
+        Development.IDE.Spans.AtPoint
+        Development.IDE.Core.Compile
+        Development.IDE.GHC.CPP
+        Development.IDE.GHC.Orphans
+        Development.IDE.Import.DependencyInformation
+        Development.IDE.Spans.Documentation
+        Development.IDE.Import.FindImports
+        Development.IDE.GHC.Error
+        Development.IDE.Spans.Calculate
+        Development.IDE.GHC.Warnings
+        Development.IDE.Core.FileStore
+        Development.IDE.Core.Rules
+        Development.IDE.GHC.Compat
         Development.IDE.LSP.LanguageServer
         Development.IDE.LSP.Definition
         Development.IDE.LSP.Hover
         Development.IDE.LSP.Protocol
         Development.IDE.LSP.Server
         Development.IDE.Types.Options
-        Development.IDE.State.RuleTypes
-        Development.IDE.State.Service
-        Development.IDE.State.Shake
+        Development.IDE.Core.RuleTypes
+        Development.IDE.Core.Service
+        Development.IDE.Core.Shake
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Location
-        Development.IDE.Types.SpanInfo
+        Development.IDE.Spans.Type
     other-modules:
         Data.Text.Prettyprint.Doc.Syntax
 

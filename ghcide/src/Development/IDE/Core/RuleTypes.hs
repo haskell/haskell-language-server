@@ -8,15 +8,15 @@
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
 --
-module Development.IDE.State.RuleTypes(
-    module Development.IDE.State.RuleTypes
+module Development.IDE.Core.RuleTypes(
+    module Development.IDE.Core.RuleTypes
     ) where
 
 import           Control.DeepSeq
-import           Development.IDE.Functions.Compile             (TcModuleResult, GhcModule, LoadPackageResult(..))
-import qualified Development.IDE.Functions.Compile             as Compile
-import           Development.IDE.Functions.FindImports         (Import(..))
-import           Development.IDE.Functions.DependencyInformation
+import           Development.IDE.Core.Compile             (TcModuleResult, GhcModule, LoadPackageResult(..))
+import qualified Development.IDE.Core.Compile             as Compile
+import           Development.IDE.Import.FindImports         (Import(..))
+import           Development.IDE.Import.DependencyInformation
 import           Data.Hashable
 import           Data.Typeable
 import Development.IDE.Types.Location
@@ -25,10 +25,10 @@ import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)
 
 import           GHC
-import Development.IDE.Compat
+import Development.IDE.GHC.Compat
 import           Module
 
-import           Development.IDE.Types.SpanInfo
+import           Development.IDE.Spans.Type
 
 
 -- NOTATION

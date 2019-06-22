@@ -8,7 +8,7 @@
 -- * Call runGhc, use runGhcFast instead. It's faster and doesn't require config we don't have.
 --
 -- * Call setSessionDynFlags, use modifyDynFlags instead. It's faster and avoids loading packages.
-module Development.IDE.UtilGHC(
+module Development.IDE.GHC.Util(
     lookupPackageConfig,
     modifyDynFlags,
     fakeDynFlags,

@@ -4,7 +4,7 @@
 {-# LANGUAGE CPP #-}
 
 -- | Attempt at hiding the GHC version differences we can.
-module Development.IDE.Compat(
+module Development.IDE.GHC.Compat(
     HieFile(..),
     mkHieFile,
     writeHieFile,

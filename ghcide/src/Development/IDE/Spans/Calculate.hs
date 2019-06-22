@@ -7,7 +7,7 @@
 
 -- | Get information on modules, identifiers, etc.
 
-module Development.IDE.Functions.SpanInfo(getSpanInfo,listifyAllSpans) where
+module Development.IDE.Spans.Calculate(getSpanInfo,listifyAllSpans) where
 
 import           ConLike
 import           Control.Monad
@@ -22,8 +22,8 @@ import           GHC
 import           GhcMonad
 import           FastString (mkFastString)
 import           Development.IDE.Types.Location
-import           Development.IDE.Types.SpanInfo
-import           Development.IDE.Functions.GHCError (zeroSpan)
+import           Development.IDE.Spans.Type
+import           Development.IDE.GHC.Error (zeroSpan)
 import           Prelude hiding (mod)
 import           TcHsSyn
 import           Var
@@ -123,7 +123,7 @@ importInfo = mapMaybe (uncurry wrk) where
 
   -- TODO make this point to the module name
   fpToSpanSource :: FilePath -> SpanSource
-  fpToSpanSource fp = Span $ RealSrcSpan $ zeroSpan $ mkFastString fp
+  fpToSpanSource fp = SpanS $ RealSrcSpan $ zeroSpan $ mkFastString fp
 
 -- | Get ALL source spans in the source.
 listifyAllSpans :: Typeable a
