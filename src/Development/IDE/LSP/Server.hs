@@ -19,7 +19,7 @@ import Control.Concurrent.STM
 import Data.Default
 
 import           Development.IDE.LSP.Protocol
-import qualified Development.IDE.Logger as Logger
+import qualified Development.IDE.Types.Logger as Logger
 
 import qualified Data.Aeson                       as Aeson
 import qualified Data.Aeson.Text as Aeson

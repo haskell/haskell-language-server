@@ -1,9 +1,8 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-module Development.IDE.Functions.Documentation (
+module Development.IDE.Spans.Documentation (
     getDocumentation
-  , docHeaders
   ) where
 
 import           Control.Monad
@@ -11,8 +10,8 @@ import           Data.List.Extra
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Text as T
-import           Development.IDE.Functions.GHCError
-import           Development.IDE.Functions.SpanInfo
+import           Development.IDE.GHC.Error
+import           Development.IDE.Spans.Calculate
 import           FastString
 import           GHC
 import SrcLoc
@@ -21,7 +20,7 @@ import SrcLoc
 getDocumentation
  ::  Name -- ^ The name you want documentation for.
  -> [TypecheckedModule] -- ^ All of the possible modules it could be defined in.
- -> [RealLocated AnnotationComment]
+ -> [T.Text]
 -- This finds any documentation between the name you want
 -- documentation for and the one before it. This is only an
 -- approximately correct algorithm and there are easily constructed
@@ -52,6 +51,7 @@ getDocumentation targetName tcs = fromMaybe [] $ do
   -- Annoyingly "-- |" documentation isn't annotated with a location,
   -- so you have to pull it out from the elements.
   pure
+      $ docHeaders
       $ filter (\(L target _) -> isBetween target prevNameSpan targetNameSpan)
       $ mapMaybe (\(L l v) -> L <$> realSpan l <*> pure v)
       $ join

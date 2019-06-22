@@ -1,7 +1,7 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-module Development.IDE.Functions.DependencyInformation
+module Development.IDE.Import.DependencyInformation
   ( DependencyInformation(..)
   , RawDependencyInformation(..)
   , NodeError(..)
@@ -13,7 +13,7 @@ module Development.IDE.Functions.DependencyInformation
 
 import Control.DeepSeq
 import Data.Bifunctor
-import Development.IDE.Orphans()
+import Development.IDE.GHC.Orphans()
 import Data.Either
 import Data.Foldable
 import Data.Graph
@@ -30,7 +30,6 @@ import GHC.Generics (Generic)
 
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
-import Development.IDE.UtilGHC ()
 
 import GHC
 import Module

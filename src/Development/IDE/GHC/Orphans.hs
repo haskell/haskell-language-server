@@ -6,13 +6,13 @@
 
 -- | Orphan instances for GHC.
 --   Note that the 'NFData' instances may not be law abiding.
-module Development.IDE.Orphans() where
+module Development.IDE.GHC.Orphans() where
 
 import           GHC                         hiding (convertLit)
 import           GhcPlugins                  as GHC hiding (fst3, (<>))
 import qualified StringBuffer as SB
 import Control.DeepSeq
-import Development.IDE.UtilGHC
+import Development.IDE.GHC.Util
 
 
 -- Orphan instances for types from the GHC API.

@@ -9,7 +9,7 @@
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
 --
-module Development.IDE.State.Rules(
+module Development.IDE.Core.Rules(
     IdeState, GetDependencies(..), GetParsedModule(..), TransitiveDependencies(..),
     Priority(..),
     runAction, runActions, useE, usesE,
@@ -25,11 +25,11 @@ module Development.IDE.State.Rules(
 
 import           Control.Monad.Except
 import Control.Monad.Trans.Maybe
-import qualified Development.IDE.Functions.Compile             as Compile
+import qualified Development.IDE.Core.Compile             as Compile
 import qualified Development.IDE.Types.Options as Compile
-import Development.IDE.Functions.DependencyInformation
-import Development.IDE.Functions.FindImports
-import           Development.IDE.State.FileStore
+import Development.IDE.Import.DependencyInformation
+import Development.IDE.Import.FindImports
+import           Development.IDE.Core.FileStore
 import           Development.IDE.Types.Diagnostics as Base
 import Development.IDE.Types.Location
 import qualified Data.ByteString.UTF8 as BS
@@ -42,18 +42,18 @@ import           Data.Foldable
 import qualified Data.Map.Strict                          as Map
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
-import           Development.IDE.Functions.GHCError
+import           Development.IDE.GHC.Error
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
-import Development.IDE.State.RuleTypes
+import Development.IDE.Core.RuleTypes
 
 import           GHC
-import Development.IDE.Compat
+import Development.IDE.GHC.Compat
 import           UniqSupply
 import NameCache
 
-import qualified Development.IDE.Functions.AtPoint as AtPoint
-import Development.IDE.State.Service
-import Development.IDE.State.Shake
+import qualified Development.IDE.Spans.AtPoint as AtPoint
+import Development.IDE.Core.Service
+import Development.IDE.Core.Shake
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -117,7 +117,8 @@ getDefinition file pos = fmap join $ runMaybeT $ do
     spans <- useE GetSpanInfo file
     pkgState <- useE GhcSession ""
     opts <- lift getOpts
-    lift $ AtPoint.gotoDefinition opts pkgState spans pos
+    let getHieFile x = use (GetHieFile x) ""
+    lift $ AtPoint.gotoDefinition getHieFile opts pkgState spans pos
 
 -- | Parse the contents of a daml file.
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)

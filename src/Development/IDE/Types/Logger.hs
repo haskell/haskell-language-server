@@ -5,7 +5,7 @@
 -- | This is a compatibility module that abstracts over the
 -- concrete choice of logging framework so users can plug in whatever
 -- framework they want to.
-module Development.IDE.Logger
+module Development.IDE.Types.Logger
   ( Handle(..)
   , makeOneHandle
   , makeNopHandle

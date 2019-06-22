@@ -16,7 +16,7 @@
 --
 -----------------------------------------------------------------------------
 
-module Development.IDE.Functions.CPP(doCpp) where
+module Development.IDE.GHC.CPP(doCpp) where
 
 import Packages
 import SysTools

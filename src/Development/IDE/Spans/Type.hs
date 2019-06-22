@@ -5,7 +5,7 @@
 
 -- | Types used separate to GHCi vanilla.
 
-module Development.IDE.Types.SpanInfo(
+module Development.IDE.Spans.Type(
     SpanInfo(..)
   , SpanSource(..)
   , getNameM
@@ -40,14 +40,14 @@ instance Show SpanInfo where
 
 -- we don't always get a name out so sometimes manually annotating source is more appropriate
 data SpanSource = Named Name
-                | Span SrcSpan
+                | SpanS SrcSpan
                 | NoSource
   deriving (Eq)
 
 instance Show SpanSource where
   show = \case
     Named n -> "Named " ++ occNameString (occName n)
-    Span sp -> "Span " ++ show sp
+    SpanS sp -> "Span " ++ show sp
     NoSource -> "NoSource"
 
 getNameM :: SpanSource -> Maybe Name

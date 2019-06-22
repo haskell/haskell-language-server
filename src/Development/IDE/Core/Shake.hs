@@ -4,7 +4,6 @@
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE DuplicateRecordFields      #-}
 {-# LANGUAGE OverloadedStrings          #-}
 
 -- | A Shake implementation of the compiler service.
@@ -22,7 +21,7 @@
 --   between runs. To deserialise a Shake value, we just consult Values.
 --   Additionally, Values can be used in an inconsistent way, for example
 --   useStale.
-module Development.IDE.State.Shake(
+module Development.IDE.Core.Shake(
     IdeState,
     IdeRule, IdeResult, GetModificationTime(..),
     shakeOpen, shakeShut,
@@ -38,8 +37,8 @@ module Development.IDE.State.Shake(
     garbageCollect,
     setPriority,
     sendEvent,
-    Development.IDE.State.Shake.logDebug,
-    Development.IDE.State.Shake.logSeriousError,
+    Development.IDE.Core.Shake.logDebug,
+    Development.IDE.Core.Shake.logSeriousError,
     FileVersion(..),
     vfsVersion
     ) where
@@ -55,7 +54,7 @@ import           Data.Maybe
 import           Data.Either.Extra
 import           Data.List.Extra
 import qualified Data.Text as T
-import Development.IDE.Logger as Logger
+import Development.IDE.Types.Logger as Logger
 import           Development.IDE.Types.Diagnostics hiding (getAllDiagnostics)
 import qualified Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
@@ -338,7 +337,7 @@ newtype Q k = Q (k, NormalizedFilePath)
 -- Using Database we don't need Binary instances for keys
 instance Binary (Q k) where
     put _ = return ()
-    get = fail "Binary.get not defined for type Development.IDE.State.Shake.Q"
+    get = fail "Binary.get not defined for type Development.IDE.Core.Shake.Q"
 
 instance Show k => Show (Q k) where
     show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file

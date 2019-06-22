@@ -4,24 +4,22 @@
 {-# LANGUAGE OverloadedStrings   #-}
 -- | Gives information about symbols at a given point in DAML files.
 -- These are all pure functions that should execute quickly.
-module Development.IDE.Functions.AtPoint (
+module Development.IDE.Spans.AtPoint (
     atPoint
   , gotoDefinition
   ) where
 
-import           Development.IDE.Functions.Documentation
-import           Development.IDE.Functions.GHCError
-import Development.IDE.Orphans()
+import           Development.IDE.Spans.Documentation
+import           Development.IDE.GHC.Error
+import Development.IDE.GHC.Orphans()
 import Development.IDE.Types.Location
 
 -- DAML compiler and infrastructure
 import Development.Shake
-import Development.IDE.UtilGHC
-import Development.IDE.Compat
-import Development.IDE.State.Shake
-import Development.IDE.State.RuleTypes
+import Development.IDE.GHC.Util
+import Development.IDE.GHC.Compat
 import Development.IDE.Types.Options
-import           Development.IDE.Types.SpanInfo as SpanInfo
+import           Development.IDE.Spans.Type as SpanInfo
 
 -- GHC API imports
 import Avail
@@ -33,19 +31,22 @@ import Outputable hiding ((<>))
 
 import Control.Monad.Extra
 import Control.Monad.Trans.Maybe
+import Control.Monad.IO.Class
 import           Data.Maybe
 import           Data.List
 import qualified Data.Text as T
 
 -- | Locate the definition of the name at a given position.
 gotoDefinition
-  :: IdeOptions
+  :: MonadIO m
+  => (FilePath -> m (Maybe HieFile))
+  -> IdeOptions
   -> HscEnv
   -> [SpanInfo]
   -> Position
-  -> Action (Maybe Location)
-gotoDefinition ideOpts pkgState srcSpans pos =
-  listToMaybe <$> locationsAtPoint ideOpts pkgState pos srcSpans
+  -> m (Maybe Location)
+gotoDefinition getHieFile ideOpts pkgState srcSpans pos =
+  listToMaybe <$> locationsAtPoint getHieFile ideOpts pkgState pos srcSpans
 
 -- | Synopsis for the name at a given position.
 atPoint
@@ -59,8 +60,7 @@ atPoint IdeOptions{..} tcs srcSpans pos = do
     ty <- spaninfoType
     let mbName  = getNameM spaninfoSource
         mbDefinedAt = fmap (\name -> "**Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "**\n") mbName
-        mbDocs  = fmap (\name -> getDocumentation name tcs) mbName
-        docInfo = maybe [] docHeaders mbDocs
+        docInfo  = maybe [] (\name -> getDocumentation name tcs) mbName
         range = Range
                   (Position spaninfoStartLine spaninfoStartCol)
                   (Position spaninfoEndLine spaninfoEndCol)
@@ -88,14 +88,14 @@ atPoint IdeOptions{..} tcs srcSpans pos = do
         Just name -> any (`isInfixOf` show name) ["==", "showsPrec"]
         Nothing -> False
 
-locationsAtPoint :: IdeOptions -> HscEnv -> Position -> [SpanInfo] -> Action [Location]
-locationsAtPoint IdeOptions{..} pkgState pos =
+locationsAtPoint :: forall m . MonadIO m => (FilePath -> m (Maybe HieFile)) -> IdeOptions -> HscEnv -> Position -> [SpanInfo] -> m [Location]
+locationsAtPoint getHieFile IdeOptions{..} pkgState pos =
     fmap (map srcSpanToLocation) .
     mapMaybeM (getSpan . spaninfoSource) .
     spansAtPoint pos
-  where getSpan :: SpanSource -> Action (Maybe SrcSpan)
+  where getSpan :: SpanSource -> m (Maybe SrcSpan)
         getSpan NoSource = pure Nothing
-        getSpan (Span sp) = pure $ Just sp
+        getSpan (SpanS sp) = pure $ Just sp
         getSpan (Named name) = case nameSrcSpan name of
             sp@(RealSrcSpan _) -> pure $ Just sp
             UnhelpfulSpan _ -> runMaybeT $ do
@@ -106,7 +106,7 @@ locationsAtPoint IdeOptions{..} pkgState pos =
                 let unitId = moduleUnitId mod
                 pkgConfig <- MaybeT $ pure $ lookupPackageConfig unitId pkgState
                 hiePath <- MaybeT $ liftIO $ optLocateHieFile optPkgLocationOpts pkgConfig mod
-                hieFile <- MaybeT $ use (GetHieFile hiePath) ""
+                hieFile <- MaybeT $ getHieFile hiePath
                 avail <- MaybeT $ pure $ listToMaybe (filterAvails (eqName name) $ hie_exports hieFile)
                 srcPath <- MaybeT $ liftIO $ optLocateSrcFile optPkgLocationOpts pkgConfig mod
                 -- The location will point to the source file used during compilation.
