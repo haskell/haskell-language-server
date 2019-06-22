@@ -7,7 +7,7 @@
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
-module Development.IDE.Functions.Compile
+module Development.IDE.Core.Compile
   ( GhcModule(..)
   , TcModuleResult(..)
   , LoadPackageResult(..)
@@ -20,21 +20,21 @@ module Development.IDE.Functions.Compile
   , computePackageDeps
   ) where
 
-import           Development.IDE.Functions.Warnings
-import           Development.IDE.Functions.CPP
+import           Development.IDE.GHC.Warnings
+import           Development.IDE.GHC.CPP
 import           Development.IDE.Types.Diagnostics
-import qualified Development.IDE.Functions.FindImports as FindImports
-import           Development.IDE.Functions.GHCError
-import           Development.IDE.Functions.SpanInfo
-import Development.IDE.UtilGHC
-import Development.IDE.Compat
+import qualified Development.IDE.Import.FindImports as FindImports
+import           Development.IDE.GHC.Error
+import           Development.IDE.Spans.Calculate
+import Development.IDE.GHC.Util
+import Development.IDE.GHC.Compat
 import Development.IDE.Types.Options
 import Development.IDE.Types.Location
 
 import           GHC hiding (parseModule, typecheckModule)
 import qualified Parser
 import           Lexer
-import           Bag
+import ErrUtils
 
 import qualified GHC
 import           Panic
@@ -56,7 +56,7 @@ import           Data.List.Extra
 import           Data.Maybe
 import           Data.Tuple.Extra
 import qualified Data.Map.Strict                          as Map
-import           Development.IDE.Types.SpanInfo
+import           Development.IDE.Spans.Type
 import GHC.Generics (Generic)
 import           System.FilePath
 import           System.Directory
@@ -143,7 +143,7 @@ typecheckModule opt packageState deps pm =
     runGhcSessionExcept opt (Just pm) packageState $
         catchSrcErrors $ do
             setupEnv deps
-            (warnings, tcm) <- withWarnings "Typechecker" $ \tweak ->
+            (warnings, tcm) <- withWarnings $ \tweak ->
                 GHC.typecheckModule pm{pm_mod_summary = tweak $ pm_mod_summary pm}
             tcm2 <- mkTcModuleResult (WriteInterface $ optWriteIface opt) tcm
             return (warnings, tcm2)
@@ -182,7 +182,7 @@ compileModule opt mod packageState deps tmr =
 
             let tm = tmrModule tmr
             session <- getSession
-            (warnings,desugar) <- withWarnings "Desugarer" $ \tweak -> do
+            (warnings,desugar) <- withWarnings $ \tweak -> do
                 let pm = tm_parsed_module tm
                 let pm' = pm{pm_mod_summary = tweak $ pm_mod_summary pm}
                 let tm' = tm{tm_parsed_module  = pm'}
@@ -395,7 +395,7 @@ parseFileContents preprocessor filename contents = do
 
    case unP Parser.parseModule (mkPState dflags contents loc) of
      PFailed _ locErr msgErr ->
-      Ex.throwE $ mkErrorDoc dflags locErr msgErr
+      Ex.throwE $ diagFromErrMsg dflags $ mkPlainErrMsg dflags locErr msgErr
      POk pst rdr_module ->
          let hpm_annotations =
                (Map.fromListWith (++) $ annotations pst,
@@ -414,11 +414,11 @@ parseFileContents preprocessor filename contents = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errs) $
-                 Ex.throwE $ toDiagnostics dflags $ snd $ getMessages pst dflags
+                 Ex.throwE $ diagFromErrMsgs dflags $ snd $ getMessages pst dflags
 
                -- Ok, we got here. It's safe to continue.
                let (errs, parsed) = preprocessor rdr_module
-               unless (null errs) $ Ex.throwE $ mkErrors dflags errs
+               unless (null errs) $ Ex.throwE $ diagFromStrings errs
                ms <- getModSummaryFromBuffer filename contents dflags parsed
                let pm =
                      ParsedModule {
@@ -427,7 +427,7 @@ parseFileContents preprocessor filename contents = do
                        , pm_extra_src_files=[] -- src imports not allowed
                        , pm_annotations = hpm_annotations
                       }
-                   warnings = mapMaybe (mkDiag dflags "Parser") $ bagToList warns
+                   warnings = diagFromErrMsgs dflags warns
                pure (warnings, pm)
 
 
@@ -453,5 +453,5 @@ catchSrcErrors ghcM = do
         handleSourceError (sourceErrorToDiagnostics dflags) $
         Right <$> ghcM
     where
-        ghcExceptionToDiagnostics dflags = return . Left . mkErrorsGhcException dflags
-        sourceErrorToDiagnostics dflags = return . Left . toDiagnostics dflags . srcErrorMessages
+        ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException dflags
+        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs dflags . srcErrorMessages

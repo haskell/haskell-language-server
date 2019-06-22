@@ -1,10 +1,8 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE BlockArguments #-}
+
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   FileDiagnostic,
