@@ -20,8 +20,9 @@ There are more details [in this blog post](https://4ta.uk/p/shaking-up-the-ide).
 ### Installing the VSCode extension
 
 1. `cd compiler/hie-core/extension`
-2. `vsce package`
-3. `code --install-extension hie-core-0.0.1.vsix`
+2. `npm ci`
+3. `vsce package`
+4. `code --install-extension hie-core-0.0.1.vsix`
 
 ### Installing in Emacs
 
