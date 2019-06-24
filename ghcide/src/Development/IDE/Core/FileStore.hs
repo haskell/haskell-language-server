@@ -7,7 +7,7 @@ module Development.IDE.Core.FileStore(
     getFileExists, getFileContents,
     setBufferModified,
     fileStoreRules,
-    VFSHandle(..),
+    VFSHandle,
     makeVFSHandle,
     makeLSPVFSHandle,
     ) where
@@ -44,8 +44,7 @@ import Language.Haskell.LSP.VFS
 -- like `setBufferModified` we abstract over the VFS implementation.
 data VFSHandle = VFSHandle
     { getVirtualFile :: NormalizedUri -> IO (Maybe VirtualFile)
-    , setVirtualFileContents :: NormalizedUri -> T.Text -> IO ()
-    , removeVirtualFile :: NormalizedUri -> IO ()
+    , setVirtualFileContents :: NormalizedUri -> Maybe T.Text -> IO ()
     }
 
 instance IsIdeGlobal VFSHandle
@@ -58,17 +57,16 @@ makeVFSHandle = do
               (_nextVersion, vfs) <- readVar vfsVar
               pure $ Map.lookup uri vfs
         , setVirtualFileContents = \uri content ->
-              modifyVar_ vfsVar $ \(nextVersion, vfs) ->
-                  pure (nextVersion + 1, Map.insert uri (VirtualFile nextVersion (Rope.fromText content) Nothing) vfs)
-        , removeVirtualFile = \uri -> modifyVar_ vfsVar $ \(nextVersion, vfs) -> pure (nextVersion, Map.delete uri vfs)
+              modifyVar_ vfsVar $ \(nextVersion, vfs) -> pure $ (nextVersion + 1, ) $
+                  case content of
+                    Nothing -> Map.delete uri vfs
+                    Just content -> Map.insert uri (VirtualFile nextVersion (Rope.fromText content) Nothing) vfs
         }
 
 makeLSPVFSHandle :: LspFuncs c -> VFSHandle
 makeLSPVFSHandle lspFuncs = VFSHandle
     { getVirtualFile = getVirtualFileFunc lspFuncs
     , setVirtualFileContents = \_ _ -> pure ()
-    -- ^ Handled internally by haskell-lsp.
-    , removeVirtualFile = \_ -> pure ()
     -- ^ Handled internally by haskell-lsp.
     }
 
@@ -162,11 +160,9 @@ fileStoreRules vfs = do
 
 -- | Notify the compiler service of a modified buffer
 setBufferModified :: IdeState -> NormalizedFilePath -> Maybe T.Text -> IO ()
-setBufferModified state absFile mbContents = do
+setBufferModified state absFile contents = do
     VFSHandle{..} <- getIdeGlobalState state
-    case mbContents of
-        Nothing -> removeVirtualFile (filePathToUri' absFile)
-        Just contents -> setVirtualFileContents (filePathToUri' absFile) contents
+    setVirtualFileContents (filePathToUri' absFile) contents
     void $ shakeRun state [] (const $ pure ())
 
 

@@ -12,6 +12,7 @@ module Development.IDE.Spans.Type(
   ) where
 
 import GHC
+import Control.DeepSeq
 import Data.Maybe
 import OccName
 
@@ -37,6 +38,10 @@ data SpanInfo =
            }
 instance Show SpanInfo where
   show (SpanInfo sl sc el ec t n) = show [show sl, show sc, show el, show ec, show $ isJust t, show n]
+
+instance NFData SpanInfo where
+    rnf = rwhnf
+
 
 -- we don't always get a name out so sometimes manually annotating source is more appropriate
 data SpanSource = Named Name

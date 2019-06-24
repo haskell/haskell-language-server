@@ -3,7 +3,6 @@
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies               #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -13,8 +12,7 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
-import           Development.IDE.Core.Compile             (TcModuleResult, GhcModule, LoadPackageResult(..))
-import qualified Development.IDE.Core.Compile             as Compile
+import           Development.IDE.Core.Compile             (TcModuleResult)
 import           Development.IDE.Import.FindImports         (Import(..))
 import           Development.IDE.Import.DependencyInformation
 import           Data.Hashable
@@ -26,7 +24,6 @@ import           GHC.Generics                             (Generic)
 
 import           GHC
 import Development.IDE.GHC.Compat
-import           Module
 
 import           Development.IDE.Spans.Type
 
@@ -54,7 +51,7 @@ type instance RuleResult TypeCheck = TcModuleResult
 type instance RuleResult GetSpanInfo = [SpanInfo]
 
 -- | Convert to Core, requires TypeCheck*
-type instance RuleResult GenerateCore = GhcModule
+type instance RuleResult GenerateCore = CoreModule
 
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnv
@@ -131,54 +128,3 @@ data GetHieFile = GetHieFile FilePath
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHieFile
 instance NFData   GetHieFile
-
-------------------------------------------------------------
--- Orphan Instances
-
-instance NFData (GenLocated SrcSpan ModuleName) where
-    rnf = rwhnf
-
-instance Show TcModuleResult where
-    show = show . pm_mod_summary . tm_parsed_module . Compile.tmrModule
-
-instance NFData TcModuleResult where
-    rnf = rwhnf
-
-instance Show ModSummary where
-    show = show . ms_mod
-
-instance Show ParsedModule where
-    show = show . pm_mod_summary
-
-instance NFData ModSummary where
-    rnf = rwhnf
-
-instance Show HscEnv where
-    show _ = "HscEnv"
-
-instance NFData HscEnv where
-    rnf = rwhnf
-
-instance NFData ParsedModule where
-    rnf = rwhnf
-
-instance NFData SpanInfo where
-    rnf = rwhnf
-
-instance NFData Import where
-  rnf = rwhnf
-
-instance Hashable InstalledUnitId where
-  hashWithSalt salt = hashWithSalt salt . installedUnitIdString
-
-instance Show LoadPackageResult where
-  show = installedUnitIdString . lprInstalledUnitId
-
-instance NFData LoadPackageResult where
-    rnf = rwhnf
-
-instance Show HieFile where
-    show = show . hie_module
-
-instance NFData HieFile where
-    rnf = rwhnf

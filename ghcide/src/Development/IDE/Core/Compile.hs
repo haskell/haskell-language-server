@@ -8,15 +8,12 @@
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
 module Development.IDE.Core.Compile
-  ( GhcModule(..)
-  , TcModuleResult(..)
-  , LoadPackageResult(..)
+  ( TcModuleResult(..)
   , getGhcDynFlags
   , compileModule
   , getSrcSpanInfos
   , parseModule
   , typecheckModule
-  , loadPackage
   , computePackageDeps
   ) where
 
@@ -26,6 +23,7 @@ import           Development.IDE.Types.Diagnostics
 import qualified Development.IDE.Import.FindImports as FindImports
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Calculate
+import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.Compat
 import Development.IDE.Types.Options
@@ -42,62 +40,47 @@ import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
 import           MkIface
-import           NameCache
 import           StringBuffer                   as SB
 import           TidyPgm
 import qualified GHC.LanguageExtensions as LangExt
 
 import Control.DeepSeq
-import           Control.Exception                        as E
 import           Control.Monad
-import qualified Control.Monad.Trans.Except               as Ex
+import Control.Monad.Trans.Except
+import qualified Data.Text as T
 import           Data.IORef
 import           Data.List.Extra
 import           Data.Maybe
 import           Data.Tuple.Extra
 import qualified Data.Map.Strict                          as Map
 import           Development.IDE.Spans.Type
-import GHC.Generics (Generic)
 import           System.FilePath
 import           System.Directory
 import System.IO.Extra
 
-
--- | 'CoreModule' together with some additional information required for the
--- conversion to DAML-LF.
-data GhcModule = GhcModule
-  { gmPath :: Maybe FilePath
-  , gmCore :: CoreModule
-  }
-  deriving (Generic, Show)
-
-instance NFData GhcModule
 
 -- | Contains the typechecked module and the OrigNameCache entry for
 -- that module.
 data TcModuleResult = TcModuleResult
     { tmrModule     :: TypecheckedModule
     , tmrModInfo    :: HomeModInfo
-    , tmrOccEnvName :: OccEnv Name
     }
+instance Show TcModuleResult where
+    show = show . pm_mod_summary . tm_parsed_module . tmrModule
 
--- | Contains the result of loading an interface. In particular the delta to the name cache.
-data LoadPackageResult = LoadPackageResult
-    { lprInstalledUnitId :: InstalledUnitId
-    , lprModuleEnv :: ModuleEnv (OccEnv Name)
-    , lprEps :: ExternalPackageState
-    }
+instance NFData TcModuleResult where
+    rnf = rwhnf
+
 
 -- | Get source span info, used for e.g. AtPoint and Goto Definition.
 getSrcSpanInfos
-    :: IdeOptions
-    -> ParsedModule
+    :: ParsedModule
     -> HscEnv
     -> [(Located ModuleName, Maybe NormalizedFilePath)]
     -> TcModuleResult
     -> IO [SpanInfo]
-getSrcSpanInfos opt mod env imports tc =
-    runGhcSession opt (Just mod) env
+getSrcSpanInfos mod env imports tc =
+    runGhcSession (Just mod) env
         . getSpanInfo imports
         $ tmrModule tc
 
@@ -109,27 +92,24 @@ parseModule
     -> FilePath
     -> SB.StringBuffer
     -> IO ([FileDiagnostic], Maybe ParsedModule)
-parseModule opt@IdeOptions{..} packageState file =
-    fmap (either (, Nothing) (second Just)) . Ex.runExceptT .
+parseModule IdeOptions{..} env file =
+    fmap (either (, Nothing) (second Just)) .
     -- We need packages since imports fail to resolve otherwise.
-    runGhcSessionExcept opt Nothing packageState . parseFileContents optPreprocessor file
+    runGhcSession Nothing env . runExceptT . parseFileContents optPreprocessor file
 
-computePackageDeps ::
-     IdeOptions -> HscEnv -> InstalledUnitId -> IO (Either [FileDiagnostic] [InstalledUnitId])
-computePackageDeps opts packageState iuid =
-  Ex.runExceptT $
-  runGhcSessionExcept opts Nothing packageState $
-  catchSrcErrors $ do
-    dflags <- hsc_dflags <$> getSession
-    liftIO $ depends <$> getPackage dflags iuid
 
-getPackage :: DynFlags -> InstalledUnitId -> IO PackageConfig
-getPackage dflags p =
-  case lookupInstalledPackage dflags p of
-    Nothing -> E.throwIO $ CmdLineError (missingPackageMsg p)
-    Just pkg -> return pkg
-  where
-    missingPackageMsg p = showSDoc dflags $ text "unknown package:" <+> ppr p
+-- | Given a package identifier, what packages does it depend on
+computePackageDeps
+    :: HscEnv
+    -> InstalledUnitId
+    -> IO (Either [FileDiagnostic] [InstalledUnitId])
+computePackageDeps env pkg = do
+    let dflags = hsc_dflags env
+    case lookupInstalledPackage dflags pkg of
+        Nothing -> return $ Left [ideErrorText (toNormalizedFilePath noFilePath) $
+            T.pack $ "unknown package: " ++ show pkg]
+        Just pkgInfo -> return $ Right $ depends pkgInfo
+
 
 -- | Typecheck a single module using the supplied dependencies and packages.
 typecheckModule
@@ -139,8 +119,8 @@ typecheckModule
     -> ParsedModule
     -> IO ([FileDiagnostic], Maybe TcModuleResult)
 typecheckModule opt packageState deps pm =
-    fmap (either (, Nothing) (second Just)) $ Ex.runExceptT $
-    runGhcSessionExcept opt (Just pm) packageState $
+    fmap (either (, Nothing) (second Just)) $
+    runGhcSession (Just pm) packageState $
         catchSrcErrors $ do
             setupEnv deps
             (warnings, tcm) <- withWarnings $ \tweak ->
@@ -148,35 +128,17 @@ typecheckModule opt packageState deps pm =
             tcm2 <- mkTcModuleResult (WriteInterface $ optWriteIface opt) tcm
             return (warnings, tcm2)
 
--- | Load a pkg and populate the name cache and external package state.
-loadPackage ::
-     IdeOptions
-  -> HscEnv
-  -> InstalledUnitId
-  -> IO (Either [FileDiagnostic] LoadPackageResult)
-loadPackage opt packageState p =
-  Ex.runExceptT $
-  runGhcSessionExcept opt Nothing packageState $
-  catchSrcErrors $ do
-    setupEnv []
-    -- this populates the namecache and external package state
-    session <- getSession
-    modEnv <- nsNames <$> liftIO (readIORef $ hsc_NC session)
-    eps <- liftIO (readIORef $ hsc_EPS session)
-    pure $ LoadPackageResult p modEnv eps
-
 -- | Compile a single type-checked module to a 'CoreModule' value, or
 -- provide errors.
 compileModule
-    :: IdeOptions
-    -> ParsedModule
+    :: ParsedModule
     -> HscEnv
     -> [TcModuleResult]
     -> TcModuleResult
-    -> IO ([FileDiagnostic], Maybe GhcModule)
-compileModule opt mod packageState deps tmr =
-    fmap (either (, Nothing) (second Just)) $ Ex.runExceptT $
-    runGhcSessionExcept opt (Just mod) packageState $
+    -> IO ([FileDiagnostic], Maybe CoreModule)
+compileModule mod packageState deps tmr =
+    fmap (either (, Nothing) (second Just)) $
+    runGhcSession (Just mod) packageState $
         catchSrcErrors $ do
             setupEnv (deps ++ [tmr])
 
@@ -191,39 +153,26 @@ compileModule opt mod packageState deps tmr =
             -- give variables unique OccNames
             (tidy, details) <- liftIO $ tidyProgram session desugar
 
-            let path  = ml_hs_file $ ms_location $ pm_mod_summary $ tm_parsed_module tm
             let core = CoreModule
                          (cg_module tidy)
                          (md_types details)
                          (cg_binds tidy)
                          (mg_safe_haskell desugar)
 
-            return (warnings, GhcModule path core)
-
--- | Evaluate a GHC session using a new environment constructed with
--- the supplied options.
-runGhcSessionExcept
-    :: IdeOptions
-    -> Maybe ParsedModule
-    -> HscEnv
-    -> Ex.ExceptT e Ghc a
-    -> Ex.ExceptT e IO a
-runGhcSessionExcept opts mbMod pkg m =
-    Ex.ExceptT $ runGhcSession opts mbMod pkg $ Ex.runExceptT m
+            return (warnings, core)
 
 
-getGhcDynFlags :: IdeOptions -> ParsedModule -> HscEnv -> IO DynFlags
-getGhcDynFlags opts mod pkg = runGhcSession opts (Just mod) pkg getSessionDynFlags
+getGhcDynFlags :: ParsedModule -> HscEnv -> IO DynFlags
+getGhcDynFlags mod pkg = runGhcSession (Just mod) pkg getSessionDynFlags
 
 -- | Evaluate a GHC session using a new environment constructed with
 -- the supplied options.
 runGhcSession
-    :: IdeOptions
-    -> Maybe ParsedModule
+    :: Maybe ParsedModule
     -> HscEnv
     -> Ghc a
     -> IO a
-runGhcSession IdeOptions{..} modu env act = runGhcEnv env $ do
+runGhcSession modu env act = runGhcEnv env $ do
     modifyDynFlags $ \x -> x
         {importPaths = nubOrd $ maybeToList (moduleImportPaths =<< modu) ++ importPaths x}
     act
@@ -255,7 +204,6 @@ mkTcModuleResult
     -> m TcModuleResult
 mkTcModuleResult (WriteInterface writeIface) tcm = do
     session   <- getSession
-    nc        <- liftIO $ readIORef (hsc_NC session)
     (iface,_) <- liftIO $ mkIfaceTc session Nothing Sf_None details tcGblEnv
     liftIO $ when writeIface $ do
         let path = ".interfaces" </> file tcm
@@ -267,16 +215,10 @@ mkTcModuleResult (WriteInterface writeIface) tcm = do
         hieFile <- runHsc session $ mkHieFile (tcModSummary tcm) tcGblEnv (fromJust $ renamedSource tcm)
         writeHieFile (replaceExtension path ".hie") hieFile
     let mod_info = HomeModInfo iface details Nothing
-        origNc = nsNames nc
-    case lookupModuleEnv origNc (tcmModule tcm) of
-        Nothing  -> panic err
-        Just occ -> return $ TcModuleResult tcm mod_info occ
+    return $ TcModuleResult tcm mod_info
   where
     file = ms_hspp_file . tcModSummary
-    tcmModule = ms_mod . tcModSummary
     (tcGblEnv, details) = tm_internals_ tcm
-    err = "Internal error : module not found in NameCache :" <>
-              moduleNameString (moduleName $ tcmModule tcm)
 
 tcModSummary :: TypecheckedModule -> ModSummary
 tcModSummary = pm_mod_summary . tm_parsed_module
@@ -327,7 +269,7 @@ getModSummaryFromBuffer
     -> SB.StringBuffer
     -> DynFlags
     -> GHC.ParsedSource
-    -> Ex.ExceptT [FileDiagnostic] m ModSummary
+    -> ExceptT [FileDiagnostic] m ModSummary
 getModSummaryFromBuffer fp contents dflags parsed = do
   (modName, imports) <- FindImports.getImportsParsed dflags parsed
 
@@ -374,10 +316,10 @@ parseFileContents
        => (GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource))
        -> FilePath  -- ^ the filename (for source locations)
        -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
-       -> Ex.ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
 parseFileContents preprocessor filename contents = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-   dflags  <- parsePragmasIntoDynFlags filename contents
+   dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
 
    (contents, dflags) <-
       if not $ xopt LangExt.Cpp dflags then
@@ -390,12 +332,12 @@ parseFileContents preprocessor filename contents = do
               liftIO $ writeFileUTF8 inp (unfoldr f contents)
               doCpp dflags True inp out
               liftIO $ SB.hGetStringBuffer out
-          dflags <- parsePragmasIntoDynFlags filename contents
+          dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
           return (contents, dflags)
 
    case unP Parser.parseModule (mkPState dflags contents loc) of
      PFailed _ locErr msgErr ->
-      Ex.throwE $ diagFromErrMsg dflags $ mkPlainErrMsg dflags locErr msgErr
+      throwE $ diagFromErrMsg dflags $ mkPlainErrMsg dflags locErr msgErr
      POk pst rdr_module ->
          let hpm_annotations =
                (Map.fromListWith (++) $ annotations pst,
@@ -414,11 +356,11 @@ parseFileContents preprocessor filename contents = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errs) $
-                 Ex.throwE $ diagFromErrMsgs dflags $ snd $ getMessages pst dflags
+                 throwE $ diagFromErrMsgs dflags $ snd $ getMessages pst dflags
 
                -- Ok, we got here. It's safe to continue.
                let (errs, parsed) = preprocessor rdr_module
-               unless (null errs) $ Ex.throwE $ diagFromStrings errs
+               unless (null errs) $ throwE $ diagFromStrings errs
                ms <- getModSummaryFromBuffer filename contents dflags parsed
                let pm =
                      ParsedModule {
@@ -436,7 +378,7 @@ parsePragmasIntoDynFlags
     :: GhcMonad m
     => FilePath
     -> SB.StringBuffer
-    -> Ex.ExceptT [FileDiagnostic] m DynFlags
+    -> m (Either [FileDiagnostic] DynFlags)
 parsePragmasIntoDynFlags fp contents = catchSrcErrors $ do
     dflags0  <- getSessionDynFlags
     let opts = Hdr.getOptions dflags0 contents fp
@@ -445,11 +387,10 @@ parsePragmasIntoDynFlags fp contents = catchSrcErrors $ do
 
 -- | Run something in a Ghc monad and catch the errors (SourceErrors and
 -- compiler-internal exceptions like Panic or InstallationError).
-catchSrcErrors :: GhcMonad m => m a -> Ex.ExceptT [FileDiagnostic] m a
+catchSrcErrors :: GhcMonad m => m a -> m (Either [FileDiagnostic] a)
 catchSrcErrors ghcM = do
       dflags <- getDynFlags
-      Ex.ExceptT $
-        handleGhcException (ghcExceptionToDiagnostics dflags) $
+      handleGhcException (ghcExceptionToDiagnostics dflags) $
         handleSourceError (sourceErrorToDiagnostics dflags) $
         Right <$> ghcM
     where
