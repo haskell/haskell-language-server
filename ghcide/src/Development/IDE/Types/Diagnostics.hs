@@ -27,7 +27,7 @@ import Data.Maybe as Maybe
 import Data.Foldable
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc.Syntax
+import Data.Text.Prettyprint.Doc
 import qualified Data.SortedList as SL
 import qualified Text.PrettyPrint.Annotated.HughesPJClass as Pretty
 import qualified Language.Haskell.LSP.Types as LSP
@@ -38,6 +38,9 @@ import Language.Haskell.LSP.Types as LSP (
   , DiagnosticRelatedInformation(..)
   )
 import Language.Haskell.LSP.Diagnostics
+import Data.Text.Prettyprint.Doc.Render.Text
+import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
+import Data.Text.Prettyprint.Doc.Render.Terminal (Color(..), color)
 
 import Development.IDE.Types.Location
 
@@ -77,7 +80,7 @@ diagnostic rng sev src msg
 --
 type FileDiagnostic = (NormalizedFilePath, Diagnostic)
 
-prettyRange :: Range -> Doc SyntaxClass
+prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
     where f Position{..} = pretty (_line+1) <> colon <> pretty _character
 
@@ -91,10 +94,10 @@ showDiagnosticsColored :: [FileDiagnostic] -> T.Text
 showDiagnosticsColored = srenderColored . prettyDiagnostics
 
 
-prettyDiagnostics :: [FileDiagnostic] -> Doc SyntaxClass
+prettyDiagnostics :: [FileDiagnostic] -> Doc Terminal.AnsiStyle
 prettyDiagnostics = vcat . map prettyDiagnostic
 
-prettyDiagnostic :: FileDiagnostic -> Doc SyntaxClass
+prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
 prettyDiagnostic (fp, LSP.Diagnostic{..}) =
     vcat
         [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fp)
@@ -103,10 +106,10 @@ prettyDiagnostic (fp, LSP.Diagnostic{..}) =
         , slabel_ "Severity:" $ pretty $ show sev
         , slabel_ "Message: "
             $ case sev of
-              LSP.DsError -> annotate ErrorSC
-              LSP.DsWarning -> annotate WarningSC
-              LSP.DsInfo -> annotate InfoSC
-              LSP.DsHint -> annotate HintSC
+              LSP.DsError -> annotate $ color Red
+              LSP.DsWarning -> annotate $ color Yellow
+              LSP.DsInfo -> annotate $ color Blue
+              LSP.DsHint -> annotate $ color Magenta
             $ stringParagraphs _message
         , slabel_ "Code:" $ pretty _code
         ]
@@ -154,3 +157,31 @@ filterDiagnostics ::
     DiagnosticStore
 filterDiagnostics keep =
     Map.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)
+
+
+
+-- | Label a document.
+slabel_ :: String -> Doc a -> Doc a
+slabel_ t d = nest 2 $ sep [pretty t, d]
+
+-- | The layout options used for the SDK assistant.
+cliLayout ::
+       Int
+    -- ^ Rendering width of the pretty printer.
+    -> LayoutOptions
+cliLayout renderWidth = LayoutOptions
+    { layoutPageWidth = AvailablePerLine renderWidth 0.9
+    }
+
+-- | Render without any syntax annotations
+srenderPlain :: Doc ann -> T.Text
+srenderPlain = renderStrict . layoutSmart (cliLayout defaultTermWidth)
+
+-- | Render a 'Document' as an ANSII colored string.
+srenderColored :: Doc Terminal.AnsiStyle -> T.Text
+srenderColored =
+    Terminal.renderStrict .
+    layoutSmart defaultLayoutOptions { layoutPageWidth = AvailablePerLine 100 1.0 }
+
+defaultTermWidth :: Int
+defaultTermWidth = 80

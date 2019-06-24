@@ -42,6 +42,7 @@ library
         mtl,
         network-uri,
         pretty,
+        prettyprinter-ansi-terminal,
         rope-utf16-splay,
         safe-exceptions,
         shake,
@@ -74,7 +75,6 @@ library
 
     hs-source-dirs:
         src
-        ../../libs-haskell/prettyprinter-syntax/src
     exposed-modules:
         Development.IDE.Types.Logger
         Development.IDE.GHC.Util
@@ -103,8 +103,6 @@ library
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Location
         Development.IDE.Spans.Type
-    other-modules:
-        Data.Text.Prettyprint.Doc.Syntax
 
 executable hie-core
     default-language:   Haskell2010
