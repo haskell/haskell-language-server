@@ -9,6 +9,7 @@ module Development.IDE.Types.Location
     , noFilePath
     , noRange
     , Position(..)
+    , showPosition
     , Range(..)
     , Uri(..)
     , NormalizedUri
@@ -24,8 +25,6 @@ module Development.IDE.Types.Location
     ) where
 
 import Language.Haskell.LSP.Types (Location(..), Range(..), Position(..))
-
-
 import Control.DeepSeq
 import Data.Maybe as Maybe
 import Data.Hashable
@@ -84,3 +83,7 @@ noFilePath = "<unknown>"
 -- A dummy range to use when range is unknown
 noRange :: Range
 noRange =  Range (Position 0 0) (Position 100000 0)
+
+
+showPosition :: Position -> String
+showPosition Position{..} = show (_line + 1) ++ ":" ++ show (_character + 1)

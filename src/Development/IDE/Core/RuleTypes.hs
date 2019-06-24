@@ -17,8 +17,6 @@ import           Development.IDE.Import.FindImports         (Import(..))
 import           Development.IDE.Import.DependencyInformation
 import           Data.Hashable
 import           Data.Typeable
-import Development.IDE.Types.Location
-import Data.Set(Set)
 import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)
 
@@ -68,14 +66,6 @@ type instance RuleResult ReportImportCycles = ()
 -- | Read the given HIE file.
 type instance RuleResult GetHieFile = HieFile
 
-
-type instance RuleResult GetFilesOfInterest = Set NormalizedFilePath
-
-
-data GetFilesOfInterest = GetFilesOfInterest
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetFilesOfInterest
-instance NFData   GetFilesOfInterest
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)

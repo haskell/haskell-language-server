@@ -76,33 +76,34 @@ library
     hs-source-dirs:
         src
     exposed-modules:
-        Development.IDE.Types.Logger
-        Development.IDE.GHC.Util
-        Development.IDE.Spans.AtPoint
         Development.IDE.Core.Compile
-        Development.IDE.GHC.CPP
-        Development.IDE.GHC.Orphans
-        Development.IDE.Import.DependencyInformation
-        Development.IDE.Spans.Documentation
-        Development.IDE.Import.FindImports
-        Development.IDE.GHC.Error
-        Development.IDE.Spans.Calculate
-        Development.IDE.GHC.Warnings
         Development.IDE.Core.FileStore
+        Development.IDE.Core.OfInterest
         Development.IDE.Core.Rules
-        Development.IDE.GHC.Compat
-        Development.IDE.LSP.LanguageServer
-        Development.IDE.LSP.Definition
-        Development.IDE.LSP.Hover
-        Development.IDE.LSP.Protocol
-        Development.IDE.LSP.Server
-        Development.IDE.Types.Options
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
         Development.IDE.Core.Shake
+        Development.IDE.GHC.Compat
+        Development.IDE.GHC.CPP
+        Development.IDE.GHC.Error
+        Development.IDE.GHC.Orphans
+        Development.IDE.GHC.Util
+        Development.IDE.GHC.Warnings
+        Development.IDE.Import.DependencyInformation
+        Development.IDE.Import.FindImports
+        Development.IDE.LSP.Definition
+        Development.IDE.LSP.Hover
+        Development.IDE.LSP.LanguageServer
+        Development.IDE.LSP.Protocol
+        Development.IDE.LSP.Server
+        Development.IDE.Spans.AtPoint
+        Development.IDE.Spans.Calculate
+        Development.IDE.Spans.Documentation
+        Development.IDE.Spans.Type
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Location
-        Development.IDE.Spans.Type
+        Development.IDE.Types.Logger
+        Development.IDE.Types.Options
 
 executable hie-core
     default-language:   Haskell2010
