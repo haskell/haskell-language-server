@@ -38,12 +38,14 @@ getSpanInfo mods tcm =
          bs  = listifyAllSpans  tcs :: [LHsBind GhcTc]
          es  = listifyAllSpans  tcs :: [LHsExpr GhcTc]
          ps  = listifyAllSpans' tcs :: [Pat GhcTc]
+         ts  = listifyAllSpans $ tm_renamed_source tcm :: [LHsType GhcRn]
      bts <- mapM (getTypeLHsBind tcm) bs -- binds
      ets <- mapM (getTypeLHsExpr tcm) es -- expressions
      pts <- mapM (getTypeLPat tcm)    ps -- patterns
+     tts <- mapM (getLHsType tcm)     ts -- types
      let imports = importInfo mods
      let exports = getExports tcm
-     let exprs = exports ++ imports ++ concat bts ++ catMaybes (ets ++ pts)
+     let exprs = exports ++ imports ++ concat bts ++ concat tts ++ catMaybes (ets ++ pts)
      return (mapMaybe toSpanInfo (sortBy cmp exprs))
   where cmp (_,a,_) (_,b,_)
           | a `isSubspanOf` b = LT
@@ -113,6 +115,14 @@ getTypeLPat _ pat =
       (Named (dataConName dc), spn)
     getSpanSource _ = (NoSource, noSrcSpan)
 
+getLHsType
+    :: GhcMonad m
+    => TypecheckedModule
+    -> LHsType GhcRn
+    -> m [(SpanSource, SrcSpan, Maybe Type)]
+getLHsType _ (L spn (HsTyVar _ _ v)) = pure [(Named $ unLoc v, spn, Nothing)]
+getLHsType _ _ = pure []
+
 importInfo :: [(Located ModuleName, Maybe NormalizedFilePath)]
            -> [(SpanSource, SrcSpan, Maybe Type)]
 importInfo = mapMaybe (uncurry wrk) where
@@ -126,8 +136,7 @@ importInfo = mapMaybe (uncurry wrk) where
   fpToSpanSource fp = SpanS $ RealSrcSpan $ zeroSpan $ mkFastString fp
 
 -- | Get ALL source spans in the source.
-listifyAllSpans :: Typeable a
-                => TypecheckedSource -> [Located a]
+listifyAllSpans :: (Typeable a, Data m) => m -> [Located a]
 listifyAllSpans tcs =
   Data.Generics.listify p tcs
   where p (L spn _) = isGoodSrcSpan spn
