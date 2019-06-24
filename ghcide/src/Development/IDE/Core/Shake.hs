@@ -31,14 +31,13 @@ module Development.IDE.Core.Shake(
     use, uses,
     use_, uses_,
     define, defineEarlyCutoff,
-    getAllDiagnostics, unsafeClearAllDiagnostics,
-    reportSeriousError, reportSeriousErrorDie,
+    getDiagnostics, unsafeClearDiagnostics,
+    reportSeriousError,
     IsIdeGlobal, addIdeGlobal, getIdeGlobalState, getIdeGlobalAction,
     garbageCollect,
     setPriority,
     sendEvent,
-    Development.IDE.Core.Shake.logDebug,
-    Development.IDE.Core.Shake.logSeriousError,
+    ideLogger,
     FileVersion(..),
     vfsVersion
     ) where
@@ -47,16 +46,18 @@ import           Development.Shake
 import           Development.Shake.Database
 import           Development.Shake.Classes
 import           Development.Shake.Rule
-import qualified Data.HashMap.Strict as Map
+import qualified Data.HashMap.Strict as HMap
+import qualified Data.Map as Map
 import qualified Data.ByteString.Char8 as BS
 import           Data.Dynamic
 import           Data.Maybe
 import           Data.Either.Extra
 import           Data.List.Extra
 import qualified Data.Text as T
-import Development.IDE.Types.Logger as Logger
-import           Development.IDE.Types.Diagnostics hiding (getAllDiagnostics)
-import qualified Development.IDE.Types.Diagnostics as D
+import Development.IDE.Types.Logger
+import Language.Haskell.LSP.Diagnostics
+import qualified Data.SortedList as SL
+import           Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import           Control.Concurrent.Extra
 import           Control.Exception
@@ -78,8 +79,8 @@ import           Numeric.Extra
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
     {eventer :: LSP.FromServerMessage -> IO ()
-    ,logger :: Logger.Handle
-    ,globals :: Var (Map.HashMap TypeRep Dynamic)
+    ,logger :: Logger
+    ,globals :: Var (HMap.HashMap TypeRep Dynamic)
     ,state :: Var Values
     ,diagnostics :: Var DiagnosticStore
     }
@@ -101,14 +102,14 @@ class Typeable a => IsIdeGlobal a where
 addIdeGlobal :: IsIdeGlobal a => a -> Rules ()
 addIdeGlobal x@(typeOf -> ty) = do
     ShakeExtras{globals} <- getShakeExtrasRules
-    liftIO $ modifyVar_ globals $ \mp -> case Map.lookup ty mp of
+    liftIO $ modifyVar_ globals $ \mp -> case HMap.lookup ty mp of
         Just _ -> error $ "Can't addIdeGlobal twice on the same type, got " ++ show ty
-        Nothing -> return $! Map.insert ty (toDyn x) mp
+        Nothing -> return $! HMap.insert ty (toDyn x) mp
 
 
 getIdeGlobalExtras :: forall a . IsIdeGlobal a => ShakeExtras -> IO a
 getIdeGlobalExtras ShakeExtras{globals} = do
-    Just x <- Map.lookup (typeRep (Proxy :: Proxy a)) <$> readVar globals
+    Just x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readVar globals
     return $ fromDyn x $ error "Serious error, corrupt globals"
 
 getIdeGlobalAction :: forall a . IsIdeGlobal a => Action a
@@ -119,7 +120,7 @@ getIdeGlobalState = getIdeGlobalExtras . shakeExtras
 
 
 -- | The state of the all values - nested so you can easily find all errors at a given file.
-type Values = Map.HashMap (NormalizedFilePath, Key) (Maybe Dynamic)
+type Values = HMap.HashMap (NormalizedFilePath, Key) (Maybe Dynamic)
 
 -- | Key type
 data Key = forall k . (Typeable k, Hashable k, Eq k, Show k) => Key k
@@ -168,7 +169,6 @@ data IdeState = IdeState
     ,shakeExtras :: ShakeExtras
     }
 
-
 profileDir :: Maybe FilePath
 profileDir = Nothing -- set to Just the directory you want profile reports to appear in
 
@@ -199,7 +199,7 @@ setValues :: IdeRule k v
           -> Maybe v
           -> IO ()
 setValues state key file val = modifyVar_ state $
-    pure . Map.insert (file, Key key) (fmap toDyn val)
+    pure . HMap.insert (file, Key key) (fmap toDyn val)
 
 -- | The outer Maybe is Nothing if this function hasn't been computed before
 --   the inner Maybe is Nothing if the result of the previous computation failed to produce
@@ -208,19 +208,19 @@ getValues :: forall k v. IdeRule k v => Var Values -> k -> NormalizedFilePath ->
 getValues state key file = do
     vs <- readVar state
     return $ do
-        v <- Map.lookup (file, Key key) vs
+        v <- HMap.lookup (file, Key key) vs
         pure $ fmap (fromJust . fromDynamic @v) v
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
-          -> Logger.Handle
+          -> Logger
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
 shakeOpen eventer logger opts rules = do
     shakeExtras <- do
-        globals <- newVar Map.empty
-        state <- newVar Map.empty
+        globals <- newVar HMap.empty
+        state <- newVar HMap.empty
         diagnostics <- newVar mempty
         pure ShakeExtras{..}
     (shakeDb, shakeClose) <- shakeOpenDatabase opts{shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts} rules
@@ -248,7 +248,7 @@ shakeRun :: IdeState -> [Action a] -> ([a] -> IO ()) -> IO (IO [a])
 --        not even start, which would make issues with async exceptions less problematic.
 shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts callback = modifyVar shakeAbort $ \stop -> do
     (stopTime,_) <- duration stop
-    Logger.logDebug logger $ T.pack $ "Starting shakeRun (aborting the previous one took " ++ showDuration stopTime ++ ")"
+    logDebug logger $ T.pack $ "Starting shakeRun (aborting the previous one took " ++ showDuration stopTime ++ ")"
     bar <- newBarrier
     start <- offsetTime
     let act = do
@@ -258,7 +258,7 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts callback = modifyVar sha
     thread <- forkFinally (shakeRunDatabaseProfile shakeDb [act]) $ \res -> do
         signalBarrier bar (mapRight head res)
         runTime <- start
-        Logger.logDebug logger $ T.pack $
+        logDebug logger $ T.pack $
             "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ (if isLeft res then "exception" else "completed") ++ ")"
     -- important: we send an async exception to the thread, then wait for it to die, before continuing
     return (do killThread thread; void $ waitBarrier bar, either throwIO return =<< waitBarrier bar)
@@ -271,14 +271,14 @@ useStale IdeState{shakeExtras=ShakeExtras{state}} k fp =
     join <$> getValues state k fp
 
 
-getAllDiagnostics :: IdeState -> IO [FileDiagnostic]
-getAllDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
+getDiagnostics :: IdeState -> IO [FileDiagnostic]
+getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
     val <- readVar diagnostics
-    return $ D.getAllDiagnostics val
+    return $ getAllDiagnostics val
 
 -- | FIXME: This function is temporary! Only required because the files of interest doesn't work
-unsafeClearAllDiagnostics :: IdeState -> IO ()
-unsafeClearAllDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
+unsafeClearDiagnostics :: IdeState -> IO ()
+unsafeClearDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
     writeVar diagnostics mempty
 
 -- | Clear the results for all files that do not match the given predicate.
@@ -286,7 +286,7 @@ garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
 garbageCollect keep = do
     ShakeExtras{state, diagnostics} <- getShakeExtras
     liftIO $
-        do modifyVar_ state $ return . Map.filterWithKey (\(file, _) _ -> keep file)
+        do modifyVar_ state $ return . HMap.filterWithKey (\(file, _) _ -> keep file)
            modifyVar_ diagnostics $ return . filterDiagnostics keep
 
 define
@@ -311,13 +311,7 @@ uses_ key files = do
 reportSeriousError :: String -> Action ()
 reportSeriousError t = do
     ShakeExtras{logger} <- getShakeExtras
-    liftIO $ Logger.logSeriousError logger $ T.pack t
-
-reportSeriousErrorDie :: String -> Action a
-reportSeriousErrorDie t = do
-    ShakeExtras{logger} <- getShakeExtras
-    liftIO $ Logger.logSeriousError logger $ T.pack t
-    fail t
+    liftIO $ logSeriousError logger $ T.pack t
 
 
 -- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
@@ -424,14 +418,9 @@ sendEvent e = do
     ShakeExtras{eventer} <- getShakeExtras
     liftIO $ eventer e
 
--- | bit of an odd signature because we're trying to remove priority
-sl :: (Handle -> T.Text -> IO ()) -> IdeState -> T.Text -> IO ()
-sl f IdeState{shakeExtras=ShakeExtras{logger}} p = f logger p
+ideLogger :: IdeState -> Logger
+ideLogger IdeState{shakeExtras=ShakeExtras{logger}} = logger
 
-logDebug, logSeriousError
-    :: IdeState -> T.Text -> IO ()
-logDebug = sl Logger.logDebug
-logSeriousError = sl Logger.logSeriousError
 
 data GetModificationTime = GetModificationTime
     deriving (Eq, Show, Generic)
@@ -449,3 +438,46 @@ instance NFData FileVersion
 vfsVersion :: FileVersion -> Maybe Int
 vfsVersion (VFSVersion i) = Just i
 vfsVersion (ModificationTime _) = Nothing
+
+
+
+getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
+getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
+
+
+-- | Sets the diagnostics for a file and compilation step
+--   if you want to clear the diagnostics call this with an empty list
+setStageDiagnostics ::
+  NormalizedFilePath ->
+  Maybe Int ->
+  -- ^ the time that the file these diagnostics originate from was last edited
+  T.Text ->
+  [LSP.Diagnostic] ->
+  DiagnosticStore ->
+  DiagnosticStore
+setStageDiagnostics fp timeM stage diags ds  =
+    updateDiagnostics ds uri timeM diagsBySource
+    where
+        diagsBySource = Map.singleton (Just stage) (SL.toSortedList diags)
+        uri = filePathToUri' fp
+
+getAllDiagnostics ::
+    DiagnosticStore ->
+    [FileDiagnostic]
+getAllDiagnostics =
+    concatMap (\(k,v) -> map (fromUri k,) $ getDiagnosticsFromStore v) . Map.toList
+
+getFileDiagnostics ::
+    NormalizedFilePath ->
+    DiagnosticStore ->
+    [LSP.Diagnostic]
+getFileDiagnostics fp ds =
+    maybe [] getDiagnosticsFromStore $
+    Map.lookup (filePathToUri' fp) ds
+
+filterDiagnostics ::
+    (NormalizedFilePath -> Bool) ->
+    DiagnosticStore ->
+    DiagnosticStore
+filterDiagnostics keep =
+    Map.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)

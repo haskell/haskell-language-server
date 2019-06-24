@@ -12,26 +12,24 @@ import Development.IDE.LSP.Protocol hiding (Hover)
 import Language.Haskell.LSP.Types (Hover(..))
 import Development.IDE.Types.Location
 
-import qualified Development.IDE.Types.Logger as Logger
+import Development.IDE.Types.Logger
 
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc
-import Data.Text.Prettyprint.Doc.Render.Text
 
 import Development.IDE.Core.Rules
 
 -- | Display information on hover.
 handle
-    :: Logger.Handle
+    :: Logger
     -> IdeState
     -> TextDocumentPositionParams
     -> IO (Maybe Hover)
 handle loggerH compilerH (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
     mbResult <- case uriToFilePath' uri of
         Just (toNormalizedFilePath -> filePath) -> do
-          Logger.logInfo loggerH $
+          logInfo loggerH $
               "Hover request at position " <>
-              renderStrict (layoutPretty defaultLayoutOptions $ prettyPosition pos) <>
+              T.pack (showPosition pos) <>
               " in file: " <> T.pack (fromNormalizedFilePath filePath)
           runAction compilerH $ getAtPoint filePath pos
         Nothing       -> pure Nothing

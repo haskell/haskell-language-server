@@ -6,7 +6,6 @@ module Development.IDE.LSP.Protocol
     ( module Language.Haskell.LSP.Types
     , ServerRequest(..)
     , ServerNotification(..)
-    , prettyPosition
     , pattern EventFileDiagnostics
     ) where
 
@@ -15,7 +14,7 @@ import qualified Data.Text        as T
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Language.Haskell.LSP.Messages
-import Data.Text.Prettyprint.Doc
+
 
 import Language.Haskell.LSP.Types hiding
     ( CodeLens
@@ -53,9 +52,6 @@ data ServerNotification
 ----------------------------------------------------------------------------------------------------
 -- Pretty printing
 ----------------------------------------------------------------------------------------------------
-
-prettyPosition :: Position -> Doc a
-prettyPosition Position{..} = pretty (_line + 1) <> colon <> pretty (_character + 1)
 
 -- | Pattern synonym to make it a bit more convenient to match on diagnostics
 -- in things like damlc test.

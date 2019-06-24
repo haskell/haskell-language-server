@@ -9,64 +9,31 @@
 --   using the "Shaker" abstraction layer for in-memory use.
 --
 module Development.IDE.Core.Service(
-    Env(..),
-    getServiceEnv,
+    getIdeOptions,
     IdeState, initialise, shutdown,
     runAction, runActions,
     runActionSync, runActionsSync,
-    setFilesOfInterest, modifyFilesOfInterest,
+    getFilesOfInterest, setFilesOfInterest, modifyFilesOfInterest,
     writeProfile,
     getDiagnostics, unsafeClearDiagnostics,
-    logDebug, logSeriousError
+    ideLogger
     ) where
 
 import           Control.Concurrent.Extra
 import           Control.Monad.Except
 import Development.IDE.Types.Options (IdeOptions(..))
 import           Development.IDE.Core.FileStore
-import qualified Development.IDE.Types.Logger as Logger
-import           Data.Set                                 (Set)
-import qualified Data.Set                                 as Set
-import qualified Data.Text as T
-import Data.Tuple.Extra
-import Development.IDE.Types.Diagnostics(FileDiagnostic)
-import Development.IDE.Types.Location (NormalizedFilePath)
+import           Development.IDE.Core.OfInterest
+import Development.IDE.Types.Logger
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
 import qualified Language.Haskell.LSP.Messages as LSP
-
-import           UniqSupply
 
 import           Development.IDE.Core.Shake
 
 
--- | Environment threaded through the Shake actions.
-data Env = Env
-    { envOptions       :: IdeOptions
-      -- ^ Compiler options.
-    , envOfInterestVar :: Var (Set NormalizedFilePath)
-      -- ^ The files of interest.
-    , envUniqSupplyVar :: Var UniqSupply
-      -- ^ The unique supply of names used by the compiler.
-    }
-instance IsIdeGlobal Env
 
-
-mkEnv :: IdeOptions -> IO Env
-mkEnv options = do
-    ofInterestVar <- newVar Set.empty
-    uniqSupplyVar <- mkSplitUniqSupply 'a' >>= newVar
-    return Env
-        { envOptions       = options
-        , envOfInterestVar = ofInterestVar
-        , envUniqSupplyVar = uniqSupplyVar
-        }
-
-getDiagnostics :: IdeState -> IO [FileDiagnostic]
-getDiagnostics = getAllDiagnostics
-
-unsafeClearDiagnostics :: IdeState -> IO ()
-unsafeClearDiagnostics = unsafeClearAllDiagnostics
-
+newtype GlobalIdeOptions = GlobalIdeOptions IdeOptions
+instance IsIdeGlobal GlobalIdeOptions
 
 ------------------------------------------------------------
 -- Exposed API
@@ -74,7 +41,7 @@ unsafeClearDiagnostics = unsafeClearAllDiagnostics
 -- | Initialise the Compiler Service.
 initialise :: Rules ()
            -> (LSP.FromServerMessage -> IO ())
-           -> Logger.Handle
+           -> Logger
            -> IdeOptions
            -> VFSHandle
            -> IO IdeState
@@ -86,8 +53,9 @@ initialise mainRule toDiags logger options vfs =
         shakeOptions { shakeThreads = optThreads options
                      , shakeFiles   = "/dev/null"
                      }) $ do
-            addIdeGlobal =<< liftIO (mkEnv options)
+            addIdeGlobal $ GlobalIdeOptions options
             fileStoreRules vfs
+            ofInterestRules
             mainRule
 
 writeProfile :: IdeState -> FilePath -> IO ()
@@ -128,16 +96,7 @@ runActionSync s a = head <$> runActionsSync s [a]
 runActionsSync :: IdeState -> [Action a] -> IO [a]
 runActionsSync s acts = join $ shakeRun s acts (const $ pure ())
 
--- | Set the files-of-interest which will be built and kept-up-to-date.
-setFilesOfInterest :: IdeState -> Set NormalizedFilePath -> IO ()
-setFilesOfInterest state files = modifyFilesOfInterest state (const files)
-
-modifyFilesOfInterest :: IdeState -> (Set NormalizedFilePath -> Set NormalizedFilePath) -> IO ()
-modifyFilesOfInterest state f = do
-    Env{..} <- getIdeGlobalState state
-    files <- modifyVar envOfInterestVar $ pure . dupe . f
-    logDebug state $ "Set files of interest to: " <> T.pack (show $ Set.toList files)
-    void $ shakeRun state [] (const $ pure ())
-
-getServiceEnv :: Action Env
-getServiceEnv = getIdeGlobalAction
+getIdeOptions :: Action IdeOptions
+getIdeOptions = do
+    GlobalIdeOptions x <- getIdeGlobalAction
+    return x

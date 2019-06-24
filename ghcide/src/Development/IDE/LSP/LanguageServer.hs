@@ -17,7 +17,7 @@ import           Development.IDE.LSP.Server
 import Control.Monad.IO.Class
 import qualified Development.IDE.LSP.Definition as LS.Definition
 import qualified Development.IDE.LSP.Hover      as LS.Hover
-import qualified Development.IDE.Types.Logger as Logger
+import Development.IDE.Types.Logger
 import Development.IDE.Core.Service
 import Development.IDE.Types.Location
 
@@ -44,30 +44,30 @@ textShow = T.pack . show
 ------------------------------------------------------------------------
 
 handleRequest
-    :: Logger.Handle
+    :: Logger
     -> IdeState
     -> (forall resp. resp -> ResponseMessage resp)
     -> (ErrorCode -> ResponseMessage ())
     -> ServerRequest
     -> IO FromServerMessage
-handleRequest loggerH compilerH makeResponse makeErrorResponse = \case
+handleRequest logger compilerH makeResponse makeErrorResponse = \case
     Shutdown -> do
-      Logger.logInfo loggerH "Shutdown request received, terminating."
+      logInfo logger "Shutdown request received, terminating."
       System.Exit.exitSuccess
 
     KeepAlive -> pure $ RspCustomServer $ makeResponse Aeson.Null
 
-    Definition params -> RspDefinition . makeResponse <$> LS.Definition.handle loggerH compilerH params
-    Hover params -> RspHover . makeResponse <$> LS.Hover.handle loggerH compilerH params
+    Definition params -> RspDefinition . makeResponse <$> LS.Definition.handle logger compilerH params
+    Hover params -> RspHover . makeResponse <$> LS.Hover.handle logger compilerH params
     CodeLens _params -> pure $ RspCodeLens $ makeResponse mempty
 
     req -> do
-        Logger.logWarning loggerH ("Method not found" <> T.pack (show req))
+        logWarning logger ("Method not found" <> T.pack (show req))
         pure $ RspError $ makeErrorResponse MethodNotFound
 
 
-handleNotification :: LspFuncs () -> Logger.Handle -> IdeState -> ServerNotification -> IO ()
-handleNotification lspFuncs loggerH compilerH = \case
+handleNotification :: LspFuncs () -> Logger -> IdeState -> ServerNotification -> IO ()
+handleNotification lspFuncs logger compilerH = \case
 
     DidOpenTextDocument (DidOpenTextDocumentParams item) -> do
         case URI.parseURI $ T.unpack $ getUri $ _uri (item :: TextDocumentItem) of
@@ -76,10 +76,10 @@ handleNotification lspFuncs loggerH compilerH = \case
               -> handleDidOpenFile item
 
               | otherwise
-              -> Logger.logWarning loggerH $ "Unknown scheme in URI: "
+              -> logWarning logger $ "Unknown scheme in URI: "
                     <> textShow uri
 
-          _ -> Logger.logSeriousError loggerH $ "Invalid URI in DidOpenTextDocument: "
+          _ -> logSeriousError logger $ "Invalid URI in DidOpenTextDocument: "
                     <> textShow (_uri (item :: TextDocumentItem))
 
     DidChangeTextDocument (DidChangeTextDocumentParams docId _) -> do
@@ -90,11 +90,11 @@ handleNotification lspFuncs loggerH compilerH = \case
             mbVirtual <- getVirtualFileFunc lspFuncs $ toNormalizedUri uri
             let contents = maybe "" (Rope.toText . (_text :: VirtualFile -> Rope.Rope)) mbVirtual
             onFileModified compilerH filePath (Just contents)
-            Logger.logInfo loggerH
+            logInfo logger
               $ "Updated text document: " <> textShow (fromNormalizedFilePath filePath)
 
           Nothing ->
-            Logger.logSeriousError loggerH
+            logSeriousError logger
               $ "Invalid file path: " <> textShow (_uri (docId :: VersionedTextDocumentIdentifier))
 
     DidCloseTextDocument (DidCloseTextDocumentParams (TextDocumentIdentifier uri)) ->
@@ -103,9 +103,9 @@ handleNotification lspFuncs loggerH compilerH = \case
               | URI.uriScheme uri' == "file:" -> do
                     Just fp <- pure $ toNormalizedFilePath <$> uriToFilePath' uri
                     handleDidCloseFile fp
-              | otherwise -> Logger.logWarning loggerH $ "Unknown scheme in URI: " <> textShow uri
+              | otherwise -> logWarning logger $ "Unknown scheme in URI: " <> textShow uri
 
-          _ -> Logger.logSeriousError loggerH
+          _ -> logSeriousError logger
                  $    "Invalid URI in DidCloseTextDocument: "
                    <> textShow uri
 
@@ -122,10 +122,10 @@ handleNotification lspFuncs loggerH compilerH = \case
         Just filePath <- pure $ toNormalizedFilePath <$> uriToFilePath' uri
         onFileModified compilerH filePath (Just contents)
         modifyFilesOfInterest compilerH (S.insert filePath)
-        Logger.logInfo loggerH $ "Opened text document: " <> textShow filePath
+        logInfo logger $ "Opened text document: " <> textShow filePath
 
     handleDidCloseFile filePath = do
-         Logger.logInfo loggerH $ "Closed text document: " <> textShow (fromNormalizedFilePath filePath)
+         logInfo logger $ "Closed text document: " <> textShow (fromNormalizedFilePath filePath)
          onFileModified compilerH filePath Nothing
          modifyFilesOfInterest compilerH (S.delete filePath)
 
@@ -136,7 +136,7 @@ onFileModified
     -> Maybe T.Text
     -> IO ()
 onFileModified service fp mbContents = do
-    logDebug service $ "File modified " <> T.pack (show fp)
+    logDebug (ideLogger service) $ "File modified " <> T.pack (show fp)
     setBufferModified service fp mbContents
 
 ------------------------------------------------------------------------
@@ -144,7 +144,7 @@ onFileModified service fp mbContents = do
 ------------------------------------------------------------------------
 
 runLanguageServer
-    :: Logger.Handle
+    :: Logger
     -> ((FromServerMessage -> IO ()) -> VFSHandle -> IO IdeState)
     -> IO ()
 runLanguageServer loggerH getIdeState = do
