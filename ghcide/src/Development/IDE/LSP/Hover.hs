@@ -8,8 +8,7 @@ module Development.IDE.LSP.Hover
     ( handle
     ) where
 
-import Development.IDE.LSP.Protocol hiding (Hover)
-import Language.Haskell.LSP.Types (Hover(..))
+import Language.Haskell.LSP.Types
 import Development.IDE.Types.Location
 
 import Development.IDE.Types.Logger

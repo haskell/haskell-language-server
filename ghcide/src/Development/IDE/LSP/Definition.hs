@@ -8,7 +8,7 @@ module Development.IDE.LSP.Definition
     ( handle
     ) where
 
-import           Development.IDE.LSP.Protocol
+import           Language.Haskell.LSP.Types
 import Development.IDE.Types.Location
 
 import Development.IDE.Types.Logger
