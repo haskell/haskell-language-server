@@ -24,6 +24,7 @@ import qualified GHC.LanguageExtensions.Type as GHC
 import           Packages
 import           Outputable                  (showSDoc, ppr, pprPanic)
 import           Finder
+import Control.DeepSeq
 
 -- standard imports
 import           Control.Monad.Extra
@@ -32,9 +33,14 @@ import qualified Control.Monad.Trans.Except            as Ex
 import           System.FilePath
 
 data Import
-  = FileImport NormalizedFilePath
-  | PackageImport M.InstalledUnitId
+  = FileImport !NormalizedFilePath
+  | PackageImport !M.InstalledUnitId
   deriving (Show)
+
+instance NFData Import where
+  rnf (FileImport x) = rnf x
+  rnf (PackageImport x) = rnf x
+
 
 -- | GhcMonad function to chase imports of a module given as a StringBuffer. Returns given module's
 -- name and its imports.
