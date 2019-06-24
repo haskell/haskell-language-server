@@ -11,27 +11,25 @@ module Development.IDE.LSP.Definition
 import           Development.IDE.LSP.Protocol
 import Development.IDE.Types.Location
 
-import qualified Development.IDE.Types.Logger as Logger
+import Development.IDE.Types.Logger
 import Development.IDE.Core.Rules
 
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc
-import Data.Text.Prettyprint.Doc.Render.Text
 
 -- | Go to the definition of a variable.
 handle
-    :: Logger.Handle
+    :: Logger
     -> IdeState
     -> TextDocumentPositionParams
     -> IO LocationResponseParams
-handle loggerH compilerH (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
+handle logger compilerH (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
 
 
     mbResult <- case uriToFilePath' uri of
         Just (toNormalizedFilePath -> filePath) -> do
-          Logger.logInfo loggerH $
+          logInfo logger $
             "Definition request at position " <>
-            renderStrict (layoutPretty defaultLayoutOptions $ prettyPosition pos) <>
+            T.pack (showPosition pos) <>
             " in file: " <> T.pack (fromNormalizedFilePath filePath)
           runAction compilerH (getDefinition filePath pos)
         Nothing       -> pure Nothing

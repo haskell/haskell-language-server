@@ -8,34 +8,22 @@ module Development.IDE.Types.Diagnostics (
   FileDiagnostic,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
-  DiagnosticRelatedInformation(..),
   List(..),
-  StoreItem(..),
   ideErrorText,
   ideErrorPretty,
-  errorDiag,
   showDiagnostics,
   showDiagnosticsColored,
-  setStageDiagnostics,
-  getAllDiagnostics,
-  filterDiagnostics,
-  getFileDiagnostics,
-  prettyDiagnostics
   ) where
 
 import Data.Maybe as Maybe
-import Data.Foldable
-import qualified Data.Map as Map
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
-import qualified Data.SortedList as SL
 import qualified Text.PrettyPrint.Annotated.HughesPJClass as Pretty
 import qualified Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types as LSP (
     DiagnosticSeverity(..)
   , Diagnostic(..)
   , List(..)
-  , DiagnosticRelatedInformation(..)
   )
 import Language.Haskell.LSP.Diagnostics
 import Data.Text.Prettyprint.Doc.Render.Text
@@ -46,30 +34,17 @@ import Development.IDE.Types.Location
 
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText fp = errorDiag fp "Ide Error"
+ideErrorText fp msg = (fp, LSP.Diagnostic {
+    _range = noRange,
+    _severity = Just LSP.DsError,
+    _code = Nothing,
+    _source = Just "compiler",
+    _message = msg,
+    _relatedInformation = Nothing
+    })
 
 ideErrorPretty :: Pretty.Pretty e => NormalizedFilePath -> e -> FileDiagnostic
 ideErrorPretty fp = ideErrorText fp . T.pack . Pretty.prettyShow
-
-errorDiag :: NormalizedFilePath -> T.Text -> T.Text -> FileDiagnostic
-errorDiag fp src msg =
-  (fp,  diagnostic noRange LSP.DsError src msg)
-
--- | This is for compatibility with our old diagnostic type
-diagnostic :: Range
-           -> LSP.DiagnosticSeverity
-           -> T.Text -- ^ source
-           -> T.Text -- ^ message
-           -> LSP.Diagnostic
-diagnostic rng sev src msg
-    = LSP.Diagnostic {
-          _range = rng,
-          _severity = Just sev,
-          _code = Nothing,
-          _source = Just src,
-          _message = msg,
-          _relatedInformation = Nothing
-          }
 
 
 -- | Human readable diagnostics for a specific file.
@@ -115,49 +90,6 @@ prettyDiagnostic (fp, LSP.Diagnostic{..}) =
         ]
     where
         sev = fromMaybe LSP.DsError _severity
-
-getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
-getDiagnosticsFromStore (StoreItem _ diags) =
-    toList =<< Map.elems diags
-
-
--- | Sets the diagnostics for a file and compilation step
---   if you want to clear the diagnostics call this with an empty list
-setStageDiagnostics ::
-  NormalizedFilePath ->
-  Maybe Int ->
-  -- ^ the time that the file these diagnostics originate from was last edited
-  T.Text ->
-  [LSP.Diagnostic] ->
-  DiagnosticStore ->
-  DiagnosticStore
-setStageDiagnostics fp timeM stage diags ds  =
-    updateDiagnostics ds uri timeM diagsBySource
-    where
-        diagsBySource = Map.singleton (Just stage) (SL.toSortedList diags)
-        uri = filePathToUri' fp
-
-getAllDiagnostics ::
-    DiagnosticStore ->
-    [FileDiagnostic]
-getAllDiagnostics =
-    concatMap (\(k,v) -> map (fromUri k,) $ getDiagnosticsFromStore v) . Map.toList
-
-getFileDiagnostics ::
-    NormalizedFilePath ->
-    DiagnosticStore ->
-    [LSP.Diagnostic]
-getFileDiagnostics fp ds =
-    maybe [] getDiagnosticsFromStore $
-    Map.lookup (filePathToUri' fp) ds
-
-filterDiagnostics ::
-    (NormalizedFilePath -> Bool) ->
-    DiagnosticStore ->
-    DiagnosticStore
-filterDiagnostics keep =
-    Map.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)
-
 
 
 -- | Label a document.

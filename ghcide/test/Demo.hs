@@ -14,7 +14,6 @@ import Development.IDE.Core.Shake
 import Development.IDE.Core.RuleTypes
 import Development.IDE.LSP.Protocol
 import Development.IDE.Types.Location
-import Data.String
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Types.Logger
@@ -47,7 +46,7 @@ main = do
     args <- getArgs
     -- lock to avoid overlapping output on stdout
     lock <- newLock
-    let logger = makeOneHandle $ withLock lock . T.putStrLn
+    let logger = makeOneLogger $ withLock lock . T.putStrLn
 
     dir <- getCurrentDirectory
     hPutStrLn stderr dir
@@ -75,7 +74,7 @@ main = do
 
 kick :: Action ()
 kick = do
-    files <- use_ GetFilesOfInterest $ fromString ""
+    files <- getFilesOfInterest
     void $ uses TypeCheck $ Set.toList files
 
 -- | Print an LSP event.

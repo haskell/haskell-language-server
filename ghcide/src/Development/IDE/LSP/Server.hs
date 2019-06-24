@@ -19,7 +19,7 @@ import Control.Concurrent.STM
 import Data.Default
 
 import           Development.IDE.LSP.Protocol
-import qualified Development.IDE.Types.Logger as Logger
+import Development.IDE.Types.Logger
 
 import qualified Data.Aeson                       as Aeson
 import qualified Data.Aeson.Text as Aeson
@@ -49,7 +49,7 @@ data Handlers = Handlers
     }
 
 runServer
-    :: Logger.Handle
+    :: Logger
     -> (LSP.LspFuncs () -> IO Handlers)
     -- ^ Notification handler for language server notifications
     -> IO ()
@@ -93,7 +93,7 @@ runServer loggerH getHandlers = do
             _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- atomically $ readTChan clientMsgChan
                 case convClientMsg msg of
-                    Nothing -> Logger.logSeriousError loggerH $ "Unknown client msg: " <> T.pack (show msg)
+                    Nothing -> logSeriousError loggerH $ "Unknown client msg: " <> T.pack (show msg)
                     Just (Left notif) -> notificationHandler notif
                     Just (Right req) -> sendFunc =<< requestHandler' req
             pure Nothing
