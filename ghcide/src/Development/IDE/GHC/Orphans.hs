@@ -8,10 +8,12 @@
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
 
-import           GHC                         hiding (convertLit)
-import           GhcPlugins                  as GHC hiding (fst3, (<>))
+import GHC
+import GhcPlugins
+import Development.IDE.GHC.Compat
 import qualified StringBuffer as SB
 import Control.DeepSeq
+import Data.Hashable
 import Development.IDE.GHC.Util
 
 
@@ -32,3 +34,33 @@ instance Show Module where
 
 instance Show (GenLocated SrcSpan ModuleName) where show = prettyPrint
 instance Show Name where show = prettyPrint
+
+instance NFData (GenLocated SrcSpan ModuleName) where
+    rnf = rwhnf
+
+instance Show ModSummary where
+    show = show . ms_mod
+
+instance Show ParsedModule where
+    show = show . pm_mod_summary
+
+instance NFData ModSummary where
+    rnf = rwhnf
+
+instance Show HscEnv where
+    show _ = "HscEnv"
+
+instance NFData HscEnv where
+    rnf = rwhnf
+
+instance NFData ParsedModule where
+    rnf = rwhnf
+
+instance Hashable InstalledUnitId where
+  hashWithSalt salt = hashWithSalt salt . installedUnitIdString
+
+instance Show HieFile where
+    show = show . hie_module
+
+instance NFData HieFile where
+    rnf = rwhnf
