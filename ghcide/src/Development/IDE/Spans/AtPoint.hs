@@ -28,6 +28,7 @@ import DynFlags
 import FastString
 import Name
 import Outputable hiding ((<>))
+import SrcLoc
 
 import Control.Monad.Extra
 import Control.Monad.Trans.Maybe
@@ -98,7 +99,8 @@ locationsAtPoint getHieFile IdeOptions{..} pkgState pos =
         getSpan (SpanS sp) = pure $ Just sp
         getSpan (Named name) = case nameSrcSpan name of
             sp@(RealSrcSpan _) -> pure $ Just sp
-            UnhelpfulSpan _ -> runMaybeT $ do
+            sp@(UnhelpfulSpan _) -> runMaybeT $ do
+                guard (sp /= wiredInSrcSpan)
                 -- This case usually arises when the definition is in an external package.
                 -- In this case the interface files contain garbage source spans
                 -- so we instead read the .hie files to get useful source spans.
