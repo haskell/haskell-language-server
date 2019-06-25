@@ -38,8 +38,7 @@ module Development.IDE.Core.Shake(
     setPriority,
     sendEvent,
     ideLogger,
-    FileVersion(..),
-    vfsVersion
+    FileVersion(..)
     ) where
 
 import           Development.Shake

@@ -10,7 +10,6 @@ module Development.IDE.Types.Diagnostics (
   DiagnosticStore,
   List(..),
   ideErrorText,
-  ideErrorPretty,
   showDiagnostics,
   showDiagnosticsColored,
   ) where
@@ -18,7 +17,6 @@ module Development.IDE.Types.Diagnostics (
 import Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
-import qualified Text.PrettyPrint.Annotated.HughesPJClass as Pretty
 import qualified Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types as LSP (
     DiagnosticSeverity(..)
@@ -42,9 +40,6 @@ ideErrorText fp msg = (fp, LSP.Diagnostic {
     _message = msg,
     _relatedInformation = Nothing
     })
-
-ideErrorPretty :: Pretty.Pretty e => NormalizedFilePath -> e -> FileDiagnostic
-ideErrorPretty fp = ideErrorText fp . T.pack . Pretty.prettyShow
 
 
 -- | Human readable diagnostics for a specific file.
