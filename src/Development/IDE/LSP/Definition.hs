@@ -5,7 +5,8 @@
 
 -- | Go to the definition of a variable.
 module Development.IDE.LSP.Definition
-    ( handle
+    ( gotoDefinition
+    , setHandlersDefinition
     ) where
 
 import           Language.Haskell.LSP.Types
@@ -13,30 +14,32 @@ import Development.IDE.Types.Location
 
 import Development.IDE.Types.Logger
 import Development.IDE.Core.Rules
+import Development.IDE.Core.Service
+import Development.IDE.LSP.Server
+import qualified Language.Haskell.LSP.Core as LSP
+import Language.Haskell.LSP.Messages
 
 import qualified Data.Text as T
 
 -- | Go to the definition of a variable.
-handle
-    :: Logger
-    -> IdeState
+gotoDefinition
+    :: IdeState
     -> TextDocumentPositionParams
     -> IO LocationResponseParams
-handle logger compilerH (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
-
-
+gotoDefinition ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
     mbResult <- case uriToFilePath' uri of
-        Just (toNormalizedFilePath -> filePath) -> do
-          logInfo logger $
-            "Definition request at position " <>
-            T.pack (showPosition pos) <>
-            " in file: " <> T.pack (fromNormalizedFilePath filePath)
-          runAction compilerH (getDefinition filePath pos)
-        Nothing       -> pure Nothing
+        Just path -> do
+            logInfo (ideLogger ide) $
+                "Definition request at position " <> T.pack (showPosition pos) <>
+                " in file: " <> T.pack path
+            runAction ide $ getDefinition (toNormalizedFilePath path) pos
+        Nothing -> pure Nothing
+    pure $ case mbResult of
+        Nothing -> MultiLoc []
+        Just loc -> SingleLoc loc
 
-    case mbResult of
-        Nothing ->
-            pure $ MultiLoc []
 
-        Just loc ->
-            pure $ SingleLoc loc
+setHandlersDefinition :: WithMessage -> LSP.Handlers -> IO LSP.Handlers
+setHandlersDefinition WithMessage{..} x = return x{
+    LSP.definitionHandler = withResponse RspDefinition gotoDefinition
+    }
