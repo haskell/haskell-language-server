@@ -13,6 +13,7 @@ module Development.IDE.Core.Compile
   , compileModule
   , getSrcSpanInfos
   , parseModule
+  , parseFileContents
   , typecheckModule
   , computePackageDeps
   ) where
