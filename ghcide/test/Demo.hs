@@ -58,7 +58,7 @@ main = do
 
     if "--lsp" `elem` args then do
         hPutStrLn stderr "Starting IDE server"
-        runLanguageServer logger $ \event vfs -> do
+        runLanguageServer $ \event vfs -> do
             hPutStrLn stderr "Server started"
             initialise (mainRule >> action kick) event logger options vfs
     else do
