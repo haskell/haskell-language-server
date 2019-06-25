@@ -1,9 +1,8 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ExistentialQuantification  #-}
 
 -- WARNING: A copy of DA.Service.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
@@ -11,145 +10,114 @@ module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     ) where
 
-import           Development.IDE.LSP.Protocol
-import           Development.IDE.LSP.Server
+import           Language.Haskell.LSP.Types
+import           Development.IDE.LSP.Server hiding (runServer)
+import qualified Language.Haskell.LSP.Control as LSP
+import qualified Language.Haskell.LSP.Core as LSP
+import Control.Concurrent.Chan
+import Control.Concurrent.Extra
+import Control.Concurrent.Async
+import Data.Default
+import           GHC.IO.Handle                    (hDuplicate, hDuplicateTo)
+import System.IO
+import Control.Monad
 
-import Control.Monad.IO.Class
-import qualified Development.IDE.LSP.Definition as LS.Definition
-import qualified Development.IDE.LSP.Hover      as LS.Hover
-import Development.IDE.Types.Logger
+import Development.IDE.LSP.Definition
+import Development.IDE.LSP.Hover
+import Development.IDE.LSP.Notifications
 import Development.IDE.Core.Service
-import Development.IDE.Types.Location
-
-import qualified Data.Aeson                                as Aeson
-import qualified Data.Rope.UTF16 as Rope
-import qualified Data.Set                                  as S
-import qualified Data.Text as T
-
 import Development.IDE.Core.FileStore
-import Development.IDE.Core.OfInterest
-
-import qualified Network.URI                               as URI
-
-import qualified System.Exit
-
 import Language.Haskell.LSP.Core (LspFuncs(..))
 import Language.Haskell.LSP.Messages
-import Language.Haskell.LSP.VFS
 
-textShow :: Show a => a -> T.Text
-textShow = T.pack . show
-
-------------------------------------------------------------------------
--- Request handlers
-------------------------------------------------------------------------
-
-handleRequest
-    :: Logger
-    -> IdeState
-    -> (forall resp. resp -> ResponseMessage resp)
-    -> (ErrorCode -> ResponseMessage ())
-    -> ServerRequest
-    -> IO FromServerMessage
-handleRequest logger compilerH makeResponse makeErrorResponse = \case
-    Shutdown -> do
-      logInfo logger "Shutdown request received, terminating."
-      System.Exit.exitSuccess
-
-    KeepAlive -> pure $ RspCustomServer $ makeResponse Aeson.Null
-
-    Definition params -> RspDefinition . makeResponse <$> LS.Definition.handle logger compilerH params
-    Hover params -> RspHover . makeResponse <$> LS.Hover.handle logger compilerH params
-    CodeLens _params -> pure $ RspCodeLens $ makeResponse mempty
-
-    req -> do
-        logWarning logger ("Method not found" <> T.pack (show req))
-        pure $ RspError $ makeErrorResponse MethodNotFound
-
-
-handleNotification :: LspFuncs () -> Logger -> IdeState -> ServerNotification -> IO ()
-handleNotification lspFuncs logger compilerH = \case
-
-    DidOpenTextDocument (DidOpenTextDocumentParams item) -> do
-        case URI.parseURI $ T.unpack $ getUri $ _uri (item :: TextDocumentItem) of
-          Just uri
-              | URI.uriScheme uri == "file:"
-              -> handleDidOpenFile item
-
-              | otherwise
-              -> logWarning logger $ "Unknown scheme in URI: "
-                    <> textShow uri
-
-          _ -> logSeriousError logger $ "Invalid URI in DidOpenTextDocument: "
-                    <> textShow (_uri (item :: TextDocumentItem))
-
-    DidChangeTextDocument (DidChangeTextDocumentParams docId _) -> do
-        let uri = _uri (docId :: VersionedTextDocumentIdentifier)
-
-        case uriToFilePath' uri of
-          Just (toNormalizedFilePath -> filePath) -> do
-            mbVirtual <- getVirtualFileFunc lspFuncs $ toNormalizedUri uri
-            let contents = maybe "" (Rope.toText . (_text :: VirtualFile -> Rope.Rope)) mbVirtual
-            onFileModified compilerH filePath (Just contents)
-            logInfo logger
-              $ "Updated text document: " <> textShow (fromNormalizedFilePath filePath)
-
-          Nothing ->
-            logSeriousError logger
-              $ "Invalid file path: " <> textShow (_uri (docId :: VersionedTextDocumentIdentifier))
-
-    DidCloseTextDocument (DidCloseTextDocumentParams (TextDocumentIdentifier uri)) ->
-        case URI.parseURI $ T.unpack $ getUri uri of
-          Just uri'
-              | URI.uriScheme uri' == "file:" -> do
-                    Just fp <- pure $ toNormalizedFilePath <$> uriToFilePath' uri
-                    handleDidCloseFile fp
-              | otherwise -> logWarning logger $ "Unknown scheme in URI: " <> textShow uri
-
-          _ -> logSeriousError logger
-                 $    "Invalid URI in DidCloseTextDocument: "
-                   <> textShow uri
-
-    DidSaveTextDocument _params ->
-      pure ()
-
-    UnknownNotification _method _params -> return ()
-  where
-    -- Note that the state changes here are not atomic.
-    -- When we have parallel compilation we could manage the state
-    -- changes in STM so that we can atomically change the state.
-    -- Internally it should be done via the IO oracle. See PROD-2808.
-    handleDidOpenFile (TextDocumentItem uri _ _ contents) = do
-        Just filePath <- pure $ toNormalizedFilePath <$> uriToFilePath' uri
-        onFileModified compilerH filePath (Just contents)
-        modifyFilesOfInterest compilerH (S.insert filePath)
-        logInfo logger $ "Opened text document: " <> textShow filePath
-
-    handleDidCloseFile filePath = do
-         logInfo logger $ "Closed text document: " <> textShow (fromNormalizedFilePath filePath)
-         onFileModified compilerH filePath Nothing
-         modifyFilesOfInterest compilerH (S.delete filePath)
-
--- | Manages the file store (caching compilation results and unsaved content).
-onFileModified
-    :: IdeState
-    -> NormalizedFilePath
-    -> Maybe T.Text
-    -> IO ()
-onFileModified service fp mbContents = do
-    logDebug (ideLogger service) $ "File modified " <> T.pack (show fp)
-    setBufferModified service fp mbContents
-
-------------------------------------------------------------------------
--- Server execution
-------------------------------------------------------------------------
 
 runLanguageServer
-    :: Logger
-    -> ((FromServerMessage -> IO ()) -> VFSHandle -> IO IdeState)
+    :: ((FromServerMessage -> IO ()) -> VFSHandle -> IO IdeState)
     -> IO ()
-runLanguageServer loggerH getIdeState = do
-    let getHandlers lspFuncs = do
-            compilerH <- getIdeState (sendFunc lspFuncs) (makeLSPVFSHandle lspFuncs)
-            pure $ Handlers (handleRequest loggerH compilerH) (handleNotification lspFuncs loggerH compilerH)
-    liftIO $ runServer loggerH getHandlers
+runLanguageServer getIdeState = do
+    -- Move stdout to another file descriptor and duplicate stderr
+    -- to stdout. This guards against stray prints from corrupting the JSON-RPC
+    -- message stream.
+    newStdout <- hDuplicate stdout
+    stderr `hDuplicateTo` stdout
+
+    -- Print out a single space to assert that the above redirection works.
+    -- This is interleaved with the logger, hence we just print a space here in
+    -- order not to mess up the output too much. Verified that this breaks
+    -- the language server tests without the redirection.
+    putStr " " >> hFlush stdout
+
+    -- Send everything over a channel, since you need to wait until after initialise before
+    -- LspFuncs is available
+    clientMsgChan :: Chan Message <- newChan
+
+    -- These barriers are signaled when the threads reading from these chans exit.
+    -- This should not happen but if it does, we will make sure that the whole server
+    -- dies and can be restarted instead of losing threads silently.
+    clientMsgBarrier <- newBarrier
+
+    let withResponse wrap f = Just $ \r -> writeChan clientMsgChan $ Response r wrap f
+    let withNotification f = Just $ \r -> writeChan clientMsgChan $ Notification r f
+    let runHandler = WithMessage{withResponse, withNotification}
+    handlers <- mergeHandlers [setHandlersDefinition, setHandlersHover, setHandlersNotifications, setHandlersIgnore] runHandler def
+
+    void $ waitAnyCancel =<< traverse async
+        [ void $ LSP.runWithHandles
+            stdin
+            newStdout
+            ( const $ Right ()
+            , handleInit (signalBarrier clientMsgBarrier ()) clientMsgChan
+            )
+            handlers
+            options
+            Nothing
+        , void $ waitBarrier clientMsgBarrier
+        ]
+    where
+        handleInit :: IO () -> Chan Message -> LSP.LspFuncs () -> IO (Maybe err)
+        handleInit exitClientMsg clientMsgChan lspFuncs@LSP.LspFuncs{..} = do
+            ide <- getIdeState sendFunc (makeLSPVFSHandle lspFuncs)
+            _ <- flip forkFinally (const exitClientMsg) $ forever $ do
+                msg <- readChan clientMsgChan
+                case msg of
+                    Notification NotificationMessage{_params} act -> act ide _params
+                    Response RequestMessage{_id, _params} wrap act -> do
+                        res <- act ide _params
+                        sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Just res) Nothing
+            pure Nothing
+
+
+-- | Things that get sent to us, but we don't deal with.
+--   Set them to avoid a warning in VS Code output.
+setHandlersIgnore :: WithMessage -> LSP.Handlers -> IO LSP.Handlers
+setHandlersIgnore _ x = return x
+    {LSP.cancelNotificationHandler = none
+    ,LSP.initializedHandler = none
+    ,LSP.codeLensHandler = none -- FIXME: Stop saying we support it in 'options'
+    }
+    where none = Just $ const $ return ()
+
+
+mergeHandlers :: [WithMessage -> LSP.Handlers -> IO LSP.Handlers] -> WithMessage -> LSP.Handlers -> IO LSP.Handlers
+mergeHandlers = foldl f (\_ a -> return a)
+    where f x1 x2 r a = x1 r a >>= x2 r
+
+
+-- | A message that we need to deal with - the pieces are split up with existentials to gain additional type safety
+--   and defer precise processing until later (allows us to keep at a higher level of abstraction slightly longer)
+data Message
+    = forall m req resp . Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (IdeState -> req -> IO resp)
+    | forall m req . Notification (NotificationMessage m req) (IdeState -> req -> IO ())
+
+
+options :: LSP.Options
+options = def
+    { LSP.textDocumentSync = Just TextDocumentSyncOptions
+          { _openClose = Just True
+          , _change = Just TdSyncIncremental
+          , _willSave = Nothing
+          , _willSaveWaitUntil = Nothing
+          , _save = Just $ SaveOptions $ Just False
+          }
+    , LSP.codeLensProvider = Just $ CodeLensOptions $ Just False
+    }

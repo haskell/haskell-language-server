@@ -7,6 +7,7 @@
 module Development.IDE.LSP.Server
   ( runServer
   , Handlers(..)
+  , WithMessage(..)
   ) where
 
 
@@ -33,6 +34,14 @@ import qualified Language.Haskell.LSP.Control as LSP
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Types as LSP
+import Development.IDE.Core.Service
+
+
+data WithMessage = WithMessage
+    {withResponse :: forall m req resp . (ResponseMessage resp -> LSP.FromServerMessage) -> (IdeState -> req -> IO resp) -> Maybe (LSP.Handler (RequestMessage m req resp))
+    ,withNotification :: forall m req . (IdeState -> req -> IO ()) -> Maybe (LSP.Handler (NotificationMessage m req))
+    }
+
 
 ------------------------------------------------------------------------
 -- Server execution
