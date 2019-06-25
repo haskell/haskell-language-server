@@ -8,6 +8,7 @@ import Control.Concurrent.Extra
 import Control.Monad
 import System.Time.Extra
 import Development.IDE.Core.FileStore
+import Development.IDE.Core.OfInterest
 import Development.IDE.Core.Service
 import Development.IDE.Core.Rules
 import Development.IDE.Core.Shake
