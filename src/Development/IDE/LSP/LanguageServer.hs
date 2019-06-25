@@ -27,6 +27,7 @@ import qualified Data.Set                                  as S
 import qualified Data.Text as T
 
 import Development.IDE.Core.FileStore
+import Development.IDE.Core.OfInterest
 
 import qualified Network.URI                               as URI
 

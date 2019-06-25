@@ -15,7 +15,6 @@ module Development.IDE.GHC.Error
   , srcSpanToFilename
   , zeroSpan
   , realSpan
-  , noSpan
   ) where
 
 import                     Development.IDE.Types.Diagnostics as D

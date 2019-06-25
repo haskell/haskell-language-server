@@ -13,7 +13,6 @@ module Development.IDE.Core.Service(
     IdeState, initialise, shutdown,
     runAction, runActions,
     runActionSync, runActionsSync,
-    getFilesOfInterest, setFilesOfInterest, modifyFilesOfInterest,
     writeProfile,
     getDiagnostics, unsafeClearDiagnostics,
     ideLogger

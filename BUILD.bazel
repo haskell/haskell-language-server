@@ -14,7 +14,6 @@ depends = [
     "data-default",
     "deepseq",
     "directory",
-    "either",
     "extra",
     "filepath",
     "hashable",
@@ -22,11 +21,9 @@ depends = [
     "haskell-lsp-types",
     "mtl",
     "network-uri",
-    "pretty",
     "prettyprinter",
     "prettyprinter-ansi-terminal",
     "rope-utf16-splay",
-    "safe-exceptions",
     "sorted-list",
     "shake",
     "stm",
@@ -34,10 +31,8 @@ depends = [
     "text",
     "time",
     "transformers",
-    "uniplate",
     "unordered-containers",
     "utf8-string",
-    "uri-encode",
 ]
 
 da_haskell_library(
@@ -78,7 +73,6 @@ da_haskell_binary(
         "containers",
         "directory",
         "extra",
-        "filepath",
         "ghc-paths",
         "ghc",
         "haskell-lsp",
