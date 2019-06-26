@@ -10,7 +10,9 @@ Our vision is that you should build an IDE by combining:
 
 There are more details about our approach [in this blog post](https://4ta.uk/p/shaking-up-the-ide).
 
-## How to use it
+## Using it
+
+### Install `hie-core`
 
 First install the `hie-core` binary using `stack` or `cabal`, e.g.
 
@@ -20,9 +22,27 @@ First install the `hie-core` binary using `stack` or `cabal`, e.g.
 
 It's important that `hie-core` is compiled with the same compiler you use to build your projects.
 
-Next, check that `hie-bios` is able to load your project. This step is currently a bit difficult.
+### Test `hie-core`
 
-Next, set up an extension for your editor.
+Next, check that `hie-core` is capable of loading your code. Change to the project directory and run `hie-core`, which will try and load everything using the same code as the IDE, but in a way that's much easier to understand. For example, taking the example of [`shake`](https://github.com/ndmitchell/shake), running `hie-core` gives some error messages and warnings before reporting at the end:
+
+```
+Files that worked: 152
+Files that failed: 6
+ * .\model\Main.hs
+ * .\model\Model.hs
+ * .\model\Test.hs
+ * .\model\Util.hs
+ * .\output\docs\Main.hs
+ * .\output\docs\Part_Architecture_md.hs
+Done
+```
+
+Of the 158 files in Shake, as of this moment, 152 can be loaded by the IDE, but 6 can't (error messages for the reasons they can't be loaded are given earlier). The failing files are all prototype work or test output, meaning I can confidently use Shake.
+
+The `hie-core` executable mostly relies on [`hie-bios`](https://github.com/mpickering/hie-bios) to do the difficult work of setting up your GHC environment. If it doesn't work, see [the `hie-bios` manual](https://github.com/mpickering/hie-bios#readme) to get it working. My default fallback is to figure it out by hand and create a `direct` style [`hie.yaml`](https://github.com/ndmitchell/shake/blob/master/hie.yaml) listing the command line arguments to load the project.
+
+Once you have got `hie-core` working outside the editor, the next step is to pick which editor to integrate with.
 
 ### Using with VS Code
 
@@ -36,7 +56,7 @@ Install the VS code extension
 
 Now openning a `.hs` file should work with `hie-core`.
 
-### Emacs
+### Using with Emacs
 
 The frst step is to install required Emacs packages. If you don't already have [Melpa](https://melpa.org/#/) package installation configured in your `.emacs`, put this stanza at the top.
 
@@ -63,7 +83,7 @@ There are two things you can do about this warning:
 ;; Remember : to avoid package-not-found errors, refresh the package
 ;; database now and then with M-x package-refresh-contents.
 ```
-   
+
 When this is in your `.emacs` and evaluated, `M-x package-refresh-contents` to get the package database downloaded and then `M-x package-list-packages` to display the available packages. Click on a package to install it. You'll need to install the following packages:
 
 * `lsp-haskell`
@@ -93,13 +113,3 @@ Optionally, you may wish to add the following conveniences:
 (define-key flymake-mode-map (kbd "M-n") 'flymake-goto-next-error)
 (define-key flymake-mode-map (kbd "M-p") 'flymake-goto-prev-error)
 ```
-
-### Testing
-
-For testing, I've been using the `ghc-lib-gen` target of the [`ghc-lib` project](https://github.com/digital-asset/ghc-lib). Navigate to the root of `ghc-lib` and create an `hie.yaml` file with contents
-
-```yaml
-cradle: {cabal: {component: "exe:ghc-lib-gen"}}
-```
-
-Invoke `cabal new-configure -w ~/.stack/programs/~/.stack/programs/x86_64-osx/ghc-8.6.5/bin/ghc` (this is the `ghc` used by `stack` to build `hie-core` - consult `//compiler/hie-core/stack.yaml` to help work out what you should write here). This last step will create a file `cabal.project.local` with contents pointing `cabal` to use the desired `ghc`. You can build `ghc-lib-gen` from the `ghc-lib` directory with the command `cabal new-build` as you like. After creating `cabal.project.local`, you should be all set. Open `ghc-lib/ghc-lib-gen/src/Main.hs` in a buffer and, for example, hover should bring up type/definition info.
