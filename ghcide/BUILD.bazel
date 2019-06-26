@@ -71,6 +71,7 @@ da_haskell_binary(
     hazel_deps = [
         "base",
         "containers",
+        "data-default",
         "directory",
         "extra",
         "ghc-paths",

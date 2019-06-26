@@ -6,6 +6,7 @@ module Demo(main) where
 import Data.Maybe
 import Control.Concurrent.Extra
 import Control.Monad
+import Data.Default
 import System.Time.Extra
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
@@ -58,7 +59,7 @@ main = do
 
     if "--lsp" `elem` args then do
         hPutStrLn stderr "Starting IDE server"
-        runLanguageServer $ \event vfs -> do
+        runLanguageServer def def $ \event vfs -> do
             hPutStrLn stderr "Server started"
             initialise (mainRule >> action kick) event logger options vfs
     else do

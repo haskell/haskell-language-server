@@ -6,6 +6,7 @@
 module Development.IDE.Core.FileStore(
     getFileExists, getFileContents,
     setBufferModified,
+    setSomethingModified,
     fileStoreRules,
     VFSHandle,
     makeVFSHandle,
@@ -44,7 +45,10 @@ import Language.Haskell.LSP.VFS
 -- like `setBufferModified` we abstract over the VFS implementation.
 data VFSHandle = VFSHandle
     { getVirtualFile :: NormalizedUri -> IO (Maybe VirtualFile)
-    , setVirtualFileContents :: NormalizedUri -> Maybe T.Text -> IO ()
+        -- ^ get the contents of a virtual file
+    , setVirtualFileContents :: Maybe (NormalizedUri -> Maybe T.Text -> IO ())
+        -- ^ set a specific file to a value. If Nothing then we are ignoring these
+        --   signals anyway so can just say something was modified
     }
 
 instance IsIdeGlobal VFSHandle
@@ -56,7 +60,7 @@ makeVFSHandle = do
         { getVirtualFile = \uri -> do
               (_nextVersion, vfs) <- readVar vfsVar
               pure $ Map.lookup uri vfs
-        , setVirtualFileContents = \uri content ->
+        , setVirtualFileContents = Just $ \uri content ->
               modifyVar_ vfsVar $ \(nextVersion, vfs) -> pure $ (nextVersion + 1, ) $
                   case content of
                     Nothing -> Map.delete uri vfs
@@ -66,9 +70,8 @@ makeVFSHandle = do
 makeLSPVFSHandle :: LspFuncs c -> VFSHandle
 makeLSPVFSHandle lspFuncs = VFSHandle
     { getVirtualFile = getVirtualFileFunc lspFuncs
-    , setVirtualFileContents = \_ _ -> pure ()
-    -- ^ Handled internally by haskell-lsp.
-    }
+    , setVirtualFileContents = Nothing
+   }
 
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or from disk.
@@ -158,11 +161,24 @@ fileStoreRules vfs = do
     getFileExistsRule vfs
 
 
--- | Notify the compiler service of a modified buffer
+-- | Notify the compiler service that a particular file has been modified.
+--   Use 'Nothing' to say the file is no longer in the virtual file system
+--   but should be sourced from disk, or 'Just' to give its new value.
 setBufferModified :: IdeState -> NormalizedFilePath -> Maybe T.Text -> IO ()
 setBufferModified state absFile contents = do
     VFSHandle{..} <- getIdeGlobalState state
-    setVirtualFileContents (filePathToUri' absFile) contents
+    whenJust setVirtualFileContents $ \set ->
+        set (filePathToUri' absFile) contents
+    void $ shakeRun state [] (const $ pure ())
+
+-- | Note that some buffer somewhere has been modified, but don't say what.
+--   Only valid if the virtual file system was initialised by LSP, as that
+--   independently tracks which files are modified.
+setSomethingModified :: IdeState -> IO ()
+setSomethingModified state = do
+    VFSHandle{..} <- getIdeGlobalState state
+    when (isJust setVirtualFileContents) $
+        fail "setSomethingModified can't be called on this type of VFSHandle"
     void $ shakeRun state [] (const $ pure ())
 
 

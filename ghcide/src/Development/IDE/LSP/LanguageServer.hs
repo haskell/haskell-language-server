@@ -18,9 +18,10 @@ import Control.Concurrent.Chan
 import Control.Concurrent.Extra
 import Control.Concurrent.Async
 import Data.Default
+import Data.Maybe
 import           GHC.IO.Handle                    (hDuplicate, hDuplicateTo)
 import System.IO
-import Control.Monad
+import Control.Monad.Extra
 
 import Development.IDE.LSP.Definition
 import Development.IDE.LSP.Hover
@@ -32,14 +33,18 @@ import Language.Haskell.LSP.Messages
 
 
 runLanguageServer
-    :: ((FromServerMessage -> IO ()) -> VFSHandle -> IO IdeState)
+    :: LSP.Options
+    -> PartialHandlers
+    -> ((FromServerMessage -> IO ()) -> VFSHandle -> IO IdeState)
     -> IO ()
-runLanguageServer getIdeState = do
+runLanguageServer options userHandlers getIdeState = do
     -- Move stdout to another file descriptor and duplicate stderr
     -- to stdout. This guards against stray prints from corrupting the JSON-RPC
     -- message stream.
     newStdout <- hDuplicate stdout
     stderr `hDuplicateTo` stdout
+    hSetBuffering stderr NoBuffering
+    hSetBuffering stdout NoBuffering
 
     -- Print out a single space to assert that the above redirection works.
     -- This is interleaved with the logger, hence we just print a space here in
@@ -57,9 +62,13 @@ runLanguageServer getIdeState = do
     clientMsgBarrier <- newBarrier
 
     let withResponse wrap f = Just $ \r -> writeChan clientMsgChan $ Response r wrap f
-    let withNotification f = Just $ \r -> writeChan clientMsgChan $ Notification r f
-    let runHandler = WithMessage{withResponse, withNotification}
-    handlers <- mergeHandlers [setHandlersDefinition, setHandlersHover, setHandlersNotifications, setHandlersIgnore] runHandler def
+    let withNotification old f = Just $ \r -> writeChan clientMsgChan $ Notification r (\ide x -> f ide x >> whenJust old ($ r))
+    let PartialHandlers parts =
+            setHandlersIgnore <> -- least important
+            setHandlersDefinition <> setHandlersHover <> -- useful features someone may override
+            userHandlers <>
+            setHandlersNotifications -- absolutely critical, join them with user notifications
+    handlers <- parts WithMessage{withResponse, withNotification} def
 
     void $ waitAnyCancel =<< traverse async
         [ void $ LSP.runWithHandles
@@ -69,7 +78,7 @@ runLanguageServer getIdeState = do
             , handleInit (signalBarrier clientMsgBarrier ()) clientMsgChan
             )
             handlers
-            options
+            (modifyOptions options)
             Nothing
         , void $ waitBarrier clientMsgBarrier
         ]
@@ -89,18 +98,12 @@ runLanguageServer getIdeState = do
 
 -- | Things that get sent to us, but we don't deal with.
 --   Set them to avoid a warning in VS Code output.
-setHandlersIgnore :: WithMessage -> LSP.Handlers -> IO LSP.Handlers
-setHandlersIgnore _ x = return x
+setHandlersIgnore :: PartialHandlers
+setHandlersIgnore = PartialHandlers $ \_ x -> return x
     {LSP.cancelNotificationHandler = none
     ,LSP.initializedHandler = none
-    ,LSP.codeLensHandler = none -- FIXME: Stop saying we support it in 'options'
     }
     where none = Just $ const $ return ()
-
-
-mergeHandlers :: [WithMessage -> LSP.Handlers -> IO LSP.Handlers] -> WithMessage -> LSP.Handlers -> IO LSP.Handlers
-mergeHandlers = foldl f (\_ a -> return a)
-    where f x1 x2 r a = x1 r a >>= x2 r
 
 
 -- | A message that we need to deal with - the pieces are split up with existentials to gain additional type safety
@@ -110,14 +113,7 @@ data Message
     | forall m req . Notification (NotificationMessage m req) (IdeState -> req -> IO ())
 
 
-options :: LSP.Options
-options = def
-    { LSP.textDocumentSync = Just TextDocumentSyncOptions
-          { _openClose = Just True
-          , _change = Just TdSyncIncremental
-          , _willSave = Nothing
-          , _willSaveWaitUntil = Nothing
-          , _save = Just $ SaveOptions $ Just False
-          }
-    , LSP.codeLensProvider = Just $ CodeLensOptions $ Just False
-    }
+modifyOptions :: LSP.Options -> LSP.Options
+modifyOptions x = x{LSP.textDocumentSync = Just orig{_openClose=Just True, _change=Just TdSyncIncremental}}
+    where orig = fromMaybe tdsDefault $ LSP.textDocumentSync x
+          tdsDefault = TextDocumentSyncOptions Nothing Nothing Nothing Nothing Nothing
