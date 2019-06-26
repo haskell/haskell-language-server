@@ -5,8 +5,7 @@
 
 -- | Go to the definition of a variable.
 module Development.IDE.LSP.Definition
-    ( gotoDefinition
-    , setHandlersDefinition
+    ( setHandlersDefinition
     ) where
 
 import           Language.Haskell.LSP.Types

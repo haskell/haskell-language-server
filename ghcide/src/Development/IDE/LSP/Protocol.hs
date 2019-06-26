@@ -3,51 +3,13 @@
 {-# LANGUAGE PatternSynonyms #-}
 
 module Development.IDE.LSP.Protocol
-    ( module Language.Haskell.LSP.Types
-    , ServerRequest(..)
-    , ServerNotification(..)
-    , pattern EventFileDiagnostics
+    ( pattern EventFileDiagnostics
     ) where
 
-import qualified Data.Aeson       as Aeson
-import qualified Data.Text        as T
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Language.Haskell.LSP.Messages
-
-
-import Language.Haskell.LSP.Types hiding
-    ( CodeLens
-    , DocumentSymbol
-    , Hover
-    , Shutdown
-    , SignatureHelp
-    , WorkspaceSymbol
-    )
-
--- | Request sent by the client to the server.
-data ServerRequest
-    = Shutdown
-    | KeepAlive
-    | Completion      !CompletionParams
-    | SignatureHelp   !TextDocumentPositionParams
-    | Hover           !TextDocumentPositionParams
-    | Definition      !TextDocumentPositionParams
-    | References      !ReferenceParams
-    | CodeLens        !CodeLensParams
-    | Rename          !RenameParams
-    | DocumentSymbol  !DocumentSymbolParams
-    | WorkspaceSymbol !WorkspaceSymbolParams
-    | Formatting      !DocumentFormattingParams
-    | UnknownRequest  !T.Text !Aeson.Value
-    deriving Show
-
-data ServerNotification
-    = DidOpenTextDocument   DidOpenTextDocumentParams
-    | DidChangeTextDocument DidChangeTextDocumentParams
-    | DidCloseTextDocument  DidCloseTextDocumentParams
-    | DidSaveTextDocument   DidSaveTextDocumentParams
-    | UnknownNotification   T.Text Aeson.Value
+import Language.Haskell.LSP.Types
 
 ----------------------------------------------------------------------------------------------------
 -- Pretty printing
