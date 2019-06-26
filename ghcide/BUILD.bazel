@@ -66,22 +66,23 @@ da_haskell_library(
 )
 
 da_haskell_binary(
-    name = "hie-core-demo",
-    srcs = glob(["test/**/*.hs"]),
+    name = "hie-core-exe",
+    srcs = glob(["exe/**/*.hs"]),
     hazel_deps = [
         "base",
         "containers",
         "data-default",
         "directory",
         "extra",
+        "filepath",
         "ghc-paths",
         "ghc",
         "haskell-lsp",
         "hie-bios",
+        "optparse-applicative",
         "shake",
         "text",
     ],
-    main_function = "Demo.main",
     src_strip_prefix = "test",
     visibility = ["//visibility:public"],
     deps = [

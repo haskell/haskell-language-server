@@ -103,25 +103,27 @@ library
 
 executable hie-core
     default-language:   Haskell2010
-    main-is: Demo.hs
-    ghc-options: -main-is Demo.main
+    hs-source-dirs:     exe
+    main-is: Main.hs
     build-depends:
         base == 4.*,
         containers,
         directory,
+        optparse-applicative,
         hie-bios,
         shake,
         data-default,
         ghc-paths,
         ghc,
         extra,
+        filepath,
         haskell-lsp,
         text,
         hie-core
+    other-modules:
+        Arguments
 
     default-extensions:
         TupleSections
         RecordWildCards
         ViewPatterns
-
-    hs-source-dirs:     test
