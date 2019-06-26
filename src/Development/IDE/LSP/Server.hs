@@ -8,6 +8,7 @@ module Development.IDE.LSP.Server
   ( runServer
   , Handlers(..)
   , WithMessage(..)
+  , PartialHandlers(..)
   ) where
 
 
@@ -38,10 +39,26 @@ import Development.IDE.Core.Service
 
 
 data WithMessage = WithMessage
-    {withResponse :: forall m req resp . (ResponseMessage resp -> LSP.FromServerMessage) -> (IdeState -> req -> IO resp) -> Maybe (LSP.Handler (RequestMessage m req resp))
-    ,withNotification :: forall m req . (IdeState -> req -> IO ()) -> Maybe (LSP.Handler (NotificationMessage m req))
+    {withResponse :: forall m req resp .
+        (ResponseMessage resp -> LSP.FromServerMessage) -> -- how to wrap a response
+        (IdeState -> req -> IO resp) -> -- actual work
+        Maybe (LSP.Handler (RequestMessage m req resp))
+    ,withNotification :: forall m req .
+        Maybe (LSP.Handler (NotificationMessage m req)) -> -- old notification handler
+        (IdeState -> req -> IO ()) -> -- actual work
+        Maybe (LSP.Handler (NotificationMessage m req))
     }
 
+newtype PartialHandlers = PartialHandlers (WithMessage -> LSP.Handlers -> IO LSP.Handlers)
+
+instance Default PartialHandlers where
+    def = PartialHandlers $ \_ x -> pure x
+
+instance Semigroup PartialHandlers where
+    PartialHandlers a <> PartialHandlers b = PartialHandlers $ \w x -> a w x >>= b w
+
+instance Monoid PartialHandlers where
+    mempty = def
 
 ------------------------------------------------------------------------
 -- Server execution

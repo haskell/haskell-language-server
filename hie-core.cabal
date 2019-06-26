@@ -111,6 +111,7 @@ executable hie-core
         directory,
         hie-bios,
         shake,
+        data-default,
         ghc-paths,
         ghc,
         extra,
