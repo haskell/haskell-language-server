@@ -11,7 +11,7 @@ module Development.IDE.LSP.LanguageServer
     ) where
 
 import           Language.Haskell.LSP.Types
-import           Development.IDE.LSP.Server hiding (runServer)
+import           Development.IDE.LSP.Server
 import qualified Language.Haskell.LSP.Control as LSP
 import qualified Language.Haskell.LSP.Core as LSP
 import Control.Concurrent.Chan
