@@ -5,8 +5,7 @@
 
 -- | Display information on hover.
 module Development.IDE.LSP.Hover
-    ( onHover
-    , setHandlersHover
+    ( setHandlersHover
     ) where
 
 import Language.Haskell.LSP.Types
