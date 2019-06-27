@@ -15,6 +15,7 @@ module Development.IDE.Core.FileStore(
 
 import           StringBuffer
 import Development.IDE.GHC.Orphans()
+import Development.IDE.GHC.Util
 
 import Control.Concurrent.Extra
 import qualified Data.Map.Strict as Map
@@ -31,7 +32,6 @@ import           GHC.Generics
 import Data.Either.Extra
 import System.IO.Error
 import qualified Data.ByteString.Char8 as BS
-import qualified StringBuffer as SB
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import qualified Data.Rope.UTF16 as Rope
@@ -74,8 +74,8 @@ makeLSPVFSHandle lspFuncs = VFSHandle
    }
 
 
--- | Get the contents of a file, either dirty (if the buffer is modified) or from disk.
-type instance RuleResult GetFileContents = (FileVersion, StringBuffer)
+-- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
+type instance RuleResult GetFileContents = (FileVersion, Maybe StringBuffer)
 
 -- | Does the file exist.
 type instance RuleResult GetFileExists = Bool
@@ -128,9 +128,7 @@ getFileContentsRule vfs =
         time <- use_ GetModificationTime file
         res <- liftIO $ ideTryIOException file $ do
             mbVirtual <- getVirtualFile vfs $ filePathToUri' file
-            case mbVirtual of
-                Just (VirtualFile _ rope _) -> return $ textToStringBuffer $ Rope.toText rope
-                Nothing -> hGetStringBuffer (fromNormalizedFilePath file)
+            pure $ textToStringBuffer . Rope.toText . _text <$> mbVirtual
         case res of
             Left err -> return ([err], Nothing)
             Right contents -> return ([], Just (time, contents))
@@ -142,7 +140,7 @@ ideTryIOException fp act =
       <$> try act
 
 
-getFileContents :: NormalizedFilePath -> Action (FileVersion, StringBuffer)
+getFileContents :: NormalizedFilePath -> Action (FileVersion, Maybe StringBuffer)
 getFileContents = use_ GetFileContents
 
 getFileExists :: NormalizedFilePath -> Action Bool
@@ -180,8 +178,3 @@ setSomethingModified state = do
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
     void $ shakeRun state [] (const $ pure ())
-
-
--- would be nice to do this more efficiently...
-textToStringBuffer :: T.Text -> SB.StringBuffer
-textToStringBuffer = SB.stringToStringBuffer . T.unpack
