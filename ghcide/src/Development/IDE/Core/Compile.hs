@@ -58,6 +58,7 @@ import           Development.IDE.Spans.Type
 import           System.FilePath
 import           System.Directory
 import System.IO.Extra
+import Data.Char
 
 
 -- | Contains the typechecked module and the OrigNameCache entry for
@@ -91,7 +92,7 @@ parseModule
     :: IdeOptions
     -> HscEnv
     -> FilePath
-    -> SB.StringBuffer
+    -> Maybe SB.StringBuffer
     -> IO ([FileDiagnostic], Maybe ParsedModule)
 parseModule IdeOptions{..} env file =
     fmap (either (, Nothing) (second Just)) .
@@ -310,15 +311,55 @@ getModSummaryFromBuffer fp contents dflags parsed = do
     , ms_parsed_mod   = Nothing
     }
 
+-- | Run CPP on a file
+runCpp :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
+runCpp dflags filename contents = withTempDir $ \dir -> do
+    let out = dir </> takeFileName filename <.> "out"
+    case contents of
+        Nothing -> do
+            -- Happy case, file is not modified, so run CPP on it in-place
+            -- which also makes things like relative #include files work
+            -- and means location information is correct
+            doCpp dflags True filename out
+            liftIO $ SB.hGetStringBuffer out
+
+        Just contents -> do
+            -- Sad path, we have to create a version of the path in a temp dir
+            -- __FILE__ macro is wrong, ignoring that for now (likely not a real issue)
+
+            -- Relative includes aren't going to work, so we fix that by adding to the include path.
+            let addSelf (IncludeSpecs quote global) = IncludeSpecs (takeDirectory filename : quote) global
+            dflags <- return dflags{includePaths = addSelf $ includePaths dflags}
+
+            -- Location information is wrong, so we fix that by patching it afterwards.
+            let inp = dir </> "___HIE_CORE_MAGIC___"
+            withBinaryFile inp WriteMode $ \h ->
+                hPutStringBuffer h contents
+            doCpp dflags True inp out
+
+            -- Fix up the filename in lines like:
+            -- # 1 "C:/Temp/extra-dir-914611385186/___HIE_CORE_MAGIC___"
+            let tweak x
+                    | Just x <- stripPrefix "# " x
+                    , "___HIE_CORE_MAGIC___" `isInfixOf` x
+                    , let num = takeWhile (not . isSpace) x
+                    -- important to use /, and never \ for paths, even on Windows, since then C escapes them
+                    -- and GHC gets all confused
+                        = "# " <> num <> " \"" <> map (\x -> if isPathSeparator x then '/' else x) filename <> "\""
+                    | otherwise = x
+            stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
+
+
 -- | Given a buffer, flags, file path and module summary, produce a
 -- parsed module (or errors) and any parse warnings.
 parseFileContents
        :: GhcMonad m
        => (GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource))
        -> FilePath  -- ^ the filename (for source locations)
-       -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
+       -> Maybe SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
-parseFileContents preprocessor filename contents = do
+parseFileContents preprocessor filename mbContents = do
+   contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
 
@@ -326,13 +367,7 @@ parseFileContents preprocessor filename contents = do
       if not $ xopt LangExt.Cpp dflags then
           return (contents, dflags)
       else do
-          contents <- liftIO $ withTempDir $ \dir -> do
-              let inp = dir </> takeFileName filename
-              let out = dir </> takeFileName filename <.> "out"
-              let f x = if SB.atEnd x then Nothing else Just $ SB.nextChar x
-              liftIO $ writeFileUTF8 inp (unfoldr f contents)
-              doCpp dflags True inp out
-              liftIO $ SB.hGetStringBuffer out
+          contents <- liftIO $ runCpp dflags filename mbContents
           dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
           return (contents, dflags)
 

@@ -13,7 +13,8 @@ module Development.IDE.GHC.Util(
     modifyDynFlags,
     fakeDynFlags,
     prettyPrint,
-    runGhcEnv
+    runGhcEnv,
+    textToStringBuffer
     ) where
 
 import Config
@@ -25,6 +26,9 @@ import Data.IORef
 import Control.Exception
 import FileCleanup
 import Platform
+import qualified Data.Text as T
+import StringBuffer
+
 
 ----------------------------------------------------------------------
 -- GHC setup
@@ -46,6 +50,10 @@ lookupPackageConfig unitId env =
             -- from PackageState so we have to wrap it in DynFlags first.
             getPackageConfigMap $ hsc_dflags env
 
+
+-- would be nice to do this more efficiently...
+textToStringBuffer :: T.Text -> StringBuffer
+textToStringBuffer = stringToStringBuffer . T.unpack
 
 
 prettyPrint :: Outputable a => a -> String

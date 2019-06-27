@@ -114,6 +114,8 @@ data Message
 
 
 modifyOptions :: LSP.Options -> LSP.Options
-modifyOptions x = x{LSP.textDocumentSync = Just orig{_openClose=Just True, _change=Just TdSyncIncremental}}
-    where orig = fromMaybe tdsDefault $ LSP.textDocumentSync x
-          tdsDefault = TextDocumentSyncOptions Nothing Nothing Nothing Nothing Nothing
+modifyOptions x = x{LSP.textDocumentSync = Just $ tweak orig}
+    where
+        tweak x = x{_openClose=Just True, _change=Just TdSyncIncremental, _save=Just $ SaveOptions Nothing}
+        orig = fromMaybe tdsDefault $ LSP.textDocumentSync x
+        tdsDefault = TextDocumentSyncOptions Nothing Nothing Nothing Nothing Nothing

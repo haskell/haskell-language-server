@@ -9,8 +9,11 @@ module Development.IDE.GHC.Compat(
     HieFile(..),
     mkHieFile,
     writeHieFile,
-    readHieFile
+    readHieFile,
+    hPutStringBuffer
     ) where
+
+import StringBuffer
 
 #ifndef GHC_STABLE
 import HieAst
@@ -22,7 +25,14 @@ import GhcPlugins
 import NameCache
 import Avail
 import TcRnTypes
+import System.IO
+import Foreign.ForeignPtr
 
+
+hPutStringBuffer :: Handle -> StringBuffer -> IO ()
+hPutStringBuffer hdl (StringBuffer buf len cur)
+    = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
+             hPutBuf hdl ptr len
 
 mkHieFile :: ModSummary -> TcGblEnv -> RenamedSource -> Hsc HieFile
 mkHieFile _ _ _ = return (HieFile () [])

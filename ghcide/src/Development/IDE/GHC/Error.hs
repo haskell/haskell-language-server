@@ -70,7 +70,8 @@ srcSpanToFilename (RealSrcSpan real) = FS.unpackFS $ srcSpanFile real
 
 srcSpanToLocation :: SrcSpan -> Location
 srcSpanToLocation src =
-  Location (filePathToUri $ srcSpanToFilename src) (srcSpanToRange src)
+  -- important that the URI's we produce have been properly normalized, otherwise they point at weird places in VS Code
+  Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath $ srcSpanToFilename src) (srcSpanToRange src)
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
