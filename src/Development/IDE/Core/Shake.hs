@@ -400,13 +400,13 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, state} current = do
             let newDiags = getFileDiagnostics fp newDiagsStore
             pure (newDiagsStore, (newDiags, oldDiags))
     when (newDiags /= oldDiags) $
-        sendEvent $ publishDiagnosticsNotification (fromNormalizedFilePath fp) newDiags
+        sendEvent $ publishDiagnosticsNotification fp newDiags
 
-publishDiagnosticsNotification :: FilePath -> [Diagnostic] -> LSP.FromServerMessage
+publishDiagnosticsNotification :: NormalizedFilePath -> [Diagnostic] -> LSP.FromServerMessage
 publishDiagnosticsNotification fp diags =
     LSP.NotPublishDiagnostics $
     LSP.NotificationMessage "2.0" LSP.TextDocumentPublishDiagnostics $
-    LSP.PublishDiagnosticsParams (LSP.filePathToUri fp) (List diags)
+    LSP.PublishDiagnosticsParams (fromNormalizedUri $ filePathToUri' fp) (List diags)
 
 setPriority :: (Enum a) => a -> Action ()
 setPriority p =

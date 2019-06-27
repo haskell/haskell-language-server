@@ -43,10 +43,15 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             setSomethingModified ide
             logInfo (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
+    ,LSP.didSaveTextDocumentNotificationHandler = withNotification (LSP.didSaveTextDocumentNotificationHandler x) $
+        \ide (DidSaveTextDocumentParams TextDocumentIdentifier{_uri}) -> do
+            setSomethingModified ide
+            logInfo (ideLogger ide) $ "Saved text document: " <> getUri _uri
+
     ,LSP.didCloseTextDocumentNotificationHandler = withNotification (LSP.didCloseTextDocumentNotificationHandler x) $
         \ide (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> do
             setSomethingModified ide
             whenUriFile ide _uri $ \file ->
                 modifyFilesOfInterest ide (S.delete file)
             logInfo (ideLogger ide) $ "Closed text document: " <> getUri _uri
-  }
+    }
