@@ -32,41 +32,42 @@ library
         directory,
         extra,
         filepath,
-        ghc,
         ghc-boot-th,
         ghc-boot,
+        ghc,
         hashable,
-        haskell-lsp,
         haskell-lsp-types,
+        haskell-lsp,
         mtl,
         network-uri,
         prettyprinter-ansi-terminal,
+        prettyprinter-ansi-terminal,
+        prettyprinter,
         rope-utf16-splay,
+        safe-exceptions,
         shake,
         sorted-list,
         stm,
         syb,
         text,
         time,
-        prettyprinter,
-        prettyprinter-ansi-terminal,
         transformers,
         unordered-containers,
         utf8-string
 
     cpp-options: -DGHC_STABLE
     default-extensions:
-        LambdaCase
         BangPatterns
         DeriveGeneric
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
         RecordWildCards
         ScopedTypeVariables
-        NamedFieldPuns
+        StandaloneDeriving
         TupleSections
         TypeApplications
         ViewPatterns
-        GeneralizedNewtypeDeriving
-        StandaloneDeriving
 
     hs-source-dirs:
         src
@@ -108,23 +109,22 @@ executable hie-core
     build-depends:
         base == 4.*,
         containers,
-        directory,
-        optparse-applicative,
-        hie-bios,
-        safe-exceptions,
-        shake,
         data-default,
-        ghc-paths,
-        ghc,
+        directory,
         extra,
         filepath,
+        ghc-paths,
+        ghc,
         haskell-lsp,
-        text,
-        hie-core
+        hie-bios,
+        hie-core,
+        optparse-applicative,
+        shake,
+        text
     other-modules:
         Arguments
 
     default-extensions:
-        TupleSections
         RecordWildCards
+        TupleSections
         ViewPatterns
