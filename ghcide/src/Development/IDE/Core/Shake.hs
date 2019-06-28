@@ -32,12 +32,12 @@ module Development.IDE.Core.Shake(
     use_, uses_,
     define, defineEarlyCutoff,
     getDiagnostics, unsafeClearDiagnostics,
-    reportSeriousError,
     IsIdeGlobal, addIdeGlobal, getIdeGlobalState, getIdeGlobalAction,
     garbageCollect,
     setPriority,
     sendEvent,
     ideLogger,
+    actionLogger,
     FileVersion(..)
     ) where
 
@@ -307,11 +307,6 @@ uses_ key files = do
         Nothing -> liftIO $ throwIO BadDependency
         Just v -> return v
 
-reportSeriousError :: String -> Action ()
-reportSeriousError t = do
-    ShakeExtras{logger} <- getShakeExtras
-    liftIO $ logSeriousError logger $ T.pack t
-
 
 -- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
 --   which short-circuits the rest of the action
@@ -419,6 +414,11 @@ sendEvent e = do
 
 ideLogger :: IdeState -> Logger
 ideLogger IdeState{shakeExtras=ShakeExtras{logger}} = logger
+
+actionLogger :: Action Logger
+actionLogger = do
+    ShakeExtras{logger} <- getShakeExtras
+    return logger
 
 
 data GetModificationTime = GetModificationTime

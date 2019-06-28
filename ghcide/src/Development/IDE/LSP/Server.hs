@@ -18,11 +18,11 @@ import Development.IDE.Core.Service
 
 
 data WithMessage = WithMessage
-    {withResponse :: forall m req resp .
+    {withResponse :: forall m req resp . (Show m, Show req) =>
         (ResponseMessage resp -> LSP.FromServerMessage) -> -- how to wrap a response
         (IdeState -> req -> IO resp) -> -- actual work
         Maybe (LSP.Handler (RequestMessage m req resp))
-    ,withNotification :: forall m req .
+    ,withNotification :: forall m req . (Show m, Show req) =>
         Maybe (LSP.Handler (NotificationMessage m req)) -> -- old notification handler
         (IdeState -> req -> IO ()) -> -- actual work
         Maybe (LSP.Handler (NotificationMessage m req))
