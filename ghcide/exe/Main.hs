@@ -22,6 +22,7 @@ import Development.IDE.Types.Location
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Types.Logger
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
 import Development.IDE.LSP.LanguageServer
@@ -52,7 +53,8 @@ main = do
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
-    let logger = makeOneLogger $ withLock lock . T.putStrLn
+    let logger = Logger $ \pri msg -> withLock lock $
+            T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
 
     whenJust argsCwd setCurrentDirectory
 
