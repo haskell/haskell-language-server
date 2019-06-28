@@ -1,6 +1,9 @@
-# `hie-core` (Haskell IDE Core)
+# `hie-core` (Haskell IDE engine)
 
 Our vision is that you should build an IDE by combining:
+
+
+<img style="float:right;" src="img/vscode2.png"/>
 
 * [`hie-bios`](https://github.com/mpickering/hie-bios) for determining where your files are, what are their dependencies, what extensions are enabled and so on;
 * `hie-core` (i.e. this library) for defining how to type check, when to type check, and producing diagnostic messages;
@@ -46,7 +49,7 @@ Once you have got `hie-core` working outside the editor, the next step is to pic
 
 ### Using with VS Code
 
-Install the VS code extension
+Install the VS code extension (see https://code.visualstudio.com/docs/setup/mac for details on adding `code` to your `$PATH`):
 
 1. `cd compiler/hie-core/extension`
 2. `npm ci`
