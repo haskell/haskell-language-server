@@ -11,20 +11,22 @@
 module Development.IDE.Core.Service(
     getIdeOptions,
     IdeState, initialise, shutdown,
-    runAction, runActions,
-    runActionSync, runActionsSync,
+    runAction,
+    runActionSync,
     writeProfile,
     getDiagnostics, unsafeClearDiagnostics,
     ideLogger
     ) where
 
 import           Control.Concurrent.Extra
+import           Control.Concurrent.Async
 import           Control.Monad.Except
 import Development.IDE.Types.Options (IdeOptions(..))
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.OfInterest
 import Development.IDE.Types.Logger
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
+import Data.Either.Extra
 import qualified Language.Haskell.LSP.Messages as LSP
 
 import           Development.IDE.Core.Shake
@@ -68,32 +70,27 @@ setProfiling opts shakeOpts =
 shutdown :: IdeState -> IO ()
 shutdown = shakeShut
 
--- | Run a single action using the supplied service. See `runActions`
--- for more details.
-runAction :: IdeState -> Action a -> IO a
-runAction service action = head <$> runActions service [action]
-
--- | Run a list of actions in parallel using the supplied service.
--- This will return as soon as the results of the actions are
+-- This will return as soon as the result of the action is
 -- available.  There might still be other rules running at this point,
 -- e.g., the ofInterestRule.
-runActions :: IdeState -> [Action a] -> IO [a]
-runActions x acts = do
-    var <- newBarrier
-    _ <- shakeRun x acts (signalBarrier var)
-    waitBarrier var
+runAction :: IdeState -> Action a -> IO a
+runAction ide action = do
+    bar <- newBarrier
+    res <- shakeRun ide [do v <- action; liftIO $ signalBarrier bar v; return v]
+    -- shakeRun might throw an exception (either through action or a default rule),
+    -- in which case action may not complete successfully, and signalBarrier might not be called.
+    -- Therefore we wait for either res (which propagates the exception) or the barrier.
+    -- Importantly, if the barrier does finish, cancelling res only kills waiting for the result,
+    -- it doesn't kill the actual work
+    fmap fromEither $ race (head <$> res) $ waitBarrier bar
 
--- | This is a synchronous variant of `runAction`. See
--- `runActionsSync` of more details.
-runActionSync :: IdeState -> Action a -> IO a
-runActionSync s a = head <$> runActionsSync s [a]
 
--- | `runActionsSync` is similar to `runActions` but it will
+-- | `runActionSync` is similar to `runAction` but it will
 -- wait for all rules (so in particular the `ofInterestRule`) to
 -- finish running. This is mainly useful in tests, where you want
 -- to wait for all rules to fire so you can check diagnostics.
-runActionsSync :: IdeState -> [Action a] -> IO [a]
-runActionsSync s acts = join $ shakeRun s acts (const $ pure ())
+runActionSync :: IdeState -> Action a -> IO a
+runActionSync s act = fmap head $ join $ shakeRun s [act]
 
 getIdeOptions :: Action IdeOptions
 getIdeOptions = do
