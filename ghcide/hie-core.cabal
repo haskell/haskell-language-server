@@ -87,6 +87,7 @@ library
         Development.IDE.GHC.Warnings
         Development.IDE.Import.DependencyInformation
         Development.IDE.Import.FindImports
+        Development.IDE.LSP.CodeAction
         Development.IDE.LSP.Definition
         Development.IDE.LSP.Hover
         Development.IDE.LSP.LanguageServer

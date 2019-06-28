@@ -27,6 +27,7 @@ import Control.Monad.Extra
 
 import Development.IDE.LSP.Definition
 import Development.IDE.LSP.Hover
+import Development.IDE.LSP.CodeAction
 import Development.IDE.LSP.Notifications
 import Development.IDE.Core.Service
 import Development.IDE.Types.Logger
@@ -68,7 +69,7 @@ runLanguageServer options userHandlers getIdeState = do
     let withNotification old f = Just $ \r -> writeChan clientMsgChan $ Notification r (\ide x -> f ide x >> whenJust old ($ r))
     let PartialHandlers parts =
             setHandlersIgnore <> -- least important
-            setHandlersDefinition <> setHandlersHover <> -- useful features someone may override
+            setHandlersDefinition <> setHandlersHover <> setHandlersCodeAction <> -- useful features someone may override
             userHandlers <>
             setHandlersNotifications -- absolutely critical, join them with user notifications
     handlers <- parts WithMessage{withResponse, withNotification} def
