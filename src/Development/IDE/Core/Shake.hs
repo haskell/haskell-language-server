@@ -237,25 +237,17 @@ shakeShut IdeState{..} = withVar shakeAbort $ \stop -> do
     stop
     shakeClose
 
--- | Spawn immediately, add an action to collect the results syncronously.
---   If you are already inside a call to shakeRun that will be aborted with an exception.
--- The callback will be fired as soon as the results are available
--- even if there are still other rules running while the IO action that is
--- being returned will wait for all rules to finish.
-shakeRun :: IdeState -> [Action a] -> ([a] -> IO ()) -> IO (IO [a])
+-- | Spawn immediately. If you are already inside a call to shakeRun that will be aborted with an exception.
+shakeRun :: IdeState -> [Action a] -> IO (IO [a])
 -- FIXME: If there is already a shakeRun queued up and waiting to send me a kill, I should probably
 --        not even start, which would make issues with async exceptions less problematic.
-shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts callback = modifyVar shakeAbort $ \stop -> do
+shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts = modifyVar shakeAbort $ \stop -> do
     (stopTime,_) <- duration stop
     logDebug logger $ T.pack $ "Starting shakeRun (aborting the previous one took " ++ showDuration stopTime ++ ")"
     bar <- newBarrier
     start <- offsetTime
-    let act = do
-            res <- parallel acts
-            liftIO $ callback res
-            pure res
-    thread <- forkFinally (shakeRunDatabaseProfile shakeDb [act]) $ \res -> do
-        signalBarrier bar (mapRight head res)
+    thread <- forkFinally (shakeRunDatabaseProfile shakeDb acts) $ \res -> do
+        signalBarrier bar res
         runTime <- start
         logDebug logger $ T.pack $
             "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ (if isLeft res then "exception" else "completed") ++ ")"
