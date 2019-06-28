@@ -6,23 +6,45 @@
 -- concrete choice of logging framework so users can plug in whatever
 -- framework they want to.
 module Development.IDE.Types.Logger
-  ( Logger(..)
-  , makeOneLogger
-  , makeNopLogger
+  ( Priority(..)
+  , Logger(..)
+  , logError, logWarning, logInfo, logDebug
+  , noLogging
   ) where
 
 import qualified Data.Text as T
-import GHC.Stack
 
-data Logger = Logger {
-      logSeriousError :: HasCallStack => T.Text -> IO ()
-    , logInfo :: HasCallStack => T.Text -> IO ()
-    , logDebug :: HasCallStack => T.Text -> IO ()
-    , logWarning :: HasCallStack => T.Text -> IO ()
-    }
 
-makeNopLogger :: Logger
-makeNopLogger = makeOneLogger $ const $ pure ()
+data Priority
+-- Don't change the ordering of this type or you will mess up the Ord
+-- instance
+    = Debug -- ^ Verbose debug logging.
+    | Info  -- ^ Useful information in case an error has to be understood.
+    | Warning
+      -- ^ These error messages should not occur in a expected usage, and
+      -- should be investigated.
+    | Error -- ^ Such log messages must never occur in expected usage.
+    deriving (Eq, Show, Ord, Enum, Bounded)
 
-makeOneLogger :: (HasCallStack => T.Text -> IO ()) -> Logger
-makeOneLogger x = Logger x x x x
+
+-- | Note that this is logging actions _of the program_, not of the user.
+--   You shouldn't call warning/error if the user has caused an error, only
+--   if our code has gone wrong and is itself erroneous (e.g. we threw an exception).
+data Logger = Logger {logPriority :: Priority -> T.Text -> IO ()}
+
+
+logError :: Logger -> T.Text -> IO ()
+logError x = logPriority x Error
+
+logWarning :: Logger -> T.Text -> IO ()
+logWarning x = logPriority x Warning
+
+logInfo :: Logger -> T.Text -> IO ()
+logInfo x = logPriority x Info
+
+logDebug :: Logger -> T.Text -> IO ()
+logDebug x = logPriority x Debug
+
+
+noLogging :: Logger
+noLogging = Logger $ \_ _ -> return ()

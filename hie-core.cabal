@@ -111,6 +111,7 @@ executable hie-core
         directory,
         optparse-applicative,
         hie-bios,
+        safe-exceptions,
         shake,
         data-default,
         ghc-paths,
