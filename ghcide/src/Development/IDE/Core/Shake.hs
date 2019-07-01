@@ -378,16 +378,20 @@ updateFileDiagnostics ::
   -> ShakeExtras
   -> [Diagnostic] -- ^ current results
   -> Action ()
-updateFileDiagnostics fp k ShakeExtras{diagnostics, state} current = do
-    (newDiags, oldDiags) <- liftIO $ do
-        modTime <- join <$> getValues state GetModificationTime fp
-        modifyVar diagnostics $ \old -> do
+updateFileDiagnostics fp k ShakeExtras{diagnostics, state, eventer} current = liftIO $ do
+    modTime <- join <$> getValues state GetModificationTime fp
+    mask_ $ do
+        -- Mask async exceptions to ensure that updated diagnostics are always
+        -- published. Otherwise, we might never publish certain diagnostics if
+        -- an exception strikes between modifyVar but before
+        -- publishDiagnosticsNotification.
+        (newDiags, oldDiags) <- modifyVar diagnostics $ \old -> do
             let oldDiags = getFileDiagnostics fp old
             let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) (T.pack $ show k) current old
             let newDiags = getFileDiagnostics fp newDiagsStore
             pure (newDiagsStore, (newDiags, oldDiags))
-    when (newDiags /= oldDiags) $
-        sendEvent $ publishDiagnosticsNotification fp newDiags
+        when (newDiags /= oldDiags) $
+            eventer $ publishDiagnosticsNotification fp newDiags
 
 publishDiagnosticsNotification :: NormalizedFilePath -> [Diagnostic] -> LSP.FromServerMessage
 publishDiagnosticsNotification fp diags =
