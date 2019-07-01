@@ -40,5 +40,5 @@ gotoDefinition ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos)
 
 setHandlersDefinition :: PartialHandlers
 setHandlersDefinition = PartialHandlers $ \WithMessage{..} x -> return x{
-    LSP.definitionHandler = withResponse RspDefinition gotoDefinition
+    LSP.definitionHandler = withResponse RspDefinition $ const gotoDefinition
     }
