@@ -46,7 +46,7 @@ import           TidyPgm
 import qualified GHC.LanguageExtensions as LangExt
 
 import Control.DeepSeq
-import           Control.Monad
+import Control.Monad.Extra
 import Control.Monad.Trans.Except
 import qualified Data.Text as T
 import           Data.IORef
@@ -127,7 +127,7 @@ typecheckModule opt packageState deps pm =
             setupEnv deps
             (warnings, tcm) <- withWarnings $ \tweak ->
                 GHC.typecheckModule pm{pm_mod_summary = tweak $ pm_mod_summary pm}
-            tcm2 <- mkTcModuleResult (WriteInterface $ optWriteIface opt) tcm
+            tcm2 <- mkTcModuleResult (optIfaceDir opt) tcm
             return (warnings, tcm2)
 
 -- | Compile a single type-checked module to a 'CoreModule' value, or
@@ -197,18 +197,16 @@ moduleImportPaths pm
     rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
 
 
-newtype WriteInterface = WriteInterface Bool
-
 mkTcModuleResult
     :: GhcMonad m
-    => WriteInterface
+    => InterfaceDirectory
     -> TypecheckedModule
     -> m TcModuleResult
-mkTcModuleResult (WriteInterface writeIface) tcm = do
+mkTcModuleResult (InterfaceDirectory mbIfaceDir) tcm = do
     session   <- getSession
     (iface,_) <- liftIO $ mkIfaceTc session Nothing Sf_None details tcGblEnv
-    liftIO $ when writeIface $ do
-        let path = ".interfaces" </> file tcm
+    liftIO $ whenJust mbIfaceDir $ \ifaceDir -> do
+        let path = ifaceDir </> file tcm
         createDirectoryIfMissing True (takeDirectory path)
         writeIfaceFile (hsc_dflags session) (replaceExtension path ".hi") iface
         -- For now, we write .hie files whenever we write .hi files which roughly corresponds to
