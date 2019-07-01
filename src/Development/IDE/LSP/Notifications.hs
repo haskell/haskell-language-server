@@ -32,24 +32,24 @@ whenUriFile ide uri act = case LSP.uriToFilePath uri of
 setHandlersNotifications :: PartialHandlers
 setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
     {LSP.didOpenTextDocumentNotificationHandler = withNotification (LSP.didOpenTextDocumentNotificationHandler x) $
-        \ide (DidOpenTextDocumentParams TextDocumentItem{_uri}) -> do
+        \_ ide (DidOpenTextDocumentParams TextDocumentItem{_uri}) -> do
             setSomethingModified ide
             whenUriFile ide _uri $ \file ->
                 modifyFilesOfInterest ide (S.insert file)
             logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
     ,LSP.didChangeTextDocumentNotificationHandler = withNotification (LSP.didChangeTextDocumentNotificationHandler x) $
-        \ide (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> do
+        \_ ide (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> do
             setSomethingModified ide
             logInfo (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
     ,LSP.didSaveTextDocumentNotificationHandler = withNotification (LSP.didSaveTextDocumentNotificationHandler x) $
-        \ide (DidSaveTextDocumentParams TextDocumentIdentifier{_uri}) -> do
+        \_ ide (DidSaveTextDocumentParams TextDocumentIdentifier{_uri}) -> do
             setSomethingModified ide
             logInfo (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
     ,LSP.didCloseTextDocumentNotificationHandler = withNotification (LSP.didCloseTextDocumentNotificationHandler x) $
-        \ide (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> do
+        \_ ide (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> do
             setSomethingModified ide
             whenUriFile ide _uri $ \file ->
                 modifyFilesOfInterest ide (S.delete file)

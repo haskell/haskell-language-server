@@ -66,7 +66,7 @@ runLanguageServer options userHandlers getIdeState = do
     clientMsgBarrier <- newBarrier
 
     let withResponse wrap f = Just $ \r -> writeChan clientMsgChan $ Response r wrap f
-    let withNotification old f = Just $ \r -> writeChan clientMsgChan $ Notification r (\ide x -> f ide x >> whenJust old ($ r))
+    let withNotification old f = Just $ \r -> writeChan clientMsgChan $ Notification r (\lsp ide x -> f lsp ide x >> whenJust old ($ r))
     let PartialHandlers parts =
             setHandlersIgnore <> -- least important
             setHandlersDefinition <> setHandlersHover <> setHandlersCodeAction <> -- useful features someone may override
@@ -94,14 +94,14 @@ runLanguageServer options userHandlers getIdeState = do
                 msg <- readChan clientMsgChan
                 case msg of
                     Notification x@NotificationMessage{_params} act -> do
-                        catch (act ide _params) $ \(e :: SomeException) ->
+                        catch (act lspFuncs ide _params) $ \(e :: SomeException) ->
                             logError (ideLogger ide) $ T.pack $
                                 "Unexpected exception on notification, please report!\n" ++
                                 "Message: " ++ show x ++ "\n" ++
                                 "Exception: " ++ show e
                     Response x@RequestMessage{_id, _params} wrap act ->
                         catch (do
-                            res <- act ide _params
+                            res <- act lspFuncs ide _params
                             sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Just res) Nothing
                         ) $ \(e :: SomeException) -> do
                             logError (ideLogger ide) $ T.pack $
@@ -126,8 +126,8 @@ setHandlersIgnore = PartialHandlers $ \_ x -> return x
 -- | A message that we need to deal with - the pieces are split up with existentials to gain additional type safety
 --   and defer precise processing until later (allows us to keep at a higher level of abstraction slightly longer)
 data Message
-    = forall m req resp . (Show m, Show req) => Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (IdeState -> req -> IO resp)
-    | forall m req . (Show m, Show req) => Notification (NotificationMessage m req) (IdeState -> req -> IO ())
+    = forall m req resp . (Show m, Show req) => Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (LSP.LspFuncs () -> IdeState -> req -> IO resp)
+    | forall m req . (Show m, Show req) => Notification (NotificationMessage m req) (LSP.LspFuncs () -> IdeState -> req -> IO ())
 
 
 modifyOptions :: LSP.Options -> LSP.Options
