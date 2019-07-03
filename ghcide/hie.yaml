@@ -1,0 +1,23 @@
+cradle:
+  direct:
+    arguments:
+      - -Wunused-binds
+      - -Wunused-imports
+      - -Worphans
+      - -Wunused-matches
+      - -Wincomplete-patterns
+      - -XBangPatterns
+      - -XDeriveGeneric
+      - -XGeneralizedNewtypeDeriving
+      - -XLambdaCase
+      - -XNamedFieldPuns
+      - -XRecordWildCards
+      - -XScopedTypeVariables
+      - -XStandaloneDeriving
+      - -XTupleSections
+      - -XTypeApplications
+      - -XViewPatterns
+      - -package=ghc
+      - -DGHC_STABLE
+      - -isrc
+      - -iexe
