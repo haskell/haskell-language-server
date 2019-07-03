@@ -86,7 +86,7 @@ atPoint IdeOptions{..} tcs srcSpans pos = do
     isTypeclassDeclSpan :: SpanInfo -> Bool
     isTypeclassDeclSpan spanInfo =
       case getNameM (spaninfoSource spanInfo) of
-        Just name -> any (`isInfixOf` show name) ["==", "showsPrec"]
+        Just name -> any (`isInfixOf` getOccString name) ["==", "showsPrec"]
         Nothing -> False
 
 locationsAtPoint :: forall m . MonadIO m => (FilePath -> m (Maybe HieFile)) -> IdeOptions -> HscEnv -> Position -> [SpanInfo] -> m [Location]
