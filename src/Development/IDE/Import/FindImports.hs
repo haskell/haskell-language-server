@@ -4,8 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Development.IDE.Import.FindImports
-  ( getImportsParsed
-  , locateModule
+  ( locateModule
   , Import(..)
   ) where
 
@@ -14,13 +13,10 @@ import Development.IDE.GHC.Orphans()
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 -- GHC imports
-import           BasicTypes                  (StringLiteral(..))
 import           DynFlags
 import           FastString
 import           GHC
-import qualified HeaderInfo                  as Hdr
 import qualified Module                      as M
-import qualified GHC.LanguageExtensions.Type as GHC
 import           Packages
 import           Outputable                  (showSDoc, ppr, pprPanic)
 import           Finder
@@ -29,7 +25,6 @@ import Control.DeepSeq
 -- standard imports
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
-import qualified Control.Monad.Trans.Except            as Ex
 import           System.FilePath
 
 data Import
@@ -40,35 +35,6 @@ data Import
 instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf (PackageImport x) = rnf x
-
-
--- | GhcMonad function to chase imports of a module given as a StringBuffer. Returns given module's
--- name and its imports.
-getImportsParsed :: Monad m =>
-               DynFlags ->
-               GHC.ParsedSource ->
-               Ex.ExceptT [FileDiagnostic] m
-                          (M.ModuleName, [(Maybe FastString, Located M.ModuleName)])
-getImportsParsed dflags (L loc parsed) = do
-  let modName = maybe (GHC.mkModuleName "Main") GHC.unLoc $ GHC.hsmodName parsed
-
-  -- refuse source imports
-  let srcImports = filter (ideclSource . GHC.unLoc) $ GHC.hsmodImports parsed
-  when (not $ null srcImports) $ Ex.throwE $
-    concat
-      [ diagFromString mloc ("Illegal source import of " <> GHC.moduleNameString (GHC.unLoc $ GHC.ideclName i))
-      | L mloc i <- srcImports ]
-
-  -- most of these corner cases are also present in https://hackage.haskell.org/package/ghc-8.6.1/docs/src/HeaderInfo.html#getImports
-  -- but we want to avoid parsing the module twice
-  let implicit_prelude = xopt GHC.ImplicitPrelude dflags
-      implicit_imports = Hdr.mkPrelImports modName loc implicit_prelude $ GHC.hsmodImports parsed
-
-  -- filter out imports that come from packages
-  return (modName, [(fmap sl_fs $ ideclPkgQual i, ideclName i)
-    | i <- map GHC.unLoc $ implicit_imports ++ GHC.hsmodImports parsed
-    , GHC.moduleNameString (GHC.unLoc $ ideclName i) /= "GHC.Prim"
-    ])
 
 
 -- | locate a module in the file system. Where we go from *daml to Haskell

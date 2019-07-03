@@ -9,24 +9,21 @@
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
 module Development.IDE.Core.Compile
   ( TcModuleResult(..)
-  , getGhcDynFlags
   , compileModule
-  , getSrcSpanInfos
   , parseModule
-  , parseFileContents
   , typecheckModule
   , computePackageDeps
+  , addRelativeImport
   ) where
 
 import           Development.IDE.GHC.Warnings
 import           Development.IDE.GHC.CPP
 import           Development.IDE.Types.Diagnostics
-import qualified Development.IDE.Import.FindImports as FindImports
 import           Development.IDE.GHC.Error
-import           Development.IDE.Spans.Calculate
 import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.Compat
+import qualified GHC.LanguageExtensions.Type as GHC
 import Development.IDE.Types.Options
 import Development.IDE.Types.Location
 
@@ -47,6 +44,7 @@ import qualified GHC.LanguageExtensions as LangExt
 
 import Control.DeepSeq
 import Control.Monad.Extra
+import Control.Monad.Except
 import Control.Monad.Trans.Except
 import qualified Data.Text as T
 import           Data.IORef
@@ -54,7 +52,6 @@ import           Data.List.Extra
 import           Data.Maybe
 import           Data.Tuple.Extra
 import qualified Data.Map.Strict                          as Map
-import           Development.IDE.Spans.Type
 import           System.FilePath
 import           System.Directory
 import System.IO.Extra
@@ -74,19 +71,6 @@ instance NFData TcModuleResult where
     rnf = rwhnf
 
 
--- | Get source span info, used for e.g. AtPoint and Goto Definition.
-getSrcSpanInfos
-    :: ParsedModule
-    -> HscEnv
-    -> [(Located ModuleName, Maybe NormalizedFilePath)]
-    -> TcModuleResult
-    -> IO [SpanInfo]
-getSrcSpanInfos mod env imports tc =
-    runGhcSession (Just mod) env
-        . getSpanInfo imports
-        $ tmrModule tc
-
-
 -- | Given a string buffer, return a pre-processed @ParsedModule@.
 parseModule
     :: IdeOptions
@@ -97,7 +81,7 @@ parseModule
 parseModule IdeOptions{..} env file =
     fmap (either (, Nothing) (second Just)) .
     -- We need packages since imports fail to resolve otherwise.
-    runGhcSession Nothing env . runExceptT . parseFileContents optPreprocessor file
+    runGhcEnv env . runExceptT . parseFileContents optPreprocessor file
 
 
 -- | Given a package identifier, what packages does it depend on
@@ -122,7 +106,7 @@ typecheckModule
     -> IO ([FileDiagnostic], Maybe TcModuleResult)
 typecheckModule opt packageState deps pm =
     fmap (either (, Nothing) (second Just)) $
-    runGhcSession (Just pm) packageState $
+    runGhcEnv packageState $
         catchSrcErrors $ do
             setupEnv deps
             (warnings, tcm) <- withWarnings $ \tweak ->
@@ -133,14 +117,13 @@ typecheckModule opt packageState deps pm =
 -- | Compile a single type-checked module to a 'CoreModule' value, or
 -- provide errors.
 compileModule
-    :: ParsedModule
-    -> HscEnv
+    :: HscEnv
     -> [TcModuleResult]
     -> TcModuleResult
     -> IO ([FileDiagnostic], Maybe CoreModule)
-compileModule mod packageState deps tmr =
+compileModule packageState deps tmr =
     fmap (either (, Nothing) (second Just)) $
-    runGhcSession (Just mod) packageState $
+    runGhcEnv packageState $
         catchSrcErrors $ do
             setupEnv (deps ++ [tmr])
 
@@ -164,21 +147,9 @@ compileModule mod packageState deps tmr =
             return (warnings, core)
 
 
-getGhcDynFlags :: ParsedModule -> HscEnv -> IO DynFlags
-getGhcDynFlags mod pkg = runGhcSession (Just mod) pkg getSessionDynFlags
-
--- | Evaluate a GHC session using a new environment constructed with
--- the supplied options.
-runGhcSession
-    :: Maybe ParsedModule
-    -> HscEnv
-    -> Ghc a
-    -> IO a
-runGhcSession modu env act = runGhcEnv env $ do
-    modifyDynFlags $ \x -> x
-        {importPaths = nubOrd $ maybeToList (moduleImportPaths =<< modu) ++ importPaths x}
-    act
-
+addRelativeImport :: ParsedModule -> DynFlags -> DynFlags
+addRelativeImport modu dflags = dflags
+    {importPaths = nubOrd $ maybeToList (moduleImportPaths modu) ++ importPaths dflags}
 
 moduleImportPaths :: GHC.ParsedModule -> Maybe FilePath
 moduleImportPaths pm
@@ -258,6 +229,35 @@ loadModuleHome tmr = modifySession $ \e ->
     mod_info = tmrModInfo tmr
     mod      = ms_mod_name ms
 
+
+
+-- | GhcMonad function to chase imports of a module given as a StringBuffer. Returns given module's
+-- name and its imports.
+getImportsParsed ::  DynFlags ->
+               GHC.ParsedSource ->
+               Either [FileDiagnostic] (GHC.ModuleName, [(Maybe FastString, Located GHC.ModuleName)])
+getImportsParsed dflags (L loc parsed) = do
+  let modName = maybe (GHC.mkModuleName "Main") GHC.unLoc $ GHC.hsmodName parsed
+
+  -- refuse source imports
+  let srcImports = filter (ideclSource . GHC.unLoc) $ GHC.hsmodImports parsed
+  when (not $ null srcImports) $ Left $
+    concat
+      [ diagFromString mloc ("Illegal source import of " <> GHC.moduleNameString (GHC.unLoc $ GHC.ideclName i))
+      | L mloc i <- srcImports ]
+
+  -- most of these corner cases are also present in https://hackage.haskell.org/package/ghc-8.6.1/docs/src/HeaderInfo.html#getImports
+  -- but we want to avoid parsing the module twice
+  let implicit_prelude = xopt GHC.ImplicitPrelude dflags
+      implicit_imports = Hdr.mkPrelImports modName loc implicit_prelude $ GHC.hsmodImports parsed
+
+  -- filter out imports that come from packages
+  return (modName, [(fmap sl_fs $ ideclPkgQual i, ideclName i)
+    | i <- map GHC.unLoc $ implicit_imports ++ GHC.hsmodImports parsed
+    , GHC.moduleNameString (GHC.unLoc $ ideclName i) /= "GHC.Prim"
+    ])
+
+
 -- | Produce a module summary from a StringBuffer.
 getModSummaryFromBuffer
     :: GhcMonad m
@@ -267,7 +267,7 @@ getModSummaryFromBuffer
     -> GHC.ParsedSource
     -> ExceptT [FileDiagnostic] m ModSummary
 getModSummaryFromBuffer fp contents dflags parsed = do
-  (modName, imports) <- FindImports.getImportsParsed dflags parsed
+  (modName, imports) <- liftEither $ getImportsParsed dflags parsed
 
   let modLoc = ModLocation
           { ml_hs_file  = Just fp

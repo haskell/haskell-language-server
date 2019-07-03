@@ -30,6 +30,7 @@ import           Control.Monad.Except
 import Control.Monad.Trans.Maybe
 import qualified Development.IDE.Core.Compile             as Compile
 import qualified Development.IDE.Types.Options as Compile
+import qualified Development.IDE.Spans.Calculate as Compile
 import Development.IDE.Import.DependencyInformation
 import Development.IDE.Import.FindImports
 import           Development.IDE.Core.FileStore
@@ -50,6 +51,7 @@ import           GHC
 import Development.IDE.GHC.Compat
 import           UniqSupply
 import NameCache
+import HscTypes
 
 import qualified Development.IDE.Spans.AtPoint as AtPoint
 import Development.IDE.Core.Service
@@ -143,8 +145,8 @@ getLocatedImportsRule =
         pm <- use_ GetParsedModule file
         let ms = pm_mod_summary pm
         let imports = ms_textual_imps ms
-        packageState <- use_ GhcSession ""
-        dflags <- liftIO $ Compile.getGhcDynFlags pm packageState
+        env <- use_ GhcSession ""
+        let dflags = Compile.addRelativeImport pm $ hsc_dflags env
         opt <- getIdeOptions
         xs <- forM imports $ \(mbPkgName, modName) ->
             (modName, ) <$> locateModule dflags (Compile.optExtensions opt) getFileExists modName mbPkgName
@@ -229,11 +231,10 @@ getDependenciesRule =
 getSpanInfoRule :: Rules ()
 getSpanInfoRule =
     define $ \GetSpanInfo file -> do
-        pm <- use_ GetParsedModule file
         tc <- use_ TypeCheck file
         imports <- use_ GetLocatedImports file
         packageState <- use_ GhcSession ""
-        x <- liftIO $ Compile.getSrcSpanInfos pm packageState (fileImports imports) tc
+        x <- liftIO $ Compile.getSrcSpanInfos packageState (fileImports imports) tc
         return ([], Just x)
 
 -- Typechecks a module.
@@ -254,10 +255,9 @@ generateCoreRule =
     define $ \GenerateCore file -> do
         deps <- use_ GetDependencies file
         (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
-        let pm = tm_parsed_module . Compile.tmrModule $ tm
         setPriority priorityGenerateCore
         packageState <- use_ GhcSession ""
-        liftIO $ Compile.compileModule pm packageState tms tm
+        liftIO $ Compile.compileModule packageState tms tm
 
 loadGhcSession :: Rules ()
 loadGhcSession =
