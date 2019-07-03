@@ -54,6 +54,7 @@ import           Data.Maybe
 import           Data.Either.Extra
 import           Data.List.Extra
 import qualified Data.Text as T
+import Development.IDE.Core.Debouncer
 import Development.IDE.Types.Logger hiding (Priority)
 import Language.Haskell.LSP.Diagnostics
 import qualified Data.SortedList as SL
@@ -79,6 +80,7 @@ import Language.Haskell.LSP.Types
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
     {eventer :: LSP.FromServerMessage -> IO ()
+    ,debouncer :: Debouncer Uri
     ,logger :: Logger
     ,globals :: Var (HMap.HashMap TypeRep Dynamic)
     ,state :: Var Values
@@ -222,6 +224,7 @@ shakeOpen eventer logger opts rules = do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
         diagnostics <- newVar mempty
+        debouncer <- newDebouncer
         pure ShakeExtras{..}
     (shakeDb, shakeClose) <- shakeOpenDatabase opts{shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts} rules
     shakeAbort <- newVar $ return ()
@@ -379,7 +382,7 @@ updateFileDiagnostics ::
   -> ShakeExtras
   -> [Diagnostic] -- ^ current results
   -> Action ()
-updateFileDiagnostics fp k ShakeExtras{diagnostics, state, eventer} current = liftIO $ do
+updateFileDiagnostics fp k ShakeExtras{diagnostics, state, debouncer, eventer} current = liftIO $ do
     modTime <- join <$> getValues state GetModificationTime fp
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
@@ -391,14 +394,16 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, state, eventer} current = li
             let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) (T.pack $ show k) current old
             let newDiags = getFileDiagnostics fp newDiagsStore
             pure (newDiagsStore, (newDiags, oldDiags))
-        when (newDiags /= oldDiags) $
-            eventer $ publishDiagnosticsNotification fp newDiags
+        let uri = fromNormalizedUri $ filePathToUri' fp
+        when (newDiags /= oldDiags) $ do
+            let delay = if null newDiags then 0.1 else 0
+            registerEvent debouncer delay uri $ eventer $ publishDiagnosticsNotification uri newDiags
 
-publishDiagnosticsNotification :: NormalizedFilePath -> [Diagnostic] -> LSP.FromServerMessage
-publishDiagnosticsNotification fp diags =
+publishDiagnosticsNotification :: Uri -> [Diagnostic] -> LSP.FromServerMessage
+publishDiagnosticsNotification uri diags =
     LSP.NotPublishDiagnostics $
     LSP.NotificationMessage "2.0" LSP.TextDocumentPublishDiagnostics $
-    LSP.PublishDiagnosticsParams (fromNormalizedUri $ filePathToUri' fp) (List diags)
+    LSP.PublishDiagnosticsParams uri (List diags)
 
 newtype Priority = Priority Double
 
