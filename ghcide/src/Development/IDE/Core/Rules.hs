@@ -12,6 +12,9 @@
 module Development.IDE.Core.Rules(
     IdeState, GetDependencies(..), GetParsedModule(..), TransitiveDependencies(..),
     Priority(..),
+    priorityTypeCheck,
+    priorityGenerateCore,
+    priorityFilesOfInterest,
     runAction, useE, usesE,
     toIdeResult, defineNoFile,
     mainRule,
@@ -117,14 +120,14 @@ getParsedModule file = use GetParsedModule file
 -- Rules
 -- These typically go from key to value and are oracles.
 
--- TODO (MK) This should be independent of DAML or move out of hie-core.
--- | We build artefacts based on the following high-to-low priority order.
-data Priority
-    = PriorityTypeCheck
-    | PriorityGenerateDalf
-    | PriorityFilesOfInterest
-  deriving (Eq, Ord, Show, Enum)
+priorityTypeCheck :: Priority
+priorityTypeCheck = Priority 0
 
+priorityGenerateCore :: Priority
+priorityGenerateCore = Priority (-1)
+
+priorityFilesOfInterest :: Priority
+priorityFilesOfInterest = Priority (-2)
 
 getParsedModuleRule :: Rules ()
 getParsedModuleRule =
@@ -240,7 +243,7 @@ typeCheckRule =
         pm <- use_ GetParsedModule file
         deps <- use_ GetDependencies file
         tms <- uses_ TypeCheck (transitiveModuleDeps deps)
-        setPriority PriorityTypeCheck
+        setPriority priorityTypeCheck
         packageState <- use_ GhcSession ""
         opt <- getIdeOptions
         liftIO $ Compile.typecheckModule opt packageState tms pm
@@ -252,7 +255,7 @@ generateCoreRule =
         deps <- use_ GetDependencies file
         (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
         let pm = tm_parsed_module . Compile.tmrModule $ tm
-        setPriority PriorityGenerateDalf
+        setPriority priorityGenerateCore
         packageState <- use_ GhcSession ""
         liftIO $ Compile.compileModule pm packageState tms tm
 
