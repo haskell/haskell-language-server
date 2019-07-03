@@ -38,7 +38,8 @@ module Development.IDE.Core.Shake(
     sendEvent,
     ideLogger,
     actionLogger,
-    FileVersion(..)
+    FileVersion(..),
+    Priority(..)
     ) where
 
 import           Development.Shake
@@ -53,7 +54,7 @@ import           Data.Maybe
 import           Data.Either.Extra
 import           Data.List.Extra
 import qualified Data.Text as T
-import Development.IDE.Types.Logger
+import Development.IDE.Types.Logger hiding (Priority)
 import Language.Haskell.LSP.Diagnostics
 import qualified Data.SortedList as SL
 import           Development.IDE.Types.Diagnostics
@@ -399,9 +400,10 @@ publishDiagnosticsNotification fp diags =
     LSP.NotificationMessage "2.0" LSP.TextDocumentPublishDiagnostics $
     LSP.PublishDiagnosticsParams (fromNormalizedUri $ filePathToUri' fp) (List diags)
 
-setPriority :: (Enum a) => a -> Action ()
-setPriority p =
-    deprioritize (fromIntegral . negate $ fromEnum p)
+newtype Priority = Priority Double
+
+setPriority :: Priority -> Action ()
+setPriority (Priority p) = deprioritize p
 
 sendEvent :: LSP.FromServerMessage -> Action ()
 sendEvent e = do
