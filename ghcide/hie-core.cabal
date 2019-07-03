@@ -88,6 +88,7 @@ library
         Development.IDE.Types.Logger
         Development.IDE.Types.Options
     other-modules:
+        Development.IDE.Core.Debouncer
         Development.IDE.Core.Compile
         Development.IDE.GHC.Compat
         Development.IDE.GHC.CPP
