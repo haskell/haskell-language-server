@@ -1,0 +1,18 @@
+:set -Wunused-binds -Wunused-imports -Worphans -Wunused-matches -Wincomplete-patterns
+
+:set -XBangPatterns
+:set -XDeriveGeneric
+:set -XGeneralizedNewtypeDeriving
+:set -XLambdaCase
+:set -XNamedFieldPuns
+:set -XRecordWildCards
+:set -XScopedTypeVariables
+:set -XStandaloneDeriving
+:set -XTupleSections
+:set -XTypeApplications
+:set -XViewPatterns
+
+:set -package=ghc
+:set -DGHC_STABLE
+:set -isrc -iexe
+:load Main
