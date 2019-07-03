@@ -73,7 +73,7 @@ import           Data.Time
 import           GHC.Generics
 import           System.IO.Unsafe
 import           Numeric.Extra
-
+import Language.Haskell.LSP.Types
 
 
 -- information we stash inside the shakeExtra field
@@ -444,14 +444,13 @@ getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.
 
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
-setStageDiagnostics ::
-  NormalizedFilePath ->
-  Maybe Int ->
-  -- ^ the time that the file these diagnostics originate from was last edited
-  T.Text ->
-  [LSP.Diagnostic] ->
-  DiagnosticStore ->
-  DiagnosticStore
+setStageDiagnostics
+    :: NormalizedFilePath
+    -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
+    -> T.Text
+    -> [LSP.Diagnostic]
+    -> DiagnosticStore
+    -> DiagnosticStore
 setStageDiagnostics fp timeM stage diags ds  =
     updateDiagnostics ds uri timeM diagsBySource
     where

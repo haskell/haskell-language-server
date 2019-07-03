@@ -285,10 +285,10 @@ getModSummaryFromBuffer fp contents dflags parsed = do
     { ms_mod          = mkModule (fsToUnitId unitId) modName
     , ms_location     = modLoc
     , ms_hs_date      = error "Rules should not depend on ms_hs_date"
-    -- ^ When we are working with a virtual file we do not have a file date.
-    -- To avoid silent issues where something is not processed because the date
-    -- has not changed, we make sure that things blow up if they depend on the
-    -- date.
+        -- When we are working with a virtual file we do not have a file date.
+        -- To avoid silent issues where something is not processed because the date
+        -- has not changed, we make sure that things blow up if they depend on the
+        -- date.
     , ms_textual_imps = imports
     , ms_hspp_file    = fp
     , ms_hspp_opts    = dflags
