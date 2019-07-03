@@ -184,11 +184,7 @@ moduleImportPaths :: GHC.ParsedModule -> Maybe FilePath
 moduleImportPaths pm
   | rootModDir == "." = Just rootPathDir
   | otherwise =
-    -- TODO (MK) stripSuffix (normalise rootModDir) (normalise rootPathDir)
-    -- would be a better choice but at the moment we do not consistently
-    -- normalize file paths in the Shake graph so we can end up with the
-    -- same module being represented twice in the Shake graph.
-    Just $ dropTrailingPathSeparator $ dropEnd (length rootModDir) rootPathDir
+    dropTrailingPathSeparator <$> stripSuffix (normalise rootModDir) (normalise rootPathDir)
   where
     ms   = GHC.pm_mod_summary pm
     file = GHC.ms_hspp_file ms
