@@ -33,7 +33,6 @@ instance Show Module where
     show = moduleNameString . moduleName
 
 instance Show (GenLocated SrcSpan ModuleName) where show = prettyPrint
-instance Show Name where show = prettyPrint
 
 instance NFData (GenLocated SrcSpan ModuleName) where
     rnf = rwhnf
