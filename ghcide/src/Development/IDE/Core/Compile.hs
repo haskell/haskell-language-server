@@ -16,10 +16,11 @@ module Development.IDE.Core.Compile
   , addRelativeImport
   ) where
 
-import           Development.IDE.GHC.Warnings
-import           Development.IDE.GHC.CPP
-import           Development.IDE.Types.Diagnostics
-import           Development.IDE.GHC.Error
+import Development.IDE.Core.RuleTypes
+import Development.IDE.GHC.CPP
+import Development.IDE.GHC.Error
+import Development.IDE.GHC.Warnings
+import Development.IDE.Types.Diagnostics
 import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.Compat
@@ -42,7 +43,6 @@ import           StringBuffer                   as SB
 import           TidyPgm
 import qualified GHC.LanguageExtensions as LangExt
 
-import Control.DeepSeq
 import Control.Monad.Extra
 import Control.Monad.Except
 import Control.Monad.Trans.Except
@@ -56,20 +56,6 @@ import           System.FilePath
 import           System.Directory
 import System.IO.Extra
 import Data.Char
-
-
--- | Contains the typechecked module and the OrigNameCache entry for
--- that module.
-data TcModuleResult = TcModuleResult
-    { tmrModule     :: TypecheckedModule
-    , tmrModInfo    :: HomeModInfo
-    }
-instance Show TcModuleResult where
-    show = show . pm_mod_summary . tm_parsed_module . tmrModule
-
-instance NFData TcModuleResult where
-    rnf = rwhnf
-
 
 -- | Given a string buffer, return a pre-processed @ParsedModule@.
 parseModule
