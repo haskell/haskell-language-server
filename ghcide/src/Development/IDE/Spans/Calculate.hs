@@ -167,9 +167,11 @@ toSpanInfo :: (SpanSource, SrcSpan, Maybe Type) -> Maybe SpanInfo
 toSpanInfo (name,mspan,typ) =
   case mspan of
     RealSrcSpan spn ->
-      Just (SpanInfo (srcSpanStartLine spn)
+      -- GHC’s line and column numbers are 1-based while LSP’s line and column
+      -- numbers are 0-based.
+      Just (SpanInfo (srcSpanStartLine spn - 1)
                      (srcSpanStartCol spn - 1)
-                     (srcSpanEndLine spn)
+                     (srcSpanEndLine spn - 1)
                      (srcSpanEndCol spn - 1)
                      typ
                      name)

@@ -21,13 +21,13 @@ import OccName
 -- unboxed but Haddock doesn't show that.
 data SpanInfo =
   SpanInfo {spaninfoStartLine :: {-# UNPACK #-} !Int
-            -- ^ Start line of the span.
+            -- ^ Start line of the span, zero-based.
            ,spaninfoStartCol :: {-# UNPACK #-} !Int
-            -- ^ Start column of the span.
+            -- ^ Start column of the span, zero-based.
            ,spaninfoEndLine :: {-# UNPACK #-} !Int
-            -- ^ End line of the span (absolute).
+            -- ^ End line of the span (absolute), zero-based.
            ,spaninfoEndCol :: {-# UNPACK #-} !Int
-            -- ^ End column of the span (absolute).
+            -- ^ End column of the span (absolute), zero-based.
            ,spaninfoType :: !(Maybe Type)
             -- ^ A pretty-printed representation fo the type.
            ,spaninfoSource :: !SpanSource
