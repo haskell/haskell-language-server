@@ -12,7 +12,6 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
-import           Development.IDE.Core.Compile             (TcModuleResult)
 import           Development.IDE.Import.FindImports         (Import(..))
 import           Development.IDE.Import.DependencyInformation
 import           Data.Hashable
@@ -21,6 +20,7 @@ import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)
 
 import           GHC
+import HscTypes (HomeModInfo)
 import Development.IDE.GHC.Compat
 
 import           Development.IDE.Spans.Type
@@ -41,6 +41,18 @@ type instance RuleResult GetDependencyInformation = DependencyInformation
 -- | Transitive module and pkg dependencies based on the information produced by GetDependencyInformation.
 -- This rule is also responsible for calling ReportImportCycles for each file in the transitive closure.
 type instance RuleResult GetDependencies = TransitiveDependencies
+
+-- | Contains the typechecked module and the OrigNameCache entry for
+-- that module.
+data TcModuleResult = TcModuleResult
+    { tmrModule     :: TypecheckedModule
+    , tmrModInfo    :: HomeModInfo
+    }
+instance Show TcModuleResult where
+    show = show . pm_mod_summary . tm_parsed_module . tmrModule
+
+instance NFData TcModuleResult where
+    rnf = rwhnf
 
 -- | The type checked version of this file, requires TypeCheck+
 type instance RuleResult TypeCheck = TcModuleResult
