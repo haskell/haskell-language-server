@@ -51,6 +51,7 @@ import qualified Data.Map as Map
 import qualified Data.ByteString.Char8 as BS
 import           Data.Dynamic
 import           Data.Maybe
+import Data.Map.Strict (Map)
 import           Data.Either.Extra
 import           Data.List.Extra
 import qualified Data.Text as T
@@ -80,11 +81,14 @@ import Language.Haskell.LSP.Types
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
     {eventer :: LSP.FromServerMessage -> IO ()
-    ,debouncer :: Debouncer Uri
+    ,debouncer :: Debouncer NormalizedUri
     ,logger :: Logger
     ,globals :: Var (HMap.HashMap TypeRep Dynamic)
     ,state :: Var Values
     ,diagnostics :: Var DiagnosticStore
+    ,publishedDiagnostics :: Var (Map NormalizedUri [Diagnostic])
+    -- ^ This represents the set of diagnostics that we have published.
+    -- Due to debouncing not every change might get published.
     }
 
 getShakeExtras :: Action ShakeExtras
@@ -224,6 +228,7 @@ shakeOpen eventer logger opts rules = do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
         diagnostics <- newVar mempty
+        publishedDiagnostics <- newVar mempty
         debouncer <- newDebouncer
         pure ShakeExtras{..}
     (shakeDb, shakeClose) <- shakeOpenDatabase opts{shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts} rules
@@ -382,22 +387,25 @@ updateFileDiagnostics ::
   -> ShakeExtras
   -> [Diagnostic] -- ^ current results
   -> Action ()
-updateFileDiagnostics fp k ShakeExtras{diagnostics, state, debouncer, eventer} current = liftIO $ do
+updateFileDiagnostics fp k ShakeExtras{diagnostics, publishedDiagnostics, state, debouncer, eventer} current = liftIO $ do
     modTime <- join <$> getValues state GetModificationTime fp
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        (newDiags, oldDiags) <- modifyVar diagnostics $ \old -> do
-            let oldDiags = getFileDiagnostics fp old
+        newDiags <- modifyVar diagnostics $ \old -> do
             let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) (T.pack $ show k) current old
             let newDiags = getFileDiagnostics fp newDiagsStore
-            pure (newDiagsStore, (newDiags, oldDiags))
-        let uri = fromNormalizedUri $ filePathToUri' fp
-        when (newDiags /= oldDiags) $ do
-            let delay = if null newDiags then 0.1 else 0
-            registerEvent debouncer delay uri $ eventer $ publishDiagnosticsNotification uri newDiags
+            pure (newDiagsStore, newDiags)
+        let uri = filePathToUri' fp
+        let delay = if null newDiags then 0.1 else 0
+        registerEvent debouncer delay uri $ do
+             mask_ $ modifyVar_ publishedDiagnostics $ \published -> do
+                 let lastPublish = Map.findWithDefault [] uri published
+                 when (lastPublish /= newDiags) $
+                     eventer $ publishDiagnosticsNotification (fromNormalizedUri uri) newDiags
+                 pure (Map.insert uri newDiags published)
 
 publishDiagnosticsNotification :: Uri -> [Diagnostic] -> LSP.FromServerMessage
 publishDiagnosticsNotification uri diags =
