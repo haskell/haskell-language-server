@@ -18,25 +18,24 @@ import Development.IDE.Types.Logger
 import Development.IDE.Core.Service
 import Development.IDE.Types.Location
 
+import Control.Monad.Extra
 import qualified Data.Set                                  as S
 
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
 
 
-whenUriFile :: IdeState -> Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile ide uri act = case LSP.uriToFilePath uri of
-    Just file -> act $ toNormalizedFilePath file
-    Nothing -> logWarning (ideLogger ide) $ "Unknown scheme in URI: " <> getUri uri
+whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
+whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath
 
 setHandlersNotifications :: PartialHandlers
 setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
     {LSP.didOpenTextDocumentNotificationHandler = withNotification (LSP.didOpenTextDocumentNotificationHandler x) $
         \_ ide (DidOpenTextDocumentParams TextDocumentItem{_uri}) -> do
             setSomethingModified ide
-            whenUriFile ide _uri $ \file ->
+            whenUriFile _uri $ \file -> do
                 modifyFilesOfInterest ide (S.insert file)
-            logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
+                logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
     ,LSP.didChangeTextDocumentNotificationHandler = withNotification (LSP.didChangeTextDocumentNotificationHandler x) $
         \_ ide (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> do
@@ -51,7 +50,7 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
     ,LSP.didCloseTextDocumentNotificationHandler = withNotification (LSP.didCloseTextDocumentNotificationHandler x) $
         \_ ide (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> do
             setSomethingModified ide
-            whenUriFile ide _uri $ \file ->
+            whenUriFile _uri $ \file -> do
                 modifyFilesOfInterest ide (S.delete file)
-            logInfo (ideLogger ide) $ "Closed text document: " <> getUri _uri
+                logInfo (ideLogger ide) $ "Closed text document: " <> getUri _uri
     }
