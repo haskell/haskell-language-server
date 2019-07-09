@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE ExistentialQuantification  #-}
 
--- WARNING: A copy of DA.Service.Daml.LanguageServer, try to keep them in sync
+-- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
 module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
