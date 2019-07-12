@@ -15,7 +15,7 @@ module Development.IDE.Core.Rules(
     priorityTypeCheck,
     priorityGenerateCore,
     priorityFilesOfInterest,
-    runAction, useE, usesE,
+    runAction, useE, useNoFileE, usesE,
     toIdeResult, defineNoFile,
     mainRule,
     getGhcCore,
@@ -68,6 +68,9 @@ toIdeResult = either (, Nothing) (([],) . Just)
 useE :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
 useE k = MaybeT . use k
 
+useNoFileE :: IdeRule k v => k -> MaybeT Action v
+useNoFileE k = useE k ""
+
 usesE :: IdeRule k v => k -> [NormalizedFilePath] -> MaybeT Action [v]
 usesE k = MaybeT . fmap sequence . uses k
 
@@ -108,9 +111,9 @@ getAtPoint file pos = fmap join $ runMaybeT $ do
 getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
 getDefinition file pos = fmap join $ runMaybeT $ do
     spans <- useE GetSpanInfo file
-    pkgState <- useE GhcSession ""
+    pkgState <- useNoFileE GhcSession
     opts <- lift getIdeOptions
-    let getHieFile x = use (GetHieFile x) ""
+    let getHieFile x = useNoFile (GetHieFile x)
     lift $ AtPoint.gotoDefinition getHieFile opts pkgState spans pos
 
 -- | Parse the contents of a daml file.
@@ -135,7 +138,7 @@ getParsedModuleRule :: Rules ()
 getParsedModuleRule =
     define $ \GetParsedModule file -> do
         (_, contents) <- getFileContents file
-        packageState <- use_ GhcSession ""
+        packageState <- useNoFile_ GhcSession
         opt <- getIdeOptions
         liftIO $ Compile.parseModule opt packageState (fromNormalizedFilePath file) contents
 
@@ -145,7 +148,7 @@ getLocatedImportsRule =
         pm <- use_ GetParsedModule file
         let ms = pm_mod_summary pm
         let imports = ms_textual_imps ms
-        env <- use_ GhcSession ""
+        env <- useNoFile_ GhcSession
         let dflags = Compile.addRelativeImport pm $ hsc_dflags env
         opt <- getIdeOptions
         xs <- forM imports $ \(mbPkgName, modName) ->
@@ -167,7 +170,7 @@ rawDependencyInformation f = go (Set.singleton f) Map.empty Map.empty
                   let modGraph' = Map.insert f (Left ModuleParseError) modGraph
                   in go fs modGraph' pkgs
                 Just imports -> do
-                  packageState <- lift $ use_ GhcSession ""
+                  packageState <- lift $ useNoFile_ GhcSession
                   modOrPkgImports <- forM imports $ \imp -> do
                     case imp of
                       (_modName, Just (PackageImport pkg)) -> do
@@ -233,7 +236,7 @@ getSpanInfoRule =
     define $ \GetSpanInfo file -> do
         tc <- use_ TypeCheck file
         imports <- use_ GetLocatedImports file
-        packageState <- use_ GhcSession ""
+        packageState <- useNoFile_ GhcSession
         x <- liftIO $ Compile.getSrcSpanInfos packageState (fileImports imports) tc
         return ([], Just x)
 
@@ -245,7 +248,7 @@ typeCheckRule =
         deps <- use_ GetDependencies file
         tms <- uses_ TypeCheck (transitiveModuleDeps deps)
         setPriority priorityTypeCheck
-        packageState <- use_ GhcSession ""
+        packageState <- useNoFile_ GhcSession
         opt <- getIdeOptions
         liftIO $ Compile.typecheckModule opt packageState tms pm
 
@@ -256,7 +259,7 @@ generateCoreRule =
         deps <- use_ GetDependencies file
         (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
         setPriority priorityGenerateCore
-        packageState <- use_ GhcSession ""
+        packageState <- useNoFile_ GhcSession
         liftIO $ Compile.compileModule packageState tms tm
 
 loadGhcSession :: Rules ()

@@ -28,8 +28,8 @@ module Development.IDE.Core.Shake(
     shakeRun,
     shakeProfile,
     useStale,
-    use, uses,
-    use_, uses_,
+    use, useNoFile, uses,
+    use_, useNoFile_, uses_,
     define, defineEarlyCutoff,
     getDiagnostics, unsafeClearDiagnostics,
     IsIdeGlobal, addIdeGlobal, getIdeGlobalState, getIdeGlobalAction,
@@ -335,8 +335,14 @@ use :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe v)
 use key file = head <$> uses key [file]
 
+useNoFile :: IdeRule k v => k -> Action (Maybe v)
+useNoFile key = use key ""
+
 use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
 use_ key file = head <$> uses_ key [file]
+
+useNoFile_ :: IdeRule k v => k -> Action v
+useNoFile_ key = use_ key ""
 
 uses_ :: IdeRule k v => k -> [NormalizedFilePath] -> Action [v]
 uses_ key files = do
