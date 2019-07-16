@@ -14,10 +14,12 @@ module Development.IDE.GHC.Util(
     fakeDynFlags,
     prettyPrint,
     runGhcEnv,
-    textToStringBuffer
+    textToStringBuffer,
+    moduleImportPaths
     ) where
 
 import Config
+import Data.List.Extra
 import Fingerprint
 import GHC
 import GhcMonad
@@ -28,6 +30,7 @@ import FileCleanup
 import Platform
 import qualified Data.Text as T
 import StringBuffer
+import System.FilePath
 
 
 ----------------------------------------------------------------------
@@ -90,3 +93,15 @@ fakeDynFlags = defaultDynFlags settings ([], [])
           { pc_DYNAMIC_BY_DEFAULT=False
           , pc_WORD_SIZE=8
           }
+
+moduleImportPaths :: GHC.ParsedModule -> Maybe FilePath
+moduleImportPaths pm
+  | rootModDir == "." = Just rootPathDir
+  | otherwise =
+    dropTrailingPathSeparator <$> stripSuffix (normalise rootModDir) (normalise rootPathDir)
+  where
+    ms   = GHC.pm_mod_summary pm
+    file = GHC.ms_hspp_file ms
+    mod'  = GHC.ms_mod ms
+    rootPathDir  = takeDirectory file
+    rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
