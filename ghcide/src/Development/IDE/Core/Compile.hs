@@ -137,19 +137,6 @@ addRelativeImport :: ParsedModule -> DynFlags -> DynFlags
 addRelativeImport modu dflags = dflags
     {importPaths = nubOrd $ maybeToList (moduleImportPaths modu) ++ importPaths dflags}
 
-moduleImportPaths :: GHC.ParsedModule -> Maybe FilePath
-moduleImportPaths pm
-  | rootModDir == "." = Just rootPathDir
-  | otherwise =
-    dropTrailingPathSeparator <$> stripSuffix (normalise rootModDir) (normalise rootPathDir)
-  where
-    ms   = GHC.pm_mod_summary pm
-    file = GHC.ms_hspp_file ms
-    mod'  = GHC.ms_mod ms
-    rootPathDir  = takeDirectory file
-    rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
-
-
 mkTcModuleResult
     :: GhcMonad m
     => InterfaceDirectory
