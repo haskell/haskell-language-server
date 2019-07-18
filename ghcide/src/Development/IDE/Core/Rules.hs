@@ -34,7 +34,7 @@ import qualified Development.IDE.Spans.Calculate as Compile
 import Development.IDE.Import.DependencyInformation
 import Development.IDE.Import.FindImports
 import           Development.IDE.Core.FileStore
-import           Development.IDE.Types.Diagnostics as Base
+import           Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Data.Bifunctor
 import Data.Either.Extra
