@@ -28,9 +28,9 @@ module Development.IDE.Core.Rules(
 
 import           Control.Monad.Except
 import Control.Monad.Trans.Maybe
-import qualified Development.IDE.Core.Compile             as Compile
-import qualified Development.IDE.Types.Options as Compile
-import qualified Development.IDE.Spans.Calculate as Compile
+import Development.IDE.Core.Compile
+import Development.IDE.Types.Options
+import Development.IDE.Spans.Calculate
 import Development.IDE.Import.DependencyInformation
 import Development.IDE.Import.FindImports
 import           Development.IDE.Core.FileStore
@@ -47,7 +47,7 @@ import           Development.IDE.GHC.Error
 import           Development.Shake                        hiding (Diagnostic, Env, newCache)
 import Development.IDE.Core.RuleTypes
 
-import           GHC
+import           GHC hiding (parseModule, typecheckModule)
 import Development.IDE.GHC.Compat
 import           UniqSupply
 import NameCache
@@ -105,7 +105,7 @@ getAtPoint file pos = fmap join $ runMaybeT $ do
   files <- transitiveModuleDeps <$> useE GetDependencies file
   tms   <- usesE TypeCheck (file : files)
   spans <- useE GetSpanInfo file
-  return $ AtPoint.atPoint opts (map Compile.tmrModule tms) spans pos
+  return $ AtPoint.atPoint opts (map tmrModule tms) spans pos
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
@@ -140,7 +140,7 @@ getParsedModuleRule =
         (_, contents) <- getFileContents file
         packageState <- useNoFile_ GhcSession
         opt <- getIdeOptions
-        liftIO $ Compile.parseModule opt packageState (fromNormalizedFilePath file) contents
+        liftIO $ parseModule opt packageState (fromNormalizedFilePath file) contents
 
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
@@ -149,10 +149,10 @@ getLocatedImportsRule =
         let ms = pm_mod_summary pm
         let imports = ms_textual_imps ms
         env <- useNoFile_ GhcSession
-        let dflags = Compile.addRelativeImport pm $ hsc_dflags env
+        let dflags = addRelativeImport pm $ hsc_dflags env
         opt <- getIdeOptions
         xs <- forM imports $ \(mbPkgName, modName) ->
-            (modName, ) <$> locateModule dflags (Compile.optExtensions opt) getFileExists modName mbPkgName
+            (modName, ) <$> locateModule dflags (optExtensions opt) getFileExists modName mbPkgName
         return (concat $ lefts $ map snd xs, Just $ map (second eitherToMaybe) xs)
 
 
@@ -174,7 +174,7 @@ rawDependencyInformation f = go (Set.singleton f) Map.empty Map.empty
                   modOrPkgImports <- forM imports $ \imp -> do
                     case imp of
                       (_modName, Just (PackageImport pkg)) -> do
-                          pkgs <- ExceptT $ liftIO $ Compile.computePackageDeps packageState pkg
+                          pkgs <- ExceptT $ liftIO $ computePackageDeps packageState pkg
                           pure $ Right $ pkg:pkgs
                       (modName, Just (FileImport absFile)) -> pure $ Left (modName, Just absFile)
                       (modName, Nothing) -> pure $ Left (modName, Nothing)
@@ -237,7 +237,7 @@ getSpanInfoRule =
         tc <- use_ TypeCheck file
         imports <- use_ GetLocatedImports file
         packageState <- useNoFile_ GhcSession
-        x <- liftIO $ Compile.getSrcSpanInfos packageState (fileImports imports) tc
+        x <- liftIO $ getSrcSpanInfos packageState (fileImports imports) tc
         return ([], Just x)
 
 -- Typechecks a module.
@@ -250,7 +250,7 @@ typeCheckRule =
         setPriority priorityTypeCheck
         packageState <- useNoFile_ GhcSession
         opt <- getIdeOptions
-        liftIO $ Compile.typecheckModule opt packageState tms pm
+        liftIO $ typecheckModule opt packageState tms pm
 
 
 generateCoreRule :: Rules ()
@@ -260,13 +260,13 @@ generateCoreRule =
         (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
         setPriority priorityGenerateCore
         packageState <- useNoFile_ GhcSession
-        liftIO $ Compile.compileModule packageState tms tm
+        liftIO $ compileModule packageState tms tm
 
 loadGhcSession :: Rules ()
 loadGhcSession =
     defineNoFile $ \GhcSession -> do
         opts <- getIdeOptions
-        Compile.optGhcSession opts
+        optGhcSession opts
 
 
 getHieFileRule :: Rules ()
