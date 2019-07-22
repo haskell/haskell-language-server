@@ -19,15 +19,12 @@
 -- * The 'Values' type stores a map of keys to values. These values are
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
---   Additionally, Values can be used in an inconsistent way, for example
---   useStale.
 module Development.IDE.Core.Shake(
     IdeState,
     IdeRule, IdeResult, GetModificationTime(..),
     shakeOpen, shakeShut,
     shakeRun,
     shakeProfile,
-    useStale,
     use, useNoFile, uses,
     use_, useNoFile_, uses_,
     define, defineEarlyCutoff,
@@ -126,8 +123,8 @@ getIdeGlobalState :: forall a . IsIdeGlobal a => IdeState -> IO a
 getIdeGlobalState = getIdeGlobalExtras . shakeExtras
 
 
--- | The state of the all values - nested so you can easily find all errors at a given file.
-type Values = HMap.HashMap (NormalizedFilePath, Key) (Maybe Dynamic)
+-- | The state of the all values.
+type Values = HMap.HashMap (NormalizedFilePath, Key) (Value Dynamic)
 
 -- | Key type
 data Key = forall k . (Typeable k, Hashable k, Eq k, Show k) => Key k
@@ -153,6 +150,25 @@ instance Hashable Key where
 --   A rule on a file should only return diagnostics for that given file. It should
 --   not propagate diagnostic errors through multiple phases.
 type IdeResult v = ([FileDiagnostic], Maybe v)
+
+data Value v
+    = Succeeded v
+    | Failed
+    deriving (Functor, Generic, Show)
+
+instance NFData v => NFData (Value v)
+
+-- | Convert a Value to a Maybe. This will only return `Just` for
+-- up2date results not for stale values.
+valueToMaybe :: Value v -> Maybe v
+valueToMaybe (Succeeded v) = Just v
+valueToMaybe Failed = Nothing
+
+-- | Convert a Value to a Maybe. A `Just` will be treated as a
+-- succesful run rather than a stale result
+maybeToValue :: Maybe v -> Value v
+maybeToValue (Just v) = Succeeded v
+maybeToValue Nothing = Failed
 
 type IdeRule k v =
   ( Shake.RuleResult k ~ v
@@ -203,15 +219,13 @@ setValues :: IdeRule k v
           => Var Values
           -> k
           -> NormalizedFilePath
-          -> Maybe v
+          -> Value v
           -> IO ()
 setValues state key file val = modifyVar_ state $
     pure . HMap.insert (file, Key key) (fmap toDyn val)
 
--- | The outer Maybe is Nothing if this function hasn't been computed before
---   the inner Maybe is Nothing if the result of the previous computation failed to produce
---   a value
-getValues :: forall k v. IdeRule k v => Var Values -> k -> NormalizedFilePath -> IO (Maybe (Maybe v))
+-- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
+getValues :: forall k v. IdeRule k v => Var Values -> k -> NormalizedFilePath -> IO (Maybe (Value v))
 getValues state key file = do
     vs <- readVar state
     return $ do
@@ -300,14 +314,6 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts = modifyVar shakeAbort $
     -- important: we send an async exception to the thread, then wait for it to die, before continuing
     return (do killThread thread; void $ waitBarrier bar, either throwIO return =<< waitBarrier bar)
 
--- | Use the last stale value, if it's ever been computed.
-useStale
-    :: IdeRule k v
-    => IdeState -> k -> NormalizedFilePath -> IO (Maybe v)
-useStale IdeState{shakeExtras=ShakeExtras{state}} k fp =
-    join <$> getValues state k fp
-
-
 getDiagnostics :: IdeState -> IO [FileDiagnostic]
 getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
     val <- readVar diagnostics
@@ -376,7 +382,7 @@ instance Show k => Show (Q k) where
 
 -- | Invariant: the 'v' must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
-data A v = A (Maybe v) (Maybe BS.ByteString)
+data A v = A (Value v) (Maybe BS.ByteString)
     deriving Show
 
 instance NFData (A v) where rnf (A v x) = v `seq` rnf x
@@ -389,7 +395,7 @@ type instance RuleResult (Q k) = A (RuleResult k)
 -- | Compute the value
 uses :: IdeRule k v
     => k -> [NormalizedFilePath] -> Action [Maybe v]
-uses key files = map (\(A value _) -> value) <$> apply (map (Q . (key,)) files)
+uses key files = map (\(A value _) -> valueToMaybe value) <$> apply (map (Q . (key,)) files)
 
 defineEarlyCutoff
     :: IdeRule k v
@@ -408,8 +414,9 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) old m
         Just res -> return res
         Nothing -> do
             (bs, (diags, res)) <- actionCatch
-                (do v <- op key file; liftIO $ evaluate $ force v) $
+                (do v <- op key file; liftIO $ evaluate $ force $ v) $
                 \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+            res <- pure $ maybeToValue res
 
             liftIO $ setValues state key file res
             updateFileDiagnostics file (Key key) extras $ map snd diags
@@ -431,7 +438,7 @@ updateFileDiagnostics ::
   -> [Diagnostic] -- ^ current results
   -> Action ()
 updateFileDiagnostics fp k ShakeExtras{diagnostics, publishedDiagnostics, state, debouncer, eventer} current = liftIO $ do
-    modTime <- join <$> getValues state GetModificationTime fp
+    modTime <- join . fmap valueToMaybe <$> getValues state GetModificationTime fp
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
