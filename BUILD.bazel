@@ -1,7 +1,12 @@
 # Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-load("//bazel_tools:haskell.bzl", "da_haskell_binary", "da_haskell_library")
+load(
+    "//bazel_tools:haskell.bzl",
+    "da_haskell_binary",
+    "da_haskell_library",
+    "da_haskell_test",
+)
 load("@os_info//:os_info.bzl", "is_windows")
 
 depends = [
@@ -109,4 +114,4 @@ da_haskell_binary(
     deps = [
         "hie-core-public",
     ],
-) if not is_windows else None  # Disable on Windows until ghc-paths is fixed upstream
+)

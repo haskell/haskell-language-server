@@ -1,0 +1,50 @@
+# Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+load(
+    "//bazel_tools:haskell.bzl",
+    "da_haskell_library",
+    "da_haskell_test",
+)
+
+da_haskell_library(
+    name = "hie-core-testing",
+    srcs = glob(["src/**/*.hs"]),
+    hazel_deps = [
+        "base",
+        "containers",
+        "haskell-lsp-types",
+        "lens",
+        "lsp-test",
+        "parser-combinators",
+        "tasty-hunit",
+        "text",
+    ],
+    src_strip_prefix = "src",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//compiler/hie-core",
+    ],
+)
+
+da_haskell_test(
+    name = "hie-core-tests",
+    srcs = glob(["exe/**/*.hs"]),
+    data = ["//compiler/hie-core:hie-core-exe"],
+    hazel_deps = [
+        "base",
+        "extra",
+        "filepath",
+        "haskell-lsp-types",
+        "lsp-test",
+        "tasty",
+        "tasty-hunit",
+        "text",
+    ],
+    src_strip_prefix = "exe",
+    deps = [
+        "//compiler/hie-core",
+        "//compiler/hie-core/test:hie-core-testing",
+        "//libs-haskell/bazel-runfiles",
+    ],
+)
