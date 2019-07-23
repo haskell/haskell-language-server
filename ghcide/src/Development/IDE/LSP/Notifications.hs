@@ -31,14 +31,16 @@ whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFileP
 setHandlersNotifications :: PartialHandlers
 setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
     {LSP.didOpenTextDocumentNotificationHandler = withNotification (LSP.didOpenTextDocumentNotificationHandler x) $
-        \_ ide (DidOpenTextDocumentParams TextDocumentItem{_uri}) -> do
+        \_ ide (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> do
+            updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
             setSomethingModified ide
             whenUriFile _uri $ \file -> do
                 modifyFilesOfInterest ide (S.insert file)
                 logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
     ,LSP.didChangeTextDocumentNotificationHandler = withNotification (LSP.didChangeTextDocumentNotificationHandler x) $
-        \_ ide (DidChangeTextDocumentParams VersionedTextDocumentIdentifier{_uri} _) -> do
+        \_ ide (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> do
+            updatePositionMapping ide identifier changes
             setSomethingModified ide
             logInfo (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
