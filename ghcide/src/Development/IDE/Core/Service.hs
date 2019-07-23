@@ -15,7 +15,8 @@ module Development.IDE.Core.Service(
     runActionSync,
     writeProfile,
     getDiagnostics, unsafeClearDiagnostics,
-    ideLogger
+    ideLogger,
+    updatePositionMapping,
     ) where
 
 import           Control.Concurrent.Extra
