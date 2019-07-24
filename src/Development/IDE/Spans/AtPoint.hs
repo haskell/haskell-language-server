@@ -1,7 +1,6 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE OverloadedStrings   #-}
 -- | Gives information about symbols at a given point in DAML files.
 -- These are all pure functions that should execute quickly.
 module Development.IDE.Spans.AtPoint (
