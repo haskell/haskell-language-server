@@ -4,7 +4,6 @@
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE OverloadedStrings          #-}
 
 -- | A Shake implementation of the compiler service.
 --
