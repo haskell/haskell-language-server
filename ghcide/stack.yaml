@@ -8,6 +8,8 @@ extra-deps:
   subdirs:
   - .
   - haskell-lsp-types
+- git: https://github.com/digital-asset/lsp-test.git
+  commit: 50c43452e19e494d71ccba1f7922d0b3b3fc69c3
 - git: https://github.com/mpickering/hie-bios.git
   commit: 8427e424a83c2f3d60bdd26c02478c00d2189a73
 nix:

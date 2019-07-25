@@ -1,21 +1,20 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Main (main) where
 
 import Control.Monad (void)
 import qualified Data.Text as T
 import Development.IDE.Test
+import Development.IDE.Test.Runfiles
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import System.Environment.Blank (setEnv)
-import System.FilePath
 import System.IO.Extra
 import Test.Tasty
 import Test.Tasty.HUnit
-
-import DA.Bazel.Runfiles
 
 
 main :: IO ()
@@ -60,8 +59,7 @@ testSession name = testCase name . run
 
 run :: Session a -> IO a
 run s = withTempDir $ \dir -> do
-  let hieCoreExePath = mainWorkspace </> exe "compiler/hie-core/hie-core-exe"
-  hieCoreExe <- locateRunfiles hieCoreExePath
+  hieCoreExe <- locateHieCoreExecutable
   let cmd = unwords [hieCoreExe, "--lsp", "--cwd", dir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
