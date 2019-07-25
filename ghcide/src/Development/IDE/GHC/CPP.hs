@@ -24,6 +24,9 @@ import Module
 import DynFlags
 import Panic
 import FileCleanup
+#ifndef GHC_STABLE
+import LlvmCodeGen (LlvmVersion (..))
+#endif
 
 import System.Directory
 import System.FilePath
@@ -130,7 +133,12 @@ getBackendDefs :: DynFlags -> IO [String]
 getBackendDefs dflags | hscTarget dflags == HscLlvm = do
     llvmVer <- figureLlvmVersion dflags
     return $ case llvmVer of
+#ifdef GHC_STABLE
                Just n -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format n ]
+#else
+               Just (LlvmVersion n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (n,0) ]
+               Just (LlvmVersionOld m n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,n) ]
+#endif
                _      -> []
   where
     format (major, minor)
