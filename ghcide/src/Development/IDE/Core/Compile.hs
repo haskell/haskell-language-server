@@ -52,7 +52,6 @@ import           Data.Maybe
 import           Data.Tuple.Extra
 import qualified Data.Map.Strict                          as Map
 import           System.FilePath
-import           System.Directory
 import System.IO.Extra
 import Data.Char
 
@@ -84,19 +83,18 @@ computePackageDeps env pkg = do
 
 -- | Typecheck a single module using the supplied dependencies and packages.
 typecheckModule
-    :: IdeOptions
-    -> HscEnv
+    :: HscEnv
     -> [TcModuleResult]
     -> ParsedModule
     -> IO ([FileDiagnostic], Maybe TcModuleResult)
-typecheckModule opt packageState deps pm =
+typecheckModule packageState deps pm =
     fmap (either (, Nothing) (second Just)) $
     runGhcEnv packageState $
         catchSrcErrors $ do
             setupEnv deps
             (warnings, tcm) <- withWarnings $ \tweak ->
                 GHC.typecheckModule pm{pm_mod_summary = tweak $ pm_mod_summary pm}
-            tcm2 <- mkTcModuleResult (optIfaceDir opt) tcm
+            tcm2 <- mkTcModuleResult tcm
             return (warnings, tcm2)
 
 -- | Compile a single type-checked module to a 'CoreModule' value, or
@@ -138,29 +136,15 @@ addRelativeImport modu dflags = dflags
 
 mkTcModuleResult
     :: GhcMonad m
-    => InterfaceDirectory
-    -> TypecheckedModule
+    => TypecheckedModule
     -> m TcModuleResult
-mkTcModuleResult (InterfaceDirectory mbIfaceDir) tcm = do
-    session   <- getSession
-    (iface,_) <- liftIO $ mkIfaceTc session Nothing Sf_None details tcGblEnv
-    liftIO $ whenJust mbIfaceDir $ \ifaceDir -> do
-        let path = ifaceDir </> file tcm
-        createDirectoryIfMissing True (takeDirectory path)
-        writeIfaceFile (hsc_dflags session) (replaceExtension path ".hi") iface
-        -- For now, we write .hie files whenever we write .hi files which roughly corresponds to
-        -- when we are building a package. It should be easily decoupable if that turns out to be
-        -- useful.
-        hieFile <- runHsc session $ mkHieFile (tcModSummary tcm) tcGblEnv (fromJust $ renamedSource tcm)
-        writeHieFile (replaceExtension path ".hie") hieFile
+mkTcModuleResult tcm = do
+    session <- getSession
+    (iface, _) <- liftIO $ mkIfaceTc session Nothing Sf_None details tcGblEnv
     let mod_info = HomeModInfo iface details Nothing
     return $ TcModuleResult tcm mod_info
   where
-    file = ms_hspp_file . tcModSummary
     (tcGblEnv, details) = tm_internals_ tcm
-
-tcModSummary :: TypecheckedModule -> ModSummary
-tcModSummary = pm_mod_summary . tm_parsed_module
 
 -- | Setup the environment that GHC needs according to our
 -- best understanding (!)
