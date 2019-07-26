@@ -7,7 +7,6 @@
 module Development.IDE.Types.Options
   ( IdeOptions(..)
   , IdePkgLocationOptions(..)
-  , InterfaceDirectory(..)
   , defaultIdeOptions
   ) where
 
@@ -16,16 +15,12 @@ import           GHC hiding (parseModule, typecheckModule)
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 
 
--- | If `Nothing` we do not write .hi files.
-newtype InterfaceDirectory = InterfaceDirectory (Maybe FilePath)
-
 data IdeOptions = IdeOptions
   { optPreprocessor :: GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource)
   , optGhcSession :: Action HscEnv
   -- ^ Setup a GHC session using a given package state. If a `ParsedModule` is supplied,
   -- the import path should be setup for that module.
   , optPkgLocationOpts :: IdePkgLocationOptions
-  , optIfaceDir :: InterfaceDirectory
   , optExtensions :: [String]
 
   , optThreads :: Int
@@ -37,7 +32,6 @@ data IdeOptions = IdeOptions
 defaultIdeOptions :: Action HscEnv -> IdeOptions
 defaultIdeOptions session = IdeOptions
     {optPreprocessor = (,) []
-    ,optIfaceDir = InterfaceDirectory Nothing
     ,optGhcSession = session
     ,optExtensions = ["hs"]
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
