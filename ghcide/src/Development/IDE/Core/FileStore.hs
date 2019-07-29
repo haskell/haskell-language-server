@@ -1,6 +1,6 @@
 -- Copyright (c) 2019 Digital Asset (Switzerland) GmbH and/or its affiliates. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Core.FileStore(
@@ -21,7 +21,6 @@ import Control.Concurrent.Extra
 import qualified Data.Map.Strict as Map
 import Data.Maybe
 import qualified Data.Text as T
-import           Data.Time.Clock
 import           Control.Monad.Extra
 import qualified System.Directory as Dir
 import           Development.Shake
@@ -35,7 +34,17 @@ import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import qualified Data.Rope.UTF16 as Rope
-import           Data.Time
+
+#ifdef mingw32_HOST_OS
+import Data.Time
+#else
+import Foreign.C.String
+import Foreign.C.Types
+import Foreign.Marshal (alloca)
+import Foreign.Ptr
+import Foreign.Storable
+import qualified System.Posix.Error as Posix
+#endif
 
 import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.VFS
@@ -102,24 +111,46 @@ getFileExistsRule vfs =
         return (Just $ if res then BS.singleton '1' else BS.empty, ([], Just res))
 
 
-showTimePrecise :: UTCTime -> String
-showTimePrecise UTCTime{..} = show (toModifiedJulianDay utctDay, diffTimeToPicoseconds utctDayTime)
-
 getModificationTimeRule :: VFSHandle -> Rules ()
 getModificationTimeRule vfs =
     defineEarlyCutoff $ \GetModificationTime file -> do
         let file' = fromNormalizedFilePath file
-        let wrap time = (Just $ BS.pack $ showTimePrecise time, ([], Just $ ModificationTime time))
+        let wrap time = (Just time, ([], Just $ ModificationTime time))
         alwaysRerun
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
         case mbVirtual of
             Just (VirtualFile ver _ _) -> pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
-            Nothing -> liftIO $ fmap wrap (Dir.getModificationTime file')
+            Nothing -> liftIO $ fmap wrap (getModTime file')
               `catch` \(e :: IOException) -> do
                 let err | isDoesNotExistError e = "File does not exist: " ++ file'
                         | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
                 return (Nothing, ([ideErrorText file $ T.pack err], Nothing))
+  where
+    -- Dir.getModificationTime is surprisingly slow since it performs
+    -- a ton of conversions. Since we do not actually care about
+    -- the format of the time, we can get away with something cheaper.
+    -- For now, we only try to do this on Unix systems where it seems to get the
+    -- time spent checking file modifications (which happens on every change)
+    -- from > 0.5s to ~0.15s.
+    -- We might also want to try speeding this up on Windows at some point.
+    getModTime :: FilePath -> IO BS.ByteString
+    getModTime f =
+#ifdef mingw32_HOST_OS
+        do time <- Dir.getModificationTime f
+           pure $! BS.pack $ show (toModifiedJulianDay $ utctDay time, diffTimeToPicoseconds $ utctDayTime time)
+#else
+        withCString f $ \f' ->
+        alloca $ \secPtr ->
+        alloca $ \nsecPtr -> do
+            Posix.throwErrnoPathIfMinus1Retry_ "getmodtime" f $ c_getModTime f' secPtr nsecPtr
+            sec <- peek secPtr
+            nsec <- peek nsecPtr
+            pure $! BS.pack $ show sec <> "." <> show nsec
 
+-- Sadly even unix’s getFileStatus + modificationTimeHiRes is still about twice as slow
+-- as doing the FFI call ourselves :(.
+foreign import ccall "getmodtime" c_getModTime :: CString -> Ptr CTime -> Ptr CLong -> IO Int
+#endif
 
 getFileContentsRule :: VFSHandle -> Rules ()
 getFileContentsRule vfs =

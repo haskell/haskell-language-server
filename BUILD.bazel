@@ -39,7 +39,7 @@ depends = [
     "transformers",
     "unordered-containers",
     "utf8-string",
-]
+] + ([] if is_windows else ["unix"])
 
 hidden = [
     "Development.IDE.Core.Compile",
@@ -69,7 +69,18 @@ da_haskell_library(
     hidden_modules = hidden,
     src_strip_prefix = "src",
     visibility = ["//visibility:public"],
+    deps = [] if is_windows else [":getmodtime"],
 )
+
+# Used in getModificationTimeRule in Development.IDE.Core.FileStore
+cc_library(
+    name = "getmodtime",
+    srcs = glob(["cbits/getmodtime.c"]),
+    copts = [
+        "-Wall",
+        "-Werror",
+    ],
+) if not is_windows else None
 
 da_haskell_library(
     name = "hie-core-public",
@@ -89,6 +100,7 @@ da_haskell_library(
     ],
     src_strip_prefix = "src",
     visibility = ["//visibility:public"],
+    deps = [] if is_windows else [":getmodtime"],
 )
 
 da_haskell_binary(
