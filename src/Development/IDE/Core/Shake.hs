@@ -582,7 +582,10 @@ instance NFData   GetModificationTime
 -- | Get the modification time of a file.
 type instance RuleResult GetModificationTime = FileVersion
 
-data FileVersion = VFSVersion Int | ModificationTime UTCTime
+-- | We store the modification time as a ByteString since we need
+-- a ByteString anyway for Shake and we do not care about how times
+-- are represented.
+data FileVersion = VFSVersion Int | ModificationTime BS.ByteString
     deriving (Show, Generic)
 
 instance NFData FileVersion
