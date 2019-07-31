@@ -54,6 +54,11 @@ library
         transformers,
         unordered-containers,
         utf8-string
+    if !os(windows)
+      build-depends:
+        unix
+      c-sources:
+        cbits/getmodtime.c
 
     cpp-options: -DGHC_STABLE
     default-extensions:
