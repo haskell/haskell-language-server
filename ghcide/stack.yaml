@@ -14,3 +14,4 @@ extra-deps:
   commit: 8427e424a83c2f3d60bdd26c02478c00d2189a73
 nix:
   packages: [zlib]
+allow-newer: true
