@@ -1,10 +1,12 @@
 :set -Wunused-binds -Wunused-imports -Worphans -Wunused-matches -Wincomplete-patterns
 
 :set -XBangPatterns
+:set -XDeriveFunctor
 :set -XDeriveGeneric
 :set -XGeneralizedNewtypeDeriving
 :set -XLambdaCase
 :set -XNamedFieldPuns
+:set -XOverloadedStrings
 :set -XRecordWildCards
 :set -XScopedTypeVariables
 :set -XStandaloneDeriving
@@ -13,6 +15,7 @@
 :set -XViewPatterns
 
 :set -package=ghc
+:set -hide-package=ghc-lib-parser
 :set -DGHC_STABLE
 :set -isrc -iexe
 :load Main
