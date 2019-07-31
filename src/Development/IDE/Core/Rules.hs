@@ -22,8 +22,8 @@ module Development.IDE.Core.Rules(
     getDefinition,
     getDependencies,
     getParsedModule,
-    getTcModuleResults,
-    fileFromParsedModule
+    fileFromParsedModule,
+    writeIfacesAndHie,
     ) where
 
 import           Control.Monad.Except
@@ -56,6 +56,9 @@ import HscTypes
 import qualified Development.IDE.Spans.AtPoint as AtPoint
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
+import System.Directory
+import System.FilePath
+import MkIface
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -120,15 +123,38 @@ getDefinition file pos = fmap join $ runMaybeT $ do
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
 getParsedModule file = use GetParsedModule file
 
--- | Get typechecked module results of a file and all it's transitive dependencies.
-getTcModuleResults :: NormalizedFilePath -> Action (Maybe ([TcModuleResult], HscEnv))
-getTcModuleResults file =
+-- | Write interface files and hie files to the location specified by the given options.
+writeIfacesAndHie ::
+       NormalizedFilePath -> NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
+writeIfacesAndHie ifDir main =
     runMaybeT $ do
-        files <- transitiveModuleDeps <$> useE GetDependencies file
-        tms <- usesE TypeCheck (file : files)
+        files <- transitiveModuleDeps <$> useE GetDependencies main
+        tcms <- usesE TypeCheck (main : files)
         session <- lift $ useNoFile_ GhcSession
-        pure (tms, session)
-
+        liftIO $ concat <$> mapM (writeTcm session) tcms
+  where
+    writeTcm session tcm =
+        do
+            let fp =
+                    fromNormalizedFilePath ifDir </>
+                    (ms_hspp_file $
+                     pm_mod_summary $ tm_parsed_module $ tmrModule tcm)
+            createDirectoryIfMissing True (takeDirectory fp)
+            let ifaceFp = replaceExtension fp ".hi"
+            let hieFp = replaceExtension fp ".hie"
+            writeIfaceFile
+                (hsc_dflags session)
+                ifaceFp
+                (hm_iface $ tmrModInfo tcm)
+            hieFile <-
+                liftIO $
+                runHsc session $
+                mkHieFile
+                    (pm_mod_summary $ tm_parsed_module $ tmrModule tcm)
+                    (fst $ tm_internals_ $ tmrModule tcm)
+                    (fromJust $ tm_renamed_source $ tmrModule tcm)
+            writeHieFile hieFp hieFile
+            pure [toNormalizedFilePath ifaceFp, toNormalizedFilePath hieFp]
 
 ------------------------------------------------------------
 -- Rules
