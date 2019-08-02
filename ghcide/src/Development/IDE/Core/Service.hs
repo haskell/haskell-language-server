@@ -50,8 +50,8 @@ initialise mainRule toDiags logger options vfs =
     shakeOpen
         toDiags
         logger
-        (setProfiling options $
-        shakeOptions { shakeThreads = optThreads options
+        (optShakeProfiling options)
+        (shakeOptions { shakeThreads = optThreads options
                      , shakeFiles   = "/dev/null"
                      }) $ do
             addIdeGlobal $ GlobalIdeOptions options
@@ -61,10 +61,6 @@ initialise mainRule toDiags logger options vfs =
 
 writeProfile :: IdeState -> FilePath -> IO ()
 writeProfile = shakeProfile
-
-setProfiling :: IdeOptions -> ShakeOptions -> ShakeOptions
-setProfiling opts shakeOpts =
-  maybe shakeOpts (\p -> shakeOpts { shakeReport = [p], shakeTimings = True }) (optShakeProfiling opts)
 
 -- | Shutdown the Compiler Service.
 shutdown :: IdeState -> IO ()
