@@ -219,17 +219,15 @@ data IdeState = IdeState
     ,shakeAbort :: Var (IO ()) -- close whoever was running last
     ,shakeClose :: IO ()
     ,shakeExtras :: ShakeExtras
+    ,shakeProfileDir :: Maybe FilePath
     }
-
-profileDir :: Maybe FilePath
-profileDir = Nothing -- set to Just the directory you want profile reports to appear in
 
 
 -- This is debugging code that generates a series of profiles, if the Boolean is true
-shakeRunDatabaseProfile :: ShakeDatabase -> [Action a] -> IO [a]
-shakeRunDatabaseProfile shakeDb acts = do
+shakeRunDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> [Action a] -> IO [a]
+shakeRunDatabaseProfile mbProfileDir shakeDb acts = do
         (time, (res,_)) <- duration $ shakeRunDatabase shakeDb acts
-        whenJust profileDir $ \dir -> do
+        whenJust mbProfileDir $ \dir -> do
             count <- modifyVar profileCounter $ \x -> let y = x+1 in return (y,y)
             let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) ++ "-" ++ showDP 2 time <.> "html"
             shakeProfileDatabase shakeDb $ dir </> file
@@ -264,10 +262,11 @@ getValues state key file = do
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
           -> Logger
+          -> Maybe FilePath
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen eventer logger opts rules = do
+shakeOpen eventer logger shakeProfileDir opts rules = do
     shakeExtras <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
@@ -336,7 +335,7 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts = modifyVar shakeAbort $
     logDebug logger $ T.pack $ "Starting shakeRun (aborting the previous one took " ++ showDuration stopTime ++ ")"
     bar <- newBarrier
     start <- offsetTime
-    thread <- forkFinally (shakeRunDatabaseProfile shakeDb acts) $ \res -> do
+    thread <- forkFinally (shakeRunDatabaseProfile shakeProfileDir shakeDb acts) $ \res -> do
         signalBarrier bar res
         runTime <- start
         let res' = case res of
