@@ -12,14 +12,16 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
-import           Development.IDE.Import.FindImports         (Import(..))
 import           Development.IDE.Import.DependencyInformation
+import Development.IDE.Types.Location
 import           Data.Hashable
 import           Data.Typeable
+import qualified Data.Set as S
 import           Development.Shake                        hiding (Env, newCache)
 import           GHC.Generics                             (Generic)
 
 import           GHC
+import Module (InstalledUnitId)
 import HscTypes (HomeModInfo)
 import Development.IDE.GHC.Compat
 
@@ -66,9 +68,9 @@ type instance RuleResult GenerateCore = CoreModule
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnv
 
--- | Resolve the imports in a module to the list of either external packages or absolute file paths
--- for modules in the same package.
-type instance RuleResult GetLocatedImports = [(Located ModuleName, Maybe Import)]
+-- | Resolve the imports in a module to the file path of a module
+-- in the same package or the package id of another package.
+type instance RuleResult GetLocatedImports = ([(Located ModuleName, Maybe NormalizedFilePath)], S.Set InstalledUnitId)
 
 -- | This rule is used to report import cycles. It depends on GetDependencyInformation.
 -- We cannot report the cycles directly from GetDependencyInformation since

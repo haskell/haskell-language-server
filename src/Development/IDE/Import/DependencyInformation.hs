@@ -13,9 +13,9 @@ module Development.IDE.Import.DependencyInformation
 
 import Control.DeepSeq
 import Data.Bifunctor
+import Data.List
 import Development.IDE.GHC.Orphans()
 import Data.Either
-import Data.Foldable
 import Data.Graph
 import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
@@ -113,20 +113,17 @@ instance Semigroup NodeResult where
 processDependencyInformation :: RawDependencyInformation -> DependencyInformation
 processDependencyInformation rawResults =
   DependencyInformation
-    { depErrorNodes = MS.mapMaybe errorNode resultGraph
+    { depErrorNodes = MS.fromList errorNodes
     , depModuleDeps = moduleDeps
     , depPkgDeps = pkgDependencies rawResults
     }
   where resultGraph = buildResultGraph rawResults
+        (errorNodes, successNodes) = partitionNodeResults $ MS.toList resultGraph
         successEdges :: [(NormalizedFilePath, NormalizedFilePath, [NormalizedFilePath])]
-        successEdges = map (\(k,ks) -> (k,k,ks)) $ MS.toList $
-          MS.map (map snd) $ MS.mapMaybe successNode resultGraph
+        successEdges =
+            map (\(file, imports) -> (file, file, map snd imports)) successNodes
         moduleDeps =
           MS.fromList $ map (\(_, v, vs) -> (v, Set.fromList vs)) successEdges
-        errorNode (ErrorNode errs) = Just errs
-        errorNode _ = Nothing
-        successNode (SuccessNode fs) = Just fs
-        successNode _ = Nothing
 
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
 -- 1. Mark each node that is part of an import cycle as an error node.
