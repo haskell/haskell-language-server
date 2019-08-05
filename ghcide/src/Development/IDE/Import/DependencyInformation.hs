@@ -3,6 +3,7 @@
 
 module Development.IDE.Import.DependencyInformation
   ( DependencyInformation(..)
+  , ModuleImports(..)
   , RawDependencyInformation(..)
   , NodeError(..)
   , ModuleParseError(..)
@@ -34,13 +35,22 @@ import Development.IDE.Types.Location
 import GHC
 import Module
 
--- | Unprocessed results that we get from following all imports recursively starting from a module.
-data RawDependencyInformation = RawDependencyInformation
-  { moduleDependencies :: Map NormalizedFilePath (Either ModuleParseError [(Located ModuleName, Maybe NormalizedFilePath)])
-  , pkgDependencies :: Map NormalizedFilePath (Set InstalledUnitId)
-  -- ^ Transitive dependencies on pkgs of this file, i.e. immidiate package dependencies and the
-  -- transitive package dependencies of those packages.
-  }
+-- | The imports for a given module.
+data ModuleImports = ModuleImports
+    { moduleImports :: ![(Located ModuleName, Maybe NormalizedFilePath)]
+    -- ^ Imports of a module in the current package and the file path of
+    -- that module on disk (if we found it)
+    , packageImports :: !(Set InstalledUnitId)
+    -- ^ Transitive package dependencies unioned for all imports.
+    }
+
+-- | Unprocessed results that we find by following imports recursively.
+newtype RawDependencyInformation = RawDependencyInformation
+    { getRawDeps :: Map NormalizedFilePath (Either ModuleParseError ModuleImports)
+    }
+
+pkgDependencies :: RawDependencyInformation -> Map NormalizedFilePath (Set InstalledUnitId)
+pkgDependencies (RawDependencyInformation m) = MS.map (either (const Set.empty) packageImports) m
 
 data DependencyInformation =
   DependencyInformation
@@ -144,13 +154,13 @@ buildResultGraph g = propagatedErrors
         cycleErrorsForFile cycle f =
           let entryPoints = mapMaybe (findImport f) cycle
           in map (\imp -> (f, ErrorNode (PartOfCycle imp cycle :| []))) entryPoints
-        otherErrors = MS.map otherErrorsForFile (moduleDependencies g)
-        otherErrorsForFile :: Either ModuleParseError [(Located ModuleName, Maybe NormalizedFilePath)] -> NodeResult
+        otherErrors = MS.map otherErrorsForFile (getRawDeps g)
+        otherErrorsForFile :: Either ModuleParseError ModuleImports -> NodeResult
         otherErrorsForFile (Left err) = ErrorNode (ParseError err :| [])
-        otherErrorsForFile (Right imports) =
+        otherErrorsForFile (Right ModuleImports{moduleImports}) =
           let toEither (imp, Nothing) = Left imp
               toEither (imp, Just path) = Right (imp, path)
-              (errs, imports') = partitionEithers (map toEither imports)
+              (errs, imports') = partitionEithers (map toEither moduleImports)
           in case nonEmpty errs of
             Nothing -> SuccessNode imports'
             Just errs' -> ErrorNode (NonEmpty.map FailedToLocateImport errs')
@@ -172,17 +182,17 @@ buildResultGraph g = propagatedErrors
                Just errs' -> ErrorNode (NonEmpty.map (ParentOfErrorNode . fst) errs')
         findImport :: NormalizedFilePath -> NormalizedFilePath -> Maybe (Located ModuleName)
         findImport file importedFile =
-          case moduleDependencies g MS.! file of
+          case getRawDeps g MS.! file of
             Left _ -> error "Tried to call findImport on a module with a parse error"
-            Right imports ->
-              fmap fst $ find (\(_, resolvedImp) -> resolvedImp == Just importedFile) imports
+            Right ModuleImports{moduleImports} ->
+              fmap fst $ find (\(_, resolvedImp) -> resolvedImp == Just importedFile) moduleImports
 
 graphEdges :: RawDependencyInformation -> [(NormalizedFilePath, NormalizedFilePath, [NormalizedFilePath])]
 graphEdges g =
-  map (\(k, ks) -> (k, k, ks)) $ MS.toList $ MS.map deps $ moduleDependencies g
-  where deps :: Either e [(i, Maybe NormalizedFilePath)] -> [NormalizedFilePath]
+  map (\(k, v) -> (k, k, deps v)) $ MS.toList $ getRawDeps g
+  where deps :: Either e ModuleImports -> [NormalizedFilePath]
         deps (Left _) = []
-        deps (Right imports) = mapMaybe snd imports
+        deps (Right ModuleImports{moduleImports}) = mapMaybe snd moduleImports
 
 partitionSCC :: [SCC a] -> ([a], [[a]])
 partitionSCC (CyclicSCC xs:rest) = second (xs:) $ partitionSCC rest
@@ -193,7 +203,7 @@ transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe Transitiv
 transitiveDeps DependencyInformation{..} f = do
   reachableVs <- Set.delete f . Set.fromList . map (fst3 . fromVertex) . reachable g <$> toVertex f
   let transitiveModuleDeps = filter (\v -> v `Set.member` reachableVs) $ map (fst3 . fromVertex) vs
-  let transitivePkgDeps = Set.toList $ foldMap (\f -> MS.findWithDefault Set.empty f depPkgDeps) (f : transitiveModuleDeps)
+  let transitivePkgDeps = Set.toList $ Set.unions $ map (\f -> MS.findWithDefault Set.empty f depPkgDeps) (f : transitiveModuleDeps)
   pure TransitiveDependencies {..}
   where (g, fromVertex, toVertex) = graphFromEdges (map (\(f, fs) -> (f, f, Set.toList fs)) $ MS.toList depModuleDeps)
         vs = topSort g
