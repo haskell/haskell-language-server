@@ -204,21 +204,20 @@ getLocatedImportsRule =
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
 rawDependencyInformation :: NormalizedFilePath -> ExceptT [FileDiagnostic] Action RawDependencyInformation
-rawDependencyInformation f = go (Set.singleton f) Map.empty Map.empty
-  where go fs !modGraph !pkgs =
-          case Set.minView fs of
-            Nothing -> pure (RawDependencyInformation modGraph pkgs)
-            Just (f, fs) -> do
-              importsOrErr <- lift $ use GetLocatedImports f
-              case importsOrErr of
-                Nothing ->
-                  let modGraph' = Map.insert f (Left ModuleParseError) modGraph
-                  in go fs modGraph' pkgs
-                Just (modImports, pkgImports) -> do
-                  let newFiles = Set.fromList (mapMaybe snd modImports) Set.\\ Map.keysSet modGraph
-                      modGraph' = Map.insert f (Right modImports) modGraph
-                      pkgs' = Map.insert f pkgImports pkgs
-                  go (fs `Set.union` newFiles) modGraph' pkgs'
+rawDependencyInformation f = go (Set.singleton f) Map.empty
+  where go fs !modGraph =
+            case Set.minView fs of
+                Nothing -> pure $ RawDependencyInformation modGraph
+                Just (f, fs) -> do
+                    importsOrErr <- lift $ use GetLocatedImports f
+                    case importsOrErr of
+                      Nothing ->
+                        let modGraph' = Map.insert f (Left ModuleParseError) modGraph
+                        in go fs modGraph'
+                      Just (modImports, pkgImports) -> do
+                        let newFiles = Set.fromList (mapMaybe snd modImports) Set.\\ Map.keysSet modGraph
+                            modGraph' = Map.insert f (Right $ ModuleImports modImports pkgImports) modGraph
+                        go (newFiles `Set.union` fs) modGraph'
 
 getDependencyInformationRule :: Rules ()
 getDependencyInformationRule =
