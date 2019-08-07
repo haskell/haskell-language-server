@@ -36,10 +36,13 @@ import Development.IDE.Import.FindImports
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
+import Data.Coerce
 import Data.Either.Extra
 import Data.Maybe
 import           Data.Foldable
-import qualified Data.Map.Strict                          as Map
+import qualified Data.IntMap.Strict as IntMap
+import qualified Data.IntSet as IntSet
+import Data.List
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
 import           Development.IDE.GHC.Error
@@ -203,40 +206,62 @@ getLocatedImportsRule =
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: NormalizedFilePath -> ExceptT [FileDiagnostic] Action RawDependencyInformation
-rawDependencyInformation f = go (Set.singleton f) Map.empty
-  where go fs !modGraph =
-            case Set.minView fs of
-                Nothing -> pure $ RawDependencyInformation modGraph
-                Just (f, fs) -> do
-                    importsOrErr <- lift $ use GetLocatedImports f
-                    case importsOrErr of
-                      Nothing ->
-                        let modGraph' = Map.insert f (Left ModuleParseError) modGraph
-                        in go fs modGraph'
-                      Just (modImports, pkgImports) -> do
-                        let newFiles = Set.fromList (mapMaybe snd modImports) Set.\\ Map.keysSet modGraph
-                            modGraph' = Map.insert f (Right $ ModuleImports modImports pkgImports) modGraph
-                        go (newFiles `Set.union` fs) modGraph'
+rawDependencyInformation :: NormalizedFilePath -> Action RawDependencyInformation
+rawDependencyInformation f = do
+    let (initialId, initialMap) = getPathId f emptyPathIdMap
+    go (IntSet.singleton $ getFilePathId initialId)
+       (RawDependencyInformation IntMap.empty initialMap)
+  where
+    go fs rawDepInfo =
+        case IntSet.minView fs of
+            -- Queue is empty
+            Nothing -> pure rawDepInfo
+            -- Pop f from the queue and process it
+            Just (f, fs) -> do
+                let fId = FilePathId f
+                importsOrErr <- use GetLocatedImports $ idToPath (rawPathIdMap rawDepInfo) fId
+                case importsOrErr of
+                  Nothing ->
+                    -- File doesn’t parse
+                    let rawDepInfo' = insertImport fId (Left ModuleParseError) rawDepInfo
+                    in go fs rawDepInfo'
+                  Just (modImports, pkgImports) -> do
+                    let f :: PathIdMap -> (a, Maybe NormalizedFilePath) -> (PathIdMap, (a, Maybe FilePathId))
+                        f pathMap (imp, mbPath) = case mbPath of
+                            Nothing -> (pathMap, (imp, Nothing))
+                            Just path ->
+                                let (pathId, pathMap') = getPathId path pathMap
+                                in (pathMap', (imp, Just pathId))
+                    -- Convert paths in imports to ids and update the path map
+                    let (pathIdMap, modImports') = mapAccumL f (rawPathIdMap rawDepInfo) modImports
+                    -- Files that we haven’t seen before are added to the queue.
+                    let newFiles =
+                            IntSet.fromList (coerce $ mapMaybe snd modImports')
+                            IntSet.\\ IntMap.keysSet (rawImports rawDepInfo)
+                    let rawDepInfo' = insertImport fId (Right $ ModuleImports modImports' pkgImports) rawDepInfo
+                    go (newFiles `IntSet.union` fs) (rawDepInfo' { rawPathIdMap = pathIdMap })
 
 getDependencyInformationRule :: Rules ()
 getDependencyInformationRule =
-    define $ \GetDependencyInformation file -> fmap toIdeResult $ runExceptT $ do
+    define $ \GetDependencyInformation file -> do
        rawDepInfo <- rawDependencyInformation file
-       pure $ processDependencyInformation rawDepInfo
+       pure ([], Just $ processDependencyInformation rawDepInfo)
 
 reportImportCyclesRule :: Rules ()
 reportImportCyclesRule =
     define $ \ReportImportCycles file -> fmap (\errs -> if null errs then ([], Just ()) else (errs, Nothing)) $ do
         DependencyInformation{..} <- use_ GetDependencyInformation file
-        case Map.lookup file depErrorNodes of
+        let fileId = pathToId depPathIdMap file
+        case IntMap.lookup (getFilePathId fileId) depErrorNodes of
             Nothing -> pure []
             Just errs -> do
-                let cycles = mapMaybe (cycleErrorInFile file) (toList errs)
+                let cycles = mapMaybe (cycleErrorInFile fileId) (toList errs)
                 -- Convert cycles of files into cycles of module names
                 forM cycles $ \(imp, files) -> do
-                    modNames <- mapM getModuleName files
-                    pure $ toDiag imp modNames
+                    modNames <- forM files $ \fileId -> do
+                        let file = idToPath depPathIdMap fileId
+                        getModuleName file
+                    pure $ toDiag imp $ sort modNames
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
@@ -261,7 +286,7 @@ getDependenciesRule :: Rules ()
 getDependenciesRule =
     define $ \GetDependencies file -> do
         depInfo@DependencyInformation{..} <- use_ GetDependencyInformation file
-        let allFiles = Map.keys depModuleDeps <> Map.keys depErrorNodes
+        let allFiles = reachableModules depInfo
         _ <- uses_ ReportImportCycles allFiles
         return ([], transitiveDeps depInfo file)
 
