@@ -100,13 +100,17 @@ runLanguageServer options userHandlers getIdeState = do
             -- out of order to be useful. Existing handlers are run afterwards.
     handlers <- parts WithMessage{withResponse, withNotification} def
 
+    let initializeCallbacks = LSP.InitializeCallbacks
+            { LSP.onInitialConfiguration = const $ Right ()
+            , LSP.onConfigurationChange = const $ Right ()
+            , LSP.onStartup = handleInit (signalBarrier clientMsgBarrier ()) clearReqId waitForCancel clientMsgChan
+            }
+
     void $ waitAnyCancel =<< traverse async
         [ void $ LSP.runWithHandles
             stdin
             newStdout
-            ( const $ Right ()
-            , handleInit (signalBarrier clientMsgBarrier ()) clearReqId waitForCancel clientMsgChan
-            )
+            initializeCallbacks
             handlers
             (modifyOptions options)
             Nothing
