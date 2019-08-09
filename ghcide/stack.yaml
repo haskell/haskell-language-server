@@ -4,12 +4,12 @@ packages:
 
 extra-deps:
 - git: https://github.com/alanz/haskell-lsp.git
-  commit: d73e2ccb518724e6766833ee3d7e73289cbe0018
+  commit: bfbd8630504ebc57b70948689c37b85cfbe589da
   subdirs:
   - .
   - haskell-lsp-types
-- git: https://github.com/digital-asset/lsp-test.git
-  commit: 50c43452e19e494d71ccba1f7922d0b3b3fc69c3
+- git: https://github.com/bubba/lsp-test.git
+  commit: d126623dc6895d325e3d204d74e2a22d4f515587
 - git: https://github.com/mpickering/hie-bios.git
   commit: 8427e424a83c2f3d60bdd26c02478c00d2189a73
 nix:
