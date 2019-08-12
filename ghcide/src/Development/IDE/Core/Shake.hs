@@ -248,16 +248,31 @@ setValues :: IdeRule k v
           -> NormalizedFilePath
           -> Value v
           -> IO ()
-setValues state key file val = modifyVar_ state $
-    pure . HMap.insert (file, Key key) (fmap toDyn val)
+setValues state key file val = modifyVar_ state $ \vals -> do
+    -- Force to make sure the old HashMap is not retained
+    evaluate $ HMap.insert (file, Key key) (fmap toDyn val) vals
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues :: forall k v. IdeRule k v => Var Values -> k -> NormalizedFilePath -> IO (Maybe (Value v))
 getValues state key file = do
     vs <- readVar state
-    return $ do
-        v <- HMap.lookup (file, Key key) vs
-        pure $ fmap (fromJust . fromDynamic @v) v
+    case HMap.lookup (file, Key key) vs of
+        Nothing -> pure Nothing
+        Just v -> do
+            let r = fmap (fromJust . fromDynamic @v) v
+            -- Force to make sure we do not retain a reference to the HashMap
+            -- and we blow up immediately if the fromJust should fail
+            -- (which would be an internal error).
+            evaluate (r `seqValue` Just r)
+
+-- | Seq the result stored in the Shake value. This only
+-- evaluates the value to WHNF not NF. We take care of the latter
+-- elsewhere and doing it twice is expensive.
+seqValue :: Value v -> b -> b
+seqValue v b = case v of
+    Succeeded ver v -> rnf ver `seq` v `seq` b
+    Stale ver v -> rnf ver `seq` v `seq` b
+    Failed -> b
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
