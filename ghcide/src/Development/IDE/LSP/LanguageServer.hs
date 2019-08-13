@@ -10,6 +10,7 @@ module Development.IDE.LSP.LanguageServer
     ) where
 
 import           Language.Haskell.LSP.Types
+import           Language.Haskell.LSP.Types.Capabilities
 import           Development.IDE.LSP.Server
 import qualified Language.Haskell.LSP.Control as LSP
 import qualified Language.Haskell.LSP.Core as LSP
@@ -40,7 +41,7 @@ import Language.Haskell.LSP.Messages
 runLanguageServer
     :: LSP.Options
     -> PartialHandlers
-    -> ((FromServerMessage -> IO ()) -> VFSHandle -> IO IdeState)
+    -> ((FromServerMessage -> IO ()) -> VFSHandle -> ClientCapabilities -> IO IdeState)
     -> IO ()
 runLanguageServer options userHandlers getIdeState = do
     -- Move stdout to another file descriptor and duplicate stderr
@@ -119,7 +120,7 @@ runLanguageServer options userHandlers getIdeState = do
     where
         handleInit :: IO () -> (LspId -> IO ()) -> (LspId -> IO ()) -> Chan Message -> LSP.LspFuncs () -> IO (Maybe err)
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan lspFuncs@LSP.LspFuncs{..} = do
-            ide <- getIdeState sendFunc (makeLSPVFSHandle lspFuncs)
+            ide <- getIdeState sendFunc (makeLSPVFSHandle lspFuncs) clientCapabilities
             _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- readChan clientMsgChan
                 case msg of
