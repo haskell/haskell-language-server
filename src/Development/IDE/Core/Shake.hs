@@ -62,6 +62,7 @@ import Language.Haskell.LSP.Diagnostics
 import qualified Data.SortedList as SL
 import           Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
+import Development.IDE.Types.Options
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.DeepSeq
@@ -211,7 +212,6 @@ type IdeRule k v =
   , NFData v
   )
 
-
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
@@ -278,10 +278,11 @@ seqValue v b = case v of
 shakeOpen :: (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
           -> Logger
           -> Maybe FilePath
+          -> IdeReportProgress
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen eventer logger shakeProfileDir opts rules = do
+shakeOpen eventer logger shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
     shakeExtras <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
@@ -294,7 +295,7 @@ shakeOpen eventer logger shakeProfileDir opts rules = do
         shakeOpenDatabase
             opts
                 { shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts
-                , shakeProgress = lspShakeProgress eventer
+                , shakeProgress = if reportProgress then lspShakeProgress eventer else const (pure ())
                 }
             rules
     shakeAbort <- newVar $ return ()

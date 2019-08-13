@@ -11,6 +11,7 @@ import Development.IDE.Test
 import Development.IDE.Test.Runfiles
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
+import Language.Haskell.LSP.Types.Capabilities
 import System.Environment.Blank (setEnv)
 import System.IO.Extra
 import Test.Tasty
@@ -64,7 +65,7 @@ run s = withTempDir $ \dir -> do
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
-  runSessionWithConfig conf cmd fullCaps dir s
+  runSessionWithConfig conf cmd fullCaps { _window = Just $ WindowClientCapabilities $ Just True } dir s
   where
     conf = defaultConfig
       -- If you uncomment this you can see all messages
