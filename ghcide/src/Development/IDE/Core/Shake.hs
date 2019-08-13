@@ -228,7 +228,7 @@ shakeRunDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> [Action a] -> IO [
 shakeRunDatabaseProfile mbProfileDir shakeDb acts = do
         (time, (res,_)) <- duration $ shakeRunDatabase shakeDb acts
         whenJust mbProfileDir $ \dir -> do
-            count <- modifyVar profileCounter $ \x -> let y = x+1 in return (y,y)
+            count <- modifyVar profileCounter $ \x -> let !y = x+1 in return (y,y)
             let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) ++ "-" ++ showDP 2 time <.> "html"
             shakeProfileDatabase shakeDb $ dir </> file
         return res
@@ -376,14 +376,16 @@ garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
 garbageCollect keep = do
     ShakeExtras{state, diagnostics,publishedDiagnostics,positionMapping} <- getShakeExtras
     liftIO $
-        do newState <- modifyVar state $ return . dupe .  HMap.filterWithKey (\(file, _) _ -> keep file)
-           modifyVar_ diagnostics $ return . filterDiagnostics keep
-           modifyVar_ publishedDiagnostics $ return . Map.filterWithKey (\uri _ -> keep (fromUri uri))
+        do newState <- modifyVar state $ \values -> do
+               values <- evaluate $ HMap.filterWithKey (\(file, _) _ -> keep file) values
+               return $! dupe values
+           modifyVar_ diagnostics $ \diags -> return $! filterDiagnostics keep diags
+           modifyVar_ publishedDiagnostics $ \diags -> return $! Map.filterWithKey (\uri _ -> keep (fromUri uri)) diags
            let versionsForFile =
                    Map.fromListWith Set.union $
                    mapMaybe (\((file, _key), v) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
                    HMap.toList newState
-           modifyVar_ positionMapping $ return . filterVersionMap versionsForFile
+           modifyVar_ positionMapping $ \mappings -> return $! filterVersionMap versionsForFile mappings
 define
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
@@ -553,7 +555,9 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, publishedDiagnostics, state,
         newDiags <- modifyVar diagnostics $ \old -> do
             let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) (T.pack $ show k) current old
             let newDiags = getFileDiagnostics fp newDiagsStore
-            pure (newDiagsStore, newDiags)
+            _ <- evaluate newDiagsStore
+            _ <- evaluate newDiags
+            pure $! (newDiagsStore, newDiags)
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
@@ -561,7 +565,7 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, publishedDiagnostics, state,
                  let lastPublish = Map.findWithDefault [] uri published
                  when (lastPublish /= newDiags) $
                      eventer $ publishDiagnosticsNotification (fromNormalizedUri uri) newDiags
-                 pure (Map.insert uri newDiags published)
+                 pure $! Map.insert uri newDiags published
 
 publishDiagnosticsNotification :: Uri -> [Diagnostic] -> LSP.FromServerMessage
 publishDiagnosticsNotification uri diags =
@@ -666,4 +670,4 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
         let updatedMapping =
                 Map.insert _version idMapping $
                 Map.map (\oldMapping -> foldl' applyChange oldMapping changes) mappingForUri
-        pure $ Map.insert uri updatedMapping allMappings
+        pure $! Map.insert uri updatedMapping allMappings
