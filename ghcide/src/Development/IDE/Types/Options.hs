@@ -6,14 +6,17 @@
 -- | Options
 module Development.IDE.Types.Options
   ( IdeOptions(..)
+  , IdeReportProgress(..)
+  , clientSupportsProgress
   , IdePkgLocationOptions(..)
   , defaultIdeOptions
   ) where
 
+import Data.Maybe
 import Development.Shake
 import           GHC hiding (parseModule, typecheckModule)
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
-
+import qualified Language.Haskell.LSP.Types.Capabilities as LSP
 
 data IdeOptions = IdeOptions
   { optPreprocessor :: GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource)
@@ -25,9 +28,16 @@ data IdeOptions = IdeOptions
 
   , optThreads :: Int
   , optShakeProfiling :: Maybe FilePath
+  , optReportProgress :: IdeReportProgress
   , optLanguageSyntax :: String -- ^ the ```language to use
   , optNewColonConvention :: Bool -- ^ whether to use new colon convention
   }
+
+newtype IdeReportProgress = IdeReportProgress Bool
+
+clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress
+clientSupportsProgress caps = IdeReportProgress $ fromMaybe False $
+    LSP._progress =<< LSP._window (caps :: LSP.ClientCapabilities)
 
 defaultIdeOptions :: Action HscEnv -> IdeOptions
 defaultIdeOptions session = IdeOptions
@@ -37,6 +47,7 @@ defaultIdeOptions session = IdeOptions
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
     ,optThreads = 0
     ,optShakeProfiling = Nothing
+    ,optReportProgress = IdeReportProgress False
     ,optLanguageSyntax = "haskell"
     ,optNewColonConvention = False
     }

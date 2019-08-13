@@ -51,6 +51,7 @@ initialise mainRule toDiags logger options vfs =
         toDiags
         logger
         (optShakeProfiling options)
+        (optReportProgress options)
         (shakeOptions { shakeThreads = optThreads options
                      , shakeFiles   = "/dev/null"
                      }) $ do
