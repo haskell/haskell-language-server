@@ -83,5 +83,10 @@ docHeaders :: [RealLocated AnnotationComment]
 docHeaders = mapMaybe (\(L _ x) -> wrk x)
   where
   wrk = \case
+    -- When `Opt_Haddock` is enabled.
     AnnDocCommentNext s -> Just $ T.pack s
+    -- When `Opt_KeepRawTokenStream` enabled.
+    AnnLineComment s  -> if "-- |" `isPrefixOf` s
+                            then Just $ T.pack s
+                            else Nothing
     _ -> Nothing
