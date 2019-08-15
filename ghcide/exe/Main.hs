@@ -25,6 +25,7 @@ import Development.IDE.Types.Logger
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
+import Linker
 import Development.IDE.LSP.LanguageServer
 import System.Directory.Extra as IO
 import System.Environment
@@ -125,6 +126,9 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
 showEvent lock e = withLock lock $ print e
 
 newSession' :: Cradle -> IO HscEnv
-newSession' cradle = getLibdir >>= \libdir -> runGhc (Just libdir) $ do
-    initializeFlagsWithCradle "" cradle
-    getSession
+newSession' cradle = getLibdir >>= \libdir -> do
+    env <- runGhc (Just libdir) $ do
+        initializeFlagsWithCradle "" cradle
+        getSession
+    initDynLinker env
+    pure env
