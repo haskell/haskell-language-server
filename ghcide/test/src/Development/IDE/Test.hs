@@ -52,9 +52,12 @@ expectDiagnostics expected = do
                   diagsNot <- skipManyTill anyMessage LspTest.message :: Session PublishDiagnosticsNotification
                   let fileUri = diagsNot ^. params . uri
                   case Map.lookup (diagsNot ^. params . uri . to toNormalizedUri) m of
-                      Nothing -> liftIO $ assertFailure $
-                          "Got diagnostics for " <> show fileUri <>
-                          " but only expected diagnostics for " <> show (Map.keys m)
+                      Nothing -> do
+                          let actual = diagsNot ^. params . diagnostics
+                          liftIO $ assertFailure $
+                              "Got diagnostics for " <> show fileUri <>
+                              " but only expected diagnostics for " <> show (Map.keys m) <>
+                              " got " <> show actual
                       Just expected -> do
                           let actual = diagsNot ^. params . diagnostics
                           liftIO $ mapM_ (requireDiagnostic actual) expected
