@@ -352,13 +352,13 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts = modifyVar shakeAbort $
     bar <- newBarrier
     start <- offsetTime
     thread <- forkFinally (shakeRunDatabaseProfile shakeProfileDir shakeDb acts) $ \res -> do
-        signalBarrier bar res
         runTime <- start
         let res' = case res of
                 Left e -> "exception: " <> displayException e
                 Right _ -> "completed"
         logDebug logger $ T.pack $
             "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ res' ++ ")"
+        signalBarrier bar res
     -- important: we send an async exception to the thread, then wait for it to die, before continuing
     return (do killThread thread; void $ waitBarrier bar, either throwIO return =<< waitBarrier bar)
 
