@@ -127,11 +127,10 @@ getParsedModule file = use GetParsedModule file
 
 -- | Write interface files and hie files to the location specified by the given options.
 writeIfacesAndHie ::
-       NormalizedFilePath -> NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
-writeIfacesAndHie ifDir main =
+       NormalizedFilePath -> [NormalizedFilePath] -> Action (Maybe [NormalizedFilePath])
+writeIfacesAndHie ifDir files =
     runMaybeT $ do
-        files <- transitiveModuleDeps <$> useE GetDependencies main
-        tcms <- usesE TypeCheck (main : files)
+        tcms <- usesE TypeCheck files
         session <- lift $ useNoFile_ GhcSession
         liftIO $ concat <$> mapM (writeTcm session) tcms
   where
