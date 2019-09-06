@@ -9,6 +9,8 @@ cradle:
       - -XBangPatterns
       - -XDeriveGeneric
       - -XGeneralizedNewtypeDeriving
+      - -XOverloadedStrings
+      - -XDeriveFunctor
       - -XLambdaCase
       - -XNamedFieldPuns
       - -XRecordWildCards
