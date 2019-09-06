@@ -62,7 +62,7 @@ hidden = [
 da_haskell_library(
     name = "hie-core",
     srcs = glob(["src/**/*.hs"]),
-    hazel_deps = depends + [
+    hackage_deps = depends + [
         "ghc-lib",
         "ghc-lib-parser",
     ],
@@ -86,7 +86,7 @@ da_haskell_library(
     name = "hie-core-public",
     srcs = glob(["src/**/*.hs"]),
     compiler_flags = ["-DGHC_STABLE"],
-    hazel_deps = depends + [
+    hackage_deps = depends + [
         "ghc",
         "ghc-boot",
         "ghc-boot-th",
@@ -106,7 +106,7 @@ da_haskell_library(
 da_haskell_binary(
     name = "hie-core-exe",
     srcs = glob(["exe/**/*.hs"]),
-    hazel_deps = [
+    hackage_deps = [
         "base",
         "containers",
         "data-default",
