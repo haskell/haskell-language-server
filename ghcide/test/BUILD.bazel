@@ -10,7 +10,7 @@ load(
 da_haskell_library(
     name = "hie-core-testing",
     srcs = glob(["src/**/*.hs"]),
-    hazel_deps = [
+    hackage_deps = [
         "base",
         "containers",
         "haskell-lsp-types",
@@ -30,7 +30,7 @@ da_haskell_library(
 da_haskell_library(
     name = "hie-core-test-runfiles",
     srcs = glob(["bazel/**/*.hs"]),
-    hazel_deps = [
+    hackage_deps = [
         "base",
         "filepath",
     ],
@@ -45,7 +45,7 @@ da_haskell_test(
     name = "hie-core-tests",
     srcs = glob(["exe/**/*.hs"]),
     data = ["//compiler/hie-core:hie-core-exe"],
-    hazel_deps = [
+    hackage_deps = [
         "base",
         "extra",
         "filepath",
