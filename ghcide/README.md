@@ -86,3 +86,19 @@ If you don't already have [MELPA](https://melpa.org/#/) package installation con
  ;;(setq lsp-log-io t)
 )
 ```
+
+### Using with Vim/Neovim
+
+Install [vim-lsp](https://github.com/prabirshrestha/vim-lsp).
+
+Add this to your vim config:
+
+```vim
+au User lsp_setup call lsp#register_server({
+    \ 'name': 'hie-core',
+    \ 'cmd': {server_info->['/your/path/to/hie-core', '--lsp']},
+    \ 'whitelist': ['haskell'],
+    \ })
+```
+
+To verify it works move your cursor over a symbol and run `:LspHover`.
