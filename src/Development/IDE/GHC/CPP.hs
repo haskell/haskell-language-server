@@ -20,6 +20,7 @@
 
 module Development.IDE.GHC.CPP(doCpp) where
 
+import Development.IDE.GHC.Compat
 import Packages
 import SysTools
 import Module

@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# OPTIONS_GHC -Wno-missing-fields #-} -- to enable prettyPrint
+{-# LANGUAGE CPP #-}
 
 -- | GHC utility functions. Importantly, code using our GHC should never:
 --
@@ -20,7 +21,9 @@ module Development.IDE.GHC.Util(
 
 import Config
 import Data.List.Extra
+#if __GLASGOW_HASKELL__ >= 806
 import Fingerprint
+#endif
 import GHC
 import GhcMonad
 import GhcPlugins
@@ -75,15 +78,17 @@ runGhcEnv env act = do
 -- Fake DynFlags which are mostly undefined, but define enough to do a
 -- little bit.
 fakeDynFlags :: DynFlags
-fakeDynFlags = defaultDynFlags settings ([], [])
+fakeDynFlags = defaultDynFlags settings mempty
     where
         settings = Settings
                    { sTargetPlatform = platform
                    , sPlatformConstants = platformConstants
                    , sProgramName = "ghc"
                    , sProjectVersion = cProjectVersion
-                   , sOpt_P_fingerprint = fingerprint0
-                   }
+#if __GLASGOW_HASKELL__ >= 806
+                    , sOpt_P_fingerprint = fingerprint0
+#endif
+                    }
         platform = Platform
           { platformWordSize=8
           , platformOS=OSUnknown
