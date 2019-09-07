@@ -9,7 +9,7 @@ module Development.IDE.LSP.CodeAction
     ) where
 
 import           Language.Haskell.LSP.Types
-import GHC.LanguageExtensions.Type
+import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.LSP.Server
 import qualified Data.HashMap.Strict as Map
@@ -80,7 +80,7 @@ suggestAction _ _ = []
 
 -- | All the GHC extensions
 ghcExtensions :: Set.HashSet T.Text
-ghcExtensions = Set.fromList $ map (T.pack . show) [Cpp .. StarIsType] -- use enumerate from GHC 8.8 and beyond
+ghcExtensions = Set.fromList $ map (T.pack . show) ghcEnumerateExtensions
 
 
 textAtPosition :: Position -> T.Text -> (T.Text, T.Text)

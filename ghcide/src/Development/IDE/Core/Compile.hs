@@ -278,8 +278,7 @@ runCpp dflags filename contents = withTempDir $ \dir -> do
             -- __FILE__ macro is wrong, ignoring that for now (likely not a real issue)
 
             -- Relative includes aren't going to work, so we fix that by adding to the include path.
-            let addSelf (IncludeSpecs quote global) = IncludeSpecs (takeDirectory filename : quote) global
-            dflags <- return dflags{includePaths = addSelf $ includePaths dflags}
+            dflags <- return $ addIncludePathsQuote (takeDirectory filename) dflags
 
             -- Location information is wrong, so we fix that by patching it afterwards.
             let inp = dir </> "___HIE_CORE_MAGIC___"

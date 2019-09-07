@@ -3,6 +3,7 @@
 
 -- ORIGINALLY COPIED FROM https://github.com/commercialhaskell/intero
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
 
 -- | Get information on modules, identifiers, etc.
@@ -30,6 +31,14 @@ import           Var
 import Development.IDE.Core.Compile
 import Development.IDE.GHC.Util
 
+
+-- A lot of things gained an extra X argument in GHC 8.6, which we mostly ignore
+-- this U ignores that arg in 8.6, but is hidden in 8.4
+#if __GLASGOW_HASKELL__ >= 806
+#define U _
+#else
+#define U
+#endif
 
 -- | Get source span info, used for e.g. AtPoint and Goto Definition.
 getSrcSpanInfos
@@ -75,12 +84,12 @@ getExports m
     ]
 getExports _ = []
 
--- | Variant of GHC’s ieNames that produces LIdP instead of IdP
-ieLNames :: IE pass -> [LIdP pass]
-ieLNames (IEVar       _ n   )     = [ieLWrappedName n]
-ieLNames (IEThingAbs  _ n   )     = [ieLWrappedName n]
-ieLNames (IEThingAll  _ n   )     = [ieLWrappedName n]
-ieLNames (IEThingWith _ n _ ns _) = ieLWrappedName n : map ieLWrappedName ns
+-- | Variant of GHC's ieNames that produces LIdP instead of IdP
+ieLNames :: IE pass -> [Located (IdP pass)]
+ieLNames (IEVar       U n   )     = [ieLWrappedName n]
+ieLNames (IEThingAbs  U n   )     = [ieLWrappedName n]
+ieLNames (IEThingAll  U n   )     = [ieLWrappedName n]
+ieLNames (IEThingWith U n _ ns _) = ieLWrappedName n : map ieLWrappedName ns
 ieLNames _ = []
 
 -- | Get the name and type of a binding.
@@ -88,7 +97,7 @@ getTypeLHsBind :: (GhcMonad m)
                => TypecheckedModule
                -> LHsBind GhcTc
                -> m [(SpanSource, SrcSpan, Maybe Type)]
-getTypeLHsBind _ (L _spn FunBind{fun_id = pid,fun_matches = MG _ _ _typ}) =
+getTypeLHsBind _ (L _spn FunBind{fun_id = pid,fun_matches = MG{}}) =
   return [(Named $ getName (unLoc pid), getLoc pid, Just (varType (unLoc pid)))]
 getTypeLHsBind _ _ = return []
 
@@ -107,11 +116,11 @@ getTypeLHsExpr _ e = do
       Nothing -> Nothing
   where
     getSpanSource :: HsExpr GhcTc -> SpanSource
-    getSpanSource (HsVar _ (L _ i)) = Named (getName i)
-    getSpanSource (HsConLikeOut _ (RealDataCon dc)) = Named (dataConName dc)
+    getSpanSource (HsVar U (L _ i)) = Named (getName i)
+    getSpanSource (HsConLikeOut U (RealDataCon dc)) = Named (dataConName dc)
     getSpanSource RecordCon {rcon_con_name} = Named (getName rcon_con_name)
-    getSpanSource (HsWrap _ _ xpr) = getSpanSource xpr
-    getSpanSource (HsPar _ xpr) = getSpanSource (unLoc xpr)
+    getSpanSource (HsWrap U _ xpr) = getSpanSource xpr
+    getSpanSource (HsPar U xpr) = getSpanSource (unLoc xpr)
     getSpanSource _ =  NoSource
 
 -- | Get the name and type of a pattern.
@@ -124,7 +133,7 @@ getTypeLPat _ pat =
   return $ Just (src, spn, Just (hsPatType pat))
   where
     getSpanSource :: Pat GhcTc -> (SpanSource, SrcSpan)
-    getSpanSource (VarPat _ (L spn vid)) = (Named (getName vid), spn)
+    getSpanSource (VarPat U (L spn vid)) = (Named (getName vid), spn)
     getSpanSource (ConPatOut (L spn (RealDataCon dc)) _ _ _ _ _ _) =
       (Named (dataConName dc), spn)
     getSpanSource _ = (NoSource, noSrcSpan)
@@ -134,7 +143,7 @@ getLHsType
     => TypecheckedModule
     -> LHsType GhcRn
     -> m [(SpanSource, SrcSpan, Maybe Type)]
-getLHsType _ (L spn (HsTyVar _ _ v)) = pure [(Named $ unLoc v, spn, Nothing)]
+getLHsType _ (L spn (HsTyVar U _ v)) = pure [(Named $ unLoc v, spn, Nothing)]
 getLHsType _ _ = pure []
 
 importInfo :: [(Located ModuleName, Maybe NormalizedFilePath)]
