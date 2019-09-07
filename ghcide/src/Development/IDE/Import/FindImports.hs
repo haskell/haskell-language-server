@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Import.FindImports
   ( locateModule
@@ -87,35 +88,31 @@ notFoundErr dfs modName reason =
       \case
         LookupFound _m _pkgConfig ->
           pprPanic "Impossible: called lookupToFind on found module." (ppr modName0)
-        LookupMultiple rs -> (FoundMultiple rs)
+        LookupMultiple rs -> FoundMultiple rs
         LookupHidden pkg_hiddens mod_hiddens ->
-          (NotFound
-             { fr_paths = []
-             , fr_pkg = Nothing
-             , fr_pkgs_hidden = map (moduleUnitId . fst) pkg_hiddens
+          notFound
+             { fr_pkgs_hidden = map (moduleUnitId . fst) pkg_hiddens
              , fr_mods_hidden = map (moduleUnitId . fst) mod_hiddens
-             , fr_unusables = []
-             , fr_suggestions = []
-             })
+             }
+#if __GLASGOW_HASKELL__ >= 806
         LookupUnusable unusable ->
           let unusables' = map get_unusable unusable
               get_unusable (m, ModUnusable r) = (moduleUnitId m, r)
               get_unusable (_, r) =
                 pprPanic "findLookupResult: unexpected origin" (ppr r)
-           in (NotFound
-                 { fr_paths = []
-                 , fr_pkg = Nothing
-                 , fr_pkgs_hidden = []
-                 , fr_mods_hidden = []
-                 , fr_unusables = unusables'
-                 , fr_suggestions = []
-                 })
+           in notFound {fr_unusables = unusables'}
+#endif
         LookupNotFound suggest ->
-          (NotFound
-             { fr_paths = []
-             , fr_pkg = Nothing
-             , fr_pkgs_hidden = []
-             , fr_mods_hidden = []
-             , fr_unusables = []
-             , fr_suggestions = suggest
-             })
+          notFound {fr_suggestions = suggest}
+
+notFound :: FindResult
+notFound = NotFound
+  { fr_paths = []
+  , fr_pkg = Nothing
+  , fr_pkgs_hidden = []
+  , fr_mods_hidden = []
+#if __GLASGOW_HASKELL__ >= 806
+  , fr_unusables = []
+#endif
+  , fr_suggestions = []
+  }

@@ -1,8 +1,12 @@
-resolver: nightly-2019-05-20
+resolver: lts-12.26
 packages:
 - .
 
 extra-deps:
+- rope-utf16-splay-0.3.1.0
+- shake-0.18.3
+- filepattern-0.1.1
+- js-dgtable-0.5.2
 - git: https://github.com/alanz/haskell-lsp.git
   commit: bfbd8630504ebc57b70948689c37b85cfbe589da
   subdirs:
