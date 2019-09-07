@@ -1,9 +1,10 @@
-cabal-version:      >= 1.18
+cabal-version:      1.20
 build-type:         Simple
+category:           Development
 name:               hie-core
-version:            0
-license:            BSD3
-x-license:          BSD3 OR Apache2
+version:            0.0.1
+license:            Apache-2.0
+license-file:       LICENSE
 author:             Digital Asset
 maintainer:         Digital Asset
 copyright:          Digital Asset 2018-2019
