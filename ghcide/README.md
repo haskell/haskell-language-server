@@ -17,6 +17,12 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 
 ### Install `hie-core`
 
+#### With Nix
+
+[See hie-core-nix repository](https://github.com/hercules-ci/hie-core-nix)
+
+#### With Cabal or Stack
+
 First install the `hie-core` binary using `stack` or `cabal`, e.g.
 
 1. `git clone https://github.com/digital-asset/daml.git`
