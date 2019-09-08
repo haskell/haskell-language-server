@@ -89,6 +89,21 @@ If you don't already have [MELPA](https://melpa.org/#/) package installation con
 
 ### Using with Vim/Neovim
 
+#### LanguageClient-neovim
+Install [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
+
+Add this to your vim config:
+```vim
+let g:LanguageClient_rootMarkers = ['*.cabal', 'stack.yaml']
+let g:LanguageClient_serverCommands = {
+    \ 'rust': ['rls'],
+    \ 'haskell': ['hie-core', '--lsp'],
+    \ }
+```
+
+Refer to `:he LanguageClient` for more details on usage and configuration.
+
+#### vim-lsp
 Install [vim-lsp](https://github.com/prabirshrestha/vim-lsp).
 
 Add this to your vim config:
