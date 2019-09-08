@@ -80,7 +80,6 @@ prettyDiagnostic (fp, LSP.Diagnostic{..}) =
               LSP.DsInfo -> annotate $ color Blue
               LSP.DsHint -> annotate $ color Magenta
             $ stringParagraphs _message
-        , slabel_ "Code:" $ pretty _code
         ]
     where
         sev = fromMaybe LSP.DsError _severity
