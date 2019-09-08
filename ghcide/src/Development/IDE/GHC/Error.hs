@@ -29,26 +29,26 @@ import qualified Outputable                 as Out
 
 
 
-diagFromText :: D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
-diagFromText sev loc msg = (toNormalizedFilePath $ srcSpanToFilename loc,)
+diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
+diagFromText diagSource sev loc msg = (toNormalizedFilePath $ srcSpanToFilename loc,)
     Diagnostic
     { _range    = srcSpanToRange loc
     , _severity = Just sev
-    , _source   = Just "compiler" -- should really be 'daml' or 'haskell', but not shown in the IDE so who cares
+    , _source   = Just diagSource -- not shown in the IDE, but useful for hie-core developers
     , _message  = msg
     , _code     = Nothing
     , _relatedInformation = Nothing
     }
 
 -- | Produce a GHC-style error from a source span and a message.
-diagFromErrMsg :: DynFlags -> ErrMsg -> [FileDiagnostic]
-diagFromErrMsg dflags e =
-    [ diagFromText sev (errMsgSpan e) $ T.pack $ Out.showSDoc dflags $ ErrUtils.pprLocErrMsg e
+diagFromErrMsg :: T.Text -> DynFlags -> ErrMsg -> [FileDiagnostic]
+diagFromErrMsg diagSource dflags e =
+    [ diagFromText diagSource sev (errMsgSpan e) $ T.pack $ Out.showSDoc dflags $ ErrUtils.pprLocErrMsg e
     | Just sev <- [toDSeverity $ errMsgSeverity e]]
 
 
-diagFromErrMsgs :: DynFlags -> Bag ErrMsg -> [FileDiagnostic]
-diagFromErrMsgs dflags = concatMap (diagFromErrMsg dflags) . bagToList
+diagFromErrMsgs :: T.Text -> DynFlags -> Bag ErrMsg -> [FileDiagnostic]
+diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . bagToList
 
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
@@ -86,12 +86,12 @@ toDSeverity SevFatal       = Just DsError
 
 -- | Produce a bag of GHC-style errors (@ErrorMessages@) from the given
 --   (optional) locations and message strings.
-diagFromStrings :: [(SrcSpan, String)] -> [FileDiagnostic]
-diagFromStrings = concatMap (uncurry diagFromString)
+diagFromStrings :: T.Text -> [(SrcSpan, String)] -> [FileDiagnostic]
+diagFromStrings diagSource = concatMap (uncurry (diagFromString diagSource))
 
 -- | Produce a GHC-style error from a source span and a message.
-diagFromString :: SrcSpan -> String -> [FileDiagnostic]
-diagFromString sp x = [diagFromText DsError sp $ T.pack x]
+diagFromString :: T.Text -> SrcSpan -> String -> [FileDiagnostic]
+diagFromString diagSource sp x = [diagFromText diagSource DsError sp $ T.pack x]
 
 
 -- | Produces an "unhelpful" source span with the given string.
@@ -111,8 +111,8 @@ realSpan = \case
   UnhelpfulSpan _ -> Nothing
 
 
-diagFromGhcException :: DynFlags -> GhcException -> [FileDiagnostic]
-diagFromGhcException dflags exc = diagFromString (noSpan "<Internal>") (showGHCE dflags exc)
+diagFromGhcException :: T.Text -> DynFlags -> GhcException -> [FileDiagnostic]
+diagFromGhcException diagSource dflags exc = diagFromString diagSource (noSpan "<Internal>") (showGHCE dflags exc)
 
 showGHCE :: DynFlags -> GhcException -> String
 showGHCE dflags exc = case exc of

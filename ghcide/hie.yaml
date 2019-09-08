@@ -23,3 +23,6 @@ cradle:
       - -DGHC_STABLE
       - -isrc
       - -iexe
+      - -itest/cabal
+      - -itest/src
+      - -itest/exe
