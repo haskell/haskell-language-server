@@ -147,7 +147,15 @@ diagnosticTests = testGroup "diagnostics"
 
 
 testSession :: String -> Session () -> TestTree
-testSession name = testCase name . run
+testSession name =
+  testCase name . run .
+      -- Check that any diagnostics produced were already consumed by the test case.
+      --
+      -- If in future we add test cases where we don't care about checking the diagnostics,
+      -- this could move elsewhere.
+      --
+      -- Experimentally, 0.5s seems to be long enough to wait for any final diagnostics to appear.
+      ( >> expectNoMoreDiagnostics 0.5)
 
 
 run :: Session a -> IO a
