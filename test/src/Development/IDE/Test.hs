@@ -6,6 +6,7 @@ module Development.IDE.Test
   , cursorPosition
   , requireDiagnostic
   , expectDiagnostics
+  , expectNoMoreDiagnostics
   ) where
 
 import Control.Applicative.Combinators
@@ -18,6 +19,7 @@ import Language.Haskell.LSP.Test hiding (message, openDoc')
 import qualified Language.Haskell.LSP.Test as LspTest
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens as Lsp
+import System.Time.Extra
 import Test.Tasty.HUnit
 
 
@@ -40,6 +42,32 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg) = do
         && cursorPosition cursor == d ^. range . start
         && standardizeQuotes (T.toLower expectedMsg) `T.isInfixOf`
            standardizeQuotes (T.toLower $ d ^. message)
+
+-- |wait for @timeout@ seconds and report an assertion failure
+-- if any diagnostic messages arrive in that period
+expectNoMoreDiagnostics :: Seconds -> Session ()
+expectNoMoreDiagnostics timeout = do
+    -- Give any further diagnostic messages time to arrive.
+    liftIO $ sleep timeout
+    -- Send a dummy message to provoke a response from the server.
+    -- This guarantees that we have at least one message to
+    -- process, so message won't block or timeout.
+    void $ sendRequest (CustomClientMethod "non-existent-method") ()
+    handleMessages
+  where
+    handleMessages = handleDiagnostic <|> handleCustomMethodResponse <|> ignoreOthers
+    handleDiagnostic = do
+        diagsNot <- LspTest.message :: Session PublishDiagnosticsNotification
+        let fileUri = diagsNot ^. params . uri
+            actual = diagsNot ^. params . diagnostics
+        liftIO $ assertFailure $
+            "Got unexpected diagnostics for " <> show fileUri <>
+            " got " <> show actual
+    handleCustomMethodResponse =
+        -- the CustomClientMethod triggers a log message about ignoring it
+        -- handle that and then exit
+        void (LspTest.message :: Session LogMessageNotification)
+    ignoreOthers = void anyMessage >> handleMessages
 
 expectDiagnostics :: [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])] -> Session ()
 expectDiagnostics expected = do

@@ -12,6 +12,7 @@ da_haskell_library(
     srcs = glob(["src/**/*.hs"]),
     hackage_deps = [
         "base",
+        "extra",
         "containers",
         "haskell-lsp-types",
         "lens",
