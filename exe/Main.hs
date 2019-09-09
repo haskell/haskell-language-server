@@ -52,7 +52,7 @@ main :: IO ()
 main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    hPutStrLn stderr $ "Starting hie-core (GHC v" ++ showVersion compilerVersion ++ ")"
+    hPutStrLn stderr $ "Starting ghcide (GHC v" ++ showVersion compilerVersion ++ ")"
     Arguments{..} <- getArguments
 
     -- lock to avoid overlapping output on stdout

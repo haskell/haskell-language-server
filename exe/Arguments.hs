@@ -18,7 +18,7 @@ getArguments = execParser opts
     opts = info (arguments <**> helper)
       ( fullDesc
      <> progDesc "Used as a test bed to check your IDE will work"
-     <> header "hie-core - the core of a Haskell IDE")
+     <> header "ghcide - the core of a Haskell IDE")
 
 arguments :: Parser Arguments
 arguments = Arguments

@@ -1,6 +1,6 @@
 {
-	"name": "hie-core",
-	"displayName": "hie-core",
+	"name": "ghcide",
+	"displayName": "ghcide",
 	"publisher": "digitalasset",
 	"repository": {
 		"type" : "git",
@@ -31,8 +31,8 @@
 			"properties": {
 				"hic.executablePath": {
 					"type": "string",
-					"default": "hie-core",
-					"description": "The location of your hie-core executable"
+					"default": "ghcide",
+					"description": "The location of your ghcide executable"
 				},
 				"hic.arguments": {
 					"type": "string",

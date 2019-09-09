@@ -60,7 +60,7 @@ hidden = [
 ]
 
 da_haskell_library(
-    name = "hie-core",
+    name = "ghcide",
     srcs = glob(["src/**/*.hs"]),
     hackage_deps = depends + [
         "ghc-lib",
@@ -83,7 +83,7 @@ cc_library(
 ) if not is_windows else None
 
 da_haskell_library(
-    name = "hie-core-public",
+    name = "ghcide-public",
     srcs = glob(["src/**/*.hs"]),
     compiler_flags = ["-DGHC_STABLE"],
     hackage_deps = depends + [
@@ -104,7 +104,7 @@ da_haskell_library(
 )
 
 da_haskell_binary(
-    name = "hie-core-exe",
+    name = "ghcide-exe",
     srcs = glob(["exe/**/*.hs"]),
     hackage_deps = [
         "base",
@@ -124,6 +124,6 @@ da_haskell_binary(
     src_strip_prefix = "test",
     visibility = ["//visibility:public"],
     deps = [
-        "hie-core-public",
+        "ghcide-public",
     ],
 )

@@ -34,7 +34,7 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath $ srcSpanToFilename 
     Diagnostic
     { _range    = srcSpanToRange loc
     , _severity = Just sev
-    , _source   = Just diagSource -- not shown in the IDE, but useful for hie-core developers
+    , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
     , _message  = msg
     , _code     = Nothing
     , _relatedInformation = Nothing

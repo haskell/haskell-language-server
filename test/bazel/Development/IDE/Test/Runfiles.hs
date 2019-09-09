@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 module Development.IDE.Test.Runfiles
-  ( locateHieCoreExecutable
+  ( locateGhcideExecutable
   ) where
 
 import System.FilePath ((</>), FilePath)
@@ -10,7 +10,7 @@ import System.FilePath ((</>), FilePath)
 import DA.Bazel.Runfiles
 
 
-locateHieCoreExecutable :: IO FilePath
-locateHieCoreExecutable = locateRunfiles hieCoreExePath
+locateGhcideExecutable :: IO FilePath
+locateGhcideExecutable = locateRunfiles ghcideExePath
   where
-    hieCoreExePath = mainWorkspace </> exe "compiler/hie-core/hie-core-exe"
+    ghcideExePath = mainWorkspace </> exe "compiler/ghcide/ghcide-exe"
