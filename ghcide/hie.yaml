@@ -20,6 +20,8 @@ cradle:
       - -XTypeApplications
       - -XViewPatterns
       - -package=ghc
+      - -ignore-package=ghc-lib-parser
+      - -ignore-package=ghc-lib
       - -DGHC_STABLE
       - -isrc
       - -iexe
