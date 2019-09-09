@@ -8,7 +8,7 @@ load(
 )
 
 da_haskell_library(
-    name = "hie-core-testing",
+    name = "ghcide-testing",
     srcs = glob(["src/**/*.hs"]),
     hackage_deps = [
         "base",
@@ -23,12 +23,12 @@ da_haskell_library(
     src_strip_prefix = "src",
     visibility = ["//visibility:public"],
     deps = [
-        "//compiler/hie-core",
+        "//compiler/ghcide",
     ],
 )
 
 da_haskell_library(
-    name = "hie-core-test-runfiles",
+    name = "ghcide-test-runfiles",
     srcs = glob(["bazel/**/*.hs"]),
     hackage_deps = [
         "base",
@@ -42,9 +42,9 @@ da_haskell_library(
 )
 
 da_haskell_test(
-    name = "hie-core-tests",
+    name = "ghcide-tests",
     srcs = glob(["exe/**/*.hs"]),
-    data = ["//compiler/hie-core:hie-core-exe"],
+    data = ["//compiler/ghcide:ghcide-exe"],
     hackage_deps = [
         "base",
         "extra",
@@ -57,8 +57,8 @@ da_haskell_test(
     ],
     src_strip_prefix = "exe",
     deps = [
-        ":hie-core-test-runfiles",
-        ":hie-core-testing",
-        "//compiler/hie-core",
+        ":ghcide-test-runfiles",
+        ":ghcide-testing",
+        "//compiler/ghcide",
     ],
 )

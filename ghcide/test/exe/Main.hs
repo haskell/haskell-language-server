@@ -152,8 +152,8 @@ testSession name = testCase name . run
 
 run :: Session a -> IO a
 run s = withTempDir $ \dir -> do
-  hieCoreExe <- locateHieCoreExecutable
-  let cmd = unwords [hieCoreExe, "--lsp", "--cwd", dir]
+  ghcideExe <- locateGhcideExecutable
+  let cmd = unwords [ghcideExe, "--lsp", "--cwd", dir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
