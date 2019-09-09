@@ -281,16 +281,16 @@ runCpp dflags filename contents = withTempDir $ \dir -> do
             dflags <- return $ addIncludePathsQuote (takeDirectory filename) dflags
 
             -- Location information is wrong, so we fix that by patching it afterwards.
-            let inp = dir </> "___HIE_CORE_MAGIC___"
+            let inp = dir </> "___GHCIDE_MAGIC___"
             withBinaryFile inp WriteMode $ \h ->
                 hPutStringBuffer h contents
             doCpp dflags True inp out
 
             -- Fix up the filename in lines like:
-            -- # 1 "C:/Temp/extra-dir-914611385186/___HIE_CORE_MAGIC___"
+            -- # 1 "C:/Temp/extra-dir-914611385186/___GHCIDE_MAGIC___"
             let tweak x
                     | Just x <- stripPrefix "# " x
-                    , "___HIE_CORE_MAGIC___" `isInfixOf` x
+                    , "___GHCIDE_MAGIC___" `isInfixOf` x
                     , let num = takeWhile (not . isSpace) x
                     -- important to use /, and never \ for paths, even on Windows, since then C escapes them
                     -- and GHC gets all confused

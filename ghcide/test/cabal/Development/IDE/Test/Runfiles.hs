@@ -2,11 +2,11 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 module Development.IDE.Test.Runfiles
-  ( locateHieCoreExecutable
+  ( locateGhcideExecutable
   ) where
 
 import System.FilePath (FilePath)
 
 
-locateHieCoreExecutable :: IO FilePath
-locateHieCoreExecutable = pure "hie-core"
+locateGhcideExecutable :: IO FilePath
+locateGhcideExecutable = pure "ghcide"
