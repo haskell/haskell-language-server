@@ -31,6 +31,9 @@ jobs:
         displayName: "Unpack cache"
         condition: eq(variables.CACHE_RESTORED, 'true')
       - bash: |
+          ./fmt.sh
+        displayName: "HLint via ./fmt.sh"
+      - bash: |
           sudo apt-get install -y g++ gcc libc6-dev libffi-dev libgmp-dev make zlib1g-dev
           curl -sSL https://get.haskellstack.org/ | sh
         displayName: 'Install Stack'
