@@ -42,11 +42,18 @@ locateModuleFile :: MonadIO m
              => DynFlags
              -> [String]
              -> (NormalizedFilePath -> m Bool)
+             -> Bool
              -> ModuleName
              -> m (Maybe NormalizedFilePath)
-locateModuleFile dflags exts doesExist modName = do
-  let candidates = [ toNormalizedFilePath (prefix </> M.moduleNameSlashes modName <.> ext) | prefix <- importPaths dflags, ext <- exts]
+locateModuleFile dflags exts doesExist isSource modName = do
+  let candidates =
+        [ toNormalizedFilePath (prefix </> M.moduleNameSlashes modName <.> maybeBoot ext)
+           | prefix <- importPaths dflags, ext <- exts]
   findM doesExist candidates
+  where
+    maybeBoot ext
+      | isSource = ext ++ "-boot"
+      | otherwise = ext
 
 -- | locate a module in either the file system or the package database. Where we go from *daml to
 -- Haskell
@@ -57,15 +64,16 @@ locateModule
     -> (NormalizedFilePath -> m Bool)
     -> Located ModuleName
     -> Maybe FastString
+    -> Bool
     -> m (Either [FileDiagnostic] Import)
-locateModule dflags exts doesExist modName mbPkgName = do
+locateModule dflags exts doesExist modName mbPkgName isSource = do
   case mbPkgName of
     -- if a package name is given we only go look for a package
     Just _pkgName -> lookupInPackageDB dflags
     Nothing -> do
       -- first try to find the module as a file. If we can't find it try to find it in the package
       -- database.
-      mbFile <- locateModuleFile dflags exts doesExist $ unLoc modName
+      mbFile <- locateModuleFile dflags exts doesExist isSource $ unLoc modName
       case mbFile of
         Nothing -> lookupInPackageDB dflags
         Just file -> return $ Right $ FileImport file
