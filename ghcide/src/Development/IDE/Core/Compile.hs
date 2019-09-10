@@ -45,6 +45,8 @@ import qualified GHC.LanguageExtensions as LangExt
 import Control.Monad.Extra
 import Control.Monad.Except
 import Control.Monad.Trans.Except
+import           Data.Function
+import           Data.Ord
 import qualified Data.Text as T
 import           Data.IORef
 import           Data.List.Extra
@@ -149,7 +151,12 @@ mkTcModuleResult tcm = do
 -- | Setup the environment that GHC needs according to our
 -- best understanding (!)
 setupEnv :: GhcMonad m => [TcModuleResult] -> m ()
-setupEnv tms = do
+setupEnv tmsIn = do
+    -- if both a .hs-boot file and a .hs file appear here, we want to make sure that the .hs file
+    -- takes precedence, so put the .hs-boot file earlier in the list
+    let isSourceFile = (==HsBootFile) . ms_hsc_src . pm_mod_summary . tm_parsed_module . tmrModule
+        tms = sortBy (compare `on` Down . isSourceFile) tmsIn
+
     session <- getSession
 
     let mss = map (pm_mod_summary . tm_parsed_module . tmrModule) tms
@@ -191,16 +198,9 @@ loadModuleHome tmr = modifySession $ \e ->
 -- name and its imports.
 getImportsParsed ::  DynFlags ->
                GHC.ParsedSource ->
-               Either [FileDiagnostic] (GHC.ModuleName, [(Maybe FastString, Located GHC.ModuleName)])
+               Either [FileDiagnostic] (GHC.ModuleName, [(Bool, (Maybe FastString, Located GHC.ModuleName))])
 getImportsParsed dflags (L loc parsed) = do
   let modName = maybe (GHC.mkModuleName "Main") GHC.unLoc $ GHC.hsmodName parsed
-
-  -- refuse source imports
-  let srcImports = filter (ideclSource . GHC.unLoc) $ GHC.hsmodImports parsed
-  when (not $ null srcImports) $ Left $
-    concat
-      [ diagFromString "imports" mloc ("Illegal source import of " <> GHC.moduleNameString (GHC.unLoc $ GHC.ideclName i))
-      | L mloc i <- srcImports ]
 
   -- most of these corner cases are also present in https://hackage.haskell.org/package/ghc-8.6.1/docs/src/HeaderInfo.html#getImports
   -- but we want to avoid parsing the module twice
@@ -208,7 +208,7 @@ getImportsParsed dflags (L loc parsed) = do
       implicit_imports = Hdr.mkPrelImports modName loc implicit_prelude $ GHC.hsmodImports parsed
 
   -- filter out imports that come from packages
-  return (modName, [(fmap sl_fs $ ideclPkgQual i, ideclName i)
+  return (modName, [(ideclSource i, (fmap sl_fs $ ideclPkgQual i, ideclName i))
     | i <- map GHC.unLoc $ implicit_imports ++ GHC.hsmodImports parsed
     , GHC.moduleNameString (GHC.unLoc $ ideclName i) /= "GHC.Prim"
     ])
@@ -227,10 +227,10 @@ getModSummaryFromBuffer fp contents dflags parsed = do
 
   let modLoc = ModLocation
           { ml_hs_file  = Just fp
-          , ml_hi_file  = replaceExtension fp "hi"
-          , ml_obj_file = replaceExtension fp "o"
+          , ml_hi_file  = derivedFile "hi"
+          , ml_obj_file = derivedFile "o"
 #ifndef GHC_STABLE
-          , ml_hie_file = replaceExtension fp "hie"
+          , ml_hie_file = derivedFile "hie"
 #endif
           -- This does not consider the dflags configuration
           -- (-osuf and -hisuf, object and hi dir.s).
@@ -245,21 +245,27 @@ getModSummaryFromBuffer fp contents dflags parsed = do
         -- To avoid silent issues where something is not processed because the date
         -- has not changed, we make sure that things blow up if they depend on the
         -- date.
-    , ms_textual_imps = imports
+    , ms_textual_imps = [imp | (False, imp) <- imports]
     , ms_hspp_file    = fp
     , ms_hspp_opts    = dflags
     , ms_hspp_buf     = Just contents
 
     -- defaults:
-    , ms_hsc_src      = HsSrcFile
+    , ms_hsc_src      = sourceType
     , ms_obj_date     = Nothing
     , ms_iface_date   = Nothing
 #ifndef GHC_STABLE
     , ms_hie_date     = Nothing
 #endif
-    , ms_srcimps      = []        -- source imports are not allowed
+    , ms_srcimps      = [imp | (True, imp) <- imports]
     , ms_parsed_mod   = Nothing
     }
+    where
+      (sourceType, derivedFile) =
+          let (stem, ext) = splitExtension fp in
+          if "-boot" `isSuffixOf` ext
+          then (HsBootFile, \newExt -> stem <.> newExt ++ "-boot")
+          else (HsSrcFile , \newExt -> stem <.> newExt)
 
 -- | Run CPP on a file
 runCpp :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer

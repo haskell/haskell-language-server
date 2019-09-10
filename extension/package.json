@@ -22,7 +22,8 @@
 		"languages": [{
 			"id": "haskell",
 			"extensions": [
-				"hs"
+				"hs",
+				"hs-boot"
 			]
 		}],
 		"configuration": {
