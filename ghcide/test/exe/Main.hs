@@ -125,6 +125,47 @@ diagnosticTests = testGroup "diagnostics"
           , [(DsError, (1, 7), "Cyclic module dependency between ModuleA, ModuleB")]
           )
         ]
+  , testSession "cyclic module dependency with hs-boot" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "import {-# SOURCE #-} ModuleB"
+            ]
+      let contentB = T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA"
+            ]
+      let contentBboot = T.unlines
+            [ "module ModuleB where"
+            ]
+      _ <- openDoc' "ModuleA.hs" "haskell" contentA
+      _ <- openDoc' "ModuleB.hs" "haskell" contentB
+      _ <- openDoc' "ModuleB.hs-boot" "haskell" contentBboot
+      expectDiagnostics []
+  , testSession "correct reference used with hs-boot" $ do
+      let contentB = T.unlines
+            [ "module ModuleB where"
+            , "import {-# SOURCE #-} ModuleA"
+            ]
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "import ModuleB"
+            , "x = 5"
+            ]
+      let contentAboot = T.unlines
+            [ "module ModuleA where"
+            ]
+      let contentC = T.unlines
+            [ "module ModuleC where"
+            , "import ModuleA"
+            -- this reference will fail if it gets incorrectly
+            -- resolved to the hs-boot file
+            , "y = x"
+            ]
+      _ <- openDoc' "ModuleB.hs" "haskell" contentB
+      _ <- openDoc' "ModuleA.hs" "haskell" contentA
+      _ <- openDoc' "ModuleA.hs-boot" "haskell" contentAboot
+      _ <- openDoc' "ModuleC.hs" "haskell" contentC
+      expectDiagnostics []
   , testSession "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
