@@ -1,4 +1,6 @@
-# `ghcide`
+# `ghcide` - A library for building Haskell IDE tooling
+
+Note: `ghcide` was previously called `hie-core`.
 
 Our vision is that you should build an IDE by combining:
 
@@ -25,8 +27,8 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 
 First install the `ghcide` binary using `stack` or `cabal`, e.g.
 
-1. `git clone https://github.com/digital-asset/daml.git`
-2. `cd daml/compiler/ghcide`
+1. `git clone https://github.com/digital-asset/ghcide.git`
+2. `cd ghcide`
 3. `cabal install` or `stack install` (and make sure `~/.local/bin` is on your `$PATH`)
 
 It's important that `ghcide` is compiled with the same compiler you use to build your projects.
