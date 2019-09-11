@@ -12,15 +12,15 @@ import Development.IDE.GHC.CPP
 import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Compat
 import GHC
-import           GhcMonad
-import           StringBuffer                   as SB
+import GhcMonad
+import StringBuffer as SB
 
-import           Data.List.Extra
-import           System.FilePath
+import Data.List.Extra
+import System.FilePath
 import System.IO.Extra
 import Data.Char
 import DynFlags
-import qualified HeaderInfo                     as Hdr
+import qualified HeaderInfo as Hdr
 import Development.IDE.Types.Diagnostics
 import Development.IDE.GHC.Error
 import SysTools (Option (..), runUnlit)
