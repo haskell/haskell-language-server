@@ -1,9 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE CPP #-}
-
 module Development.IDE.Core.Preprocessor
   ( preprocessor
   ) where
@@ -70,7 +67,6 @@ parsePragmasIntoDynFlags fp contents = catchSrcErrors "pragmas" $ do
     return dflags
 
 
-
 -- | Run (unlit) literate haskell preprocessor on a file, or buffer if set
 runLhs :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
 runLhs dflags filename contents = withTempDir $ \dir -> do
@@ -97,6 +93,7 @@ runLhs dflags filename contents = withTempDir $ \dir -> do
     escape ('\'':cs) = '\\':'\'': escape cs
     escape (c:cs)    = c : escape cs
     escape []        = []
+
 
 -- | Run CPP on a file
 runCpp :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
