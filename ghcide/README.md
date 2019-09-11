@@ -59,7 +59,7 @@ Once you have got `ghcide` working outside the editor, the next step is to pick 
 
 Install the VS code extension (see https://code.visualstudio.com/docs/setup/mac for details on adding `code` to your `$PATH`):
 
-1. `cd compiler/ghcide/extension`
+1. `cd extension/`
 2. `npm ci`
 3. `npm install vsce --global` (may require `sudo`)
 4. `vsce package`
