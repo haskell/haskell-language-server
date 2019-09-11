@@ -46,7 +46,7 @@ import Data.List
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
 import           Development.IDE.GHC.Error
-import           Development.Shake                        hiding (Diagnostic, Env, newCache)
+import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
 
 import           GHC hiding (parseModule, typecheckModule)

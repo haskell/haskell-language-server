@@ -17,7 +17,7 @@ import Development.IDE.Types.Location
 import           Data.Hashable
 import           Data.Typeable
 import qualified Data.Set as S
-import           Development.Shake                        hiding (Env, newCache)
+import           Development.Shake
 import           GHC.Generics                             (Generic)
 
 import           GHC
