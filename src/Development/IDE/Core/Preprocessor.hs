@@ -37,7 +37,7 @@ preprocessor filename mbContents = do
    let isOnDisk = isNothing mbContents
 
    -- unlit content if literate Haskell ending
-   (isOnDisk, contents) <- if ".lhs" `isSuffixOf` filename
+   (isOnDisk, contents) <- if isLiterate  filename
       then do
         dflags <- getDynFlags
         newcontent <- liftIO $ runLhs dflags filename mbContents
@@ -51,6 +51,10 @@ preprocessor filename mbContents = do
         contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
         dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
         return (contents, dflags)
+
+
+isLiterate :: FilePath -> Bool
+isLiterate x = takeExtension x `elem` [".lhs",".lhs-boot"]
 
 
 -- | This reads the pragma information directly from the provided buffer.
