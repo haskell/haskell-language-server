@@ -25,7 +25,7 @@ import Development.IDE.Types.Options (IdeOptions(..))
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.OfInterest
 import Development.IDE.Types.Logger
-import           Development.Shake                        hiding (Diagnostic, Env, newCache)
+import           Development.Shake                        hiding (Diagnostic, Env)
 import Data.Either.Extra
 import qualified Language.Haskell.LSP.Messages as LSP
 
