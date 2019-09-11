@@ -16,7 +16,8 @@ module Development.IDE.GHC.Util(
     prettyPrint,
     runGhcEnv,
     textToStringBuffer,
-    moduleImportPaths
+    moduleImportPaths,
+    HscEnvEq, hscEnv, newHscEnvEq
     ) where
 
 import Config
@@ -26,11 +27,13 @@ import Fingerprint
 #endif
 import GHC
 import GhcMonad
-import GhcPlugins
+import GhcPlugins hiding (Unique)
 import Data.IORef
 import Control.Exception
 import FileCleanup
 import Platform
+import Data.Unique
+import Development.Shake.Classes
 import qualified Data.Text as T
 import StringBuffer
 import System.FilePath
@@ -110,3 +113,21 @@ moduleImportPaths pm
     mod'  = GHC.ms_mod ms
     rootPathDir  = takeDirectory file
     rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
+
+-- | An HscEnv with equality.
+data HscEnvEq = HscEnvEq Unique HscEnv
+
+hscEnv :: HscEnvEq -> HscEnv
+hscEnv (HscEnvEq _ x) = x
+
+newHscEnvEq :: HscEnv -> IO HscEnvEq
+newHscEnvEq e = do u <- newUnique; return $ HscEnvEq u e
+
+instance Show HscEnvEq where
+  show (HscEnvEq a _) = "HscEnvEq " ++ show (hashUnique a)
+
+instance Eq HscEnvEq where
+  HscEnvEq a _ == HscEnvEq b _ = a == b
+
+instance NFData HscEnvEq where
+  rnf (HscEnvEq a b) = rnf (hashUnique a) `seq` b `seq` ()
