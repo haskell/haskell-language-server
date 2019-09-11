@@ -43,7 +43,7 @@ defaultIdeOptions :: Action HscEnv -> IdeOptions
 defaultIdeOptions session = IdeOptions
     {optPreprocessor = (,) []
     ,optGhcSession = session
-    ,optExtensions = ["hs"]
+    ,optExtensions = ["hs", "lhs"]
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
     ,optThreads = 0
     ,optShakeProfiling = Nothing

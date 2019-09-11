@@ -23,7 +23,9 @@
 			"id": "haskell",
 			"extensions": [
 				"hs",
-				"hs-boot"
+				"hs-boot",
+				"lhs-boot",
+				"lhs"
 			]
 		}],
 		"configuration": {
