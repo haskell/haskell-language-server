@@ -73,6 +73,8 @@ main = do
                     { optReportProgress = clientSupportsProgress caps }
             initialise (mainRule >> action kick) event logger options vfs
     else do
+        -- Note that this whole section needs to change once we have genuine
+        -- multi environment support. Needs rewriting in terms of loadEnvironment.
         putStrLn "[1/6] Finding hie-bios cradle"
         cradle <- findCradle (dir <> "/")
         print cradle
