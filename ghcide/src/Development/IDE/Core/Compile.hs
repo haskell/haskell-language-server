@@ -38,7 +38,6 @@ import qualified HeaderInfo                     as Hdr
 import           MkIface
 import           StringBuffer                   as SB
 import           TidyPgm
-import qualified GHC.LanguageExtensions as LangExt
 
 import Control.Monad.Extra
 import Control.Monad.Except
@@ -264,6 +263,7 @@ getModSummaryFromBuffer fp contents dflags parsed = do
           then (HsBootFile, \newExt -> stem <.> newExt ++ "-boot")
           else (HsSrcFile , \newExt -> stem <.> newExt)
 
+
 -- | Given a buffer, flags, file path and module summary, produce a
 -- parsed module (or errors) and any parse warnings.
 parseFileContents
@@ -273,27 +273,8 @@ parseFileContents
        -> Maybe SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
 parseFileContents sourcePlugin filename mbContents = do
+   (contents, dflags) <- preprocessor filename mbContents
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-   contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
-   let isOnDisk = isNothing mbContents
-
-   -- unlit content if literate Haskell ending
-   (isOnDisk, contents) <- if ".lhs" `isSuffixOf` filename
-      then do
-        dflags <- getDynFlags
-        newcontent <- liftIO $ runLhs dflags filename mbContents
-        return (False, newcontent)
-      else return (isOnDisk, contents)
-
-   dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
-   (contents, dflags) <-
-      if not $ xopt LangExt.Cpp dflags then
-          return (contents, dflags)
-      else do
-          contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
-          dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
-          return (contents, dflags)
-
    case unP Parser.parseModule (mkPState dflags contents loc) of
      PFailed _ locErr msgErr ->
       throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
@@ -330,16 +311,3 @@ parseFileContents sourcePlugin filename mbContents = do
                       }
                    warnings = diagFromErrMsgs "parser" dflags warns
                pure (warnings, pm)
-
-
--- | This reads the pragma information directly from the provided buffer.
-parsePragmasIntoDynFlags
-    :: GhcMonad m
-    => FilePath
-    -> SB.StringBuffer
-    -> m (Either [FileDiagnostic] DynFlags)
-parsePragmasIntoDynFlags fp contents = catchSrcErrors "pragmas" $ do
-    dflags0  <- getSessionDynFlags
-    let opts = Hdr.getOptions dflags0 contents fp
-    (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
-    return dflags
