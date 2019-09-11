@@ -72,7 +72,7 @@ runGhcEnv :: HscEnv -> Ghc a -> IO a
 runGhcEnv env act = do
     filesToClean <- newIORef emptyFilesToClean
     dirsToClean <- newIORef mempty
-    let dflags = (hsc_dflags env){filesToClean=filesToClean, dirsToClean=dirsToClean}
+    let dflags = (hsc_dflags env){filesToClean=filesToClean, dirsToClean=dirsToClean, useUnicode=True}
     ref <- newIORef env{hsc_dflags=dflags}
     unGhc act (Session ref) `finally` do
         cleanTempFiles dflags
