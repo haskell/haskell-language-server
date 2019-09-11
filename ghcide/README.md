@@ -125,3 +125,44 @@ au User lsp_setup call lsp#register_server({
 ```
 
 To verify it works move your cursor over a symbol and run `:LspHover`.
+
+### coc.nvim
+
+Install [coc.nvim](https://github.com/neoclide/coc.nvim)
+
+Add this to your coc-settings.json (which you can edit with :CocConfig):
+
+```json
+{
+  "languageserver": {
+    "haskell": {
+      "command": "ghcide",
+      "args": [
+        "--lsp"
+      ],
+      "rootPatterns": [
+        ".stack.yaml",
+        ".hie-bios",
+        "BUILD.bazel",
+        "cabal.config",
+        "package.yaml"
+      ],
+      "filetypes": [
+        "hs",
+        "lhs",
+        "haskell"
+      ],
+      "initializationOptions": {
+        "languageServerHaskell": {
+          "hlintOn": true,
+          "maxNumberOfProblems": 10,
+          "completionSnippetsOn": true
+        }
+      }
+    }
+  }
+}
+```
+
+Here's a nice article on setting up neovim and coc: [Vim and Haskell in
+2019](http://marco-lopes.com/articles/Vim-and-Haskell-in-2019/)
