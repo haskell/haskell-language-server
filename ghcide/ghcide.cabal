@@ -2,7 +2,7 @@ cabal-version:      1.20
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            0.0.1
+version:            0.0.2
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset
@@ -11,13 +11,13 @@ copyright:          Digital Asset 2018-2019
 synopsis:           The core of an IDE
 description:
     A library for building Haskell IDE's on top of the GHC API.
-homepage:           https://github.com/digital-asset/daml#readme
-bug-reports:        https://github.com/digital-asset/daml/issues
+homepage:           https://github.com/digital-asset/ghcide#readme
+bug-reports:        https://github.com/digital-asset/ghcide/issues
 tested-with:        GHC==8.6.5
 
 source-repository head
     type:     git
-    location: https://github.com/digital-asset/daml.git
+    location: https://github.com/digital-asset/ghcide.git
 
 library
     default-language:   Haskell2010
