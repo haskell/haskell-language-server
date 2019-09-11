@@ -8,6 +8,7 @@ module Development.IDE.GHC.Error
   , diagFromString
   , diagFromStrings
   , diagFromGhcException
+  , catchSrcErrors
 
   -- * utilities working with spans
   , srcSpanToLocation
@@ -23,6 +24,9 @@ import Development.IDE.GHC.Orphans()
 import qualified FastString as FS
 import           GHC
 import           Bag
+import DynFlags
+import HscTypes
+import Panic
 import           ErrUtils
 import           SrcLoc
 import qualified Outputable                 as Out
@@ -109,6 +113,19 @@ realSpan :: SrcSpan
 realSpan = \case
   RealSrcSpan r -> Just r
   UnhelpfulSpan _ -> Nothing
+
+
+-- | Run something in a Ghc monad and catch the errors (SourceErrors and
+-- compiler-internal exceptions like Panic or InstallationError).
+catchSrcErrors :: GhcMonad m => T.Text -> m a -> m (Either [FileDiagnostic] a)
+catchSrcErrors fromWhere ghcM = do
+      dflags <- getDynFlags
+      handleGhcException (ghcExceptionToDiagnostics dflags) $
+        handleSourceError (sourceErrorToDiagnostics dflags) $
+        Right <$> ghcM
+    where
+        ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
+        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags . srcErrorMessages
 
 
 diagFromGhcException :: T.Text -> DynFlags -> GhcException -> [FileDiagnostic]
