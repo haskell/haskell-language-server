@@ -33,17 +33,17 @@ import Data.Maybe
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
 preprocessor :: GhcMonad m => FilePath -> Maybe StringBuffer -> ExceptT [FileDiagnostic] m (StringBuffer, DynFlags)
 preprocessor filename mbContents = do
-   contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
-   let isOnDisk = isNothing mbContents
-
-   -- unlit content if literate Haskell ending
-   (isOnDisk, contents) <- if isLiterate  filename
-      then do
+   -- Perform unlit
+   (isOnDisk, contents) <- if isLiterate filename then do
         dflags <- getDynFlags
         newcontent <- liftIO $ runLhs dflags filename mbContents
         return (False, newcontent)
-      else return (isOnDisk, contents)
+   else do
+      contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
+      let isOnDisk = isNothing mbContents
+      return (isOnDisk, contents)
 
+   -- Perform cpp
    dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
    if not $ xopt LangExt.Cpp dflags then
         return (contents, dflags)
