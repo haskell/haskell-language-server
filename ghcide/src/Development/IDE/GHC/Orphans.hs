@@ -46,12 +46,6 @@ instance Show ParsedModule where
 instance NFData ModSummary where
     rnf = rwhnf
 
-instance Show HscEnv where
-    show _ = "HscEnv"
-
-instance NFData HscEnv where
-    rnf = rwhnf
-
 instance NFData ParsedModule where
     rnf = rwhnf
 

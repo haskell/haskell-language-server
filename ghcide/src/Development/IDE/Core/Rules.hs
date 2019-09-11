@@ -36,6 +36,7 @@ import Development.IDE.Import.FindImports
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
+import Development.IDE.GHC.Util
 import Data.Coerce
 import Data.Either.Extra
 import Data.Maybe
@@ -54,10 +55,12 @@ import Development.IDE.GHC.Compat
 import           UniqSupply
 import NameCache
 import HscTypes
+import GHC.Generics(Generic)
 
 import qualified Development.IDE.Spans.AtPoint as AtPoint
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
+import Development.Shake.Classes
 import System.Directory
 import System.FilePath
 import MkIface
@@ -116,7 +119,7 @@ getAtPoint file pos = fmap join $ runMaybeT $ do
 getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
 getDefinition file pos = fmap join $ runMaybeT $ do
     spans <- useE GetSpanInfo file
-    pkgState <- useNoFileE GhcSession
+    pkgState <- hscEnv <$> useE GhcSession file
     opts <- lift getIdeOptions
     let getHieFile x = useNoFile (GetHieFile x)
     lift $ AtPoint.gotoDefinition getHieFile opts pkgState spans pos
@@ -131,8 +134,9 @@ writeIfacesAndHie ::
 writeIfacesAndHie ifDir files =
     runMaybeT $ do
         tcms <- usesE TypeCheck files
-        session <- lift $ useNoFile_ GhcSession
-        liftIO $ concat <$> mapM (writeTcm session) tcms
+        fmap concat $ forM (zip files tcms) $ \(file, tcm) -> do
+            session <- lift $ hscEnv <$> use_ GhcSession file
+            liftIO $ writeTcm session tcm
   where
     writeTcm session tcm =
         do
@@ -174,7 +178,7 @@ getParsedModuleRule :: Rules ()
 getParsedModuleRule =
     define $ \GetParsedModule file -> do
         (_, contents) <- getFileContents file
-        packageState <- useNoFile_ GhcSession
+        packageState <- hscEnv <$> use_ GhcSession file
         opt <- getIdeOptions
         liftIO $ parseModule opt packageState (fromNormalizedFilePath file) contents
 
@@ -184,7 +188,7 @@ getLocatedImportsRule =
         pm <- use_ GetParsedModule file
         let ms = pm_mod_summary pm
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
-        env <- useNoFile_ GhcSession
+        env <- hscEnv <$> useNoFile_ GhcSession
         let dflags = addRelativeImport pm $ hsc_dflags env
         opt <- getIdeOptions
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
@@ -295,7 +299,7 @@ getSpanInfoRule =
     define $ \GetSpanInfo file -> do
         tc <- use_ TypeCheck file
         (fileImports, _) <- use_ GetLocatedImports file
-        packageState <- useNoFile_ GhcSession
+        packageState <- hscEnv <$> use_ GhcSession file
         x <- liftIO $ getSrcSpanInfos packageState fileImports tc
         return ([], Just x)
 
@@ -307,7 +311,7 @@ typeCheckRule =
         deps <- use_ GetDependencies file
         tms <- uses_ TypeCheck (transitiveModuleDeps deps)
         setPriority priorityTypeCheck
-        packageState <- useNoFile_ GhcSession
+        packageState <- hscEnv <$> use_ GhcSession file
         liftIO $ typecheckModule packageState tms pm
 
 
@@ -317,14 +321,33 @@ generateCoreRule =
         deps <- use_ GetDependencies file
         (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
         setPriority priorityGenerateCore
-        packageState <- useNoFile_ GhcSession
+        packageState <- hscEnv <$> use_ GhcSession file
         liftIO $ compileModule packageState tms tm
 
+
+-- A local rule type to get caching. We want to use newCache, but it has
+-- thread killed exception issues, so we lift it to a full rule.
+-- https://github.com/digital-asset/daml/pull/2808#issuecomment-529639547
+type instance RuleResult GhcSessionIO = GhcSessionFun
+
+data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
+instance Hashable GhcSessionIO
+instance NFData   GhcSessionIO
+
+newtype GhcSessionFun = GhcSessionFun (FilePath -> Action HscEnvEq)
+instance Show GhcSessionFun where show _ = "GhcSessionFun"
+instance NFData GhcSessionFun where rnf !_ = ()
+
+
 loadGhcSession :: Rules ()
-loadGhcSession =
-    defineNoFile $ \GhcSession -> do
+loadGhcSession = do
+    defineNoFile $ \GhcSessionIO -> do
         opts <- getIdeOptions
-        optGhcSession opts
+        liftIO $ GhcSessionFun <$> optGhcSession opts
+    define $ \GhcSession file -> do
+        GhcSessionFun fun <- useNoFile_ GhcSessionIO
+        val <- fun $ fromNormalizedFilePath file
+        return ([], Just val)
 
 
 getHieFileRule :: Rules ()
