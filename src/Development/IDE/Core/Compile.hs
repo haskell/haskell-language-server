@@ -32,7 +32,6 @@ import           Lexer
 import ErrUtils
 
 import qualified GHC
-import           Panic
 import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
@@ -344,15 +343,3 @@ parsePragmasIntoDynFlags fp contents = catchSrcErrors "pragmas" $ do
     let opts = Hdr.getOptions dflags0 contents fp
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
     return dflags
-
--- | Run something in a Ghc monad and catch the errors (SourceErrors and
--- compiler-internal exceptions like Panic or InstallationError).
-catchSrcErrors :: GhcMonad m => T.Text -> m a -> m (Either [FileDiagnostic] a)
-catchSrcErrors fromWhere ghcM = do
-      dflags <- getDynFlags
-      handleGhcException (ghcExceptionToDiagnostics dflags) $
-        handleSourceError (sourceErrorToDiagnostics dflags) $
-        Right <$> ghcM
-    where
-        ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
-        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags . srcErrorMessages
