@@ -13,6 +13,7 @@ module Development.IDE.Core.RuleTypes(
 
 import           Control.DeepSeq
 import           Development.IDE.Import.DependencyInformation
+import Development.IDE.GHC.Util
 import Development.IDE.Types.Location
 import           Data.Hashable
 import           Data.Typeable
@@ -66,7 +67,7 @@ type instance RuleResult GetSpanInfo = [SpanInfo]
 type instance RuleResult GenerateCore = CoreModule
 
 -- | A GHC session that we reuse.
-type instance RuleResult GhcSession = HscEnv
+type instance RuleResult GhcSession = HscEnvEq
 
 -- | Resolve the imports in a module to the file path of a module
 -- in the same package or the package id of another package.
