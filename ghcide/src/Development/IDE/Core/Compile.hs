@@ -57,6 +57,9 @@ import           System.FilePath
 import System.IO.Extra
 import Data.Char
 
+import SysTools (Option (..), runUnlit)
+
+
 -- | Given a string buffer, return a pre-processed @ParsedModule@.
 parseModule
     :: IdeOptions
@@ -267,6 +270,33 @@ getModSummaryFromBuffer fp contents dflags parsed = do
           then (HsBootFile, \newExt -> stem <.> newExt ++ "-boot")
           else (HsSrcFile , \newExt -> stem <.> newExt)
 
+-- | Run (unlit) literate haskell preprocessor on a file, or buffer if set
+runLhs :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
+runLhs dflags filename contents = withTempDir $ \dir -> do
+    let fout = dir </> takeFileName filename <.> "unlit"
+    filesrc <- case contents of
+        Nothing   -> return filename
+        Just cnts -> do
+            let fsrc = dir </> takeFileName filename <.> "literate"
+            withBinaryFile fsrc WriteMode $ \h ->
+                hPutStringBuffer h cnts
+            return fsrc
+    unlit filesrc fout
+    SB.hGetStringBuffer fout
+  where
+    unlit filein fileout = SysTools.runUnlit dflags (args filein fileout)
+    args filein fileout = [
+                      SysTools.Option     "-h"
+                    , SysTools.Option     (escape filename) -- name this file
+                    , SysTools.FileOption "" filein       -- input file
+                    , SysTools.FileOption "" fileout ]    -- output file
+    -- taken from ghc's DriverPipeline.hs
+    escape ('\\':cs) = '\\':'\\': escape cs
+    escape ('\"':cs) = '\\':'\"': escape cs
+    escape ('\'':cs) = '\\':'\'': escape cs
+    escape (c:cs)    = c : escape cs
+    escape []        = []
+
 -- | Run CPP on a file
 runCpp :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
 runCpp dflags filename contents = withTempDir $ \dir -> do
@@ -304,7 +334,6 @@ runCpp dflags filename contents = withTempDir $ \dir -> do
                     | otherwise = x
             stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
 
-
 -- | Given a buffer, flags, file path and module summary, produce a
 -- parsed module (or errors) and any parse warnings.
 parseFileContents
@@ -314,15 +343,24 @@ parseFileContents
        -> Maybe SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
 parseFileContents preprocessor filename mbContents = do
-   contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-   dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
+   contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
+   let isOnDisk = isNothing mbContents
 
+   -- unlit content if literate Haskell ending
+   (isOnDisk, contents) <- if ".lhs" `isSuffixOf` filename
+      then do
+        dflags <- getDynFlags
+        newcontent <- liftIO $ runLhs dflags filename mbContents
+        return (False, newcontent)
+      else return (isOnDisk, contents)
+
+   dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
    (contents, dflags) <-
       if not $ xopt LangExt.Cpp dflags then
           return (contents, dflags)
       else do
-          contents <- liftIO $ runCpp dflags filename mbContents
+          contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
           dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
           return (contents, dflags)
 
