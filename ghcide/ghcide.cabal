@@ -38,7 +38,7 @@ library
         ghc >= 8.4,
         hashable,
         haskell-lsp-types,
-        haskell-lsp,
+        haskell-lsp >= 0.15,
         mtl,
         network-uri,
         prettyprinter-ansi-terminal,
