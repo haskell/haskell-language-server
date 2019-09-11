@@ -4,11 +4,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE CPP #-}
 
--- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
---   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
 module Development.IDE.Core.Preprocessor
-  ( runLhs
-  , runCpp
+  ( preprocessor
   ) where
 
 import Development.IDE.GHC.CPP
@@ -22,8 +19,53 @@ import           Data.List.Extra
 import           System.FilePath
 import System.IO.Extra
 import Data.Char
-
+import DynFlags
+import qualified HeaderInfo                     as Hdr
+import Development.IDE.Types.Diagnostics
+import Development.IDE.GHC.Error
 import SysTools (Option (..), runUnlit)
+import Control.Monad.Trans.Except
+import qualified GHC.LanguageExtensions as LangExt
+import Data.Maybe
+
+
+-- | Given a file and some contents, apply any necessary preprocessors,
+--   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
+preprocessor :: GhcMonad m => FilePath -> Maybe StringBuffer -> ExceptT [FileDiagnostic] m (StringBuffer, DynFlags)
+preprocessor filename mbContents = do
+   contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
+   let isOnDisk = isNothing mbContents
+
+   -- unlit content if literate Haskell ending
+   (isOnDisk, contents) <- if ".lhs" `isSuffixOf` filename
+      then do
+        dflags <- getDynFlags
+        newcontent <- liftIO $ runLhs dflags filename mbContents
+        return (False, newcontent)
+      else return (isOnDisk, contents)
+
+   dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
+   if not $ xopt LangExt.Cpp dflags then
+        return (contents, dflags)
+   else do
+        contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
+        dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
+        return (contents, dflags)
+
+
+-- | This reads the pragma information directly from the provided buffer.
+parsePragmasIntoDynFlags
+    :: GhcMonad m
+    => FilePath
+    -> SB.StringBuffer
+    -> m (Either [FileDiagnostic] DynFlags)
+parsePragmasIntoDynFlags fp contents = catchSrcErrors "pragmas" $ do
+    dflags0  <- getSessionDynFlags
+    let opts = Hdr.getOptions dflags0 contents fp
+    (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
+    return dflags
+
+
 
 -- | Run (unlit) literate haskell preprocessor on a file, or buffer if set
 runLhs :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
