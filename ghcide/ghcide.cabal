@@ -99,6 +99,7 @@ library
     other-modules:
         Development.IDE.Core.Debouncer
         Development.IDE.Core.Compile
+        Development.IDE.Core.Preprocessor
         Development.IDE.GHC.Compat
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Error
