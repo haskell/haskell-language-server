@@ -213,6 +213,7 @@ codeActionTests = testGroup "code actions"
   [ renameActionTests
   , typeWildCardActionTests
   , removeImportTests
+  , importRenameActionTests
   ]
 
 renameActionTests :: TestTree
@@ -412,6 +413,27 @@ removeImportTests = testGroup "remove import actions"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
+
+importRenameActionTests :: TestTree
+importRenameActionTests = testGroup "import rename actions"
+  [ testSession "Data.Mape -> Data.Map"   $ check "Map"
+  , testSession "Data.Mape -> Data.Maybe" $ check "Maybe" ] where
+  check modname = do
+      let content = T.unlines
+            [ "module Testing where"
+            , "import Data.Mape"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      actionsOrCommands <- getCodeActions doc (Range (Position 2 8) (Position 2 16))
+      let [changeToMap] = [action | CACodeAction action@CodeAction{ _title = actionTitle } <- actionsOrCommands, ("Data." <> modname) `T.isInfixOf` actionTitle ]
+      executeCodeAction changeToMap
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "module Testing where"
+            , "import Data." <> modname
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
 
 ----------------------------------------------------------------------
 -- Utils

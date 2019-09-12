@@ -20,6 +20,7 @@ import Language.Haskell.LSP.Messages
 import qualified Data.Rope.UTF16 as Rope
 import Data.Char
 import Data.Maybe
+import Data.List
 import qualified Data.Text as T
 
 -- | Generate code actions.
@@ -96,6 +97,15 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
 --       In the instance declaration for `Unit (m a)'
     | exts@(_:_) <- filter (`Set.member` ghcExtensions) $ T.split (not . isAlpha) $ T.replace "-X" "" _message
         = [("Add " <> x <> " extension", [TextEdit (Range (Position 0 0) (Position 0 0)) $ "{-# LANGUAGE " <> x <> " #-}\n"]) | x <- exts]
+
+-- src/Development/IDE/Core/Compile.hs:58:1: error:
+--     Could not find module ‘Data.Cha’
+--     Perhaps you meant Data.Char (from base-4.12.0.0)
+    | "Could not find module" `T.isInfixOf` _message
+    , "Perhaps you meant"     `T.isInfixOf` _message
+      = map proposeModule $ nub $ findSuggestedModules _message where
+      findSuggestedModules = (map (head . T.words) . drop 2 . T.lines)
+      proposeModule mod = ("replace with " <> mod, [TextEdit _range mod])
 
 suggestAction _ _ = []
 
