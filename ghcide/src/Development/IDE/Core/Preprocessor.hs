@@ -31,14 +31,15 @@ import Data.Maybe
 preprocessor :: GhcMonad m => FilePath -> Maybe StringBuffer -> ExceptT [FileDiagnostic] m (StringBuffer, DynFlags)
 preprocessor filename mbContents = do
     -- Perform unlit
-    (isOnDisk, contents) <- if isLiterate filename then do
-        dflags <- getDynFlags
-        newcontent <- liftIO $ runLhs dflags filename mbContents
-        return (False, newcontent)
-    else do
-        contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
-        let isOnDisk = isNothing mbContents
-        return (isOnDisk, contents)
+    (isOnDisk, contents) <-
+        if isLiterate filename then do
+            dflags <- getDynFlags
+            newcontent <- liftIO $ runLhs dflags filename mbContents
+            return (False, newcontent)
+        else do
+            contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
+            let isOnDisk = isNothing mbContents
+            return (isOnDisk, contents)
 
     -- Perform cpp
     dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents

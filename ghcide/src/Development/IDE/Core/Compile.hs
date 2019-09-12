@@ -272,7 +272,7 @@ parseFileContents
        -> FilePath  -- ^ the filename (for source locations)
        -> Maybe SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
-parseFileContents sourcePlugin filename mbContents = do
+parseFileContents customPreprocessor filename mbContents = do
    (contents, dflags) <- preprocessor filename mbContents
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    case unP Parser.parseModule (mkPState dflags contents loc) of
@@ -299,7 +299,7 @@ parseFileContents sourcePlugin filename mbContents = do
                  throwE $ diagFromErrMsgs "parser" dflags $ snd $ getMessages pst dflags
 
                -- Ok, we got here. It's safe to continue.
-               let (errs, parsed) = sourcePlugin rdr_module
+               let (errs, parsed) = customPreprocessor rdr_module
                unless (null errs) $ throwE $ diagFromStrings "parser" errs
                ms <- getModSummaryFromBuffer filename contents dflags parsed
                let pm =
