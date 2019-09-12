@@ -68,6 +68,12 @@ locateModule
     -> m (Either [FileDiagnostic] Import)
 locateModule dflags exts doesExist modName mbPkgName isSource = do
   case mbPkgName of
+    -- "this" means that we should only look in the current package
+    Just "this" -> do
+      mbFile <- locateModuleFile dflags exts doesExist isSource $ unLoc modName
+      case mbFile of
+        Nothing -> return $ Left $ notFoundErr dflags modName $ LookupNotFound []
+        Just file -> return $ Right $ FileImport file
     -- if a package name is given we only go look for a package
     Just _pkgName -> lookupInPackageDB dflags
     Nothing -> do

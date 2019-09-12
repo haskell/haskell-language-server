@@ -182,6 +182,30 @@ diagnosticTests = testGroup "diagnostics"
           , [(DsWarning, (2, 0), "The import of 'ModuleA' is redundant")]
           )
         ]
+  , testSession "package imports" $ do
+      let thisDataListContent = T.unlines
+            [ "module Data.List where"
+            , "x = 123"
+            ]
+      let mainContent = T.unlines
+            [ "{-# LANGUAGE PackageImports #-}"
+            , "module Main where"
+            , "import qualified \"this\" Data.List as ThisList"
+            , "import qualified \"base\" Data.List as BaseList"
+            , "useThis = ThisList.x"
+            , "useBase = BaseList.map"
+            , "wrong1 = ThisList.map"
+            , "wrong2 = BaseList.x"
+            ]
+      _ <- openDoc' "Data/List.hs" "haskell" thisDataListContent
+      _ <- openDoc' "Main.hs" "haskell" mainContent
+      expectDiagnostics
+        [ ( "Main.hs"
+          , [(DsError, (6, 9), "Not in scope: \8216ThisList.map\8217")
+            ,(DsError, (7, 9), "Not in scope: \8216BaseList.x\8217")
+            ]
+          )
+        ]
   ]
 
 codeActionTests :: TestTree
