@@ -48,6 +48,7 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
 --       except perhaps to import instances from `Data.List'
 --     To import instances alone, use: import Data.List()
     | "The import of " `T.isInfixOf` _message
+    || "The qualified import of " `T.isInfixOf` _message
     , " is redundant" `T.isInfixOf` _message
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
 
