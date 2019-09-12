@@ -65,6 +65,14 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
     | renameSuggestions@(_:_) <- extractRenamableTerms _message
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
 
+-- Foo.hs:3:8: error:
+--     * Found type wildcard `_' standing for `p -> p1 -> p'
+
+    | "Found type wildcard" `T.isInfixOf` _message
+    , " standing for " `T.isInfixOf` _message
+    , typeSignature <- extractWildCardTypeSignature _message
+        =  [("Use type signature: ‘" <> typeSignature <> "’", [TextEdit _range typeSignature])]
+
 -- File.hs:22:8: error:
 --     Illegal lambda-case (use -XLambdaCase)
 -- File.hs:22:6: error:
@@ -100,6 +108,14 @@ mkRenameEdit contents range name =
       curr <- textInRange range <$> contents
       pure $ "`" `T.isPrefixOf` curr && "`" `T.isSuffixOf` curr
 
+extractWildCardTypeSignature :: T.Text -> T.Text
+extractWildCardTypeSignature =
+  -- inferring when parens are actually needed around the type signature would
+  -- require understanding both the precedence of the context of the _ and of
+  -- the signature itself. Inserting them unconditionally is ugly but safe.
+  ("(" `T.append`) . (`T.append` ")") .
+  T.takeWhile (/='’') . T.dropWhile (=='‘') . T.dropWhile (/='‘') .
+  snd . T.breakOnEnd "standing for "
 
 extractRenamableTerms :: T.Text -> [T.Text]
 extractRenamableTerms msg
