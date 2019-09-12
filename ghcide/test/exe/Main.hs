@@ -211,6 +211,7 @@ diagnosticTests = testGroup "diagnostics"
 codeActionTests :: TestTree
 codeActionTests = testGroup "code actions"
   [ renameActionTests
+  , typeWildCardActionTests
   ]
 
 renameActionTests :: TestTree
@@ -285,6 +286,76 @@ renameActionTests = testGroup "rename actions"
             , "monus :: Int -> Int"
             , "monus x y = max 0 (x - y)"
             , "foo x y = x `monus` y"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  ]
+
+typeWildCardActionTests :: TestTree
+typeWildCardActionTests = testGroup "type wildcard actions"
+  [ testSession "global signature" $ do
+      let content = T.unlines
+            [ "module Testing where"
+            , "func :: _"
+            , "func x = x"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      actionsOrCommands <- getCodeActions doc (Range (Position 2 1) (Position 2 10))
+      let [addSignature] = [action | CACodeAction action@CodeAction { _title = actionTitle } <- actionsOrCommands
+                                   , "Use type signature" `T.isInfixOf` actionTitle
+                           ]
+      executeCodeAction addSignature
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "module Testing where"
+            , "func :: (p -> p)"
+            , "func x = x"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "multi-line message" $ do
+      let content = T.unlines
+            [ "module Testing where"
+            , "func :: _"
+            , "func x y = x + y"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      actionsOrCommands <- getCodeActions doc (Range (Position 2 1) (Position 2 10))
+      let [addSignature] = [action | CACodeAction action@CodeAction { _title = actionTitle } <- actionsOrCommands
+                                    , "Use type signature" `T.isInfixOf` actionTitle
+                              ]
+      executeCodeAction addSignature
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "module Testing where"
+            , "func :: (Integer -> Integer -> Integer)"
+            , "func x y = x + y"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "local signature" $ do
+      let content = T.unlines
+            [ "module Testing where"
+            , "func :: Int -> Int"
+            , "func x ="
+            , "  let y :: _"
+            , "      y = x * 2"
+            , "  in y"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      actionsOrCommands <- getCodeActions doc (Range (Position 4 1) (Position 4 10))
+      let [addSignature] = [action | CACodeAction action@CodeAction { _title = actionTitle } <- actionsOrCommands
+                                    , "Use type signature" `T.isInfixOf` actionTitle
+                              ]
+      executeCodeAction addSignature
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "module Testing where"
+            , "func :: Int -> Int"
+            , "func x ="
+            , "  let y :: (Int)"
+            , "      y = x * 2"
+            , "  in y"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
