@@ -6,6 +6,7 @@
 module Main (main) where
 
 import Control.Monad (void)
+import Control.Monad.IO.Class (liftIO)
 import qualified Data.Text as T
 import Development.IDE.Test
 import Development.IDE.Test.Runfiles
@@ -26,6 +27,7 @@ main = defaultMain $ testGroup "HIE"
       closeDoc doc
       void (message :: Session ProgressDoneNotification)
   , diagnosticTests
+  , codeActionTests
   ]
 
 
@@ -182,6 +184,86 @@ diagnosticTests = testGroup "diagnostics"
         ]
   ]
 
+codeActionTests :: TestTree
+codeActionTests = testGroup "code actions"
+  [ renameActionTests
+  ]
+
+renameActionTests :: TestTree
+renameActionTests = testGroup "rename actions"
+  [ testSession "change to local variable name" $ do
+      let content = T.unlines
+            [ "module Testing where"
+            , "foo :: Int -> Int"
+            , "foo argName = argNme"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      [CACodeAction action@CodeAction { _title = actionTitle }]
+          <- getCodeActions doc (Range (Position 2 14) (Position 2 20))
+      liftIO $ "Replace with ‘argName’" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "module Testing where"
+            , "foo :: Int -> Int"
+            , "foo argName = argName"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "change to name of imported function" $ do
+      let content = T.unlines
+            [ "module Testing where"
+            , "import Data.Maybe (maybeToList)"
+            , "foo :: Maybe a -> [a]"
+            , "foo = maybToList"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      [CACodeAction action@CodeAction { _title = actionTitle }]
+          <- getCodeActions doc (Range (Position 3 6) (Position 3 16))
+      liftIO $ "Replace with ‘maybeToList’" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "module Testing where"
+            , "import Data.Maybe (maybeToList)"
+            , "foo :: Maybe a -> [a]"
+            , "foo = maybeToList"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "suggest multiple local variable names" $ do
+      let content = T.unlines
+            [ "module Testing where"
+            , "foo :: Char -> Char -> Char -> Char"
+            , "foo argument1 argument2 argument3 = argumentX"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      actionsOrCommands <- getCodeActions doc (Range (Position 2 36) (Position 2 45))
+      let actionTitles = [ actionTitle | CACodeAction CodeAction{ _title = actionTitle } <- actionsOrCommands ]
+          expectedActionTitles = ["Replace with ‘argument1’", "Replace with ‘argument2’", "Replace with ‘argument3’"]
+      liftIO $ expectedActionTitles @=? actionTitles
+  , testSession "change infix function" $ do
+      let content = T.unlines
+            [ "module Testing where"
+            , "monus :: Int -> Int"
+            , "monus x y = max 0 (x - y)"
+            , "foo x y = x `monnus` y"
+            ]
+      doc <- openDoc' "Testing.hs" "haskell" content
+      _ <- waitForDiagnostics
+      actionsOrCommands <- getCodeActions doc (Range (Position 3 12) (Position 3 20))
+      [fixTypo] <- pure [action | CACodeAction action@CodeAction{ _title = actionTitle } <- actionsOrCommands, "monus" `T.isInfixOf` actionTitle ]
+      executeCodeAction fixTypo
+      contentAfterAction <- documentContents doc
+      let expectedContentAfterAction = T.unlines
+            [ "module Testing where"
+            , "monus :: Int -> Int"
+            , "monus x y = max 0 (x - y)"
+            , "foo x y = x `monus` y"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  ]
 
 ----------------------------------------------------------------------
 -- Utils

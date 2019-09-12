@@ -19,6 +19,7 @@ import Language.Haskell.LSP.VFS
 import Language.Haskell.LSP.Messages
 import qualified Data.Rope.UTF16 as Rope
 import Data.Char
+import Data.Maybe
 import qualified Data.Text as T
 
 -- | Generate code actions.
@@ -48,9 +49,21 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
 --     To import instances alone, use: import Data.List()
     | "The import of " `T.isInfixOf` _message
     , " is redundant" `T.isInfixOf` _message
-    , let newlineAfter = maybe False (T.isPrefixOf "\n" . T.dropWhile (\x -> isSpace x && x /= '\n') . snd . textAtPosition _end) contents
-    , let extend = newlineAfter && _character _start == 0 -- takes up an entire line, so remove the whole line
-        = [("Remove import", [TextEdit (if extend then Range _start (Position (_line _end + 1) 0) else _range) ""])]
+        = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
+
+-- File.hs:52:41: error:
+--     * Variable not in scope:
+--         suggestAcion :: Maybe T.Text -> Range -> Range
+--     * Perhaps you meant ‘suggestAction’ (line 83)
+-- File.hs:94:37: error:
+--     Not in scope: ‘T.isPrfixOf’
+--     Perhaps you meant one of these:
+--       ‘T.isPrefixOf’ (imported from Data.Text),
+--       ‘T.isInfixOf’ (imported from Data.Text),
+--       ‘T.isSuffixOf’ (imported from Data.Text)
+--     Module ‘Data.Text’ does not export ‘isPrfixOf’.
+    | renameSuggestions@(_:_) <- extractRenamableTerms _message
+        = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
 
 -- File.hs:22:8: error:
 --     Illegal lambda-case (use -XLambdaCase)
@@ -77,19 +90,68 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
 
 suggestAction _ _ = []
 
+mkRenameEdit :: Maybe T.Text -> Range -> T.Text -> TextEdit
+mkRenameEdit contents range name =
+    if fromMaybe False maybeIsInfixFunction
+      then TextEdit range ("`" <> name <> "`")
+      else TextEdit range name
+  where
+    maybeIsInfixFunction = do
+      curr <- textInRange range <$> contents
+      pure $ "`" `T.isPrefixOf` curr && "`" `T.isSuffixOf` curr
+
+
+extractRenamableTerms :: T.Text -> [T.Text]
+extractRenamableTerms msg
+  -- Account for both "Variable not in scope" and "Not in scope"
+  | "ot in scope:" `T.isInfixOf` msg = extractSuggestions msg
+  | otherwise = []
+  where
+    extractSuggestions = map getEnclosed
+                       . concatMap singleSuggestions
+                       . filter isKnownSymbol
+                       . T.lines
+    singleSuggestions = T.splitOn "), " -- Each suggestion is comma delimited
+    isKnownSymbol t = " (imported from" `T.isInfixOf` t || " (line " `T.isInfixOf` t
+    getEnclosed = T.dropWhile (== '‘')
+                . T.dropWhileEnd (== '’')
+                . T.dropAround (\c -> c /= '‘' && c /= '’')
+
+-- | If a range takes up a whole line (it begins at the start of the line and there's only whitespace
+-- between the end of the range and the next newline), extend the range to take up the whole line.
+extendToWholeLineIfPossible :: Maybe T.Text -> Range -> Range
+extendToWholeLineIfPossible contents range@Range{..} =
+    let newlineAfter = maybe False (T.isPrefixOf "\n" . T.dropWhile (\x -> isSpace x && x /= '\n') . snd . splitTextAtPosition _end) contents
+        extend = newlineAfter && _character _start == 0 -- takes up an entire line, so remove the whole line
+    in if extend then Range _start (Position (_line _end + 1) 0) else range
 
 -- | All the GHC extensions
 ghcExtensions :: Set.HashSet T.Text
 ghcExtensions = Set.fromList $ map (T.pack . show) ghcEnumerateExtensions
 
-
-textAtPosition :: Position -> T.Text -> (T.Text, T.Text)
-textAtPosition (Position row col) x
+splitTextAtPosition :: Position -> T.Text -> (T.Text, T.Text)
+splitTextAtPosition (Position row col) x
     | (preRow, mid:postRow) <- splitAt row $ T.splitOn "\n" x
     , (preCol, postCol) <- T.splitAt col mid
         = (T.intercalate "\n" $ preRow ++ [preCol], T.intercalate "\n" $ postCol : postRow)
     | otherwise = (x, T.empty)
 
+textInRange :: Range -> T.Text -> T.Text
+textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
+    case compare startRow endRow of
+      LT ->
+        let (linesInRangeBeforeEndLine, endLineAndFurtherLines) = splitAt (endRow - startRow) linesBeginningWithStartLine
+            (textInRangeInFirstLine, linesBetween) = case linesInRangeBeforeEndLine of
+              [] -> ("", [])
+              firstLine:linesInBetween -> (T.drop startCol firstLine, linesInBetween)
+            maybeTextInRangeInEndLine = T.take endCol <$> listToMaybe endLineAndFurtherLines
+        in T.intercalate "\n" (textInRangeInFirstLine : linesBetween ++ maybeToList maybeTextInRangeInEndLine)
+      EQ ->
+        let line = fromMaybe "" (listToMaybe linesBeginningWithStartLine)
+        in T.take (endCol - startCol) (T.drop startCol line)
+      GT -> ""
+    where
+      linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
 setHandlersCodeAction :: PartialHandlers
 setHandlersCodeAction = PartialHandlers $ \WithMessage{..} x -> return x{
