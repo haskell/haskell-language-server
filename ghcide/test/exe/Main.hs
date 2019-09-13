@@ -212,6 +212,7 @@ codeActionTests :: TestTree
 codeActionTests = testGroup "code actions"
   [ renameActionTests
   , typeWildCardActionTests
+  , removeImportTests
   ]
 
 renameActionTests :: TestTree
@@ -356,6 +357,58 @@ typeWildCardActionTests = testGroup "type wildcard actions"
             , "  let y :: (Int)"
             , "      y = x * 2"
             , "  in y"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  ]
+
+removeImportTests :: TestTree
+removeImportTests = testGroup "remove import actions"
+  [ testSession "redundant" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            ]
+      docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA"
+            , "stuffB = 123"
+            ]
+      docB <- openDoc' "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      [CACodeAction action@CodeAction { _title = actionTitle }]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove import" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "stuffB = 123"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "qualified redundant" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            ]
+      docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import qualified ModuleA"
+            , "stuffB = 123"
+            ]
+      docB <- openDoc' "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      [CACodeAction action@CodeAction { _title = actionTitle }]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove import" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "stuffB = 123"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
