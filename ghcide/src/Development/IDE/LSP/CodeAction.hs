@@ -20,7 +20,7 @@ import Language.Haskell.LSP.Messages
 import qualified Data.Rope.UTF16 as Rope
 import Data.Char
 import Data.Maybe
-import Data.List
+import Data.List.Extra
 import qualified Data.Text as T
 
 -- | Generate code actions.
@@ -103,8 +103,8 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
 --     Perhaps you meant Data.Char (from base-4.12.0.0)
     | "Could not find module" `T.isInfixOf` _message
     , "Perhaps you meant"     `T.isInfixOf` _message
-      = map proposeModule $ nub $ findSuggestedModules _message where
-      findSuggestedModules = (map (head . T.words) . drop 2 . T.lines)
+      = map proposeModule $ nubOrd $ findSuggestedModules _message where
+      findSuggestedModules = map (head . T.words) . drop 2 . T.lines
       proposeModule mod = ("replace with " <> mod, [TextEdit _range mod])
 
 suggestAction _ _ = []
