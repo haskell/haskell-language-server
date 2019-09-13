@@ -16,13 +16,12 @@ module Development.IDE.Core.Compile
   ) where
 
 import Development.IDE.Core.RuleTypes
-import Development.IDE.GHC.CPP
+import Development.IDE.Core.Preprocessor
 import Development.IDE.GHC.Error
 import Development.IDE.GHC.Warnings
 import Development.IDE.Types.Diagnostics
 import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Util
-import Development.IDE.GHC.Compat
 import qualified GHC.LanguageExtensions.Type as GHC
 import Development.IDE.Types.Options
 import Development.IDE.Types.Location
@@ -33,14 +32,12 @@ import           Lexer
 import ErrUtils
 
 import qualified GHC
-import           Panic
 import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
 import           MkIface
 import           StringBuffer                   as SB
 import           TidyPgm
-import qualified GHC.LanguageExtensions as LangExt
 
 import Control.Monad.Extra
 import Control.Monad.Except
@@ -54,10 +51,6 @@ import           Data.Maybe
 import           Data.Tuple.Extra
 import qualified Data.Map.Strict                          as Map
 import           System.FilePath
-import System.IO.Extra
-import Data.Char
-
-import SysTools (Option (..), runUnlit)
 
 
 -- | Given a string buffer, return a pre-processed @ParsedModule@.
@@ -270,69 +263,6 @@ getModSummaryFromBuffer fp contents dflags parsed = do
           then (HsBootFile, \newExt -> stem <.> newExt ++ "-boot")
           else (HsSrcFile , \newExt -> stem <.> newExt)
 
--- | Run (unlit) literate haskell preprocessor on a file, or buffer if set
-runLhs :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
-runLhs dflags filename contents = withTempDir $ \dir -> do
-    let fout = dir </> takeFileName filename <.> "unlit"
-    filesrc <- case contents of
-        Nothing   -> return filename
-        Just cnts -> do
-            let fsrc = dir </> takeFileName filename <.> "literate"
-            withBinaryFile fsrc WriteMode $ \h ->
-                hPutStringBuffer h cnts
-            return fsrc
-    unlit filesrc fout
-    SB.hGetStringBuffer fout
-  where
-    unlit filein fileout = SysTools.runUnlit dflags (args filein fileout)
-    args filein fileout = [
-                      SysTools.Option     "-h"
-                    , SysTools.Option     (escape filename) -- name this file
-                    , SysTools.FileOption "" filein       -- input file
-                    , SysTools.FileOption "" fileout ]    -- output file
-    -- taken from ghc's DriverPipeline.hs
-    escape ('\\':cs) = '\\':'\\': escape cs
-    escape ('\"':cs) = '\\':'\"': escape cs
-    escape ('\'':cs) = '\\':'\'': escape cs
-    escape (c:cs)    = c : escape cs
-    escape []        = []
-
--- | Run CPP on a file
-runCpp :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
-runCpp dflags filename contents = withTempDir $ \dir -> do
-    let out = dir </> takeFileName filename <.> "out"
-    case contents of
-        Nothing -> do
-            -- Happy case, file is not modified, so run CPP on it in-place
-            -- which also makes things like relative #include files work
-            -- and means location information is correct
-            doCpp dflags True filename out
-            liftIO $ SB.hGetStringBuffer out
-
-        Just contents -> do
-            -- Sad path, we have to create a version of the path in a temp dir
-            -- __FILE__ macro is wrong, ignoring that for now (likely not a real issue)
-
-            -- Relative includes aren't going to work, so we fix that by adding to the include path.
-            dflags <- return $ addIncludePathsQuote (takeDirectory filename) dflags
-
-            -- Location information is wrong, so we fix that by patching it afterwards.
-            let inp = dir </> "___GHCIDE_MAGIC___"
-            withBinaryFile inp WriteMode $ \h ->
-                hPutStringBuffer h contents
-            doCpp dflags True inp out
-
-            -- Fix up the filename in lines like:
-            -- # 1 "C:/Temp/extra-dir-914611385186/___GHCIDE_MAGIC___"
-            let tweak x
-                    | Just x <- stripPrefix "# " x
-                    , "___GHCIDE_MAGIC___" `isInfixOf` x
-                    , let num = takeWhile (not . isSpace) x
-                    -- important to use /, and never \ for paths, even on Windows, since then C escapes them
-                    -- and GHC gets all confused
-                        = "# " <> num <> " \"" <> map (\x -> if isPathSeparator x then '/' else x) filename <> "\""
-                    | otherwise = x
-            stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
 
 -- | Given a buffer, flags, file path and module summary, produce a
 -- parsed module (or errors) and any parse warnings.
@@ -342,28 +272,9 @@ parseFileContents
        -> FilePath  -- ^ the filename (for source locations)
        -> Maybe SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
-parseFileContents preprocessor filename mbContents = do
+parseFileContents customPreprocessor filename mbContents = do
+   (contents, dflags) <- preprocessor filename mbContents
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
-   contents <- liftIO $ maybe (hGetStringBuffer filename) return mbContents
-   let isOnDisk = isNothing mbContents
-
-   -- unlit content if literate Haskell ending
-   (isOnDisk, contents) <- if ".lhs" `isSuffixOf` filename
-      then do
-        dflags <- getDynFlags
-        newcontent <- liftIO $ runLhs dflags filename mbContents
-        return (False, newcontent)
-      else return (isOnDisk, contents)
-
-   dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
-   (contents, dflags) <-
-      if not $ xopt LangExt.Cpp dflags then
-          return (contents, dflags)
-      else do
-          contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
-          dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
-          return (contents, dflags)
-
    case unP Parser.parseModule (mkPState dflags contents loc) of
      PFailed _ locErr msgErr ->
       throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
@@ -388,7 +299,7 @@ parseFileContents preprocessor filename mbContents = do
                  throwE $ diagFromErrMsgs "parser" dflags $ snd $ getMessages pst dflags
 
                -- Ok, we got here. It's safe to continue.
-               let (errs, parsed) = preprocessor rdr_module
+               let (errs, parsed) = customPreprocessor rdr_module
                unless (null errs) $ throwE $ diagFromStrings "parser" errs
                ms <- getModSummaryFromBuffer filename contents dflags parsed
                let pm =
@@ -400,28 +311,3 @@ parseFileContents preprocessor filename mbContents = do
                       }
                    warnings = diagFromErrMsgs "parser" dflags warns
                pure (warnings, pm)
-
-
--- | This reads the pragma information directly from the provided buffer.
-parsePragmasIntoDynFlags
-    :: GhcMonad m
-    => FilePath
-    -> SB.StringBuffer
-    -> m (Either [FileDiagnostic] DynFlags)
-parsePragmasIntoDynFlags fp contents = catchSrcErrors "pragmas" $ do
-    dflags0  <- getSessionDynFlags
-    let opts = Hdr.getOptions dflags0 contents fp
-    (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
-    return dflags
-
--- | Run something in a Ghc monad and catch the errors (SourceErrors and
--- compiler-internal exceptions like Panic or InstallationError).
-catchSrcErrors :: GhcMonad m => T.Text -> m a -> m (Either [FileDiagnostic] a)
-catchSrcErrors fromWhere ghcM = do
-      dflags <- getDynFlags
-      handleGhcException (ghcExceptionToDiagnostics dflags) $
-        handleSourceError (sourceErrorToDiagnostics dflags) $
-        Right <$> ghcM
-    where
-        ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
-        sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags . srcErrorMessages
