@@ -65,7 +65,7 @@ Install the VS code extension (see https://code.visualstudio.com/docs/setup/mac 
 4. `vsce package`
 5. `code --install-extension ghcide-0.0.1.vsix`
 
-Now openning a `.hs` file should work with `ghcide`.
+Now opening a `.hs` file should work with `ghcide`.
 
 ### Using with Emacs
 
