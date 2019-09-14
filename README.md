@@ -150,14 +150,7 @@ Add this to your coc-settings.json (which you can edit with :CocConfig):
         "hs",
         "lhs",
         "haskell"
-      ],
-      "initializationOptions": {
-        "languageServerHaskell": {
-          "hlintOn": true,
-          "maxNumberOfProblems": 10,
-          "completionSnippetsOn": true
-        }
-      }
+      ]
     }
   }
 }
