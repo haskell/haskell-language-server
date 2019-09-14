@@ -21,6 +21,7 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 
 * Display error messages (parse errors, typecheck errors, etc.) and enabled warnings.
 * Offer quickfix for unused imports.
+* Go to definition in local package.
 
 ## Using it
 
