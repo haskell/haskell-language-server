@@ -206,6 +206,24 @@ diagnosticTests = testGroup "diagnostics"
             ]
           )
         ]
+  , testSession "unqualified warnings" $ do
+      let fooContent = T.unlines
+            [ "{-# OPTIONS_GHC -Wredundant-constraints #-}"
+            , "module Foo where"
+            , "foo :: Ord a => a -> Int"
+            , "foo a = 1"
+            ]
+      _ <- openDoc' "Foo.hs" "haskell" fooContent
+      expectDiagnostics
+        [ ( "Foo.hs"
+      -- The test is to make sure that warnings contain unqualified names
+      -- where appropriate. The warning should use an unqualified name 'Ord', not
+      -- sometihng like 'GHC.Classes.Ord'. The choice of redundant-constraints to
+      -- test this is fairly arbitrary.
+          , [(DsWarning, (2, 0), "Redundant constraint: Ord a")
+            ]
+          )
+        ]
   ]
 
 codeActionTests :: TestTree
