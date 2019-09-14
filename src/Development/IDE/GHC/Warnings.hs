@@ -29,8 +29,9 @@ withWarnings :: GhcMonad m => T.Text -> ((ModSummary -> ModSummary) -> m a) -> m
 withWarnings diagSource action = do
   warnings <- liftIO $ newVar []
   oldFlags <- getDynFlags
-  let newAction dynFlags _ _ loc _ msg = do
-        let d = diagFromErrMsg diagSource dynFlags $ mkPlainWarnMsg dynFlags loc msg
+  let newAction :: DynFlags -> WarnReason -> Severity -> SrcSpan -> PprStyle -> SDoc -> IO ()
+      newAction dynFlags _ _ loc style msg = do
+        let d = diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc (queryQual style) msg
         modifyVar_ warnings $ return . (d:)
   setLogAction newAction
   res <- action $ \x -> x{ms_hspp_opts = (ms_hspp_opts x){log_action = newAction}}
