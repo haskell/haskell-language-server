@@ -61,9 +61,8 @@ Install the VS code extension (see https://code.visualstudio.com/docs/setup/mac 
 
 1. `cd extension/`
 2. `npm ci`
-3. `npm install vsce --global` (may require `sudo`)
-4. `vsce package`
-5. `code --install-extension ghcide-0.0.1.vsix`
+3. `npm run vscepackage`
+4. `code --install-extension ghcide-0.0.1.vsix`
 
 Now opening a `.hs` file should work with `ghcide`.
 
