@@ -15,6 +15,16 @@ Our vision is that you should build an IDE by combining:
 
 There are more details about our approach [in this blog post](https://4ta.uk/p/shaking-up-the-ide).
 
+## Features
+
+`ghcide` already exports the following features via the lsp protocol:
+
+* Display error messages (parse errors, typecheck errors, etc.) and enabled warnings.
+* Offer quickfix for unused imports.
+* Go to definition in local package.
+* Display definitions.
+* Organize imports.
+
 ## Using it
 
 ### Install `ghcide`
