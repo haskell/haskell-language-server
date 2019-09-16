@@ -81,7 +81,9 @@
     - Development.IDE.GHC.Compat
     - Development.IDE.GHC.Util
     - Development.IDE.Import.FindImports
+    - Development.IDE.LSP.CodeAction
     - Development.IDE.Spans.Calculate
+    - Main
 
 - flags:
   - default: false
