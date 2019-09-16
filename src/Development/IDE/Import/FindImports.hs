@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 
 module Development.IDE.Import.FindImports
   ( locateModule
@@ -108,7 +109,7 @@ notFoundErr dfs modName reason =
              { fr_pkgs_hidden = map (moduleUnitId . fst) pkg_hiddens
              , fr_mods_hidden = map (moduleUnitId . fst) mod_hiddens
              }
-#if __GLASGOW_HASKELL__ >= 806
+#if MIN_GHC_API_VERSION(8,6,0)
         LookupUnusable unusable ->
           let unusables' = map get_unusable unusable
               get_unusable (m, ModUnusable r) = (moduleUnitId m, r)
@@ -125,7 +126,7 @@ notFound = NotFound
   , fr_pkg = Nothing
   , fr_pkgs_hidden = []
   , fr_mods_hidden = []
-#if __GLASGOW_HASKELL__ >= 806
+#if MIN_GHC_API_VERSION(8,6,0)
   , fr_unusables = []
 #endif
   , fr_suggestions = []

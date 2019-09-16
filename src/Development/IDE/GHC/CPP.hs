@@ -9,6 +9,7 @@
 
 {-# LANGUAGE CPP, NamedFieldPuns, NondecreasingIndentation, BangPatterns, MultiWayIf #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+#include "ghc-api-version.h"
 
 -----------------------------------------------------------------------------
 --
@@ -27,7 +28,7 @@ import Module
 import DynFlags
 import Panic
 import FileCleanup
-#ifndef GHC_STABLE
+#if MIN_GHC_API_VERSION(8,8,0)
 import LlvmCodeGen (LlvmVersion (..))
 #endif
 
@@ -136,11 +137,11 @@ getBackendDefs :: DynFlags -> IO [String]
 getBackendDefs dflags | hscTarget dflags == HscLlvm = do
     llvmVer <- figureLlvmVersion dflags
     return $ case llvmVer of
-#ifdef GHC_STABLE
-               Just n -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format n ]
-#else
+#if MIN_GHC_API_VERSION(8,8,0)
                Just (LlvmVersion n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (n,0) ]
                Just (LlvmVersionOld m n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,n) ]
+#else
+               Just n -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format n ]
 #endif
                _      -> []
   where

@@ -5,6 +5,7 @@
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE RankNTypes #-}
+#include "ghc-api-version.h"
 
 -- | Get information on modules, identifiers, etc.
 
@@ -34,7 +35,7 @@ import Development.IDE.GHC.Util
 
 -- A lot of things gained an extra X argument in GHC 8.6, which we mostly ignore
 -- this U ignores that arg in 8.6, but is hidden in 8.4
-#if __GLASGOW_HASKELL__ >= 806
+#if MIN_GHC_API_VERSION(8,6,0)
 #define U _
 #else
 #define U
