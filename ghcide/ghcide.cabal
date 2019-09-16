@@ -14,10 +14,16 @@ description:
 homepage:           https://github.com/digital-asset/ghcide#readme
 bug-reports:        https://github.com/digital-asset/ghcide/issues
 tested-with:        GHC==8.6.5
+extra-source-files: include/ghc-api-version.h README.md
 
 source-repository head
     type:     git
     location: https://github.com/digital-asset/ghcide.git
+
+flag ghc-lib
+  description: build against ghc-lib instead of the ghc package
+  default: False
+  manual: True
 
 library
     default-language:   Haskell2010
@@ -33,9 +39,6 @@ library
         directory,
         extra,
         filepath,
-        ghc-boot-th,
-        ghc-boot,
-        ghc >= 8.4,
         hashable,
         haskell-lsp-types,
         haskell-lsp >= 0.15,
@@ -55,13 +58,22 @@ library
         transformers,
         unordered-containers,
         utf8-string
+    if flag(ghc-lib)
+      build-depends:
+        ghc-lib >= 8.8,
+        ghc-lib-parser >= 8.8
+      cpp-options: -DGHC_LIB
+    else
+      build-depends:
+        ghc-boot-th,
+        ghc-boot,
+        ghc >= 8.4
     if !os(windows)
       build-depends:
         unix
       c-sources:
         cbits/getmodtime.c
 
-    cpp-options: -DGHC_STABLE
     default-extensions:
         BangPatterns
         DeriveFunctor
@@ -79,6 +91,8 @@ library
 
     hs-source-dirs:
         src
+    include-dirs:
+        include
     exposed-modules:
         Development.IDE.Core.FileStore
         Development.IDE.Core.OfInterest
@@ -116,6 +130,8 @@ library
         Development.IDE.Spans.Type
 
 executable ghcide
+    if flag(ghc-lib)
+      buildable: False
     default-language:   Haskell2010
     hs-source-dirs:     exe
     ghc-options: -threaded
@@ -144,6 +160,8 @@ executable ghcide
         ViewPatterns
 
 test-suite ghcide-tests
+    if flag(ghc-lib)
+      buildable: False
     type: exitcode-stdio-1.0
     default-language: Haskell2010
     build-tool-depends:
