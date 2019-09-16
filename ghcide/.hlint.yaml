@@ -46,7 +46,7 @@
 
 # Specify additional command line arguments
 #
-# - arguments: [--color, --cpp-simple, -XQuasiQuotes]
+- arguments: ["--cpp-include=include"]
 
 - extensions:
   - default: true
