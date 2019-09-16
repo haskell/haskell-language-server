@@ -10,7 +10,7 @@ extra-deps:
 - git: https://github.com/bubba/lsp-test.git
   commit: d126623dc6895d325e3d204d74e2a22d4f515587
 - git: https://github.com/mpickering/hie-bios.git
-  commit: 89e4ba24f87aac9909d9814b0e8c51b679a0ccd4
+  commit: 68c662ea1d0e7095ccf2a4e3d393fc524e769bfe
 - ghc-lib-parser-8.8.1
 - ghc-lib-8.8.1
 nix:
