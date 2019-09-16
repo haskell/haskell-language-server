@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
@@ -21,7 +22,11 @@ import StringBuffer
 import DynFlags
 import GHC.LanguageExtensions.Type
 
-#ifndef GHC_STABLE
+#if MIN_GHC_API_VERSION(8,8,0)
+import Data.List.Extra (enumerate)
+#endif
+
+#if MIN_GHC_API_VERSION(8,8,0)
 import HieAst
 import HieBin
 import HieTypes
@@ -53,7 +58,7 @@ data HieFile = HieFile {hie_module :: (), hie_exports :: [AvailInfo]}
 data HieFileResult = HieFileResult { hie_file_result :: HieFile }
 #endif
 
-#if __GLASGOW_HASKELL__ < 806
+#if !MIN_GHC_API_VERSION(8,6,0)
 includePathsGlobal, includePathsQuote :: [String] -> [String]
 includePathsGlobal = id
 includePathsQuote = const []
@@ -61,7 +66,7 @@ includePathsQuote = const []
 
 
 addIncludePathsQuote :: FilePath -> DynFlags -> DynFlags
-#if __GLASGOW_HASKELL__ >= 806
+#if MIN_GHC_API_VERSION(8,6,0)
 addIncludePathsQuote path x = x{includePaths = f $ includePaths x}
     where f i = i{includePathsQuote = path : includePathsQuote i}
 #else
@@ -69,9 +74,9 @@ addIncludePathsQuote path x = x{includePaths = path : includePaths x}
 #endif
 
 ghcEnumerateExtensions :: [Extension]
-#if __GLASGOW_HASKELL__ >= 808
+#if MIN_GHC_API_VERSION(8,8,0)
 ghcEnumerateExtensions = enumerate
-#elif __GLASGOW_HASKELL__ >= 806
+#elif MIN_GHC_API_VERSION(8,6,0)
 ghcEnumerateExtensions = [Cpp .. StarIsType]
 #else
 ghcEnumerateExtensions = [Cpp .. EmptyDataDeriving]
