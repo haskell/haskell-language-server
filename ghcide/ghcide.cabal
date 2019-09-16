@@ -171,6 +171,14 @@ test-suite ghcide-tests
         containers,
         extra,
         filepath,
+        --------------------------------------------------------------
+        -- The MIN_GHC_API_VERSION macro relies on MIN_VERSION pragmas
+        -- which require depending on ghc. So the tests need to depend
+        -- on ghc if they need to use MIN_GHC_API_VERSION. Maybe a
+        -- better solution can be found, but this is a quick solution
+        -- which works for now.
+        ghc,
+        --------------------------------------------------------------
         haskell-lsp-types,
         lens,
         lsp-test,
@@ -179,6 +187,7 @@ test-suite ghcide-tests
         tasty-hunit,
         text
     hs-source-dirs: test/cabal test/exe test/src
+    include-dirs: include
     ghc-options: -threaded
     main-is: Main.hs
     other-modules:

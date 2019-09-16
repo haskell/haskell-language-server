@@ -2,6 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
 module Development.IDE.LSP.CodeAction
@@ -102,12 +104,51 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
 --     Could not find module ‘Data.Cha’
 --     Perhaps you meant Data.Char (from base-4.12.0.0)
     | "Could not find module" `T.isInfixOf` _message
-    , "Perhaps you meant"     `T.isInfixOf` _message
-      = map proposeModule $ nubOrd $ findSuggestedModules _message where
+    , "Perhaps you meant"     `T.isInfixOf` _message = let
       findSuggestedModules = map (head . T.words) . drop 2 . T.lines
       proposeModule mod = ("replace with " <> mod, [TextEdit _range mod])
+      in map proposeModule $ nubOrd $ findSuggestedModules _message
+
+--  ...Development/IDE/LSP/CodeAction.hs:103:9: warning:
+--   * Found hole: _ :: Int -> String
+--   * In the expression: _
+--     In the expression: _ a
+--     In an equation for ‘foo’: foo a = _ a
+--   * Relevant bindings include
+--       a :: Int
+--         (bound at ...Development/IDE/LSP/CodeAction.hs:103:5)
+--       foo :: Int -> String
+--         (bound at ...Development/IDE/LSP/CodeAction.hs:103:1)
+--     Valid hole fits include
+--       foo :: Int -> String
+--         (bound at ...Development/IDE/LSP/CodeAction.hs:103:1)
+--       show :: forall a. Show a => a -> String
+--         with show @Int
+--         (imported from ‘Prelude’ at ...Development/IDE/LSP/CodeAction.hs:7:8-37
+--          (and originally defined in ‘GHC.Show’))
+--       mempty :: forall a. Monoid a => a
+--         with mempty @(Int -> String)
+--         (imported from ‘Prelude’ at ...Development/IDE/LSP/CodeAction.hs:7:8-37
+--          (and originally defined in ‘GHC.Base’)) (lsp-ui)
+
+    | topOfHoleFitsMarker `T.isInfixOf` _message = let
+      findSuggestedHoleFits :: T.Text -> [T.Text]
+      findSuggestedHoleFits = extractFitNames . selectLinesWithFits . dropPreceding . T.lines
+      proposeHoleFit name = ("replace hole `" <> holeName <>  "` with " <> name, [TextEdit _range name])
+      holeName = T.strip $ last $ T.splitOn ":" $ head . T.splitOn "::" $ head $ filter ("Found hole" `T.isInfixOf`) $ T.lines _message
+      dropPreceding       = dropWhile (not . (topOfHoleFitsMarker `T.isInfixOf`))
+      selectLinesWithFits = filter ("::" `T.isInfixOf`)
+      extractFitNames     = map (T.strip . head . T.splitOn " :: ")
+      in map proposeHoleFit $ nubOrd $ findSuggestedHoleFits _message
 
 suggestAction _ _ = []
+
+topOfHoleFitsMarker =
+#if MIN_GHC_API_VERSION(8,6,0)
+  "Valid hole fits include"
+#else
+  "Valid substitutions include"
+#endif
 
 mkRenameEdit :: Maybe T.Text -> Range -> T.Text -> TextEdit
 mkRenameEdit contents range name =
