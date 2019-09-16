@@ -40,10 +40,12 @@ import System.IO
 import Foreign.ForeignPtr
 
 
+#if !MIN_GHC_API_VERSION(8,8,0)
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
 hPutStringBuffer hdl (StringBuffer buf len cur)
     = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
              hPutBuf hdl ptr len
+#endif
 
 mkHieFile :: ModSummary -> TcGblEnv -> RenamedSource -> Hsc HieFile
 mkHieFile _ _ _ = return (HieFile () [])

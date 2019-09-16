@@ -41,6 +41,7 @@ import GHC hiding (def)
 import qualified GHC.Paths
 
 import HIE.Bios
+import HIE.Bios.Ghc.Api (initializeFlagsWithCradle)
 
 -- Set the GHC libdir to the nix libdir if it's present.
 getLibdir :: IO FilePath
@@ -76,7 +77,7 @@ main = do
         -- Note that this whole section needs to change once we have genuine
         -- multi environment support. Needs rewriting in terms of loadEnvironment.
         putStrLn "[1/6] Finding hie-bios cradle"
-        cradle <- findCradle (dir <> "/")
+        cradle <- getCradle dir
         print cradle
 
         putStrLn "\n[2/6] Converting Cradle to GHC session"
@@ -138,5 +139,13 @@ newSession' cradle = getLibdir >>= \libdir -> do
 
 loadEnvironment :: FilePath -> IO (FilePath -> Action HscEnvEq)
 loadEnvironment dir = do
-    res <- liftIO $ newSession' =<< findCradle (dir <> "/")
+    res <- liftIO $ newSession' =<< getCradle dir
     return $ const $ return res
+
+getCradle :: FilePath -> IO Cradle
+getCradle dir = do
+    dir <- pure $ addTrailingPathSeparator dir
+    mbYaml <- findCradle dir
+    case mbYaml of
+        Nothing -> loadImplicitCradle dir
+        Just yaml -> loadCradle yaml
