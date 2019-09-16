@@ -1,7 +1,6 @@
 resolver: nightly-2019-09-16
 packages:
 - .
-
 extra-deps:
 - git: https://github.com/alanz/haskell-lsp.git
   commit: bfbd8630504ebc57b70948689c37b85cfbe589da
@@ -12,5 +11,13 @@ extra-deps:
   commit: d126623dc6895d325e3d204d74e2a22d4f515587
 - git: https://github.com/mpickering/hie-bios.git
   commit: 89e4ba24f87aac9909d9814b0e8c51b679a0ccd4
+- ghc-lib-parser-8.8.1
+- ghc-lib-8.8.1
 nix:
   packages: [zlib]
+flags:
+  ghcide:
+    ghc-lib: True
+ghc-options:
+  ghc-lib-parser: -O0
+  ghc-lib: -O0

@@ -3,6 +3,7 @@
 
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
@@ -225,7 +226,7 @@ getModSummaryFromBuffer fp contents dflags parsed = do
           { ml_hs_file  = Just fp
           , ml_hi_file  = derivedFile "hi"
           , ml_obj_file = derivedFile "o"
-#ifndef GHC_STABLE
+#if MIN_GHC_API_VERSION(8,8,0)
           , ml_hie_file = derivedFile "hie"
 #endif
           -- This does not consider the dflags configuration
@@ -250,7 +251,7 @@ getModSummaryFromBuffer fp contents dflags parsed = do
     , ms_hsc_src      = sourceType
     , ms_obj_date     = Nothing
     , ms_iface_date   = Nothing
-#ifndef GHC_STABLE
+#if MIN_GHC_API_VERSION(8,8,0)
     , ms_hie_date     = Nothing
 #endif
     , ms_srcimps      = [imp | (True, imp) <- imports]

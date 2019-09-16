@@ -3,6 +3,7 @@
 
 {-# OPTIONS_GHC -Wno-missing-fields #-} -- to enable prettyPrint
 {-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 
 -- | GHC utility functions. Importantly, code using our GHC should never:
 --
@@ -22,7 +23,7 @@ module Development.IDE.GHC.Util(
 
 import Config
 import Data.List.Extra
-#if __GLASGOW_HASKELL__ >= 806
+#if MIN_GHC_API_VERSION(8,6,0)
 import Fingerprint
 #endif
 import GHC
@@ -88,7 +89,7 @@ fakeDynFlags = defaultDynFlags settings mempty
                    , sPlatformConstants = platformConstants
                    , sProgramName = "ghc"
                    , sProjectVersion = cProjectVersion
-#if __GLASGOW_HASKELL__ >= 806
+#if MIN_GHC_API_VERSION(8,6,0)
                     , sOpt_P_fingerprint = fingerprint0
 #endif
                     }
