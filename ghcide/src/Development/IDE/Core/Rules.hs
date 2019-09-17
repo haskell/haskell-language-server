@@ -312,7 +312,8 @@ typeCheckRule =
         tms <- uses_ TypeCheck (transitiveModuleDeps deps)
         setPriority priorityTypeCheck
         packageState <- hscEnv <$> use_ GhcSession file
-        liftIO $ typecheckModule packageState tms pm
+        IdeOptions{ optDefer = defer} <- getIdeOptions
+        liftIO $ typecheckModule defer packageState tms pm
 
 
 generateCoreRule :: Rules ()
