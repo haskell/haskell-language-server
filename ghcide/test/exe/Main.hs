@@ -389,7 +389,7 @@ removeImportTests = testGroup "remove import actions"
       let contentA = T.unlines
             [ "module ModuleA where"
             ]
-      docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      _docA <- openDoc' "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
@@ -413,7 +413,7 @@ removeImportTests = testGroup "remove import actions"
       let contentA = T.unlines
             [ "module ModuleA where"
             ]
-      docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      _docA <- openDoc' "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
