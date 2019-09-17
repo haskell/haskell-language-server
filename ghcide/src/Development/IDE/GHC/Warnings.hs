@@ -25,14 +25,14 @@ import           Development.IDE.GHC.Error
 --   https://github.com/ghc/ghc/blob/5f1d949ab9e09b8d95319633854b7959df06eb58/compiler/main/GHC.hs#L623-L640
 --   which basically says that log_action is taken from the ModSummary when GHC feels like it.
 --   The given argument lets you refresh a ModSummary log_action
-withWarnings :: GhcMonad m => T.Text -> ((ModSummary -> ModSummary) -> m a) -> m ([FileDiagnostic], a)
+withWarnings :: GhcMonad m => T.Text -> ((ModSummary -> ModSummary) -> m a) -> m ([(WarnReason, FileDiagnostic)], a)
 withWarnings diagSource action = do
   warnings <- liftIO $ newVar []
   oldFlags <- getDynFlags
   let newAction :: DynFlags -> WarnReason -> Severity -> SrcSpan -> PprStyle -> SDoc -> IO ()
-      newAction dynFlags _ _ loc style msg = do
-        let d = diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc (queryQual style) msg
-        modifyVar_ warnings $ return . (d:)
+      newAction dynFlags wr _ loc style msg = do
+        let wr_d = fmap (wr,) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc (queryQual style) msg
+        modifyVar_ warnings $ return . (wr_d:)
   setLogAction newAction
   res <- action $ \x -> x{ms_hspp_opts = (ms_hspp_opts x){log_action = newAction}}
   setLogAction $ log_action oldFlags
