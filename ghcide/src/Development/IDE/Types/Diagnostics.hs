@@ -16,7 +16,6 @@ module Development.IDE.Types.Diagnostics (
 import Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
-import qualified Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types as LSP (
     DiagnosticSeverity(..)
   , Diagnostic(..)
