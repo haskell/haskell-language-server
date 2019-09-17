@@ -82,19 +82,22 @@ computePackageDeps env pkg = do
 
 -- | Typecheck a single module using the supplied dependencies and packages.
 typecheckModule
-    :: HscEnv
+    :: IdeDefer
+    -> HscEnv
     -> [TcModuleResult]
     -> ParsedModule
     -> IO ([FileDiagnostic], Maybe TcModuleResult)
-typecheckModule packageState deps pm =
+typecheckModule (IdeDefer defer) packageState deps pm =
+    let demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
+    in
     fmap (either (, Nothing) (second Just)) $
     runGhcEnv packageState $
         catchSrcErrors "typecheck" $ do
             setupEnv deps
             (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-                GHC.typecheckModule pm{pm_mod_summary = tweak $ pm_mod_summary pm}
+                GHC.typecheckModule $ demoteIfDefer pm{pm_mod_summary = tweak $ pm_mod_summary pm}
             tcm2 <- mkTcModuleResult tcm
-            return (warnings, tcm2)
+            return (map unDefer warnings, tcm2)
 
 -- | Compile a single type-checked module to a 'CoreModule' value, or
 -- provide errors.
@@ -126,8 +129,32 @@ compileModule packageState deps tmr =
                          (cg_binds tidy)
                          (mg_safe_haskell desugar)
 
-            return (warnings, core)
+            return (map snd warnings, core)
 
+demoteTypeErrorsToWarnings :: ParsedModule -> ParsedModule
+demoteTypeErrorsToWarnings =
+  (update_pm_mod_summary . update_hspp_opts) demoteTEsToWarns where
+
+  demoteTEsToWarns :: DynFlags -> DynFlags
+  demoteTEsToWarns = (`gopt_set` Opt_DeferTypeErrors)
+                   . (`gopt_set` Opt_DeferTypedHoles)
+                   . (`gopt_set` Opt_DeferOutOfScopeVariables)
+
+  update_hspp_opts :: (DynFlags -> DynFlags) -> ModSummary -> ModSummary
+  update_hspp_opts up ms = ms{ms_hspp_opts = up $ ms_hspp_opts ms}
+
+  update_pm_mod_summary :: (ModSummary -> ModSummary) -> ParsedModule -> ParsedModule
+  update_pm_mod_summary up pm =
+    pm{pm_mod_summary = up $ pm_mod_summary pm}
+
+unDefer :: (WarnReason, FileDiagnostic) -> FileDiagnostic
+unDefer (Reason Opt_WarnDeferredTypeErrors         , fd) = upgradeWarningToError fd
+unDefer (Reason Opt_WarnTypedHoles                 , fd) = upgradeWarningToError fd
+unDefer (Reason Opt_WarnDeferredOutOfScopeVariables, fd) = upgradeWarningToError fd
+unDefer ( _                                        , fd) = fd
+
+upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
+upgradeWarningToError (nfp, fd) = (nfp, fd{_severity = Just DsError})
 
 addRelativeImport :: ParsedModule -> DynFlags -> DynFlags
 addRelativeImport modu dflags = dflags
