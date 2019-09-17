@@ -143,6 +143,7 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
 
 suggestAction _ _ = []
 
+topOfHoleFitsMarker :: T.Text
 topOfHoleFitsMarker =
 #if MIN_GHC_API_VERSION(8,6,0)
   "Valid hole fits include"
