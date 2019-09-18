@@ -1,16 +1,10 @@
 resolver: nightly-2019-09-16
 packages:
 - .
-
 extra-deps:
-- git: https://github.com/alanz/haskell-lsp.git
-  commit: bfbd8630504ebc57b70948689c37b85cfbe589da
-  subdirs:
-  - .
-  - haskell-lsp-types
-- git: https://github.com/bubba/lsp-test.git
-  commit: d126623dc6895d325e3d204d74e2a22d4f515587
-- git: https://github.com/mpickering/hie-bios.git
-  commit: 68c662ea1d0e7095ccf2a4e3d393fc524e769bfe
+- haskell-lsp-0.16.0.0
+- haskell-lsp-types-0.16.0.0
+- lsp-test-0.7.0.0
+- hie-bios-0.2.0
 nix:
   packages: [zlib]
