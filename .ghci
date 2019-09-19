@@ -17,6 +17,7 @@
 :set -package=ghc
 :set -hide-package=ghc-lib-parser
 :set -DGHC_STABLE
+:set -Iinclude
 :set -isrc
 :set -iexe
 
