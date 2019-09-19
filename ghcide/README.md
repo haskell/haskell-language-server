@@ -19,11 +19,13 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 
 `ghcide` already exports the following features via the lsp protocol:
 
-* Display error messages (parse errors, typecheck errors, etc.) and enabled warnings.
-* Offer quickfix for unused imports.
-* Go to definition in local package.
-* Display definitions.
-* Organize imports.
+| Feature | LSP name |
+| - | - |
+| Display error messages (parse errors, typecheck errors, etc.) and enabled warnings. | diagnostics |
+| Go to definition in local package | definition  | 
+| Display type and source module of values | hover |
+| Remove redundant imports, replace suggested typos for values and module imports, fill type holes, add suggested ghc extensions,  | codeAction (quickfix) |
+| Organize imports | codeAction (source.organizeImports) |
 
 ## Using it
 
