@@ -23,6 +23,7 @@ cradle:
       - -ignore-package=ghc-lib-parser
       - -ignore-package=ghc-lib
       - -DGHC_STABLE
+      - -Iinclude
       - -isrc
       - -iexe
       - -itest/cabal
