@@ -272,6 +272,7 @@ codeActionTests = testGroup "code actions"
   , removeImportTests
   , importRenameActionTests
   , fillTypedHoleTests
+  , addSigActionTests
   ]
 
 renameActionTests :: TestTree
@@ -515,7 +516,7 @@ fillTypedHoleTests = let
   check :: T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> T.Text -> TestTree
   check actionTitle
         oldA oldB oldC
-        newA newB newC =  testSession (T.unpack actionTitle) $ do
+        newA newB newC = testSession (T.unpack actionTitle) $ do
     let originalCode = sourceCode oldA oldB oldC
     let expectedCode = sourceCode newA newB newC
     doc <- openDoc' "Testing.hs" "haskell" originalCode
@@ -525,12 +526,6 @@ fillTypedHoleTests = let
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
-
-  pickActionWithTitle title actions = head
-    [ action
-    | CACodeAction action@CodeAction{ _title = actionTitle } <- actions
-    , title == actionTitle ]
-
   in
   testGroup "fill typed holes"
   [ check "replace hole `_` with show"
@@ -562,6 +557,33 @@ fillTypedHoleTests = let
 #endif
   ]
 
+addSigActionTests :: TestTree
+addSigActionTests = let
+  head = T.unlines [ "{-# OPTIONS_GHC -Wmissing-signatures #-}"
+                     , "module Sigs where"]
+  before def     = T.unlines [head,      def]
+  after  def sig = T.unlines [head, sig, def]
+
+  def >:: sig = testSession (T.unpack def) $ do
+    let originalCode = before def
+    let expectedCode = after  def sig
+    doc <- openDoc' "Sigs.hs" "haskell" originalCode
+    _ <- waitForDiagnostics
+    actionsOrCommands <- getCodeActions doc (Range (Position 3 1) (Position 3 maxBound))
+    let chosenAction = pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
+    executeCodeAction chosenAction
+    modifiedCode <- documentContents doc
+    liftIO $ expectedCode @=? modifiedCode
+  in
+  testGroup "add signature"
+  [ "abc = True"             >:: "abc :: Bool"
+  , "foo a b = a + b"        >:: "foo :: Num a => a -> a -> a"
+  , "bar a b = show $ a + b" >:: "bar :: (Show a, Num a) => a -> a -> String"
+  , "(!!!) a b = a > b"      >:: "(!!!) :: Ord a => a -> a -> Bool"
+  , "a >>>> b = a + b"       >:: "(>>>>) :: Num a => a -> a -> a"
+  , "a `haha` b = a b"       >:: "haha :: (t1 -> t2) -> t1 -> t2"
+  ]
+
 ----------------------------------------------------------------------
 -- Utils
 
@@ -577,6 +599,11 @@ testSession name =
       -- Experimentally, 0.5s seems to be long enough to wait for any final diagnostics to appear.
       ( >> expectNoMoreDiagnostics 0.5)
 
+pickActionWithTitle :: T.Text -> [CAResult] -> CodeAction
+pickActionWithTitle title actions = head
+  [ action
+  | CACodeAction action@CodeAction{ _title = actionTitle } <- actions
+  , title == actionTitle ]
 
 run :: Session a -> IO a
 run s = withTempDir $ \dir -> do

@@ -141,6 +141,16 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
       extractFitNames     = map (T.strip . head . T.splitOn " :: ")
       in map proposeHoleFit $ nubOrd $ findSuggestedHoleFits _message
 
+    | "Top-level binding with no type signature" `T.isInfixOf` _message = let
+      filterNewlines = T.concat  . T.lines
+      unifySpaces    = T.unwords . T.words
+      signature      = T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
+      startOfLine    = Position (_line _start) 0
+      beforeLine     = Range startOfLine startOfLine
+      title          = "add signature: " <> signature
+      action         = TextEdit beforeLine $ signature <> "\n"
+      in [(title, [action])]
+
 suggestAction _ _ = []
 
 topOfHoleFitsMarker :: T.Text
