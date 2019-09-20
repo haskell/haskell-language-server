@@ -33,7 +33,7 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 
 #### With Nix
 
-[See hie-core-nix repository](https://github.com/hercules-ci/hie-core-nix)
+[See ghcide-nix repository](https://github.com/hercules-ci/ghcide-nix)
 
 #### With Cabal or Stack
 
