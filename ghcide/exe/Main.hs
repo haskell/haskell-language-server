@@ -9,6 +9,7 @@ import Data.Maybe
 import Data.List.Extra
 import System.FilePath
 import Control.Concurrent.Extra
+import Control.Exception
 import Control.Monad.Extra
 import Data.Default
 import System.Time.Extra
@@ -41,7 +42,6 @@ import GHC hiding (def)
 import qualified GHC.Paths
 
 import HIE.Bios
-import HIE.Bios.Ghc.Api (initializeFlagsWithCradle)
 
 -- Set the GHC libdir to the nix libdir if it's present.
 getLibdir :: IO FilePath
@@ -130,9 +130,11 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
 showEvent lock e = withLock lock $ print e
 
 newSession' :: Cradle -> IO HscEnvEq
-newSession' cradle = getLibdir >>= \libdir -> do
+newSession' cradle = do
+    opts <- either throwIO return =<< getCompilerOptions "" cradle
+    libdir <- getLibdir
     env <- runGhc (Just libdir) $ do
-        initializeFlagsWithCradle "" cradle
+        _targets <- initSession opts
         getSession
     initDynLinker env
     newHscEnvEq env
