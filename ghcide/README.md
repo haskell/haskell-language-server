@@ -24,7 +24,7 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 | Display error messages (parse errors, typecheck errors, etc.) and enabled warnings. | diagnostics |
 | Go to definition in local package | definition  | 
 | Display type and source module of values | hover |
-| Remove redundant imports, replace suggested typos for values and module imports, fill type holes, add suggested ghc extensions,  | codeAction (quickfix) |
+| Remove redundant imports, replace suggested typos for values and module imports, fill type holes, insert missing type signatures, add suggested ghc extensions  | codeAction (quickfix) |
 | Organize imports | codeAction (source.organizeImports) |
 
 ## Using it
