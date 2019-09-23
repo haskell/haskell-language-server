@@ -23,7 +23,6 @@ module Development.IDE.Core.Rules(
     getDependencies,
     getParsedModule,
     fileFromParsedModule,
-    writeIfacesAndHie,
     ) where
 
 import           Control.Monad.Except
@@ -127,39 +126,6 @@ getDefinition file pos = fmap join $ runMaybeT $ do
 -- | Parse the contents of a daml file.
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
 getParsedModule file = use GetParsedModule file
-
--- | Write interface files and hie files to the location specified by the given options.
-writeIfacesAndHie ::
-       NormalizedFilePath -> [NormalizedFilePath] -> Action (Maybe [NormalizedFilePath])
-writeIfacesAndHie ifDir files =
-    runMaybeT $ do
-        tcms <- usesE TypeCheck files
-        fmap concat $ forM (zip files tcms) $ \(file, tcm) -> do
-            session <- lift $ hscEnv <$> use_ GhcSession file
-            liftIO $ writeTcm session tcm
-  where
-    writeTcm session tcm =
-        do
-            let fp =
-                    fromNormalizedFilePath ifDir </>
-                    (ms_hspp_file $
-                     pm_mod_summary $ tm_parsed_module $ tmrModule tcm)
-            createDirectoryIfMissing True (takeDirectory fp)
-            let ifaceFp = replaceExtension fp ".hi"
-            let hieFp = replaceExtension fp ".hie"
-            writeIfaceFile
-                (hsc_dflags session)
-                ifaceFp
-                (hm_iface $ tmrModInfo tcm)
-            hieFile <-
-                liftIO $
-                runHsc session $
-                mkHieFile
-                    (pm_mod_summary $ tm_parsed_module $ tmrModule tcm)
-                    (fst $ tm_internals_ $ tmrModule tcm)
-                    (fromJust $ tm_renamed_source $ tmrModule tcm)
-            writeHieFile hieFp hieFile
-            pure [toNormalizedFilePath ifaceFp, toNormalizedFilePath hieFp]
 
 ------------------------------------------------------------
 -- Rules
