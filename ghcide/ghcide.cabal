@@ -14,7 +14,7 @@ description:
 homepage:           https://github.com/digital-asset/ghcide#readme
 bug-reports:        https://github.com/digital-asset/ghcide/issues
 tested-with:        GHC==8.6.5
-extra-source-files: include/ghc-api-version.h README.md
+extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
 
 source-repository head
     type:     git
