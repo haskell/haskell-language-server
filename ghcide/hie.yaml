@@ -24,6 +24,7 @@ cradle:
       - -ignore-package=ghc-lib
       - -DGHC_STABLE
       - -Iinclude
+      - -idist/build/autogen
       - -isrc
       - -iexe
       - -itest/cabal
