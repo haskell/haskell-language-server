@@ -17,7 +17,7 @@ module Development.IDE.GHC.Util(
     prettyPrint,
     runGhcEnv,
     textToStringBuffer,
-    moduleImportPaths,
+    moduleImportPath,
     HscEnvEq, hscEnv, newHscEnvEq
     ) where
 
@@ -103,16 +103,25 @@ fakeDynFlags = defaultDynFlags settings mempty
           , pc_WORD_SIZE=8
           }
 
-moduleImportPaths :: GHC.ParsedModule -> Maybe FilePath
-moduleImportPaths pm
-  | rootModDir == "." = Just rootPathDir
-  | otherwise =
-    dropTrailingPathSeparator <$> stripSuffix (normalise rootModDir) (normalise rootPathDir)
+moduleImportPath :: GHC.ParsedModule -> Maybe FilePath
+moduleImportPath pm
+    | rootModDir == "." = Just rootPathDir
+    | otherwise = do
+          dir <- dropTrailingPathSeparator <$> stripSuffix (normalise rootModDir) (normalise rootPathDir)
+          -- For modules with more than one component, this can be empty, e.g.,
+          -- stripSuffix (normalise ./A) (normalise ./A) for A/B.daml.
+          -- We make a best effort attemp at not duplicating file paths
+          -- by mapping the current directory to '.' if 'rootPathDir' starts with '.' and
+          -- to an empty string otherwise.
+          pure $! if null dir then dotDir else dir
   where
+    dotDir = if "." `isPrefixOf` rootPathDir then "." else ""
     ms   = GHC.pm_mod_summary pm
     file = GHC.ms_hspp_file ms
     mod'  = GHC.ms_mod ms
+    -- ./src/A for file ./src/A/B.daml
     rootPathDir  = takeDirectory file
+    -- A for module A.B
     rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
 
 -- | An HscEnv with equality.

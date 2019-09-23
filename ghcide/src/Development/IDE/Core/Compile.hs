@@ -158,7 +158,7 @@ upgradeWarningToError (nfp, fd) = (nfp, fd{_severity = Just DsError})
 
 addRelativeImport :: ParsedModule -> DynFlags -> DynFlags
 addRelativeImport modu dflags = dflags
-    {importPaths = nubOrd $ maybeToList (moduleImportPaths modu) ++ importPaths dflags}
+    {importPaths = nubOrd $ maybeToList (moduleImportPath modu) ++ importPaths dflags}
 
 mkTcModuleResult
     :: GhcMonad m
