@@ -1,6 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
+{-# LANGUAGE CPP #-} -- To get precise GHC version
 
 module Main(main) where
 
@@ -29,12 +30,13 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
 import Linker
-import System.Info
 import Data.Version
 import Development.IDE.LSP.LanguageServer
 import System.Directory.Extra as IO
 import System.Environment
 import System.IO
+import System.Exit
+import Paths_ghcide
 import Development.Shake hiding (Env)
 import qualified Data.Set as Set
 
@@ -47,12 +49,18 @@ import HIE.Bios
 getLibdir :: IO FilePath
 getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
 
+ghcideVersion :: String
+ghcideVersion = "ghcide version: " <> showVersion version
+             <> " (GHC: "          <> VERSION_ghc <> ")"
+
 main :: IO ()
 main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    hPutStrLn stderr $ "Starting ghcide (GHC v" ++ showVersion compilerVersion ++ ")"
     Arguments{..} <- getArguments
+
+    if argsVersion then putStrLn ghcideVersion >> exitSuccess
+    else hPutStrLn stderr {- see WARNING above -} ghcideVersion
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
