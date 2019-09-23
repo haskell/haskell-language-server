@@ -10,6 +10,7 @@ data Arguments = Arguments
     {argLSP :: Bool
     ,argsCwd :: Maybe FilePath
     ,argFiles :: [FilePath]
+    ,argsVersion :: Bool
     }
 
 getArguments :: IO Arguments
@@ -25,3 +26,4 @@ arguments = Arguments
       <$> switch (long "lsp" <> help "Start talking to an LSP server")
       <*> optional (strOption $ long "cwd" <> metavar "DIR" <> help "Change to this directory")
       <*> many (argument str (metavar "FILES/DIRS..."))
+      <*> switch (long "version" <> help "Show ghcide and GHC versions")
