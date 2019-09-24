@@ -60,9 +60,6 @@ import qualified Development.IDE.Spans.AtPoint as AtPoint
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.Shake.Classes
-import System.Directory
-import System.FilePath
-import MkIface
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
