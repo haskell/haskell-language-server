@@ -147,7 +147,7 @@ executable ghcide
         ghc-paths,
         ghc,
         haskell-lsp,
-        hie-bios >= 0.2,
+        hie-bios >= 0.2 && < 0.3,
         ghcide,
         optparse-applicative,
         shake,
