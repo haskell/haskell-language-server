@@ -154,7 +154,10 @@ unDefer (Reason Opt_WarnDeferredOutOfScopeVariables, fd) = upgradeWarningToError
 unDefer ( _                                        , fd) = fd
 
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
-upgradeWarningToError (nfp, fd) = (nfp, fd{_severity = Just DsError})
+upgradeWarningToError (nfp, fd) =
+  (nfp, fd{_severity = Just DsError, _message = warn2err $ _message fd}) where
+  warn2err :: T.Text -> T.Text
+  warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
 addRelativeImport :: ParsedModule -> DynFlags -> DynFlags
 addRelativeImport modu dflags = dflags
