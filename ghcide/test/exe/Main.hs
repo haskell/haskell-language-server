@@ -117,9 +117,10 @@ diagnosticTests = testGroup "diagnostics"
           _ <- openDoc' "B.hs" "haskell"   sourceB
           expectDiagnostics $ expectedDs message
     in
-    [ deferralTest "type error"       "True"    "Couldn't match expected type"
-    , deferralTest "typed hole"       "_"       "Found hole"
-    , deferralTest "out of scope var" "unbound" "Variable not in scope"
+    [ deferralTest "type error"          "True"    "Couldn't match expected type"
+    , deferralTest "typed hole"          "_"       "Found hole"
+    , deferralTest "out of scope var"    "unbound" "Variable not in scope"
+    , deferralTest "message shows error" "True"    "A.hs:3:5: error:"
     ]
 
   , testSession "remove required module" $ do
