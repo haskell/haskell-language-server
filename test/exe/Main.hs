@@ -17,6 +17,7 @@ import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
 import System.Environment.Blank (setEnv)
 import System.IO.Extra
+import System.Directory
 import Test.Tasty
 import Test.Tasty.HUnit
 
@@ -609,6 +610,11 @@ pickActionWithTitle title actions = head
 run :: Session a -> IO a
 run s = withTempDir $ \dir -> do
   ghcideExe <- locateGhcideExecutable
+
+  -- Temporarily hack around https://github.com/mpickering/hie-bios/pull/56
+  -- since the package import test creates "Data/List.hs", which otherwise has no physical home
+  createDirectoryIfMissing True $ dir ++ "/Data"
+
   let cmd = unwords [ghcideExe, "--lsp", "--cwd", dir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.

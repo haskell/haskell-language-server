@@ -171,6 +171,7 @@ test-suite ghcide-tests
     build-depends:
         base,
         containers,
+        directory,
         extra,
         filepath,
         --------------------------------------------------------------
