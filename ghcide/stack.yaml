@@ -5,6 +5,6 @@ extra-deps:
 - haskell-lsp-0.16.0.0
 - haskell-lsp-types-0.16.0.0
 - lsp-test-0.7.0.0
-- hie-bios-0.2.0
+- hie-bios-0.2.1
 nix:
   packages: [zlib]
