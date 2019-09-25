@@ -14,7 +14,6 @@ module Development.IDE.Core.OfInterest(
     ) where
 
 import           Control.Concurrent.Extra
-import           Control.Monad.Except
 import Data.Hashable
 import Control.DeepSeq
 import GHC.Generics
@@ -27,6 +26,7 @@ import           Data.Set                                 (Set)
 import qualified Data.Set                                 as Set
 import qualified Data.Text as T
 import Data.Tuple.Extra
+import Data.Functor
 import           Development.Shake
 
 import           Development.IDE.Core.Shake
