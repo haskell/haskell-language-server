@@ -25,7 +25,8 @@ module Development.IDE.Core.Rules(
     fileFromParsedModule,
     ) where
 
-import           Control.Monad.Except
+import Control.Monad
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Development.IDE.Core.Compile
 import Development.IDE.Types.Options

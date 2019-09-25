@@ -20,8 +20,8 @@ module Development.IDE.Core.Service(
 
 import           Control.Concurrent.Extra
 import           Control.Concurrent.Async
-import           Control.Monad.Except
 import Development.IDE.Types.Options (IdeOptions(..))
+import Control.Monad
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.OfInterest
 import Development.IDE.Types.Logger
