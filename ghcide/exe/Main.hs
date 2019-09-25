@@ -39,6 +39,7 @@ import System.Exit
 import Paths_ghcide
 import Development.Shake hiding (Env)
 import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map
 
 import GHC hiding (def)
 import qualified GHC.Paths
@@ -64,13 +65,12 @@ main = do
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
-    let logger = Logger $ \pri msg -> withLock lock $
+    let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
             T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
 
     whenJust argsCwd setCurrentDirectory
 
     dir <- getCurrentDirectory
-    hPutStrLn stderr dir
 
     if argLSP then do
         t <- offsetTime
@@ -78,31 +78,43 @@ main = do
         runLanguageServer def def $ \event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
-            let options = (defaultIdeOptions $ loadEnvironment dir)
+            -- very important we only call loadSession once, and it's fast, so just do it before starting
+            session <- loadSession dir
+            let options = (defaultIdeOptions $ return session)
                     { optReportProgress = clientSupportsProgress caps }
-            initialise (mainRule >> action kick) event logger options vfs
+            initialise (mainRule >> action kick) event (logger minBound) options vfs
     else do
-        -- Note that this whole section needs to change once we have genuine
-        -- multi environment support. Needs rewriting in terms of loadEnvironment.
-        putStrLn "[1/6] Finding hie-bios cradle"
-        cradle <- getCradle dir
-        print cradle
+        putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
+        putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
 
-        putStrLn "\n[2/6] Converting Cradle to GHC session"
-        env <- newSession' cradle
-
-        putStrLn "\n[3/6] Initialising IDE session"
-        vfs <- makeVFSHandle
-        ide <- initialise mainRule (showEvent lock) logger (defaultIdeOptions $ return $ const $ return env) vfs
-
-        putStrLn "\n[4/6] Finding interesting files"
+        putStrLn $ "\nStep 1/6: Finding files to test in " ++ dir
         files <- nubOrd <$> expandFiles (argFiles ++ ["." | null argFiles])
         putStrLn $ "Found " ++ show (length files) ++ " files"
 
-        putStrLn "\n[5/6] Setting interesting files"
-        setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files
+        putStrLn "\nStep 2/6: Looking for hie.yaml files that control setup"
+        cradles <- mapM findCradle files
+        let ucradles = nubOrd cradles
+        let n = length ucradles
+        putStrLn $ "Found " ++ show n ++ " cradle" ++ ['s' | n /= 1]
+        sessions <- forM (zipFrom (1 :: Int) ucradles) $ \(i, x) -> do
+            let msg = maybe ("Implicit cradle for " ++ dir) ("Loading " ++) x
+            putStrLn $ "\nStep 3/6, Cradle " ++ show i ++ "/" ++ show n ++ ": " ++ msg
+            cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle x
+            when (isNothing x) $ print cradle
+            putStrLn $ "\nStep 4/6, Cradle " ++ show i ++ "/" ++ show n ++ ": Loading GHC Session"
+            cradleToSession cradle
 
-        putStrLn "\n[6/6] Loading interesting files"
+        putStrLn "\nStep 5/6: Initializing the IDE"
+        vfs <- makeVFSHandle
+        let cradlesToSessions = Map.fromList $ zip ucradles sessions
+        let filesToCradles = Map.fromList $ zip files cradles
+        let grab file = fromMaybe (head sessions) $ do
+                cradle <- Map.lookup file filesToCradles
+                Map.lookup cradle cradlesToSessions
+        ide <- initialise mainRule (showEvent lock) (logger Info) (defaultIdeOptions $ return $ return . grab) vfs
+
+        putStrLn "\nStep 6/6: Type checking the files"
+        setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files
         results <- runActionSync ide $ uses TypeCheck $ map toNormalizedFilePath files
         let (worked, failed) = partition fst $ zip (map isJust results) files
         putStrLn $ "Files that worked: " ++ show (length worked)
@@ -137,8 +149,9 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,) diags
 showEvent lock e = withLock lock $ print e
 
-newSession' :: Cradle -> IO HscEnvEq
-newSession' cradle = do
+
+cradleToSession :: Cradle -> IO HscEnvEq
+cradleToSession cradle = do
     opts <- either throwIO return =<< getCompilerOptions "" cradle
     libdir <- getLibdir
     env <- runGhc (Just libdir) $ do
@@ -147,15 +160,33 @@ newSession' cradle = do
     initDynLinker env
     newHscEnvEq env
 
-loadEnvironment :: FilePath -> IO (FilePath -> Action HscEnvEq)
-loadEnvironment dir = do
-    res <- liftIO $ newSession' =<< getCradle dir
-    return $ const $ return res
 
-getCradle :: FilePath -> IO Cradle
-getCradle dir = do
-    dir <- pure $ addTrailingPathSeparator dir
-    mbYaml <- findCradle dir
-    case mbYaml of
-        Nothing -> loadImplicitCradle dir
-        Just yaml -> loadCradle yaml
+loadSession :: FilePath -> IO (FilePath -> Action HscEnvEq)
+loadSession dir = do
+    cradleLoc <- memoIO $ \v -> do
+        res <- findCradle v
+        -- Sometimes we get C: and sometimes we get c:, try and normalise that
+        -- e.g. see https://github.com/digital-asset/ghcide/issues/126
+        return $ normalise <$> res
+    session <- memoIO $ \file -> do
+        c <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle file
+        cradleToSession c
+    return $ \file -> liftIO $ session =<< cradleLoc file
+
+
+-- | Memoize an IO function, with the characteristics:
+--
+--   * If multiple people ask for a result simultaneously, make sure you only compute it once.
+--
+--   * If there are exceptions, repeatedly reraise them.
+--
+--   * If the caller is aborted (async exception) finish computing it anyway.
+memoIO :: Ord a => (a -> IO b) -> IO (a -> IO b)
+memoIO op = do
+    ref <- newVar Map.empty
+    return $ \k -> join $ mask_ $ modifyVar ref $ \mp ->
+        case Map.lookup k mp of
+            Nothing -> do
+                res <- onceFork $ op k
+                return (Map.insert k res mp, res)
+            Just res -> return (mp, res)
