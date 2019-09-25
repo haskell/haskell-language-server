@@ -69,14 +69,8 @@ Once you have got `ghcide` working outside the editor, the next step is to pick 
 
 ### Using with VS Code
 
-Install the VS code extension (see https://code.visualstudio.com/docs/setup/mac for details on adding `code` to your `$PATH`):
-
-1. `cd extension/`
-2. `npm ci`
-3. `npm run vscepackage`
-4. `code --install-extension ghcide-0.0.1.vsix`
-
-Now opening a `.hs` file should work with `ghcide`.
+You can install the VSCode extension from the [VSCode
+marketplace](https://marketplace.visualstudio.com/items?itemName=DigitalAssetHoldingsLLC.ghcide).
 
 ### Using with Emacs
 
@@ -170,6 +164,24 @@ Add this to your coc-settings.json (which you can edit with :CocConfig):
 
 Here's a nice article on setting up neovim and coc: [Vim and Haskell in
 2019](http://marco-lopes.com/articles/Vim-and-Haskell-in-2019/)
+
+## Hacking on ghcide
+
+To build and work on `ghcide` itself, you can use Stack or cabal, e.g.,
+running `stack test` will execute the test suite.
+
+### Building the extension
+
+For development, you can also the VSCode extension from this repository (see
+https://code.visualstudio.com/docs/setup/mac for details on adding
+`code` to your `$PATH`):
+
+1. `cd extension/`
+2. `npm ci`
+3. `npm run vscepackage`
+4. `code --install-extension ghcide-0.0.1.vsix`
+
+Now opening a `.hs` file should work with `ghcide`.
 
 ## History and relationship to other Haskell IDE's
 
