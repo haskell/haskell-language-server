@@ -117,11 +117,11 @@ main = do
         setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files
         results <- runActionSync ide $ uses TypeCheck $ map toNormalizedFilePath files
         let (worked, failed) = partition fst $ zip (map isJust results) files
-        putStrLn $ "Files that worked: " ++ show (length worked)
-        putStrLn $ "Files that failed: " ++ show (length failed)
-        putStr $ unlines $ map ((++) " * " . snd) failed
+        when (failed /= []) $
+            putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
 
-        putStrLn "Done"
+        let files xs = let n = length xs in if n == 1 then "1 file" else show n ++ " files"
+        putStrLn $ "\nCompleted (" ++ files worked ++ " worked, " ++ files failed ++ " failed)"
 
 
 expandFiles :: [FilePath] -> IO [FilePath]
