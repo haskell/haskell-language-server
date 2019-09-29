@@ -20,6 +20,7 @@ import System.IO.Extra
 import System.Directory
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.ExpectedFailure
 
 
 main :: IO ()
@@ -31,8 +32,8 @@ main = defaultMain $ testGroup "HIE"
       void (message :: Session ProgressDoneNotification)
   , diagnosticTests
   , codeActionTests
+  , findDefinitionTests
   ]
-
 
 diagnosticTests :: TestTree
 diagnosticTests = testGroup "diagnostics"
@@ -113,10 +114,10 @@ diagnosticTests = testGroup "diagnostics"
         expectedDs aMessage =
           [ ("A.hs", [(DsError, (2,4), aMessage)])
           , ("B.hs", [(DsError, (3,4), bMessage)])]
-        deferralTest title binding message = testSession title $ do
+        deferralTest title binding msg = testSession title $ do
           _ <- openDoc' "A.hs" "haskell" $ sourceA binding
           _ <- openDoc' "B.hs" "haskell"   sourceB
-          expectDiagnostics $ expectedDs message
+          expectDiagnostics $ expectedDs msg
     in
     [ deferralTest "type error"          "True"    "Couldn't match expected type"
     , deferralTest "typed hole"          "_"       "Found hole"
@@ -561,14 +562,14 @@ fillTypedHoleTests = let
 
 addSigActionTests :: TestTree
 addSigActionTests = let
-  head = T.unlines [ "{-# OPTIONS_GHC -Wmissing-signatures #-}"
+  header = T.unlines [ "{-# OPTIONS_GHC -Wmissing-signatures #-}"
                      , "module Sigs where"]
-  before def     = T.unlines [head,      def]
-  after  def sig = T.unlines [head, sig, def]
+  before  def     = T.unlines [header,      def]
+  after'  def sig = T.unlines [header, sig, def]
 
   def >:: sig = testSession (T.unpack def) $ do
     let originalCode = before def
-    let expectedCode = after  def sig
+    let expectedCode = after'  def sig
     doc <- openDoc' "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 3 1) (Position 3 maxBound))
@@ -585,6 +586,123 @@ addSigActionTests = let
   , "a >>>> b = a + b"       >:: "(>>>>) :: Num a => a -> a -> a"
   , "a `haha` b = a b"       >:: "haha :: (t1 -> t2) -> t1 -> t2"
   ]
+
+findDefinitionTests :: TestTree
+findDefinitionTests = let
+
+  tst (get, check) pos targetRange title = testSession title $ do
+    doc <- openDoc' "Testing.hs" "haskell" source
+    found <- get doc pos
+    check found targetRange
+
+  checkDefs defs expected = do
+
+    let ndef = length defs
+    if ndef /= 1
+      then let dfound n = "definitions found: " <> show n in
+           liftIO $ dfound (1 :: Int) @=? dfound (length defs)
+      else do
+           let [Location{_range = foundRange}] = defs
+           liftIO $ expected @=? foundRange
+
+  checkHover hover expected = do
+    case hover of
+      Nothing -> liftIO $ "hover found" @=? ("no hover found" :: T.Text)
+      Just Hover{_contents = (HoverContents MarkupContent{_value = v})} ->
+        liftIO $ adjust expected @=? Position l c where
+          found = T.splitOn ":" $ head $ T.splitOn "**" $ last $ T.splitOn "Testing.hs:" v
+          [l,c] =  map (read . T.unpack) found
+          -- looks like hovers use 1-based numbering while definitions use 0-based
+          adjust Range{_start = Position{_line = l, _character = c}} =
+            Position{_line = l + 1, _character = c + 1}
+      _ -> error "test not expecting this kind of hover info"
+
+  source = T.unlines
+    -- 0123456789 123456789 123456789 123456789
+    [ "{-# OPTIONS_GHC -Wmissing-signatures #-}" --  0
+    , "module Testing where"                     --  1
+    , "data TypeConstructor = DataConstructor"   --  2
+    , "  { fff :: String"                        --  3
+    , "  , ggg :: Int }"                         --  4
+    , "aaa :: TypeConstructor"                   --  5
+    , "aaa = DataConstructor"                    --  6
+    , "  { fff = \"\""                           --  7
+    , "  , ggg = 0"                              --  8
+    , "  }"                                      --  9
+    -- 0123456789 123456789 123456789 123456789
+    , "bbb :: TypeConstructor"                   -- 10
+    , "bbb = DataConstructor \"\" 0"             -- 11
+    , "ccc :: (String, Int)"                     -- 12
+    , "ccc = (fff bbb, ggg aaa)"                 -- 13
+    , "ddd :: Num a => a -> a -> a"              -- 14
+    , "ddd vv ww = vv +! ww"                     -- 15
+    , "a +! b = a - b"                           -- 16
+    , "hhh (Just a) (><) = a >< a"               -- 17
+    , "iii a b = a `b` a"                        -- 18
+    -- 0123456789 123456789 123456789 123456789
+    ]
+
+  -- definition locations
+  tcData = mkRange   2  0    4 16
+  tcDC   = mkRange   2 23    4 16
+  fff    = mkRange   3  4    3  7
+  aaa    = mkRange   6  0    6  3
+  vv     = mkRange  15  4   15  6
+  op     = mkRange  16  2   16  4
+  opp    = mkRange  17 13   17 17
+  apmp   = mkRange  17 10   17 11
+  bp     = mkRange  18  6   18  7
+  -- search locations
+  fffL3  = _start fff
+  fffL7  = Position  7  4
+  fffL13 = Position 13  7
+  aaaL13 = Position 13 20
+  dcL6   = Position  6 11
+  dcL11  = Position 11 11
+  tcL5   = Position  5 11
+  vvL15  = Position 15 12
+  opL15  = Position 15 15
+  opL17  = Position 17 22
+  aL17   = Position 17 20
+  b'L18  = Position 18 13
+
+  --t = (getTypeDefinitions, checkTDefs) -- getTypeDefinitions always times out
+  d = (getDefinitions, checkDefs)
+  h = (getHover, checkHover)
+  in
+  testGroup "get"
+  [ testGroup "definition"
+    [ tst d fffL3  fff    "field in record definition"
+    , tst d fffL7  fff    "field in record construction" `xfail` "known broken"
+    , tst d fffL13 fff    "field name used as accessor"   -- 120 in Calculate.hs
+    , tst d aaaL13 aaa    "top-level name"                -- 120
+    , tst d dcL6   tcDC   "record data constructor"      `xfail` "known broken"
+    , tst d dcL11  tcDC   "plain  data constructor"       -- 121
+    , tst d tcL5   tcData "type constructor"              -- 147
+    , tst d vvL15  vv     "plain parameter"
+    , tst d aL17   apmp   "pattern match name"
+    , tst d opL15  op     "top-level operator"            -- 123
+    , tst d opL17  opp    "parameter operator"
+    , tst d b'L18  bp     "name in backticks"
+    ]
+  , testGroup "hover"
+    [ tst h fffL3  fff    "field in record definition"
+    , tst h fffL7  fff    "field in record construction" `xfail` "known broken"
+    , tst h fffL13 fff    "field name used as accessor"   -- 120
+    , tst h aaaL13 aaa    "top-level name"                -- 120
+    , tst h dcL6   tcDC   "record data constructor"      `xfail` "known broken"
+    , tst h dcL11  tcDC   "plain  data constructor"       -- 121
+    , tst h tcL5   tcData "type constructor"             `xfail` "known broken"
+    , tst h vvL15  vv     "plain parameter"
+    , tst h aL17   apmp   "pattern match name"
+    , tst h opL15  op     "top-level operator"           -- 123
+    , tst d opL17  opp    "parameter operator"
+    , tst h b'L18  bp     "name in backticks"
+    ]
+  ]
+
+xfail :: TestTree -> String -> TestTree
+xfail = flip expectFailBecause
 
 ----------------------------------------------------------------------
 -- Utils
@@ -606,6 +724,9 @@ pickActionWithTitle title actions = head
   [ action
   | CACodeAction action@CodeAction{ _title = actionTitle } <- actions
   , title == actionTitle ]
+
+mkRange :: Int -> Int -> Int -> Int -> Range
+mkRange a b c d = Range (Position a b) (Position c d)
 
 run :: Session a -> IO a
 run s = withTempDir $ \dir -> do
