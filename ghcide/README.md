@@ -4,7 +4,6 @@ Note: `ghcide` was previously called `hie-core`.
 
 Our vision is that you should build an IDE by combining:
 
-
 <img style="float:right;" src="img/vscode2.png"/>
 
 * [`hie-bios`](https://github.com/mpickering/hie-bios) for determining where your files are, what are their dependencies, what extensions are enabled and so on;
@@ -22,7 +21,7 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 | Feature | LSP name |
 | - | - |
 | Display error messages (parse errors, typecheck errors, etc.) and enabled warnings. | diagnostics |
-| Go to definition in local package | definition  | 
+| Go to definition in local package | definition  |
 | Display type and source module of values | hover |
 | Remove redundant imports, replace suggested typos for values and module imports, fill type holes, insert missing type signatures, add suggested ghc extensions  | codeAction (quickfix) |
 | Organize imports | codeAction (source.organizeImports) |
@@ -49,23 +48,22 @@ It's important that `ghcide` is compiled with the same compiler you use to build
 
 Next, check that `ghcide` is capable of loading your code. Change to the project directory and run `ghcide`, which will try and load everything using the same code as the IDE, but in a way that's much easier to understand. For example, taking the example of [`shake`](https://github.com/ndmitchell/shake), running `ghcide` gives some error messages and warnings before reporting at the end:
 
-```
-Files that worked: 152
-Files that failed: 6
+```console
+Files that failed:
  * .\model\Main.hs
  * .\model\Model.hs
  * .\model\Test.hs
  * .\model\Util.hs
  * .\output\docs\Main.hs
  * .\output\docs\Part_Architecture_md.hs
-Done
+Completed (152 worked, 6 failed)
 ```
 
 Of the 158 files in Shake, as of this moment, 152 can be loaded by the IDE, but 6 can't (error messages for the reasons they can't be loaded are given earlier). The failing files are all prototype work or test output, meaning I can confidently use Shake.
 
 The `ghcide` executable mostly relies on [`hie-bios`](https://github.com/mpickering/hie-bios) to do the difficult work of setting up your GHC environment. If it doesn't work, see [the `hie-bios` manual](https://github.com/mpickering/hie-bios#readme) to get it working. My default fallback is to figure it out by hand and create a `direct` style [`hie.yaml`](https://github.com/ndmitchell/shake/blob/master/hie.yaml) listing the command line arguments to load the project.
 
-Once you have got `ghcide` working outside the editor, the next step is to pick which editor to integrate with.
+If you can't get `ghcide` working outside the editor, see [this setup troubleshooting guide](docs/Setup.md). Once you have got `ghcide` working outside the editor, the next step is to pick which editor to integrate with.
 
 ### Using with VS Code
 
