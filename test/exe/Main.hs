@@ -30,10 +30,73 @@ main = defaultMain $ testGroup "HIE"
       void (message :: Session ProgressStartNotification)
       closeDoc doc
       void (message :: Session ProgressDoneNotification)
+  , initializeResponseTests
   , diagnosticTests
   , codeActionTests
   , findDefinitionTests
   ]
+
+initializeResponseTests :: TestTree
+initializeResponseTests = withResource acquire release tests where
+
+  -- these tests document and monitor the evolution of the
+  -- capabilities announced by the server in the initialize
+  -- response. Currently the server advertises almost no capabilities
+  -- at all, in some cases failing to announce capabilities that it
+  -- actually does provide! Hopefully this will change ...
+  tests :: IO InitializeResponse -> TestTree
+  tests getInitializeResponse =
+    testGroup "initialize response capabilities"
+    [ chk "   text doc sync"             _textDocumentSync  tds
+    , chk "   hover"                         _hoverProvider (Just True)
+    , chk "NO completion"               _completionProvider  Nothing
+    , chk "NO signature help"        _signatureHelpProvider  Nothing
+    , chk "   goto definition"          _definitionProvider (Just True)
+    , chk "NO goto type definition" _typeDefinitionProvider  Nothing
+    , chk "NO goto implementation"  _implementationProvider  Nothing
+    , chk "NO find references"          _referencesProvider  Nothing
+    , chk "NO doc highlight"     _documentHighlightProvider  Nothing
+    , chk "NO doc symbol"           _documentSymbolProvider  Nothing
+    , chk "NO workspace symbol"    _workspaceSymbolProvider  Nothing
+    , chk "NO code action"              _codeActionProvider  Nothing -- available but not declared !
+    , chk "NO code lens"                  _codeLensProvider  Nothing
+    , chk "NO doc formatting"   _documentFormattingProvider  Nothing
+    , chk "NO doc range formatting"
+                           _documentRangeFormattingProvider  Nothing
+    , chk "NO doc formatting on typing"
+                          _documentOnTypeFormattingProvider  Nothing
+    , chk "NO renaming"                     _renameProvider  Nothing
+    , chk "NO doc link"               _documentLinkProvider  Nothing
+    , chk "NO color"                         _colorProvider  Nothing
+    , chk "NO folding range"          _foldingRangeProvider  Nothing
+    , chk "NO execute command"      _executeCommandProvider  Nothing
+    , chk "NO workspace"                         _workspace  nothingWorkspace
+    , chk "NO experimental"                   _experimental  Nothing
+    ] where
+
+      tds = Just (TDSOptions (TextDocumentSyncOptions
+                              { _openClose = Just True
+                              , _change    = Just TdSyncIncremental
+                              , _willSave  = Nothing
+                              , _willSaveWaitUntil = Nothing
+                              , _save = Just (SaveOptions {_includeText = Nothing})}))
+
+      nothingWorkspace = Just (WorkspaceOptions {_workspaceFolders = Nothing})
+
+      chk :: (Eq a, Show a) => TestName -> (InitializeResponseCapabilitiesInner -> a) -> a -> TestTree
+      chk title getActual expected =
+        testCase title $ getInitializeResponse >>= \ir -> expected @=? (getActual . innerCaps) ir
+
+  innerCaps :: InitializeResponse -> InitializeResponseCapabilitiesInner
+  innerCaps (ResponseMessage _ _ (Just (InitializeResponseCapabilities c)) _) = c
+  innerCaps  _ = error "this test only expects inner capabilities"
+
+  acquire :: IO InitializeResponse
+  acquire = run initializeResponse
+
+  release :: InitializeResponse -> IO ()
+  release = const $ pure ()
+
 
 diagnosticTests :: TestTree
 diagnosticTests = testGroup "diagnostics"
