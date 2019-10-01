@@ -21,7 +21,7 @@ import System.Directory
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.ExpectedFailure
-
+import Data.Maybe
 
 main :: IO ()
 main = defaultMain $ testGroup "HIE"
@@ -605,17 +605,41 @@ findDefinitionTests = let
            let [Location{_range = foundRange}] = defs
            liftIO $ expected @=? foundRange
 
-  checkHover hover expected = do
+  checkHover hover expected =
     case hover of
       Nothing -> liftIO $ "hover found" @=? ("no hover found" :: T.Text)
-      Just Hover{_contents = (HoverContents MarkupContent{_value = v})} ->
-        liftIO $ adjust expected @=? Position l c where
-          found = T.splitOn ":" $ head $ T.splitOn "**" $ last $ T.splitOn "Testing.hs:" v
-          [l,c] =  map (read . T.unpack) found
+      Just Hover{_contents = (HoverContents MarkupContent{_value = msg})
+                ,_range    = mRange } ->
+        let
+          extractLineColFromMsg =
+            T.splitOn ":" . head . T.splitOn "**" . last . T.splitOn "Testing.hs:"
+          lineCol = extractLineColFromMsg msg
+
           -- looks like hovers use 1-based numbering while definitions use 0-based
-          adjust Range{_start = Position{_line = l, _character = c}} =
+          -- turns out that they are stored 1-based in RealSrcLoc by GHC itself.
+          adjust Position{_line = l, _character = c} =
             Position{_line = l + 1, _character = c + 1}
+        in
+        case lineCol of
+          [_,_] -> liftIO $ (adjust $ _start expected) @=? Position l c where [l,c] = map (read . T.unpack) lineCol
+          _     -> liftIO $ ("[...]Testing.hs:<LINE>:<COL>**[...]", mRange) @=? (msg, Just expected)
       _ -> error "test not expecting this kind of hover info"
+
+  mkFindTests tests = testGroup "get"
+    [ testGroup "definition" $ mapMaybe fst tests
+    , testGroup "hover"      $ mapMaybe snd tests ]
+
+  test runDef runHover look bind title =
+    ( runDef   $ tst def   look bind title
+    , runHover $ tst hover look bind title ) where
+      def   = (getDefinitions, checkDefs)
+      hover = (getHover      , checkHover)
+      --type_ = (getTypeDefinitions, checkTDefs) -- getTypeDefinitions always times out
+  -- test run control
+  yes, broken :: (TestTree -> Maybe TestTree)
+  yes    = Just -- test should run and pass
+  broken = Just . (`xfail` "known broken")
+--  no = const Nothing -- don't run this test at all
 
   source = T.unlines
     -- 0123456789 123456789 123456789 123456789
@@ -642,63 +666,35 @@ findDefinitionTests = let
     -- 0123456789 123456789 123456789 123456789
     ]
 
-  -- definition locations
-  tcData = mkRange   2  0    4 16
-  tcDC   = mkRange   2 23    4 16
-  fff    = mkRange   3  4    3  7
-  aaa    = mkRange   6  0    6  3
-  vv     = mkRange  15  4   15  6
-  op     = mkRange  16  2   16  4
-  opp    = mkRange  17 13   17 17
-  apmp   = mkRange  17 10   17 11
-  bp     = mkRange  18  6   18  7
-  -- search locations
-  fffL3  = _start fff
-  fffL7  = Position  7  4
-  fffL13 = Position 13  7
-  aaaL13 = Position 13 20
-  dcL6   = Position  6 11
-  dcL11  = Position 11 11
-  tcL5   = Position  5 11
-  vvL15  = Position 15 12
-  opL15  = Position 15 15
-  opL17  = Position 17 22
-  aL17   = Position 17 20
-  b'L18  = Position 18 13
+  -- search locations            definition locations
+  fffL3  = _start fff      ;  fff    = mkRange   3  4    3  7
+  fffL7  = Position  7  4  ;
+  fffL13 = Position 13  7  ;
+  aaaL13 = Position 13 20  ;  aaa    = mkRange   6  0    6  3
+  dcL6   = Position  6 11  ;  tcDC   = mkRange   2 23    4 16
+  dcL11  = Position 11 11  ;
+  tcL5   = Position  5 11  ;  tcData = mkRange   2  0    4 16
+  vvL15  = Position 15 12  ;  vv     = mkRange  15  4   15  6
+  opL15  = Position 15 15  ;  op     = mkRange  16  2   16  4
+  opL17  = Position 17 22  ;  opp    = mkRange  17 13   17 17
+  aL17   = Position 17 20  ;  apmp   = mkRange  17 10   17 11
+  b'L18  = Position 18 13  ;  bp     = mkRange  18  6   18  7
 
-  --t = (getTypeDefinitions, checkTDefs) -- getTypeDefinitions always times out
-  d = (getDefinitions, checkDefs)
-  h = (getHover, checkHover)
   in
-  testGroup "get"
-  [ testGroup "definition"
-    [ tst d fffL3  fff    "field in record definition"
-    , tst d fffL7  fff    "field in record construction" `xfail` "known broken"
-    , tst d fffL13 fff    "field name used as accessor"   -- 120 in Calculate.hs
-    , tst d aaaL13 aaa    "top-level name"                -- 120
-    , tst d dcL6   tcDC   "record data constructor"      `xfail` "known broken"
-    , tst d dcL11  tcDC   "plain  data constructor"       -- 121
-    , tst d tcL5   tcData "type constructor"              -- 147
-    , tst d vvL15  vv     "plain parameter"
-    , tst d aL17   apmp   "pattern match name"
-    , tst d opL15  op     "top-level operator"            -- 123
-    , tst d opL17  opp    "parameter operator"
-    , tst d b'L18  bp     "name in backticks"
-    ]
-  , testGroup "hover"
-    [ tst h fffL3  fff    "field in record definition"
-    , tst h fffL7  fff    "field in record construction" `xfail` "known broken"
-    , tst h fffL13 fff    "field name used as accessor"   -- 120
-    , tst h aaaL13 aaa    "top-level name"                -- 120
-    , tst h dcL6   tcDC   "record data constructor"      `xfail` "known broken"
-    , tst h dcL11  tcDC   "plain  data constructor"       -- 121
-    , tst h tcL5   tcData "type constructor"             `xfail` "known broken"
-    , tst h vvL15  vv     "plain parameter"
-    , tst h aL17   apmp   "pattern match name"
-    , tst h opL15  op     "top-level operator"           -- 123
-    , tst d opL17  opp    "parameter operator"
-    , tst h b'L18  bp     "name in backticks"
-    ]
+  mkFindTests
+  --     def    hover  look   bind
+  [ test yes    yes    fffL3  fff    "field in record definition"
+  , test broken broken fffL7  fff    "field in record construction"
+  , test yes    yes    fffL13 fff    "field name used as accessor"   -- 120 in Calculate.hs
+  , test yes    yes    aaaL13 aaa    "top-level name"                -- 120
+  , test broken broken dcL6   tcDC   "record data constructor"
+  , test yes    yes    dcL11  tcDC   "plain  data constructor"       -- 121
+  , test yes    broken tcL5   tcData "type constructor"              -- 147
+  , test yes    yes    vvL15  vv     "plain parameter"
+  , test yes    yes    aL17   apmp   "pattern match name"
+  , test yes    yes    opL15  op     "top-level operator"            -- 123
+  , test yes    yes    opL17  opp    "parameter operator"
+  , test yes    yes    b'L18  bp     "name in backticks"
   ]
 
 xfail :: TestTree -> String -> TestTree
