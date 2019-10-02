@@ -35,7 +35,9 @@ jobs:
         displayName: "HLint via ./fmt.sh"
       - bash: |
           sudo apt-get install -y g++ gcc libc6-dev libffi-dev libgmp-dev make zlib1g-dev
-          curl -sSL https://get.haskellstack.org/ | sh
+          if ! which stack >/dev/null 2>&1; then
+              curl -sSL https://get.haskellstack.org/ | sh
+          fi
         displayName: 'Install Stack'
       - bash: stack setup
         displayName: 'stack setup'
@@ -79,7 +81,9 @@ jobs:
         displayName: "HLint via ./fmt.sh"
       - bash: |
           sudo apt-get install -y g++ gcc libc6-dev libffi-dev libgmp-dev make zlib1g-dev
-          curl -sSL https://get.haskellstack.org/ | sh
+          if ! which stack >/dev/null 2>&1; then
+              curl -sSL https://get.haskellstack.org/ | sh
+          fi
         displayName: 'Install Stack'
       - bash: stack setup --stack-yaml=stack84.yaml
         displayName: 'stack setup --stack-yaml=stack84.yaml'
@@ -123,7 +127,9 @@ jobs:
         displayName: "HLint via ./fmt.sh"
       - bash: |
           sudo apt-get install -y g++ gcc libc6-dev libffi-dev libgmp-dev make zlib1g-dev
-          curl -sSL https://get.haskellstack.org/ | sh
+          if ! which stack >/dev/null 2>&1; then
+              curl -sSL https://get.haskellstack.org/ | sh
+          fi
         displayName: 'Install Stack'
       - bash: stack setup --stack-yaml=stack88.yaml
         displayName: 'stack setup --stack-yaml=stack88.yaml'
@@ -167,7 +173,9 @@ jobs:
         displayName: "HLint via ./fmt.sh"
       - bash: |
           sudo apt-get install -y g++ gcc libc6-dev libffi-dev libgmp-dev make zlib1g-dev
-          curl -sSL https://get.haskellstack.org/ | sh
+          if ! which stack >/dev/null 2>&1; then
+              curl -sSL https://get.haskellstack.org/ | sh
+          fi
         displayName: 'Install Stack'
       - bash: stack setup --stack-yaml=stack-ghc-lib.yaml
         displayName: 'stack setup --stack-yaml=stack-ghc-lib.yaml'
