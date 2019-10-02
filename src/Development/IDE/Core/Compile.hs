@@ -196,9 +196,15 @@ setupEnv tmsIn = do
     -- by putting them in the finder cache.
     let ims  = map (InstalledModule (thisInstalledUnitId $ hsc_dflags session) . moduleName . ms_mod) mss
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) mss ims
-    liftIO $ modifyIORef (hsc_FC session) $ \fc ->
-        foldl' (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) fc
-            $ zip ims ifrs
+    -- We have to create a new IORef here instead of modifying the existing IORef as
+    -- it is shared between concurrent compilations.
+    prevFinderCache <- liftIO $ readIORef $ hsc_FC session
+    let newFinderCache =
+            foldl'
+                (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) prevFinderCache
+                $ zip ims ifrs
+    newFinderCacheVar <- liftIO $ newIORef $! newFinderCache
+    modifySession $ \s -> s { hsc_FC = newFinderCacheVar }
 
     -- load dependent modules, which must be in topological order.
     mapM_ loadModuleHome tms
