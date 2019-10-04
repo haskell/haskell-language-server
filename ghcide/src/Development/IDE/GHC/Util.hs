@@ -39,6 +39,8 @@ import qualified Data.Text as T
 import StringBuffer
 import System.FilePath
 
+import Development.IDE.Types.Location
+
 
 ----------------------------------------------------------------------
 -- GHC setup
@@ -103,26 +105,22 @@ fakeDynFlags = defaultDynFlags settings mempty
           , pc_WORD_SIZE=8
           }
 
-moduleImportPath :: GHC.ParsedModule -> Maybe FilePath
-moduleImportPath pm
-    | rootModDir == "." = Just rootPathDir
-    | otherwise = do
-          dir <- dropTrailingPathSeparator <$> stripSuffix (normalise rootModDir) (normalise rootPathDir)
-          -- For modules with more than one component, this can be empty, e.g.,
-          -- stripSuffix (normalise ./A) (normalise ./A) for A/B.daml.
-          -- We make a best effort attemp at not duplicating file paths
-          -- by mapping the current directory to '.' if 'rootPathDir' starts with '.' and
-          -- to an empty string otherwise.
-          pure $! if null dir then dotDir else dir
+moduleImportPath :: NormalizedFilePath -> GHC.ParsedModule -> Maybe FilePath
+-- The call to takeDirectory is required since DAML does not require that
+-- the file name matches the module name in the last component.
+-- Once that has changed we can get rid of this.
+moduleImportPath (takeDirectory . fromNormalizedFilePath -> pathDir) pm
+    -- This happens for single-component modules since takeDirectory "A" == "."
+    | modDir == "." = Just pathDir
+    | otherwise = dropTrailingPathSeparator <$> stripSuffix modDir pathDir
   where
-    dotDir = if "." `isPrefixOf` rootPathDir then "." else ""
     ms   = GHC.pm_mod_summary pm
-    file = GHC.ms_hspp_file ms
     mod'  = GHC.ms_mod ms
-    -- ./src/A for file ./src/A/B.daml
-    rootPathDir  = takeDirectory file
     -- A for module A.B
-    rootModDir   = takeDirectory . moduleNameSlashes . GHC.moduleName $ mod'
+    modDir =
+        takeDirectory $
+        fromNormalizedFilePath $ toNormalizedFilePath $
+        moduleNameSlashes $ GHC.moduleName mod'
 
 -- | An HscEnv with equality.
 data HscEnvEq = HscEnvEq Unique HscEnv

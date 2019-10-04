@@ -7,8 +7,11 @@
 
 module Main (main) where
 
-import Control.Monad (void)
+import Control.Applicative.Combinators
+import Control.Monad
 import Control.Monad.IO.Class (liftIO)
+import Data.Char (toLower)
+import Data.Foldable
 import qualified Data.Text as T
 import Development.IDE.Test
 import Development.IDE.Test.Runfiles
@@ -16,6 +19,7 @@ import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
 import System.Environment.Blank (setEnv)
+import System.FilePath
 import System.IO.Extra
 import System.Directory
 import Test.Tasty
@@ -329,6 +333,40 @@ diagnosticTests = testGroup "diagnostics"
             ]
           )
         ]
+    , testSessionWait "lower-case drive" $ do
+          let aContent = T.unlines
+                [ "module A.A where"
+                , "import A.B ()"
+                ]
+              bContent = T.unlines
+                [ "{-# OPTIONS_GHC -Wall #-}"
+                , "module A.B where"
+                , "import Data.List"
+                ]
+          uriB <- getDocUri "A/B.hs"
+          Just pathB <- pure $ uriToFilePath uriB
+          uriB <- pure $
+              let (drive, suffix) = splitDrive pathB
+              in filePathToUri (joinDrive (map toLower drive ) suffix)
+          liftIO $ createDirectoryIfMissing True (takeDirectory pathB)
+          liftIO $ writeFileUTF8 pathB $ T.unpack bContent
+          uriA <- getDocUri "A/A.hs"
+          Just pathA <- pure $ uriToFilePath uriA
+          uriA <- pure $
+              let (drive, suffix) = splitDrive pathA
+              in filePathToUri (joinDrive (map toLower drive ) suffix)
+          let itemA = TextDocumentItem uriA "haskell" 0 aContent
+          let a = TextDocumentIdentifier uriA
+          sendNotification TextDocumentDidOpen (DidOpenTextDocumentParams itemA)
+          diagsNot <- skipManyTill anyMessage message :: Session PublishDiagnosticsNotification
+          let PublishDiagnosticsParams fileUri diags = _params (diagsNot :: PublishDiagnosticsNotification)
+          -- Check that if we put a lower-case drive in for A.A
+          -- the diagnostics for A.B will also be lower-case.
+          liftIO $ fileUri @?= uriB
+          let msg = _message (head (toList diags) :: Diagnostic)
+          liftIO $ unless ("redundant" `T.isInfixOf` msg) $
+              assertFailure ("Expected redundant import but got " <> T.unpack msg)
+          closeDoc a
   ]
 
 codeActionTests :: TestTree
