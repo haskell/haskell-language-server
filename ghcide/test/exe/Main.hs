@@ -58,7 +58,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc highlight"     _documentHighlightProvider  Nothing
     , chk "NO doc symbol"           _documentSymbolProvider  Nothing
     , chk "NO workspace symbol"    _workspaceSymbolProvider  Nothing
-    , chk "NO code action"              _codeActionProvider  Nothing -- available but not declared !
+    , chk "   code action"             _codeActionProvider $ Just $ CodeActionOptionsStatic True
     , chk "NO code lens"                  _codeLensProvider  Nothing
     , chk "NO doc formatting"   _documentFormattingProvider  Nothing
     , chk "NO doc range formatting"
