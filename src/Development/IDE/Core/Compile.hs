@@ -159,9 +159,9 @@ upgradeWarningToError (nfp, fd) =
   warn2err :: T.Text -> T.Text
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
-addRelativeImport :: ParsedModule -> DynFlags -> DynFlags
-addRelativeImport modu dflags = dflags
-    {importPaths = nubOrd $ maybeToList (moduleImportPath modu) ++ importPaths dflags}
+addRelativeImport :: NormalizedFilePath -> ParsedModule -> DynFlags -> DynFlags
+addRelativeImport fp modu dflags = dflags
+    {importPaths = nubOrd $ maybeToList (moduleImportPath fp modu) ++ importPaths dflags}
 
 mkTcModuleResult
     :: GhcMonad m
