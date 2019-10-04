@@ -153,7 +153,7 @@ getLocatedImportsRule =
         let ms = pm_mod_summary pm
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env <- hscEnv <$> use_ GhcSession file
-        let dflags = addRelativeImport pm $ hsc_dflags env
+        let dflags = addRelativeImport file pm $ hsc_dflags env
         opt <- getIdeOptions
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule dflags (optExtensions opt) getFileExists modName mbPkgName isSource
