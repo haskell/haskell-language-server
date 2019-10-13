@@ -1,14 +1,11 @@
-resolver: nightly-2019-10-02
+resolver: nightly-2019-10-10
 packages:
 - .
 extra-deps:
 - haskell-lsp-0.16.0.0
-- prettyprinter-1.3.0
-- prettyprinter-ansi-terminal-1.1.1.2
 - hslogger-1.3.0.0
 - lsp-test-0.7.0.0
 - network-bsd-2.8.1.0
-- conduit-parse-0.2.1.0
 allow-newer: true
 nix:
   packages: [zlib]
