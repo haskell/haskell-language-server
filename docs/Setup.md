@@ -36,3 +36,19 @@ Does `ghcide` alone work on the console? Did you first enter a Nix shell? Or run
 ## Issues with Nix
 
 If you are using packages installed by Nix, then often Nix will set `NIX_GHC_LIBDIR` to say where the libraries are installed. `ghcide` can cope with that. However, sometimes the `ghc` on your shell will actually be a shell script that sets `NIX_GHC_LIBDIR`, which `ghcide` can't find. If that happens, you need to either set `NIX_GHC_LIBDIR` (so `ghcide` can see it) or use a proper [Nix compatible wrapper](https://github.com/hercules-ci/ghcide-nix) over `ghcide`.
+
+## Symbol’s value as variable is void: capability
+
+As described [here](https://github.com/emacs-lsp/lsp-mode/issues/770#issuecomment-483540119) and [here](https://github.com/emacs-lsp/lsp-mode/issues/517#issuecomment-445448700), the default installation of `lsp-mode`, `lsp-ui`, `lsp-ui-mode` and `lsp-haskell` as described in [ghcide's "Using with Emacs" section](https://github.com/digital-asset/ghcide/#using-with-emacs) may result in the following error message:
+ 
+```
+Symbol’s value as variable is void: capability
+```
+ 
+This can be caused by either an old version of the Emacs package `dash`, or a cached `.elc` file for an old version. A fix consists of (re)moving the old package from ~/.emacs.d/elpa/ and installing it again, e.g. via M-x `package-list-packages` RET and M-x `package-install` RET `dash` RET. If this is not enough,
+ 
+```
+find ~/.emacs.d -name '*.elc' -exec rm {} \;
+```
+
+(which causes recompilation of all bytecode-compiled scripts.)
