@@ -740,62 +740,66 @@ findDefinitionTests = let
   yes, broken :: (TestTree -> Maybe TestTree)
   yes    = Just -- test should run and pass
   broken = Just . (`xfail` "known broken")
+  cant   = Just . (`xfail` "cannot be made to work")
 --  no = const Nothing -- don't run this test at all
 
   source = T.unlines
     -- 0123456789 123456789 123456789 123456789
     [ "{-# OPTIONS_GHC -Wmissing-signatures #-}" --  0
     , "module Testing where"                     --  1
-    , "data TypeConstructor = DataConstructor"   --  2
-    , "  { fff :: String"                        --  3
-    , "  , ggg :: Int }"                         --  4
-    , "aaa :: TypeConstructor"                   --  5
-    , "aaa = DataConstructor"                    --  6
-    , "  { fff = \"\""                           --  7
-    , "  , ggg = 0"                              --  8
-    , "  }"                                      --  9
+    , "import Data.Text (Text)"                  --  2
+    , "data TypeConstructor = DataConstructor"   --  3
+    , "  { fff :: Text"                          --  4
+    , "  , ggg :: Int }"                         --  5
+    , "aaa :: TypeConstructor"                   --  6
+    , "aaa = DataConstructor"                    --  7
+    , "  { fff = \"\""                           --  8
+    , "  , ggg = 0"                              --  9
     -- 0123456789 123456789 123456789 123456789
-    , "bbb :: TypeConstructor"                   -- 10
-    , "bbb = DataConstructor \"\" 0"             -- 11
-    , "ccc :: (String, Int)"                     -- 12
-    , "ccc = (fff bbb, ggg aaa)"                 -- 13
-    , "ddd :: Num a => a -> a -> a"              -- 14
-    , "ddd vv ww = vv +! ww"                     -- 15
-    , "a +! b = a - b"                           -- 16
-    , "hhh (Just a) (><) = a >< a"               -- 17
-    , "iii a b = a `b` a"                        -- 18
+    , "  }"                                      -- 10
+    , "bbb :: TypeConstructor"                   -- 11
+    , "bbb = DataConstructor \"\" 0"             -- 12
+    , "ccc :: (Text, Int)"                       -- 13
+    , "ccc = (fff bbb, ggg aaa)"                 -- 14
+    , "ddd :: Num a => a -> a -> a"              -- 15
+    , "ddd vv ww = vv +! ww"                     -- 16
+    , "a +! b = a - b"                           -- 17
+    , "hhh (Just a) (><) = a >< a"               -- 18
+    , "iii a b = a `b` a"                        -- 19
     -- 0123456789 123456789 123456789 123456789
     ]
 
   -- search locations            definition locations
-  fffL3  = _start fff      ;  fff    = mkRange   3  4    3  7
-  fffL7  = Position  7  4  ;
-  fffL13 = Position 13  7  ;
-  aaaL13 = Position 13 20  ;  aaa    = mkRange   6  0    6  3
-  dcL6   = Position  6 11  ;  tcDC   = mkRange   2 23    4 16
-  dcL11  = Position 11 11  ;
-  tcL5   = Position  5 11  ;  tcData = mkRange   2  0    4 16
-  vvL15  = Position 15 12  ;  vv     = mkRange  15  4   15  6
-  opL15  = Position 15 15  ;  op     = mkRange  16  2   16  4
-  opL17  = Position 17 22  ;  opp    = mkRange  17 13   17 17
-  aL17   = Position 17 20  ;  apmp   = mkRange  17 10   17 11
-  b'L18  = Position 18 13  ;  bp     = mkRange  18  6   18  7
+  fffL4  = _start fff      ;  fff    = mkRange   4  4    4  7
+  fffL8  = Position  8  4  ;
+  fffL14 = Position 14  7  ;
+  aaaL14 = Position 14 20  ;  aaa    = mkRange   7  0    7  3
+  dcL7   = Position  7 11  ;  tcDC   = mkRange   3 23    5 16
+  dcL12  = Position 12 11  ;
+  xtcL5  = Position  5 11  ;  xtc    = undefined -- not clear what it should do
+  tcL6   = Position  6 11  ;  tcData = mkRange   3  0    5 16
+  vvL16  = Position 16 12  ;  vv     = mkRange  16  4   16  6
+  opL16  = Position 16 15  ;  op     = mkRange  17  2   17  4
+  opL18  = Position 18 22  ;  opp    = mkRange  18 13   18 17
+  aL18   = Position 18 20  ;  apmp   = mkRange  18 10   18 11
+  b'L19  = Position 19 13  ;  bp     = mkRange  19  6   19  7
 
   in
   mkFindTests
   --     def    hover  look   bind
-  [ test yes    yes    fffL3  fff    "field in record definition"
-  , test broken broken fffL7  fff    "field in record construction"
-  , test yes    yes    fffL13 fff    "field name used as accessor"   -- 120 in Calculate.hs
-  , test yes    yes    aaaL13 aaa    "top-level name"                -- 120
-  , test broken broken dcL6   tcDC   "record data constructor"
-  , test yes    yes    dcL11  tcDC   "plain  data constructor"       -- 121
-  , test yes    broken tcL5   tcData "type constructor"              -- 147
-  , test yes    yes    vvL15  vv     "plain parameter"
-  , test yes    yes    aL17   apmp   "pattern match name"
-  , test yes    yes    opL15  op     "top-level operator"            -- 123
-  , test yes    yes    opL17  opp    "parameter operator"
-  , test yes    yes    b'L18  bp     "name in backticks"
+  [ test yes    yes    fffL4  fff    "field in record definition"
+  , test broken broken fffL8  fff    "field in record construction"
+  , test yes    yes    fffL14 fff    "field name used as accessor"   -- 120 in Calculate.hs
+  , test yes    yes    aaaL14 aaa    "top-level name"                -- 120
+  , test broken broken dcL7   tcDC   "record data constructor"
+  , test yes    yes    dcL12  tcDC   "plain  data constructor"       -- 121
+  , test yes    broken tcL6   tcData "type constructor"              -- 147
+  , test cant   broken xtcL5  xtc    "type constructor from other package"
+  , test yes    yes    vvL16  vv     "plain parameter"
+  , test yes    yes    aL18   apmp   "pattern match name"
+  , test yes    yes    opL16  op     "top-level operator"            -- 123
+  , test yes    yes    opL18  opp    "parameter operator"
+  , test yes    yes    b'L19  bp     "name in backticks"
   ]
 
 xfail :: TestTree -> String -> TestTree
