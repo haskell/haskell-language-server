@@ -72,7 +72,17 @@ marketplace](https://marketplace.visualstudio.com/items?itemName=DigitalAssetHol
 
 ### Using with Emacs
 
-If you don't already have [MELPA](https://melpa.org/#/) package installation configured, visit MELPA [getting started](https://melpa.org/#/getting-started) page to get set up. Then, install [`use-package`](https://melpa.org/#/use-package). Finally, add the following lines to your `.emacs`.
+If you don't already have [MELPA](https://melpa.org/#/) package installation configured, visit MELPA [getting started](https://melpa.org/#/getting-started) page to get set up. Then, install [`use-package`](https://melpa.org/#/use-package).
+
+Now you have a choice of two different Emacs packages which can be used to communicate with the `ghcide` LSP server:
+
++ `lsp-ui`
++ `eglot`
+
+In each case, you can enable support by adding the shown lines to your `.emacs`:
+
+#### lsp-ui
+
 ```elisp
 ;; LSP
 (use-package flycheck
@@ -97,6 +107,15 @@ If you don't already have [MELPA](https://melpa.org/#/) package installation con
  ;;(setq lsp-log-io t)
 )
 ```
+
+#### eglot
+
+````elisp
+(use-package eglot
+  :ensure t
+  :config
+  (add-to-list 'eglot-server-programs '(haskell-mode . ("ghcide" "--lsp"))))
+````
 
 ### Using with Vim/Neovim
 
