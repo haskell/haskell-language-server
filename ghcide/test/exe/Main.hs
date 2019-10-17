@@ -31,9 +31,10 @@ main :: IO ()
 main = defaultMain $ testGroup "HIE"
   [ testSession "open close" $ do
       doc <- openDoc' "Testing.hs" "haskell" ""
-      void (message :: Session ProgressStartNotification)
+      void (message :: Session WorkDoneProgressCreateRequest)
+      void (message :: Session WorkDoneProgressBeginNotification)
       closeDoc doc
-      void (message :: Session ProgressDoneNotification)
+      void (message :: Session WorkDoneProgressEndNotification)
   , initializeResponseTests
   , diagnosticTests
   , codeActionTests
@@ -118,7 +119,8 @@ diagnosticTests = testGroup "diagnostics"
   , testSessionWait "introduce syntax error" $ do
       let content = T.unlines [ "module Testing where" ]
       doc <- openDoc' "Testing.hs" "haskell" content
-      void (message :: Session ProgressStartNotification)
+      void (message :: Session WorkDoneProgressCreateRequest)
+      void (message :: Session WorkDoneProgressBeginNotification)
       let change = TextDocumentContentChangeEvent
             { _range = Just (Range (Position 0 15) (Position 0 18))
             , _rangeLength = Nothing

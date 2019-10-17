@@ -29,6 +29,7 @@ import Development.IDE.GHC.Util
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
+import Language.Haskell.LSP.Types (LspId(IdInt))
 import Linker
 import Data.Version
 import Development.IDE.LSP.LanguageServer
@@ -76,14 +77,14 @@ main = do
         t <- offsetTime
         hPutStrLn stderr "Starting LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcidie WITHOUT the --lsp option!"
-        runLanguageServer def def $ \event vfs caps -> do
+        runLanguageServer def def $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             -- very important we only call loadSession once, and it's fast, so just do it before starting
             session <- loadSession dir
             let options = (defaultIdeOptions $ return session)
                     { optReportProgress = clientSupportsProgress caps }
-            initialise (mainRule >> action kick) event (logger minBound) options vfs
+            initialise (mainRule >> action kick) getLspId event (logger minBound) options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
@@ -112,7 +113,7 @@ main = do
         let grab file = fromMaybe (head sessions) $ do
                 cradle <- Map.lookup file filesToCradles
                 Map.lookup cradle cradlesToSessions
-        ide <- initialise mainRule (showEvent lock) (logger Info) (defaultIdeOptions $ return $ return . grab) vfs
+        ide <- initialise mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) (defaultIdeOptions $ return $ return . grab) vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files
