@@ -28,12 +28,13 @@ export function activate(context: ExtensionContext) {
 		// Register the server for plain text documents
 		documentSelector: ["haskell"]
 	};
-	let client2 = new LanguageClient( 
+	client = new LanguageClient(
 		'haskell',
-		'Haskell IDE Core',
+		'ghcide',
 		{ args: args, command: cPath, options: {cwd: workspace.rootPath }}, clientOptions, true);
+    client.registerProposedFeatures();
 	
-	client2.start();
+	client.start();
 }
 
 export function deactivate(): Thenable<void> | undefined {

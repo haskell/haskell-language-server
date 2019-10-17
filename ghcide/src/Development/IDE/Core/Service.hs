@@ -28,6 +28,7 @@ import Development.IDE.Types.Logger
 import           Development.Shake
 import Data.Either.Extra
 import qualified Language.Haskell.LSP.Messages as LSP
+import qualified Language.Haskell.LSP.Types as LSP
 
 import           Development.IDE.Core.Shake
 
@@ -41,13 +42,15 @@ instance IsIdeGlobal GlobalIdeOptions
 
 -- | Initialise the Compiler Service.
 initialise :: Rules ()
+           -> IO LSP.LspId
            -> (LSP.FromServerMessage -> IO ())
            -> Logger
            -> IdeOptions
            -> VFSHandle
            -> IO IdeState
-initialise mainRule toDiags logger options vfs =
+initialise mainRule getLspId toDiags logger options vfs =
     shakeOpen
+        getLspId
         toDiags
         logger
         (optShakeProfiling options)

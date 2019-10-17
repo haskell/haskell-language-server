@@ -3,12 +3,12 @@
 	"displayName": "ghcide",
 	"publisher": "DigitalAssetHoldingsLLC",
 	"repository": {
-		"type" : "git",
-		"url" : "https://github.com/digitalasset/daml.git"
+		"type": "git",
+		"url": "https://github.com/digitalasset/daml.git"
 	},
 	"description": "A simple extension to test out haskell ide core",
 	"version": "0.0.1",
-    "license": "Apache-2.0",
+	"license": "Apache-2.0",
 	"engines": {
 		"vscode": "^1.35.0"
 	},
@@ -16,19 +16,21 @@
 		"Other"
 	],
 	"activationEvents": [
-        "onLanguage:haskell"
+		"onLanguage:haskell"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
-		"languages": [{
-			"id": "haskell",
-			"extensions": [
-				"hs",
-				"hs-boot",
-				"lhs-boot",
-				"lhs"
-			]
-		}],
+		"languages": [
+			{
+				"id": "haskell",
+				"extensions": [
+					"hs",
+					"hs-boot",
+					"lhs-boot",
+					"lhs"
+				]
+			}
+		],
 		"configuration": {
 			"type": "object",
 			"title": "Haskell IDE Core Configuration",
@@ -53,18 +55,18 @@
 		"test": "npm run compile && node ./node_modules/vscode/bin/test",
 		"vscepackage": "vsce package"
 	},
-    "extensionDependencies": [
-        "justusadam.language-haskell"
+	"extensionDependencies": [
+		"justusadam.language-haskell"
 	],
 	"dependencies": {
-		"vscode-languageclient": "^4.1.4"
+		"vscode-languageclient": "^6.0.0-next.1"
 	},
 	"devDependencies": {
-		"@types/mocha": "^2.2.42",
-		"@types/node": "^10.12.21",
+		"@types/mocha": "^5.2.7",
+		"@types/node": "^12.7.11",
 		"@types/vscode": "1.35.0",
 		"tslint": "^5.12.1",
-		"typescript": "^3.3.1",
+		"typescript": "^3.6.3",
 		"vsce": "^1.66.0"
 	}
 }

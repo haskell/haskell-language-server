@@ -275,14 +275,15 @@ seqValue v b = case v of
     Failed -> b
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
-shakeOpen :: (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
+shakeOpen :: IO LSP.LspId
+          -> (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
           -> Logger
           -> Maybe FilePath
           -> IdeReportProgress
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen eventer logger shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
+shakeOpen getLspId eventer logger shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
     shakeExtras <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
@@ -295,29 +296,38 @@ shakeOpen eventer logger shakeProfileDir (IdeReportProgress reportProgress) opts
         shakeOpenDatabase
             opts
                 { shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts
-                , shakeProgress = if reportProgress then lspShakeProgress eventer else const (pure ())
+                , shakeProgress = if reportProgress then lspShakeProgress getLspId eventer else const (pure ())
                 }
             rules
     shakeAbort <- newMVar $ return ()
     shakeDb <- shakeDb
     return IdeState{..}
 
-lspShakeProgress :: (LSP.FromServerMessage -> IO ()) -> IO Progress -> IO ()
-lspShakeProgress sendMsg prog = do
-    u <- T.pack . show . hashUnique <$> newUnique
+lspShakeProgress :: IO LSP.LspId -> (LSP.FromServerMessage -> IO ()) -> IO Progress -> IO ()
+lspShakeProgress getLspId sendMsg prog = do
+    lspId <- getLspId
+    u <- ProgressTextToken . T.pack . show . hashUnique <$> newUnique
+    sendMsg $ LSP.ReqWorkDoneProgressCreate $ LSP.fmServerWorkDoneProgressCreateRequest
+      lspId $ LSP.WorkDoneProgressCreateParams
+      { _token = u }
     bracket_ (start u) (stop u) (loop u)
     where
-        start id = sendMsg $ LSP.NotProgressStart $ LSP.fmServerProgressStartNotification
-            ProgressStartParams
-                { _id = id
-                , _title = "Processing"
-                , _cancellable = Nothing
-                , _message = Nothing
-                , _percentage = Nothing
+        start id = sendMsg $ LSP.NotWorkDoneProgressBegin $ LSP.fmServerWorkDoneProgressBeginNotification
+            LSP.ProgressParams
+                { _token = id
+                , _value = WorkDoneProgressBeginParams
+                  { _title = "Processing"
+                  , _cancellable = Nothing
+                  , _message = Nothing
+                  , _percentage = Nothing
+                  }
                 }
-        stop id = sendMsg $ LSP.NotProgressDone $ LSP.fmServerProgressDoneNotification
-            ProgressDoneParams
-                { _id = id
+        stop id = sendMsg $ LSP.NotWorkDoneProgressEnd $ LSP.fmServerWorkDoneProgressEndNotification
+            LSP.ProgressParams
+                { _token = id
+                , _value = WorkDoneProgressEndParams
+                  { _message = Nothing
+                  }
                 }
         sample = 0.1
         loop id = forever $ do
@@ -325,11 +335,14 @@ lspShakeProgress sendMsg prog = do
             p <- prog
             let done = countSkipped p + countBuilt p
             let todo = done + countUnknown p + countTodo p
-            sendMsg $ LSP.NotProgressReport $ LSP.fmServerProgressReportNotification
-                ProgressReportParams
-                    { _id = id
-                    , _message = Just $ T.pack $ show done <> "/" <> show todo
-                    , _percentage = Nothing
+            sendMsg $ LSP.NotWorkDoneProgressReport $ LSP.fmServerWorkDoneProgressReportNotification
+                LSP.ProgressParams
+                    { _token = id
+                    , _value = LSP.WorkDoneProgressReportParams
+                      { _cancellable = Nothing
+                      , _message = Just $ T.pack $ show done <> "/" <> show todo
+                      , _percentage = Nothing
+                      }
                     }
 
 shakeProfile :: IdeState -> FilePath -> IO ()

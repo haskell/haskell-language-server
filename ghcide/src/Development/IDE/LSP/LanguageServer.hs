@@ -41,7 +41,7 @@ import Language.Haskell.LSP.Messages
 runLanguageServer
     :: LSP.Options
     -> PartialHandlers
-    -> ((FromServerMessage -> IO ()) -> VFSHandle -> ClientCapabilities -> IO IdeState)
+    -> (IO LspId -> (FromServerMessage -> IO ()) -> VFSHandle -> ClientCapabilities -> IO IdeState)
     -> IO ()
 runLanguageServer options userHandlers getIdeState = do
     -- Move stdout to another file descriptor and duplicate stderr
@@ -120,7 +120,7 @@ runLanguageServer options userHandlers getIdeState = do
     where
         handleInit :: IO () -> (LspId -> IO ()) -> (LspId -> IO ()) -> Chan Message -> LSP.LspFuncs () -> IO (Maybe err)
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan lspFuncs@LSP.LspFuncs{..} = do
-            ide <- getIdeState sendFunc (makeLSPVFSHandle lspFuncs) clientCapabilities
+            ide <- getIdeState getNextReqId sendFunc (makeLSPVFSHandle lspFuncs) clientCapabilities
             _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- readChan clientMsgChan
                 case msg of
@@ -161,6 +161,7 @@ runLanguageServer options userHandlers getIdeState = do
 setHandlersIgnore :: PartialHandlers
 setHandlersIgnore = PartialHandlers $ \_ x -> return x
     {LSP.initializedHandler = none
+    ,LSP.responseHandler = none
     }
     where none = Just $ const $ return ()
 

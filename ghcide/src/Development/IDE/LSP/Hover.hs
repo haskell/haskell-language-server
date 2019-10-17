@@ -24,7 +24,7 @@ onHover
     :: IdeState
     -> TextDocumentPositionParams
     -> IO (Maybe Hover)
-onHover ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
+onHover ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos _) = do
     mbResult <- case uriToFilePath' uri of
         Just (toNormalizedFilePath -> filePath) -> do
           logInfo (ideLogger ide) $
