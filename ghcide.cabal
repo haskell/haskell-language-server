@@ -57,7 +57,8 @@ library
         time,
         transformers,
         unordered-containers,
-        utf8-string
+        utf8-string,
+        hslogger
     if flag(ghc-lib)
       build-depends:
         ghc-lib >= 8.8,
@@ -138,6 +139,7 @@ executable ghcide
     ghc-options: -threaded -Wall -Wno-name-shadowing
     main-is: Main.hs
     build-depends:
+        hslogger,
         base == 4.*,
         containers,
         data-default,

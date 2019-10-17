@@ -24,7 +24,7 @@ gotoDefinition
     :: IdeState
     -> TextDocumentPositionParams
     -> IO LocationResponseParams
-gotoDefinition ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
+gotoDefinition ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos _) = do
     mbResult <- case uriToFilePath' uri of
         Just path -> do
             logInfo (ideLogger ide) $
