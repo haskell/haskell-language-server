@@ -4,7 +4,7 @@ Note: `ghcide` was previously called `hie-core`.
 
 Our vision is that you should build an IDE by combining:
 
-<img style="float:right;" src="img/vscode2.png"/>
+![vscode](https://raw.githubusercontent.com/digital-asset/ghcide/master/img/vscode2.png)
 
 * [`hie-bios`](https://github.com/mpickering/hie-bios) for determining where your files are, what are their dependencies, what extensions are enabled and so on;
 * `ghcide` (i.e. this library) for defining how to type check, when to type check, and producing diagnostic messages;
