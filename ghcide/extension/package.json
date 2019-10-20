@@ -4,10 +4,10 @@
 	"publisher": "DigitalAssetHoldingsLLC",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/digitalasset/daml.git"
+		"url": "https://github.com/digital-asset/ghcide.git"
 	},
 	"description": "A simple extension to test out haskell ide core",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"license": "Apache-2.0",
 	"engines": {
 		"vscode": "^1.35.0"
@@ -67,6 +67,6 @@
 		"@types/vscode": "1.35.0",
 		"tslint": "^5.12.1",
 		"typescript": "^3.6.3",
-		"vsce": "^1.66.0"
+		"vsce": "^1.68.0"
 	}
 }
