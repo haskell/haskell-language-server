@@ -136,7 +136,11 @@ demoteTypeErrorsToWarnings =
   (update_pm_mod_summary . update_hspp_opts) demoteTEsToWarns where
 
   demoteTEsToWarns :: DynFlags -> DynFlags
-  demoteTEsToWarns = (`gopt_set` Opt_DeferTypeErrors)
+  -- convert the errors into warnings, and also check the warnings are enabled
+  demoteTEsToWarns = (`wopt_set` Opt_WarnDeferredTypeErrors)
+                   . (`wopt_set` Opt_WarnTypedHoles)
+                   . (`wopt_set` Opt_WarnDeferredOutOfScopeVariables)
+                   . (`gopt_set` Opt_DeferTypeErrors)
                    . (`gopt_set` Opt_DeferTypedHoles)
                    . (`gopt_set` Opt_DeferOutOfScopeVariables)
 
