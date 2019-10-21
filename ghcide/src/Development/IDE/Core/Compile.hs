@@ -309,7 +309,7 @@ getModSummaryFromBuffer fp contents dflags parsed = do
 -- parsed module (or errors) and any parse warnings.
 parseFileContents
        :: GhcMonad m
-       => (GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource))
+       => (GHC.ParsedSource -> IdePreprocessedSource)
        -> FilePath  -- ^ the filename (for source locations)
        -> Maybe SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
@@ -340,8 +340,9 @@ parseFileContents customPreprocessor filename mbContents = do
                  throwE $ diagFromErrMsgs "parser" dflags $ snd $ getMessages pst dflags
 
                -- Ok, we got here. It's safe to continue.
-               let (errs, parsed) = customPreprocessor rdr_module
-               unless (null errs) $ throwE $ diagFromStrings "parser" errs
+               let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
+               unless (null errs) $ throwE $ diagFromStrings "parser" DsError errs
+               let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
                ms <- getModSummaryFromBuffer filename contents dflags parsed
                let pm =
                      ParsedModule {
@@ -351,4 +352,4 @@ parseFileContents customPreprocessor filename mbContents = do
                        , pm_annotations = hpm_annotations
                       }
                    warnings = diagFromErrMsgs "parser" dflags warns
-               pure (warnings, pm)
+               pure (warnings ++ preproc_warnings, pm)

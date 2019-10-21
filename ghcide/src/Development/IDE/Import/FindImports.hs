@@ -95,7 +95,7 @@ notFoundErr :: DynFlags -> Located M.ModuleName -> LookupResult -> [FileDiagnost
 notFoundErr dfs modName reason =
   mkError' $ ppr' $ cannotFindModule dfs modName0 $ lookupToFindResult reason
   where
-    mkError' = diagFromString "not found" (getLoc modName)
+    mkError' = diagFromString "not found" DsError (getLoc modName)
     modName0 = unLoc modName
     ppr' = showSDoc dfs
     -- We convert the lookup result to a find result to reuse GHC's cannotFindMoudle pretty printer.
