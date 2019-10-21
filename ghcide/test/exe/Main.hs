@@ -38,7 +38,7 @@ main = defaultMain $ testGroup "HIE"
   , initializeResponseTests
   , diagnosticTests
   , codeActionTests
-  , findDefinitionTests
+  , findDefinitionAndHoverTests
   ]
 
 initializeResponseTests :: TestTree
@@ -690,66 +690,86 @@ addSigActionTests = let
   , "a `haha` b = a b"       >:: "haha :: (t1 -> t2) -> t1 -> t2"
   ]
 
-findDefinitionTests :: TestTree
-findDefinitionTests = let
+findDefinitionAndHoverTests :: TestTree
+findDefinitionAndHoverTests = let
 
   tst (get, check) pos targetRange title = testSession title $ do
-    doc <- openDoc' "Testing.hs" "haskell" source
+    doc <- openDoc' sourceFilePath "haskell" source
     found <- get doc pos
     check found targetRange
 
-  checkDefs defs expected = do
+  checkDefs :: [Location] -> [Expect] -> Session ()
+  checkDefs defs expectations = traverse_ check expectations where
 
-    let ndef = length defs
-    if ndef /= 1
-      then let dfound n = "definitions found: " <> show n in
-           liftIO $ dfound (1 :: Int) @=? dfound (length defs)
-      else do
-           let [Location{_range = foundRange}] = defs
-           liftIO $ expected @=? foundRange
+    check (ExpectRange expectedRange) = do
+      assertNDefinitionsFound 1 defs
+      assertRangeCorrect (head defs) expectedRange
+    check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
+    check _ = pure () -- all other expectations not relevant to getDefinition
 
-  checkHover hover expected =
-    case hover of
-      Nothing -> liftIO $ "hover found" @=? ("no hover found" :: T.Text)
-      Just Hover{_contents = (HoverContents MarkupContent{_value = msg})
-                ,_range    = mRange } ->
-        let
-          extractLineColFromMsg =
-            T.splitOn ":" . head . T.splitOn "**" . last . T.splitOn "Testing.hs:"
-          lineCol = extractLineColFromMsg msg
+  assertNDefinitionsFound :: Int -> [a] -> Session ()
+  assertNDefinitionsFound n defs = liftIO $ assertEqual "number of definitions" n (length defs)
 
-          -- looks like hovers use 1-based numbering while definitions use 0-based
-          -- turns out that they are stored 1-based in RealSrcLoc by GHC itself.
-          adjust Position{_line = l, _character = c} =
-            Position{_line = l + 1, _character = c + 1}
-        in
-        case lineCol of
-          [_,_] -> liftIO $ (adjust $ _start expected) @=? Position l c where [l,c] = map (read . T.unpack) lineCol
-          _     -> liftIO $ ("[...]Testing.hs:<LINE>:<COL>**[...]", mRange) @=? (msg, Just expected)
-      _ -> error "test not expecting this kind of hover info"
+  assertRangeCorrect Location{_range = foundRange} expectedRange =
+    liftIO $ expectedRange @=? foundRange
+
+  checkHover :: Maybe Hover -> [Expect] -> Session ()
+  checkHover hover expectations = traverse_ check expectations where
+
+    check expected =
+      case hover of
+        Nothing -> liftIO $ assertFailure "no hover found"
+        Just Hover{_contents = (HoverContents MarkupContent{_value = msg})
+                  ,_range    = rangeInHover } ->
+          case expected of
+            ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
+            ExpectHoverRange expectedRange -> checkHoverRange expectedRange rangeInHover msg
+            ExpectHoverText snippets -> liftIO $ traverse_ (`assertFoundIn` msg) snippets
+            _ -> pure () -- all other expectations not relevant to hover
+        _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
+
+  extractLineColFromHoverMsg :: T.Text -> [T.Text]
+  extractLineColFromHoverMsg = T.splitOn ":" . head . T.splitOn "**" . last . T.splitOn (sourceFileName <> ":")
+
+  checkHoverRange :: Range -> Maybe Range -> T.Text -> Session ()
+  checkHoverRange expectedRange rangeInHover msg =
+    let
+      lineCol = extractLineColFromHoverMsg msg
+      -- looks like hovers use 1-based numbering while definitions use 0-based
+      -- turns out that they are stored 1-based in RealSrcLoc by GHC itself.
+      adjust Position{_line = l, _character = c} =
+        Position{_line = l + 1, _character = c + 1}
+    in
+    case map (read . T.unpack) lineCol of
+      [l,c] -> liftIO $ (adjust $ _start expectedRange) @=? Position l c
+      _     -> liftIO $ assertFailure $
+        "expected: " <> show ("[...]" <> sourceFileName <> ":<LINE>:<COL>**[...]", Just expectedRange) <>
+        "\n but got: " <> show (msg, rangeInHover)
+
+  assertFoundIn :: T.Text -> T.Text -> Assertion
+  assertFoundIn part whole = assertBool
+    (T.unpack $ "failed to find: `" <> part <> "` in hover message:\n" <> whole)
+    (part `T.isInfixOf` whole)
+
+  sourceFilePath = "Testing.hs" -- TODO: convert from sourceFileName
+  sourceFileName = "Testing.hs"
 
   mkFindTests tests = testGroup "get"
     [ testGroup "definition" $ mapMaybe fst tests
     , testGroup "hover"      $ mapMaybe snd tests ]
 
-  test runDef runHover look bind title =
-    ( runDef   $ tst def   look bind title
-    , runHover $ tst hover look bind title ) where
+  test runDef runHover look expect title =
+    ( runDef   $ tst def   look expect title
+    , runHover $ tst hover look expect title ) where
       def   = (getDefinitions, checkDefs)
       hover = (getHover      , checkHover)
       --type_ = (getTypeDefinitions, checkTDefs) -- getTypeDefinitions always times out
-  -- test run control
-  yes, broken :: (TestTree -> Maybe TestTree)
-  yes    = Just -- test should run and pass
-  broken = Just . (`xfail` "known broken")
-  cant   = Just . (`xfail` "cannot be made to work")
---  no = const Nothing -- don't run this test at all
 
   source = T.unlines
     -- 0123456789 123456789 123456789 123456789
     [ "{-# OPTIONS_GHC -Wmissing-signatures #-}" --  0
     , "module Testing where"                     --  1
-    , "import Data.Text (Text)"                  --  2
+    , "import Data.Text (Text, pack)"            --  2
     , "data TypeConstructor = DataConstructor"   --  3
     , "  { fff :: Text"                          --  4
     , "  , ggg :: Int }"                         --  5
@@ -768,27 +788,29 @@ findDefinitionTests = let
     , "a +! b = a - b"                           -- 17
     , "hhh (Just a) (><) = a >< a"               -- 18
     , "iii a b = a `b` a"                        -- 19
+    , "jjj s = pack $ s <> s"                    -- 20
     -- 0123456789 123456789 123456789 123456789
     ]
 
-  -- search locations            definition locations
-  fffL4  = _start fff      ;  fff    = mkRange   4  4    4  7
+  -- search locations            expectations on results
+  fffL4  = _start fffR     ;  fffR = mkRange 4  4    4  7 ; fff  = [ExpectRange fffR]
   fffL8  = Position  8  4  ;
   fffL14 = Position 14  7  ;
-  aaaL14 = Position 14 20  ;  aaa    = mkRange   7  0    7  3
-  dcL7   = Position  7 11  ;  tcDC   = mkRange   3 23    5 16
+  aaaL14 = Position 14 20  ;  aaa    = [mkR   7  0    7  3]
+  dcL7   = Position  7 11  ;  tcDC   = [mkR   3 23    5 16]
   dcL12  = Position 12 11  ;
-  xtcL5  = Position  5 11  ;  xtc    = undefined -- not clear what it should do
-  tcL6   = Position  6 11  ;  tcData = mkRange   3  0    5 16
-  vvL16  = Position 16 12  ;  vv     = mkRange  16  4   16  6
-  opL16  = Position 16 15  ;  op     = mkRange  17  2   17  4
-  opL18  = Position 18 22  ;  opp    = mkRange  18 13   18 17
-  aL18   = Position 18 20  ;  apmp   = mkRange  18 10   18 11
-  b'L19  = Position 19 13  ;  bp     = mkRange  19  6   19  7
+  xtcL5  = Position  5 11  ;  xtc    = [ExpectExternFail]
+  tcL6   = Position  6 11  ;  tcData = [mkR   3  0    5 16]
+  vvL16  = Position 16 12  ;  vv     = [mkR  16  4   16  6]
+  opL16  = Position 16 15  ;  op     = [mkR  17  2   17  4]
+  opL18  = Position 18 22  ;  opp    = [mkR  18 13   18 17]
+  aL18   = Position 18 20  ;  apmp   = [mkR  18 10   18 11]
+  b'L19  = Position 19 13  ;  bp     = [mkR  19  6   19  7]
+  xvL20  = Position 20  8  ;  xvMsg  = [ExpectHoverText ["Data.Text.pack", ":: String -> Text"], ExpectExternFail]
 
   in
   mkFindTests
-  --     def    hover  look   bind
+  --     def    hover  look   expect
   [ test yes    yes    fffL4  fff    "field in record definition"
   , test broken broken fffL8  fff    "field in record construction"
   , test yes    yes    fffL14 fff    "field name used as accessor"   -- 120 in Calculate.hs
@@ -796,17 +818,32 @@ findDefinitionTests = let
   , test broken broken dcL7   tcDC   "record data constructor"
   , test yes    yes    dcL12  tcDC   "plain  data constructor"       -- 121
   , test yes    broken tcL6   tcData "type constructor"              -- 147
-  , test cant   broken xtcL5  xtc    "type constructor from other package"
+  , test broken broken xtcL5  xtc    "type constructor from other package"
+  , test broken yes    xvL20  xvMsg  "value from other package"
   , test yes    yes    vvL16  vv     "plain parameter"
   , test yes    yes    aL18   apmp   "pattern match name"
   , test yes    yes    opL16  op     "top-level operator"            -- 123
   , test yes    yes    opL18  opp    "parameter operator"
   , test yes    yes    b'L19  bp     "name in backticks"
   ]
+  where yes, broken :: (TestTree -> Maybe TestTree)
+        yes    = Just -- test should run and pass
+        broken = Just . (`xfail` "known broken")
+      --  no = const Nothing -- don't run this test at all
 
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
 
+data Expect
+  = ExpectRange Range -- Both gotoDef and hover should report this range
+--  | ExpectDefRange Range -- Only gotoDef should report this range
+  | ExpectHoverRange Range -- Only hover should report this range
+  | ExpectHoverText [T.Text] -- the hover message must contain these snippets
+  | ExpectExternFail -- definition lookup in other file expected to fail
+--  | ExpectExtern -- TODO: as above, but expected to succeed: need some more info in here, once we have some working examples
+
+mkR :: Int -> Int -> Int -> Int -> Expect
+mkR startLine startColumn endLine endColumn = ExpectRange $ mkRange startLine startColumn endLine endColumn
 ----------------------------------------------------------------------
 -- Utils
 
