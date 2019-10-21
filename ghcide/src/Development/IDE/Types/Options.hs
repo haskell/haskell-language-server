@@ -6,6 +6,7 @@
 -- | Options
 module Development.IDE.Types.Options
   ( IdeOptions(..)
+  , IdePreprocessedSource(..)
   , IdeReportProgress(..)
   , IdeDefer(..)
   , clientSupportsProgress
@@ -21,9 +22,9 @@ import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified Language.Haskell.LSP.Types.Capabilities as LSP
 
 data IdeOptions = IdeOptions
-  { optPreprocessor :: GHC.ParsedSource -> ([(GHC.SrcSpan, String)], GHC.ParsedSource)
+  { optPreprocessor :: GHC.ParsedSource -> IdePreprocessedSource
     -- ^ Preprocessor to run over all parsed source trees, generating a list of warnings
-    --   along with a new parse tree.
+    --   and a list of errors, along with a new parse tree.
   , optGhcSession :: IO (FilePath -> Action HscEnvEq)
     -- ^ Setup a GHC session for a given file, e.g. @Foo.hs@.
     --   The 'IO' will be called once, then the resulting function will be applied once per file.
@@ -53,6 +54,15 @@ data IdeOptions = IdeOptions
     --   the presence of type errors, holes or unbound variables.
   }
 
+data IdePreprocessedSource = IdePreprocessedSource
+  { preprocWarnings :: [(GHC.SrcSpan, String)]
+    -- ^ Warnings emitted by the preprocessor.
+  , preprocErrors :: [(GHC.SrcSpan, String)]
+    -- ^ Errors emitted by the preprocessor.
+  , preprocSource :: GHC.ParsedSource
+    -- ^ New parse tree emitted by the preprocessor.
+  }
+
 newtype IdeReportProgress = IdeReportProgress Bool
 newtype IdeDefer          = IdeDefer          Bool
 
@@ -62,7 +72,7 @@ clientSupportsProgress caps = IdeReportProgress $ fromMaybe False $
 
 defaultIdeOptions :: IO (FilePath -> Action HscEnvEq) -> IdeOptions
 defaultIdeOptions session = IdeOptions
-    {optPreprocessor = (,) []
+    {optPreprocessor = IdePreprocessedSource [] []
     ,optGhcSession = session
     ,optExtensions = ["hs", "lhs"]
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
