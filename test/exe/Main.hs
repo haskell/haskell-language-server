@@ -12,6 +12,7 @@ import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Char (toLower)
 import Data.Foldable
+import Development.IDE.GHC.Util
 import qualified Data.Text as T
 import Development.IDE.Test
 import Development.IDE.Test.Runfiles
@@ -694,7 +695,7 @@ findDefinitionAndHoverTests :: TestTree
 findDefinitionAndHoverTests = let
 
   tst (get, check) pos targetRange title = testSession title $ do
-    doc <- openDoc' sourceFilePath "haskell" source
+    doc <- openTestDataDoc sourceFilePath
     found <- get doc pos
     check found targetRange
 
@@ -751,8 +752,8 @@ findDefinitionAndHoverTests = let
     (T.unpack $ "failed to find: `" <> part <> "` in hover message:\n" <> whole)
     (part `T.isInfixOf` whole)
 
-  sourceFilePath = "Testing.hs" -- TODO: convert from sourceFileName
-  sourceFileName = "Testing.hs"
+  sourceFilePath = T.unpack sourceFileName
+  sourceFileName = "GotoHover.hs"
 
   mkFindTests tests = testGroup "get"
     [ testGroup "definition" $ mapMaybe fst tests
@@ -764,33 +765,6 @@ findDefinitionAndHoverTests = let
       def   = (getDefinitions, checkDefs)
       hover = (getHover      , checkHover)
       --type_ = (getTypeDefinitions, checkTDefs) -- getTypeDefinitions always times out
-
-  source = T.unlines
-    -- 0123456789 123456789 123456789 123456789
-    [ "{-# OPTIONS_GHC -Wmissing-signatures #-}" --  0
-    , "module Testing where"                     --  1
-    , "import Data.Text (Text, pack)"            --  2
-    , "data TypeConstructor = DataConstructor"   --  3
-    , "  { fff :: Text"                          --  4
-    , "  , ggg :: Int }"                         --  5
-    , "aaa :: TypeConstructor"                   --  6
-    , "aaa = DataConstructor"                    --  7
-    , "  { fff = \"\""                           --  8
-    , "  , ggg = 0"                              --  9
-    -- 0123456789 123456789 123456789 123456789
-    , "  }"                                      -- 10
-    , "bbb :: TypeConstructor"                   -- 11
-    , "bbb = DataConstructor \"\" 0"             -- 12
-    , "ccc :: (Text, Int)"                       -- 13
-    , "ccc = (fff bbb, ggg aaa)"                 -- 14
-    , "ddd :: Num a => a -> a -> a"              -- 15
-    , "ddd vv ww = vv +! ww"                     -- 16
-    , "a +! b = a - b"                           -- 17
-    , "hhh (Just a) (><) = a >< a"               -- 18
-    , "iii a b = a `b` a"                        -- 19
-    , "jjj s = pack $ s <> s"                    -- 20
-    -- 0123456789 123456789 123456789 123456789
-    ]
 
   -- search locations            expectations on results
   fffL4  = _start fffR     ;  fffR = mkRange 4  4    4  7 ; fff  = [ExpectRange fffR]
@@ -888,3 +862,8 @@ run s = withTempDir $ \dir -> do
       -- If you uncomment this you can see all messages
       -- which can be quite useful for debugging.
       -- { logMessages = True, logColor = False, logStdErr = True }
+
+openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
+openTestDataDoc path = do
+  source <- liftIO $ readFileUtf8 $ "test/data" </> path
+  openDoc' path "haskell" source
