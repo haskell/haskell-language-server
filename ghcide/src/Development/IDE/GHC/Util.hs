@@ -18,7 +18,8 @@ module Development.IDE.GHC.Util(
     runGhcEnv,
     textToStringBuffer,
     moduleImportPath,
-    HscEnvEq, hscEnv, newHscEnvEq
+    HscEnvEq, hscEnv, newHscEnvEq,
+    readFileUtf8
     ) where
 
 import Config
@@ -35,7 +36,10 @@ import FileCleanup
 import Platform
 import Data.Unique
 import Development.Shake.Classes
-import qualified Data.Text as T
+import qualified Data.Text                as T
+import qualified Data.Text.Encoding       as T
+import qualified Data.Text.Encoding.Error as T
+import qualified Data.ByteString          as BS
 import StringBuffer
 import System.FilePath
 
@@ -139,3 +143,6 @@ instance Eq HscEnvEq where
 
 instance NFData HscEnvEq where
   rnf (HscEnvEq a b) = rnf (hashUnique a) `seq` b `seq` ()
+
+readFileUtf8 :: FilePath -> IO T.Text
+readFileUtf8 f = T.decodeUtf8With T.lenientDecode <$> BS.readFile f
