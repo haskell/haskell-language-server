@@ -15,6 +15,7 @@ homepage:           https://github.com/digital-asset/ghcide#readme
 bug-reports:        https://github.com/digital-asset/ghcide/issues
 tested-with:        GHC==8.6.5
 extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
+                    test/data/GotoHover.hs
 
 source-repository head
     type:     git
@@ -172,6 +173,7 @@ test-suite ghcide-tests
         ghcide:ghcide
     build-depends:
         base,
+        bytestring,
         containers,
         directory,
         extra,
@@ -184,6 +186,7 @@ test-suite ghcide-tests
         -- which works for now.
         ghc,
         --------------------------------------------------------------
+        ghcide,
         haskell-lsp-types,
         lens,
         lsp-test >= 0.8,
