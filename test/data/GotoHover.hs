@@ -19,3 +19,9 @@ a +! b = a - b
 hhh (Just a) (><) = a >< a
 iii a b = a `b` a
 jjj s = pack $ s <> s
+class Class a where
+  method :: a -> Int
+instance Class Int where
+  method = succ
+kkk :: Class a => Int -> a -> Int
+kkk n c = n + method c
