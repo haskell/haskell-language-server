@@ -781,7 +781,9 @@ findDefinitionAndHoverTests = let
   aL18   = Position 18 20  ;  apmp   = [mkR  18 10   18 11]
   b'L19  = Position 19 13  ;  bp     = [mkR  19  6   19  7]
   xvL20  = Position 20  8  ;  xvMsg  = [ExpectHoverText ["Data.Text.pack", ":: String -> Text"], ExpectExternFail]
-
+  clL23  = Position 23 11  ;  cls    = [mkR  21  0   22 20]
+  clL25  = Position 25  9
+  eclL15 = Position 15  8  ;  ecls   = [ExpectHoverText ["Num"], ExpectExternFail]
   in
   mkFindTests
   --     def    hover  look   expect
@@ -793,12 +795,15 @@ findDefinitionAndHoverTests = let
   , test yes    yes    dcL12  tcDC   "plain  data constructor"       -- 121
   , test yes    broken tcL6   tcData "type constructor"              -- 147
   , test broken broken xtcL5  xtc    "type constructor from other package"
-  , test broken yes    xvL20  xvMsg  "value from other package"
-  , test yes    yes    vvL16  vv     "plain parameter"
-  , test yes    yes    aL18   apmp   "pattern match name"
-  , test yes    yes    opL16  op     "top-level operator"            -- 123
-  , test yes    yes    opL18  opp    "parameter operator"
-  , test yes    yes    b'L19  bp     "name in backticks"
+  , test broken yes    xvL20  xvMsg  "value from other package"      -- 120
+  , test yes    yes    vvL16  vv     "plain parameter"               -- 120
+  , test yes    yes    aL18   apmp   "pattern match name"            -- 120
+  , test yes    yes    opL16  op     "top-level operator"            -- 120, 123
+  , test yes    yes    opL18  opp    "parameter operator"            -- 120
+  , test yes    yes    b'L19  bp     "name in backticks"             -- 120
+  , test yes    broken clL23  cls    "class in instance declaration"
+  , test yes    broken clL25  cls    "class in signature"            -- 147
+  , test broken broken eclL15 ecls   "external class in signature"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
