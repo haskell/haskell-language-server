@@ -8,7 +8,7 @@
 module Development.IDE.Types.Logger
   ( Priority(..)
   , Logger(..)
-  , logError, logWarning, logInfo, logDebug
+  , logError, logWarning, logInfo, logDebug, logTelemetry
   , noLogging
   ) where
 
@@ -18,7 +18,8 @@ import qualified Data.Text as T
 data Priority
 -- Don't change the ordering of this type or you will mess up the Ord
 -- instance
-    = Debug -- ^ Verbose debug logging.
+    = Telemetry -- ^ Events that are useful for gathering user metrics.
+    | Debug -- ^ Verbose debug logging.
     | Info  -- ^ Useful information in case an error has to be understood.
     | Warning
       -- ^ These error messages should not occur in a expected usage, and
@@ -44,6 +45,9 @@ logInfo x = logPriority x Info
 
 logDebug :: Logger -> T.Text -> IO ()
 logDebug x = logPriority x Debug
+
+logTelemetry :: Logger -> T.Text -> IO ()
+logTelemetry x = logPriority x Telemetry
 
 
 noLogging :: Logger
