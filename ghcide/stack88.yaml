@@ -1,12 +1,9 @@
-resolver: nightly-2019-10-10
+resolver: nightly-2019-10-27
 packages:
 - .
 extra-deps:
 - haskell-lsp-0.17.0.0
-- haskell-lsp-types-0.17.0.0
 - lsp-test-0.8.0.0
-- prettyprinter-1.3.0
-- prettyprinter-ansi-terminal-1.1.1.2
 - hslogger-1.3.0.0
 - network-bsd-2.8.1.0
 allow-newer: true
