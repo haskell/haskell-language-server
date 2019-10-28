@@ -23,6 +23,7 @@ module Development.IDE.Core.Rules(
     getDependencies,
     getParsedModule,
     fileFromParsedModule,
+    generateCore,
     ) where
 
 import Control.Monad
@@ -279,15 +280,17 @@ typeCheckRule =
         IdeOptions{ optDefer = defer} <- getIdeOptions
         liftIO $ typecheckModule defer packageState tms pm
 
+generateCore :: NormalizedFilePath -> Action ([FileDiagnostic], Maybe CoreModule)
+generateCore file = do
+    deps <- use_ GetDependencies file
+    (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
+    setPriority priorityGenerateCore
+    packageState <- hscEnv <$> use_ GhcSession file
+    liftIO $ compileModule packageState tms tm
 
 generateCoreRule :: Rules ()
 generateCoreRule =
-    define $ \GenerateCore file -> do
-        deps <- use_ GetDependencies file
-        (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
-        setPriority priorityGenerateCore
-        packageState <- hscEnv <$> use_ GhcSession file
-        liftIO $ compileModule packageState tms tm
+    define $ \GenerateCore -> generateCore
 
 
 -- A local rule type to get caching. We want to use newCache, but it has
