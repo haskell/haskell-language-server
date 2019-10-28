@@ -280,7 +280,7 @@ typeCheckRule =
         IdeOptions{ optDefer = defer} <- getIdeOptions
         liftIO $ typecheckModule defer packageState tms pm
 
-generateCore :: NormalizedFilePath -> Action ([FileDiagnostic], Maybe CoreModule)
+generateCore :: NormalizedFilePath -> Action (IdeResult CoreModule)
 generateCore file = do
     deps <- use_ GetDependencies file
     (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
