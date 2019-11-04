@@ -182,6 +182,51 @@ Add this to your coc-settings.json (which you can edit with :CocConfig):
 Here's a nice article on setting up neovim and coc: [Vim and Haskell in
 2019](http://marco-lopes.com/articles/Vim-and-Haskell-in-2019/)
 
+### SpaceVim
+
+In the `autocomplete` layer, add the `autocomplete_method` option to force the use of `coc`:
+
+```toml
+[[layers]]
+  name = 'autocomplete'
+  auto-completion-return-key-behavior = "complete"
+  auto-completion-tab-key-behavior = "smart"
+  [options]
+    autocomplete_method = "coc"
+```
+
+Add this to your coc-settings.json (which you can edit with :CocConfig):
+
+```json
+{
+  "languageserver": {
+    "haskell": {
+      "command": "stack",
+      "args": [
+        "exec",
+        "ghcide",
+        "--lsp"
+      ],
+      "rootPatterns": [
+        ".stack.yaml",
+        ".hie-bios",
+        "BUILD.bazel",
+        "cabal.config",
+        "package.yaml"
+      ],
+      "filetypes": [
+        "hs",
+        "lhs",
+        "haskell"
+      ]
+    }
+  }
+}
+```
+
+This example above describes a setup in which `ghcide` is installed
+using `stack install ghcide` within a project.
+
 ## Hacking on ghcide
 
 To build and work on `ghcide` itself, you can use Stack or cabal, e.g.,
