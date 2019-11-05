@@ -21,7 +21,7 @@ jobs:
       - checkout: self
       - task: CacheBeta@0
         inputs:
-          key: stack-cache-v1 | $(Agent.OS) | $(Build.SourcesDirectory)/stack.yaml | $(Build.SourcesDirectory)/ghcide.cabal
+          key: stack-cache-v2 | $(Agent.OS) | $(Build.SourcesDirectory)/stack.yaml | $(Build.SourcesDirectory)/ghcide.cabal
           path: .azure-cache
           cacheHitVar: CACHE_RESTORED
         displayName: "Cache stack artifacts"
@@ -67,7 +67,7 @@ jobs:
       - checkout: self
       - task: CacheBeta@0
         inputs:
-          key: stack-cache-v1 | $(Agent.OS) | $(Build.SourcesDirectory)/stack84.yaml | $(Build.SourcesDirectory)/ghcide.cabal
+          key: stack-cache-v2 | $(Agent.OS) | $(Build.SourcesDirectory)/stack84.yaml | $(Build.SourcesDirectory)/ghcide.cabal
           path: .azure-cache
           cacheHitVar: CACHE_RESTORED
         displayName: "Cache stack artifacts"
@@ -113,7 +113,7 @@ jobs:
       - checkout: self
       - task: CacheBeta@0
         inputs:
-          key: stack-cache-v1 | $(Agent.OS) | $(Build.SourcesDirectory)/stack88.yaml | $(Build.SourcesDirectory)/ghcide.cabal
+          key: stack-cache-v2 | $(Agent.OS) | $(Build.SourcesDirectory)/stack88.yaml | $(Build.SourcesDirectory)/ghcide.cabal
           path: .azure-cache
           cacheHitVar: CACHE_RESTORED
         displayName: "Cache stack artifacts"
@@ -159,7 +159,7 @@ jobs:
       - checkout: self
       - task: CacheBeta@0
         inputs:
-          key: stack-cache-v1 | $(Agent.OS) | $(Build.SourcesDirectory)/stack-ghc-lib.yaml | $(Build.SourcesDirectory)/ghcide.cabal
+          key: stack-cache-v2 | $(Agent.OS) | $(Build.SourcesDirectory)/stack-ghc-lib.yaml | $(Build.SourcesDirectory)/ghcide.cabal
           path: .azure-cache
           cacheHitVar: CACHE_RESTORED
         displayName: "Cache stack artifacts"
