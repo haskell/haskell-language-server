@@ -25,6 +25,7 @@ module Development.IDE.Types.Location
 
 import Language.Haskell.LSP.Types (Location(..), Range(..), Position(..))
 import Control.DeepSeq
+import Data.Binary
 import Data.Maybe as Maybe
 import Data.Hashable
 import Data.String
@@ -42,7 +43,7 @@ import Language.Haskell.LSP.Types as LSP (
 
 -- | Newtype wrapper around FilePath that always has normalized slashes.
 newtype NormalizedFilePath = NormalizedFilePath FilePath
-    deriving (Eq, Ord, Show, Hashable, NFData)
+    deriving (Eq, Ord, Show, Hashable, NFData, Binary)
 
 instance IsString NormalizedFilePath where
     fromString = toNormalizedFilePath

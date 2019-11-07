@@ -20,6 +20,7 @@ module Development.IDE.Core.Service(
 
 import           Control.Concurrent.Extra
 import           Control.Concurrent.Async
+import Data.Maybe
 import Development.IDE.Types.Options (IdeOptions(..))
 import Control.Monad
 import           Development.IDE.Core.FileStore
@@ -55,9 +56,10 @@ initialise mainRule getLspId toDiags logger options vfs =
         logger
         (optShakeProfiling options)
         (optReportProgress options)
-        (shakeOptions { shakeThreads = optThreads options
-                     , shakeFiles   = "/dev/null"
-                     }) $ do
+        shakeOptions
+          { shakeThreads = optThreads options
+          , shakeFiles   = fromMaybe "/dev/null" (optShakeFiles options)
+          } $ do
             addIdeGlobal $ GlobalIdeOptions options
             fileStoreRules vfs
             ofInterestRules
