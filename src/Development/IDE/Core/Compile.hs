@@ -14,6 +14,7 @@ module Development.IDE.Core.Compile
   , typecheckModule
   , computePackageDeps
   , addRelativeImport
+  , mkTcModuleResult
   ) where
 
 import Development.IDE.Core.RuleTypes

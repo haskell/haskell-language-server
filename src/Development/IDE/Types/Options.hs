@@ -38,6 +38,9 @@ data IdeOptions = IdeOptions
 
   , optThreads :: Int
     -- ^ Number of threads to use. Use 0 for number of threads on the machine.
+  , optShakeFiles :: Maybe FilePath
+  -- ^ Directory where the shake database should be stored. For ghcide this is always set to `Nothing` for now
+  -- meaning we keep everything in memory but the daml CLI compiler uses this for incremental builds.
   , optShakeProfiling :: Maybe FilePath
     -- ^ Set to 'Just' to create a directory of profiling reports.
   , optReportProgress :: IdeReportProgress
@@ -77,6 +80,7 @@ defaultIdeOptions session = IdeOptions
     ,optExtensions = ["hs", "lhs"]
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
     ,optThreads = 0
+    ,optShakeFiles = Nothing
     ,optShakeProfiling = Nothing
     ,optReportProgress = IdeReportProgress False
     ,optLanguageSyntax = "haskell"
