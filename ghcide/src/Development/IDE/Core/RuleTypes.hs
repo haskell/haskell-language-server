@@ -12,6 +12,7 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
+import Data.Binary
 import           Development.IDE.Import.DependencyInformation
 import Development.IDE.GHC.Util
 import Development.IDE.Types.Location
@@ -86,46 +87,55 @@ data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetParsedModule
 instance NFData   GetParsedModule
+instance Binary   GetParsedModule
 
 data GetLocatedImports = GetLocatedImports
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetLocatedImports
 instance NFData   GetLocatedImports
+instance Binary   GetLocatedImports
 
 data GetDependencyInformation = GetDependencyInformation
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetDependencyInformation
 instance NFData   GetDependencyInformation
+instance Binary   GetDependencyInformation
 
 data ReportImportCycles = ReportImportCycles
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable ReportImportCycles
 instance NFData   ReportImportCycles
+instance Binary   ReportImportCycles
 
 data GetDependencies = GetDependencies
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetDependencies
 instance NFData   GetDependencies
+instance Binary   GetDependencies
 
 data TypeCheck = TypeCheck
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable TypeCheck
 instance NFData   TypeCheck
+instance Binary   TypeCheck
 
 data GetSpanInfo = GetSpanInfo
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetSpanInfo
 instance NFData   GetSpanInfo
+instance Binary   GetSpanInfo
 
 data GenerateCore = GenerateCore
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GenerateCore
 instance NFData   GenerateCore
+instance Binary   GenerateCore
 
 data GhcSession = GhcSession
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSession
 instance NFData   GhcSession
+instance Binary   GhcSession
 
 -- Note that we embed the filepath here instead of using the filepath associated with Shake keys.
 -- Otherwise we will garbage collect the result since files in package dependencies will not be declared reachable.
@@ -133,3 +143,4 @@ data GetHieFile = GetHieFile FilePath
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHieFile
 instance NFData   GetHieFile
+instance Binary   GetHieFile

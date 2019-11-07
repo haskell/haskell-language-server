@@ -14,6 +14,7 @@ module Development.IDE.Core.OfInterest(
     ) where
 
 import           Control.Concurrent.Extra
+import Data.Binary
 import Data.Hashable
 import Control.DeepSeq
 import GHC.Generics
@@ -44,6 +45,7 @@ data GetFilesOfInterest = GetFilesOfInterest
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetFilesOfInterest
 instance NFData   GetFilesOfInterest
+instance Binary   GetFilesOfInterest
 
 
 ofInterestRules :: Rules ()

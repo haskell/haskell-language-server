@@ -26,6 +26,9 @@ module Development.IDE.Core.Rules(
     generateCore,
     ) where
 
+import Fingerprint
+
+import Data.Binary
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
@@ -141,11 +144,13 @@ priorityFilesOfInterest = Priority (-2)
 
 getParsedModuleRule :: Rules ()
 getParsedModuleRule =
-    define $ \GetParsedModule file -> do
+    defineEarlyCutoff $ \GetParsedModule file -> do
         (_, contents) <- getFileContents file
         packageState <- hscEnv <$> use_ GhcSession file
         opt <- getIdeOptions
-        liftIO $ parseModule opt packageState (fromNormalizedFilePath file) contents
+        r <- liftIO $ parseModule opt packageState (fromNormalizedFilePath file) contents
+        mbFingerprint <- traverse (const $ getSourceFingerprint file) (optShakeFiles opt)
+        pure (fingerprintToBS <$> mbFingerprint, r)
 
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
@@ -252,11 +257,13 @@ reportImportCyclesRule =
 -- NOTE: result does not include the argument file.
 getDependenciesRule :: Rules ()
 getDependenciesRule =
-    define $ \GetDependencies file -> do
+    defineEarlyCutoff $ \GetDependencies file -> do
         depInfo@DependencyInformation{..} <- use_ GetDependencyInformation file
         let allFiles = reachableModules depInfo
         _ <- uses_ ReportImportCycles allFiles
-        return ([], transitiveDeps depInfo file)
+        opts <- getIdeOptions
+        let mbFingerprints = map (fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
+        return (fingerprintToBS . fingerprintFingerprints <$> mbFingerprints, ([], transitiveDeps depInfo file))
 
 -- Source SpanInfo is used by AtPoint and Goto Definition.
 getSpanInfoRule :: Rules ()
@@ -301,6 +308,7 @@ type instance RuleResult GhcSessionIO = GhcSessionFun
 data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
+instance Binary   GhcSessionIO
 
 newtype GhcSessionFun = GhcSessionFun (FilePath -> Action HscEnvEq)
 instance Show GhcSessionFun where show _ = "GhcSessionFun"
@@ -312,10 +320,11 @@ loadGhcSession = do
     defineNoFile $ \GhcSessionIO -> do
         opts <- getIdeOptions
         liftIO $ GhcSessionFun <$> optGhcSession opts
-    define $ \GhcSession file -> do
+    defineEarlyCutoff $ \GhcSession file -> do
         GhcSessionFun fun <- useNoFile_ GhcSessionIO
         val <- fun $ fromNormalizedFilePath file
-        return ([], Just val)
+        opts <- getIdeOptions
+        return ("" <$ optShakeFiles opts, ([], Just val))
 
 
 getHieFileRule :: Rules ()
