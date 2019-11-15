@@ -40,6 +40,7 @@ main = defaultMain $ testGroup "HIE"
   , diagnosticTests
   , codeActionTests
   , findDefinitionAndHoverTests
+  , pluginTests
   ]
 
 initializeResponseTests :: TestTree
@@ -809,6 +810,28 @@ findDefinitionAndHoverTests = let
         yes    = Just -- test should run and pass
         broken = Just . (`xfail` "known broken")
       --  no = const Nothing -- don't run this test at all
+
+pluginTests :: TestTree
+pluginTests = testSessionWait "plugins" $ do
+  let content =
+        T.unlines
+          [ "{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}"
+          , "{-# LANGUAGE DataKinds, ScopedTypeVariables, TypeOperators #-}"
+          , "module Testing where"
+          , "import Data.Proxy"
+          , "import GHC.TypeLits"
+          -- This function fails without plugins being initialized.
+          , "f :: forall n. KnownNat n => Proxy n -> Integer"
+          , "f _ = natVal (Proxy :: Proxy n) + natVal (Proxy :: Proxy (n+2))"
+          , "foo :: Int -> Int -> Int"
+          , "foo a b = a + c"
+          ]
+  _ <- openDoc' "Testing.hs" "haskell" content
+  expectDiagnostics
+    [ ( "Testing.hs",
+        [(DsError, (8, 14), "Variable not in scope: c")]
+      )
+    ]
 
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
