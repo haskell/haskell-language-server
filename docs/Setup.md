@@ -26,6 +26,34 @@ ghcide version: 0.0.3 (GHC: 8.6.5)
 
 You can see the version of GHC being used by this project in the second-last line of the output with `ghc-8.6.4/`, or in in mismatch interfaces of wanted `8065` (aka 8.6.5), got `8064` (aka 8.6.4). The solution is to use the same GHC version in both places.
 
+## “failed to load interface for ‘…’ There are files missing”
+
+If you see a problem such as:
+
+```console
+File:     ./src/File/FileStream.hs
+Range:    1:0-100001:0
+Source:   typecheck
+Severity: DsError
+Message: 
+  Program error: Failed to load interface for ‘Data.DList’
+Files that failed:
+  There are files missing in the ‘dlist-0.8.0.7’ package,
+ * ./src/File/FileStream.hs
+  try running 'ghc-pkg check'.
+  Use -v to see a list of the files searched for.
+```
+
+It might be caused by `ghcide` picking up the wrong cradle. In
+particular, this has been observed when running in a `nix-shell` where
+`ghcide` picked up the default cradle. Try setting the cradle
+explicitly, e.g., to use the cabal cradle create a `hie.yaml` file
+with the following content:
+
+```
+cradle: {cabal: {component: "mylibrary"}}
+```
+
 ## Works in `ghcide` but not my editor
 
 Does `ghcide` alone work on the console? Did you first enter a Nix shell? Or run `stack exec ghcide`? If so, there are two options:
