@@ -59,8 +59,8 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO completion"               _completionProvider  Nothing
     , chk "NO signature help"        _signatureHelpProvider  Nothing
     , chk "   goto definition"          _definitionProvider (Just True)
-    , chk "NO goto type definition" _typeDefinitionProvider  Nothing
-    , chk "NO goto implementation"  _implementationProvider  Nothing
+    , chk "NO goto type definition" _typeDefinitionProvider (Just $ GotoOptionsStatic False)
+    , chk "NO goto implementation"  _implementationProvider (Just $ GotoOptionsStatic False)
     , chk "NO find references"          _referencesProvider  Nothing
     , chk "NO doc highlight"     _documentHighlightProvider  Nothing
     , chk "NO doc symbol"           _documentSymbolProvider  Nothing
@@ -72,10 +72,10 @@ initializeResponseTests = withResource acquire release tests where
                            _documentRangeFormattingProvider  Nothing
     , chk "NO doc formatting on typing"
                           _documentOnTypeFormattingProvider  Nothing
-    , chk "NO renaming"                     _renameProvider  Nothing
+    , chk "NO renaming"                     _renameProvider (Just $ RenameOptionsStatic False)
     , chk "NO doc link"               _documentLinkProvider  Nothing
-    , chk "NO color"                         _colorProvider  Nothing
-    , chk "NO folding range"          _foldingRangeProvider  Nothing
+    , chk "NO color"                         _colorProvider (Just $ ColorOptionsStatic False)
+    , chk "NO folding range"          _foldingRangeProvider (Just $ FoldingRangeOptionsStatic False)
     , chk "NO execute command"      _executeCommandProvider  Nothing
     , chk "NO workspace"                         _workspace  nothingWorkspace
     , chk "NO experimental"                   _experimental  Nothing
