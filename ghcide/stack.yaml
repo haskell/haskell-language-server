@@ -2,9 +2,9 @@ resolver: nightly-2019-09-16
 packages:
 - .
 extra-deps:
-- haskell-lsp-0.17.0.0
-- haskell-lsp-types-0.17.0.0
-- lsp-test-0.8.0.0
+- haskell-lsp-0.18.0.0
+- haskell-lsp-types-0.18.0.0
+- lsp-test-0.8.2.0
 - hie-bios-0.2.1
 nix:
   packages: [zlib]
