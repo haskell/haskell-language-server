@@ -1,9 +1,8 @@
-resolver: nightly-2019-10-27
+resolver: nightly-2019-11-25
 packages:
 - .
 extra-deps:
 - haskell-lsp-0.18.0.0
-- haskell-lsp-types-0.18.0.0
 - lsp-test-0.8.2.0
 - hslogger-1.3.0.0
 - network-bsd-2.8.1.0
