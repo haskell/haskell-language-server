@@ -54,6 +54,19 @@ with the following content:
 cradle: {cabal: {component: "mylibrary"}}
 ```
 
+## ghc: readCreateProcess: does not exist
+
+I was getting this in Windows: `ghcide.exe: ghc: readCreateProcess: does not exist (No such file or directory)`
+
+And we figured a hack around for this:
+
+VSCode user or workspace settings, add these:
+
+    "hic.executablePath": "stack",
+    "hic.arguments": "exec ghcide -- --lsp"
+    
+Since I use stack. Required if you don't have a `ghc` on your path.
+
 ## Works in `ghcide` but not my editor
 
 Does `ghcide` alone work on the console? Did you first enter a Nix shell? Or run `stack exec ghcide`? If so, there are two options:
