@@ -67,6 +67,10 @@ VSCode user or workspace settings, add these:
     
 Since I use stack. Required if you don't have a `ghc` on your path.
 
+## Could not find module ...
+
+Try adding an explicit hie.yaml file and see if that helps.
+
 ## Works in `ghcide` but not my editor
 
 Does `ghcide` alone work on the console? Did you first enter a Nix shell? Or run `stack exec ghcide`? If so, there are two options:
