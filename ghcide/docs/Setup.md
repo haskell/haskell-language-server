@@ -82,6 +82,10 @@ Does `ghcide` alone work on the console? Did you first enter a Nix shell? Or run
 
 If you are using packages installed by Nix, then often Nix will set `NIX_GHC_LIBDIR` to say where the libraries are installed. `ghcide` can cope with that. However, sometimes the `ghc` on your shell will actually be a shell script that sets `NIX_GHC_LIBDIR`, which `ghcide` can't find. If that happens, you need to either set `NIX_GHC_LIBDIR` (so `ghcide` can see it) or use a proper [Nix compatible wrapper](https://github.com/hercules-ci/ghcide-nix) over `ghcide`.
 
+## ghcide: this operation requires -fexternal-interpreter
+
+This can happen if you have a GHC compiled without GHC library support.  This seems to be [the case](https://github.com/input-output-hk/haskell.nix/issues/313) with `haskell.nix` at the moment.
+
 ## Symbol’s value as variable is void: capability
 
 As described [here](https://github.com/emacs-lsp/lsp-mode/issues/770#issuecomment-483540119) and [here](https://github.com/emacs-lsp/lsp-mode/issues/517#issuecomment-445448700), the default installation of `lsp-mode`, `lsp-ui`, `lsp-ui-mode` and `lsp-haskell` as described in [ghcide's "Using with Emacs" section](https://github.com/digital-asset/ghcide/#using-with-emacs) may result in the following error message:
