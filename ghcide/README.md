@@ -76,7 +76,7 @@ If you don't already have [MELPA](https://melpa.org/#/) package installation con
 Now you have a choice of two different Emacs packages which can be used to communicate with the `ghcide` LSP server:
 
 + `lsp-ui`
-+ `eglot`
++ `eglot` (requires Emacs 26.1+)
 
 In each case, you can enable support by adding the shown lines to your `.emacs`:
 
