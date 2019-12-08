@@ -167,9 +167,11 @@ loadSession :: FilePath -> IO (FilePath -> Action HscEnvEq)
 loadSession dir = do
     cradleLoc <- memoIO $ \v -> do
         res <- findCradle v
-        -- Sometimes we get C: and sometimes we get c:, try and normalise that
+        -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
+        -- try and normalise that
         -- e.g. see https://github.com/digital-asset/ghcide/issues/126
-        return $ normalise <$> res
+        res' <- traverse makeAbsolute res
+        return $ normalise <$> res'
     session <- memoIO $ \file -> do
         c <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle file
         cradleToSession c
