@@ -66,7 +66,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc symbol"           _documentSymbolProvider  Nothing
     , chk "NO workspace symbol"    _workspaceSymbolProvider  Nothing
     , chk "   code action"             _codeActionProvider $ Just $ CodeActionOptionsStatic True
-    , chk "NO code lens"                  _codeLensProvider  Nothing
+    , chk "   code lens"                 _codeLensProvider $ Just $ CodeLensOptions Nothing
     , chk "NO doc formatting"   _documentFormattingProvider  Nothing
     , chk "NO doc range formatting"
                            _documentRangeFormattingProvider  Nothing
@@ -76,7 +76,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider  Nothing
     , chk "NO color"                         _colorProvider (Just $ ColorOptionsStatic False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ FoldingRangeOptionsStatic False)
-    , chk "NO execute command"      _executeCommandProvider  Nothing
+    , chk "   execute command"      _executeCommandProvider (Just $ ExecuteCommandOptions $ List ["typesignature.add"])
     , chk "NO workspace"                         _workspace  nothingWorkspace
     , chk "NO experimental"                   _experimental  Nothing
     ] where

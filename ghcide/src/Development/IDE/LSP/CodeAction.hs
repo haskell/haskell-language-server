@@ -8,18 +8,22 @@
 -- | Go to the definition of a variable.
 module Development.IDE.LSP.CodeAction
     ( setHandlersCodeAction
+    , setHandlersCodeLens
     ) where
 
 import           Language.Haskell.LSP.Types
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
+import Development.IDE.Core.Shake
 import Development.IDE.LSP.Server
+import Development.IDE.Types.Location
 import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as Set
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.VFS
 import Language.Haskell.LSP.Messages
 import qualified Data.Rope.UTF16 as Rope
+import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
 import Data.Char
 import Data.Maybe
 import Data.List.Extra
@@ -42,9 +46,41 @@ codeAction lsp _ CodeActionParams{_textDocument=TextDocumentIdentifier uri,_cont
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
 
+-- | Generate code lenses.
+codeLens
+    :: LSP.LspFuncs ()
+    -> IdeState
+    -> CodeLensParams
+    -> IO (List CodeLens)
+codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+    diag <- getDiagnostics ideState
+    case uriToFilePath' uri of
+      Just (toNormalizedFilePath -> filePath) -> do
+        pure $ List
+          [ CodeLens _range (Just (Command title "typesignature.add" (Just $ List [toJSON edit]))) Nothing
+          | (dFile, dDiag@Diagnostic{_range=_range@Range{..},..}) <- diag
+          , dFile == filePath
+          , (title, tedit) <- suggestTopLevelBinding False dDiag
+          , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+          ]
+      Nothing -> pure $ List []
+
+-- | Generate code lenses.
+executeAddSignatureCommand
+    :: LSP.LspFuncs ()
+    -> IdeState
+    -> ExecuteCommandParams
+    -> IO (Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
+    | _command == "typesignature.add"
+    , Just (List [edit]) <- _arguments
+    , Success wedit <- fromJSON edit 
+    = return (Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
+    | otherwise
+    = return (Null, Nothing)
 
 suggestAction :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAction contents Diagnostic{_range=_range@Range{..},..}
+suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
 
 -- File.hs:16:1: warning:
 --     The import of `Data.List' is redundant
@@ -141,17 +177,22 @@ suggestAction contents Diagnostic{_range=_range@Range{..},..}
       extractFitNames     = map (T.strip . head . T.splitOn " :: ")
       in map proposeHoleFit $ nubOrd $ findSuggestedHoleFits _message
 
+    | tlb@[_] <- suggestTopLevelBinding True diag = tlb
+
+suggestAction _ _ = []
+
+suggestTopLevelBinding :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestTopLevelBinding isQuickFix Diagnostic{_range=_range@Range{..},..}
     | "Top-level binding with no type signature" `T.isInfixOf` _message = let
       filterNewlines = T.concat  . T.lines
       unifySpaces    = T.unwords . T.words
       signature      = T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
       startOfLine    = Position (_line _start) 0
       beforeLine     = Range startOfLine startOfLine
-      title          = "add signature: " <> signature
+      title          = if isQuickFix then "add signature: " <> signature else signature
       action         = TextEdit beforeLine $ signature <> "\n"
       in [(title, [action])]
-
-suggestAction _ _ = []
+suggestTopLevelBinding _ _ = []
 
 topOfHoleFitsMarker :: T.Text
 topOfHoleFitsMarker =
@@ -235,4 +276,10 @@ textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
 setHandlersCodeAction :: PartialHandlers
 setHandlersCodeAction = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeActionHandler = withResponse RspCodeAction codeAction
+    }
+
+setHandlersCodeLens :: PartialHandlers
+setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
+    LSP.codeLensHandler = withResponse RspCodeLens codeLens,
+    LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
     }
