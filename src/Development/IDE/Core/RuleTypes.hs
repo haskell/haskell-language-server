@@ -24,7 +24,7 @@ import           GHC.Generics                             (Generic)
 
 import           GHC
 import Module (InstalledUnitId)
-import HscTypes (HomeModInfo)
+import HscTypes (CgGuts, Linkable, HomeModInfo, ModDetails)
 import Development.IDE.GHC.Compat
 
 import           Development.IDE.Spans.Type
@@ -65,7 +65,10 @@ type instance RuleResult TypeCheck = TcModuleResult
 type instance RuleResult GetSpanInfo = [SpanInfo]
 
 -- | Convert to Core, requires TypeCheck*
-type instance RuleResult GenerateCore = CoreModule
+type instance RuleResult GenerateCore = (SafeHaskellMode, CgGuts, ModDetails)
+
+-- | Generate byte code for template haskell.
+type instance RuleResult GenerateByteCode = Linkable
 
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnvEq
@@ -130,6 +133,12 @@ data GenerateCore = GenerateCore
 instance Hashable GenerateCore
 instance NFData   GenerateCore
 instance Binary   GenerateCore
+
+data GenerateByteCode = GenerateByteCode
+   deriving (Eq, Show, Typeable, Generic)
+instance Hashable GenerateByteCode
+instance NFData   GenerateByteCode
+instance Binary   GenerateByteCode
 
 data GhcSession = GhcSession
     deriving (Eq, Show, Typeable, Generic)
