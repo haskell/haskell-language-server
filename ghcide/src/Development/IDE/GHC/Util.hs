@@ -19,7 +19,8 @@ module Development.IDE.GHC.Util(
     textToStringBuffer,
     moduleImportPath,
     HscEnvEq, hscEnv, newHscEnvEq,
-    readFileUtf8
+    readFileUtf8,
+    cgGutsToCoreModule
     ) where
 
 import Config
@@ -146,3 +147,10 @@ instance NFData HscEnvEq where
 
 readFileUtf8 :: FilePath -> IO T.Text
 readFileUtf8 f = T.decodeUtf8With T.lenientDecode <$> BS.readFile f
+
+cgGutsToCoreModule :: SafeHaskellMode -> CgGuts -> ModDetails -> CoreModule
+cgGutsToCoreModule safeMode guts modDetails = CoreModule
+    (cg_module guts)
+    (md_types modDetails)
+    (cg_binds guts)
+    safeMode

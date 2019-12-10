@@ -20,7 +20,13 @@ import Development.IDE.GHC.Util
 -- Orphan instances for types from the GHC API.
 instance Show CoreModule where show = prettyPrint
 instance NFData CoreModule where rnf = rwhnf
-
+instance Show CgGuts where show = prettyPrint . cg_module
+instance NFData CgGuts where rnf = rwhnf
+instance Show ModDetails where show = const "<moddetails>"
+instance NFData ModDetails where rnf = rwhnf
+instance NFData SafeHaskellMode where rnf = rwhnf
+instance Show Linkable where show = prettyPrint
+instance NFData Linkable where rnf = rwhnf
 
 instance Show InstalledUnitId where
     show = installedUnitIdString
