@@ -41,6 +41,7 @@ main = defaultMain $ testGroup "HIE"
   , codeActionTests
   , findDefinitionAndHoverTests
   , pluginTests
+  , thTests
   ]
 
 initializeResponseTests :: TestTree
@@ -831,6 +832,36 @@ pluginTests = testSessionWait "plugins" $ do
     [ ( "Testing.hs",
         [(DsError, (8, 14), "Variable not in scope: c")]
       )
+    ]
+
+thTests :: TestTree
+thTests =
+  testGroup
+    "TemplateHaskell"
+    [ -- Test for https://github.com/digital-asset/ghcide/pull/212
+      testSessionWait "load" $ do
+        let sourceA =
+              T.unlines
+                [ "{-# LANGUAGE PackageImports #-}",
+                  "{-# LANGUAGE TemplateHaskell #-}",
+                  "module A where",
+                  "import \"template-haskell\" Language.Haskell.TH",
+                  "a :: Integer",
+                  "a = $(litE $ IntegerL 3)"
+                ]
+            sourceB =
+              T.unlines
+                [ "{-# LANGUAGE PackageImports #-}",
+                  "{-# LANGUAGE TemplateHaskell #-}",
+                  "module B where",
+                  "import A",
+                  "import \"template-haskell\" Language.Haskell.TH",
+                  "b :: Integer",
+                  "b = $(litE $ IntegerL $ a) + n"
+                ]
+        _ <- openDoc' "A.hs" "haskell" sourceA
+        _ <- openDoc' "B.hs" "haskell" sourceB
+        expectDiagnostics [ ( "B.hs", [(DsError, (6, 29), "Variable not in scope: n")] ) ]
     ]
 
 xfail :: TestTree -> String -> TestTree
