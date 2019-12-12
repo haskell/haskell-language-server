@@ -311,7 +311,7 @@ lspShakeProgress getLspId sendMsg prog = do
     sendMsg $ LSP.ReqWorkDoneProgressCreate $ LSP.fmServerWorkDoneProgressCreateRequest
       lspId $ LSP.WorkDoneProgressCreateParams
       { _token = u }
-    bracket_ (start u) (stop u) (loop u)
+    bracket_ (start u) (stop u) (loop u Nothing)
     where
         start id = sendMsg $ LSP.NotWorkDoneProgressBegin $ LSP.fmServerWorkDoneProgressBeginNotification
             LSP.ProgressParams
@@ -331,20 +331,23 @@ lspShakeProgress getLspId sendMsg prog = do
                   }
                 }
         sample = 0.1
-        loop id = forever $ do
+        loop id prev = do
             sleep sample
             p <- prog
             let done = countSkipped p + countBuilt p
             let todo = done + countUnknown p + countTodo p
-            sendMsg $ LSP.NotWorkDoneProgressReport $ LSP.fmServerWorkDoneProgressReportNotification
-                LSP.ProgressParams
-                    { _token = id
-                    , _value = LSP.WorkDoneProgressReportParams
-                      { _cancellable = Nothing
-                      , _message = Just $ T.pack $ show done <> "/" <> show todo
-                      , _percentage = Nothing
-                      }
-                    }
+            let next = Just $ T.pack $ show done <> "/" <> show todo
+            when (next /= prev) $
+                sendMsg $ LSP.NotWorkDoneProgressReport $ LSP.fmServerWorkDoneProgressReportNotification
+                    LSP.ProgressParams
+                        { _token = id
+                        , _value = LSP.WorkDoneProgressReportParams
+                        { _cancellable = Nothing
+                        , _message = next
+                        , _percentage = Nothing
+                        }
+                        }
+            loop id next
 
 shakeProfile :: IdeState -> FilePath -> IO ()
 shakeProfile IdeState{..} = shakeProfileDatabase shakeDb
