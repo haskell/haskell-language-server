@@ -2,7 +2,7 @@ cabal-version:      1.20
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            0.0.4
+version:            0.0.5
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset
