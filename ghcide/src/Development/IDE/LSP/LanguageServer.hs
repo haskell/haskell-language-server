@@ -12,6 +12,7 @@ module Development.IDE.LSP.LanguageServer
 import           Language.Haskell.LSP.Types
 import           Language.Haskell.LSP.Types.Capabilities
 import           Development.IDE.LSP.Server
+import qualified Development.IDE.GHC.Util as Ghcide
 import qualified Language.Haskell.LSP.Control as LSP
 import qualified Language.Haskell.LSP.Core as LSP
 import Control.Concurrent.Chan
@@ -23,7 +24,7 @@ import Data.Default
 import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import           GHC.IO.Handle                    (hDuplicate, hDuplicateTo)
+import GHC.IO.Handle (hDuplicate)
 import System.IO
 import Control.Monad.Extra
 
@@ -37,7 +38,6 @@ import Development.IDE.Core.FileStore
 import Language.Haskell.LSP.Core (LspFuncs(..))
 import Language.Haskell.LSP.Messages
 
-
 runLanguageServer
     :: LSP.Options
     -> PartialHandlers
@@ -48,7 +48,7 @@ runLanguageServer options userHandlers getIdeState = do
     -- to stdout. This guards against stray prints from corrupting the JSON-RPC
     -- message stream.
     newStdout <- hDuplicate stdout
-    stderr `hDuplicateTo` stdout
+    stderr `Ghcide.hDuplicateTo` stdout
     hSetBuffering stderr NoBuffering
     hSetBuffering stdout NoBuffering
 
