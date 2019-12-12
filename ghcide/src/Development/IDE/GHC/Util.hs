@@ -20,11 +20,15 @@ module Development.IDE.GHC.Util(
     moduleImportPath,
     HscEnvEq, hscEnv, newHscEnvEq,
     readFileUtf8,
+    hDuplicateTo,
     cgGutsToCoreModule
     ) where
 
 import Config
+import Control.Concurrent
 import Data.List.Extra
+import Data.Maybe
+import Data.Typeable
 #if MIN_GHC_API_VERSION(8,6,0)
 import Fingerprint
 #endif
@@ -34,6 +38,12 @@ import GhcPlugins hiding (Unique)
 import Data.IORef
 import Control.Exception
 import FileCleanup
+import GHC.IO.BufferedIO (BufferedIO)
+import GHC.IO.Device as IODevice
+import GHC.IO.Encoding
+import GHC.IO.Exception
+import GHC.IO.Handle.Types
+import GHC.IO.Handle.Internals
 import Platform
 import Data.Unique
 import Development.Shake.Classes
@@ -154,3 +164,71 @@ cgGutsToCoreModule safeMode guts modDetails = CoreModule
     (md_types modDetails)
     (cg_binds guts)
     safeMode
+
+-- This is a slightly modified version of hDuplicateTo in GHC.
+-- See the inline comment for more details.
+hDuplicateTo :: Handle -> Handle -> IO ()
+hDuplicateTo h1@(FileHandle path m1) h2@(FileHandle _ m2)  = do
+ withHandle__' "hDuplicateTo" h2 m2 $ \h2_ -> do
+   -- The implementation in base has this call to hClose_help.
+   -- _ <- hClose_help h2_
+   -- hClose_help does two things:
+   -- 1. It flushes the buffer, we replicate this here
+   _ <- flushWriteBuffer h2_ `catch` \(_ :: IOException) -> pure ()
+   -- 2. It closes the handle. This is redundant since dup2 takes care of that
+   -- but even worse it is actively harmful! Once the handle has been closed
+   -- another thread is free to reallocate it. This leads to dup2 failing with EBUSY
+   -- if it happens just in the right moment.
+   withHandle_' "hDuplicateTo" h1 m1 $ \h1_ -> do
+     dupHandleTo path h1 Nothing h2_ h1_ (Just handleFinalizer)
+hDuplicateTo h1@(DuplexHandle path r1 w1) h2@(DuplexHandle _ r2 w2)  = do
+ withHandle__' "hDuplicateTo" h2 w2  $ \w2_ -> do
+   _ <- hClose_help w2_
+   withHandle_' "hDuplicateTo" h1 w1 $ \w1_ -> do
+     dupHandleTo path h1 Nothing w2_ w1_ (Just handleFinalizer)
+ withHandle__' "hDuplicateTo" h2 r2  $ \r2_ -> do
+   _ <- hClose_help r2_
+   withHandle_' "hDuplicateTo" h1 r1 $ \r1_ -> do
+     dupHandleTo path h1 (Just w1) r2_ r1_ Nothing
+hDuplicateTo h1 _ =
+  ioe_dupHandlesNotCompatible h1
+
+-- | This is copied unmodified from GHC since it is not exposed.
+dupHandleTo :: FilePath
+            -> Handle
+            -> Maybe (MVar Handle__)
+            -> Handle__
+            -> Handle__
+            -> Maybe HandleFinalizer
+            -> IO Handle__
+dupHandleTo filepath h other_side
+            _hto_@Handle__{haDevice=devTo}
+            h_@Handle__{haDevice=dev} mb_finalizer = do
+  flushBuffer h_
+  case cast devTo of
+    Nothing   -> ioe_dupHandlesNotCompatible h
+    Just dev' -> do
+      _ <- IODevice.dup2 dev dev'
+      FileHandle _ m <- dupHandle_ dev' filepath other_side h_ mb_finalizer
+      takeMVar m
+
+-- | This is copied unmodified from GHC since it is not exposed.
+-- Note the beautiful inline comment!
+dupHandle_ :: (IODevice dev, BufferedIO dev, Typeable dev) => dev
+           -> FilePath
+           -> Maybe (MVar Handle__)
+           -> Handle__
+           -> Maybe HandleFinalizer
+           -> IO Handle
+dupHandle_ new_dev filepath other_side _h_@Handle__{..} mb_finalizer = do
+   -- XXX wrong!
+  mb_codec <- if isJust haEncoder then fmap Just getLocaleEncoding else return Nothing
+  mkHandle new_dev filepath haType True{-buffered-} mb_codec
+      NewlineMode { inputNL = haInputNL, outputNL = haOutputNL }
+      mb_finalizer other_side
+
+-- | This is copied unmodified from GHC since it is not exposed.
+ioe_dupHandlesNotCompatible :: Handle -> IO a
+ioe_dupHandlesNotCompatible h =
+   ioException (IOError (Just h) IllegalOperation "hDuplicateTo"
+                "handles are incompatible" Nothing Nothing)
