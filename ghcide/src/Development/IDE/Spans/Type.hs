@@ -13,9 +13,8 @@ module Development.IDE.Spans.Type(
 
 import GHC
 import Control.DeepSeq
-import Data.Maybe
 import OccName
-
+import Development.IDE.GHC.Util
 
 -- | Type of some span of source code. Most of these fields are
 -- unboxed but Haddock doesn't show that.
@@ -29,7 +28,7 @@ data SpanInfo =
            ,spaninfoEndCol :: {-# UNPACK #-} !Int
             -- ^ End column of the span (absolute), zero-based.
            ,spaninfoType :: !(Maybe Type)
-            -- ^ A pretty-printed representation fo the type.
+            -- ^ A pretty-printed representation for the type.
            ,spaninfoSource :: !SpanSource
            -- ^ The actutal 'Name' associated with the span, if
             -- any. This can be useful for accessing a variety of
@@ -37,7 +36,9 @@ data SpanInfo =
             -- locality, definition location, etc.
            }
 instance Show SpanInfo where
-  show (SpanInfo sl sc el ec t n) = show [show sl, show sc, show el, show ec, show $ isJust t, show n]
+  show (SpanInfo sl sc el ec t n) =
+    unwords ["(SpanInfo", show sl, show sc, show el, show ec
+            , show $ maybe "NoType" prettyPrint t, "(" <> show n <> "))"]
 
 instance NFData SpanInfo where
     rnf = rwhnf
