@@ -810,9 +810,9 @@ findDefinitionAndHoverTests = let
   , test yes    broken clL23  cls    "class in instance declaration"
   , test yes    broken clL25  cls    "class in signature"            -- 147
   , test broken broken eclL15 ecls   "external class in signature"
-  , test yes    broken dnbL29 dnb    "do-notation   bind"            -- 137
+  , test yes    yes    dnbL29 dnb    "do-notation   bind"            -- 137
   , test yes    yes    dnbL30 dnb    "do-notation lookup"
-  , test yes    broken lcbL33 lcb    "listcomp   bind"               -- 137
+  , test yes    yes    lcbL33 lcb    "listcomp   bind"               -- 137
   , test yes    yes    lclL33 lcb    "listcomp lookup"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)

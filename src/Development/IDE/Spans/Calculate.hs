@@ -74,7 +74,7 @@ getSpanInfo mods tcm =
   where cmp (_,a,_) (_,b,_)
           | a `isSubspanOf` b = LT
           | b `isSubspanOf` a = GT
-          | otherwise = EQ
+          | otherwise         = compare (srcSpanStart a) (srcSpanStart b)
 
 getExports :: TypecheckedModule -> [(SpanSource, SrcSpan, Maybe Type)]
 getExports m
