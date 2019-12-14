@@ -101,3 +101,8 @@ find ~/.emacs.d -name '*.elc' -exec rm {} \;
 ```
 
 (which causes recompilation of all bytecode-compiled scripts.)
+
+
+## Docker stack builds
+
+You're likely to see `ghcide: (ExitFailure 1,"","")`. Because ghcide can't get at the ghc installed inside Docker, your best bet is to `stack exec ghcide` and make sure `ghcide` is installed within the container. Full details at [issue 221](https://github.com/digital-asset/ghcide/issues/221).
