@@ -32,3 +32,7 @@ doBind = do unwrapped <- Just ()
 
 listCompBind :: [Char]
 listCompBind = [ succ c | c <- "abc" ]
+
+multipleClause :: Bool -> Char
+multipleClause True  = 't'
+multipleClause False = 'f'

@@ -790,6 +790,8 @@ findDefinitionAndHoverTests = let
   dnbL30 = Position 30 23
   lcbL33 = Position 33 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  33 26   33 27]
   lclL33 = Position 33 22
+  mclL36 = Position 36  1  ;  mcl    = [mkR  36  0   36 14]
+  mclL37 = Position 37  1
   in
   mkFindTests
   --     def    hover  look   expect
@@ -814,6 +816,8 @@ findDefinitionAndHoverTests = let
   , test yes    yes    dnbL30 dnb    "do-notation lookup"
   , test yes    yes    lcbL33 lcb    "listcomp   bind"               -- 137
   , test yes    yes    lclL33 lcb    "listcomp lookup"
+  , test yes    yes    mclL36 mcl    "top-level fn 1st clause"
+  , test broken broken mclL37 mcl    "top-level fn 2nd clause"               -- issue #245
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
