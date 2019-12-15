@@ -796,28 +796,28 @@ findDefinitionAndHoverTests = let
   mkFindTests
   --     def    hover  look   expect
   [ test yes    yes    fffL4  fff    "field in record definition"
-  , test broken broken fffL8  fff    "field in record construction"
+  , test broken broken fffL8  fff    "field in record construction #71"
   , test yes    yes    fffL14 fff    "field name used as accessor"   -- 120 in Calculate.hs
   , test yes    yes    aaaL14 aaa    "top-level name"                -- 120
-  , test broken broken dcL7   tcDC   "record data constructor"
+  , test broken broken dcL7   tcDC   "record data constructor #247"
   , test yes    yes    dcL12  tcDC   "plain  data constructor"       -- 121
-  , test yes    broken tcL6   tcData "type constructor"              -- 147
-  , test broken broken xtcL5  xtc    "type constructor from other package"
-  , test broken yes    xvL20  xvMsg  "value from other package"      -- 120
+  , test yes    broken tcL6   tcData "type constructor #249"         -- 147
+  , test broken broken xtcL5  xtc    "type constructor from other package #249"
+  , test broken yes    xvL20  xvMsg  "value from other package #249" -- 120
   , test yes    yes    vvL16  vv     "plain parameter"               -- 120
   , test yes    yes    aL18   apmp   "pattern match name"            -- 120
   , test yes    yes    opL16  op     "top-level operator"            -- 120, 123
   , test yes    yes    opL18  opp    "parameter operator"            -- 120
   , test yes    yes    b'L19  bp     "name in backticks"             -- 120
-  , test yes    broken clL23  cls    "class in instance declaration"
-  , test yes    broken clL25  cls    "class in signature"            -- 147
-  , test broken broken eclL15 ecls   "external class in signature"
+  , test yes    broken clL23  cls    "class in instance declaration #250"
+  , test yes    broken clL25  cls    "class in signature #250"       -- 147
+  , test broken broken eclL15 ecls   "external class in signature #249,250"
   , test yes    yes    dnbL29 dnb    "do-notation   bind"            -- 137
   , test yes    yes    dnbL30 dnb    "do-notation lookup"
   , test yes    yes    lcbL33 lcb    "listcomp   bind"               -- 137
   , test yes    yes    lclL33 lcb    "listcomp lookup"
   , test yes    yes    mclL36 mcl    "top-level fn 1st clause"
-  , test broken broken mclL37 mcl    "top-level fn 2nd clause"               -- issue #245
+  , test broken broken mclL37 mcl    "top-level fn 2nd clause #245"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
