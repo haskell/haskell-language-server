@@ -102,11 +102,20 @@ typecheckModule (IdeDefer defer) packageState deps pm =
         catchSrcErrors "typecheck" $ do
             setupEnv deps
             let modSummary = pm_mod_summary pm
+                dflags = ms_hspp_opts modSummary
             modSummary' <- initPlugins modSummary
             (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-                GHC.typecheckModule $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+                GHC.typecheckModule $ enableTopLevelWarnings
+                                    $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
             tcm2 <- mkTcModuleResult tcm
-            return (map unDefer warnings, tcm2)
+            let errorPipeline = unDefer
+                              . (if wopt Opt_WarnMissingSignatures dflags
+                                    then id
+                                    else degradeError Opt_WarnMissingSignatures)
+                              . (if wopt Opt_WarnMissingLocalSignatures dflags
+                                    then id
+                                    else degradeError Opt_WarnMissingLocalSignatures)
+            return (map errorPipeline warnings, tcm2)
 
 initPlugins :: GhcMonad m => ModSummary -> m ModSummary
 initPlugins modSummary = do
@@ -170,12 +179,17 @@ demoteTypeErrorsToWarnings =
                    . (`gopt_set` Opt_DeferTypedHoles)
                    . (`gopt_set` Opt_DeferOutOfScopeVariables)
 
-  update_hspp_opts :: (DynFlags -> DynFlags) -> ModSummary -> ModSummary
-  update_hspp_opts up ms = ms{ms_hspp_opts = up $ ms_hspp_opts ms}
+enableTopLevelWarnings :: ParsedModule -> ParsedModule
+enableTopLevelWarnings =
+  (update_pm_mod_summary . update_hspp_opts)
+  ((`wopt_set` Opt_WarnMissingSignatures) . (`wopt_set` Opt_WarnMissingLocalSignatures))
 
-  update_pm_mod_summary :: (ModSummary -> ModSummary) -> ParsedModule -> ParsedModule
-  update_pm_mod_summary up pm =
-    pm{pm_mod_summary = up $ pm_mod_summary pm}
+update_hspp_opts :: (DynFlags -> DynFlags) -> ModSummary -> ModSummary
+update_hspp_opts up ms = ms{ms_hspp_opts = up $ ms_hspp_opts ms}
+
+update_pm_mod_summary :: (ModSummary -> ModSummary) -> ParsedModule -> ParsedModule
+update_pm_mod_summary up pm =
+  pm{pm_mod_summary = up $ pm_mod_summary pm}
 
 unDefer :: (WarnReason, FileDiagnostic) -> FileDiagnostic
 unDefer (Reason Opt_WarnDeferredTypeErrors         , fd) = upgradeWarningToError fd
@@ -183,11 +197,20 @@ unDefer (Reason Opt_WarnTypedHoles                 , fd) = upgradeWarningToError
 unDefer (Reason Opt_WarnDeferredOutOfScopeVariables, fd) = upgradeWarningToError fd
 unDefer ( _                                        , fd) = fd
 
+degradeError :: WarningFlag -> (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
+degradeError f (Reason f', fd)
+  | f == f'        = (Reason f', degradeWarningToError fd)
+degradeError _ wfd = wfd
+
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
 upgradeWarningToError (nfp, fd) =
   (nfp, fd{_severity = Just DsError, _message = warn2err $ _message fd}) where
   warn2err :: T.Text -> T.Text
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
+
+degradeWarningToError :: FileDiagnostic -> FileDiagnostic
+degradeWarningToError (nfp, fd) =
+  (nfp, fd{_severity = Just DsInfo})
 
 addRelativeImport :: NormalizedFilePath -> ParsedModule -> DynFlags -> DynFlags
 addRelativeImport fp modu dflags = dflags

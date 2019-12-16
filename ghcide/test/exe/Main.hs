@@ -299,6 +299,7 @@ diagnosticTests = testGroup "diagnostics"
   , testSessionWait "package imports" $ do
       let thisDataListContent = T.unlines
             [ "module Data.List where"
+            , "x :: Integer"
             , "x = 123"
             ]
       let mainContent = T.unlines
@@ -541,6 +542,7 @@ removeImportTests = testGroup "remove import actions"
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
             , "import ModuleA"
+            , "stuffB :: Integer"
             , "stuffB = 123"
             ]
       docB <- openDoc' "ModuleB.hs" "haskell" contentB
@@ -553,6 +555,7 @@ removeImportTests = testGroup "remove import actions"
       let expectedContentAfterAction = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
+            , "stuffB :: Integer"
             , "stuffB = 123"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
@@ -565,6 +568,7 @@ removeImportTests = testGroup "remove import actions"
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
             , "import qualified ModuleA"
+            , "stuffB :: Integer"
             , "stuffB = 123"
             ]
       docB <- openDoc' "ModuleB.hs" "haskell" contentB
@@ -577,6 +581,7 @@ removeImportTests = testGroup "remove import actions"
       let expectedContentAfterAction = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
+            , "stuffB :: Integer"
             , "stuffB = 123"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction

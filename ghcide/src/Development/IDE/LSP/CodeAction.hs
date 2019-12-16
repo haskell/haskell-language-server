@@ -14,6 +14,7 @@ module Development.IDE.LSP.CodeAction
 import           Language.Haskell.LSP.Types
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
+import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 import Development.IDE.LSP.Server
 import Development.IDE.Types.Location
@@ -24,6 +25,7 @@ import Language.Haskell.LSP.VFS
 import Language.Haskell.LSP.Messages
 import qualified Data.Rope.UTF16 as Rope
 import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
+import Control.Monad.Trans.Maybe
 import Data.Char
 import Data.Maybe
 import Data.List.Extra
@@ -53,19 +55,20 @@ codeLens
     -> CodeLensParams
     -> IO (List CodeLens)
 codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
-    diag <- getDiagnostics ideState
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
+        _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
+        diag <- getDiagnostics ideState
         pure $ List
           [ CodeLens _range (Just (Command title "typesignature.add" (Just $ List [toJSON edit]))) Nothing
           | (dFile, dDiag@Diagnostic{_range=_range@Range{..},..}) <- diag
           , dFile == filePath
-          , (title, tedit) <- suggestTopLevelBinding False dDiag
+          , (title, tedit) <- suggestSignature False dDiag
           , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
           ]
       Nothing -> pure $ List []
 
--- | Generate code lenses.
+-- | Execute the "typesignature.add" command.
 executeAddSignatureCommand
     :: LSP.LspFuncs ()
     -> IdeState
@@ -177,12 +180,12 @@ suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
       extractFitNames     = map (T.strip . head . T.splitOn " :: ")
       in map proposeHoleFit $ nubOrd $ findSuggestedHoleFits _message
 
-    | tlb@[_] <- suggestTopLevelBinding True diag = tlb
+    | tlb@[_] <- suggestSignature True diag = tlb
 
 suggestAction _ _ = []
 
-suggestTopLevelBinding :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestTopLevelBinding isQuickFix Diagnostic{_range=_range@Range{..},..}
+suggestSignature :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
     | "Top-level binding with no type signature" `T.isInfixOf` _message = let
       filterNewlines = T.concat  . T.lines
       unifySpaces    = T.unwords . T.words
@@ -192,7 +195,23 @@ suggestTopLevelBinding isQuickFix Diagnostic{_range=_range@Range{..},..}
       title          = if isQuickFix then "add signature: " <> signature else signature
       action         = TextEdit beforeLine $ signature <> "\n"
       in [(title, [action])]
-suggestTopLevelBinding _ _ = []
+suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
+    | "Polymorphic local binding with no type signature" `T.isInfixOf` _message = let
+      filterNewlines = T.concat  . T.lines
+      unifySpaces    = T.unwords . T.words
+      signature      = removeInitialForAll
+                     $ T.takeWhile (\x -> x/='*' && x/='•')
+                     $ T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
+      startOfLine    = Position (_line _start) (_character _start)
+      beforeLine     = Range startOfLine startOfLine
+      title          = if isQuickFix then "add signature: " <> signature else signature
+      action         = TextEdit beforeLine $ signature <> "\n" <> T.replicate (_character _start) " "
+      in [(title, [action])]
+    where removeInitialForAll :: T.Text -> T.Text
+          removeInitialForAll (T.breakOnEnd " :: " -> (nm, ty))
+              | "forall" `T.isPrefixOf` ty = nm <> T.drop 2 (snd (T.breakOn "." ty))
+              | otherwise                  = nm <> ty
+suggestSignature _ _ = []
 
 topOfHoleFitsMarker :: T.Text
 topOfHoleFitsMarker =
