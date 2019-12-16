@@ -20,7 +20,7 @@ module Development.IDE.GHC.Util(
     moduleImportPath,
     HscEnvEq, hscEnv, newHscEnvEq,
     readFileUtf8,
-    hDuplicateTo,
+    hDuplicateTo',
     cgGutsToCoreModule
     ) where
 
@@ -167,8 +167,8 @@ cgGutsToCoreModule safeMode guts modDetails = CoreModule
 
 -- This is a slightly modified version of hDuplicateTo in GHC.
 -- See the inline comment for more details.
-hDuplicateTo :: Handle -> Handle -> IO ()
-hDuplicateTo h1@(FileHandle path m1) h2@(FileHandle _ m2)  = do
+hDuplicateTo' :: Handle -> Handle -> IO ()
+hDuplicateTo' h1@(FileHandle path m1) h2@(FileHandle _ m2)  = do
  withHandle__' "hDuplicateTo" h2 m2 $ \h2_ -> do
    -- The implementation in base has this call to hClose_help.
    -- _ <- hClose_help h2_
@@ -181,7 +181,7 @@ hDuplicateTo h1@(FileHandle path m1) h2@(FileHandle _ m2)  = do
    -- if it happens just in the right moment.
    withHandle_' "hDuplicateTo" h1 m1 $ \h1_ -> do
      dupHandleTo path h1 Nothing h2_ h1_ (Just handleFinalizer)
-hDuplicateTo h1@(DuplexHandle path r1 w1) h2@(DuplexHandle _ r2 w2)  = do
+hDuplicateTo' h1@(DuplexHandle path r1 w1) h2@(DuplexHandle _ r2 w2)  = do
  withHandle__' "hDuplicateTo" h2 w2  $ \w2_ -> do
    _ <- hClose_help w2_
    withHandle_' "hDuplicateTo" h1 w1 $ \w1_ -> do
@@ -190,7 +190,7 @@ hDuplicateTo h1@(DuplexHandle path r1 w1) h2@(DuplexHandle _ r2 w2)  = do
    _ <- hClose_help r2_
    withHandle_' "hDuplicateTo" h1 r1 $ \r1_ -> do
      dupHandleTo path h1 (Just w1) r2_ r1_ Nothing
-hDuplicateTo h1 _ =
+hDuplicateTo' h1 _ =
   ioe_dupHandlesNotCompatible h1
 
 -- | This is copied unmodified from GHC since it is not exposed.
