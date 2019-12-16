@@ -76,7 +76,8 @@ makeVFSHandle = do
               modifyVar_ vfsVar $ \(nextVersion, vfs) -> pure $ (nextVersion + 1, ) $
                   case content of
                     Nothing -> Map.delete uri vfs
-                    Just content -> Map.insert uri (VirtualFile nextVersion (Rope.fromText content)) vfs
+                    -- The second version number is only used in persistFileVFS which we do not use so we set it to 0.
+                    Just content -> Map.insert uri (VirtualFile nextVersion 0 (Rope.fromText content)) vfs
         }
 
 makeLSPVFSHandle :: LspFuncs c -> VFSHandle
@@ -139,7 +140,7 @@ getModificationTimeRule vfs =
         alwaysRerun
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
         case mbVirtual of
-            Just (VirtualFile ver _) -> pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
+            Just (virtualFileVersion -> ver) -> pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
             Nothing -> liftIO $ fmap wrap (getModTime file')
               `catch` \(e :: IOException) -> do
                 let err | isDoesNotExistError e = "File does not exist: " ++ file'
