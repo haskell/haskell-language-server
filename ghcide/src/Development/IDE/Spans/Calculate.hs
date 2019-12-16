@@ -98,8 +98,9 @@ getTypeLHsBind :: (GhcMonad m)
                => TypecheckedModule
                -> LHsBind GhcTc
                -> m [(SpanSource, SrcSpan, Maybe Type)]
-getTypeLHsBind _ (L _spn FunBind{fun_id = pid,fun_matches = MG{}}) =
-  return [(Named $ getName (unLoc pid), getLoc pid, Just (varType (unLoc pid)))]
+getTypeLHsBind _ (L _spn FunBind{ fun_id = pid
+                                , fun_matches = MG{mg_alts=(L _ matches)}}) =
+  return [(Named (getName (unLoc pid)), getLoc match, Just (varType (unLoc pid))) | match <- matches ]
 getTypeLHsBind _ _ = return []
 
 -- | Get the name and type of an expression.
