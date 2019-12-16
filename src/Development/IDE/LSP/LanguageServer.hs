@@ -48,7 +48,7 @@ runLanguageServer options userHandlers getIdeState = do
     -- to stdout. This guards against stray prints from corrupting the JSON-RPC
     -- message stream.
     newStdout <- hDuplicate stdout
-    stderr `Ghcide.hDuplicateTo` stdout
+    stderr `Ghcide.hDuplicateTo'` stdout
     hSetBuffering stderr NoBuffering
     hSetBuffering stdout NoBuffering
 
