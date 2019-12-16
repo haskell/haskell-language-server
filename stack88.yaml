@@ -2,6 +2,7 @@ resolver: nightly-2019-12-06
 packages:
 - .
 extra-deps:
+- hie-bios-0.3.0
 allow-newer: true
 nix:
   packages: [zlib]

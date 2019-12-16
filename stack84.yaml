@@ -10,7 +10,7 @@ extra-deps:
 - shake-0.18.3
 - filepattern-0.1.1
 - js-dgtable-0.5.2
-- hie-bios-0.2.1
+- hie-bios-0.3.0
 nix:
   packages: [zlib]
 allow-newer: true
