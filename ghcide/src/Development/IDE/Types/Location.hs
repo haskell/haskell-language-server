@@ -30,7 +30,6 @@ import Data.Maybe as Maybe
 import Data.Hashable
 import Data.String
 import System.FilePath
-import System.Info.Extra
 import qualified Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types as LSP (
     filePathToUri
@@ -49,25 +48,9 @@ instance IsString NormalizedFilePath where
     fromString = toNormalizedFilePath
 
 toNormalizedFilePath :: FilePath -> NormalizedFilePath
+-- We want to keep empty paths instead of normalising them to "."
 toNormalizedFilePath "" = NormalizedFilePath ""
-toNormalizedFilePath fp = NormalizedFilePath $ normalise' fp
-    where
-        -- We do not use System.FilePath’s normalise here since that
-        -- also normalises things like the case of the drive letter
-        -- which NormalizedUri does not normalise so we get VFS lookup failures.
-        normalise' :: FilePath -> FilePath
-        normalise' = oneSlash . map (\c -> if isPathSeparator c then pathSeparator else c)
-
-        -- Allow double slashes as the very first element of the path for UNC drives on Windows
-        -- otherwise turn adjacent slashes into one. These slashes often arise from dodgy CPP
-        oneSlash :: FilePath -> FilePath
-        oneSlash (x:xs) | isWindows = x : f xs
-        oneSlash xs = f xs
-
-        f (x:y:xs) | isPathSeparator x, isPathSeparator y = f (x:xs)
-        f (x:xs) = x : f xs
-        f [] = []
-
+toNormalizedFilePath fp = NormalizedFilePath $ normalise fp
 
 fromNormalizedFilePath :: NormalizedFilePath -> FilePath
 fromNormalizedFilePath (NormalizedFilePath fp) = fp
