@@ -28,6 +28,7 @@ module Development.IDE.Core.Shake(
     use_, useNoFile_, uses_,
     define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks, fingerprintToBS,
     getDiagnostics, unsafeClearDiagnostics,
+    getHiddenDiagnostics,
     IsIdeGlobal, addIdeGlobal, getIdeGlobalState, getIdeGlobalAction,
     garbageCollect,
     setPriority,
@@ -93,6 +94,7 @@ data ShakeExtras = ShakeExtras
     ,globals :: Var (HMap.HashMap TypeRep Dynamic)
     ,state :: Var Values
     ,diagnostics :: Var DiagnosticStore
+    ,hiddenDiagnostics :: Var DiagnosticStore
     ,publishedDiagnostics :: Var (Map NormalizedUri [Diagnostic])
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
@@ -289,6 +291,7 @@ shakeOpen getLspId eventer logger shakeProfileDir (IdeReportProgress reportProgr
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
         diagnostics <- newVar mempty
+        hiddenDiagnostics <- newVar mempty
         publishedDiagnostics <- newVar mempty
         debouncer <- newDebouncer
         positionMapping <- newVar Map.empty
@@ -400,6 +403,11 @@ getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
     val <- readVar diagnostics
     return $ getAllDiagnostics val
 
+getHiddenDiagnostics :: IdeState -> IO [FileDiagnostic]
+getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
+    val <- readVar hiddenDiagnostics
+    return $ getAllDiagnostics val
+
 -- | FIXME: This function is temporary! Only required because the files of interest doesn't work
 unsafeClearDiagnostics :: IdeState -> IO ()
 unsafeClearDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
@@ -408,12 +416,13 @@ unsafeClearDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
 -- | Clear the results for all files that do not match the given predicate.
 garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
 garbageCollect keep = do
-    ShakeExtras{state, diagnostics,publishedDiagnostics,positionMapping} <- getShakeExtras
+    ShakeExtras{state, diagnostics,hiddenDiagnostics,publishedDiagnostics,positionMapping} <- getShakeExtras
     liftIO $
         do newState <- modifyVar state $ \values -> do
                values <- evaluate $ HMap.filterWithKey (\(file, _) _ -> keep file) values
                return $! dupe values
            modifyVar_ diagnostics $ \diags -> return $! filterDiagnostics keep diags
+           modifyVar_ hiddenDiagnostics $ \hdiags -> return $! filterDiagnostics keep hdiags
            modifyVar_ publishedDiagnostics $ \diags -> return $! Map.filterWithKey (\uri _ -> keep (fromUri uri)) diags
            let versionsForFile =
                    Map.fromListWith Set.union $
@@ -528,7 +537,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                             Failed -> (toShakeValue ShakeResult bs, Failed)
                 Just v -> pure $ (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
             liftIO $ setValues state key file res
-            updateFileDiagnostics file (Key key) extras $ map snd diags
+            updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
             let eq = case (bs, fmap decodeShakeValue old) of
                     (ShakeResult a, Just (ShakeResult b)) -> a == b
                     (ShakeStale a, Just (ShakeStale b)) -> a == b
@@ -589,7 +598,7 @@ defineOnDisk act = addBuiltinRule noLint noIdentity $
       case mbOld of
           Nothing -> do
               (diags, mbHash) <- runAct
-              updateFileDiagnostics file (Key key) extras $ map snd diags
+              updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
               pure $ RunResult ChangedRecomputeDiff (fromMaybe "" mbHash) (isJust mbHash)
           Just old -> do
               current <- validateHash <$> (actionCatch getHash $ \(_ :: SomeException) -> pure "")
@@ -600,7 +609,7 @@ defineOnDisk act = addBuiltinRule noLint noIdentity $
                     pure $ RunResult ChangedNothing (fromMaybe "" current) (isJust current)
                   else do
                     (diags, mbHash) <- runAct
-                    updateFileDiagnostics file (Key key) extras $ map snd diags
+                    updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                     let change
                           | mbHash == Just old = ChangedRecomputeSame
                           | otherwise = ChangedRecomputeDiff
@@ -656,21 +665,30 @@ updateFileDiagnostics ::
      NormalizedFilePath
   -> Key
   -> ShakeExtras
-  -> [Diagnostic] -- ^ current results
+  -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> Action ()
-updateFileDiagnostics fp k ShakeExtras{diagnostics, publishedDiagnostics, state, debouncer, eventer} current = liftIO $ do
+updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, eventer} current = liftIO $ do
     modTime <- join . fmap currentValue <$> getValues state GetModificationTime fp
+    let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
         newDiags <- modifyVar diagnostics $ \old -> do
-            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime) (T.pack $ show k) current old
+            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime)
+                                  (T.pack $ show k) (map snd currentShown) old
             let newDiags = getFileDiagnostics fp newDiagsStore
             _ <- evaluate newDiagsStore
             _ <- evaluate newDiags
             pure $! (newDiagsStore, newDiags)
+        modifyVar_ hiddenDiagnostics $ \old -> do
+            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime)
+                                  (T.pack $ show k) (map snd currentHidden) old
+            let newDiags = getFileDiagnostics fp newDiagsStore
+            _ <- evaluate newDiagsStore
+            _ <- evaluate newDiags
+            return newDiagsStore
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
@@ -751,7 +769,7 @@ getAllDiagnostics ::
     DiagnosticStore ->
     [FileDiagnostic]
 getAllDiagnostics =
-    concatMap (\(k,v) -> map (fromUri k,) $ getDiagnosticsFromStore v) . Map.toList
+    concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v) . Map.toList
 
 getFileDiagnostics ::
     NormalizedFilePath ->

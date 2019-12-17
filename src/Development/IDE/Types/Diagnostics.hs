@@ -4,6 +4,7 @@
 
 module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
+  ShowDiagnostic(..),
   FileDiagnostic,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
@@ -13,6 +14,7 @@ module Development.IDE.Types.Diagnostics (
   showDiagnosticsColored,
   ) where
 
+import Control.DeepSeq
 import Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
@@ -30,7 +32,7 @@ import Development.IDE.Types.Location
 
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText fp msg = (fp, LSP.Diagnostic {
+ideErrorText fp msg = (fp, ShowDiag, LSP.Diagnostic {
     _range = noRange,
     _severity = Just LSP.DsError,
     _code = Nothing,
@@ -39,6 +41,20 @@ ideErrorText fp msg = (fp, LSP.Diagnostic {
     _relatedInformation = Nothing
     })
 
+-- | Defines whether a particular diagnostic should be reported
+--   back to the user.
+--
+--   One important use case is "missing signature" code lenses,
+--   for which we need to enable the corresponding warning during
+--   type checking. However, we do not want to show the warning
+--   unless the programmer asks for it (#261).
+data ShowDiagnostic
+    = ShowDiag  -- ^ Report back to the user
+    | HideDiag  -- ^ Hide from user
+    deriving (Eq, Ord, Show)
+
+instance NFData ShowDiagnostic where
+    rnf = rwhnf
 
 -- | Human readable diagnostics for a specific file.
 --
@@ -46,7 +62,7 @@ ideErrorText fp msg = (fp, LSP.Diagnostic {
 --   along with the related source location so that we can display the error
 --   on either the console or in the IDE at the right source location.
 --
-type FileDiagnostic = (NormalizedFilePath, Diagnostic)
+type FileDiagnostic = (NormalizedFilePath, ShowDiagnostic, Diagnostic)
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
@@ -66,9 +82,10 @@ prettyDiagnostics :: [FileDiagnostic] -> Doc Terminal.AnsiStyle
 prettyDiagnostics = vcat . map prettyDiagnostic
 
 prettyDiagnostic :: FileDiagnostic -> Doc Terminal.AnsiStyle
-prettyDiagnostic (fp, LSP.Diagnostic{..}) =
+prettyDiagnostic (fp, sh, LSP.Diagnostic{..}) =
     vcat
         [ slabel_ "File:    " $ pretty (fromNormalizedFilePath fp)
+        , slabel_ "Hidden:  " $ if sh == ShowDiag then "no" else "yes"
         , slabel_ "Range:   " $ prettyRange _range
         , slabel_ "Source:  " $ pretty _source
         , slabel_ "Severity:" $ pretty $ show sev

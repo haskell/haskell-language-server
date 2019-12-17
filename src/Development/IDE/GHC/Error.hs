@@ -34,7 +34,7 @@ import qualified Outputable                 as Out
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
-diagFromText diagSource sev loc msg = (toNormalizedFilePath $ srcSpanToFilename loc,)
+diagFromText diagSource sev loc msg = (toNormalizedFilePath $ srcSpanToFilename loc,ShowDiag,)
     Diagnostic
     { _range    = srcSpanToRange loc
     , _severity = Just sev

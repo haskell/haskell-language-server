@@ -150,7 +150,7 @@ kick = do
 showEvent :: Lock -> FromServerMessage -> IO ()
 showEvent _ (EventFileDiagnostics _ []) = return ()
 showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
-    withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,) diags
+    withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,ShowDiag,) diags
 showEvent lock e = withLock lock $ print e
 
 

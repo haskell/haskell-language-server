@@ -59,9 +59,10 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
         diag <- getDiagnostics ideState
+        hDiag <- getHiddenDiagnostics ideState
         pure $ List
           [ CodeLens _range (Just (Command title "typesignature.add" (Just $ List [toJSON edit]))) Nothing
-          | (dFile, dDiag@Diagnostic{_range=_range@Range{..},..}) <- diag
+          | (dFile, _, dDiag@Diagnostic{_range=_range@Range{..},..}) <- diag ++ hDiag
           , dFile == filePath
           , (title, tedit) <- suggestSignature False dDiag
           , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
