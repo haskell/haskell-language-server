@@ -842,6 +842,7 @@ findDefinitionAndHoverTests = let
   lclL33 = Position 33 22
   mclL36 = Position 36  1  ;  mcl    = [mkR  36  0   36 14]
   mclL37 = Position 37  1
+  docL40 = Position 40  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
   in
   mkFindTests
   --     def    hover  look   expect
@@ -868,11 +869,12 @@ findDefinitionAndHoverTests = let
   , test yes    yes    lclL33 lcb    "listcomp lookup"
   , test yes    yes    mclL36 mcl    "top-level fn 1st clause"
   , test yes    yes    mclL37 mcl    "top-level fn 2nd clause         #246"
+  , test no     broken docL40 doc    "documentation"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
         broken = Just . (`xfail` "known broken")
-        -- no = const Nothing -- don't run this test at all
+        no = const Nothing -- don't run this test at all
 
 pluginTests :: TestTree
 pluginTests = testSessionWait "plugins" $ do

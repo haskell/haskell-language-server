@@ -36,3 +36,6 @@ listCompBind = [ succ c | c <- "abc" ]
 multipleClause :: Bool -> Char
 multipleClause True  = 't'
 multipleClause False = 'f'
+
+-- | Recognizable docs: kpqz
+documented = True
