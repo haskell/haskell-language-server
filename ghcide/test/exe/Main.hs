@@ -39,6 +39,7 @@ main = defaultMain $ testGroup "HIE"
   , initializeResponseTests
   , diagnosticTests
   , codeActionTests
+  , codeLensesTests
   , findDefinitionAndHoverTests
   , pluginTests
   , thTests
@@ -385,6 +386,11 @@ codeActionTests = testGroup "code actions"
   , addSigActionTests
   ]
 
+codeLensesTests :: TestTree
+codeLensesTests = testGroup "code lenses"
+  [ addSigLensesTests
+  ]
+
 renameActionTests :: TestTree
 renameActionTests = testGroup "rename actions"
   [ testSession "change to local variable name" $ do
@@ -673,14 +679,14 @@ fillTypedHoleTests = let
 
 addSigActionTests :: TestTree
 addSigActionTests = let
-  header = T.unlines [ "{-# OPTIONS_GHC -Wmissing-signatures #-}"
-                     , "module Sigs where"]
-  before  def     = T.unlines [header,      def]
-  after'  def sig = T.unlines [header, sig, def]
+  header = "{-# OPTIONS_GHC -Wmissing-signatures #-}"
+  moduleH = "module Sigs where"
+  before def     = T.unlines [header, moduleH,      def]
+  after' def sig = T.unlines [header, moduleH, sig, def]
 
   def >:: sig = testSession (T.unpack def) $ do
     let originalCode = before def
-    let expectedCode = after'  def sig
+    let expectedCode = after' def sig
     doc <- openDoc' "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 3 1) (Position 3 maxBound))
@@ -690,13 +696,52 @@ addSigActionTests = let
     liftIO $ expectedCode @=? modifiedCode
   in
   testGroup "add signature"
-  [ "abc = True"             >:: "abc :: Bool"
-  , "foo a b = a + b"        >:: "foo :: Num a => a -> a -> a"
-  , "bar a b = show $ a + b" >:: "bar :: (Show a, Num a) => a -> a -> String"
-  , "(!!!) a b = a > b"      >:: "(!!!) :: Ord a => a -> a -> Bool"
-  , "a >>>> b = a + b"       >:: "(>>>>) :: Num a => a -> a -> a"
-  , "a `haha` b = a b"       >:: "haha :: (t1 -> t2) -> t1 -> t2"
-  ]
+    [ "abc = True"             >:: "abc :: Bool"
+    , "foo a b = a + b"        >:: "foo :: Num a => a -> a -> a"
+    , "bar a b = show $ a + b" >:: "bar :: (Show a, Num a) => a -> a -> String"
+    , "(!!!) a b = a > b"      >:: "(!!!) :: Ord a => a -> a -> Bool"
+    , "a >>>> b = a + b"       >:: "(>>>>) :: Num a => a -> a -> a"
+    , "a `haha` b = a b"       >:: "haha :: (t1 -> t2) -> t1 -> t2"
+    ]
+
+addSigLensesTests :: TestTree
+addSigLensesTests = let
+  missing = "{-# OPTIONS_GHC -Wmissing-signatures -Wunused-matches #-}"
+  notMissing = "{-# OPTIONS_GHC -Wunused-matches #-}"
+  moduleH = "module Sigs where"
+  other = T.unlines ["f :: Integer -> Integer", "f x = 3"]
+  before  withMissing def
+    = T.unlines $ (if withMissing then (missing :) else (notMissing :)) [moduleH, def, other]
+  after'  withMissing def sig
+    = T.unlines $ (if withMissing then (missing :) else (notMissing :)) [moduleH, sig, def, other]
+
+  sigSession withMissing def sig = testSession (T.unpack def) $ do
+    let originalCode = before withMissing def
+    let expectedCode = after' withMissing def sig
+    doc <- openDoc' "Sigs.hs" "haskell" originalCode
+    [CodeLens {_command = Just c}] <- getCodeLenses doc
+    executeCommand c
+    modifiedCode <- getDocumentEdit doc
+    liftIO $ expectedCode @=? modifiedCode
+  in
+  testGroup "add signature"
+    [ testGroup "with warnings enabled"
+      [ sigSession True "abc = True"             "abc :: Bool"
+      , sigSession True "foo a b = a + b"        "foo :: Num a => a -> a -> a"
+      , sigSession True "bar a b = show $ a + b" "bar :: (Show a, Num a) => a -> a -> String"
+      , sigSession True "(!!!) a b = a > b"      "(!!!) :: Ord a => a -> a -> Bool"
+      , sigSession True "a >>>> b = a + b"       "(>>>>) :: Num a => a -> a -> a"
+      , sigSession True "a `haha` b = a b"       "haha :: (t1 -> t2) -> t1 -> t2"
+      ]
+    , testGroup "with warnings disabled"
+      [ sigSession False "abc = True"             "abc :: Bool"
+      , sigSession False "foo a b = a + b"        "foo :: Num a => a -> a -> a"
+      , sigSession False "bar a b = show $ a + b" "bar :: (Show a, Num a) => a -> a -> String"
+      , sigSession False "(!!!) a b = a > b"      "(!!!) :: Ord a => a -> a -> Bool"
+      , sigSession False "a >>>> b = a + b"       "(>>>>) :: Num a => a -> a -> a"
+      , sigSession False "a `haha` b = a b"       "haha :: (t1 -> t2) -> t1 -> t2"
+      ]
+    ]
 
 findDefinitionAndHoverTests :: TestTree
 findDefinitionAndHoverTests = let
