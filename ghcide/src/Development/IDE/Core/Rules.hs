@@ -229,7 +229,7 @@ reportImportCyclesRule =
     where cycleErrorInFile f (PartOfCycle imp fs)
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
-          toDiag imp mods = (fp ,) $ Diagnostic
+          toDiag imp mods = (fp , ShowDiag , ) $ Diagnostic
             { _range = (_range :: Location -> Range) loc
             , _severity = Just DsError
             , _source = Just "Import cycle detection"

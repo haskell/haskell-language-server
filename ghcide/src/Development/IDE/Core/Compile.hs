@@ -108,13 +108,7 @@ typecheckModule (IdeDefer defer) packageState deps pm =
                 GHC.typecheckModule $ enableTopLevelWarnings
                                     $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
             tcm2 <- mkTcModuleResult tcm
-            let errorPipeline = unDefer
-                              . (if wopt Opt_WarnMissingSignatures dflags
-                                    then id
-                                    else degradeError Opt_WarnMissingSignatures)
-                              . (if wopt Opt_WarnMissingLocalSignatures dflags
-                                    then id
-                                    else degradeError Opt_WarnMissingLocalSignatures)
+            let errorPipeline = unDefer . hideDiag dflags
             return (map errorPipeline warnings, tcm2)
 
 initPlugins :: GhcMonad m => ModSummary -> m ModSummary
@@ -182,7 +176,9 @@ demoteTypeErrorsToWarnings =
 enableTopLevelWarnings :: ParsedModule -> ParsedModule
 enableTopLevelWarnings =
   (update_pm_mod_summary . update_hspp_opts)
-  ((`wopt_set` Opt_WarnMissingSignatures) . (`wopt_set` Opt_WarnMissingLocalSignatures))
+  (`wopt_set` Opt_WarnMissingSignatures)
+  -- the line below would show also warnings for let bindings without signature
+  -- ((`wopt_set` Opt_WarnMissingSignatures) . (`wopt_set` Opt_WarnMissingLocalSignatures))
 
 update_hspp_opts :: (DynFlags -> DynFlags) -> ModSummary -> ModSummary
 update_hspp_opts up ms = ms{ms_hspp_opts = up $ ms_hspp_opts ms}
@@ -197,20 +193,16 @@ unDefer (Reason Opt_WarnTypedHoles                 , fd) = upgradeWarningToError
 unDefer (Reason Opt_WarnDeferredOutOfScopeVariables, fd) = upgradeWarningToError fd
 unDefer ( _                                        , fd) = fd
 
-degradeError :: WarningFlag -> (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
-degradeError f (Reason f', fd)
-  | f == f'        = (Reason f', degradeWarningToError fd)
-degradeError _ wfd = wfd
-
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
-upgradeWarningToError (nfp, fd) =
-  (nfp, fd{_severity = Just DsError, _message = warn2err $ _message fd}) where
+upgradeWarningToError (nfp, sh, fd) =
+  (nfp, sh, fd{_severity = Just DsError, _message = warn2err $ _message fd}) where
   warn2err :: T.Text -> T.Text
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
-degradeWarningToError :: FileDiagnostic -> FileDiagnostic
-degradeWarningToError (nfp, fd) =
-  (nfp, fd{_severity = Just DsInfo})
+hideDiag :: DynFlags -> (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
+hideDiag originalFlags (Reason warning, (nfp, _sh, fd))
+  | not (wopt warning originalFlags) = (Reason warning, (nfp, HideDiag, fd))
+hideDiag _originalFlags t = t 
 
 addRelativeImport :: NormalizedFilePath -> ParsedModule -> DynFlags -> DynFlags
 addRelativeImport fp modu dflags = dflags
