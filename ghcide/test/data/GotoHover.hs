@@ -6,11 +6,11 @@ data TypeConstructor = DataConstructor
   , ggg :: Int }
 aaa :: TypeConstructor
 aaa = DataConstructor
-  { fff = ""
-  , ggg = 0
+  { fff = "dfgy"
+  , ggg = 832
   }
 bbb :: TypeConstructor
-bbb = DataConstructor "" 0
+bbb = DataConstructor "mjgp" 2994
 ccc :: (Text, Int)
 ccc = (fff bbb, ggg aaa)
 ddd :: Num a => a -> a -> a
@@ -31,7 +31,7 @@ doBind = do unwrapped <- Just ()
             return unwrapped
 
 listCompBind :: [Char]
-listCompBind = [ succ c | c <- "abc" ]
+listCompBind = [ succ c | c <- "ptfx" ]
 
 multipleClause :: Bool -> Char
 multipleClause True  = 't'
@@ -39,4 +39,6 @@ multipleClause False = 'f'
 
 -- | Recognizable docs: kpqz
 documented :: Monad m => Either Int (m a)
-documented = Left 3
+documented = Left 7518
+
+listOfInt = [ 8391 :: Int, 6268 ]
