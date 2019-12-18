@@ -12,6 +12,7 @@ import System.FilePath
 import Control.Concurrent.Extra
 import Control.Exception
 import Control.Monad.Extra
+import Control.Monad.IO.Class
 import Data.Default
 import System.Time.Extra
 import Development.IDE.Core.FileStore
@@ -38,7 +39,7 @@ import System.Environment
 import System.IO
 import System.Exit
 import Paths_ghcide
-import Development.Shake hiding (Env)
+import Development.Shake (Action, action)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 
