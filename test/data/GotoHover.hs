@@ -19,11 +19,11 @@ a +! b = a - b
 hhh (Just a) (><) = a >< a
 iii a b = a `b` a
 jjj s = pack $ s <> s
-class Class a where
+class MyClass a where
   method :: a -> Int
-instance Class Int where
+instance MyClass Int where
   method = succ
-kkk :: Class a => Int -> a -> Int
+kkk :: MyClass a => Int -> a -> Int
 kkk n c = n + method c
 
 doBind :: Maybe ()

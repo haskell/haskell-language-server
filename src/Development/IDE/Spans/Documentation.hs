@@ -18,8 +18,8 @@ import SrcLoc
 
 
 getDocumentation
- ::  Name -- ^ The name you want documentation for.
- -> [TypecheckedModule] -- ^ All of the possible modules it could be defined in.
+ :: [TypecheckedModule] -- ^ All of the possible modules it could be defined in.
+ ->  Name -- ^ The name you want documentation for.
  -> [T.Text]
 -- This finds any documentation between the name you want
 -- documentation for and the one before it. This is only an
@@ -28,7 +28,7 @@ getDocumentation
 -- may be edge cases where it is very wrong).
 -- TODO : Build a version of GHC exactprint to extract this information
 -- more accurately.
-getDocumentation targetName tcs = fromMaybe [] $ do
+getDocumentation tcs targetName = fromMaybe [] $ do
   -- Find the module the target is defined in.
   targetNameSpan <- realSpan $ nameSrcSpan targetName
   tc <-
