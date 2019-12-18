@@ -846,6 +846,10 @@ findDefinitionAndHoverTests = let
   eitL40 = Position 40 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
   intL40 = Position 40 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
   tvrL40 = Position 40 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
+  intL41 = Position 41 20  ;  litI   = [ExpectHoverText ["7518"]]
+  chrL36 = Position 36 25  ;  litC   = [ExpectHoverText ["'t'"]]
+  txtL8  = Position  8 14  ;  litT   = [ExpectHoverText ["\"dfgv\""]]
+  lstL43 = Position 43 12  ;  litL   = [ExpectHoverText ["[ 8391 :: Int, 6268 ]"]]
   in
   mkFindTests
   --     def    hover  look   expect
@@ -876,6 +880,10 @@ findDefinitionAndHoverTests = let
   , test no     broken eitL40 kindE  "kind of Either                  #273"
   , test no     broken intL40 kindI  "kind of Int                     #273"
   , test no     broken tvrL40 kindV  "kind of (* -> *) type variable  #273"
+  , test no     broken intL41 litI   "literal Int  in hover info      #274"
+  , test no     broken chrL36 litC   "literal Char in hover info      #274"
+  , test no     broken txtL8  litT   "literal Text in hover info      #274"
+  , test no     broken lstL43 litL   "literal List in hover info      #274"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
