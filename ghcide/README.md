@@ -69,6 +69,10 @@ If you can't get `ghcide` working outside the editor, see [this setup troublesho
 You can install the VSCode extension from the [VSCode
 marketplace](https://marketplace.visualstudio.com/items?itemName=DigitalAssetHoldingsLLC.ghcide).
 
+### Using with Atom
+
+You can follow the [instructions](https://github.com/moodmosaic/ide-haskell-ghcide#readme) to install with `apm`.
+
 ### Using with Emacs
 
 If you don't already have [MELPA](https://melpa.org/#/) package installation configured, visit MELPA [getting started](https://melpa.org/#/getting-started) page to get set up. Then, install [`use-package`](https://melpa.org/#/use-package).
