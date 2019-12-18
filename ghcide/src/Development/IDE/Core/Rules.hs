@@ -102,17 +102,17 @@ getDependencies file = fmap transitiveModuleDeps <$> use GetDependencies file
 getAtPoint :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 getAtPoint file pos = fmap join $ runMaybeT $ do
   opts <- lift getIdeOptions
+  spans <- useE GetSpanInfo file
   files <- transitiveModuleDeps <$> useE GetDependencies file
   tms   <- usesE TypeCheck (file : files)
-  spans <- useE GetSpanInfo file
   return $ AtPoint.atPoint opts (map tmrModule tms) spans pos
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
 getDefinition file pos = fmap join $ runMaybeT $ do
+    opts <- lift getIdeOptions
     spans <- useE GetSpanInfo file
     pkgState <- hscEnv <$> useE GhcSession file
-    opts <- lift getIdeOptions
     let getHieFile x = useNoFile (GetHieFile x)
     lift $ AtPoint.gotoDefinition getHieFile opts pkgState spans pos
 

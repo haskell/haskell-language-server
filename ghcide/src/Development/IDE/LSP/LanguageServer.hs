@@ -28,8 +28,7 @@ import GHC.IO.Handle (hDuplicate)
 import System.IO
 import Control.Monad.Extra
 
-import Development.IDE.LSP.Definition
-import Development.IDE.LSP.Hover
+import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.CodeAction
 import Development.IDE.LSP.Notifications
 import Development.IDE.Core.Service

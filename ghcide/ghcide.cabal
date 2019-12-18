@@ -123,8 +123,7 @@ library
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
         Development.IDE.LSP.CodeAction
-        Development.IDE.LSP.Definition
-        Development.IDE.LSP.Hover
+        Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.Notifications
         Development.IDE.Spans.AtPoint
         Development.IDE.Spans.Calculate
