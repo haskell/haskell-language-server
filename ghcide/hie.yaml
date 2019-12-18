@@ -1,1 +1,1 @@
-cradle: {stack}
+cradle: {stack: {component: "ghcide:lib"}}
