@@ -842,7 +842,10 @@ findDefinitionAndHoverTests = let
   lclL33 = Position 33 22
   mclL36 = Position 36  1  ;  mcl    = [mkR  36  0   36 14]
   mclL37 = Position 37  1
-  docL40 = Position 40  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
+  docL41 = Position 41  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
+  eitL40 = Position 40 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
+  intL40 = Position 40 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
+  tvrL40 = Position 40 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
   in
   mkFindTests
   --     def    hover  look   expect
@@ -869,7 +872,10 @@ findDefinitionAndHoverTests = let
   , test yes    yes    lclL33 lcb    "listcomp lookup"
   , test yes    yes    mclL36 mcl    "top-level fn 1st clause"
   , test yes    yes    mclL37 mcl    "top-level fn 2nd clause         #246"
-  , test no     broken docL40 doc    "documentation                     #7"
+  , test no     broken docL41 doc    "documentation                     #7"
+  , test no     broken eitL40 kindE  "kind of Either                  #273"
+  , test no     broken intL40 kindI  "kind of Int                     #273"
+  , test no     broken tvrL40 kindV  "kind of (* -> *) type variable  #273"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
