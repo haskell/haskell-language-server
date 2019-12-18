@@ -38,4 +38,5 @@ multipleClause True  = 't'
 multipleClause False = 'f'
 
 -- | Recognizable docs: kpqz
-documented = True
+documented :: Monad m => Either Int (m a)
+documented = Left 3
