@@ -8,6 +8,7 @@ extra-deps:
 - hie-bios-0.3.0
 - ghc-lib-parser-8.8.1
 - ghc-lib-8.8.1
+- fuzzy-0.1.0.0
 nix:
   packages: [zlib]
 flags:
