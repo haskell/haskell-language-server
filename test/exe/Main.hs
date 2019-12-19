@@ -42,6 +42,7 @@ main = defaultMain $ testGroup "HIE"
   , codeLensesTests
   , findDefinitionAndHoverTests
   , pluginTests
+  , preprocessorTests
   , thTests
   ]
 
@@ -911,6 +912,21 @@ pluginTests = testSessionWait "plugins" $ do
   expectDiagnostics
     [ ( "Testing.hs",
         [(DsError, (8, 14), "Variable not in scope: c")]
+      )
+    ]
+
+preprocessorTests :: TestTree
+preprocessorTests = testSessionWait "preprocessor" $ do
+  let content =
+        T.unlines
+          [ "{-# OPTIONS_GHC -F -pgmF=ghcide-test-preprocessor #-}"
+          , "module Testing where"
+          , "y = x + z" -- plugin replaces x with y, making this have only one diagnostic
+          ]
+  _ <- openDoc' "Testing.hs" "haskell" content
+  expectDiagnostics
+    [ ( "Testing.hs",
+        [(DsError, (2, 8), "Variable not in scope: z")]
       )
     ]
 
