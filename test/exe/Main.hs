@@ -843,6 +843,7 @@ findDefinitionAndHoverTests = let
   mclL36 = Position 36  1  ;  mcl    = [mkR  36  0   36 14]
   mclL37 = Position 37  1
   docL41 = Position 41  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
+                           ;  constr = [ExpectHoverText ["Monad m =>"]]
   eitL40 = Position 40 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
   intL40 = Position 40 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
   tvrL40 = Position 40 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
@@ -884,6 +885,7 @@ findDefinitionAndHoverTests = let
   , test no     broken chrL36 litC   "literal Char in hover info      #274"
   , test no     broken txtL8  litT   "literal Text in hover info      #274"
   , test no     broken lstL43 litL   "literal List in hover info      #274"
+  , test no     broken docL41 constr "type constraint in hover info   #283"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
