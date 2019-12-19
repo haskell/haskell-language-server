@@ -20,7 +20,7 @@ import DynFlags
 import qualified HeaderInfo as Hdr
 import Development.IDE.Types.Diagnostics
 import Development.IDE.GHC.Error
-import SysTools (Option (..), runUnlit)
+import SysTools (Option (..), runUnlit, runPp)
 import Control.Monad.Trans.Except
 import qualified GHC.LanguageExtensions as LangExt
 import Data.Maybe
@@ -43,10 +43,19 @@ preprocessor filename mbContents = do
 
     -- Perform cpp
     dflags  <- ExceptT $ parsePragmasIntoDynFlags filename contents
-    if not $ xopt LangExt.Cpp dflags then
+    (isOnDisk, contents, dflags) <-
+        if not $ xopt LangExt.Cpp dflags then
+            return (isOnDisk, contents, dflags)
+        else do
+            contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
+            dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
+            return (False, contents, dflags)
+
+    -- Perform preprocessor
+    if not $ gopt Opt_Pp dflags then
         return (contents, dflags)
     else do
-        contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
+        contents <- liftIO $ runPreprocessor dflags filename $ if isOnDisk then Nothing else Just contents
         dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
         return (contents, dflags)
 
@@ -132,3 +141,18 @@ runCpp dflags filename contents = withTempDir $ \dir -> do
                         = "# " <> num <> " \"" <> map (\x -> if isPathSeparator x then '/' else x) filename <> "\""
                     | otherwise = x
             stringToStringBuffer . unlines . map tweak . lines <$> readFileUTF8' out
+
+
+-- | Run a preprocessor on a file
+runPreprocessor :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
+runPreprocessor dflags filename contents = withTempDir $ \dir -> do
+    let out = dir </> takeFileName filename <.> "out"
+    inp <- case contents of
+        Nothing -> return filename
+        Just contents -> do
+            let inp = dir </> takeFileName filename <.> "hs"
+            withBinaryFile inp WriteMode $ \h ->
+                hPutStringBuffer h contents
+            return inp
+    runPp dflags [SysTools.Option filename, SysTools.Option inp, SysTools.FileOption "" out]
+    SB.hGetStringBuffer out
