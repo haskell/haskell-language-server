@@ -39,6 +39,7 @@ library
         deepseq,
         directory,
         extra,
+        fuzzy,
         filepath,
         hashable,
         haskell-lsp-types == 0.19.*,
@@ -96,6 +97,8 @@ library
     include-dirs:
         include
     exposed-modules:
+        Development.IDE.Core.Completions
+        Development.IDE.Core.CompletionsTypes
         Development.IDE.Core.FileStore
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
@@ -123,6 +126,7 @@ library
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
         Development.IDE.LSP.CodeAction
+        Development.IDE.LSP.Completions
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.Notifications
         Development.IDE.Spans.AtPoint
@@ -180,6 +184,7 @@ test-suite ghcide-tests
         ghcide:ghcide,
         ghcide:ghcide-test-preprocessor
     build-depends:
+        aeson,
         base,
         bytestring,
         containers,

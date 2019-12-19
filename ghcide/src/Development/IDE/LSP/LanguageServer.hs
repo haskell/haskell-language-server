@@ -30,6 +30,7 @@ import Control.Monad.Extra
 
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.CodeAction
+import Development.IDE.LSP.Completions
 import Development.IDE.LSP.Notifications
 import Development.IDE.Core.Service
 import Development.IDE.Types.Logger
@@ -97,6 +98,7 @@ runLanguageServer options userHandlers getIdeState = do
             setHandlersIgnore <> -- least important
             setHandlersDefinition <> setHandlersHover <>
             setHandlersCodeAction <> setHandlersCodeLens <> -- useful features someone may override
+            setHandlersCompletion <>
             userHandlers <>
             setHandlersNotifications <> -- absolutely critical, join them with user notifications
             cancelHandler cancelRequest
