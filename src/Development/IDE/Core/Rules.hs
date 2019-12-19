@@ -32,6 +32,7 @@ import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Development.IDE.Core.Compile
+import Development.IDE.Core.Completions
 import Development.IDE.Types.Options
 import Development.IDE.Spans.Calculate
 import Development.IDE.Import.DependencyInformation
@@ -304,6 +305,19 @@ generateCoreRule :: Rules ()
 generateCoreRule =
     define $ \GenerateCore -> generateCore
 
+produceCompletions :: Rules ()
+produceCompletions =
+    define $ \ProduceCompletions file -> do
+        deps <- maybe (TransitiveDependencies [] []) fst <$> useWithStale GetDependencies file
+        tms <- mapMaybe (fmap fst) <$> usesWithStale TypeCheck (transitiveModuleDeps deps)
+        tm <- fmap fst <$> useWithStale TypeCheck file
+        dflags <- fmap (hsc_dflags . hscEnv . fst) <$> useWithStale GhcSession file
+        case (tm, dflags) of
+            (Just tm', Just dflags') -> do
+                cdata <- liftIO $ cacheDataProducer dflags' (tmrModule tm') (map tmrModule tms)
+                return ([], Just (cdata, tm'))
+            _ -> return ([], Nothing)
+
 generateByteCodeRule :: Rules ()
 generateByteCodeRule =
     define $ \GenerateByteCode file -> do
@@ -361,6 +375,7 @@ mainRule = do
     generateByteCodeRule
     loadGhcSession
     getHieFileRule
+    produceCompletions
 
 ------------------------------------------------------------
 
