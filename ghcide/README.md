@@ -73,6 +73,26 @@ marketplace](https://marketplace.visualstudio.com/items?itemName=DigitalAssetHol
 
 You can follow the [instructions](https://github.com/moodmosaic/ide-haskell-ghcide#readme) to install with `apm`.
 
+### Using with Sublime Text
+
+* Install [LSP](https://packagecontrol.io/packages/LSP)
+* Press Ctrl+Shift+P or Cmd+Shift+P in Sublime Text and search for *Preferences: LSP Settings*, then paste these settings
+```
+{
+  "clients":
+  {
+    "ghcide":
+    {
+      "enabled"   : true,
+      "languageId": "haskell",
+      "command"   : ["ghcide", "--lsp"],
+      "scopes"    : ["source.haskell"],
+      "syntaxes"  : ["Packages/Haskell/Haskell.sublime-syntax"]
+    }
+  }
+}
+```
+
 ### Using with Emacs
 
 If you don't already have [MELPA](https://melpa.org/#/) package installation configured, visit MELPA [getting started](https://melpa.org/#/getting-started) page to get set up. Then, install [`use-package`](https://melpa.org/#/use-package).
