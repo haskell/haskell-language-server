@@ -55,8 +55,8 @@ atPoint
   -> [SpanInfo]
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{..} tcs pos srcSpans = do
-    firstSpan <- listToMaybe $ deEmpasizeGeneratedEqShow $ spansAtPoint srcSpans pos
+atPoint IdeOptions{..} tcs srcSpans pos = do
+    firstSpan <- listToMaybe $ deEmpasizeGeneratedEqShow $ spansAtPoint pos srcSpans
     return (Just (range firstSpan), hoverInfo firstSpan)
   where
     -- Hover info for types, classes, type variables
