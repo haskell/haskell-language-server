@@ -30,6 +30,8 @@ import Data.Char
 import Data.Maybe
 import Data.List.Extra
 import qualified Data.Text as T
+import Text.Regex.TDFA ((=~), (=~~))
+import Text.Regex.TDFA.Text()
 
 -- | Generate code actions.
 codeAction
@@ -85,14 +87,18 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
 
 suggestAction :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
+--     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
+    | Just [_, bindings] <- matchRegex _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
+    , Just c <- contents
+    , importLine <- textInRange _range c
+    = [( "Remove " <> bindings <> " from import"
+       , [TextEdit _range (dropBindingsFromImportLine (T.splitOn "," bindings) importLine)])]
 
 -- File.hs:16:1: warning:
 --     The import of `Data.List' is redundant
 --       except perhaps to import instances from `Data.List'
 --     To import instances alone, use: import Data.List()
-    | "The import of " `T.isInfixOf` _message
-    || "The qualified import of " `T.isInfixOf` _message
-    , " is redundant" `T.isInfixOf` _message
+    | _message =~ ("The( qualified)? import of [^ ]* is redundant" :: String)
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
 
 -- File.hs:52:41: error:
@@ -292,6 +298,51 @@ textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
       GT -> ""
     where
       linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
+
+-- | Drop all occurrences of a binding in an import line.
+--   Preserves well-formedness but not whitespace between bindings.
+--
+-- >>> dropBindingsFromImportLine ["bA", "bC"] "import A(bA, bB,bC ,bA)"
+--  "import A(bB)"
+--
+-- >>> dropBindingsFromImportLine ["+"] "import "P" qualified A as B ((+))"
+--  "import "P" qualified A() as B hiding (bB)"
+dropBindingsFromImportLine :: [T.Text] -> T.Text -> T.Text
+dropBindingsFromImportLine bindings_ importLine =
+      importPre <> "(" <> importRest'
+    where
+      bindings = map (wrapOperatorInParens . removeQualified) bindings_
+
+      (importPre, importRest) = T.breakOn "(" importLine
+
+      wrapOperatorInParens x = if isAlpha (T.head x) then x else "(" <> x <> ")"
+
+      removeQualified x = case T.breakOn "." x of
+        (_qualifier, T.uncons -> Just (_, unqualified)) -> unqualified
+        _ -> x
+
+      importRest' = case T.uncons importRest of
+        Just (_, x) ->
+          T.intercalate ","
+            $ joinCloseParens
+            $ mapMaybe (filtering . T.strip)
+            $ T.splitOn "," x
+        Nothing -> importRest
+
+      filtering x = case () of
+        () | x `elem` bindings -> Nothing
+        () | x `elem` map (<> ")") bindings -> Just ")"
+        _                      -> Just x
+
+      joinCloseParens (x : ")" : rest) = (x <> ")") : joinCloseParens rest
+      joinCloseParens (x       : rest) = x : joinCloseParens rest
+      joinCloseParens []               = []
+
+-- | Returns Just (the submatches) for the first capture, or Nothing.
+matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
+matchRegex message regex = case message =~~ regex of
+  Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
+  Nothing -> Nothing
 
 setHandlersCodeAction :: PartialHandlers
 setHandlersCodeAction = PartialHandlers $ \WithMessage{..} x -> return x{
