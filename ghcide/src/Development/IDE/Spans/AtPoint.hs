@@ -22,7 +22,6 @@ import           Development.IDE.Spans.Type as SpanInfo
 
 -- GHC API imports
 import Avail
-import GHC
 import DynFlags
 import FastString
 import Name

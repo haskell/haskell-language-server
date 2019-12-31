@@ -12,6 +12,7 @@ module Development.IDE.GHC.Error
 
   -- * utilities working with spans
   , srcSpanToLocation
+  , srcSpanToRange
   , srcSpanToFilename
   , zeroSpan
   , realSpan

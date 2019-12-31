@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 
@@ -42,6 +43,7 @@ main = defaultMain $ testGroup "HIE"
   , diagnosticTests
   , codeActionTests
   , codeLensesTests
+  , outlineTests
   , findDefinitionAndHoverTests
   , pluginTests
   , preprocessorTests
@@ -68,7 +70,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO goto implementation"  _implementationProvider (Just $ GotoOptionsStatic False)
     , chk "NO find references"          _referencesProvider  Nothing
     , chk "NO doc highlight"     _documentHighlightProvider  Nothing
-    , chk "NO doc symbol"           _documentSymbolProvider  Nothing
+    , chk "   doc symbol"           _documentSymbolProvider  (Just True)
     , chk "NO workspace symbol"    _workspaceSymbolProvider  Nothing
     , chk "   code action"             _codeActionProvider $ Just $ CodeActionOptionsStatic True
     , chk "   code lens"                 _codeLensProvider $ Just $ CodeLensOptions Nothing
@@ -1066,6 +1068,153 @@ completionTests
       , _command = Nothing
       , _xdata = Just (Aeson.toJSON (xdata :: [T.Text]))
       }
+
+outlineTests :: TestTree
+outlineTests = testGroup
+  "outline"
+  [ testSessionWait "type class" $ do
+    let source = T.unlines ["module A where", "class A a where a :: a -> Bool"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [ moduleSymbol
+          "A"
+          (R 0 7 0 8)
+          [ classSymbol "A a"
+                        (R 1 0 1 30)
+                        [docSymbol' "a" SkMethod (R 1 16 1 30) (R 1 16 1 17)]
+          ]
+      ]
+  , testSessionWait "type class instance " $ do
+    let source = T.unlines ["class A a where", "instance A () where"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [ classSymbol "A a" (R 0 0 0 15) []
+      , docSymbol "A ()" SkInterface (R 1 0 1 19)
+      ]
+  , testSessionWait "type family" $ do
+    let source = T.unlines ["{-# language TypeFamilies #-}", "type family A"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left [docSymbolD "A" "type family" SkClass (R 1 0 1 13)]
+  , testSessionWait "type family instance " $ do
+    let source = T.unlines
+          [ "{-# language TypeFamilies #-}"
+          , "type family A a"
+          , "type instance A () = ()"
+          ]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [ docSymbolD "A a"   "type family" SkClass     (R 1 0 1 15)
+      , docSymbol "A ()" SkInterface (R 2 0 2 23)
+      ]
+  , testSessionWait "data family" $ do
+    let source = T.unlines ["{-# language TypeFamilies #-}", "data family A"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left [docSymbolD "A" "data family" SkClass (R 1 0 1 11)]
+  , testSessionWait "data family instance " $ do
+    let source = T.unlines
+          [ "{-# language TypeFamilies #-}"
+          , "data family A a"
+          , "data instance A () = A ()"
+          ]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [ docSymbolD "A a"   "data family" SkClass     (R 1 0 1 11)
+      , docSymbol "A ()" SkInterface (R 2 0 2 25)
+      ]
+  , testSessionWait "constant" $ do
+    let source = T.unlines ["a = ()"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [docSymbol "a" SkFunction (R 0 0 0 6)]
+  , testSessionWait "pattern" $ do
+    let source = T.unlines ["Just foo = Just 21"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [docSymbol "Just foo" SkFunction (R 0 0 0 18)]
+  , testSessionWait "pattern with type signature" $ do
+    let source = T.unlines ["{-# language ScopedTypeVariables #-}", "a :: () = ()"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [docSymbol "a :: ()" SkFunction (R 1 0 1 12)]
+  , testSessionWait "function" $ do
+    let source = T.unlines ["a x = ()"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left [docSymbol "a" SkFunction (R 0 0 0 8)]
+  , testSessionWait "type synonym" $ do
+    let source = T.unlines ["type A = Bool"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [docSymbol' "A" SkTypeParameter (R 0 0 0 13) (R 0 5 0 6)]
+  , testSessionWait "datatype" $ do
+    let source = T.unlines ["data A = C"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [ docSymbolWithChildren "A"
+                              SkStruct
+                              (R 0 0 0 10)
+                              [docSymbol "C" SkConstructor (R 0 9 0 10)]
+      ]
+  , testSessionWait "import" $ do
+    let source = T.unlines ["import Data.Maybe"]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [docSymbol "import Data.Maybe" SkModule (R 0 0 0 17)]
+  , testSessionWait "foreign import" $ do
+    let source = T.unlines
+          [ "{-# language ForeignFunctionInterface #-}"
+          , "foreign import ccall \"a\" a :: Int"
+          ]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left [docSymbolD "a" "import" SkObject (R 1 0 1 33)]
+  , testSessionWait "foreign export" $ do
+    let source = T.unlines
+          [ "{-# language ForeignFunctionInterface #-}"
+          , "foreign export ccall odd :: Int -> Bool"
+          ]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left [docSymbolD "odd" "export" SkObject (R 1 0 1 39)]
+  ]
+ where
+  docSymbol name kind loc =
+    DocumentSymbol name Nothing kind Nothing loc loc Nothing
+  docSymbol' name kind loc selectionLoc =
+    DocumentSymbol name Nothing kind Nothing loc selectionLoc Nothing
+  docSymbolD name detail kind loc =
+    DocumentSymbol name (Just detail) kind Nothing loc loc Nothing
+  docSymbolWithChildren name kind loc cc =
+    DocumentSymbol name Nothing kind Nothing loc loc (Just $ List cc)
+  moduleSymbol name loc cc = DocumentSymbol name
+                                            Nothing
+                                            SkFile
+                                            Nothing
+                                            (R 0 0 maxBound 0)
+                                            loc
+                                            (Just $ List cc)
+  classSymbol name loc cc = DocumentSymbol name
+                                           (Just "class")
+                                           SkClass
+                                           Nothing
+                                           loc
+                                           loc
+                                           (Just $ List cc)
+
+pattern R :: Int -> Int -> Int -> Int -> Range
+pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
