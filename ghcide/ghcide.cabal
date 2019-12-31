@@ -130,6 +130,7 @@ library
         Development.IDE.LSP.Completions
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.Notifications
+        Development.IDE.LSP.Outline
         Development.IDE.Spans.AtPoint
         Development.IDE.Spans.Calculate
         Development.IDE.Spans.Documentation

@@ -8,7 +8,6 @@ module Development.IDE.Core.Preprocessor
 import Development.IDE.GHC.CPP
 import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Compat
-import GHC
 import GhcMonad
 import StringBuffer as SB
 
