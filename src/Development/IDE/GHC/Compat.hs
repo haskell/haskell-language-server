@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE PatternSynonyms #-}
 #include "ghc-api-version.h"
 
 -- | Attempt at hiding the GHC version differences we can.
@@ -15,7 +16,14 @@ module Development.IDE.GHC.Compat(
     includePathsGlobal,
     includePathsQuote,
     addIncludePathsQuote,
-    ghcEnumerateExtensions
+    ghcEnumerateExtensions,
+    pattern DerivD,
+    pattern ForD,
+    pattern InstD,
+    pattern TyClD,
+    pattern ValD,
+    pattern ClassOpSig,
+    module GHC
     ) where
 
 import StringBuffer
@@ -26,12 +34,14 @@ import GHC.LanguageExtensions.Type
 import Data.List.Extra (enumerate)
 #endif
 
+import qualified GHC
+import GHC hiding (ClassOpSig, DerivD, ForD, InstD, TyClD, ValD)
+
 #if MIN_GHC_API_VERSION(8,8,0)
 import HieAst
 import HieBin
 import HieTypes
 #else
-import GHC
 import GhcPlugins
 import NameCache
 import Avail
@@ -82,4 +92,52 @@ ghcEnumerateExtensions = enumerate
 ghcEnumerateExtensions = [Cpp .. StarIsType]
 #else
 ghcEnumerateExtensions = [Cpp .. EmptyDataDeriving]
+#endif
+
+pattern DerivD :: DerivDecl p -> HsDecl p
+pattern DerivD x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.DerivD _ x
+#else
+    GHC.DerivD x
+#endif
+
+pattern ForD :: ForeignDecl p -> HsDecl p
+pattern ForD x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.ForD _ x
+#else
+    GHC.ForD x
+#endif
+
+pattern ValD :: HsBind p -> HsDecl p
+pattern ValD x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.ValD _ x
+#else
+    GHC.ValD x
+#endif
+
+pattern InstD :: InstDecl p -> HsDecl p
+pattern InstD x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.InstD _ x
+#else
+    GHC.InstD x
+#endif
+
+pattern TyClD :: TyClDecl p -> HsDecl p
+pattern TyClD x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.TyClD _ x
+#else
+    GHC.TyClD x
+#endif
+
+pattern ClassOpSig :: Bool -> [Located (IdP pass)] -> LHsSigType pass -> Sig pass
+pattern ClassOpSig a b c <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.ClassOpSig _ a b c
+#else
+    GHC.ClassOpSig a b c
 #endif

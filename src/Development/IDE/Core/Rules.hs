@@ -56,7 +56,7 @@ import Development.IDE.Core.RuleTypes
 
 import           GHC hiding (parseModule, typecheckModule)
 import qualified GHC.LanguageExtensions as LangExt
-import Development.IDE.GHC.Compat
+import Development.IDE.GHC.Compat (hie_file_result, readHieFile)
 import           UniqSupply
 import NameCache
 import HscTypes
