@@ -656,6 +656,34 @@ removeImportTests = testGroup "remove import actions"
             , "main = print A.stuffB"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , (`xfail` "known broken (#299)") $ testSession "redundant hierarchical import" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data A = A"
+            , "stuffB :: Integer"
+            , "stuffB = 123"
+            ]
+      _docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (A(..), stuffB)"
+            , "main = print stuffB"
+            ]
+      docB <- openDoc' "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      [CACodeAction action@CodeAction { _title = actionTitle }]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove A from import" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (stuffB)"
+            , "main = print stuffB"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
 importRenameActionTests :: TestTree
