@@ -1,14 +1,9 @@
-resolver: nightly-2019-12-06
+resolver: nightly-2020-01-03
 packages:
 - .
 extra-deps:
-- haskell-lsp-0.19.0.0
-- haskell-lsp-types-0.19.0.0
-- lsp-test-0.9.0.0
-- hie-bios-0.3.0
+- hie-bios-0.3.2
 - fuzzy-0.1.0.0
-- regex-base-0.94.0.0
-- regex-tdfa-1.3.1.0
 allow-newer: true
 nix:
   packages: [zlib]
