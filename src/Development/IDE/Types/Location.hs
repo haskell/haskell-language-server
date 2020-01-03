@@ -29,7 +29,12 @@ import Data.Binary
 import Data.Maybe as Maybe
 import Data.Hashable
 import Data.String
+import qualified Data.Text as T
+import Network.URI
 import System.FilePath
+import qualified System.FilePath.Posix as FPP
+import qualified System.FilePath.Windows as FPW
+import System.Info.Extra
 import qualified Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types as LSP (
     filePathToUri
@@ -65,7 +70,40 @@ uriToFilePath' uri
     | otherwise = LSP.uriToFilePath uri
 
 filePathToUri' :: NormalizedFilePath -> NormalizedUri
-filePathToUri' = toNormalizedUri . filePathToUri . fromNormalizedFilePath
+filePathToUri' (NormalizedFilePath fp) = toNormalizedUri $ Uri $ T.pack $ LSP.fileScheme <> "//" <> platformAdjustToUriPath fp
+  where
+    -- The definitions below are variants of the corresponding functions in Language.Haskell.LSP.Types.Uri that assume that
+    -- the filepath has already been normalised. This is necessary since normalising the filepath has a nontrivial cost.
+
+    toNormalizedUri :: Uri -> NormalizedUri
+    toNormalizedUri (Uri t) =
+      NormalizedUri $ T.pack $ escapeURIString isUnescapedInURI $ unEscapeString $ T.unpack t
+
+    platformAdjustToUriPath :: FilePath -> String
+    platformAdjustToUriPath srcPath
+      | isWindows = '/' : escapedPath
+      | otherwise = escapedPath
+      where
+        (splitDirectories, splitDrive)
+          | isWindows =
+              (FPW.splitDirectories, FPW.splitDrive)
+          | otherwise =
+              (FPP.splitDirectories, FPP.splitDrive)
+        escapedPath =
+            case splitDrive srcPath of
+                (drv, rest) ->
+                    convertDrive drv `FPP.joinDrive`
+                    FPP.joinPath (map (escapeURIString unescaped) $ splitDirectories rest)
+        -- splitDirectories does not remove the path separator after the drive so
+        -- we do a final replacement of \ to /
+        convertDrive drv
+          | isWindows && FPW.hasTrailingPathSeparator drv =
+              FPP.addTrailingPathSeparator (init drv)
+          | otherwise = drv
+        unescaped c
+          | isWindows = isUnreserved c || c `elem` [':', '\\', '/']
+          | otherwise = isUnreserved c || c == '/'
+
 
 
 fromUri :: LSP.NormalizedUri -> NormalizedFilePath
