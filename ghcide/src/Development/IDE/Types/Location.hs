@@ -66,8 +66,11 @@ fromNormalizedFilePath (NormalizedFilePath fp) = fp
 -- So we have our own wrapper here that supports empty filepaths.
 uriToFilePath' :: Uri -> Maybe FilePath
 uriToFilePath' uri
-    | uri == filePathToUri "" = Just ""
+    | uri == fromNormalizedUri emptyPathUri = Just ""
     | otherwise = LSP.uriToFilePath uri
+
+emptyPathUri :: NormalizedUri
+emptyPathUri = filePathToUri' ""
 
 filePathToUri' :: NormalizedFilePath -> NormalizedUri
 filePathToUri' (NormalizedFilePath fp) = toNormalizedUri $ Uri $ T.pack $ LSP.fileScheme <> "//" <> platformAdjustToUriPath fp
