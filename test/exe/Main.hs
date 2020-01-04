@@ -18,6 +18,7 @@ import Development.IDE.GHC.Util
 import qualified Data.Text as T
 import Development.IDE.Test
 import Development.IDE.Test.Runfiles
+import Development.IDE.Types.Location
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
@@ -48,6 +49,7 @@ main = defaultMain $ testGroup "HIE"
   , pluginTests
   , preprocessorTests
   , thTests
+  , unitTests
   ]
 
 initializeResponseTests :: TestTree
@@ -1306,3 +1308,10 @@ openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
   source <- liftIO $ readFileUtf8 $ "test/data" </> path
   openDoc' path "haskell" source
+
+unitTests :: TestTree
+unitTests = do
+  testGroup "Unit"
+     [ testCase "empty file path" $
+         uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just ""
+     ]
