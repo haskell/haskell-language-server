@@ -16,6 +16,7 @@ import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
+import Development.IDE.GHC.Error
 import Development.IDE.LSP.Server
 import Development.IDE.Types.Location
 import qualified Data.HashMap.Strict as Map
@@ -85,8 +86,22 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | otherwise
     = return (Null, Nothing)
 
-suggestAction :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
+suggestAction  :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAction text diag = concat
+    [ suggestAddExtension diag
+    , suggestExtendImport text diag
+    , suggestFillHole diag
+    , suggestFillTypeWildcard diag
+    , suggestFixConstructorImport text diag
+    , suggestModuleTypo diag
+    , suggestRemoveRedundantImport text diag
+    , suggestReplaceIdentifier text diag
+    , suggestSignature True diag
+    ]
+
+
+suggestRemoveRedundantImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveRedundantImport contents Diagnostic{_range=_range@Range{..},..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegex _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just c <- contents
@@ -100,7 +115,10 @@ suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
 --     To import instances alone, use: import Data.List()
     | _message =~ ("The( qualified)? import of [^ ]* is redundant" :: String)
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
+    | otherwise = []
 
+suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestReplaceIdentifier contents Diagnostic{_range=_range@Range{..},..}
 -- File.hs:52:41: error:
 --     * Variable not in scope:
 --         suggestAcion :: Maybe T.Text -> Range -> Range
@@ -114,7 +132,10 @@ suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
 --     Module ‘Data.Text’ does not export ‘isPrfixOf’.
     | renameSuggestions@(_:_) <- extractRenamableTerms _message
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
+    | otherwise = []
 
+suggestFillTypeWildcard :: Diagnostic -> [(T.Text, [TextEdit])]
+suggestFillTypeWildcard Diagnostic{_range=_range@Range{..},..}
 -- Foo.hs:3:8: error:
 --     * Found type wildcard `_' standing for `p -> p1 -> p'
 
@@ -122,7 +143,10 @@ suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
     , " standing for " `T.isInfixOf` _message
     , typeSignature <- extractWildCardTypeSignature _message
         =  [("Use type signature: ‘" <> typeSignature <> "’", [TextEdit _range typeSignature])]
+    | otherwise = []
 
+suggestAddExtension :: Diagnostic -> [(T.Text, [TextEdit])]
+suggestAddExtension Diagnostic{_range=_range@Range{..},..}
 -- File.hs:22:8: error:
 --     Illegal lambda-case (use -XLambdaCase)
 -- File.hs:22:6: error:
@@ -145,7 +169,10 @@ suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
 --       In the instance declaration for `Unit (m a)'
     | exts@(_:_) <- filter (`Set.member` ghcExtensions) $ T.split (not . isAlpha) $ T.replace "-X" "" _message
         = [("Add " <> x <> " extension", [TextEdit (Range (Position 0 0) (Position 0 0)) $ "{-# LANGUAGE " <> x <> " #-}\n"]) | x <- exts]
+    | otherwise = []
 
+suggestModuleTypo :: Diagnostic -> [(T.Text, [TextEdit])]
+suggestModuleTypo Diagnostic{_range=_range@Range{..},..}
 -- src/Development/IDE/Core/Compile.hs:58:1: error:
 --     Could not find module ‘Data.Cha’
 --     Perhaps you meant Data.Char (from base-4.12.0.0)
@@ -154,7 +181,10 @@ suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
       findSuggestedModules = map (head . T.words) . drop 2 . T.lines
       proposeModule mod = ("replace with " <> mod, [TextEdit _range mod])
       in map proposeModule $ nubOrd $ findSuggestedModules _message
+    | otherwise = []
 
+suggestFillHole :: Diagnostic -> [(T.Text, [TextEdit])]
+suggestFillHole Diagnostic{_range=_range@Range{..},..}
 --  ...Development/IDE/LSP/CodeAction.hs:103:9: warning:
 --   * Found hole: _ :: Int -> String
 --   * In the expression: _
@@ -187,9 +217,36 @@ suggestAction contents diag@Diagnostic{_range=_range@Range{..},..}
       extractFitNames     = map (T.strip . head . T.splitOn " :: ")
       in map proposeHoleFit $ nubOrd $ findSuggestedHoleFits _message
 
-    | tlb@[_] <- suggestSignature True diag = tlb
+    | otherwise = []
 
-suggestAction _ _ = []
+suggestExtendImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestExtendImport contents Diagnostic{_range=_range,..}
+    | Just [binding, mod, srcspan] <-
+      matchRegex _message
+      "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
+    , Just c <- contents
+    = let range = case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
+            [s] -> let x = srcSpanToRange s
+                   in x{_end = (_end x){_character = succ (_character (_end x))}}
+            _ -> error "bug in srcspan parser"
+          importLine = textInRange range c
+        in [("Add " <> binding <> " to the import list of " <> mod
+        , [TextEdit range (addBindingToImportList binding importLine)])]
+    | otherwise = []
+
+suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestFixConstructorImport _ Diagnostic{_range=_range,..}
+    -- ‘Success’ is a data constructor of ‘Result’
+    -- To import it use
+    -- import Data.Aeson.Types( Result( Success ) )
+    -- or
+    -- import Data.Aeson.Types( Result(..) ) (lsp-ui)
+  | Just [constructor, typ] <-
+    matchRegex _message
+    "‘([^’]*)’ is a data constructor of ‘([^’]*)’ To import it use"
+  = let fixedImport = typ <> "(" <> constructor <> ")"
+    in [("Fix import of " <> fixedImport, [TextEdit _range fixedImport])]
+  | otherwise = []
 
 suggestSignature :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
@@ -282,6 +339,7 @@ splitTextAtPosition (Position row col) x
         = (T.intercalate "\n" $ preRow ++ [preCol], T.intercalate "\n" $ postCol : postRow)
     | otherwise = (x, T.empty)
 
+-- | Returns [start .. end[
 textInRange :: Range -> T.Text -> T.Text
 textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
     case compare startRow endRow of
@@ -338,11 +396,27 @@ dropBindingsFromImportLine bindings_ importLine =
       joinCloseParens (x       : rest) = x : joinCloseParens rest
       joinCloseParens []               = []
 
+-- | Extends an import list with a new binding.
+--   Assumes an import statement of the form:
+--       import (qualified) A (..) ..
+--   Places the new binding first, preserving whitespace.
+--   Copes with multi-line import lists
+addBindingToImportList :: T.Text -> T.Text -> T.Text
+addBindingToImportList binding importLine = case T.breakOn "(" importLine of
+    (pre, T.uncons -> Just (_, rest)) ->
+      case T.uncons (T.dropWhile isSpace rest) of
+        Just (')', _) -> T.concat [pre, "(", binding, rest]
+        _             -> T.concat [pre, "(", binding, ", ", rest]
+    _ ->
+      error
+        $  "importLine does not have the expected structure: "
+        <> T.unpack importLine
+
 -- | Returns Just (the submatches) for the first capture, or Nothing.
 matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
-matchRegex message regex = case message =~~ regex of
-  Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
-  Nothing -> Nothing
+matchRegex message regex = case T.unwords (T.words message) =~~ regex of
+    Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
+    Nothing -> Nothing
 
 setHandlersCodeAction :: PartialHandlers
 setHandlersCodeAction = PartialHandlers $ \WithMessage{..} x -> return x{

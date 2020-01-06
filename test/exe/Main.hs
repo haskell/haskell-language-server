@@ -14,6 +14,7 @@ import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Char (toLower)
 import Data.Foldable
+import Data.List
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
 import Development.IDE.Test
@@ -389,6 +390,8 @@ codeActionTests = testGroup "code actions"
   [ renameActionTests
   , typeWildCardActionTests
   , removeImportTests
+  , extendImportTests
+  , fixConstructorImportTests
   , importRenameActionTests
   , fillTypedHoleTests
   , addSigActionTests
@@ -688,6 +691,153 @@ removeImportTests = testGroup "remove import actions"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
+
+extendImportTests :: TestTree
+extendImportTests = testGroup "extend import actions"
+  [ testSession "extend single line import with value" $ template
+      (T.unlines
+            [ "module ModuleA where"
+            , "stuffA :: Double"
+            , "stuffA = 0.00750"
+            , "stuffB :: Integer"
+            , "stuffB = 123"
+            ])
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA as A (stuffB)"
+            , "main = print (stuffA, stuffB)"
+            ])
+      (Range (Position 3 17) (Position 3 18))
+      "Add stuffA to the import list of ModuleA"
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA as A (stuffA, stuffB)"
+            , "main = print (stuffA, stuffB)"
+            ])
+  , testSession "extend single line import with type" $ template
+      (T.unlines
+            [ "module ModuleA where"
+            , "type A = Double"
+            ])
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA ()"
+            , "b :: A"
+            , "b = 0"
+            ])
+      (Range (Position 2 5) (Position 2 5))
+      "Add A to the import list of ModuleA"
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA (A)"
+            , "b :: A"
+            , "b = 0"
+            ])
+  ,  (`xfail` "known broken") $ testSession "extend single line import with constructor" $ template
+      (T.unlines
+            [ "module ModuleA where"
+            , "data A = Constructor"
+            ])
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA (A)"
+            , "b :: A"
+            , "b = Constructor"
+            ])
+      (Range (Position 2 5) (Position 2 5))
+      "Add Constructor to the import list of ModuleA"
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA (A(Constructor))"
+            , "b :: A"
+            , "b = Constructor"
+            ])
+  , testSession "extend single line qualified import with value" $ template
+      (T.unlines
+            [ "module ModuleA where"
+            , "stuffA :: Double"
+            , "stuffA = 0.00750"
+            , "stuffB :: Integer"
+            , "stuffB = 123"
+            ])
+      (T.unlines
+            [ "module ModuleB where"
+            , "import qualified ModuleA as A (stuffB)"
+            , "main = print (A.stuffA, A.stuffB)"
+            ])
+      (Range (Position 3 17) (Position 3 18))
+      "Add stuffA to the import list of ModuleA"
+      (T.unlines
+            [ "module ModuleB where"
+            , "import qualified ModuleA as A (stuffA, stuffB)"
+            , "main = print (A.stuffA, A.stuffB)"
+            ])
+  , testSession "extend multi line import with value" $ template
+      (T.unlines
+            [ "module ModuleA where"
+            , "stuffA :: Double"
+            , "stuffA = 0.00750"
+            , "stuffB :: Integer"
+            , "stuffB = 123"
+            ])
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA (stuffB"
+            , "               )"
+            , "main = print (stuffA, stuffB)"
+            ])
+      (Range (Position 3 17) (Position 3 18))
+      "Add stuffA to the import list of ModuleA"
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA (stuffA, stuffB"
+            , "               )"
+            , "main = print (stuffA, stuffB)"
+            ])
+  ]
+  where
+    template contentA contentB range expectedAction expectedContentB = do
+      _docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      docB <- openDoc' "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      CACodeAction action@CodeAction { _title = actionTitle } : _
+                  <- sortOn (\(CACodeAction CodeAction{_title=x}) -> x) <$>
+                     getCodeActions docB range
+      liftIO $ expectedAction @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ expectedContentB @=? contentAfterAction
+
+fixConstructorImportTests :: TestTree
+fixConstructorImportTests = testGroup "fix import actions"
+  [ testSession "fix constructor import" $ template
+      (T.unlines
+            [ "module ModuleA where"
+            , "data A = Constructor"
+            ])
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA(Constructor)"
+            ])
+      (Range (Position 1 10) (Position 1 11))
+      "Fix import of A(Constructor)"
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA(A(Constructor))"
+            ])
+  ]
+  where
+    template contentA contentB range expectedAction expectedContentB = do
+      _docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      docB  <- openDoc' "ModuleB.hs" "haskell" contentB
+      _diags <- waitForDiagnostics
+      CACodeAction action@CodeAction { _title = actionTitle } : _
+                  <- sortOn (\(CACodeAction CodeAction{_title=x}) -> x) <$>
+                     getCodeActions docB range
+      liftIO $ expectedAction @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ expectedContentB @=? contentAfterAction
 
 importRenameActionTests :: TestTree
 importRenameActionTests = testGroup "import rename actions"
