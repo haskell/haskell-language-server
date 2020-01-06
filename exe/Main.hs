@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE CPP #-} -- To get precise GHC version
+{-# LANGUAGE TemplateHaskell #-}
 
 module Main(main) where
 
@@ -39,6 +40,7 @@ import System.Environment
 import System.IO
 import System.Exit
 import Paths_ghcide
+import Development.GitRev
 import Development.Shake (Action, action)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
@@ -52,9 +54,16 @@ import HIE.Bios
 getLibdir :: IO FilePath
 getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
 
-ghcideVersion :: String
-ghcideVersion = "ghcide version: " <> showVersion version
-             <> " (GHC: "          <> VERSION_ghc <> ")"
+ghcideVersion :: IO String
+ghcideVersion = do
+  path <- getExecutablePath
+  let gitHashSection = case $(gitHash) of
+        x | x == "UNKNOWN" -> ""
+        x -> " (GIT hash: " <> x <> ")"
+  return $ "ghcide version: " <> showVersion version
+             <> " (GHC: " <> VERSION_ghc
+             <> ") (PATH: " <> path <> ")"
+             <> gitHashSection
 
 main :: IO ()
 main = do
@@ -62,8 +71,8 @@ main = do
     --          then the language server will not work
     Arguments{..} <- getArguments
 
-    if argsVersion then putStrLn ghcideVersion >> exitSuccess
-    else hPutStrLn stderr {- see WARNING above -} ghcideVersion
+    if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
+    else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock
