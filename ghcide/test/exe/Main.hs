@@ -12,7 +12,6 @@ import Control.Applicative.Combinators
 import Control.Exception (catch)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
-import qualified Data.Aeson as Aeson
 import Data.Char (toLower)
 import Data.Foldable
 import Development.IDE.GHC.Util
@@ -1092,7 +1091,7 @@ completionTests
         let source = T.unlines ["module A where", "f = hea"]
         docId <- openDoc' "A.hs" "haskell" source
         compls <- getCompletions docId (Position 1 7)
-        liftIO $ compls @?= [complItem "head" ["GHC.List", "base", "v", "head"] (Just CiFunction)]
+        liftIO $ compls @?= [complItem "head" (Just CiFunction)]
     , testSessionWait "type" $ do
         let source = T.unlines ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: ()", "f = ()"]
         docId <- openDoc' "A.hs" "haskell" source
@@ -1100,8 +1099,8 @@ completionTests
         changeDoc docId [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]]
         compls <- getCompletions docId (Position 2 7)
         liftIO $ compls @?=
-            [ complItem "Bounded" ["GHC.Enum", "base", "t", "Bounded"] (Just CiClass)
-            , complItem "Bool" ["GHC.Types", "ghc-prim", "t", "Bool"] (Just CiClass)
+            [ complItem "Bounded" (Just CiClass)
+            , complItem "Bool" (Just CiClass)
             ]
     , testSessionWait "qualified" $ do
         let source = T.unlines ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = ()"]
@@ -1109,10 +1108,10 @@ completionTests
         expectDiagnostics [ ("A.hs", [(DsWarning, (2, 0), "not used")]) ]
         changeDoc docId [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]]
         compls <- getCompletions docId (Position 2 15)
-        liftIO $ compls @?= [complItem "head" ["GHC.List", "base", "v", "head"] (Just CiFunction)]
+        liftIO $ compls @?= [complItem "head" (Just CiFunction)]
     ]
   where
-    complItem label xdata kind = CompletionItem
+    complItem label kind = CompletionItem
       { _label = label
       , _kind = kind
       , _detail = Just "Prelude"
@@ -1127,7 +1126,7 @@ completionTests
       , _additionalTextEdits = Nothing
       , _commitCharacters = Nothing
       , _command = Nothing
-      , _xdata = Just (Aeson.toJSON (xdata :: [T.Text]))
+      , _xdata = Nothing
       }
 
 outlineTests :: TestTree
