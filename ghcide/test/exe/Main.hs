@@ -954,7 +954,7 @@ findDefinitionAndHoverTests = let
   , test broken broken fffL8  fff    "field in record construction     #71"
   , test yes    yes    fffL14 fff    "field name used as accessor"          -- 120 in Calculate.hs
   , test yes    yes    aaaL14 aaa    "top-level name"                       -- 120
-  , test broken broken dcL7   tcDC   "data constructor record         #247"
+  , test yes    yes    dcL7   tcDC   "data constructor record         #247"
   , test yes    yes    dcL12  tcDC   "data constructor plain"               -- 121
   , test yes    yes    tcL6   tcData "type constructor                #248" -- 147
   , test broken yes    xtcL5  xtc    "type constructor external   #248,249"
