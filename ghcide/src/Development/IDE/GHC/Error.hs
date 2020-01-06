@@ -16,6 +16,9 @@ module Development.IDE.GHC.Error
   , srcSpanToFilename
   , zeroSpan
   , realSpan
+
+  -- * utilities working with severities
+  , toDSeverity
   ) where
 
 import                     Development.IDE.Types.Diagnostics as D

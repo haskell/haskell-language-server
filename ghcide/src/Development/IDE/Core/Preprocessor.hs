@@ -18,11 +18,17 @@ import Data.Char
 import DynFlags
 import qualified HeaderInfo as Hdr
 import Development.IDE.Types.Diagnostics
+import Development.IDE.Types.Location
 import Development.IDE.GHC.Error
 import SysTools (Option (..), runUnlit, runPp)
 import Control.Monad.Trans.Except
 import qualified GHC.LanguageExtensions as LangExt
 import Data.Maybe
+import Control.Exception.Safe (catch, throw)
+import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Outputable (showSDoc)
 
 
 -- | Given a file and some contents, apply any necessary preprocessors,
@@ -46,7 +52,18 @@ preprocessor filename mbContents = do
         if not $ xopt LangExt.Cpp dflags then
             return (isOnDisk, contents, dflags)
         else do
-            contents <- liftIO $ runCpp dflags filename $ if isOnDisk then Nothing else Just contents
+            cppLogs <- liftIO $ newIORef []
+            contents <- ExceptT
+                        $ liftIO
+                        $ (Right <$> (runCpp dflags {log_action = logAction cppLogs} filename
+                                       $ if isOnDisk then Nothing else Just contents))
+                            `catch`
+                            ( \(e :: GhcException) -> do
+                                logs <- readIORef cppLogs
+                                case diagsFromCPPLogs filename (reverse logs) of
+                                  [] -> throw e
+                                  diags -> return $ Left diags
+                            )
             dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
             return (False, contents, dflags)
 
@@ -57,6 +74,52 @@ preprocessor filename mbContents = do
         contents <- liftIO $ runPreprocessor dflags filename $ if isOnDisk then Nothing else Just contents
         dflags <- ExceptT $ parsePragmasIntoDynFlags filename contents
         return (contents, dflags)
+  where
+    logAction :: IORef [CPPLog] -> LogAction
+    logAction cppLogs dflags _reason severity srcSpan _style msg = do
+      let log = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
+      modifyIORef cppLogs (log :)
+
+
+data CPPLog = CPPLog Severity SrcSpan Text
+  deriving (Show)
+
+
+data CPPDiag
+  = CPPDiag
+      { cdRange :: Range,
+        cdSeverity :: Maybe DiagnosticSeverity,
+        cdMessage :: [Text]
+      }
+  deriving (Show)
+
+
+diagsFromCPPLogs :: FilePath -> [CPPLog] -> [FileDiagnostic]
+diagsFromCPPLogs filename logs =
+  map (\d -> (toNormalizedFilePath filename, ShowDiag, cppDiagToDiagnostic d)) $
+    go [] logs
+  where
+    -- On errors, CPP calls logAction with a real span for the initial log and
+    -- then additional informational logs with `UnhelpfulSpan`. Collect those
+    -- informational log messages and attaches them to the initial log message.
+    go :: [CPPDiag] -> [CPPLog] -> [CPPDiag]
+    go acc [] = reverse $ map (\d -> d {cdMessage = reverse $ cdMessage d}) acc
+    go acc (CPPLog sev span@(RealSrcSpan _) msg : logs) =
+      let diag = CPPDiag (srcSpanToRange span) (toDSeverity sev) [msg]
+       in go (diag : acc) logs
+    go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : logs) =
+      go (diag {cdMessage = msg : cdMessage diag} : diags) logs
+    go [] (CPPLog _sev (UnhelpfulSpan _) _msg : logs) = go [] logs
+    cppDiagToDiagnostic :: CPPDiag -> Diagnostic
+    cppDiagToDiagnostic d =
+      Diagnostic
+        { _range = cdRange d,
+          _severity = cdSeverity d,
+          _code = Nothing,
+          _source = Just "CPP",
+          _message = T.unlines $ cdMessage d,
+          _relatedInformation = Nothing
+        }
 
 
 isLiterate :: FilePath -> Bool
