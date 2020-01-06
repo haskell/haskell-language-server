@@ -53,9 +53,10 @@ import qualified Data.ByteString.Internal as BS
 import           Data.Dynamic
 import           Data.Maybe
 import Data.Map.Strict (Map)
-import           Data.List.Extra
+import           Data.List.Extra (foldl', partition, takeEnd)
 import qualified Data.Set as Set
 import qualified Data.Text as T
+import Data.Traversable (for)
 import Data.Tuple.Extra
 import Data.Unique
 import Development.IDE.Core.Debouncer
@@ -227,14 +228,15 @@ data IdeState = IdeState
 
 
 -- This is debugging code that generates a series of profiles, if the Boolean is true
-shakeRunDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> [Action a] -> IO [a]
+shakeRunDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> [Action a] -> IO ([a], Maybe FilePath)
 shakeRunDatabaseProfile mbProfileDir shakeDb acts = do
         (time, (res,_)) <- duration $ shakeRunDatabase shakeDb acts
-        whenJust mbProfileDir $ \dir -> do
-            count <- modifyVar profileCounter $ \x -> let !y = x+1 in return (y,y)
-            let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) ++ "-" ++ showDP 2 time <.> "html"
-            shakeProfileDatabase shakeDb $ dir </> file
-        return res
+        proFile <- for mbProfileDir $ \dir -> do
+                count <- modifyVar profileCounter $ \x -> let !y = x+1 in return (y,y)
+                let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) ++ "-" ++ showDP 2 time <.> "html"
+                shakeProfileDatabase shakeDb $ dir </> file
+                return (dir </> file)
+        return (res, proFile)
     where
 
 {-# NOINLINE profileStartTime #-}
@@ -392,9 +394,15 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts =
                   let res' = case res of
                           Left e -> "exception: " <> displayException e
                           Right _ -> "completed"
+                      profile = case res of
+                          Right (_, Just fp) -> 
+                              let link = case filePathToUri' $ toNormalizedFilePath fp of
+                                            NormalizedUri x -> x
+                              in ", profile saved at " <> T.unpack link
+                          _ -> ""
                   logDebug logger $ T.pack $
-                      "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ res' ++ ")"
-                  signalBarrier bar res
+                      "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ res' ++ profile ++ ")"
+                  signalBarrier bar (fst <$> res)
               -- important: we send an async exception to the thread, then wait for it to die, before continuing
               pure (killThread thread >> void (waitBarrier bar), either throwIO return =<< waitBarrier bar))
 
