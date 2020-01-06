@@ -7,8 +7,6 @@ module Development.IDE.Core.Completions (
 ) where
 
 import Control.Applicative
-import Data.Aeson
-import Data.Aeson.Types
 import Data.Char (isSpace)
 import Data.Generics
 import Data.List as List hiding (stripPrefix)
@@ -18,7 +16,6 @@ import qualified Data.Text as T
 import qualified Text.Fuzzy as Fuzzy
 
 import GHC
-import Module
 import HscTypes
 import Name
 import RdrName
@@ -38,43 +35,6 @@ import Development.IDE.Core.CompletionsTypes
 import Development.IDE.Spans.Documentation
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
-
-data NameDetails
-  = NameDetails Module OccName
-  deriving (Eq)
-
-nsJSON :: NameSpace -> Value
-nsJSON ns
-  | isVarNameSpace ns = String "v"
-  | isDataConNameSpace ns = String "c"
-  | isTcClsNameSpace ns  = String "t"
-  | isTvNameSpace ns = String "z"
-  | otherwise = error "namespace not recognized"
-
-parseNs :: Value -> Parser NameSpace
-parseNs (String "v") = pure Name.varName
-parseNs (String "c") = pure dataName
-parseNs (String "t") = pure tcClsName
-parseNs (String "z") = pure tvName
-parseNs _ = mempty
-
-instance FromJSON NameDetails where
-  parseJSON v@(Array _)
-    = do
-      [modname,modid,namesp,occname] <- parseJSON v
-      mn  <- parseJSON modname
-      mid <- parseJSON modid
-      ns <- parseNs namesp
-      occn <- parseJSON occname
-      pure $ NameDetails (mkModule (stringToUnitId mid) (mkModuleName mn)) (mkOccName ns occn)
-  parseJSON _ = mempty
-instance ToJSON NameDetails where
-  toJSON (NameDetails mdl occ) = toJSON [toJSON mname,toJSON mid,nsJSON ns,toJSON occs]
-    where
-      mname = moduleNameString $ moduleName mdl
-      mid = unitIdString $ moduleUnitId mdl
-      ns = occNameSpace occ
-      occs = occNameString occ
 
 safeTyThingId :: TyThing -> Maybe Id
 safeTyThingId (AnId i)                    = Just i
@@ -175,9 +135,6 @@ getCContext pos pm
           | otherwise = Nothing
         importInline _ _ = Nothing
 
-type CompItemResolveData
-  = Maybe NameDetails
-
 occNameToComKind :: OccName -> CompletionItemKind
 occNameToComKind oc
   | isVarOcc  oc = CiFunction
@@ -190,9 +147,8 @@ mkCompl CI{origName,importedFrom,thingType,label,isInfix,docs} =
   CompletionItem label kind (Just $ maybe "" (<>"\n") typeText <> importedFrom)
     (Just $ CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator docs)
     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
-    Nothing Nothing Nothing Nothing resolveData
+    Nothing Nothing Nothing Nothing Nothing
   where kind = Just $ occNameToComKind $ occName origName
-        resolveData = Just (toJSON nameDets)
         insertText = case isInfix of
             Nothing -> case getArgText <$> thingType of
                             Nothing -> label
@@ -203,11 +159,6 @@ mkCompl CI{origName,importedFrom,thingType,label,isInfix,docs} =
         typeText
           | Just t <- thingType = Just . stripForall $ T.pack (showGhc t)
           | otherwise = Nothing
-        nameDets =
-          case (thingType, nameModule_maybe origName) of
-            (Just _,_) -> Nothing
-            (Nothing, Nothing) -> Nothing
-            (Nothing, Just mdl) -> Just (NameDetails mdl (nameOccName origName))
 
 stripForall :: T.Text -> T.Text
 stripForall t
@@ -242,9 +193,7 @@ mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
   CompletionItem label (Just CiModule) Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing (Just $ toJSON resolveData)
-  where resolveData :: CompItemResolveData
-        resolveData = Nothing
+    Nothing Nothing Nothing Nothing Nothing
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
