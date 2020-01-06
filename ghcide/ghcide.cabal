@@ -162,6 +162,7 @@ executable ghcide
         filepath,
         ghc-paths,
         ghc,
+        gitrev,
         haskell-lsp,
         hie-bios >= 0.3.2 && < 0.4,
         ghcide,
