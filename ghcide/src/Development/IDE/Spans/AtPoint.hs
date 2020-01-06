@@ -142,12 +142,16 @@ spansAtPoint :: Position -> [SpanInfo] -> [SpanInfo]
 spansAtPoint pos = filter atp where
   line = _line pos
   cha = _character pos
-  atp SpanInfo{..} =    spaninfoStartLine <= line
-                     && spaninfoEndLine >= line
-                     && spaninfoStartCol <= cha
-                     -- The end col points to the column after the
-                     -- last character so we use > instead of >=
-                     && spaninfoEndCol > cha
+  atp SpanInfo{..} =
+      startsBeforePosition && endsAfterPosition
+    where
+      startLineCmp = compare spaninfoStartLine line
+      endLineCmp   = compare spaninfoEndLine   line
+
+      startsBeforePosition = startLineCmp == LT || (startLineCmp == EQ && spaninfoStartCol <= cha)
+                                              -- The end col points to the column after the
+                                              -- last character so we use > instead of >=
+      endsAfterPosition = endLineCmp == GT || (endLineCmp == EQ && spaninfoEndCol > cha)
 
 showName :: Outputable a => a -> T.Text
 showName = T.pack . prettyprint
