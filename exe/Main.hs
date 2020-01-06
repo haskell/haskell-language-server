@@ -93,7 +93,9 @@ main = do
             -- very important we only call loadSession once, and it's fast, so just do it before starting
             session <- loadSession dir
             let options = (defaultIdeOptions $ return session)
-                    { optReportProgress = clientSupportsProgress caps }
+                    { optReportProgress = clientSupportsProgress caps 
+                    , optShakeProfiling = argsShakeProfiling
+                    }
             initialise (mainRule >> action kick) getLspId event (logger minBound) options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."

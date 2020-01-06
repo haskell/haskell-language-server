@@ -11,6 +11,7 @@ data Arguments = Arguments
     ,argsCwd :: Maybe FilePath
     ,argFiles :: [FilePath]
     ,argsVersion :: Bool
+    ,argsShakeProfiling :: Maybe FilePath
     }
 
 getArguments :: IO Arguments
@@ -27,3 +28,4 @@ arguments = Arguments
       <*> optional (strOption $ long "cwd" <> metavar "DIR" <> help "Change to this directory")
       <*> many (argument str (metavar "FILES/DIRS..."))
       <*> switch (long "version" <> help "Show ghcide and GHC versions")
+      <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory")
