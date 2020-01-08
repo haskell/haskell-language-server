@@ -23,11 +23,14 @@ module Development.IDE.GHC.Compat(
     pattern TyClD,
     pattern ValD,
     pattern ClassOpSig,
+    pattern IEThingWith,
+
     module GHC
     ) where
 
 import StringBuffer
 import DynFlags
+import FieldLabel
 import GHC.LanguageExtensions.Type
 
 #if MIN_GHC_API_VERSION(8,8,0)
@@ -35,7 +38,7 @@ import Data.List.Extra (enumerate)
 #endif
 
 import qualified GHC
-import GHC hiding (ClassOpSig, DerivD, ForD, InstD, TyClD, ValD)
+import GHC hiding (ClassOpSig, DerivD, ForD, IEThingWith, InstD, TyClD, ValD)
 
 #if MIN_GHC_API_VERSION(8,8,0)
 import HieAst
@@ -140,4 +143,12 @@ pattern ClassOpSig a b c <-
     GHC.ClassOpSig _ a b c
 #else
     GHC.ClassOpSig a b c
+#endif
+
+pattern IEThingWith :: LIEWrappedName (IdP pass) -> IEWildcard -> [LIEWrappedName (IdP pass)] -> [Located (FieldLbl (IdP pass))] -> IE pass
+pattern IEThingWith a b c d <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.IEThingWith _ a b c d
+#else
+    GHC.IEThingWith a b c d
 #endif

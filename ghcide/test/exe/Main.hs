@@ -608,19 +608,20 @@ removeImportTests = testGroup "remove import actions"
             , "stuffA = False"
             , "stuffB :: Integer"
             , "stuffB = 123"
+            , "stuffC = ()"
             ]
       _docA <- openDoc' "ModuleA.hs" "haskell" contentA
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
-            , "import ModuleA (stuffA, stuffB)"
+            , "import ModuleA (stuffA, stuffB, stuffC, stuffA)"
             , "main = print stuffB"
             ]
       docB <- openDoc' "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
       [CACodeAction action@CodeAction { _title = actionTitle }]
           <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove stuffA from import" @=? actionTitle
+      liftIO $ "Remove stuffA, stuffC from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1480,9 +1481,11 @@ run s = withTempDir $ \dir -> do
   runSessionWithConfig conf cmd fullCaps { _window = Just $ WindowClientCapabilities $ Just True } dir s
   where
     conf = defaultConfig
-      -- If you uncomment this you can see all messages
+      -- If you uncomment this you can see all logging
       -- which can be quite useful for debugging.
-      -- { logMessages = True, logColor = False, logStdErr = True }
+      -- { logStdErr = True, logColor = False }
+      -- If you really want to, you can also see all messages
+      -- { logMessages = True, logColor = False }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
