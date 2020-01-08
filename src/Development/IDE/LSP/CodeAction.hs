@@ -12,6 +12,7 @@ module Development.IDE.LSP.CodeAction
     ) where
 
 import           Language.Haskell.LSP.Types
+import Control.Monad (join)
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
@@ -33,6 +34,7 @@ import Data.List.Extra
 import qualified Data.Text as T
 import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
+import Outputable (ppr, showSDocUnsafe)
 
 -- | Generate code actions.
 codeAction
@@ -40,14 +42,15 @@ codeAction
     -> IdeState
     -> CodeActionParams
     -> IO (List CAResult)
-codeAction lsp _ CodeActionParams{_textDocument=TextDocumentIdentifier uri,_context=CodeActionContext{_diagnostics=List xs}} = do
+codeAction lsp state CodeActionParams{_textDocument=TextDocumentIdentifier uri,_context=CodeActionContext{_diagnostics=List xs}} = do
     -- disable logging as its quite verbose
     -- logInfo (ideLogger ide) $ T.pack $ "Code action req: " ++ show arg
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
+    parsedModule <- (runAction state . getParsedModule . toNormalizedFilePath) `traverse` uriToFilePath uri
     pure $ List
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction text x
+        | x <- xs, (title, tedit) <- suggestAction ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
 
@@ -86,28 +89,29 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | otherwise
     = return (Null, Nothing)
 
-suggestAction  :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAction text diag = concat
+suggestAction  :: Maybe ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAction parsedModule text diag = concat
     [ suggestAddExtension diag
     , suggestExtendImport text diag
     , suggestFillHole diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
-    , suggestRemoveRedundantImport text diag
     , suggestReplaceIdentifier text diag
     , suggestSignature True diag
-    ]
+    ] ++ concat
+    [ suggestRemoveRedundantImport pm text diag | Just pm <- [parsedModule]]
 
 
-suggestRemoveRedundantImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveRedundantImport contents Diagnostic{_range=_range@Range{..},..}
+suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range@Range{..},..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegex _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
+    , Just (L _ impDecl) <- find (\(L l _) -> srcSpanToRange l == _range ) hsmodImports
     , Just c <- contents
-    , importLine <- textInRange _range c
-    = [( "Remove " <> bindings <> " from import"
-       , [TextEdit _range (dropBindingsFromImportLine (T.splitOn "," bindings) importLine)])]
+    , ranges <- map (rangesForBinding impDecl . T.unpack) (T.splitOn ", " bindings)
+    , ranges' <- extendAllToIncludeCommaIfPossible (indexedByPosition $ T.unpack c) (concat ranges)
+    = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
 
 -- File.hs:16:1: warning:
 --     The import of `Data.List' is redundant
@@ -357,44 +361,29 @@ textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
     where
       linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
--- | Drop all occurrences of a binding in an import line.
---   Preserves well-formedness but not whitespace between bindings.
---
--- >>> dropBindingsFromImportLine ["bA", "bC"] "import A(bA, bB,bC ,bA)"
---  "import A(bB)"
---
--- >>> dropBindingsFromImportLine ["+"] "import "P" qualified A as B ((+))"
---  "import "P" qualified A() as B hiding (bB)"
-dropBindingsFromImportLine :: [T.Text] -> T.Text -> T.Text
-dropBindingsFromImportLine bindings_ importLine =
-      importPre <> "(" <> importRest'
-    where
-      bindings = map (wrapOperatorInParens . removeQualified) bindings_
+-- | Returns the ranges for a binding in an import declaration
+rangesForBinding :: ImportDecl GhcPs -> String -> [Range]
+rangesForBinding ImportDecl{ideclHiding = Just (False, L _ lies)} b =
+    concatMap (map srcSpanToRange . rangesForBinding' b') lies
+  where
+    b' = wrapOperatorInParens (unqualify b)
 
-      (importPre, importRest) = T.breakOn "(" importLine
+    wrapOperatorInParens x = if isAlpha (head x) then x else "(" <> x <> ")"
 
-      wrapOperatorInParens x = if isAlpha (T.head x) then x else "(" <> x <> ")"
+    unqualify x = snd $ breakOnEnd "." x
 
-      removeQualified x = case T.breakOn "." x of
-        (_qualifier, T.uncons -> Just (_, unqualified)) -> unqualified
-        _ -> x
+rangesForBinding _ _ = []
 
-      importRest' = case T.uncons importRest of
-        Just (_, x) ->
-          T.intercalate ","
-            $ joinCloseParens
-            $ mapMaybe (filtering . T.strip)
-            $ T.splitOn "," x
-        Nothing -> importRest
-
-      filtering x = case () of
-        () | x `elem` bindings -> Nothing
-        () | x `elem` map (<> ")") bindings -> Just ")"
-        _                      -> Just x
-
-      joinCloseParens (x : ")" : rest) = (x <> ")") : joinCloseParens rest
-      joinCloseParens (x       : rest) = x : joinCloseParens rest
-      joinCloseParens []               = []
+rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
+rangesForBinding' b (L l x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L l x@IEThingAbs{}) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L l x@IEThingAll{}) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L l (IEThingWith thing _  inners labels))
+    | showSDocUnsafe (ppr thing) == b = [l]
+    | otherwise =
+        [ l' | L l' x <- inners, showSDocUnsafe (ppr x) == b] ++
+        [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b]
+rangesForBinding' _ _ = []
 
 -- | Extends an import list with a new binding.
 --   Assumes an import statement of the form:
@@ -428,3 +417,51 @@ setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeLensHandler = withResponse RspCodeLens codeLens,
     LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
     }
+
+--------------------------------------------------------------------------------
+
+type PositionIndexedString = [(Position, Char)]
+
+indexedByPosition :: String -> PositionIndexedString
+indexedByPosition = unfoldr f . (Position 0 0,) where
+  f (_, []) = Nothing
+  f (p@(Position l _), '\n' : rest) = Just ((p,'\n'), (Position (l+1) 0, rest))
+  f (p@(Position l c),    x : rest) = Just ((p,   x), (Position l (c+1), rest))
+
+-- | Returns a tuple (before, contents, after)
+unconsRange :: Range -> PositionIndexedString -> (PositionIndexedString, PositionIndexedString, PositionIndexedString)
+unconsRange Range {..} indexedString = (before, mid, after)
+  where
+    (before, rest) = span ((/= _start) . fst) indexedString
+    (mid, after) = span ((/= _end) . fst) rest
+
+stripRange :: Range -> PositionIndexedString -> PositionIndexedString
+stripRange r s = case unconsRange r s of
+  (b, _, a) -> b ++ a
+
+extendAllToIncludeCommaIfPossible :: PositionIndexedString -> [Range] -> [Range]
+extendAllToIncludeCommaIfPossible _             [] =  []
+extendAllToIncludeCommaIfPossible indexedString (r : rr) = r' : extendAllToIncludeCommaIfPossible indexedString' rr
+  where
+    r' = case extendToIncludeCommaIfPossible indexedString r of
+          [] -> r
+          r' : _ -> r'
+    indexedString' = stripRange r' indexedString
+
+-- | Returns a sorted list of ranges with extended selections includindg preceding or trailing commas
+extendToIncludeCommaIfPossible :: PositionIndexedString -> Range -> [Range]
+extendToIncludeCommaIfPossible indexedString range =
+    -- a, |b|, c ===> a|, b|, c
+    [ range{_start = start'}
+    | (start', ',') : _ <- [before']
+    ]
+    ++
+    -- a, |b|, c ===> a, |b, |c
+    [ range{_end = end'}
+    |  (_, ',') : rest <- [after']
+    , let (end', _) : _ = dropWhile (isSpace . snd) rest
+    ]
+  where
+    (before, _, after) = unconsRange range indexedString
+    after' = dropWhile (isSpace . snd) after
+    before' = dropWhile (isSpace . snd) (reverse before)
