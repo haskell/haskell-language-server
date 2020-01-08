@@ -42,3 +42,9 @@ documented :: Monad m => Either Int (m a)
 documented = Left 7518
 
 listOfInt = [ 8391 :: Int, 6268 ]
+
+outer :: Bool
+outer = undefined where
+
+  inner :: Char
+  inner = undefined
