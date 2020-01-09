@@ -41,6 +41,7 @@ library
         extra,
         fuzzy,
         filepath,
+        haddock-library,
         hashable,
         haskell-lsp-types == 0.19.*,
         haskell-lsp == 0.19.*,
