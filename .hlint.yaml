@@ -83,6 +83,7 @@
     - Development.IDE.Import.FindImports
     - Development.IDE.LSP.CodeAction
     - Development.IDE.Spans.Calculate
+    - Development.IDE.Spans.Documentation
     - Main
 
 - flags:

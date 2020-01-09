@@ -27,7 +27,7 @@ getCompletionsLSP lsp ide CompletionParams{_textDocument=TextDocumentIdentifier 
     case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath path
-        compls <- runAction ide (useWithStale ProduceCompletions npath)
+        (ideOpts, compls) <- runAction ide ((,) <$> getIdeOptions <*> useWithStale ProduceCompletions npath)
         case compls of
           Just ((cci', tm'), mapping) -> do
             let position' = fromCurrentPosition mapping position
@@ -35,7 +35,7 @@ getCompletionsLSP lsp ide CompletionParams{_textDocument=TextDocumentIdentifier 
             case pfix of
               Just pfix' -> do
                 let fakeClientCapabilities = ClientCapabilities Nothing Nothing Nothing Nothing
-                Completions . List <$> getCompletions cci' (tmrModule tm') pfix' fakeClientCapabilities (WithSnippets True)
+                Completions . List <$> getCompletions ideOpts cci' (tmrModule tm') pfix' fakeClientCapabilities (WithSnippets True)
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])

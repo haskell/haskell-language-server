@@ -1246,31 +1246,66 @@ completionTests
         let source = T.unlines ["module A where", "f = hea"]
         docId <- openDoc' "A.hs" "haskell" source
         compls <- getCompletions docId (Position 1 7)
-        liftIO $ compls @?= [complItem "head" (Just CiFunction)]
+        liftIO $ map dropDocs compls @?= 
+          [complItem "head" (Just CiFunction) (Just "[a] -> a")]
+        let [CompletionItem { _documentation = headDocs}] = compls
+        checkDocText "head" headDocs [ "Defined in 'Prelude'"
+#if MIN_GHC_API_VERSION(8,6,0)
+                                     , "Extract the first element of a list"
+#endif
+                                     ]
+    , testSessionWait "constructor" $ do
+        let source = T.unlines ["module A where", "f = Tru"]
+        docId <- openDoc' "A.hs" "haskell" source
+        compls <- getCompletions docId (Position 1 7)
+        liftIO $ map dropDocs compls @?= 
+          [ complItem "True" (Just CiConstructor) (Just "Bool")
+#if MIN_GHC_API_VERSION(8,6,0)
+          , complItem "truncate" (Just CiFunction) (Just "(RealFrac a, Integral b) => a -> b")
+#else
+          , complItem "truncate" (Just CiFunction) (Just "RealFrac a => forall b. Integral b => a -> b") 
+#endif
+          ]
     , testSessionWait "type" $ do
         let source = T.unlines ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: ()", "f = ()"]
         docId <- openDoc' "A.hs" "haskell" source
         expectDiagnostics [ ("A.hs", [(DsWarning, (3,0), "not used")]) ]
         changeDoc docId [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]]
         compls <- getCompletions docId (Position 2 7)
-        liftIO $ compls @?=
-            [ complItem "Bounded" (Just CiClass)
-            , complItem "Bool" (Just CiClass)
-            ]
+        liftIO $ map dropDocs compls @?=
+            [ complItem "Bounded" (Just CiClass) (Just "* -> Constraint")
+            , complItem "Bool" (Just CiStruct) (Just "*") ]
+        let [ CompletionItem { _documentation = boundedDocs},
+              CompletionItem { _documentation = boolDocs } ] = compls
+        checkDocText "Bounded" boundedDocs [ "Defined in 'Prelude'"
+#if MIN_GHC_API_VERSION(8,6,0)
+                                           , "name the upper and lower limits"
+#endif
+                                           ]
+        checkDocText "Bool" boolDocs [ "Defined in 'Prelude'" ]
     , testSessionWait "qualified" $ do
         let source = T.unlines ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = ()"]
         docId <- openDoc' "A.hs" "haskell" source
         expectDiagnostics [ ("A.hs", [(DsWarning, (2, 0), "not used")]) ]
         changeDoc docId [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]]
         compls <- getCompletions docId (Position 2 15)
-        liftIO $ compls @?= [complItem "head" (Just CiFunction)]
+        liftIO $ map dropDocs compls @?= 
+          [complItem "head" (Just CiFunction) (Just "[a] -> a")]
+        let [CompletionItem { _documentation = headDocs}] = compls
+        checkDocText "head" headDocs [ "Defined in 'Prelude'"
+#if MIN_GHC_API_VERSION(8,6,0)
+                                     , "Extract the first element of a list"
+#endif
+                                     ]
     ]
   where
-    complItem label kind = CompletionItem
+    dropDocs :: CompletionItem -> CompletionItem
+    dropDocs ci = ci { _documentation = Nothing }
+    complItem label kind ty = CompletionItem
       { _label = label
       , _kind = kind
-      , _detail = Just "Prelude"
-      , _documentation = Just (CompletionDocMarkup (MarkupContent {_kind = MkMarkdown, _value = ""}))
+      , _detail = (":: " <>) <$> ty
+      , _documentation = Nothing
       , _deprecated = Nothing
       , _preselect = Nothing
       , _sortText = Nothing
@@ -1283,6 +1318,13 @@ completionTests
       , _command = Nothing
       , _xdata = Nothing
       }
+    getDocText (CompletionDocString s) = s
+    getDocText (CompletionDocMarkup (MarkupContent _ s)) = s
+    checkDocText thing Nothing _
+      = liftIO $ assertFailure $ "docs for " ++ thing ++ " not found"
+    checkDocText thing (Just doc) items
+      = liftIO $ assertBool ("docs for " ++ thing ++ " contain the strings") $
+          all (`T.isInfixOf` getDocText doc) items
 
 outlineTests :: TestTree
 outlineTests = testGroup

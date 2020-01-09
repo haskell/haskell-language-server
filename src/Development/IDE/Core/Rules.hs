@@ -311,10 +311,11 @@ produceCompletions =
         deps <- maybe (TransitiveDependencies [] []) fst <$> useWithStale GetDependencies file
         tms <- mapMaybe (fmap fst) <$> usesWithStale TypeCheck (transitiveModuleDeps deps)
         tm <- fmap fst <$> useWithStale TypeCheck file
-        dflags <- fmap (hsc_dflags . hscEnv . fst) <$> useWithStale GhcSession file
-        case (tm, dflags) of
-            (Just tm', Just dflags') -> do
-                cdata <- liftIO $ cacheDataProducer dflags' (tmrModule tm') (map tmrModule tms)
+        packageState <- fmap (hscEnv . fst) <$> useWithStale GhcSession file
+        case (tm, packageState) of
+            (Just tm', Just packageState') -> do
+                cdata <- liftIO $ cacheDataProducer packageState' (hsc_dflags packageState')
+                                                    (tmrModule tm') (map tmrModule tms)
                 return ([], Just (cdata, tm'))
             _ -> return ([], Nothing)
 

@@ -7,7 +7,7 @@ module Development.IDE.Core.Completions (
 ) where
 
 import Control.Applicative
-import Data.Char (isSpace)
+import Data.Char (isSpace, isUpper)
 import Data.Generics
 import Data.List as List hiding (stripPrefix)
 import qualified Data.Map  as Map
@@ -33,6 +33,9 @@ import Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.VFS as VFS
 import Development.IDE.Core.CompletionsTypes
 import Development.IDE.Spans.Documentation
+import Development.IDE.GHC.Util
+import Development.IDE.GHC.Error
+import Development.IDE.Types.Options
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
 
@@ -40,6 +43,12 @@ safeTyThingId :: TyThing -> Maybe Id
 safeTyThingId (AnId i)                    = Just i
 safeTyThingId (AConLike (RealDataCon dc)) = Just $ dataConWrapId dc
 safeTyThingId _                           = Nothing
+
+safeTyThingType :: TyThing -> Maybe Type
+safeTyThingType thing
+  | Just i <- safeTyThingId thing = Just (varType i)
+safeTyThingType (ATyCon tycon)    = Just (tyConKind tycon)
+safeTyThingType _                 = Nothing
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -135,20 +144,26 @@ getCContext pos pm
           | otherwise = Nothing
         importInline _ _ = Nothing
 
-occNameToComKind :: OccName -> CompletionItemKind
-occNameToComKind oc
-  | isVarOcc  oc = CiFunction
-  | isTcOcc   oc = CiClass
+occNameToComKind :: Maybe T.Text -> OccName -> CompletionItemKind
+occNameToComKind ty oc
+  | isVarOcc  oc = case occNameString oc of
+                     i:_ | isUpper i -> CiConstructor
+                     _               -> CiFunction
+  | isTcOcc   oc = case ty of
+                     Just t
+                       | "Constraint" `T.isSuffixOf` t 
+                       -> CiClass
+                     _ -> CiStruct
   | isDataOcc oc = CiConstructor
   | otherwise    = CiVariable
 
-mkCompl :: CompItem -> CompletionItem
-mkCompl CI{origName,importedFrom,thingType,label,isInfix,docs} =
-  CompletionItem label kind (Just $ maybe "" (<>"\n") typeText <> importedFrom)
-    (Just $ CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator docs)
+mkCompl :: IdeOptions -> CompItem -> CompletionItem
+mkCompl IdeOptions{..} CI{origName,importedFrom,thingType,label,isInfix,docs} =
+  CompletionItem label kind ((colon <>) <$> typeText)
+    (Just $ CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator docs')
     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
-  where kind = Just $ occNameToComKind $ occName origName
+  where kind = Just $ occNameToComKind typeText $ occName origName
         insertText = case isInfix of
             Nothing -> case getArgText <$> thingType of
                             Nothing -> label
@@ -159,6 +174,8 @@ mkCompl CI{origName,importedFrom,thingType,label,isInfix,docs} =
         typeText
           | Just t <- thingType = Just . stripForall $ T.pack (showGhc t)
           | otherwise = Nothing
+        docs' = ("*Defined in '" <> importedFrom <> "'*\n") : docs
+        colon = if optNewColonConvention then ": " else ":: "
 
 stripForall :: T.Text -> T.Text
 stripForall t
@@ -215,8 +232,8 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-cacheDataProducer :: DynFlags -> TypecheckedModule -> [TypecheckedModule] -> IO CachedCompletions
-cacheDataProducer dflags tm tcs = do
+cacheDataProducer :: HscEnv -> DynFlags -> TypecheckedModule -> [TypecheckedModule] -> IO CachedCompletions
+cacheDataProducer packageState dflags tm tcs = do
   let parsedMod = tm_parsed_module tm
       curMod = moduleName $ ms_mod $ pm_mod_summary parsedMod
       Just (_,limports,_,_) = tm_renamed_source tm
@@ -242,42 +259,50 @@ cacheDataProducer dflags tm tcs = do
       rdrEnv = tcg_rdr_env $ fst $ tm_internals_ tm
       rdrElts = globalRdrEnvElts rdrEnv
 
-      getCompls :: [GlobalRdrElt] -> ([CompItem],QualCompls)
-      getCompls = foldMap getComplsForOne
+      foldMapM :: (Foldable f, Monad m, Monoid b) => (a -> m b) -> f a -> m b
+      foldMapM f xs = foldr step return xs mempty where
+        step x r z = f x >>= \y -> r $! z `mappend` y
 
-      getComplsForOne :: GlobalRdrElt -> ([CompItem],QualCompls)
+      getCompls :: [GlobalRdrElt] -> IO ([CompItem],QualCompls)
+      getCompls = foldMapM getComplsForOne
+
+      getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
       getComplsForOne (GRE n _ True _) =
         case lookupTypeEnv typeEnv n of
           Just tt -> case safeTyThingId tt of
-            Just var -> ([varToCompl var],mempty)
-            Nothing -> ([toCompItem curMod n],mempty)
-          Nothing -> ([toCompItem curMod n],mempty)
+            Just var -> (\x -> ([x],mempty)) <$> varToCompl var
+            Nothing -> (\x -> ([x],mempty)) <$> toCompItem curMod n
+          Nothing -> (\x -> ([x],mempty)) <$> toCompItem curMod n
       getComplsForOne (GRE n _ False prov) =
-        flip foldMap (map is_decl prov) $ \spec ->
+        flip foldMapM (map is_decl prov) $ \spec -> do
+          compItem <- toCompItem (is_mod spec) n
           let unqual
                 | is_qual spec = []
-                | otherwise = compItem
+                | otherwise = [compItem]
               qual
-                | is_qual spec = Map.singleton asMod compItem
-                | otherwise = Map.fromList [(asMod,compItem),(origMod,compItem)]
-              compItem = [toCompItem (is_mod spec) n]
+                | is_qual spec = Map.singleton asMod [compItem]
+                | otherwise = Map.fromList [(asMod,[compItem]),(origMod,[compItem])]
               asMod = showModName (is_as spec)
               origMod = showModName (is_mod spec)
-          in (unqual,QualCompls qual)
+          return (unqual,QualCompls qual)
 
-      varToCompl :: Var -> CompItem
-      varToCompl var = CI name (showModName curMod) typ label Nothing docs
-        where
-          typ = Just $ varType var
-          name = Var.varName var
-          label = T.pack $ showGhc name
-          docs = getDocumentation tcs name
+      varToCompl :: Var -> IO CompItem
+      varToCompl var = do
+        let typ = Just $ varType var
+            name = Var.varName var
+            label = T.pack $ showGhc name
+        docs <- getDocumentationTryGhc packageState (tm:tcs) name
+        return $ CI name (showModName curMod) typ label Nothing docs
 
-      toCompItem :: ModuleName -> Name -> CompItem
-      toCompItem mn n =
-        CI n (showModName mn) Nothing (T.pack $ showGhc n) Nothing (getDocumentation tcs n)
+      toCompItem :: ModuleName -> Name -> IO CompItem
+      toCompItem mn n = do
+        docs <- getDocumentationTryGhc packageState (tm:tcs) n
+        ty <- runGhcEnv packageState $ catchSrcErrors "completion" $ do
+                name' <- lookupName n
+                return $ name' >>= safeTyThingType
+        return $ CI n (showModName mn) (either (const Nothing) id ty) (T.pack $ showGhc n) Nothing docs
 
-      (unquals,quals) = getCompls rdrElts
+  (unquals,quals) <- getCompls rdrElts
 
   return $ CC
     { allModNamesAsNS = allModNamesAsNS
@@ -297,8 +322,8 @@ toggleSnippets ClientCapabilities { _textDocument } (WithSnippets with) x
   where supported = fromMaybe False (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
 
 -- | Returns the cached completions for the given module and position.
-getCompletions :: CachedCompletions -> TypecheckedModule -> VFS.PosPrefixInfo -> ClientCapabilities -> WithSnippets -> IO [CompletionItem]
-getCompletions CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules }
+getCompletions :: IdeOptions -> CachedCompletions -> TypecheckedModule -> VFS.PosPrefixInfo -> ClientCapabilities -> WithSnippets -> IO [CompletionItem]
+getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules }
                tm prefixInfo caps withSnippets = do
   let VFS.PosPrefixInfo { VFS.fullLine, VFS.prefixModule, VFS.prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
@@ -382,7 +407,7 @@ getCompletions CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules
         = filtPragmaCompls (pragmaSuffix fullLine)
         | otherwise
         = filtModNameCompls ++ map (toggleSnippets caps withSnippets
-                                      . mkCompl . stripAutoGenerated) filtCompls
+                                      . mkCompl ideOpts . stripAutoGenerated) filtCompls
   
   return result
 
