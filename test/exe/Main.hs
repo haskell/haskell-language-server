@@ -1004,6 +1004,8 @@ findDefinitionAndHoverTests = let
     check (ExpectRange expectedRange) = do
       assertNDefinitionsFound 1 defs
       assertRangeCorrect (head defs) expectedRange
+    check ExpectNoDefinitions = do
+      assertNDefinitionsFound 0 defs
     check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
     check _ = pure () -- all other expectations not relevant to getDefinition
 
@@ -1018,13 +1020,14 @@ findDefinitionAndHoverTests = let
 
     check expected =
       case hover of
-        Nothing -> liftIO $ assertFailure "no hover found"
+        Nothing -> unless (expected == ExpectNoHover) $ liftIO $ assertFailure "no hover found"
         Just Hover{_contents = (HoverContents MarkupContent{_value = msg})
                   ,_range    = rangeInHover } ->
           case expected of
             ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverRange expectedRange -> checkHoverRange expectedRange rangeInHover msg
             ExpectHoverText snippets -> liftIO $ traverse_ (`assertFoundIn` msg) snippets
+            ExpectNoHover -> liftIO $ assertFailure $ "Expected no hover but got " <> show hover
             _ -> pure () -- all other expectations not relevant to hover
         _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
 
@@ -1089,6 +1092,7 @@ findDefinitionAndHoverTests = let
   lclL33 = Position 33 22
   mclL36 = Position 36  1  ;  mcl    = [mkR  36  0   36 14]
   mclL37 = Position 37  1
+  spaceL37 = Position 37  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
   docL41 = Position 41  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
                            ;  constr = [ExpectHoverText ["Monad m =>"]]
   eitL40 = Position 40 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
@@ -1126,6 +1130,7 @@ findDefinitionAndHoverTests = let
   , test yes    yes    lclL33 lcb    "listcomp lookup"
   , test yes    yes    mclL36 mcl    "top-level fn 1st clause"
   , test yes    yes    mclL37 mcl    "top-level fn 2nd clause         #246"
+  , test yes    yes    spaceL37 space "top-level fn on space #315"
   , test no     broken docL41 doc    "documentation                     #7"
   , test no     broken eitL40 kindE  "kind of Either                  #273"
   , test no     broken intL40 kindI  "kind of Int                     #273"
@@ -1482,7 +1487,10 @@ data Expect
   | ExpectHoverRange Range -- Only hover should report this range
   | ExpectHoverText [T.Text] -- the hover message must contain these snippets
   | ExpectExternFail -- definition lookup in other file expected to fail
+  | ExpectNoDefinitions
+  | ExpectNoHover
 --  | ExpectExtern -- TODO: as above, but expected to succeed: need some more info in here, once we have some working examples
+  deriving Eq
 
 mkR :: Int -> Int -> Int -> Int -> Expect
 mkR startLine startColumn endLine endColumn = ExpectRange $ mkRange startLine startColumn endLine endColumn

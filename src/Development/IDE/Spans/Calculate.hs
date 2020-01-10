@@ -23,6 +23,7 @@ import           Desugar
 import           GHC
 import           GhcMonad
 import           FastString (mkFastString)
+import           OccName
 import           Development.IDE.Types.Location
 import           Development.IDE.Spans.Type
 import           Development.IDE.GHC.Error (zeroSpan)
@@ -30,6 +31,7 @@ import           Prelude hiding (mod)
 import           TcHsSyn
 import           Var
 import Development.IDE.Core.Compile
+import qualified Development.IDE.GHC.Compat as Compat
 import Development.IDE.GHC.Util
 
 
@@ -63,7 +65,8 @@ getSpanInfo mods tcm =
          es  = listifyAllSpans  tcs :: [LHsExpr GhcTc]
          ps  = listifyAllSpans' tcs :: [Pat GhcTc]
          ts  = listifyAllSpans $ tm_renamed_source tcm :: [LHsType GhcRn]
-     bts <- mapM (getTypeLHsBind tcm) bs -- binds
+     let funBinds = funBindMap $ tm_parsed_module tcm
+     bts <- mapM (getTypeLHsBind funBinds) bs -- binds
      ets <- mapM (getTypeLHsExpr tcm) es -- expressions
      pts <- mapM (getTypeLPat tcm)    ps -- patterns
      tts <- mapM (getLHsType tcm)     ts -- types
@@ -75,6 +78,15 @@ getSpanInfo mods tcm =
           | a `isSubspanOf` b = LT
           | b `isSubspanOf` a = GT
           | otherwise         = compare (srcSpanStart a) (srcSpanStart b)
+
+-- | The locations in the typechecked module are slightly messed up in some cases (e.g. HsMatchContext always
+-- points to the first match) whereas the parsed module has the correct locations.
+-- Therefore we build up a map from OccName to the corresponding definition in the parsed module
+-- to lookup precise locations for things like multi-clause function definitions.
+--
+-- For now this only contains FunBinds.
+funBindMap :: ParsedModule -> OccEnv (HsBind GhcPs)
+funBindMap pm = mkOccEnv $ [ (occName $ unLoc f, bnd) | L _ (Compat.ValD bnd@FunBind{fun_id = f}) <- hsmodDecls $ unLoc $ pm_parsed_source pm ]
 
 getExports :: TypecheckedModule -> [(SpanSource, SrcSpan, Maybe Type)]
 getExports m
@@ -95,12 +107,15 @@ ieLNames _ = []
 
 -- | Get the name and type of a binding.
 getTypeLHsBind :: (GhcMonad m)
-               => TypecheckedModule
+               => OccEnv (HsBind GhcPs)
                -> LHsBind GhcTc
                -> m [(SpanSource, SrcSpan, Maybe Type)]
-getTypeLHsBind _ (L _spn FunBind{ fun_id = pid
-                                , fun_matches = MG{mg_alts=(L _ matches)}}) =
-  return [(Named (getName (unLoc pid)), getLoc match, Just (varType (unLoc pid))) | match <- matches ]
+getTypeLHsBind funBinds (L _spn FunBind{fun_id = pid})
+  | Just FunBind {fun_matches = MG{mg_alts=L _ matches}} <- lookupOccEnv funBinds (occName $ unLoc pid) =
+  return [(Named (getName (unLoc pid)), getLoc mc_fun, Just (varType (unLoc pid))) | match <- matches, FunRhs{mc_fun = mc_fun} <- [m_ctxt $ unLoc match] ]
+-- In theory this shouldn’t ever fail but if it does, we can at least show the first clause.
+getTypeLHsBind _ (L _spn FunBind{fun_id = pid,fun_matches = MG{}}) =
+  return [(Named $ getName (unLoc pid), getLoc pid, Just (varType (unLoc pid)))]
 getTypeLHsBind _ _ = return []
 
 -- | Get the name and type of an expression.

@@ -34,7 +34,7 @@ listCompBind :: [Char]
 listCompBind = [ succ c | c <- "ptfx" ]
 
 multipleClause :: Bool -> Char
-multipleClause True  = 't'
+multipleClause True  =    't'
 multipleClause False = 'f'
 
 -- | Recognizable docs: kpqz
