@@ -22,7 +22,10 @@ getCompletionsLSP
     -> IdeState
     -> CompletionParams
     -> IO CompletionResponseResult
-getCompletionsLSP lsp ide CompletionParams{_textDocument=TextDocumentIdentifier uri,_position=position} = do
+getCompletionsLSP lsp ide
+  CompletionParams{_textDocument=TextDocumentIdentifier uri
+                  ,_position=position
+                  ,_context=completionContext} = do
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
@@ -32,8 +35,10 @@ getCompletionsLSP lsp ide CompletionParams{_textDocument=TextDocumentIdentifier 
           Just ((cci', tm'), mapping) -> do
             let position' = fromCurrentPosition mapping position
             pfix <- maybe (return Nothing) (flip VFS.getCompletionPrefix cnts) position'
-            case pfix of
-              Just pfix' -> do
+            case (pfix, completionContext) of
+              (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
+                -> return (Completions $ List [])
+              (Just pfix', _) -> do
                 let fakeClientCapabilities = ClientCapabilities Nothing Nothing Nothing Nothing
                 Completions . List <$> getCompletions ideOpts cci' (tmrModule tm') pfix' fakeClientCapabilities (WithSnippets True)
               _ -> return (Completions $ List [])
