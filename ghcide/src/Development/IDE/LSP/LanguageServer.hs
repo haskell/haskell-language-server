@@ -206,6 +206,7 @@ data Message
 modifyOptions :: LSP.Options -> LSP.Options
 modifyOptions x = x{ LSP.textDocumentSync   = Just $ tweakTDS origTDS
                    , LSP.executeCommandCommands = Just ["typesignature.add"]
+                   , LSP.completionTriggerCharacters = Just "."
                    }
     where
         tweakTDS tds = tds{_openClose=Just True, _change=Just TdSyncIncremental, _save=Just $ SaveOptions Nothing}
