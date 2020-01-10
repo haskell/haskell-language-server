@@ -58,8 +58,7 @@ getDocumentation tcs targetName = fromMaybe [] $ do
   -- Find the module the target is defined in.
   targetNameSpan <- realSpan $ nameSrcSpan targetName
   tc <-
-    listToMaybe
-      $ filter ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)
+    find ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)
       $ reverse tcs -- TODO : Is reversing the list here really neccessary?
   -- Names bound by the module (we want to exclude non-"top-level"
   -- bindings but unfortunately we get all here).
