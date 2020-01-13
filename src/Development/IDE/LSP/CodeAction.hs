@@ -16,10 +16,12 @@ import Control.Monad (join)
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
+import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Error
 import Development.IDE.LSP.Server
 import Development.IDE.Types.Location
+import Development.IDE.Types.Options
 import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as Set
 import qualified Language.Haskell.LSP.Core as LSP
@@ -47,10 +49,12 @@ codeAction lsp state CodeActionParams{_textDocument=TextDocumentIdentifier uri,_
     -- logInfo (ideLogger ide) $ T.pack $ "Code action req: " ++ show arg
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
-    parsedModule <- (runAction state . getParsedModule . toNormalizedFilePath) `traverse` uriToFilePath uri
+    (ideOptions, parsedModule) <- runAction state $
+      (,) <$> getIdeOptions
+          <*> (getParsedModule . toNormalizedFilePath) `traverse` uriToFilePath uri
     pure $ List
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction ( join parsedModule ) text x
+        | x <- xs, (title, tedit) <- suggestAction ideOptions ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
 
@@ -89,8 +93,8 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | otherwise
     = return (Null, Nothing)
 
-suggestAction  :: Maybe ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAction parsedModule text diag = concat
+suggestAction  :: IdeOptions -> Maybe ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAction ideOptions parsedModule text diag = concat
     [ suggestAddExtension diag
     , suggestExtendImport text diag
     , suggestFillHole diag
@@ -100,7 +104,9 @@ suggestAction parsedModule text diag = concat
     , suggestReplaceIdentifier text diag
     , suggestSignature True diag
     ] ++ concat
-    [ suggestRemoveRedundantImport pm text diag | Just pm <- [parsedModule]]
+    [  suggestNewDefinition ideOptions pm text diag
+    ++ suggestRemoveRedundantImport pm text diag
+    | Just pm <- [parsedModule]]
 
 
 suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
@@ -137,6 +143,36 @@ suggestReplaceIdentifier contents Diagnostic{_range=_range@Range{..},..}
     | renameSuggestions@(_:_) <- extractRenamableTerms _message
         = [ ("Replace with ‘" <> name <> "’", [mkRenameEdit contents _range name]) | name <- renameSuggestions ]
     | otherwise = []
+
+suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestNewDefinition ideOptions parsedModule contents Diagnostic{_message, _range}
+--     * Variable not in scope:
+--         suggestAcion :: Maybe T.Text -> Range -> Range
+    | Just [name, typ] <- matchRegex message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
+    = newDefinitionAction ideOptions parsedModule _range name typ
+    | Just [name, typ] <- matchRegex message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps"
+    , [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name typ
+    = [(label, mkRenameEdit contents _range name : newDefinitionEdits)]
+    | otherwise = []
+    where
+      message = unifySpaces _message
+
+newDefinitionAction :: IdeOptions -> ParsedModule -> Range -> T.Text -> T.Text -> [(T.Text, [TextEdit])]
+newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
+    | Range _ lastLineP : _ <-
+      [ srcSpanToRange l
+      | (L l _) <- hsmodDecls
+      , _start `isInsideSrcSpan` l]
+    , nextLineP <- Position{ _line = _line lastLineP + 1, _character = 0}
+    = [ ("Define " <> sig
+        , [TextEdit (Range nextLineP nextLineP) (T.unlines ["", sig, name <> " = error \"not implemented\""])]
+        )]
+    | otherwise = []
+  where
+    colon = if optNewColonConvention then " : " else " :: "
+    sig = name <> colon <> T.dropWhileEnd isSpace typ
+    ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} = parsedModule
+
 
 suggestFillTypeWildcard :: Diagnostic -> [(T.Text, [TextEdit])]
 suggestFillTypeWildcard Diagnostic{_range=_range@Range{..},..}
@@ -255,8 +291,6 @@ suggestFixConstructorImport _ Diagnostic{_range=_range,..}
 suggestSignature :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
     | "Top-level binding with no type signature" `T.isInfixOf` _message = let
-      filterNewlines = T.concat  . T.lines
-      unifySpaces    = T.unwords . T.words
       signature      = T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
       startOfLine    = Position (_line _start) 0
       beforeLine     = Range startOfLine startOfLine
@@ -265,8 +299,6 @@ suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
       in [(title, [action])]
 suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
     | "Polymorphic local binding with no type signature" `T.isInfixOf` _message = let
-      filterNewlines = T.concat  . T.lines
-      unifySpaces    = T.unwords . T.words
       signature      = removeInitialForAll
                      $ T.takeWhile (\x -> x/='*' && x/='•')
                      $ T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
@@ -403,7 +435,7 @@ addBindingToImportList binding importLine = case T.breakOn "(" importLine of
 
 -- | Returns Just (the submatches) for the first capture, or Nothing.
 matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
-matchRegex message regex = case T.unwords (T.words message) =~~ regex of
+matchRegex message regex = case unifySpaces message =~~ regex of
     Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
     Nothing -> Nothing
 
@@ -417,6 +449,12 @@ setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeLensHandler = withResponse RspCodeLens codeLens,
     LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
     }
+
+filterNewlines :: T.Text -> T.Text
+filterNewlines = T.concat  . T.lines
+
+unifySpaces :: T.Text -> T.Text
+unifySpaces    = T.unwords . T.words
 
 --------------------------------------------------------------------------------
 

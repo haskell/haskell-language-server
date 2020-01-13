@@ -395,6 +395,7 @@ codeActionTests = testGroup "code actions"
   , importRenameActionTests
   , fillTypedHoleTests
   , addSigActionTests
+  , insertNewDefinitionTests
   ]
 
 codeLensesTests :: TestTree
@@ -412,9 +413,7 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- openDoc' "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }]
-          <- getCodeActions doc (Range (Position 2 14) (Position 2 20))
-      liftIO $ "Replace with ‘argName’" @=? actionTitle
+      action <- findCodeAction doc (Range (Position 2 14) (Position 2 20)) "Replace with ‘argName’"
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -432,9 +431,7 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- openDoc' "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }]
-          <- getCodeActions doc (Range (Position 3 6) (Position 3 16))
-      liftIO $ "Replace with ‘maybeToList’" @=? actionTitle
+      action <- findCodeAction doc (Range (Position 3 6) (Position 3 16))  "Replace with ‘maybeToList’"
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -452,10 +449,9 @@ renameActionTests = testGroup "rename actions"
             ]
       doc <- openDoc' "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 2 36) (Position 2 45))
-      let actionTitles = [ actionTitle | CACodeAction CodeAction{ _title = actionTitle } <- actionsOrCommands ]
-          expectedActionTitles = ["Replace with ‘argument1’", "Replace with ‘argument2’", "Replace with ‘argument3’"]
-      liftIO $ expectedActionTitles @=? actionTitles
+      _ <- findCodeActions doc (Range (Position 2 36) (Position 2 45))
+                           ["Replace with ‘argument1’", "Replace with ‘argument2’", "Replace with ‘argument3’"]
+      return()
   , testSession "change infix function" $ do
       let content = T.unlines
             [ "module Testing where"
@@ -808,6 +804,61 @@ extendImportTests = testGroup "extend import actions"
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ expectedContentB @=? contentAfterAction
+
+insertNewDefinitionTests :: TestTree
+insertNewDefinitionTests = testGroup "insert new definition actions"
+  [ testSession "insert new function definition" $ do
+      let txtB =
+            ["foo True = select [True]"
+            , ""
+            ,"foo False = False"
+            ]
+          txtB' =
+            [""
+            ,"someOtherCode = ()"
+            ]
+      docB <- openDoc' "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
+      _ <- waitForDiagnostics
+      CACodeAction action@CodeAction { _title = actionTitle } : _
+                  <- sortOn (\(CACodeAction CodeAction{_title=x}) -> x) <$>
+                     getCodeActions docB (R 1 0 1 50)
+      liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines (txtB ++
+        [ ""
+        , "select :: [Bool] -> Bool"
+        , "select = error \"not implemented\""
+        ]
+        ++ txtB')
+  , testSession "define a hole" $ do
+      let txtB =
+            ["foo True = _select [True]"
+            , ""
+            ,"foo False = False"
+            ]
+          txtB' =
+            [""
+            ,"someOtherCode = ()"
+            ]
+      docB <- openDoc' "ModuleB.hs" "haskell" (T.unlines $ txtB ++ txtB')
+      _ <- waitForDiagnostics
+      CACodeAction action@CodeAction { _title = actionTitle } : _
+                  <- sortOn (\(CACodeAction CodeAction{_title=x}) -> x) <$>
+                     getCodeActions docB (R 1 0 1 50)
+      liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      liftIO $ contentAfterAction @?= T.unlines (
+        ["foo True = select [True]"
+        , ""
+        ,"foo False = False"
+        , ""
+        , "select :: [Bool] -> Bool"
+        , "select = error \"not implemented\""
+        ]
+        ++ txtB')
+  ]
 
 fixConstructorImportTests :: TestTree
 fixConstructorImportTests = testGroup "fix import actions"
@@ -1545,6 +1596,29 @@ openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
   source <- liftIO $ readFileUtf8 $ "test/data" </> path
   openDoc' path "haskell" source
+
+findCodeActions :: TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
+findCodeActions doc range expectedTitles = do
+  actions <- getCodeActions doc range
+  let matches = sequence
+        [ listToMaybe
+          [ action
+          | CACodeAction action@CodeAction { _title = actionTitle } <- actions
+          , actionTitle == expectedTitle ]
+        | expectedTitle <- expectedTitles]
+  let msg = show
+            [ actionTitle
+            | CACodeAction CodeAction { _title = actionTitle } <- actions
+            ]
+            ++ "is not a superset of "
+            ++ show expectedTitles
+  liftIO $ case matches of
+    Nothing -> assertFailure msg
+    Just _ -> pure ()
+  return (fromJust matches)
+
+findCodeAction :: TextDocumentIdentifier -> Range -> T.Text -> Session CodeAction
+findCodeAction doc range t = head <$> findCodeActions doc range [t]
 
 unitTests :: TestTree
 unitTests = do
