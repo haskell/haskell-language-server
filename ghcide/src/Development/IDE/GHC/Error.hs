@@ -16,6 +16,7 @@ module Development.IDE.GHC.Error
   , srcSpanToFilename
   , zeroSpan
   , realSpan
+  , isInsideSrcSpan
 
   -- * utilities working with severities
   , toDSeverity
@@ -79,6 +80,10 @@ srcSpanToLocation :: SrcSpan -> Location
 srcSpanToLocation src =
   -- important that the URI's we produce have been properly normalized, otherwise they point at weird places in VS Code
   Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath $ srcSpanToFilename src) (srcSpanToRange src)
+
+isInsideSrcSpan :: Position -> SrcSpan -> Bool
+p `isInsideSrcSpan` r = sp <= p && p <= ep
+  where Range sp ep = srcSpanToRange r
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).

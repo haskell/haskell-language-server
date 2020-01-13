@@ -26,7 +26,6 @@ import Packages
 import DynFlags
 import ConLike
 import DataCon
-import SrcLoc as GHC
 
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
@@ -70,12 +69,12 @@ data Context = TypeContext
 -- i.e. where are the value decls and the type decls
 getCContext :: Position -> ParsedModule -> Maybe Context
 getCContext pos pm
-  | Just (L (RealSrcSpan r) modName) <- moduleHeader
-  , pos `isInsideRange` r
+  | Just (L r modName) <- moduleHeader
+  , pos `isInsideSrcSpan` r
   = Just (ModuleContext (moduleNameString modName))
 
-  | Just (L (RealSrcSpan r) _) <- exportList
-  , pos `isInsideRange` r
+  | Just (L r _) <- exportList
+  , pos `isInsideSrcSpan` r
   = Just ExportContext
 
   | Just ctx <- something (Nothing `mkQ` go `extQ` goInline) decl
@@ -93,54 +92,34 @@ getCContext pos pm
         imports = hsmodImports $ unLoc $ pm_parsed_source pm
 
         go :: LHsDecl GhcPs -> Maybe Context
-        go (L (RealSrcSpan r) SigD {})
-          | pos `isInsideRange` r = Just TypeContext
+        go (L r SigD {})
+          | pos `isInsideSrcSpan` r = Just TypeContext
           | otherwise = Nothing
-        go (L (GHC.RealSrcSpan r) GHC.ValD {})
-          | pos `isInsideRange` r = Just ValueContext
+        go (L r GHC.ValD {})
+          | pos `isInsideSrcSpan` r = Just ValueContext
           | otherwise = Nothing
         go _ = Nothing
 
         goInline :: GHC.LHsType GhcPs -> Maybe Context
-        goInline (GHC.L (GHC.RealSrcSpan r) _)
-          | pos `isInsideRange` r = Just TypeContext
-          | otherwise = Nothing
+        goInline (GHC.L r _)
+          | pos `isInsideSrcSpan` r = Just TypeContext
         goInline _ = Nothing
 
-        p `isInsideRange` r = sp <= p && p <= ep
-          where (sp, ep) = unpackRealSrcSpan r
-
-        -- | Converts from one based tuple
-        toPos :: (Int,Int) -> Position
-        toPos (l,c) = Position (l-1) (c-1)
-          
-        unpackRealSrcSpan :: GHC.RealSrcSpan -> (Position, Position)
-        unpackRealSrcSpan rspan =
-          (toPos (l1,c1),toPos (l2,c2))
-          where s  = GHC.realSrcSpanStart rspan
-                l1 = GHC.srcLocLine s
-                c1 = GHC.srcLocCol s
-                e  = GHC.realSrcSpanEnd rspan
-                l2 = GHC.srcLocLine e
-                c2 = GHC.srcLocCol e
-
         importGo :: GHC.LImportDecl GhcPs -> Maybe Context
-        importGo (L (RealSrcSpan r) impDecl)
-          | pos `isInsideRange` r
+        importGo (L r impDecl)
+          | pos `isInsideSrcSpan` r
           = importInline importModuleName (ideclHiding impDecl)
           <|> Just (ImportContext importModuleName)
 
           | otherwise = Nothing
           where importModuleName = moduleNameString $ unLoc $ ideclName impDecl
 
-        importGo _ = Nothing
-
         importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
-        importInline modName (Just (True, L (RealSrcSpan r) _))
-          | pos `isInsideRange` r = Just $ ImportHidingContext modName
+        importInline modName (Just (True, L r _))
+          | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
           | otherwise = Nothing
-        importInline modName (Just (False, L (RealSrcSpan r) _))
-          | pos `isInsideRange` r = Just $ ImportListContext modName
+        importInline modName (Just (False, L r _))
+          | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
           | otherwise = Nothing
         importInline _ _ = Nothing
 
@@ -151,7 +130,7 @@ occNameToComKind ty oc
                      _               -> CiFunction
   | isTcOcc   oc = case ty of
                      Just t
-                       | "Constraint" `T.isSuffixOf` t 
+                       | "Constraint" `T.isSuffixOf` t
                        -> CiClass
                      _ -> CiStruct
   | isDataOcc oc = CiConstructor
