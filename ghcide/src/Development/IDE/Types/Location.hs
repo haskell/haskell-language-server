@@ -47,7 +47,7 @@ import Language.Haskell.LSP.Types as LSP (
   , toNormalizedUri
   , fromNormalizedUri
   )
-import GHC
+import SrcLoc as GHC
 import Text.ParserCombinators.ReadP as ReadP
 
 
