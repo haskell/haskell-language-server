@@ -76,6 +76,7 @@
   - {name: ImplicitParams, within: []}
   - name: CPP
     within:
+    - Development.IDE.Core.Completions
     - Development.IDE.Core.FileStore
     - Development.IDE.Core.Compile
     - Development.IDE.GHC.Compat
