@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Core.Completions (
   CachedCompletions
@@ -32,9 +33,19 @@ import Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.VFS as VFS
 import Development.IDE.Core.CompletionsTypes
 import Development.IDE.Spans.Documentation
-import Development.IDE.GHC.Util
 import Development.IDE.GHC.Error
 import Development.IDE.Types.Options
+
+#ifndef GHC_LIB
+import Development.IDE.GHC.Util
+
+
+safeTyThingType :: TyThing -> Maybe Type
+safeTyThingType thing
+  | Just i <- safeTyThingId thing = Just (varType i)
+safeTyThingType (ATyCon tycon)    = Just (tyConKind tycon)
+safeTyThingType _                 = Nothing
+#endif
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
 
@@ -42,12 +53,6 @@ safeTyThingId :: TyThing -> Maybe Id
 safeTyThingId (AnId i)                    = Just i
 safeTyThingId (AConLike (RealDataCon dc)) = Just $ dataConWrapId dc
 safeTyThingId _                           = Nothing
-
-safeTyThingType :: TyThing -> Maybe Type
-safeTyThingType thing
-  | Just i <- safeTyThingId thing = Just (varType i)
-safeTyThingType (ATyCon tycon)    = Just (tyConKind tycon)
-safeTyThingType _                 = Nothing
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -276,9 +281,15 @@ cacheDataProducer packageState dflags tm tcs = do
       toCompItem :: ModuleName -> Name -> IO CompItem
       toCompItem mn n = do
         docs <- getDocumentationTryGhc packageState (tm:tcs) n
+-- lookupName uses runInteractiveHsc, i.e., GHCi stuff which does not work with GHCi
+-- and leads to fun errors like "Cannot continue after interface file error".
+#ifdef GHC_LIB
+        let ty = Right Nothing
+#else
         ty <- runGhcEnv packageState $ catchSrcErrors "completion" $ do
                 name' <- lookupName n
                 return $ name' >>= safeTyThingType
+#endif
         return $ CI n (showModName mn) (either (const Nothing) id ty) (T.pack $ showGhc n) Nothing docs
 
   (unquals,quals) <- getCompls rdrElts
