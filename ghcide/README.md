@@ -224,10 +224,8 @@ Add this to your coc-settings.json (which you can edit with :CocConfig):
 {
   "languageserver": {
     "haskell": {
-      "command": "stack",
+      "command": "ghcide",
       "args": [
-        "exec",
-        "ghcide",
         "--lsp"
       ],
       "rootPatterns": [
