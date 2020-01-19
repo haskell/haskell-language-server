@@ -158,11 +158,9 @@ executable ghcide
                 -- allow user RTS overrides
                 -rtsopts
                 -- disable idle GC
-                -with-rtsopts=-I0
                 -- disable parallel GC
-                -with-rtsopts=-qg
                 -- increase nursery size
-                -with-rtsopts=-A128M
+                "-with-rtsopts=-I0 -qg -A128M"
     main-is: Main.hs
     build-depends:
         hslogger,
