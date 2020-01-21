@@ -20,6 +20,7 @@
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
     IdeState,
+    ShakeExtras(..), getShakeExtras,
     IdeRule, IdeResult, GetModificationTime(..),
     shakeOpen, shakeShut,
     shakeRun,
@@ -38,7 +39,8 @@ module Development.IDE.Core.Shake(
     FileVersion(..),
     Priority(..),
     updatePositionMapping,
-    OnDiskRule(..)
+    deleteValue,
+    OnDiskRule(..),
     ) where
 
 import           Development.Shake hiding (ShakeValue, doesFileExist)
@@ -256,6 +258,16 @@ setValues :: IdeRule k v
 setValues state key file val = modifyVar_ state $ \vals -> do
     -- Force to make sure the old HashMap is not retained
     evaluate $ HMap.insert (file, Key key) (fmap toDyn val) vals
+
+-- | Delete the value stored for a given ide build key
+deleteValue
+  :: (Typeable k, Hashable k, Eq k, Show k)
+  => IdeState
+  -> k
+  -> NormalizedFilePath
+  -> IO ()
+deleteValue IdeState{shakeExtras = ShakeExtras{state}} key file = modifyVar_ state $ \vals ->
+    evaluate $ HMap.delete (file, Key key) vals
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues :: forall k v. IdeRule k v => Var Values -> k -> NormalizedFilePath -> IO (Maybe (Value v))

@@ -37,7 +37,8 @@ import Development.IDE.Types.Options
 import Development.IDE.Spans.Calculate
 import Development.IDE.Import.DependencyInformation
 import Development.IDE.Import.FindImports
-import           Development.IDE.Core.FileStore
+import           Development.IDE.Core.FileExists
+import           Development.IDE.Core.FileStore        (getFileContents, getSourceFingerprint)
 import           Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.GHC.Util

@@ -2,26 +2,30 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes            #-}
 
 module Development.IDE.LSP.Notifications
     ( setHandlersNotifications
     ) where
 
-import           Language.Haskell.LSP.Types
 import           Development.IDE.LSP.Server
-import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.Types as LSP
+import qualified Language.Haskell.LSP.Core        as LSP
+import           Language.Haskell.LSP.Types
+import qualified Language.Haskell.LSP.Types       as LSP
 
-import Development.IDE.Types.Logger
-import Development.IDE.Core.Service
-import Development.IDE.Types.Location
+import           Development.IDE.Core.Service
+import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger
 
-import Control.Monad.Extra
-import qualified Data.Set                                  as S
+import           Control.Monad.Extra
+import           Data.Foldable                    as F
+import           Data.Maybe
+import qualified Data.Set                         as S
+import qualified Data.Text                        as Text
 
-import Development.IDE.Core.FileStore
-import Development.IDE.Core.OfInterest
+import           Development.IDE.Core.FileStore   (setSomethingModified)
+import           Development.IDE.Core.FileExists  (modifyFileExists)
+import           Development.IDE.Core.OfInterest
 
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
@@ -52,4 +56,17 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             whenUriFile _uri $ \file -> do
                 modifyFilesOfInterest ide (S.delete file)
                 logInfo (ideLogger ide) $ "Closed text document: " <> getUri _uri
+    ,LSP.didChangeWatchedFilesNotificationHandler = withNotification (LSP.didChangeWatchedFilesNotificationHandler x) $
+        \_ ide (DidChangeWatchedFilesParams fileEvents) -> do
+            let events =
+                    mapMaybe
+                        (\(FileEvent uri ev) ->
+                            (, ev /= FcDeleted) . toNormalizedFilePath
+                            <$> LSP.uriToFilePath uri
+                        )
+                        ( F.toList fileEvents )
+            let msg = Text.pack $ show events
+            logInfo (ideLogger ide) $ "Files created or deleted: " <> msg
+            modifyFileExists ide events
+            setSomethingModified ide
     }
