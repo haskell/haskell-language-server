@@ -40,6 +40,7 @@ import qualified Data.Rope.UTF16 as Rope
 
 #ifdef mingw32_HOST_OS
 import Data.Time
+import qualified System.Directory as Dir
 #else
 import Foreign.C.String
 import Foreign.C.Types
