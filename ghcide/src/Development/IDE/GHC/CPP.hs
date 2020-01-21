@@ -28,7 +28,9 @@ import Module
 import DynFlags
 import Panic
 import FileCleanup
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_GHC_API_VERSION(8,8,2)
+import LlvmCodeGen (LlvmVersion, llvmVersionList)
+#elif MIN_GHC_API_VERSION(8,8,0)
 import LlvmCodeGen (LlvmVersion (..))
 #endif
 
@@ -139,7 +141,11 @@ getBackendDefs :: DynFlags -> IO [String]
 getBackendDefs dflags | hscTarget dflags == HscLlvm = do
     llvmVer <- figureLlvmVersion dflags
     return $ case llvmVer of
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_GHC_API_VERSION(8,8,2)
+               Just v
+                 | [m] <- llvmVersionList v -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m, 0) ]
+                 | m:n:_   <- llvmVersionList v -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m, n) ]
+#elif MIN_GHC_API_VERSION(8,8,0)
                Just (LlvmVersion n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (n,0) ]
                Just (LlvmVersionOld m n) -> [ "-D__GLASGOW_HASKELL_LLVM__=" ++ format (m,n) ]
 #else
