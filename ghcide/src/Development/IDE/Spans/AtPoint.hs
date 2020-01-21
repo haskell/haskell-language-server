@@ -8,7 +8,6 @@ module Development.IDE.Spans.AtPoint (
   , gotoDefinition
   ) where
 
-import           Development.IDE.Spans.Documentation
 import           Development.IDE.GHC.Error
 import Development.IDE.GHC.Orphans()
 import Development.IDE.Types.Location
@@ -18,7 +17,8 @@ import Development.Shake
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.Compat
 import Development.IDE.Types.Options
-import           Development.IDE.Spans.Type as SpanInfo
+import Development.IDE.Spans.Type as SpanInfo
+import Development.IDE.Spans.Common (spanDocToMarkdown)
 
 -- GHC API imports
 import Avail
@@ -50,40 +50,42 @@ gotoDefinition getHieFile ideOpts pkgState srcSpans pos =
 -- | Synopsis for the name at a given position.
 atPoint
   :: IdeOptions
-  -> [TypecheckedModule]
   -> [SpanInfo]
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{..} tcs srcSpans pos = do
+atPoint IdeOptions{..} srcSpans pos = do
     firstSpan <- listToMaybe $ deEmpasizeGeneratedEqShow $ spansAtPoint pos srcSpans
     return (Just (range firstSpan), hoverInfo firstSpan)
   where
     -- Hover info for types, classes, type variables
-    hoverInfo SpanInfo{spaninfoType = Nothing , ..} =
-       documentation <> (wrapLanguageSyntax <$> name <> kind) <> location
+    hoverInfo SpanInfo{spaninfoType = Nothing , spaninfoDocs = docs ,  ..} =
+       (wrapLanguageSyntax <$> name) <> location <> spanDocToMarkdown docs
      where
-       documentation = findDocumentation mbName
        name     = [maybe shouldNotHappen showName  mbName]
        location = [maybe shouldNotHappen definedAt mbName]
-       kind     = [] -- TODO
        shouldNotHappen = "ghcide: did not expect a type level component without a name"
        mbName = getNameM spaninfoSource
 
     -- Hover info for values/data
-    hoverInfo SpanInfo{spaninfoType = (Just typ), ..} =
-       documentation <> (wrapLanguageSyntax <$> nameOrSource <> typeAnnotation) <> location
+    hoverInfo SpanInfo{spaninfoType = (Just typ), spaninfoDocs = docs , ..} =
+       (wrapLanguageSyntax <$> nameOrSource) <> location <> spanDocToMarkdown docs
      where
        mbName = getNameM spaninfoSource
-       documentation  = findDocumentation mbName
-       typeAnnotation = [colon <> showName typ]
-       nameOrSource   = [maybe literalSource qualifyNameIfPossible mbName]
-       literalSource = "" -- TODO: literals: display (length-limited) source
+       typeAnnotation = colon <> showName typ
+       expr = case spaninfoSource of
+                Named n -> qualifyNameIfPossible n
+                Lit   l -> crop $ T.pack l
+                _       -> ""
+       nameOrSource   = [expr <> "\n" <> typeAnnotation]
        qualifyNameIfPossible name' = modulePrefix <> showName name'
          where modulePrefix = maybe "" (<> ".") (getModuleNameAsText name')
        location = [maybe "" definedAt mbName]
 
-    findDocumentation = maybe [] (getDocumentation tcs)
-    definedAt name = "**Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "**\n"
+    definedAt name = "*Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "*\n"
+
+    crop txt
+      | T.length txt > 50 = T.take 46 txt <> " ..."
+      | otherwise         = txt
 
     range SpanInfo{..} = Range
       (Position spaninfoStartLine spaninfoStartCol)
@@ -112,6 +114,7 @@ locationsAtPoint getHieFile IdeOptions{..} pkgState pos =
   where getSpan :: SpanSource -> m (Maybe SrcSpan)
         getSpan NoSource = pure Nothing
         getSpan (SpanS sp) = pure $ Just sp
+        getSpan (Lit _) = pure Nothing
         getSpan (Named name) = case nameSrcSpan name of
             sp@(RealSrcSpan _) -> pure $ Just sp
             sp@(UnhelpfulSpan _) -> runMaybeT $ do
