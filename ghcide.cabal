@@ -121,6 +121,7 @@ library
         Development.IDE.Core.Debouncer
         Development.IDE.Core.Compile
         Development.IDE.Core.Preprocessor
+        Development.IDE.Core.FileExists
         Development.IDE.GHC.Compat
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Error
@@ -230,4 +231,16 @@ test-suite ghcide-tests
         Development.IDE.Test
         Development.IDE.Test.Runfiles
     default-extensions:
+        BangPatterns
+        DeriveFunctor
+        DeriveGeneric
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
         OverloadedStrings
+        RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
+        TupleSections
+        TypeApplications
+        ViewPatterns

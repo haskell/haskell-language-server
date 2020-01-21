@@ -93,10 +93,10 @@ main = do
             -- very important we only call loadSession once, and it's fast, so just do it before starting
             session <- loadSession dir
             let options = (defaultIdeOptions $ return session)
-                    { optReportProgress = clientSupportsProgress caps 
+                    { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     }
-            initialise (mainRule >> action kick) getLspId event (logger minBound) options vfs
+            initialise caps (mainRule >> action kick) getLspId event (logger minBound) options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
@@ -125,7 +125,7 @@ main = do
         let grab file = fromMaybe (head sessions) $ do
                 cradle <- Map.lookup file filesToCradles
                 Map.lookup cradle cradlesToSessions
-        ide <- initialise mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) (defaultIdeOptions $ return $ return . grab) vfs
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) (defaultIdeOptions $ return $ return . grab) vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files

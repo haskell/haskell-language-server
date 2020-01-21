@@ -4,7 +4,8 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Core.FileStore(
-    getFileExists, getFileContents,
+    getFileContents,
+    getVirtualFile,
     setBufferModified,
     setSomethingModified,
     fileStoreRules,
@@ -20,16 +21,14 @@ import Fingerprint
 import           StringBuffer
 import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Util
-
+import           Development.IDE.Core.Shake
 import Control.Concurrent.Extra
 import qualified Data.Map.Strict as Map
 import Data.Maybe
 import qualified Data.Text as T
 import           Control.Monad.Extra
-import qualified System.Directory as Dir
 import           Development.Shake
 import           Development.Shake.Classes
-import           Development.IDE.Core.Shake
 import           Control.Exception
 import           GHC.Generics
 import Data.Either.Extra
@@ -90,16 +89,7 @@ makeLSPVFSHandle lspFuncs = VFSHandle
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
 type instance RuleResult GetFileContents = (FileVersion, Maybe StringBuffer)
 
--- | Does the file exist.
-type instance RuleResult GetFileExists = Bool
-
 type instance RuleResult FingerprintSource = Fingerprint
-
-data GetFileExists = GetFileExists
-    deriving (Eq, Show, Generic)
-instance Hashable GetFileExists
-instance NFData   GetFileExists
-instance Binary   GetFileExists
 
 data GetFileContents = GetFileContents
     deriving (Eq, Show, Generic)
@@ -121,16 +111,6 @@ fingerprintSourceRule =
       fingerprint <- liftIO $ fpStringBuffer content
       pure ([], Just fingerprint)
     where fpStringBuffer (StringBuffer buf len cur) = withForeignPtr buf $ \ptr -> fingerprintData (ptr `plusPtr` cur) len
-
-getFileExistsRule :: VFSHandle -> Rules ()
-getFileExistsRule vfs =
-    defineEarlyCutoff $ \GetFileExists file -> do
-        alwaysRerun
-        res <- liftIO $ handle (\(_ :: IOException) -> return False) $
-            (isJust <$> getVirtualFile vfs (filePathToUri' file)) ||^
-            Dir.doesFileExist (fromNormalizedFilePath file)
-        return (Just $ if res then BS.singleton '1' else BS.empty, ([], Just res))
-
 
 getModificationTimeRule :: VFSHandle -> Rules ()
 getModificationTimeRule vfs =
@@ -154,6 +134,8 @@ getModificationTimeRule vfs =
     -- time spent checking file modifications (which happens on every change)
     -- from > 0.5s to ~0.15s.
     -- We might also want to try speeding this up on Windows at some point.
+    -- TODO leverage DidChangeWatchedFile lsp notifications on clients that
+    -- support them, as done for GetFileExists
     getModTime :: FilePath -> IO BS.ByteString
     getModTime f =
 #ifdef mingw32_HOST_OS
@@ -198,20 +180,11 @@ ideTryIOException fp act =
 getFileContents :: NormalizedFilePath -> Action (FileVersion, Maybe StringBuffer)
 getFileContents = use_ GetFileContents
 
-getFileExists :: NormalizedFilePath -> Action Bool
-getFileExists =
-    -- we deliberately and intentionally wrap the file as an FilePath WITHOUT mkAbsolute
-    -- so that if the file doesn't exist, is on a shared drive that is unmounted etc we get a properly
-    -- cached 'No' rather than an exception in the wrong place
-    use_ GetFileExists
-
-
 fileStoreRules :: VFSHandle -> Rules ()
 fileStoreRules vfs = do
     addIdeGlobal vfs
     getModificationTimeRule vfs
     getFileContentsRule vfs
-    getFileExistsRule vfs
     fingerprintSourceRule
 
 
