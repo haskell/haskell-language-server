@@ -105,9 +105,7 @@ getAtPoint :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.T
 getAtPoint file pos = fmap join $ runMaybeT $ do
   opts <- lift getIdeOptions
   spans <- useE GetSpanInfo file
-  files <- transitiveModuleDeps <$> useE GetDependencies file
-  tms   <- usesE TypeCheck (file : files)
-  return $ AtPoint.atPoint opts (map tmrModule tms) spans pos
+  return $ AtPoint.atPoint opts spans pos
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
@@ -263,9 +261,11 @@ getSpanInfoRule :: Rules ()
 getSpanInfoRule =
     define $ \GetSpanInfo file -> do
         tc <- use_ TypeCheck file
+        deps <- maybe (TransitiveDependencies [] []) fst <$> useWithStale GetDependencies file
+        tms <- mapMaybe (fmap fst) <$> usesWithStale TypeCheck (transitiveModuleDeps deps)
         (fileImports, _) <- use_ GetLocatedImports file
         packageState <- hscEnv <$> use_ GhcSession file
-        x <- liftIO $ getSrcSpanInfos packageState fileImports tc
+        x <- liftIO $ getSrcSpanInfos packageState fileImports tc tms
         return ([], Just x)
 
 -- Typechecks a module.
