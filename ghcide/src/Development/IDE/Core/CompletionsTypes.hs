@@ -5,15 +5,11 @@ module Development.IDE.Core.CompletionsTypes (
 import           Control.DeepSeq
 import qualified Data.Map  as Map
 import qualified Data.Text as T
-
 import           GHC
-import           Outputable
-import           DynFlags
+
+import Development.IDE.Spans.Common
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
-
-showGhc :: Outputable a => a -> String
-showGhc = showPpr unsafeGlobalDynFlags
 
 data Backtick = Surrounded | LeftSide deriving Show
 data CompItem = CI
@@ -23,7 +19,7 @@ data CompItem = CI
   , label        :: T.Text         -- ^ Label to display to the user.
   , isInfix      :: Maybe Backtick -- ^ Did the completion happen
                                    -- in the context of an infix notation.
-  , docs         :: [T.Text]       -- ^ Available documentation.
+  , docs         :: SpanDoc        -- ^ Available documentation.
   }
 instance Show CompItem where
   show CI { .. } = "CompItem { origName = \"" ++ showGhc origName ++ "\""

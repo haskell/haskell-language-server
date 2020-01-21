@@ -1084,7 +1084,7 @@ findDefinitionAndHoverTests = let
         _ -> liftIO $ assertFailure $ "test not expecting this kind of hover info" <> show hover
 
   extractLineColFromHoverMsg :: T.Text -> [T.Text]
-  extractLineColFromHoverMsg = T.splitOn ":" . head . T.splitOn "**" . last . T.splitOn (sourceFileName <> ":")
+  extractLineColFromHoverMsg = T.splitOn ":" . head . T.splitOn "*" . last . T.splitOn (sourceFileName <> ":")
 
   checkHoverRange :: Range -> Maybe Range -> T.Text -> Session ()
   checkHoverRange expectedRange rangeInHover msg =
@@ -1151,7 +1151,7 @@ findDefinitionAndHoverTests = let
   intL40 = Position 40 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
   tvrL40 = Position 40 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
   intL41 = Position 41 20  ;  litI   = [ExpectHoverText ["7518"]]
-  chrL36 = Position 36 25  ;  litC   = [ExpectHoverText ["'t'"]]
+  chrL36 = Position 37 24  ;  litC   = [ExpectHoverText ["'f'"]]
   txtL8  = Position  8 14  ;  litT   = [ExpectHoverText ["\"dfgv\""]]
   lstL43 = Position 43 12  ;  litL   = [ExpectHoverText ["[ 8391 :: Int, 6268 ]"]]
   outL45 = Position 45  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
@@ -1184,11 +1184,11 @@ findDefinitionAndHoverTests = let
   , test yes    yes    mclL37 mcl    "top-level fn 2nd clause         #246"
   , test yes    yes    spaceL37 space "top-level fn on space #315"
   , test no     broken docL41 doc    "documentation                     #7"
-  , test no     broken eitL40 kindE  "kind of Either                  #273"
-  , test no     broken intL40 kindI  "kind of Int                     #273"
+  , test no     yes    eitL40 kindE  "kind of Either                  #273"
+  , test no     yes    intL40 kindI  "kind of Int                     #273"
   , test no     broken tvrL40 kindV  "kind of (* -> *) type variable  #273"
-  , test no     broken intL41 litI   "literal Int  in hover info      #274"
-  , test no     broken chrL36 litC   "literal Char in hover info      #274"
+  , test no     yes    intL41 litI   "literal Int  in hover info      #274"
+  , test no     yes    chrL36 litC   "literal Char in hover info      #274"
   , test no     broken txtL8  litT   "literal Text in hover info      #274"
   , test no     broken lstL43 litL   "literal List in hover info      #274"
   , test no     broken docL41 constr "type constraint in hover info   #283"

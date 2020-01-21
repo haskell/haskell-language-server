@@ -25,8 +25,6 @@ import Type
 import Var
 import Packages
 import DynFlags
-import ConLike
-import DataCon
 
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
@@ -35,24 +33,8 @@ import Development.IDE.Core.CompletionsTypes
 import Development.IDE.Spans.Documentation
 import Development.IDE.GHC.Error
 import Development.IDE.Types.Options
-
-#ifndef GHC_LIB
+import Development.IDE.Spans.Common
 import Development.IDE.GHC.Util
-
-
-safeTyThingType :: TyThing -> Maybe Type
-safeTyThingType thing
-  | Just i <- safeTyThingId thing = Just (varType i)
-safeTyThingType (ATyCon tycon)    = Just (tyConKind tycon)
-safeTyThingType _                 = Nothing
-#endif
-
--- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
-
-safeTyThingId :: TyThing -> Maybe Id
-safeTyThingId (AnId i)                    = Just i
-safeTyThingId (AConLike (RealDataCon dc)) = Just $ dataConWrapId dc
-safeTyThingId _                           = Nothing
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -158,7 +140,7 @@ mkCompl IdeOptions{..} CI{origName,importedFrom,thingType,label,isInfix,docs} =
         typeText
           | Just t <- thingType = Just . stripForall $ T.pack (showGhc t)
           | otherwise = Nothing
-        docs' = ("*Defined in '" <> importedFrom <> "'*\n") : docs
+        docs' = ("*Defined in '" <> importedFrom <> "'*\n") : spanDocToMarkdown docs
         colon = if optNewColonConvention then ": " else ":: "
 
 stripForall :: T.Text -> T.Text
@@ -275,12 +257,12 @@ cacheDataProducer packageState dflags tm tcs = do
         let typ = Just $ varType var
             name = Var.varName var
             label = T.pack $ showGhc name
-        docs <- getDocumentationTryGhc packageState (tm:tcs) name
+        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm:tcs) name
         return $ CI name (showModName curMod) typ label Nothing docs
 
       toCompItem :: ModuleName -> Name -> IO CompItem
       toCompItem mn n = do
-        docs <- getDocumentationTryGhc packageState (tm:tcs) n
+        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm:tcs) n
 -- lookupName uses runInteractiveHsc, i.e., GHCi stuff which does not work with GHCi
 -- and leads to fun errors like "Cannot continue after interface file error".
 #ifdef GHC_LIB
