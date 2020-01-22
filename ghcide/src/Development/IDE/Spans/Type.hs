@@ -6,7 +6,8 @@
 -- | Types used separate to GHCi vanilla.
 
 module Development.IDE.Spans.Type(
-    SpanInfo(..)
+    SpansInfo(..)
+  , SpanInfo(..)
   , SpanSource(..)
   , getNameM
   ) where
@@ -16,6 +17,14 @@ import Control.DeepSeq
 import OccName
 import Development.IDE.GHC.Util
 import Development.IDE.Spans.Common
+
+data SpansInfo =
+  SpansInfo { spansExprs       :: [SpanInfo]
+            , spansConstraints :: [SpanInfo] }
+  deriving Show
+
+instance NFData SpansInfo where
+  rnf (SpansInfo e c) = liftRnf rnf e `seq` liftRnf rnf c
 
 -- | Type of some span of source code. Most of these fields are
 -- unboxed but Haddock doesn't show that.

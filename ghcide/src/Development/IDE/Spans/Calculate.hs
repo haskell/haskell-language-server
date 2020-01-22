@@ -52,7 +52,7 @@ getSrcSpanInfos
     -> [(Located ModuleName, Maybe NormalizedFilePath)]
     -> TcModuleResult
     -> [TcModuleResult]
-    -> IO [SpanInfo]
+    -> IO SpansInfo
 getSrcSpanInfos env imports tc tms =
     runGhcEnv env $
         getSpanInfo imports (tmrModule tc) (map tmrModule tms)
@@ -62,7 +62,7 @@ getSpanInfo :: GhcMonad m
             => [(Located ModuleName, Maybe NormalizedFilePath)] -- ^ imports
             -> TypecheckedModule
             -> [TypecheckedModule]
-            -> m [SpanInfo]
+            -> m SpansInfo
 getSpanInfo mods tcm tcms =
   do let tcs = tm_typechecked_source tcm
          bs  = listifyAllSpans  tcs :: [LHsBind GhcTc]
@@ -78,13 +78,16 @@ getSpanInfo mods tcm tcms =
      let imports = importInfo mods
      let exports = getExports tcm
      let exprs = addEmptyInfo exports ++ addEmptyInfo imports ++ concat bts ++ concat tts ++ catMaybes (ets ++ pts)
-     return (mapMaybe toSpanInfo (sortBy cmp exprs))
+     let constraints = map constraintToInfo (concatMap getConstraintsLHsBind bs)
+     return $ SpansInfo (mapMaybe toSpanInfo (sortBy cmp exprs))
+                        (mapMaybe toSpanInfo (sortBy cmp constraints))
   where cmp (_,a,_,_) (_,b,_,_)
           | a `isSubspanOf` b = LT
           | b `isSubspanOf` a = GT
           | otherwise         = compare (srcSpanStart a) (srcSpanStart b)
 
         addEmptyInfo = map (\(a,b) -> (a,b,Nothing,emptySpanDoc))
+        constraintToInfo (sp, ty) = (SpanS sp, sp, Just ty, emptySpanDoc)
 
 -- | The locations in the typechecked module are slightly messed up in some cases (e.g. HsMatchContext always
 -- points to the first match) whereas the parsed module has the correct locations.
@@ -129,6 +132,13 @@ getTypeLHsBind tms _ (L _spn FunBind{fun_id = pid,fun_matches = MG{}}) = do
   docs <- getDocumentationTryGhc tms name
   return [(Named name, getLoc pid, Just (varType (unLoc pid)), docs)]
 getTypeLHsBind _ _ _ = return []
+
+-- | Get information about constraints
+getConstraintsLHsBind :: LHsBind GhcTc
+                      -> [(SrcSpan, Type)]
+getConstraintsLHsBind (L spn AbsBinds { abs_ev_vars = vars })
+  = map (\v -> (spn, varType v)) vars
+getConstraintsLHsBind _ = []
 
 -- | Get the name and type of an expression.
 getTypeLHsExpr :: (GhcMonad m)
