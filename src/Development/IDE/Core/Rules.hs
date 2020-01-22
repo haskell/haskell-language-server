@@ -54,6 +54,7 @@ import qualified Data.Text                                as T
 import           Development.IDE.GHC.Error
 import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
+import Development.IDE.Spans.Type
 
 import           GHC hiding (parseModule, typecheckModule)
 import qualified GHC.LanguageExtensions as LangExt
@@ -114,7 +115,7 @@ getDefinition file pos = fmap join $ runMaybeT $ do
     spans <- useE GetSpanInfo file
     pkgState <- hscEnv <$> useE GhcSession file
     let getHieFile x = useNoFile (GetHieFile x)
-    lift $ AtPoint.gotoDefinition getHieFile opts pkgState spans pos
+    lift $ AtPoint.gotoDefinition getHieFile opts pkgState (spansExprs spans) pos
 
 -- | Parse the contents of a daml file.
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)

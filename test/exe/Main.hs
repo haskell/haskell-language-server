@@ -1146,7 +1146,7 @@ findDefinitionAndHoverTests = let
   mclL37 = Position 37  1
   spaceL37 = Position 37  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
   docL41 = Position 41  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
-                           ;  constr = [ExpectHoverText ["Monad m =>"]]
+                           ;  constr = [ExpectHoverText ["Monad m"]]
   eitL40 = Position 40 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
   intL40 = Position 40 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
   tvrL40 = Position 40 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
@@ -1191,7 +1191,7 @@ findDefinitionAndHoverTests = let
   , test no     yes    chrL36 litC   "literal Char in hover info      #274"
   , test no     broken txtL8  litT   "literal Text in hover info      #274"
   , test no     broken lstL43 litL   "literal List in hover info      #274"
-  , test no     broken docL41 constr "type constraint in hover info   #283"
+  , test no     yes    docL41 constr "type constraint in hover info   #283"
   , test broken broken outL45 outSig "top-level signature             #310"
   , test broken broken innL48 innSig "inner     signature             #310"
   ]

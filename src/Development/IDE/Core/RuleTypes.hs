@@ -63,7 +63,7 @@ instance NFData TcModuleResult where
 type instance RuleResult TypeCheck = TcModuleResult
 
 -- | Information about what spans occur where, requires TypeCheck
-type instance RuleResult GetSpanInfo = [SpanInfo]
+type instance RuleResult GetSpanInfo = SpansInfo
 
 -- | Convert to Core, requires TypeCheck*
 type instance RuleResult GenerateCore = (SafeHaskellMode, CgGuts, ModDetails)
