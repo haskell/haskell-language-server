@@ -27,6 +27,8 @@ import FastString
 import Name
 import Outputable hiding ((<>))
 import SrcLoc
+import Type
+import VarSet
 
 import Control.Monad.Extra
 import Control.Monad.Trans.Maybe
@@ -50,15 +52,16 @@ gotoDefinition getHieFile ideOpts pkgState srcSpans pos =
 -- | Synopsis for the name at a given position.
 atPoint
   :: IdeOptions
-  -> [SpanInfo]
+  -> SpansInfo
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{..} srcSpans pos = do
+atPoint IdeOptions{..} (SpansInfo srcSpans cntsSpans) pos = do
     firstSpan <- listToMaybe $ deEmpasizeGeneratedEqShow $ spansAtPoint pos srcSpans
-    return (Just (range firstSpan), hoverInfo firstSpan)
+    let constraintsAtPoint = mapMaybe spaninfoType (spansAtPoint pos cntsSpans)
+    return (Just (range firstSpan), hoverInfo firstSpan constraintsAtPoint)
   where
     -- Hover info for types, classes, type variables
-    hoverInfo SpanInfo{spaninfoType = Nothing , spaninfoDocs = docs ,  ..} =
+    hoverInfo SpanInfo{spaninfoType = Nothing , spaninfoDocs = docs ,  ..} _ =
        (wrapLanguageSyntax <$> name) <> location <> spanDocToMarkdown docs
      where
        name     = [maybe shouldNotHappen showName  mbName]
@@ -67,11 +70,10 @@ atPoint IdeOptions{..} srcSpans pos = do
        mbName = getNameM spaninfoSource
 
     -- Hover info for values/data
-    hoverInfo SpanInfo{spaninfoType = (Just typ), spaninfoDocs = docs , ..} =
+    hoverInfo SpanInfo{spaninfoType = (Just typ), spaninfoDocs = docs , ..} cnts =
        (wrapLanguageSyntax <$> nameOrSource) <> location <> spanDocToMarkdown docs
      where
        mbName = getNameM spaninfoSource
-       typeAnnotation = colon <> showName typ
        expr = case spaninfoSource of
                 Named n -> qualifyNameIfPossible n
                 Lit   l -> crop $ T.pack l
@@ -80,6 +82,15 @@ atPoint IdeOptions{..} srcSpans pos = do
        qualifyNameIfPossible name' = modulePrefix <> showName name'
          where modulePrefix = maybe "" (<> ".") (getModuleNameAsText name')
        location = [maybe "" definedAt mbName]
+
+       thisFVs = tyCoVarsOfType typ
+       constraintsOverFVs = filter (\cnt -> not (tyCoVarsOfType cnt `disjointVarSet` thisFVs)) cnts
+       constraintsT = T.intercalate ", " (map showName constraintsOverFVs)
+
+       typeAnnotation = case constraintsOverFVs of 
+                          []  -> colon <> showName typ
+                          [_] -> colon <> constraintsT <> "\n=> " <> showName typ
+                          _   -> colon <> "(" <> constraintsT <> ")\n=> " <> showName typ
 
     definedAt name = "*Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "*\n"
 
