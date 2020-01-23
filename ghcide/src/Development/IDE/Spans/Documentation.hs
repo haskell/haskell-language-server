@@ -26,7 +26,9 @@ getDocumentationTryGhc
   => [TypecheckedModule]
   -> Name
   -> m SpanDoc
-#if MIN_GHC_API_VERSION(8,6,0)
+-- getDocs goes through the GHCi codepaths which cause problems on ghc-lib.
+-- See https://github.com/digital-asset/daml/issues/4152 for more details.
+#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
 getDocumentationTryGhc tcs name = do
   res <- catchSrcErrors "docs" $ getDocs name
   case res of
