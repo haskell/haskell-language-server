@@ -133,7 +133,7 @@ locationsAtPoint getHieFile IdeOptions{..} pkgState pos =
                 -- This case usually arises when the definition is in an external package.
                 -- In this case the interface files contain garbage source spans
                 -- so we instead read the .hie files to get useful source spans.
-                let mod = nameModule name
+                mod <- MaybeT $ return $ nameModule_maybe name
                 let unitId = moduleUnitId mod
                 pkgConfig <- MaybeT $ pure $ lookupPackageConfig unitId pkgState
                 hiePath <- MaybeT $ liftIO $ optLocateHieFile optPkgLocationOpts pkgConfig mod
@@ -147,7 +147,7 @@ locationsAtPoint getHieFile IdeOptions{..} pkgState pos =
                 pure span
         -- We ignore uniques and source spans and only compare the name and the module.
         eqName :: Name -> Name -> Bool
-        eqName n n' = nameOccName n == nameOccName n' && nameModule n == nameModule n'
+        eqName n n' = nameOccName n == nameOccName n' && nameModule_maybe n == nameModule_maybe n'
         setFileName f (RealSrcSpan span) = RealSrcSpan (span { srcSpanFile = mkFastString f })
         setFileName _ span@(UnhelpfulSpan _) = span
 

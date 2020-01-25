@@ -97,9 +97,12 @@
 #   - {name: Control.Arrow, within: []} # Certain modules are banned entirely
 #
 - functions:
+  # Things that are unsafe in Haskell base library
   - {name: unsafeInterleaveIO, within: []}
   - {name: unsafeDupablePerformIO, within: []}
   - {name: unsafeCoerce, within: []}
+  # Things that are a bit dangerous in the GHC API
+  - {name: nameModule, within: []}
 
 # Add custom hints for this project
 #
