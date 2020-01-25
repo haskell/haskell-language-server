@@ -1,0 +1,14 @@
+# This is a sample hie.yaml file for opening haskell-ide-engine in
+# hie, using stack as the build system.
+# To use is, copy it to a file called 'hie.yaml'
+
+cradle:
+  stack:
+    - path: "./test"
+      component: "ide:test"
+
+    - path: "./exe"
+      component: "ide:exe:ide"
+
+    - path: "./src"
+      component: "ide:lib"

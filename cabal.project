@@ -1,0 +1,10 @@
+packages:
+         ./
+         ../../digital-asset/ghcide
+
+tests: true
+
+package ide
+  test-show-details: direct
+
+write-ghc-environment-files: never
