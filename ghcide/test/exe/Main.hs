@@ -1354,6 +1354,11 @@ completionTests
                                      , "Extract the first element of a list"
 #endif
                                      ]
+    , testSessionWait "keyword" $ do
+        let source = T.unlines ["module A where", "f = newty"]
+        docId <- openDoc' "A.hs" "haskell" source
+        compls <- getCompletions docId (Position 1 9)
+        liftIO $ compls @?= [keywordItem "newtype"]
     ]
   where
     dropDocs :: CompletionItem -> CompletionItem
@@ -1369,6 +1374,23 @@ completionTests
       , _filterText = Nothing
       , _insertText = Nothing
       , _insertTextFormat = Just PlainText
+      , _textEdit = Nothing
+      , _additionalTextEdits = Nothing
+      , _commitCharacters = Nothing
+      , _command = Nothing
+      , _xdata = Nothing
+      }
+    keywordItem label = CompletionItem
+      { _label = label
+      , _kind = Just CiKeyword
+      , _detail = Nothing
+      , _documentation = Nothing
+      , _deprecated = Nothing
+      , _preselect = Nothing
+      , _sortText = Nothing
+      , _filterText = Nothing
+      , _insertText = Nothing
+      , _insertTextFormat = Nothing
       , _textEdit = Nothing
       , _additionalTextEdits = Nothing
       , _commitCharacters = Nothing
