@@ -1,6 +1,8 @@
 cabal-version: 1.12
+category:       Development
 name:           ide
 version:        0.1.0.0
+synopsis:       LSP server for GHC
 description:    Please see the README on GitHub at <https://github.com/alanz/ide#readme>
 homepage:       https://github.com/alanz/ide#readme
 bug-reports:    https://github.com/alanz/ide/issues
