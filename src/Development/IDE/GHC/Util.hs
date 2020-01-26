@@ -5,23 +5,22 @@
 {-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 
--- | GHC utility functions. Importantly, code using our GHC should never:
---
--- * Call runGhc, use runGhcFast instead. It's faster and doesn't require config we don't have.
---
--- * Call setSessionDynFlags, use modifyDynFlags instead. It's faster and avoids loading packages.
+-- | General utility functions, mostly focused around GHC operations.
 module Development.IDE.GHC.Util(
-    lookupPackageConfig,
+    -- * HcsEnv and environment
+    HscEnvEq, hscEnv, newHscEnvEq,
     modifyDynFlags,
     fakeDynFlags,
-    prettyPrint,
     runGhcEnv,
-    textToStringBuffer,
+    -- * GHC wrappers
+    prettyPrint,
+    lookupPackageConfig,
     moduleImportPath,
-    HscEnvEq, hscEnv, newHscEnvEq,
+    cgGutsToCoreModule,
+    -- * General utilities
+    textToStringBuffer,
     readFileUtf8,
     hDuplicateTo',
-    cgGutsToCoreModule
     ) where
 
 import Config
@@ -60,6 +59,8 @@ import Development.IDE.Types.Location
 ----------------------------------------------------------------------
 -- GHC setup
 
+-- | Used to modify dyn flags in preference to calling 'setSessionDynFlags',
+--   since that function also reloads packages (which is very slow).
 modifyDynFlags :: GhcMonad m => (DynFlags -> DynFlags) -> m ()
 modifyDynFlags f = do
   newFlags <- f <$> getSessionDynFlags
@@ -68,6 +69,7 @@ modifyDynFlags f = do
   modifySession $ \h ->
     h { hsc_dflags = newFlags, hsc_IC = (hsc_IC h) {ic_dflags = newFlags} }
 
+-- | Given a 'UnitId' try and find the associated 'PackageConfig' in the environment.
 lookupPackageConfig :: UnitId -> HscEnv -> Maybe PackageConfig
 lookupPackageConfig unitId env =
     lookupPackage' False pkgConfigMap unitId
@@ -78,14 +80,18 @@ lookupPackageConfig unitId env =
             getPackageConfigMap $ hsc_dflags env
 
 
--- would be nice to do this more efficiently...
+-- | Convert from the @text@ package to the @GHC@ 'StringBuffer'.
+--   Currently implemented somewhat inefficiently (if it ever comes up in a profile).
 textToStringBuffer :: T.Text -> StringBuffer
 textToStringBuffer = stringToStringBuffer . T.unpack
 
 
+-- | Pretty print a GHC value using 'fakeDynFlags'.
 prettyPrint :: Outputable a => a -> String
 prettyPrint = showSDoc fakeDynFlags . ppr
 
+-- | Run a 'Ghc' monad value using an existing 'HscEnv'. Sets up and tears down all the required
+--   pieces, but designed to be more efficient than a standard 'runGhc'.
 runGhcEnv :: HscEnv -> Ghc a -> IO a
 runGhcEnv env act = do
     filesToClean <- newIORef emptyFilesToClean
@@ -96,8 +102,8 @@ runGhcEnv env act = do
         cleanTempFiles dflags
         cleanTempDirs dflags
 
--- Fake DynFlags which are mostly undefined, but define enough to do a
--- little bit.
+-- | A 'DynFlags' value where most things are undefined. It's sufficient to call pretty printing,
+--   but not much else.
 fakeDynFlags :: DynFlags
 fakeDynFlags = defaultDynFlags settings mempty
     where
@@ -120,6 +126,9 @@ fakeDynFlags = defaultDynFlags settings mempty
           , pc_WORD_SIZE=8
           }
 
+-- | Given a module location, and its parse tree, figure out what is the include directory implied by it.
+--   For example, given the file @\/usr\/\Test\/Foo\/Bar.hs@ with the module name @Foo.Bar@ the directory
+--   @\/usr\/Test@ should be on the include path to find sibling modules.
 moduleImportPath :: NormalizedFilePath -> GHC.ParsedModule -> Maybe FilePath
 -- The call to takeDirectory is required since DAML does not require that
 -- the file name matches the module name in the last component.
@@ -137,12 +146,15 @@ moduleImportPath (takeDirectory . fromNormalizedFilePath -> pathDir) pm
         fromNormalizedFilePath $ toNormalizedFilePath $
         moduleNameSlashes $ GHC.moduleName mod'
 
--- | An HscEnv with equality.
+-- | An 'HscEnv' with equality. Two values are considered equal
+--   if they are created with the same call to 'newHscEnvEq'.
 data HscEnvEq = HscEnvEq Unique HscEnv
 
+-- | Unwrap an 'HsEnvEq'.
 hscEnv :: HscEnvEq -> HscEnv
 hscEnv (HscEnvEq _ x) = x
 
+-- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: HscEnv -> IO HscEnvEq
 newHscEnvEq e = do u <- newUnique; return $ HscEnvEq u e
 
@@ -155,9 +167,11 @@ instance Eq HscEnvEq where
 instance NFData HscEnvEq where
   rnf (HscEnvEq a b) = rnf (hashUnique a) `seq` b `seq` ()
 
+-- | Read a UTF8 file, with lenient decoding, so it will never raise a decoding error.
 readFileUtf8 :: FilePath -> IO T.Text
 readFileUtf8 f = T.decodeUtf8With T.lenientDecode <$> BS.readFile f
 
+-- | Convert from a 'CgGuts' to a 'CoreModule'.
 cgGutsToCoreModule :: SafeHaskellMode -> CgGuts -> ModDetails -> CoreModule
 cgGutsToCoreModule safeMode guts modDetails = CoreModule
     (cg_module guts)
@@ -165,8 +179,8 @@ cgGutsToCoreModule safeMode guts modDetails = CoreModule
     (cg_binds guts)
     safeMode
 
--- This is a slightly modified version of hDuplicateTo in GHC.
--- See the inline comment for more details.
+-- | A slightly modified version of 'hDuplicateTo' from GHC.
+--   Importantly, it avoids the bug listed in https://gitlab.haskell.org/ghc/ghc/merge_requests/2318.
 hDuplicateTo' :: Handle -> Handle -> IO ()
 hDuplicateTo' h1@(FileHandle path m1) h2@(FileHandle _ m2)  = do
  withHandle__' "hDuplicateTo" h2 m2 $ \h2_ -> do
