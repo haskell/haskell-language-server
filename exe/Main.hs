@@ -28,8 +28,9 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Types.Logger
 import Development.IDE.GHC.Util
-import Development.IDE.Plugin.Completions
-import Development.IDE.Plugin.CodeAction
+import Development.IDE.Plugin
+import Development.IDE.Plugin.Completions as Completions
+import Development.IDE.Plugin.CodeAction as CodeAction
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
@@ -85,18 +86,13 @@ main = do
 
     dir <- getCurrentDirectory
 
-    let handlers =
-            setHandlersCompletion <>
-            setHandlersCodeAction <> setHandlersCodeLens
-    let rules = do
-            mainRule
-            produceCompletions
+    let plugins = Completions.plugin <> CodeAction.plugin
 
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer def handlers $ \getLspId event vfs caps -> do
+        runLanguageServer def (pluginHandler plugins) $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             -- very important we only call loadSession once, and it's fast, so just do it before starting
@@ -105,7 +101,7 @@ main = do
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     }
-            initialise caps (rules >> action kick) getLspId event (logger minBound) options vfs
+            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"

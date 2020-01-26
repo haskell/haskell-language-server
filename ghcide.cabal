@@ -115,6 +115,7 @@ library
         Development.IDE.Types.Location
         Development.IDE.Types.Logger
         Development.IDE.Types.Options
+        Development.IDE.Plugin
         Development.IDE.Plugin.Completions
         Development.IDE.Plugin.CodeAction
     other-modules:

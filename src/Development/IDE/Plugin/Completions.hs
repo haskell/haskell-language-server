@@ -1,8 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 
-module Development.IDE.Plugin.Completions (
-  setHandlersCompletion, produceCompletions
-) where
+module Development.IDE.Plugin.Completions(plugin) where
 
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
@@ -15,6 +13,7 @@ import GHC.Generics
 import Data.Maybe
 import HscTypes
 
+import Development.IDE.Plugin
 import Development.IDE.Core.Service
 import Development.IDE.Plugin.Completions.Logic
 import Development.IDE.Types.Location
@@ -25,6 +24,9 @@ import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
 import Development.IDE.Import.DependencyInformation
 
+
+plugin :: Plugin
+plugin = Plugin produceCompletions setHandlersCompletion
 
 produceCompletions :: Rules ()
 produceCompletions =
