@@ -6,13 +6,11 @@
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
-module Development.IDE.Plugin.CodeAction
-    ( setHandlersCodeAction
-    , setHandlersCodeLens
-    ) where
+module Development.IDE.Plugin.CodeAction(plugin) where
 
 import           Language.Haskell.LSP.Types
 import Control.Monad (join)
+import Development.IDE.Plugin
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
@@ -38,13 +36,18 @@ import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
 import Outputable (ppr, showSDocUnsafe)
 
+plugin :: Plugin
+plugin = codeActionPlugin codeAction <> Plugin mempty setHandlersCodeLens
+
 -- | Generate code actions.
 codeAction
     :: LSP.LspFuncs ()
     -> IdeState
-    -> CodeActionParams
-    -> IO (List CAResult)
-codeAction lsp state CodeActionParams{_textDocument=TextDocumentIdentifier uri,_context=CodeActionContext{_diagnostics=List xs}} = do
+    -> TextDocumentIdentifier
+    -> Range
+    -> CodeActionContext
+    -> IO [CAResult]
+codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
     -- disable logging as its quite verbose
     -- logInfo (ideLogger ide) $ T.pack $ "Code action req: " ++ show arg
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
@@ -52,7 +55,7 @@ codeAction lsp state CodeActionParams{_textDocument=TextDocumentIdentifier uri,_
     (ideOptions, parsedModule) <- runAction state $
       (,) <$> getIdeOptions
           <*> (getParsedModule . toNormalizedFilePath) `traverse` uriToFilePath uri
-    pure $ List
+    pure
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
         | x <- xs, (title, tedit) <- suggestAction ideOptions ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
@@ -438,11 +441,6 @@ matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegex message regex = case unifySpaces message =~~ regex of
     Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
     Nothing -> Nothing
-
-setHandlersCodeAction :: PartialHandlers
-setHandlersCodeAction = PartialHandlers $ \WithMessage{..} x -> return x{
-    LSP.codeActionHandler = withResponse RspCodeAction codeAction
-    }
 
 setHandlersCodeLens :: PartialHandlers
 setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
