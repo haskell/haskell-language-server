@@ -95,7 +95,7 @@ main = do
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting LSP server..."
-        hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcidie WITHOUT the --lsp option!"
+        hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
         runLanguageServer def handlers $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
