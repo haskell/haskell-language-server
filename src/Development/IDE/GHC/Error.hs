@@ -17,6 +17,7 @@ module Development.IDE.GHC.Error
   , zeroSpan
   , realSpan
   , isInsideSrcSpan
+  , noSpan
 
   -- * utilities working with severities
   , toDSeverity
