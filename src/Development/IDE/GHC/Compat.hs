@@ -16,7 +16,6 @@ module Development.IDE.GHC.Compat(
     includePathsGlobal,
     includePathsQuote,
     addIncludePathsQuote,
-    ghcEnumerateExtensions,
     pattern DerivD,
     pattern ForD,
     pattern InstD,
@@ -31,11 +30,6 @@ module Development.IDE.GHC.Compat(
 import StringBuffer
 import DynFlags
 import FieldLabel
-import GHC.LanguageExtensions.Type
-
-#if MIN_GHC_API_VERSION(8,8,0)
-import Data.List.Extra (enumerate)
-#endif
 
 import qualified GHC
 import GHC hiding (ClassOpSig, DerivD, ForD, IEThingWith, InstD, TyClD, ValD)
@@ -86,15 +80,6 @@ addIncludePathsQuote path x = x{includePaths = f $ includePaths x}
     where f i = i{includePathsQuote = path : includePathsQuote i}
 #else
 addIncludePathsQuote path x = x{includePaths = path : includePaths x}
-#endif
-
-ghcEnumerateExtensions :: [Extension]
-#if MIN_GHC_API_VERSION(8,8,0)
-ghcEnumerateExtensions = enumerate
-#elif MIN_GHC_API_VERSION(8,6,0)
-ghcEnumerateExtensions = [Cpp .. StarIsType]
-#else
-ghcEnumerateExtensions = [Cpp .. EmptyDataDeriving]
 #endif
 
 pattern DerivD :: DerivDecl p -> HsDecl p

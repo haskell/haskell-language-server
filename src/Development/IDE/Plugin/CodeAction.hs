@@ -21,7 +21,6 @@ import Development.IDE.LSP.Server
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import qualified Data.HashMap.Strict as Map
-import qualified Data.HashSet as Set
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.VFS
 import Language.Haskell.LSP.Messages
@@ -32,9 +31,12 @@ import Data.Char
 import Data.Maybe
 import Data.List.Extra
 import qualified Data.Text as T
+import Data.Tuple.Extra ((&&&))
 import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
 import Outputable (ppr, showSDocUnsafe)
+import DynFlags (xFlags, FlagSpec(..))
+import GHC.LanguageExtensions.Type (Extension)
 
 plugin :: Plugin
 plugin = codeActionPlugin codeAction <> Plugin mempty setHandlersCodeLens
@@ -210,9 +212,13 @@ suggestAddExtension Diagnostic{_range=_range@Range{..},..}
 --     * In the context: a ~ ()
 --       While checking an instance declaration
 --       In the instance declaration for `Unit (m a)'
-    | exts@(_:_) <- filter (`Set.member` ghcExtensions) $ T.split (not . isAlpha) $ T.replace "-X" "" _message
+    | exts@(_:_) <- filter (`Map.member` ghcExtensions) $ T.split (not . isAlpha) $ T.replace "-X" "" _message
         = [("Add " <> x <> " extension", [TextEdit (Range (Position 0 0) (Position 0 0)) $ "{-# LANGUAGE " <> x <> " #-}\n"]) | x <- exts]
     | otherwise = []
+
+-- | All the GHC extensions
+ghcExtensions :: Map.HashMap T.Text Extension
+ghcExtensions = Map.fromList . map ( ( T.pack . flagSpecName ) &&& flagSpecFlag ) $ xFlags
 
 suggestModuleTypo :: Diagnostic -> [(T.Text, [TextEdit])]
 suggestModuleTypo Diagnostic{_range=_range@Range{..},..}
@@ -366,10 +372,6 @@ extendToWholeLineIfPossible contents range@Range{..} =
     let newlineAfter = maybe False (T.isPrefixOf "\n" . T.dropWhile (\x -> isSpace x && x /= '\n') . snd . splitTextAtPosition _end) contents
         extend = newlineAfter && _character _start == 0 -- takes up an entire line, so remove the whole line
     in if extend then Range _start (Position (_line _end + 1) 0) else range
-
--- | All the GHC extensions
-ghcExtensions :: Set.HashSet T.Text
-ghcExtensions = Set.fromList $ map (T.pack . show) ghcEnumerateExtensions
 
 splitTextAtPosition :: Position -> T.Text -> (T.Text, T.Text)
 splitTextAtPosition (Position row col) x
