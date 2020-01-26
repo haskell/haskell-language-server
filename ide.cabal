@@ -62,11 +62,12 @@ library
         transformers,
         unordered-containers,
         utf8-string,
-        hslogger
+      hslogger,
+      ghc
 
   default-language: Haskell2010
 
-executable ide
+executable haskell-ide
   main-is: Main.hs
   other-modules:
       Paths_ide
