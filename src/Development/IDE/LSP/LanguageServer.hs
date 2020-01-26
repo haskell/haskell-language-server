@@ -29,8 +29,6 @@ import System.IO
 import Control.Monad.Extra
 
 import Development.IDE.LSP.HoverDefinition
-import Development.IDE.LSP.CodeAction
-import Development.IDE.LSP.Completions
 import Development.IDE.LSP.Notifications
 import Development.IDE.LSP.Outline
 import Development.IDE.Core.Service
@@ -98,8 +96,6 @@ runLanguageServer options userHandlers getIdeState = do
     let PartialHandlers parts =
             setHandlersIgnore <> -- least important
             setHandlersDefinition <> setHandlersHover <>
-            setHandlersCodeAction <> setHandlersCodeLens <> -- useful features someone may override
-            setHandlersCompletion <>
             setHandlersOutline <>
             userHandlers <>
             setHandlersNotifications <> -- absolutely critical, join them with user notifications

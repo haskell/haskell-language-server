@@ -1,5 +1,7 @@
-module Development.IDE.LSP.Completions (
-  setHandlersCompletion
+{-# LANGUAGE TypeFamilies #-}
+
+module Development.IDE.Plugin.Completions (
+  setHandlersCompletion, produceCompletions
 ) where
 
 import Language.Haskell.LSP.Messages
@@ -7,14 +9,47 @@ import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.VFS as VFS
 import Language.Haskell.LSP.Types.Capabilities
+import Development.Shake.Classes
+import Development.Shake
+import GHC.Generics
+import Data.Maybe
+import HscTypes
 
 import Development.IDE.Core.Service
-import Development.IDE.Core.Completions
+import Development.IDE.Plugin.Completions.Logic
 import Development.IDE.Types.Location
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
+import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
+import Development.IDE.Import.DependencyInformation
+
+
+produceCompletions :: Rules ()
+produceCompletions =
+    define $ \ProduceCompletions file -> do
+        deps <- maybe (TransitiveDependencies [] []) fst <$> useWithStale GetDependencies file
+        tms <- mapMaybe (fmap fst) <$> usesWithStale TypeCheck (transitiveModuleDeps deps)
+        tm <- fmap fst <$> useWithStale TypeCheck file
+        packageState <- fmap (hscEnv . fst) <$> useWithStale GhcSession file
+        case (tm, packageState) of
+            (Just tm', Just packageState') -> do
+                cdata <- liftIO $ cacheDataProducer packageState' (hsc_dflags packageState')
+                                                    (tmrModule tm') (map tmrModule tms)
+                return ([], Just (cdata, tm'))
+            _ -> return ([], Nothing)
+
+
+-- | Produce completions info for a file
+type instance RuleResult ProduceCompletions = (CachedCompletions, TcModuleResult)
+
+data ProduceCompletions = ProduceCompletions
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable ProduceCompletions
+instance NFData   ProduceCompletions
+instance Binary   ProduceCompletions
+
 
 -- | Generate code actions.
 getCompletionsLSP
