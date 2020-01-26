@@ -99,8 +99,6 @@ library
     include-dirs:
         include
     exposed-modules:
-        Development.IDE.Core.Completions
-        Development.IDE.Core.CompletionsTypes
         Development.IDE.Core.FileStore
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
@@ -117,6 +115,8 @@ library
         Development.IDE.Types.Location
         Development.IDE.Types.Logger
         Development.IDE.Types.Options
+        Development.IDE.Plugin.Completions
+        Development.IDE.Plugin.CodeAction
     other-modules:
         Development.IDE.Core.Debouncer
         Development.IDE.Core.Compile
@@ -128,8 +128,6 @@ library
         Development.IDE.GHC.Orphans
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
-        Development.IDE.LSP.CodeAction
-        Development.IDE.LSP.Completions
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.Notifications
         Development.IDE.LSP.Outline
@@ -138,6 +136,8 @@ library
         Development.IDE.Spans.Common
         Development.IDE.Spans.Documentation
         Development.IDE.Spans.Type
+        Development.IDE.Plugin.Completions.Logic
+        Development.IDE.Plugin.Completions.Types
     ghc-options: -Wall -Wno-name-shadowing
 
 executable ghcide-test-preprocessor
