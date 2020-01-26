@@ -27,7 +27,7 @@ module Development.IDE.Core.Shake(
     shakeProfile,
     use, useWithStale, useNoFile, uses, usesWithStale,
     use_, useNoFile_, uses_,
-    define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks, fingerprintToBS,
+    define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks,
     getDiagnostics, unsafeClearDiagnostics,
     getHiddenDiagnostics,
     IsIdeGlobal, addIdeGlobal, getIdeGlobalState, getIdeGlobalAction,
@@ -51,7 +51,6 @@ import qualified Data.HashMap.Strict as HMap
 import qualified Data.Map.Strict as Map
 import qualified Data.Map.Merge.Strict as Map
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Internal as BS
 import           Data.Dynamic
 import           Data.Maybe
 import Data.Map.Strict (Map)
@@ -64,9 +63,6 @@ import Data.Unique
 import Development.IDE.Core.Debouncer
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Types.Logger hiding (Priority)
-import Foreign.Ptr
-import Foreign.Storable
-import GHC.Fingerprint
 import Language.Haskell.LSP.Diagnostics
 import qualified Data.SortedList as SL
 import           Development.IDE.Types.Diagnostics
@@ -637,12 +633,6 @@ defineOnDisk act = addBuiltinRule noLint noIdentity $
                           | mbHash == Just old = ChangedRecomputeSame
                           | otherwise = ChangedRecomputeDiff
                     pure $ RunResult change (fromMaybe "" mbHash) (isJust mbHash)
-
-fingerprintToBS :: Fingerprint -> BS.ByteString
-fingerprintToBS (Fingerprint a b) = BS.unsafeCreate 8 $ \ptr -> do
-    ptr <- pure $ castPtr ptr
-    pokeElemOff ptr 0 a
-    pokeElemOff ptr 1 b
 
 needOnDisk :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> NormalizedFilePath -> Action ()
 needOnDisk k file = do
