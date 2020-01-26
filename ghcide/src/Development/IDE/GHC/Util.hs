@@ -17,6 +17,8 @@ module Development.IDE.GHC.Util(
     lookupPackageConfig,
     moduleImportPath,
     cgGutsToCoreModule,
+    fingerprintToBS,
+    fingerprintFromStringBuffer,
     -- * General utilities
     textToStringBuffer,
     readFileUtf8,
@@ -28,15 +30,17 @@ import Control.Concurrent
 import Data.List.Extra
 import Data.Maybe
 import Data.Typeable
-#if MIN_GHC_API_VERSION(8,6,0)
+import qualified Data.ByteString.Internal as BS
 import Fingerprint
-#endif
 import GHC
 import GhcMonad
 import GhcPlugins hiding (Unique)
 import Data.IORef
 import Control.Exception
 import FileCleanup
+import Foreign.Ptr
+import Foreign.ForeignPtr
+import Foreign.Storable
 import GHC.IO.BufferedIO (BufferedIO)
 import GHC.IO.Device as IODevice
 import GHC.IO.Encoding
@@ -178,6 +182,20 @@ cgGutsToCoreModule safeMode guts modDetails = CoreModule
     (md_types modDetails)
     (cg_binds guts)
     safeMode
+
+-- | Convert a 'Fingerprint' to a 'ByteString' by copying the byte across.
+--   Will produce an 8 byte unreadable ByteString.
+fingerprintToBS :: Fingerprint -> BS.ByteString
+fingerprintToBS (Fingerprint a b) = BS.unsafeCreate 8 $ \ptr -> do
+    ptr <- pure $ castPtr ptr
+    pokeElemOff ptr 0 a
+    pokeElemOff ptr 1 b
+
+-- | Take the 'Fingerprint' of a 'StringBuffer'.
+fingerprintFromStringBuffer :: StringBuffer -> IO Fingerprint
+fingerprintFromStringBuffer (StringBuffer buf len cur) =
+    withForeignPtr buf $ \ptr -> fingerprintData (ptr `plusPtr` cur) len
+
 
 -- | A slightly modified version of 'hDuplicateTo' from GHC.
 --   Importantly, it avoids the bug listed in https://gitlab.haskell.org/ghc/ghc/merge_requests/2318.
