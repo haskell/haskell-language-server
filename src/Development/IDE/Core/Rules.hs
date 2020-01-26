@@ -21,7 +21,6 @@ module Development.IDE.Core.Rules(
     getDefinition,
     getDependencies,
     getParsedModule,
-    fileFromParsedModule,
     generateCore,
     ) where
 
@@ -363,9 +362,3 @@ mainRule = do
     generateByteCodeRule
     loadGhcSession
     getHieFileRule
-
-
-------------------------------------------------------------
-
-fileFromParsedModule :: ParsedModule -> NormalizedFilePath
-fileFromParsedModule = toNormalizedFilePath . ms_hspp_file . pm_mod_summary
