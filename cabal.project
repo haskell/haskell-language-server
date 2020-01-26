@@ -1,6 +1,6 @@
 packages:
          ./
-         ../../digital-asset/ghcide
+         ghcide
 
 tests: true
 
