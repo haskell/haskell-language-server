@@ -6,7 +6,7 @@
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
-module Development.IDE.LSP.CodeAction
+module Development.IDE.Plugin.CodeAction
     ( setHandlersCodeAction
     , setHandlersCodeLens
     ) where

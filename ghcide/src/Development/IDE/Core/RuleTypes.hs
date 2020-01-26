@@ -27,7 +27,6 @@ import Module (InstalledUnitId)
 import HscTypes (CgGuts, Linkable, HomeModInfo, ModDetails)
 import Development.IDE.GHC.Compat
 
-import           Development.IDE.Core.CompletionsTypes
 import           Development.IDE.Spans.Type
 
 
@@ -85,9 +84,6 @@ type instance RuleResult ReportImportCycles = ()
 
 -- | Read the given HIE file.
 type instance RuleResult GetHieFile = HieFile
-
--- | Produce completions info for a file
-type instance RuleResult ProduceCompletions = (CachedCompletions, TcModuleResult)
 
 
 data GetParsedModule = GetParsedModule
@@ -157,9 +153,3 @@ data GetHieFile = GetHieFile FilePath
 instance Hashable GetHieFile
 instance NFData   GetHieFile
 instance Binary   GetHieFile
-
-data ProduceCompletions = ProduceCompletions
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable ProduceCompletions
-instance NFData   ProduceCompletions
-instance Binary   ProduceCompletions

@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 -- Mostly taken from "haskell-ide-engine"
-module Development.IDE.Core.Completions (
+module Development.IDE.Plugin.Completions.Logic (
   CachedCompletions
 , cacheDataProducer
 , WithSnippets(..)
@@ -29,7 +29,7 @@ import DynFlags
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.VFS as VFS
-import Development.IDE.Core.CompletionsTypes
+import Development.IDE.Plugin.Completions.Types
 import Development.IDE.Spans.Documentation
 import Development.IDE.GHC.Error
 import Development.IDE.Types.Options
