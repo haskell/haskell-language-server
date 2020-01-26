@@ -392,6 +392,7 @@ codeActionTests = testGroup "code actions"
   , typeWildCardActionTests
   , removeImportTests
   , extendImportTests
+  , addExtensionTests
   , fixConstructorImportTests
   , importRenameActionTests
   , fillTypedHoleTests
@@ -805,6 +806,62 @@ extendImportTests = testGroup "extend import actions"
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ expectedContentB @=? contentAfterAction
+
+addExtensionTests :: TestTree
+addExtensionTests = testGroup "add language extension actions"
+  [ testSession "add NamedFieldPuns language extension" $ template
+      (T.unlines
+            [ "module Module where"
+            , ""
+            , "data A = A { getA :: Bool }"
+            , ""
+            , "f :: A -> Bool"
+            , "f A { getA } = getA"
+            ])
+      (Range (Position 0 0) (Position 0 0))
+      "Add NamedFieldPuns extension"
+      (T.unlines
+            [ "{-# LANGUAGE NamedFieldPuns #-}"
+            , "module Module where"
+            , ""
+            , "data A = A { getA :: Bool }"
+            , ""
+            , "f :: A -> Bool"
+            , "f A { getA } = getA"
+            ])
+  , testSession "add RecordWildCards language extension" $ template
+      (T.unlines
+            [ "module Module where"
+            , ""
+            , "data A = A { getA :: Bool }"
+            , ""
+            , "f :: A -> Bool"
+            , "f A { .. } = getA"
+            ])
+      (Range (Position 0 0) (Position 0 0))
+      "Add RecordWildCards extension"
+      (T.unlines
+            [ "{-# LANGUAGE RecordWildCards #-}"
+            , "module Module where"
+            , ""
+            , "data A = A { getA :: Bool }"
+            , ""
+            , "f :: A -> Bool"
+            , "f A { .. } = getA"
+            ])
+  ]
+    where
+      template initialContent range expectedAction expectedContents = do
+        doc <- openDoc' "Module.hs" "haskell" initialContent
+        _ <- waitForDiagnostics
+        CACodeAction action@CodeAction { _title = actionTitle } : _
+                    <- sortOn (\(CACodeAction CodeAction{_title=x}) -> x) <$>
+                       getCodeActions doc range
+        liftIO $ expectedAction @=? actionTitle
+        executeCodeAction action
+        contentAfterAction <- documentContents doc
+        liftIO $ expectedContents @=? contentAfterAction
+        
 
 insertNewDefinitionTests :: TestTree
 insertNewDefinitionTests = testGroup "insert new definition actions"
