@@ -31,6 +31,7 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Types.Logger
 import Development.IDE.GHC.Util
+import Development.IDE.Plugin
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
@@ -55,7 +56,9 @@ import HIE.Bios
 
 -- ---------------------------------------------------------------------
 
-import qualified Ide.Plugin.Example as P
+import Ide.Plugin.Example as Example
+import Development.IDE.Plugin.Completions as Completions
+import Development.IDE.Plugin.CodeAction as CodeAction
 
 -- ---------------------------------------------------------------------
 
@@ -92,11 +95,14 @@ main = do
 
     dir <- getCurrentDirectory
 
+    let plugins = Completions.plugin <> CodeAction.plugin
+                  <> Example.plugin
+
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting (ide)LSP server..."
-        hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ide WITHOUT the --lsp option!"
-        runLanguageServer def P.setHandlersExample $ \getLspId event vfs caps -> do
+        hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
+        runLanguageServer def (pluginHandler plugins) $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             -- very important we only call loadSession once, and it's fast, so just do it before starting
@@ -105,7 +111,7 @@ main = do
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     }
-            initialise caps (mainRule >> action kick) getLspId event (logger minBound) options vfs
+            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"

@@ -3,7 +3,7 @@
 
 module Ide.Plugin.Example
   (
-    setHandlersExample
+    plugin
   ) where
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
@@ -13,12 +13,25 @@ import           Development.IDE.Types.Logger
 import           Development.Shake
 import qualified Language.Haskell.LSP.Core       as LSP
 
+import Development.IDE.Plugin
+import Development.IDE.Core.Service
+import Development.IDE.Types.Location
+import Development.IDE.Core.PositionMapping
+import Development.IDE.Core.RuleTypes
+import Development.IDE.Core.Shake
+import Development.IDE.GHC.Util
+import Development.IDE.LSP.Server
+import Development.IDE.Import.DependencyInformation
+
 import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
 
 import qualified Data.Text as T
 
 -- ---------------------------------------------------------------------
+
+plugin :: Plugin
+plugin = Plugin mempty handlersExample
 
 hover          :: IdeState -> TextDocumentPositionParams -> IO (Maybe Hover)
 hover          = request "Hover"      blah     Nothing      foundHover
@@ -27,9 +40,9 @@ blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
   = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover"])
 
-setHandlersExample :: PartialHandlers
-setHandlersExample = PartialHandlers $ \WithMessage{..} x ->
-  return x{LSP.hoverHandler      = withResponse RspHover      $ const hover}
+handlersExample :: PartialHandlers
+handlersExample = PartialHandlers $ \WithMessage{..} x ->
+  return x{LSP.hoverHandler = withResponse RspHover $ const hover}
 
 
 -- ---------------------------------------------------------------------
