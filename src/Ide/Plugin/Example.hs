@@ -1,37 +1,55 @@
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 module Ide.Plugin.Example
   (
     plugin
   ) where
-import           Development.IDE.Core.Rules
-import           Development.IDE.Core.Service
-import           Development.IDE.LSP.Server
-import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger
-import           Development.Shake
-import qualified Language.Haskell.LSP.Core       as LSP
 
-import Development.IDE.Plugin
-import Development.IDE.Core.Service
-import Development.IDE.Types.Location
+import           Control.Concurrent.Extra
+import Control.DeepSeq
+import Control.Exception
+import Data.Binary
+import qualified Data.ByteString.UTF8 as BS
+import Data.Functor
+import Data.Hashable
+import           Data.Set                                 (Set)
+import qualified Data.Set                                 as Set
+import qualified Data.Text as T
+import Data.Tuple.Extra
+import Data.Typeable
+import Development.IDE.Core.OfInterest
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Service
+import Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
 import Development.IDE.Core.Shake
+import Development.IDE.GHC.Error
 import Development.IDE.GHC.Util
-import Development.IDE.LSP.Server
 import Development.IDE.Import.DependencyInformation
-
+import           Development.IDE.LSP.Server
+import Development.IDE.LSP.Server
+import Development.IDE.Plugin
+import           Development.IDE.Types.Location
+import Development.IDE.Types.Location
+import           Development.IDE.Types.Logger
+import Development.IDE.Types.Logger
+import           Development.Shake
+import GHC.Generics
+import qualified Language.Haskell.LSP.Core       as LSP
 import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
-
-import qualified Data.Text as T
+import  SrcLoc
 
 -- ---------------------------------------------------------------------
 
 plugin :: Plugin
-plugin = Plugin mempty handlersExample
+plugin = Plugin exampleRules handlersExample
 
 hover          :: IdeState -> TextDocumentPositionParams -> IO (Maybe Hover)
 hover          = request "Hover"      blah     Nothing      foundHover
@@ -46,6 +64,26 @@ handlersExample = PartialHandlers $ \WithMessage{..} x ->
 
 
 -- ---------------------------------------------------------------------
+
+data Example = Example
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable Example
+instance NFData   Example
+instance Binary   Example
+
+type instance RuleResult Example = ()
+
+exampleRules = do
+  define $ \Example file -> do
+    getParsedModule file
+    let diag = diagFromString "example" DsError (noSpan "<Internal>") "example diagnostic, hello world"
+    return (diag, Just ())
+
+  action $ do
+    files <- getFilesOfInterest
+    void $ uses Example $ Set.toList files
+-- ---------------------------------------------------------------------
+
 foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
 foundHover (mbRange, contents) =
   Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
