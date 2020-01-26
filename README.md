@@ -4,8 +4,7 @@ Integration point for ghcide and haskell-ide-engine. One IDE to rule them all.
 
 This is *very* early stage software.
 
-To play along at home, it assumes the ghcide master is checked out at
-`../../digital-asset/ghcide` relative to this one.
+To play along at home, do a recursive `git clone`.
 
 Initial effort is to understand how plugins can be supported in a modular way.
 

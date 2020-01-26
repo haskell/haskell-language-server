@@ -1,0 +1,3 @@
+[submodule "ghcide"]
+	path = ghcide
+	url = https://github.com/digital-asset/ghcide.git
