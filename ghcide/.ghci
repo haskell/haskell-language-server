@@ -18,6 +18,7 @@
 :set -ignore-package=ghc-lib-parser
 :set -DGHC_STABLE
 :set -Iinclude
+:set -idist/build/autogen
 :set -isrc
 :set -iexe
 
