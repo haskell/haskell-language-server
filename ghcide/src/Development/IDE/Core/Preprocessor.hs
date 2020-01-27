@@ -167,10 +167,18 @@ runLhs dflags filename contents = withTempDir $ \dir -> do
     escape []        = []
 
 
+modifyOptP :: ([String] -> [String]) -> DynFlags -> DynFlags
+modifyOptP op = onSettings (onOptP op)
+  where
+    onSettings f x = x{settings = f $ settings x}
+    onOptP f x = x{sOpt_P = f $ sOpt_P x}
+
 -- | Run CPP on a file
 runCpp :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer
 runCpp dflags filename contents = withTempDir $ \dir -> do
     let out = dir </> takeFileName filename <.> "out"
+    dflags <- pure $ modifyOptP ("-D__GHCIDE__":) dflags
+
     case contents of
         Nothing -> do
             -- Happy case, file is not modified, so run CPP on it in-place
