@@ -1209,8 +1209,8 @@ findDefinitionAndHoverTests = let
   tvrL40 = Position 40 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
   intL41 = Position 41 20  ;  litI   = [ExpectHoverText ["7518"]]
   chrL36 = Position 37 24  ;  litC   = [ExpectHoverText ["'f'"]]
-  txtL8  = Position  8 14  ;  litT   = [ExpectHoverText ["\"dfgv\""]]
-  lstL43 = Position 43 12  ;  litL   = [ExpectHoverText ["[ 8391 :: Int, 6268 ]"]]
+  txtL8  = Position  8 14  ;  litT   = [ExpectHoverText ["\"dfgy\""]]
+  lstL43 = Position 43 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
   outL45 = Position 45  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
   innL48 = Position 48  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   in
@@ -1246,8 +1246,8 @@ findDefinitionAndHoverTests = let
   , test no     broken tvrL40 kindV  "kind of (* -> *) type variable  #273"
   , test no     yes    intL41 litI   "literal Int  in hover info      #274"
   , test no     yes    chrL36 litC   "literal Char in hover info      #274"
-  , test no     broken txtL8  litT   "literal Text in hover info      #274"
-  , test no     broken lstL43 litL   "literal List in hover info      #274"
+  , test no     yes    txtL8  litT   "literal Text in hover info      #274"
+  , test no     yes    lstL43 litL   "literal List in hover info      #274"
   , test no     yes    docL41 constr "type constraint in hover info   #283"
   , test broken broken outL45 outSig "top-level signature             #310"
   , test broken broken innL48 innSig "inner     signature             #310"
