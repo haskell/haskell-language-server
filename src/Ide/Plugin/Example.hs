@@ -12,51 +12,28 @@ module Ide.Plugin.Example
     plugin
   ) where
 
-import Control.Concurrent.Extra
-import Control.DeepSeq
-import Control.Exception
-import Control.Monad (join)
-import Control.Monad.Trans.Maybe
-import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
+import Control.DeepSeq ( NFData )
 import Data.Binary
-import qualified Data.ByteString.UTF8 as BS
-import Data.Char
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
-import qualified Data.HashSet as HSet
 import Data.Hashable
-import Data.List.Extra
-import Data.Maybe
-import qualified Data.Rope.UTF16 as Rope
 import qualified Data.Set                     as Set
 import qualified Data.Text as T
-import Data.Tuple.Extra
 import Data.Typeable
 import Development.IDE.Core.OfInterest
-import Development.IDE.Core.PositionMapping
-import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Rules
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
-import Development.IDE.GHC.Error
-import Development.IDE.GHC.Util
-import Development.IDE.Import.DependencyInformation
 import Development.IDE.LSP.Server
 import Development.IDE.Plugin
 import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
-import Development.IDE.Types.Options
 import Development.Shake hiding ( Diagnostic )
-import GHC
 import GHC.Generics
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.VFS
-import Outputable (ppr, showSDocUnsafe)
-import SrcLoc
-import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
@@ -86,9 +63,10 @@ instance Binary   Example
 
 type instance RuleResult Example = ()
 
+exampleRules :: Rules ()
 exampleRules = do
   define $ \Example file -> do
-    getParsedModule file
+    _pm <- getParsedModule file
     let diag = mkDiag file "example" DsError (Range (Position 0 0) (Position 1 0)) "example diagnostic, hello world"
     return ([diag], Just ())
 
@@ -122,27 +100,14 @@ codeAction
     -> Range
     -> CodeActionContext
     -> IO [CAResult]
-codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
-    contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
-    let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
-    (ideOptions, parsedModule) <- runAction state $
-      (,) <$> getIdeOptions
-          <*> (getParsedModule . toNormalizedFilePath) `traverse` uriToFilePath uri
+codeAction _lsp _state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
+    let
+      title = "Add TODO Item"
+      tedit = [TextEdit (Range (Position 0 0) (Position 1 0)) "-- TODO added by Example Plugin directly\n"]
+      edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
     pure
-        [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction ideOptions ( join parsedModule ) text x
-        , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-        ]
+        [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) (Just edit) Nothing ]
 
-suggestAction  :: IdeOptions -> Maybe ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAction ideOptions parsedModule text diag = concat
-    [ suggestAddTodo diag ]
-
-suggestAddTodo :: Diagnostic -> [(T.Text, [TextEdit])]
-suggestAddTodo Diagnostic{_range=_range@Range{..},..}
-    = [("Add TODO Item",
-        -- [TextEdit _range "-- TODO added by Example Plugin\n"]) ]
-        [TextEdit (Range (Position 0 0) (Position 1 0)) "-- TODO added by Example Plugin\n"]) ]
 
 -- ---------------------------------------------------------------------
 
