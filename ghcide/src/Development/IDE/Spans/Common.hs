@@ -12,6 +12,7 @@ module Development.IDE.Spans.Common (
 , SpanDoc(..)
 , emptySpanDoc
 , spanDocToMarkdown
+, spanDocToMarkdownForTest
 ) where
 
 import Data.Data
@@ -27,11 +28,9 @@ import DataCon
 import Var
 #endif
 
-#if MIN_GHC_API_VERSION(8,6,0)
 import           Data.Char (isSpace)
 import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types as H
-#endif
 
 showGhc :: Outputable a => a -> String
 showGhc = showPpr unsafeGlobalDynFlags
@@ -81,7 +80,14 @@ spanDocToMarkdown (SpanDocString _)
 #endif
 spanDocToMarkdown (SpanDocText txt) = txt
 
-#if MIN_GHC_API_VERSION(8,6,0)
+spanDocToMarkdownForTest :: String -> String
+spanDocToMarkdownForTest
+#if MIN_VERSION_haddock_library(1,6,0)
+  = haddockToMarkdown . H.toRegular . H._doc . H.parseParas Nothing
+#else
+  = haddockToMarkdown . H.toRegular . H._doc . H.parseParas
+#endif
+
 -- Simple (and a bit hacky) conversion from Haddock markup to Markdown
 haddockToMarkdown
   :: H.DocH String String -> String
@@ -89,7 +95,7 @@ haddockToMarkdown
 haddockToMarkdown H.DocEmpty
   = ""
 haddockToMarkdown (H.DocAppend d1 d2)
-  = haddockToMarkdown d1 Prelude.<> haddockToMarkdown d2
+  = haddockToMarkdown d1 ++ " " ++ haddockToMarkdown d2
 haddockToMarkdown (H.DocString s)
   = s
 haddockToMarkdown (H.DocParagraph p)
@@ -138,9 +144,9 @@ haddockToMarkdown (H.DocHeader (H.Header level title))
   = replicate level '#' ++ " " ++ haddockToMarkdown title
 
 haddockToMarkdown (H.DocUnorderedList things)
-  = '\n' : (unlines $ map (\thing -> "+ " ++ dropWhile isSpace (haddockToMarkdown thing)) things)
+  = '\n' : (unlines $ map (("+ " ++) . dropWhile isSpace . splitForList . haddockToMarkdown) things)
 haddockToMarkdown (H.DocOrderedList things)
-  = '\n' : (unlines $ map (\thing -> "1. " ++ dropWhile isSpace (haddockToMarkdown thing)) things)
+  = '\n' : (unlines $ map (("1. " ++) . dropWhile isSpace . splitForList . haddockToMarkdown) things)
 haddockToMarkdown (H.DocDefList things)
   = '\n' : (unlines $ map (\(term, defn) -> "+ **" ++ haddockToMarkdown term ++ "**: " ++ haddockToMarkdown defn) things)
 
@@ -157,4 +163,9 @@ haddockToMarkdown (H.DocTable _t)
 -- things I don't really know how to handle
 haddockToMarkdown (H.DocProperty _)
   = ""  -- don't really know what to do
-#endif
+
+splitForList :: String -> String
+splitForList s
+  = case lines s of
+      [] -> ""
+      (first:rest) -> unlines $ first : map (("  " ++) . dropWhile isSpace) rest
