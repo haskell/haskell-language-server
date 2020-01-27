@@ -1281,22 +1281,35 @@ pluginTests = testSessionWait "plugins" $ do
 
 cppTests :: TestTree
 cppTests =
-  testCase "cpp" $ do
-    let content =
-          T.unlines
-            [ "{-# LANGUAGE CPP #-}",
-              "module Testing where",
-              "#ifdef FOO",
-              "foo = 42"
-            ]
-    -- The error locations differ depending on which C-preprocessor is used.
-    -- Some give the column number and others don't (hence -1). Assert either
-    -- of them.
-    (run $ expectError content (2, -1))
-      `catch` ( \e -> do
-                  let _ = e :: HUnitFailure
-                  run $ expectError content (2, 1)
-              )
+  testGroup "cpp"
+    [ testCase "cpp-error" $ do
+        let content =
+              T.unlines
+                [ "{-# LANGUAGE CPP #-}",
+                  "module Testing where",
+                  "#ifdef FOO",
+                  "foo = 42"
+                ]
+        -- The error locations differ depending on which C-preprocessor is used.
+        -- Some give the column number and others don't (hence -1). Assert either
+        -- of them.
+        (run $ expectError content (2, -1))
+          `catch` ( \e -> do
+                      let _ = e :: HUnitFailure
+                      run $ expectError content (2, 1)
+                  )
+    , testSessionWait "cpp-ghcide" $ do
+        _ <- openDoc' "A.hs" "haskell" $ T.unlines
+          ["{-# LANGUAGE CPP #-}"
+          ,"main ="
+          ,"#ifdef __GHCIDE__"
+          ,"  worked"
+          ,"#else"
+          ,"  failed"
+          ,"#endif"
+          ]
+        expectDiagnostics [("A.hs", [(DsError, (3, 2), "Variable not in scope: worked")])]
+    ]
   where
     expectError :: T.Text -> Cursor -> Session ()
     expectError content cursor = do
