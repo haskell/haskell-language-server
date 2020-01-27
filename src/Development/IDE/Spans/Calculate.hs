@@ -158,14 +158,43 @@ getTypeLHsExpr tms e = do
     Nothing -> return Nothing
   where
     getSpanSource :: HsExpr GhcTc -> SpanSource
-    getSpanSource (HsLit U lit) = Lit (showGhc lit)
-    getSpanSource (HsOverLit U lit) = Lit (showGhc lit)
+    getSpanSource xpr | isLit xpr = Lit (showGhc xpr)
     getSpanSource (HsVar U (L _ i)) = Named (getName i)
     getSpanSource (HsConLikeOut U (RealDataCon dc)) = Named (dataConName dc)
     getSpanSource RecordCon {rcon_con_name} = Named (getName rcon_con_name)
     getSpanSource (HsWrap U _ xpr) = getSpanSource xpr
     getSpanSource (HsPar U xpr) = getSpanSource (unLoc xpr)
     getSpanSource _ = NoSource
+
+    isLit :: HsExpr GhcTc -> Bool
+    isLit (HsLit U _) = True
+    isLit (HsOverLit U _) = True
+    isLit (ExplicitTuple U args _) = all (isTupLit . unLoc) args
+#if MIN_GHC_API_VERSION(8,6,0)
+    isLit (ExplicitSum  U _ _ xpr) = isLitChild (unLoc xpr)
+    isLit (ExplicitList U _ xprs) = all (isLitChild . unLoc) xprs
+#else
+    isLit (ExplicitSum  _ _ xpr _) = isLitChild (unLoc xpr)
+    isLit (ExplicitList _ _ xprs) = all (isLitChild . unLoc) xprs
+#endif
+    isLit _ = False
+
+    isTupLit (Present U xpr) = isLitChild (unLoc xpr)
+    isTupLit _               = False
+
+    -- We need special treatment for children so things like [(1)] are still treated
+    -- as a list literal while not treating (1) as a literal.
+    isLitChild (HsWrap U _ xpr) = isLitChild xpr
+    isLitChild (HsPar U xpr)    = isLitChild (unLoc xpr)
+#if MIN_GHC_API_VERSION(8,8,0)
+    isLitChild (ExprWithTySig U xpr _) = isLitChild (unLoc xpr)
+#elif MIN_GHC_API_VERSION(8,6,0)
+    isLitChild (ExprWithTySig U xpr) = isLitChild (unLoc xpr)
+#else
+    isLitChild (ExprWithTySigOut xpr _) = isLitChild (unLoc xpr)
+    isLitChild (ExprWithTySig xpr _) = isLitChild (unLoc xpr)
+#endif
+    isLitChild e = isLit e
 
 -- | Get the name and type of a pattern.
 getTypeLPat :: (GhcMonad m)
