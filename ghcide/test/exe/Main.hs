@@ -861,7 +861,7 @@ addExtensionTests = testGroup "add language extension actions"
         executeCodeAction action
         contentAfterAction <- documentContents doc
         liftIO $ expectedContents @=? contentAfterAction
-        
+
 
 insertNewDefinitionTests :: TestTree
 insertNewDefinitionTests = testGroup "insert new definition actions"
@@ -1360,7 +1360,7 @@ completionTests
         let source = T.unlines ["module A where", "f = hea"]
         docId <- openDoc' "A.hs" "haskell" source
         compls <- getCompletions docId (Position 1 7)
-        liftIO $ map dropDocs compls @?= 
+        liftIO $ map dropDocs compls @?=
           [complItem "head" (Just CiFunction) (Just "[a] -> a")]
         let [CompletionItem { _documentation = headDocs}] = compls
         checkDocText "head" headDocs [ "Defined in 'Prelude'"
@@ -1372,12 +1372,12 @@ completionTests
         let source = T.unlines ["module A where", "f = Tru"]
         docId <- openDoc' "A.hs" "haskell" source
         compls <- getCompletions docId (Position 1 7)
-        liftIO $ map dropDocs compls @?= 
+        liftIO $ map dropDocs compls @?=
           [ complItem "True" (Just CiConstructor) (Just "Bool")
 #if MIN_GHC_API_VERSION(8,6,0)
           , complItem "truncate" (Just CiFunction) (Just "(RealFrac a, Integral b) => a -> b")
 #else
-          , complItem "truncate" (Just CiFunction) (Just "RealFrac a => forall b. Integral b => a -> b") 
+          , complItem "truncate" (Just CiFunction) (Just "RealFrac a => forall b. Integral b => a -> b")
 #endif
           ]
     , testSessionWait "type" $ do
@@ -1403,7 +1403,7 @@ completionTests
         expectDiagnostics [ ("A.hs", [(DsWarning, (2, 0), "not used")]) ]
         changeDoc docId [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]]
         compls <- getCompletions docId (Position 2 15)
-        liftIO $ map dropDocs compls @?= 
+        liftIO $ map dropDocs compls @?=
           [complItem "head" (Just CiFunction) (Just "[a] -> a")]
         let [CompletionItem { _documentation = headDocs}] = compls
         checkDocText "head" headDocs [ "Defined in 'Prelude'"
