@@ -412,9 +412,11 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts =
                    let logMsg = logDebug logger $ T.pack $
                         "Finishing shakeRun (took " ++ showDuration runTime ++ ", " ++ res' ++ profile ++ ")"
                    return (fst <$> res, logMsg)
-              let wrapUp (res, logMsg) = do
-                    () <- logMsg
+              let wrapUp (res, _) = do
                     either (throwIO @SomeException) return res
+              _ <- async $ do
+                  (_, logMsg) <- wait aThread
+                  logMsg
               pure (cancel aThread, wrapUp =<< wait aThread))
 
 getDiagnostics :: IdeState -> IO [FileDiagnostic]
