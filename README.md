@@ -1,6 +1,6 @@
 # ide
 
-Integration point for ghcide and haskell-ide-engine. One IDE to rule them all.
+Integration point for ghcide and haskell-ide-engine. One IDE to rule them all. Read the [project's background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html).
 
 This is *very* early stage software.
 
