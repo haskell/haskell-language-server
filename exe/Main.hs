@@ -130,7 +130,11 @@ main = do
         let grab file = fromMaybe (head sessions) $ do
                 cradle <- Map.lookup file filesToCradles
                 Map.lookup cradle cradlesToSessions
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) (defaultIdeOptions $ return $ return . grab) vfs
+
+        let options =
+              (defaultIdeOptions $ return $ return . grab)
+                    { optShakeProfiling = argsShakeProfiling }
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files
