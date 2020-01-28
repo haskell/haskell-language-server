@@ -20,6 +20,7 @@ module Development.IDE.Core.Compile
 
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Preprocessor
+import Development.IDE.Core.Shake
 import Development.IDE.GHC.Error
 import Development.IDE.GHC.Warnings
 import Development.IDE.Types.Diagnostics
@@ -67,7 +68,7 @@ parseModule
     -> HscEnv
     -> FilePath
     -> Maybe SB.StringBuffer
-    -> IO ([FileDiagnostic], Maybe (StringBuffer, ParsedModule))
+    -> IO (IdeResult (StringBuffer, ParsedModule))
 parseModule IdeOptions{..} env filename mbContents =
     fmap (either (, Nothing) id) $
     runGhcEnv env $ runExceptT $ do
@@ -95,7 +96,7 @@ typecheckModule
     -> HscEnv
     -> [TcModuleResult]
     -> ParsedModule
-    -> IO ([FileDiagnostic], Maybe TcModuleResult)
+    -> IO (IdeResult TcModuleResult)
 typecheckModule (IdeDefer defer) packageState deps pm =
     let demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
     in
@@ -129,7 +130,7 @@ compileModule
     :: HscEnv
     -> [TcModuleResult]
     -> TcModuleResult
-    -> IO ([FileDiagnostic], Maybe (SafeHaskellMode, CgGuts, ModDetails))
+    -> IO (IdeResult (SafeHaskellMode, CgGuts, ModDetails))
 compileModule packageState deps tmr =
     fmap (either (, Nothing) (second Just)) $
     runGhcEnv packageState $
@@ -148,7 +149,7 @@ compileModule packageState deps tmr =
             (guts, details) <- liftIO $ tidyProgram session desugar
             return (map snd warnings, (mg_safe_haskell desugar, guts, details))
 
-generateByteCode :: HscEnv -> [TcModuleResult] -> TcModuleResult -> CgGuts -> IO ([FileDiagnostic], Maybe Linkable)
+generateByteCode :: HscEnv -> [TcModuleResult] -> TcModuleResult -> CgGuts -> IO (IdeResult Linkable)
 generateByteCode hscEnv deps tmr guts =
     fmap (either (, Nothing) (second Just)) $
     runGhcEnv hscEnv $
