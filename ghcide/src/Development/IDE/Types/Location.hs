@@ -49,22 +49,55 @@ import Language.Haskell.LSP.Types as LSP (
   )
 import SrcLoc as GHC
 import Text.ParserCombinators.ReadP as ReadP
+import GHC.Generics
 
 
 -- | Newtype wrapper around FilePath that always has normalized slashes.
-newtype NormalizedFilePath = NormalizedFilePath FilePath
-    deriving (Eq, Ord, Show, Hashable, NFData, Binary)
+-- The NormalizedUri and hash of the FilePath are cached to avoided
+-- repeated normalisation when we need to compute them (which is a lot).
+--
+-- This is one of the most performance critical parts of ghcide, do not
+-- modify it without profiling.
+data NormalizedFilePath = NormalizedFilePath NormalizedUriWrapper !Int !FilePath
+    deriving (Generic, Eq, Ord)
+
+instance NFData NormalizedFilePath where
+instance Binary NormalizedFilePath where
+  put (NormalizedFilePath _ _ fp) = put fp
+  get = do
+    v <- Data.Binary.get :: Get FilePath
+    return (toNormalizedFilePath v)
+
+
+instance Show NormalizedFilePath where
+  show (NormalizedFilePath _ _ fp) = "NormalizedFilePath " ++ show fp
+
+instance Hashable NormalizedFilePath where
+  hash (NormalizedFilePath _ h _) = h
+
+-- Just to define NFData and Binary
+newtype NormalizedUriWrapper =
+  NormalizedUriWrapper { unwrapNormalizedFilePath :: NormalizedUri }
+  deriving (Show, Generic, Eq, Ord)
+
+instance NFData NormalizedUriWrapper where
+  rnf = rwhnf
+
+
+instance Hashable NormalizedUriWrapper where
 
 instance IsString NormalizedFilePath where
     fromString = toNormalizedFilePath
 
 toNormalizedFilePath :: FilePath -> NormalizedFilePath
 -- We want to keep empty paths instead of normalising them to "."
-toNormalizedFilePath "" = NormalizedFilePath ""
-toNormalizedFilePath fp = NormalizedFilePath $ normalise fp
+toNormalizedFilePath "" = NormalizedFilePath (NormalizedUriWrapper emptyPathUri) (hash ("" :: String)) ""
+toNormalizedFilePath fp =
+  let nfp = normalise fp
+  in NormalizedFilePath (NormalizedUriWrapper $ filePathToUriInternal' nfp) (hash nfp) nfp
 
 fromNormalizedFilePath :: NormalizedFilePath -> FilePath
-fromNormalizedFilePath (NormalizedFilePath fp) = fp
+fromNormalizedFilePath (NormalizedFilePath _ _ fp) = fp
 
 -- | We use an empty string as a filepath when we don’t have a file.
 -- However, haskell-lsp doesn’t support that in uriToFilePath and given
@@ -76,10 +109,13 @@ uriToFilePath' uri
     | otherwise = LSP.uriToFilePath uri
 
 emptyPathUri :: NormalizedUri
-emptyPathUri = filePathToUri' ""
+emptyPathUri = filePathToUriInternal' ""
 
 filePathToUri' :: NormalizedFilePath -> NormalizedUri
-filePathToUri' (NormalizedFilePath fp) = toNormalizedUri $ Uri $ T.pack $ LSP.fileScheme <> "//" <> platformAdjustToUriPath fp
+filePathToUri' (NormalizedFilePath (NormalizedUriWrapper u) _ _) = u
+
+filePathToUriInternal' :: FilePath -> NormalizedUri
+filePathToUriInternal' fp = toNormalizedUri $ Uri $ T.pack $ LSP.fileScheme <> "//" <> platformAdjustToUriPath fp
   where
     -- The definitions below are variants of the corresponding functions in Language.Haskell.LSP.Types.Uri that assume that
     -- the filepath has already been normalised. This is necessary since normalising the filepath has a nontrivial cost.
