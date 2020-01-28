@@ -11,8 +11,9 @@ import Control.Concurrent.Extra
 import Control.Concurrent.Async
 import Control.Exception
 import Control.Monad.Extra
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import Data.Hashable
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as Map
 import System.Time.Extra
 
 -- | A debouncer can be used to avoid triggering many events
@@ -21,7 +22,7 @@ import System.Time.Extra
 -- by delaying each event for a given time. If another event
 -- is registered for the same key within that timeframe,
 -- only the new event will fire.
-newtype Debouncer k = Debouncer (Var (Map k (Async ())))
+newtype Debouncer k = Debouncer (Var (HashMap k (Async ())))
 
 -- | Create a new empty debouncer.
 newDebouncer :: IO (Debouncer k)
@@ -35,7 +36,7 @@ newDebouncer = do
 -- If there is a pending event for the same key, the pending event will be killed.
 -- Events are run unmasked so it is up to the user of `registerEvent`
 -- to mask if required.
-registerEvent :: Ord k => Debouncer k -> Seconds -> k -> IO () -> IO ()
+registerEvent :: (Eq k, Hashable k) => Debouncer k -> Seconds -> k -> IO () -> IO ()
 registerEvent (Debouncer d) delay k fire = modifyVar_ d $ \m -> mask_ $ do
     whenJust (Map.lookup k m) cancel
     a <- asyncWithUnmask $ \unmask -> unmask $ do
