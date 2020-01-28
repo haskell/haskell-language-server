@@ -218,13 +218,18 @@ test-suite ghcide-tests
         ghcide,
         ghc-typelits-knownnat,
         haddock-library,
+        haskell-lsp,
         haskell-lsp-types,
         lens,
         lsp-test >= 0.8,
         parser-combinators,
+        QuickCheck,
+        quickcheck-instances,
+        rope-utf16-splay,
         tasty,
-        tasty-hunit,
         tasty-expected-failure,
+        tasty-hunit,
+        tasty-quickcheck,
         text
     hs-source-dirs: test/cabal test/exe test/src
     include-dirs: include
