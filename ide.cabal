@@ -16,6 +16,12 @@ extra-source-files:
     README.md
     ChangeLog.md
 
+
+flag pedantic
+  Description: Enable -Werror
+  Default:     False
+  Manual:      True
+
 source-repository head
   type: git
   location: https://github.com/alanz/ide
@@ -29,41 +35,47 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , aeson
+    , async
+    , binary
+    , bytestring
+    , containers
+    , data-default
+    , deepseq
+    , directory
+    , extra
+    , filepath
+    , fuzzy
+    , ghc
     , ghcide
-    , aeson,
-        async,
-        binary,
-        bytestring,
-        containers,
-        data-default,
-        deepseq,
-        directory,
-        extra,
-        fuzzy,
-        filepath,
-        haddock-library,
-        hashable,
-        haskell-lsp-types == 0.19.*,
-        haskell-lsp == 0.19.*,
-        mtl,
-        network-uri,
-        prettyprinter-ansi-terminal,
-        prettyprinter-ansi-terminal,
-        prettyprinter,
-        regex-tdfa >= 1.3.1.0,
-        rope-utf16-splay,
-        safe-exceptions,
-        shake >= 0.17.5,
-        sorted-list,
-        stm,
-        syb,
-        text,
-        time,
-        transformers,
-        unordered-containers,
-        utf8-string,
-      hslogger,
-      ghc
+    , haddock-library
+    , hashable
+    , haskell-lsp == 0.19.*
+    , haskell-lsp-types == 0.19.*
+    , hslogger
+    , mtl
+    , network-uri
+    , prettyprinter
+    , prettyprinter-ansi-terminal
+    , prettyprinter-ansi-terminal
+    , regex-tdfa >= 1.3.1.0
+    , rope-utf16-splay
+    , safe-exceptions
+    , shake >= 0.17.5
+    , sorted-list
+    , stm
+    , syb
+    , text
+    , time
+    , transformers
+    , unordered-containers
+    , utf8-string
+  ghc-options:
+         -Wall
+         -Wredundant-constraints
+         -Wno-name-shadowing
+  if flag(pedantic)
+     ghc-options:      -Werror
 
   default-language: Haskell2010
 
@@ -77,28 +89,32 @@ executable haskell-ide
               -threaded
               -Wall
               -Wno-name-shadowing
+              -Wredundant-constraints
               -- allow user RTS overrides
               -rtsopts
               -- disable idle GC
               -- disable parallel GC
               -- increase nursery size
               "-with-rtsopts=-I0 -qg -A128M"
+  if flag(pedantic)
+     ghc-options:      -Werror
+
   build-depends:
       base >=4.7 && <5
-    , ide
-    , ghcide
-    , hslogger
     , containers
     , data-default
     , directory
     , extra
     , filepath
-    , ghc-paths
     , ghc
+    , ghc-paths
+    , ghcide
+    , ghcide
     , gitrev
     , haskell-lsp
     , hie-bios >= 0.3.2 && < 0.4
-    , ghcide
+    , hslogger
+    , ide
     , optparse-applicative
     , shake >= 0.17.5
     , text
@@ -114,7 +130,13 @@ test-suite test
       Paths_ide
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:
+         -Wall
+         -Wredundant-constraints
+         -Wno-name-shadowing
+         -threaded -rtsopts -with-rtsopts=-N
+  if flag(pedantic)
+     ghc-options:      -Werror
   build-depends:
       base >=4.7 && <5
     , ide
