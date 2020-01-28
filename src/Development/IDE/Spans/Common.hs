@@ -82,11 +82,7 @@ spanDocToMarkdown (SpanDocText txt) = txt
 
 spanDocToMarkdownForTest :: String -> String
 spanDocToMarkdownForTest
-#if MIN_VERSION_haddock_library(1,6,0)
   = haddockToMarkdown . H.toRegular . H._doc . H.parseParas Nothing
-#else
-  = haddockToMarkdown . H.toRegular . H._doc . H.parseParas
-#endif
 
 -- Simple (and a bit hacky) conversion from Haddock markup to Markdown
 haddockToMarkdown
@@ -127,13 +123,8 @@ haddockToMarkdown (H.DocExamples es)
       = ">>> " ++ expr ++ "\n" ++ unlines result
 haddockToMarkdown (H.DocHyperlink (H.Hyperlink url Nothing))
   = "<" ++ url ++ ">"
-#if MIN_VERSION_haddock_library(1,8,0)
 haddockToMarkdown (H.DocHyperlink (H.Hyperlink url (Just label)))
   = "[" ++ haddockToMarkdown label ++ "](" ++ url ++ ")"
-#else
-haddockToMarkdown (H.DocHyperlink (H.Hyperlink url (Just label)))
-  = "[" ++ label ++ "](" ++ url ++ ")"
-#endif
 haddockToMarkdown (H.DocPic (H.Picture url Nothing))
   = "![](" ++ url ++ ")"
 haddockToMarkdown (H.DocPic (H.Picture url (Just label)))

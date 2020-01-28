@@ -1665,11 +1665,7 @@ haddockTests
           (unlines
              [ ""
              , ""
-#if MIN_VERSION_haddock_library(1,8,0)
              , "However,  `(+)`  and  `(*)`  are"
-#else
-             , "However, '(+)' and '(*)' are"
-#endif
              , "customarily expected to define a ring and have the following properties: "
              , "+ ****Associativity of (+)****: `(x + y) + z`  =  `x + (y + z)`"
              , "+ ****Commutativity of (+)****: `x + y`  =  `y + x`"
