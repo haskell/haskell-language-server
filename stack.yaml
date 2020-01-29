@@ -2,9 +2,9 @@ resolver: lts-14.22
 
 packages:
 - .
-- ghcide
-extra-deps:
 
+extra-deps:
+- ./ghcide/
 - ansi-terminal-0.10.2
 - base-compat-0.11.0
 - cabal-helper-1.0.0.0

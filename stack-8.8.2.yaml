@@ -1,10 +1,11 @@
 resolver: nightly-2020-01-25
+
 packages:
 - .
-- ghcide
-extra-deps:
 
-# - git: https://github.com/haskell/haddock.git
+extra-deps:
+- ./ghcide/
+  # - git: https://github.com/haskell/haddock.git
 #   commit: be8b02c4e3cffe7d45b3dad0a0f071d35a274d65
 #   subdirs:
 #     - haddock-api
