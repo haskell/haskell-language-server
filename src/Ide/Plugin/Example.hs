@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts  #-}
@@ -13,6 +14,8 @@ module Ide.Plugin.Example
   ) where
 
 import Control.DeepSeq ( NFData )
+import Control.Monad.Trans.Maybe
+import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
 import Data.Binary
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
@@ -22,6 +25,7 @@ import qualified Data.Text as T
 import Data.Typeable
 import Development.IDE.Core.OfInterest
 import Development.IDE.Core.Rules
+import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.LSP.Server
@@ -39,7 +43,9 @@ import Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 plugin :: Plugin
-plugin = Plugin exampleRules handlersExample <> codeActionPlugin codeAction
+plugin = Plugin exampleRules handlersExample
+         <> codeActionPlugin codeAction
+         <> Plugin mempty handlersCodeLens
 
 hover          :: IdeState -> TextDocumentPositionParams -> IO (Maybe Hover)
 hover          = request "Hover"      blah     Nothing      foundHover
@@ -103,11 +109,57 @@ codeAction
 codeAction _lsp _state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let
       title = "Add TODO Item"
-      tedit = [TextEdit (Range (Position 0 0) (Position 1 0)) "-- TODO added by Example Plugin directly\n"]
+      tedit = [TextEdit (Range (Position 0 0) (Position 0 0))
+               "-- TODO added by Example Plugin directly\n"]
       edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
     pure
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) (Just edit) Nothing ]
 
+-- ---------------------------------------------------------------------
+
+-- | Generate code lenses.
+handlersCodeLens :: PartialHandlers
+handlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
+    LSP.codeLensHandler = withResponse RspCodeLens codeLens,
+    LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
+    }
+
+codeLens
+    :: LSP.LspFuncs ()
+    -> IdeState
+    -> CodeLensParams
+    -> IO (List CodeLens)
+codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+    case uriToFilePath' uri of
+      Just (toNormalizedFilePath -> filePath) -> do
+        _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
+        _diag <- getDiagnostics ideState
+        _hDiag <- getHiddenDiagnostics ideState
+        let
+          title = "Add TODO Item via Code Lens"
+          tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
+               "-- TODO added by Example Plugin via code lens action\n"]
+          edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+          range = (Range (Position 3 0) (Position 4 0))
+        pure $ List
+          -- [ CodeLens range (Just (Command title "codelens.do" (Just $ List [toJSON edit]))) Nothing
+          [ CodeLens range (Just (Command title "codelens.todo" (Just $ List [toJSON edit]))) Nothing
+          ]
+      Nothing -> pure $ List []
+
+-- | Execute the "codelens.todo" command.
+executeAddSignatureCommand
+    :: LSP.LspFuncs ()
+    -> IdeState
+    -> ExecuteCommandParams
+    -> IO (Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
+    | _command == "codelens.todo"
+    , Just (List [edit]) <- _arguments
+    , Success wedit <- fromJSON edit
+    = return (Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
+    | otherwise
+    = return (Null, Nothing)
 
 -- ---------------------------------------------------------------------
 
