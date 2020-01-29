@@ -9,7 +9,7 @@ cradle:
       component: "ide:test"
 
     - path: "./exe"
-      component: "ide:exe:ide"
+      component: "ide:exe:haskell-ide"
 
     - path: "./src"
       component: "lib:ide"
