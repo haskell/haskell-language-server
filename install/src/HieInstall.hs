@@ -79,14 +79,18 @@ defaultMain = do
         need ["submodules"]
         need ["check"]
         if isRunFromStack then do
-          stackBuildHie version
-          stackInstallHie version
+          stackInstallHieWithErrMsg (Just version)
         else
           cabalInstallHie version
       )
 
     phony "latest" (need ["haskell-ide-" ++ latestVersion])
     phony "haskell-ide"  (need ["data", "latest"])
+
+    -- stack specific targets
+    when isRunFromStack $ do
+
+      phony "dev" $ stackInstallHieWithErrMsg Nothing
 
     -- cabal specific targets
     when isRunFromCabal $ do

@@ -15,14 +15,23 @@ import           Version
 import           Print
 import           Env
 
-stackBuildHie :: VersionNumber -> Action ()
-stackBuildHie versionNumber = execStackWithGhc_ versionNumber ["build"]
-  `actionOnException` liftIO (putStrLn stackBuildFailMsg)
+stackInstallHieWithErrMsg :: Maybe VersionNumber -> Action ()
+stackInstallHieWithErrMsg mbVersionNumber =
+  stackInstallHie mbVersionNumber
+    `actionOnException` liftIO (putStrLn stackBuildFailMsg)
 
 -- | copy the built binaries into the localBinDir
-stackInstallHie :: VersionNumber -> Action ()
-stackInstallHie versionNumber = do
-  execStackWithGhc_ versionNumber ["install"]
+stackInstallHie :: Maybe VersionNumber -> Action ()
+stackInstallHie mbVersionNumber = do
+  versionNumber <-
+    case mbVersionNumber of
+      Nothing -> do
+        execStackWithCfgFile_ "stack.yaml" ["install"]
+        getGhcVersionOfCfgFile "stack.yaml"
+      Just vn -> do
+        execStackWithGhc_ vn ["install"]
+        return vn
+
   localBinDir <- getLocalBin
   let hie = "haskell-ide" <.> exe
   liftIO $ do
@@ -30,6 +39,12 @@ stackInstallHie versionNumber = do
              (localBinDir </> "haskell-ide-" ++ versionNumber <.> exe)
     copyFile (localBinDir </> hie)
              (localBinDir </> "haskell-ide-" ++ dropExtension versionNumber <.> exe)
+
+getGhcVersionOfCfgFile :: String -> Action VersionNumber
+getGhcVersionOfCfgFile stackFile = do
+  Stdout ghcVersion <-
+    execStackWithCfgFile stackFile ["exec", "ghc", "--", "--numeric-version"]
+  return $ trim ghcVersion
 
 -- | check `stack` has the required version
 checkStack :: Action ()
@@ -53,14 +68,21 @@ stackBuildData = do
 
 -- | Execute a stack command for a specified ghc, discarding the output
 execStackWithGhc_ :: VersionNumber -> [String] -> Action ()
-execStackWithGhc_ versionNumber args = do
-  let stackFile = "stack-" ++ versionNumber ++ ".yaml"
-  command_ [] "stack" (("--stack-yaml=" ++ stackFile) : args)
+execStackWithGhc_ = execStackWithGhc
 
 -- | Execute a stack command for a specified ghc
 execStackWithGhc :: CmdResult r => VersionNumber -> [String] -> Action r
 execStackWithGhc versionNumber args = do
   let stackFile = "stack-" ++ versionNumber ++ ".yaml"
+  execStackWithCfgFile stackFile args
+
+-- | Execute a stack command for a specified stack.yaml file, discarding the output
+execStackWithCfgFile_ :: String -> [String] -> Action ()
+execStackWithCfgFile_ = execStackWithCfgFile
+
+-- | Execute a stack command for a specified stack.yaml file
+execStackWithCfgFile :: CmdResult r => String -> [String] -> Action r
+execStackWithCfgFile stackFile args =
   command [] "stack" (("--stack-yaml=" ++ stackFile) : args)
 
 -- | Execute a stack command with the same resolver as the build script
@@ -69,7 +91,7 @@ execStackShake args = command [] "stack" ("--stack-yaml=install/shake.yaml" : ar
 
 -- | Execute a stack command with the same resolver as the build script, discarding the output
 execStackShake_ :: [String] -> Action ()
-execStackShake_ args = command_ [] "stack" ("--stack-yaml=install/shake.yaml" : args)
+execStackShake_ = execStackShake
 
 
 -- | Error message when the `stack` binary is an older version

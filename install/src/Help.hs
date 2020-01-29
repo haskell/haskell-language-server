@@ -78,7 +78,7 @@ helpMessage versions@BuildableVersions {..} = do
     [emptyTarget]
     [ generalTargets
     , defaultTargets
-    , if isRunFromCabal then [cabalGhcsTarget] else []
+    , if isRunFromCabal then [cabalGhcsTarget] else [stackDevTarget]
     , [macosIcuTarget]
     ]
 
@@ -97,13 +97,13 @@ templateTarget = ("<target>", "")
 
 hieTarget :: String -> TargetDescription
 hieTarget version =
-  ("haskell-ide-" ++ version, "Builds haskell-ide for GHC version " ++ version)
+  ("haskell-ide-" ++ version, "Install haskell-ide for GHC version " ++ version)
 
 buildTarget :: TargetDescription
-buildTarget = ("haskell-ide", "Build haskell-ide with the latest available GHC and the data files")
+buildTarget = ("haskell-ide", "Install haskell-ide with the latest available GHC and the data files")
 
 buildLatestTarget :: TargetDescription
-buildLatestTarget = ("latest", "Build haskell-ide with the latest available GHC")
+buildLatestTarget = ("latest", "Install haskell-ide with the latest available GHC")
 
 buildDataTarget :: TargetDescription
 buildDataTarget =
@@ -122,3 +122,6 @@ cabalGhcsTarget =
   ( "ghcs"
   , "Show all GHC versions that can be installed via `cabal-build`."
   )
+
+stackDevTarget :: TargetDescription
+stackDevTarget = ("dev", "Install haskell-ide with the default stack.yaml")

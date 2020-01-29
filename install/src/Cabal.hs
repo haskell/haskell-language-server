@@ -36,7 +36,7 @@ execCabal :: CmdResult r => [String] -> Action r
 execCabal = command [] "cabal"
 
 execCabal_ :: [String] -> Action ()
-execCabal_ = command [] "cabal"
+execCabal_ = execCabal
 
 cabalBuildData :: Action ()
 cabalBuildData = do
