@@ -8,8 +8,11 @@ cradle:
     - path: "./test"
       component: "ide:test"
 
-    - path: "./exe"
+    - path: "./exe/Main.hs"
       component: "ide:exe:haskell-ide"
+
+    - path: "./exe/Wrapper.hs"
+      component: "ide:exe:haskell-ide-wrapper"
 
     - path: "./src"
       component: "lib:ide"

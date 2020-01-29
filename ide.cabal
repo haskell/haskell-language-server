@@ -28,7 +28,10 @@ source-repository head
 
 library
   exposed-modules:
+      Ide.Cradle
       Ide.Plugin.Example
+      Ide.Options
+      Ide.Version
   other-modules:
       Paths_ide
   hs-source-dirs:
@@ -39,6 +42,8 @@ library
     , async
     , binary
     , bytestring
+    , Cabal
+    , cabal-helper >= 1.0
     , containers
     , data-default
     , deepseq
@@ -48,16 +53,20 @@ library
     , fuzzy
     , ghc
     , ghcide
+    , gitrev
     , haddock-library
     , hashable
     , haskell-lsp == 0.19.*
     , haskell-lsp-types == 0.19.*
+    , hie-bios
     , hslogger
     , mtl
     , network-uri
+    , optparse-simple
     , prettyprinter
     , prettyprinter-ansi-terminal
     , prettyprinter-ansi-terminal
+    , process
     , regex-tdfa >= 1.3.1.0
     , rope-utf16-splay
     , safe-exceptions
@@ -122,6 +131,26 @@ executable haskell-ide
       Arguments
       Paths_ide
   default-language: Haskell2010
+
+executable haskell-ide-wrapper
+  hs-source-dirs:      exe
+  main-is:             Wrapper.hs
+  other-modules:       Paths_ide
+  autogen-modules:     Paths_ide
+  build-depends:       base
+                     , directory
+                     , filepath
+                     , haskell-lsp
+                     , hie-bios
+                     , hslogger
+                     , optparse-simple
+                     , process
+                     , ide
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -Wredundant-constraints
+                       -with-rtsopts=-T
+  if flag(pedantic)
+     ghc-options:      -Werror
+  default-language:    Haskell2010
 
 test-suite test
   type: exitcode-stdio-1.0
