@@ -13,3 +13,5 @@ Builds with stack and cabal, using GHC 8.6.5
 Two sample `hie.yaml` files are provided, `hie.yaml.stack` for stack
 usage, `hie.yaml.cbl` for cabal. Simply copy the relevant one to be
 `hie.yaml` and it should work.
+
+The developers tend to hang out at [our IRC channel](https://webchat.freenode.net/?channels=haskell-ide-engine) at `#haskell-ide-engine` on `freenode`.
