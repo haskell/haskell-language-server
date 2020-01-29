@@ -1,0 +1,11 @@
+# Used to provide a different environment for the shake build script
+resolver: lts-14.11 # GHC 8.6.5
+packages:
+- .
+
+nix:
+  packages: [ zlib ]
+
+flags:
+  hie-install:
+    run-from-stack: true
