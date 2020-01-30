@@ -2,10 +2,9 @@ resolver: lts-13.19 # GHC 8.6.4
 
 packages:
 - .
+- ./ghcide/
 
 extra-deps:
-
-- ./ghcide/
 - brittany-0.12.1.0
 - butcher-1.3.2.1
 - bytestring-trie-0.2.5.0
