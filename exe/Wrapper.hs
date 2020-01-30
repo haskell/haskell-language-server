@@ -9,14 +9,14 @@ import           Data.Semigroup
 #endif
 
 import Arguments
-import Control.Concurrent.Extra
+-- import Control.Concurrent.Extra
 import Control.Monad.Extra
 import           Data.Foldable
 import           Data.List
-import Data.List.Extra
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Development.IDE.Types.Logger
+-- import Data.List.Extra
+-- import qualified Data.Text as T
+-- import qualified Data.Text.IO as T
+-- import Development.IDE.Types.Logger
 import HIE.Bios
 import           Ide.Cradle (findLocalCradle, logm)
 import           Ide.Version
