@@ -6,5 +6,7 @@ tests: true
 
 package ide
   test-show-details: direct
+package ghcide
+  test-show-details: direct
 
 write-ghc-environment-files: never
