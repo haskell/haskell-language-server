@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP             #-}
+{-# LANGUAGE RecordWildCards #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
 module Main where
@@ -6,65 +7,52 @@ module Main where
 #if __GLASGOW_HASKELL__ < 804
 import           Data.Semigroup
 #endif
+
+import Arguments
+-- import Control.Concurrent.Extra
+import Control.Monad.Extra
 import           Data.Foldable
 import           Data.List
-import           Data.Version                          (showVersion)
-import           HIE.Bios
+-- import Data.List.Extra
+-- import qualified Data.Text as T
+-- import qualified Data.Text.IO as T
+-- import Development.IDE.Types.Logger
+import HIE.Bios
 import           Ide.Cradle (findLocalCradle, logm)
-import           Ide.Options
 import           Ide.Version
-import qualified Language.Haskell.LSP.Core             as Core
-import           Options.Applicative.Simple
-import qualified Paths_ide                             as Meta
 import           System.Directory
 import           System.Environment
+import System.Exit
 import           System.FilePath
+import System.IO
 import           System.Info
-import qualified System.Log.Logger as L
 import           System.Process
 
 -- ---------------------------------------------------------------------
 
 main :: IO ()
 main = do
-    let
-        numericVersion :: Parser (a -> a)
-        numericVersion =
-            infoOption
-                (showVersion Meta.version)
-                (long "numeric-version" <>
-                 help "Show only version number")
-        compiler :: Parser (a -> a)
-        compiler =
-            infoOption
-                hieGhcDisplayVersion
-                (long "compiler" <>
-                 help "Show only compiler and version supported")
-    -- Parse the options and run
-    (global, ()) <-
-        simpleOptions
-            hieVersion
-            "haskell-ide-wrapper - Launch the appropriate haskell-ide for a given project"
-            ""
-            (numericVersion <*> compiler <*> globalOptsParser)
-            empty
+  -- WARNING: If you write to stdout before runLanguageServer
+  --          then the language server will not work
+  Arguments{..} <- getArguments "haskell-ide"
 
-    run global
+  if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
+  else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
--- ---------------------------------------------------------------------
+  -- lock to avoid overlapping output on stdout
+  -- lock <- newLock
+  -- let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
+  --         T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
 
-run :: GlobalOpts -> IO ()
-run opts = do
-  let mLogFileName = optLogFile opts
+  whenJust argsCwd setCurrentDirectory
 
-      logLevel = if optDebugOn opts
-                   then L.DEBUG
-                   else L.INFO
+  -- let mLogFileName = optLogFile opts
 
-  Core.setupLogger mLogFileName ["hie"] logLevel
+  --     logLevel = if optDebugOn opts
+  --                  then L.DEBUG
+  --                  else L.INFO
 
-  maybe (pure ()) setCurrentDirectory $ projectRoot opts
-
+  -- Core.setupLogger mLogFileName ["hie"] logLevel
 
   progName <- getProgName
   logm $  "run entered for haskell-ide-wrapper(" ++ progName ++ ") " ++ hieVersion

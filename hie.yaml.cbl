@@ -16,3 +16,9 @@ cradle:
 
     - path: "./src"
       component: "lib:ide"
+
+    - path: "./ghcide/src"
+      component: "ghcide:lib:ghcide"
+
+    - path: "./ghcide/exe"
+      component: "ghcide:exe:ghcide"

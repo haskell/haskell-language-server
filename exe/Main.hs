@@ -1,8 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
-{-# LANGUAGE CPP #-} -- To get precise GHC version
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TupleSections #-}
@@ -37,51 +35,37 @@ import qualified Data.Text.IO as T
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types (LspId(IdInt))
 import Linker
-import Data.Version
 import Development.IDE.LSP.LanguageServer
 import System.Directory.Extra as IO
-import System.Environment
 import System.IO
 import System.Exit
-import Paths_ide
-import Development.GitRev
 import Development.Shake (Action, action)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map
 
 import GHC hiding (def)
-import qualified GHC.Paths
 
 import HIE.Bios
 
 -- ---------------------------------------------------------------------
 
-import Ide.Plugin.Example as Example
+import Development.IDE.Plugin.CodeAction  as CodeAction
 import Development.IDE.Plugin.Completions as Completions
-import Development.IDE.Plugin.CodeAction as CodeAction
+import Ide.Plugin.Example                 as Example
 
 -- ---------------------------------------------------------------------
 
--- Set the GHC libdir to the nix libdir if it's present.
-getLibdir :: IO FilePath
-getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
-
-ghcideVersion :: IO String
-ghcideVersion = do
-  path <- getExecutablePath
-  let gitHashSection = case $(gitHash) of
-        x | x == "UNKNOWN" -> ""
-        x -> " (GIT hash: " <> x <> ")"
-  return $ "ghcide version: " <> showVersion version
-             <> " (GHC: " <> VERSION_ghc
-             <> ") (PATH: " <> path <> ")"
-             <> gitHashSection
+idePlugins :: Bool -> Plugin
+idePlugins includeExample
+  = Completions.plugin <>
+    CodeAction.plugin <>
+    if includeExample then Example.plugin else mempty
 
 main :: IO ()
 main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    Arguments{..} <- getArguments
+    Arguments{..} <- getArguments "haskell-ide"
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
@@ -95,8 +79,7 @@ main = do
 
     dir <- getCurrentDirectory
 
-    let plugins = Completions.plugin <> CodeAction.plugin
-                  <> Example.plugin
+    let plugins = idePlugins argsExamplePlugin
 
     if argLSP then do
         t <- offsetTime
