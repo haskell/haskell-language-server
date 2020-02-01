@@ -7,10 +7,9 @@ module Ide.Cradle where
 
 import           Control.Exception
 import           Control.Monad.IO.Class
-import           Data.Char (toLower)
 import           Data.Foldable (toList)
 import           Data.Function ((&))
-import           Data.List (isPrefixOf, isInfixOf, sortOn, find)
+import           Data.List (isPrefixOf, sortOn, find)
 import           Data.List.NonEmpty (NonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as Map
@@ -25,13 +24,16 @@ import           Distribution.Helper (Package, projectPackages, pUnits,
                                       Unit, unitInfo, uiComponents,
                                       ChEntrypoint(..), UnitInfo(..))
 import           Distribution.Helper.Discover (findProjects, getDefaultDistDir)
-import           HIE.Bios as BIOS
-import           HIE.Bios.Types as BIOS
+import           HIE.Bios as Bios
+import qualified HIE.Bios.Cradle as Bios
+import           HIE.Bios.Types (CradleAction(..))
+import qualified HIE.Bios.Types as Bios
 import           System.Directory (getCurrentDirectory, canonicalizePath, findExecutable)
 import           System.Exit
 import           System.FilePath
 import           System.Log.Logger
 import           System.Process (readCreateProcessWithExitCode, shell)
+
 
 -- ---------------------------------------------------------------------
 
@@ -45,14 +47,15 @@ import           System.Process (readCreateProcessWithExitCode, shell)
 -- If no "hie.yaml" can be found, the implicit config is used.
 -- The implicit config uses different heuristics to determine the type
 -- of the project that may or may not be accurate.
-findLocalCradle :: FilePath -> IO Cradle
+findLocalCradle :: FilePath -> IO (Cradle CabalHelper)
 findLocalCradle fp = do
-  cradleConf <- BIOS.findCradle fp
-  crdl <- case cradleConf of
+  cradleConf <- Bios.findCradle fp
+  crdl       <- case cradleConf of
     Just yaml -> do
       debugm $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
-      BIOS.loadCradle yaml
-    Nothing   -> cabalHelperCradle fp
+      crdl <- Bios.loadCradle yaml
+      return $ fmap (const CabalNone) crdl
+    Nothing -> cabalHelperCradle fp
   logm $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
 
@@ -60,29 +63,33 @@ findLocalCradle fp = do
 -- This might be used to determine the GHC version to use on the project.
 -- If it is a stack-cradle, we have to use @"stack path --compiler-exe"@
 -- otherwise we may ask `ghc` directly what version it is.
-isStackCradle :: Cradle -> Bool
-isStackCradle = (`elem` ["stack", "Cabal-Helper-Stack", "Cabal-Helper-Stack-None"])
-  . BIOS.actionName
-  . BIOS.cradleOptsProg
+isStackCradle :: Cradle CabalHelper -> Bool
+isStackCradle crdl = Bios.isStackCradle crdl || cabalHelperStackCradle crdl
+ where
+  cabalHelperStackCradle =
+    (`elem` [Bios.Other Stack, Bios.Other StackNone])
+      . Bios.actionName
+      . Bios.cradleOptsProg
+
 
 -- | Check if the given cradle is a cabal cradle.
 -- This might be used to determine the GHC version to use on the project.
 -- If it is a stack-cradle, we have to use @"stack path --compiler-exe"@
 -- otherwise we may ask @ghc@ directly what version it is.
-isCabalCradle :: Cradle -> Bool
-isCabalCradle =
-  (`elem`
-    [ "cabal"
-    , "Cabal-Helper-Cabal-V1"
-    , "Cabal-Helper-Cabal-V2"
-    , "Cabal-Helper-Cabal-V1-Dir"
-    , "Cabal-Helper-Cabal-V2-Dir"
-    , "Cabal-Helper-Cabal-V2-None"
-    , "Cabal-Helper-Cabal-None"
-    ]
-  )
-  . BIOS.actionName
-  . BIOS.cradleOptsProg
+isCabalCradle :: Cradle CabalHelper -> Bool
+isCabalCradle crdl = Bios.isCabalCradle crdl || cabalHelperCabalCradle crdl
+ where
+  cabalHelperCabalCradle =
+    (`elem` [Bios.Other CabalV2, Bios.Other CabalNone])
+      . Bios.actionName
+      . Bios.cradleOptsProg
+
+data CabalHelper
+  = Stack
+  | StackNone
+  | CabalV2
+  | CabalNone
+  deriving (Show, Eq, Ord)
 
 -- | Execute @ghc@ that is based on the given cradle.
 -- Output must be a single line. If an error is raised, e.g. the command
@@ -91,7 +98,7 @@ isCabalCradle =
 --
 -- E.g. for a stack cradle, we use @stack ghc@ and for a cabal cradle
 -- we are taking the @ghc@ that is on the path.
-execProjectGhc :: Cradle -> [String] -> IO (Maybe String)
+execProjectGhc :: Cradle CabalHelper -> [String] -> IO (Maybe String)
 execProjectGhc crdl args = do
   isStackInstalled <- isJust <$> findExecutable "stack"
   -- isCabalInstalled <- isJust <$> findExecutable "cabal"
@@ -147,7 +154,7 @@ tryCommand cmd = do
 
 
 -- | Get the directory of the libdir based on the project ghc.
-getProjectGhcLibDir :: Cradle -> IO (Maybe FilePath)
+getProjectGhcLibDir :: Cradle CabalHelper -> IO (Maybe FilePath)
 getProjectGhcLibDir crdl =
   execProjectGhc crdl ["--print-libdir"] >>= \case
     Nothing -> do
@@ -444,7 +451,7 @@ the compiler options obtained from Cabal-Helper are relative to the package
 source directory, which is "\/Repo\/SubRepo".
 
 -}
-cabalHelperCradle :: FilePath -> IO Cradle
+cabalHelperCradle :: FilePath -> IO (Cradle CabalHelper)
 cabalHelperCradle file = do
   projM <- findCabalHelperEntryPoint file
   case projM of
@@ -454,7 +461,7 @@ cabalHelperCradle file = do
       return
         Cradle { cradleRootDir = cwd
                , cradleOptsProg =
-                   CradleAction { actionName = "Direct"
+                   CradleAction { actionName = Bios.Direct
                                 , runCradle = \_ _ ->
                                       return
                                       $ CradleSuccess
@@ -470,7 +477,7 @@ cabalHelperCradle file = do
       let root = projectRootDir proj
       -- Create a suffix for the cradle name.
       -- Purpose is mainly for easier debugging.
-      let actionNameSuffix = projectSuffix proj
+      let actionNameSuffix = projectType proj
       debugm $ "Cabal-Helper dirs: " ++ show [root, file]
       let dist_dir = getDefaultDistDir proj
       env <- mkQueryEnv proj dist_dir
@@ -487,9 +494,7 @@ cabalHelperCradle file = do
           return
             Cradle { cradleRootDir = root
                    , cradleOptsProg =
-                       CradleAction { actionName = "Cabal-Helper-"
-                                        ++ actionNameSuffix
-                                        ++ "-None"
+                       CradleAction { actionName = Bios.Other (projectNoneType proj)
                                     , runCradle = \_ _ -> return CradleNone
                                     }
                    }
@@ -504,8 +509,7 @@ cabalHelperCradle file = do
           return
             Cradle { cradleRootDir = normalisedPackageLocation
                    , cradleOptsProg =
-                       CradleAction { actionName =
-                                        "Cabal-Helper-" ++ actionNameSuffix
+                       CradleAction { actionName = Bios.Other actionNameSuffix
                                     , runCradle = \_ fp -> cabalHelperAction
                                         (Ex proj)
                                         env
@@ -754,12 +758,19 @@ projectRootDir ProjLocV2File { plProjectDirV2 } = plProjectDirV2
 projectRootDir ProjLocV2Dir { plProjectDirV2 } = plProjectDirV2
 projectRootDir ProjLocStackYaml { plStackYaml } = takeDirectory plStackYaml
 
-projectSuffix :: ProjLoc qt -> FilePath
-projectSuffix ProjLocV1CabalFile {} = "Cabal-V1"
-projectSuffix ProjLocV1Dir {} = "Cabal-V1-Dir"
-projectSuffix ProjLocV2File {} = "Cabal-V2"
-projectSuffix ProjLocV2Dir {} = "Cabal-V2-Dir"
-projectSuffix ProjLocStackYaml {} = "Stack"
+projectType :: ProjLoc qt -> CabalHelper
+projectType ProjLocV1CabalFile {} = CabalV2
+projectType ProjLocV1Dir {} = CabalV2
+projectType ProjLocV2File {} = CabalV2
+projectType ProjLocV2Dir {} = CabalV2
+projectType ProjLocStackYaml {} = Stack
+
+projectNoneType :: ProjLoc qt -> CabalHelper
+projectNoneType ProjLocV1CabalFile {} = CabalNone
+projectNoneType ProjLocV1Dir {} = CabalNone
+projectNoneType ProjLocV2File {} = CabalNone
+projectNoneType ProjLocV2Dir {} = CabalNone
+projectNoneType ProjLocStackYaml {} = StackNone
 
 -- ----------------------------------------------------------------------------
 --
@@ -870,18 +881,25 @@ relativeTo file sourceDirs =
 
 -- | Returns a user facing display name for the cradle type,
 -- e.g. "Stack project" or "GHC session"
-cradleDisplay :: IsString a => BIOS.Cradle -> a
+cradleDisplay :: IsString a => Cradle CabalHelper -> a
 cradleDisplay cradle = fromString result
-  where
-    result
-      | "stack" `isInfixOf` name = "Stack project"
-      | "cabal-v1" `isInfixOf` name = "Cabal (V1) project"
-      | "cabal" `isInfixOf` name = "Cabal project"
-      | "direct" `isInfixOf` name = "GHC session"
-      | "multi" `isInfixOf` name = "Multi Component project"
-      | otherwise = "project"
-    name = map toLower $ BIOS.actionName (BIOS.cradleOptsProg cradle)
-
+ where
+  result
+    | Bios.isStackCradle cradle
+      ||     name
+      `elem` [Bios.Other Stack, Bios.Other StackNone]
+    = "Stack project"
+    | Bios.isCabalCradle cradle
+      ||     name
+      `elem` [Bios.Other CabalV2, Bios.Other CabalNone]
+    = "Cabal project"
+    | Bios.isDirectCradle cradle
+    = "GHC session"
+    | Bios.isMultiCradle cradle
+    = "Multi Component project"
+    | otherwise
+    = "project"
+  name = Bios.actionName (Bios.cradleOptsProg cradle)
 
 -- ---------------------------------------------------------------------
 

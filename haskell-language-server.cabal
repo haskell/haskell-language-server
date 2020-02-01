@@ -29,6 +29,7 @@ library
   exposed-modules:
       Ide.Cradle
       Ide.Plugin.Example
+      Ide.Plugin.Ormolu
       Ide.Version
   other-modules:
       Paths_haskell_language_server
@@ -50,7 +51,7 @@ library
     , filepath
     , fuzzy
     , ghc
-    , ghcide
+    , ghcide >= 0.1
     , gitrev
     , haddock-library
     , hashable
@@ -77,6 +78,9 @@ library
     , transformers
     , unordered-containers
     , utf8-string
+  if impl(ghc >= 8.6)
+     build-depends: ormolu >= 0.0.3.1
+
   ghc-options:
          -Wall
          -Wredundant-constraints
@@ -121,7 +125,7 @@ executable haskell-language-server
     , ghcide
     , gitrev
     , haskell-lsp
-    , hie-bios >= 0.3.2 && < 0.4
+    , hie-bios >= 0.4
     , hslogger
     , haskell-language-server
     , optparse-applicative

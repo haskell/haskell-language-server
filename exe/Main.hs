@@ -8,58 +8,64 @@
 module Main(main) where
 
 import Arguments
-import Data.Maybe
-import Data.List.Extra
-import System.FilePath
 import Control.Concurrent.Extra
 import Control.Exception
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Data.Default
-import System.Time.Extra
-import Development.IDE.Core.FileStore
-import Development.IDE.Core.OfInterest
-import Development.IDE.Core.Service
-import Development.IDE.Core.Rules
-import Development.IDE.Core.Shake
-import Development.IDE.Core.RuleTypes
-import Development.IDE.LSP.Protocol
-import Development.IDE.Types.Location
-import Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Options
-import Development.IDE.Types.Logger
-import Development.IDE.GHC.Util
-import Development.IDE.Plugin
+import Data.List.Extra
+import qualified Data.Map.Strict as Map
+import Data.Maybe
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Development.IDE.Core.FileStore
+import Development.IDE.Core.OfInterest
+import Development.IDE.Core.RuleTypes
+import Development.IDE.Core.Rules
+import Development.IDE.Core.Service
+import Development.IDE.Core.Shake
+import Development.IDE.GHC.Util
+import Development.IDE.LSP.LanguageServer
+import Development.IDE.LSP.Protocol
+import Development.IDE.Plugin
+import Development.IDE.Types.Diagnostics
+import Development.IDE.Types.Location
+import Development.IDE.Types.Logger
+import Development.IDE.Types.Options
+import Development.Shake (Action, action)
+import GHC hiding (def)
+import HIE.Bios
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types (LspId(IdInt))
 import Linker
-import Development.IDE.LSP.LanguageServer
 import System.Directory.Extra as IO
-import System.IO
 import System.Exit
-import Development.Shake (Action, action)
-import qualified Data.Set as Set
-import qualified Data.Map.Strict as Map
-
-import GHC hiding (def)
-
-import HIE.Bios
+import System.FilePath
+import System.IO
+import System.Time.Extra
 
 -- ---------------------------------------------------------------------
 
 import Development.IDE.Plugin.CodeAction  as CodeAction
 import Development.IDE.Plugin.Completions as Completions
 import Ide.Plugin.Example                 as Example
+import Ide.Plugin.Ormolu                  as Ormolu
 
 -- ---------------------------------------------------------------------
 
+-- The plugins configured for use in this instance of the language
+-- server.
+-- These can be freely added or removed to tailor the available
+-- features of the server.
 idePlugins :: Bool -> Plugin
 idePlugins includeExample
   = Completions.plugin <>
     CodeAction.plugin <>
+    Ormolu.plugin <>
     if includeExample then Example.plugin else mempty
+
+-- ---------------------------------------------------------------------
 
 main :: IO ()
 main = do
@@ -100,7 +106,9 @@ main = do
         putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
 
         putStrLn $ "\nStep 1/6: Finding files to test in " ++ dir
-        files <- nubOrd <$> expandFiles (argFiles ++ ["." | null argFiles])
+        files <- expandFiles (argFiles ++ ["." | null argFiles])
+        -- LSP works with absolute file paths, so try and behave similarly
+        files <- nubOrd <$> mapM canonicalizePath files
         putStrLn $ "Found " ++ show (length files) ++ " files"
 
         putStrLn "\nStep 2/6: Looking for hie.yaml files that control setup"
@@ -123,7 +131,11 @@ main = do
         let grab file = fromMaybe (head sessions) $ do
                 cradle <- Map.lookup file filesToCradles
                 Map.lookup cradle cradlesToSessions
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) (defaultIdeOptions $ return $ return . grab) vfs
+
+        let options =
+              (defaultIdeOptions $ return $ return . grab)
+                    { optShakeProfiling = argsShakeProfiling }
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files
@@ -164,7 +176,7 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
 showEvent lock e = withLock lock $ print e
 
 
-cradleToSession :: Cradle -> IO HscEnvEq
+cradleToSession :: Cradle a -> IO HscEnvEq
 cradleToSession cradle = do
     cradleRes <- getCompilerOptions "" cradle
     opts <- case cradleRes of

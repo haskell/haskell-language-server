@@ -47,8 +47,8 @@ plugin = Plugin exampleRules handlersExample
          <> codeActionPlugin codeAction
          <> Plugin mempty handlersCodeLens
 
-hover          :: IdeState -> TextDocumentPositionParams -> IO (Maybe Hover)
-hover          = request "Hover"      blah     Nothing      foundHover
+hover :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
+hover = request "Hover" blah (Right Nothing) foundHover
 
 blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
@@ -105,14 +105,14 @@ codeAction
     -> TextDocumentIdentifier
     -> Range
     -> CodeActionContext
-    -> IO [CAResult]
+    -> IO (Either ResponseError [CAResult])
 codeAction _lsp _state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let
       title = "Add TODO Item"
       tedit = [TextEdit (Range (Position 0 0) (Position 0 0))
                "-- TODO added by Example Plugin directly\n"]
       edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-    pure
+    pure $ Right
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) (Just edit) Nothing ]
 
 -- ---------------------------------------------------------------------
@@ -128,7 +128,7 @@ codeLens
     :: LSP.LspFuncs ()
     -> IdeState
     -> CodeLensParams
-    -> IO (List CodeLens)
+    -> IO (Either ResponseError (List CodeLens))
 codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
@@ -141,11 +141,11 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
                "-- TODO added by Example Plugin via code lens action\n"]
           edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
           range = (Range (Position 3 0) (Position 4 0))
-        pure $ List
+        pure $ Right $ List
           -- [ CodeLens range (Just (Command title "codelens.do" (Just $ List [toJSON edit]))) Nothing
           [ CodeLens range (Just (Command title "codelens.todo" (Just $ List [toJSON edit]))) Nothing
           ]
-      Nothing -> pure $ List []
+      Nothing -> pure $ Right $ List []
 
 -- | Execute the "codelens.todo" command.
 executeAddSignatureCommand
@@ -163,20 +163,21 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
 
 -- ---------------------------------------------------------------------
 
-foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
+foundHover :: (Maybe Range, [T.Text]) -> Either ResponseError (Maybe Hover)
 foundHover (mbRange, contents) =
-  Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
+  Right $ Just $ Hover (HoverContents $ MarkupContent MkMarkdown
+                        $ T.intercalate sectionSeparator contents) mbRange
 
 
 -- | Respond to and log a hover or go-to-definition request
 request
   :: T.Text
   -> (NormalizedFilePath -> Position -> Action (Maybe a))
-  -> b
-  -> (a -> b)
+  -> Either ResponseError b
+  -> (a -> Either ResponseError b)
   -> IdeState
   -> TextDocumentPositionParams
-  -> IO b
+  -> IO (Either ResponseError b)
 request label getResults notFound found ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos _) = do
     mbResult <- case uriToFilePath' uri of
         Just path -> logAndRunRequest label getResults ide pos path
