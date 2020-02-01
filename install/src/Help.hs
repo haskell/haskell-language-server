@@ -51,7 +51,7 @@ shortHelpMessage = do
     , cabalGhcsTarget
     ]
 
--- | A record that specifies for each build system which versions of @haskell-ide@ can be built.
+-- | A record that specifies for each build system which versions of @haskell-language-server@ can be built.
 data BuildableVersions = BuildableVersions
   { stackVersions :: [VersionNumber]
   , cabalVersions :: [VersionNumber]
@@ -97,17 +97,17 @@ templateTarget = ("<target>", "")
 
 hieTarget :: String -> TargetDescription
 hieTarget version =
-  ("haskell-ide-" ++ version, "Install haskell-ide for GHC version " ++ version)
+  ("haskell-language-server-" ++ version, "Install haskell-language-server for GHC version " ++ version)
 
 buildTarget :: TargetDescription
-buildTarget = ("haskell-ide", "Install haskell-ide with the latest available GHC and the data files")
+buildTarget = ("haskell-language-server", "Install haskell-language-server with the latest available GHC and the data files")
 
 buildLatestTarget :: TargetDescription
-buildLatestTarget = ("latest", "Install haskell-ide with the latest available GHC")
+buildLatestTarget = ("latest", "Install haskell-language-server with the latest available GHC")
 
 buildDataTarget :: TargetDescription
 buildDataTarget =
-  ("data", "Get the required data-files for `haskell-ide` (Hoogle DB)")
+  ("data", "Get the required data-files for `haskell-language-server` (Hoogle DB)")
 
 -- special targets
 
@@ -124,4 +124,4 @@ cabalGhcsTarget =
   )
 
 stackDevTarget :: TargetDescription
-stackDevTarget = ("dev", "Install haskell-ide with the default stack.yaml")
+stackDevTarget = ("dev", "Install haskell-language-server with the default stack.yaml")

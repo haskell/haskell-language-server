@@ -4,9 +4,14 @@ packages:
 
 tests: true
 
-package ide
+package haskell-language-server
   test-show-details: direct
 package ghcide
   test-show-details: direct
 
 write-ghc-environment-files: never
+
+-- pre-brexit
+-- A later version (2020-02-01T08:48:32Z) has a problem with a diamond
+-- dependency for cabal-helper and cabal-plan
+index-state: 2020-01-31T22:59:59Z

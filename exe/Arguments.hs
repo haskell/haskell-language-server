@@ -19,7 +19,7 @@ import Data.Version
 import Development.GitRev
 import qualified GHC.Paths
 import Options.Applicative
-import Paths_ide
+import Paths_haskell_language_server
 import System.Environment
 
 -- ---------------------------------------------------------------------
@@ -38,7 +38,7 @@ getArguments exeName = execParser opts
   where
     opts = info (arguments exeName <**> helper)
       ( fullDesc
-     <> progDesc "Used as a test bed to check your IDE will work"
+     <> progDesc "Used as a test bed to check your IDE Client will work"
      <> header (exeName ++ " - GHC Haskell LSP server"))
 
 arguments :: String -> Parser Arguments

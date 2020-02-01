@@ -33,12 +33,12 @@ stackInstallHie mbVersionNumber = do
         return vn
 
   localBinDir <- getLocalBin
-  let hie = "haskell-ide" <.> exe
+  let hie = "haskell-language-server" <.> exe
   liftIO $ do
     copyFile (localBinDir </> hie)
-             (localBinDir </> "haskell-ide-" ++ versionNumber <.> exe)
+             (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
     copyFile (localBinDir </> hie)
-             (localBinDir </> "haskell-ide-" ++ dropExtension versionNumber <.> exe)
+             (localBinDir </> "haskell-language-server-" ++ dropExtension versionNumber <.> exe)
 
 getGhcVersionOfCfgFile :: String -> Action VersionNumber
 getGhcVersionOfCfgFile stackFile = do
@@ -116,5 +116,4 @@ stackBuildFailMsg =
     $  "Building failed, "
     ++ "Try running `stack clean` and restart the build\n"
     ++ "If this does not work, open an issue at \n"
-    ++ "\thttps://github.com/haskell/haskell-ide-engine"
-
+    ++ "\thttps://github.com/haskell/haskell-language-server-engine"

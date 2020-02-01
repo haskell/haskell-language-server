@@ -1,21 +1,21 @@
-# This is a sample hie.yaml file for opening haskell-ide-engine in
-# hie, using cabal as the build system.
-# To use is, copy it to a file called 'hie.yaml'
+# This is a sample hie.yaml file for opening haskell-language-server
+# in hie, using cabal as the build system.  To use is, copy it to a
+# file called 'hie.yaml'
 
 cradle:
   cabal:
 
     - path: "./test"
-      component: "ide:test"
+      component: "haskell-language-server:test"
 
     - path: "./exe/Main.hs"
-      component: "ide:exe:haskell-ide"
+      component: "haskell-language-server:exe:haskell-language-server"
 
     - path: "./exe/Wrapper.hs"
-      component: "ide:exe:haskell-ide-wrapper"
+      component: "haskell-language-server:exe:haskell-language-server-wrapper"
 
     - path: "./src"
-      component: "lib:ide"
+      component: "lib:haskell-language-server"
 
     - path: "./ghcide/src"
       component: "ghcide:lib:ghcide"

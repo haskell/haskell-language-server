@@ -1,13 +1,16 @@
-# ide
+# haskell-language-server
+
 [![License Apache 2.0][badge-license]][license]
 [![CircleCI][badge-circleci]][circleci]
 
 [badge-license]: https://img.shields.io/badge/license-Apache2-green.svg?dummy
-[license]: https://github.com/haskell/ide/blob/master/LICENSE
-[badge-circleci]: https://img.shields.io/circleci/project/github/haskell/ide/master.svg
-[circleci]: https://circleci.com/gh/haskell/ide/
+[license]: https://github.com/haskell/haskell-language-server/blob/master/LICENSE
+[badge-circleci]: https://img.shields.io/circleci/project/github/haskell/haskell-language-server/master.svg
+[circleci]: https://circleci.com/gh/haskell/haskell-language-server/
 
-Integration point for ghcide and haskell-ide-engine. One IDE to rule them all. Read the [project's background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html).
+Integration point for ghcide and haskell-ide-engine. One IDE to rule
+them all. Read the [project's
+background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html).
 
 This is *very* early stage software.
 

@@ -68,21 +68,21 @@ cabalInstallHie versionNumber = do
     , "--write-ghc-environment-files=never"
     , installDirOpt, localBin
     , "--max-backjumps=5000"
-    , "exe:haskell-ide"
+    , "exe:haskell-language-server"
     , "--overwrite-policy=always"
     ]
     ++ installMethod
 
-  let minorVerExe = "haskell-ide-" ++ versionNumber <.> exe
-      majorVerExe = "haskell-ide-" ++ dropExtension versionNumber <.> exe
+  let minorVerExe = "haskell-language-server-" ++ versionNumber <.> exe
+      majorVerExe = "haskell-language-server-" ++ dropExtension versionNumber <.> exe
 
   liftIO $ do
-    copyFile (localBin </> "haskell-ide" <.> exe) (localBin </> minorVerExe)
-    copyFile (localBin </> "haskell-ide" <.> exe) (localBin </> majorVerExe)
+    copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> minorVerExe)
+    copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> majorVerExe)
 
   printLine $   "Copied executables "
-             ++ ("haskell-ide-wrapper" <.> exe) ++ ", "
-             ++ ("haskell-ide" <.> exe) ++ ", "
+             ++ ("haskell-language-server-wrapper" <.> exe) ++ ", "
+             ++ ("haskell-language-server" <.> exe) ++ ", "
              ++ majorVerExe ++ " and "
              ++ minorVerExe
              ++ " to " ++ localBin

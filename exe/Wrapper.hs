@@ -34,7 +34,7 @@ main :: IO ()
 main = do
   -- WARNING: If you write to stdout before runLanguageServer
   --          then the language server will not work
-  Arguments{..} <- getArguments "haskell-ide"
+  Arguments{..} <- getArguments "haskell-language-server-wrapper"
 
   if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
   else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
@@ -55,7 +55,8 @@ main = do
   -- Core.setupLogger mLogFileName ["hie"] logLevel
 
   progName <- getProgName
-  logm $  "run entered for haskell-ide-wrapper(" ++ progName ++ ") " ++ hieVersion
+  logm $  "run entered for haskell-language-server-wrapper(" ++ progName ++ ") "
+            ++ hieVersion
   d <- getCurrentDirectory
   logm $ "Current directory:" ++ d
   logm $ "Operating system:" ++ os
@@ -72,22 +73,22 @@ main = do
   logm $ "Project GHC version:" ++ ghcVersion
 
   let
-    hieBin = "haskell-ide-" ++ ghcVersion
+    hieBin = "haskell-language-server-" ++ ghcVersion
     backupHieBin =
       case dropWhileEnd (/='.') ghcVersion of
-        [] -> "haskell-ide"
-        xs -> "haskell-ide-" ++ init xs
-    candidates' = [hieBin, backupHieBin, "haskell-ide"]
+        [] -> "haskell-language-server"
+        xs -> "haskell-language-server-" ++ init xs
+    candidates' = [hieBin, backupHieBin, "haskell-language-server"]
     candidates = map (++ exeExtension) candidates'
 
-  logm $ "haskell-ide exe candidates :" ++ show candidates
+  logm $ "haskell-language-server exe candidates :" ++ show candidates
 
   mexes <- traverse findExecutable candidates
 
   case asum mexes of
-    Nothing -> logm $ "cannot find any haskell-ide exe, looked for:" ++ intercalate ", " candidates
+    Nothing -> logm $ "cannot find any haskell-language-server exe, looked for:" ++ intercalate ", " candidates
     Just e -> do
-      logm $ "found haskell-ide exe at:" ++ e
+      logm $ "found haskell-language-server exe at:" ++ e
       logm $ "args:" ++ show args
       logm "launching ....\n\n\n"
       callProcess e args

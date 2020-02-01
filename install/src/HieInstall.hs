@@ -75,7 +75,7 @@ defaultMain = do
 
     forM_
       versions
-      (\version -> phony ("haskell-ide-" ++ version) $ do
+      (\version -> phony ("haskell-language-server-" ++ version) $ do
         need ["submodules"]
         need ["check"]
         if isRunFromStack then do
@@ -84,8 +84,8 @@ defaultMain = do
           cabalInstallHie version
       )
 
-    phony "latest" (need ["haskell-ide-" ++ latestVersion])
-    phony "haskell-ide"  (need ["data", "latest"])
+    phony "latest" (need ["haskell-language-server-" ++ latestVersion])
+    phony "haskell-language-server"  (need ["data", "latest"])
 
     -- stack specific targets
     when isRunFromStack $ do

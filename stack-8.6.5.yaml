@@ -28,7 +28,7 @@ extra-deps:
 - topograph-1
 
 flags:
-  ide:
+  haskell-language-server:
     pedantic: true
 
 # allow-newer: true

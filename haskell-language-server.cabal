@@ -1,11 +1,11 @@
 cabal-version: 1.12
 category:       Development
-name:           ide
+name:           haskell-language-server
 version:        0.1.0.0
 synopsis:       LSP server for GHC
-description:    Please see the README on GitHub at <https://github.com/alanz/ide#readme>
-homepage:       https://github.com/alanz/ide#readme
-bug-reports:    https://github.com/alanz/ide/issues
+description:    Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+homepage:       https://github.com/haskell/haskell-language-server#readme
+bug-reports:    https://github.com/haskell/haskell-language-server/issues
 author:         Alan Zimmerman
 maintainer:     alan.zimm@gmail.com
 copyright:      Alan Zimmerman
@@ -16,7 +16,6 @@ extra-source-files:
     README.md
     ChangeLog.md
 
-
 flag pedantic
   Description: Enable -Werror
   Default:     False
@@ -24,7 +23,7 @@ flag pedantic
 
 source-repository head
   type: git
-  location: https://github.com/alanz/ide
+  location: https://github.com/haskell/haskell-language-server
 
 library
   exposed-modules:
@@ -32,7 +31,7 @@ library
       Ide.Plugin.Example
       Ide.Version
   other-modules:
-      Paths_ide
+      Paths_haskell_language_server
   hs-source-dirs:
       src
   build-depends:
@@ -87,15 +86,15 @@ library
 
   default-language: Haskell2010
 
-executable haskell-ide
+executable haskell-language-server
   main-is: Main.hs
   hs-source-dirs:
       exe
   other-modules:
       Arguments
-      Paths_ide
+      Paths_haskell_language_server
   autogen-modules:
-      Paths_ide
+      Paths_haskell_language_server
   ghc-options:
               -threaded
               -Wall
@@ -124,21 +123,21 @@ executable haskell-ide
     , haskell-lsp
     , hie-bios >= 0.3.2 && < 0.4
     , hslogger
-    , ide
+    , haskell-language-server
     , optparse-applicative
     , shake >= 0.17.5
     , text
   default-language: Haskell2010
 
-executable haskell-ide-wrapper
+executable haskell-language-server-wrapper
   main-is: Wrapper.hs
   hs-source-dirs:
       exe
   other-modules:
       Arguments
-      Paths_ide
+      Paths_haskell_language_server
   autogen-modules:
-      Paths_ide
+      Paths_haskell_language_server
   ghc-options:
               -threaded
               -Wall
@@ -163,7 +162,7 @@ executable haskell-ide-wrapper
     , ghc-paths
     , haskell-lsp
     , hie-bios
-    , ide
+    , haskell-language-server
     , optparse-applicative
     , process
     , text
@@ -174,7 +173,7 @@ test-suite test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_ide
+      Paths_haskell_language_server
   hs-source-dirs:
       test
   ghc-options:
@@ -186,5 +185,5 @@ test-suite test
      ghc-options:      -Werror
   build-depends:
       base >=4.7 && <5
-    , ide
+    , haskell-language-server
   default-language: Haskell2010

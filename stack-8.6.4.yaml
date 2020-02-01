@@ -45,7 +45,7 @@ extra-deps:
 
 
 flags:
-  ide:
+  haskell-language-server:
     pedantic: true
 
 
