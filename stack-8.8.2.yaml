@@ -30,7 +30,7 @@ extra-deps:
 - temporary-1.2.1.1
 
 flags:
-  ide:
+  haskell-language-server:
     pedantic: true
 
 # allow-newer: true

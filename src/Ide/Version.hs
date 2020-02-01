@@ -12,7 +12,7 @@ import           Distribution.Text               (display)
 import           Options.Applicative.Simple      (simpleVersion)
 import           Ide.Cradle                      (execProjectGhc)
 import qualified HIE.Bios.Types as Bios
-import qualified Paths_ide      as Meta
+import qualified Paths_haskell_language_server as Meta
 import           System.Directory
 import           System.Info
 

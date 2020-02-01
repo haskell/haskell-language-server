@@ -1,14 +1,23 @@
-# This is a sample hie.yaml file for opening haskell-ide-engine in
-# hie, using stack as the build system.
-# To use is, copy it to a file called 'hie.yaml'
+# This is a sample hie.yaml file for opening haskell-language-server
+# in hie, using stack as the build system.  To use is, copy it to a
+# file called 'hie.yaml'
 
 cradle:
   stack:
     - path: "./test"
-      component: "ide:test"
+      component: "haskell-language-server:test"
 
-    - path: "./exe"
-      component: "ide:exe:ide"
+    - path: "./exe/Main.hs"
+      component: "haskell-language-server:exe:haskell-language-server"
+
+    - path: "./exe/Wrapper.hs"
+      component: "haskell-language-server:exe:haskell-language-server-wrapper"
 
     - path: "./src"
-      component: "ide:lib"
+      component: "haskell-language-server:lib"
+
+    - path: "./ghcide/src"
+      component: "ghcide:lib:ghcide"
+
+    - path: "./ghcide/exe"
+      component: "ghcide:exe:ghcide"

@@ -65,7 +65,7 @@ main :: IO ()
 main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    Arguments{..} <- getArguments "haskell-ide"
+    Arguments{..} <- getArguments "haskell-language-server"
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
@@ -83,7 +83,7 @@ main = do
 
     if argLSP then do
         t <- offsetTime
-        hPutStrLn stderr "Starting (ide)LSP server..."
+        hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
         runLanguageServer def (pluginHandler plugins) $ \getLspId event vfs caps -> do
             t <- t
@@ -96,8 +96,8 @@ main = do
                     }
             initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) options vfs
     else do
-        putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
-        putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
+        putStrLn $ "(haskell-language-server)Ghcide setup tester in " ++ dir ++ "."
+        putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
 
         putStrLn $ "\nStep 1/6: Finding files to test in " ++ dir
         files <- nubOrd <$> expandFiles (argFiles ++ ["." | null argFiles])
