@@ -1387,7 +1387,7 @@ completionTests
           [complItem "head" (Just CiFunction) (Just "[a] -> a")]
         let [CompletionItem { _documentation = headDocs}] = compls
         checkDocText "head" headDocs [ "Defined in 'Prelude'"
-#if MIN_GHC_API_VERSION(8,6,0)
+#if MIN_GHC_API_VERSION(8,6,5)
                                      , "Extract the first element of a list"
 #endif
                                      ]
@@ -1415,7 +1415,7 @@ completionTests
         let [ CompletionItem { _documentation = boundedDocs},
               CompletionItem { _documentation = boolDocs } ] = compls
         checkDocText "Bounded" boundedDocs [ "Defined in 'Prelude'"
-#if MIN_GHC_API_VERSION(8,6,0)
+#if MIN_GHC_API_VERSION(8,6,5)
                                            , "name the upper and lower limits"
 #endif
                                            ]
@@ -1430,7 +1430,7 @@ completionTests
           [complItem "head" (Just CiFunction) (Just "[a] -> a")]
         let [CompletionItem { _documentation = headDocs}] = compls
         checkDocText "head" headDocs [ "Defined in 'Prelude'"
-#if MIN_GHC_API_VERSION(8,6,0)
+#if MIN_GHC_API_VERSION(8,6,5)
                                      , "Extract the first element of a list"
 #endif
                                      ]
