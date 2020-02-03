@@ -63,12 +63,13 @@ cabalInstallHie versionNumber = do
       installMethod | isWindowsSystem && isCabal3 = ["--install-method=copy"]
                     | otherwise = []
   execCabal_ $
-    [ "v2-install", "exe:haskell-language-server"
+    [ "v2-install"
+    , "exe:haskell-language-server"
+    , "exe:haskell-language-server-wrapper"
     , "-w", ghcPath
     , "--write-ghc-environment-files=never"
     , installDirOpt, localBin
     , "--max-backjumps=5000"
-    , "exe:haskell-language-server"
     , "--overwrite-policy=always"
     ]
     ++ installMethod
