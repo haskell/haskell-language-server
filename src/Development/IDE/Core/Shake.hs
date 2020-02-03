@@ -101,6 +101,8 @@ data ShakeExtras = ShakeExtras
     ,positionMapping :: Var (Map NormalizedUri (Map TextDocumentVersion PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
+    ,inProgress :: Var (Map NormalizedFilePath Int)
+    -- ^ How many rules are running for each file
     }
 
 getShakeExtras :: Action ShakeExtras
@@ -298,6 +300,7 @@ shakeOpen :: IO LSP.LspId
           -> Rules ()
           -> IO IdeState
 shakeOpen getLspId eventer logger shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
+    inProgress <- newVar Map.empty
     shakeExtras <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
@@ -311,15 +314,17 @@ shakeOpen getLspId eventer logger shakeProfileDir (IdeReportProgress reportProgr
         shakeOpenDatabase
             opts
                 { shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts
-                , shakeProgress = if reportProgress then lspShakeProgress getLspId eventer else const (pure ())
+                -- we don't actually use the progress value, but Shake conveniently spawns/kills this thread whenever
+                -- we call into Shake, so abuse it for that purpose
+                , shakeProgress = const $ if reportProgress then lspShakeProgress getLspId eventer inProgress else pure ()
                 }
             rules
     shakeAbort <- newMVar $ return ()
     shakeDb <- shakeDb
     return IdeState{..}
 
-lspShakeProgress :: IO LSP.LspId -> (LSP.FromServerMessage -> IO ()) -> IO Progress -> IO ()
-lspShakeProgress getLspId sendMsg prog = do
+lspShakeProgress :: Show a => IO LSP.LspId -> (LSP.FromServerMessage -> IO ()) -> Var (Map a Int) -> IO ()
+lspShakeProgress getLspId sendMsg inProgress = do
     lspId <- getLspId
     u <- ProgressTextToken . T.pack . show . hashUnique <$> newUnique
     sendMsg $ LSP.ReqWorkDoneProgressCreate $ LSP.fmServerWorkDoneProgressCreateRequest
@@ -347,9 +352,9 @@ lspShakeProgress getLspId sendMsg prog = do
         sample = 0.1
         loop id prev = do
             sleep sample
-            p <- prog
-            let done = countSkipped p + countBuilt p
-            let todo = done + countUnknown p + countTodo p
+            current <- readVar inProgress
+            let done = length $ filter (== 0) $ Map.elems current
+            let todo = Map.size current
             let next = Just $ T.pack $ show done <> "/" <> show todo
             when (next /= prev) $
                 sendMsg $ LSP.NotWorkDoneProgressReport $ LSP.fmServerWorkDoneProgressReportNotification
@@ -525,50 +530,58 @@ usesWithStale key files = do
     values <- map (\(A value _) -> value) <$> apply (map (Q . (key,)) files)
     mapM (uncurry lastValue) (zip files values)
 
+
+withProgress :: Ord a => Var (Map a Int) -> a -> Action b -> Action b
+withProgress var file = actionBracket (f succ) (const $ f pred) . const
+    where f shift = modifyVar_ var $ return . Map.alter (Just . shift . fromMaybe 0) file
+
+
 defineEarlyCutoff
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
     -> Rules ()
 defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> do
-    extras@ShakeExtras{state} <- getShakeExtras
-    val <- case old of
-        Just old | mode == RunDependenciesSame -> do
-            v <- liftIO $ getValues state key file
-            case v of
-                -- No changes in the dependencies and we have
-                -- an existing result.
-                Just v -> return $ Just $ RunResult ChangedNothing old $ A v (decodeShakeValue old)
-                _ -> return Nothing
-        _ -> return Nothing
-    case val of
-        Just res -> return res
-        Nothing -> do
-            (bs, (diags, res)) <- actionCatch
-                (do v <- op key file; liftIO $ evaluate $ force $ v) $
-                \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-            modTime <- liftIO $ join . fmap currentValue <$> getValues state GetModificationTime file
-            (bs, res) <- case res of
-                Nothing -> do
-                    staleV <- liftIO $ getValues state key file
-                    pure $ case staleV of
-                        Nothing -> (toShakeValue ShakeResult bs, Failed)
-                        Just v -> case v of
-                            Succeeded ver v -> (toShakeValue ShakeStale bs, Stale ver v)
-                            Stale ver v -> (toShakeValue ShakeStale bs, Stale ver v)
-                            Failed -> (toShakeValue ShakeResult bs, Failed)
-                Just v -> pure $ (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
-            liftIO $ setValues state key file res
-            updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
-            let eq = case (bs, fmap decodeShakeValue old) of
-                    (ShakeResult a, Just (ShakeResult b)) -> a == b
-                    (ShakeStale a, Just (ShakeStale b)) -> a == b
-                    -- If we do not have a previous result
-                    -- or we got ShakeNoCutoff we always return False.
-                    _ -> False
-            return $ RunResult
-                (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
-                (encodeShakeValue bs) $
-                A res bs
+    extras@ShakeExtras{state, inProgress} <- getShakeExtras
+    -- don't do progress for GetFileExists, as there are lots of non-nodes for just that one key
+    (if show key == "GetFileExists" then id else withProgress inProgress file) $ do
+        val <- case old of
+            Just old | mode == RunDependenciesSame -> do
+                v <- liftIO $ getValues state key file
+                case v of
+                    -- No changes in the dependencies and we have
+                    -- an existing result.
+                    Just v -> return $ Just $ RunResult ChangedNothing old $ A v (decodeShakeValue old)
+                    _ -> return Nothing
+            _ -> return Nothing
+        case val of
+            Just res -> return res
+            Nothing -> do
+                (bs, (diags, res)) <- actionCatch
+                    (do v <- op key file; liftIO $ evaluate $ force $ v) $
+                    \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
+                modTime <- liftIO $ join . fmap currentValue <$> getValues state GetModificationTime file
+                (bs, res) <- case res of
+                    Nothing -> do
+                        staleV <- liftIO $ getValues state key file
+                        pure $ case staleV of
+                            Nothing -> (toShakeValue ShakeResult bs, Failed)
+                            Just v -> case v of
+                                Succeeded ver v -> (toShakeValue ShakeStale bs, Stale ver v)
+                                Stale ver v -> (toShakeValue ShakeStale bs, Stale ver v)
+                                Failed -> (toShakeValue ShakeResult bs, Failed)
+                    Just v -> pure $ (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
+                liftIO $ setValues state key file res
+                updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+                let eq = case (bs, fmap decodeShakeValue old) of
+                        (ShakeResult a, Just (ShakeResult b)) -> a == b
+                        (ShakeStale a, Just (ShakeStale b)) -> a == b
+                        -- If we do not have a previous result
+                        -- or we got ShakeNoCutoff we always return False.
+                        _ -> False
+                return $ RunResult
+                    (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
+                    (encodeShakeValue bs) $
+                    A res bs
 
 
 -- | Rule type, input file

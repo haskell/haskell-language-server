@@ -9,6 +9,7 @@ extra-deps:
 - ghc-lib-parser-8.8.1
 - ghc-lib-8.8.1
 - fuzzy-0.1.0.0
+- shake-0.18.4
 - regex-base-0.94.0.0
 - regex-tdfa-1.3.1.0
 - haddock-library-1.8.0
