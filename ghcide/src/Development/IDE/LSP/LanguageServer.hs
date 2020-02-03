@@ -134,8 +134,10 @@ runLanguageServer options userHandlers getIdeState = do
                                 "Message: " ++ show x ++ "\n" ++
                                 "Exception: " ++ show e
                     Response x@RequestMessage{_id, _params} wrap act ->
-                        checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $ 
-                            \res -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Just res) Nothing
+                        checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
+                            \case
+                              Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) Nothing (Just e)
+                              Right r -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Just r) Nothing
                     ResponseAndRequest x@RequestMessage{_id, _params} wrap wrapNewReq act ->
                         checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
                             \(res, newReq) -> do
@@ -191,7 +193,7 @@ cancelHandler cancelRequest = PartialHandlers $ \_ x -> return x
 -- | A message that we need to deal with - the pieces are split up with existentials to gain additional type safety
 --   and defer precise processing until later (allows us to keep at a higher level of abstraction slightly longer)
 data Message
-    = forall m req resp . (Show m, Show req) => Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (LSP.LspFuncs () -> IdeState -> req -> IO resp)
+    = forall m req resp . (Show m, Show req) => Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (LSP.LspFuncs () -> IdeState -> req -> IO (Either ResponseError resp))
     -- | Used for cases in which we need to send not only a response,
     --   but also an additional request to the client.
     --   For example, 'executeCommand' may generate an 'applyWorkspaceEdit' request.

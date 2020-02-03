@@ -34,12 +34,12 @@ setHandlersOutline = PartialHandlers $ \WithMessage {..} x -> return x
   }
 
 moduleOutline
-  :: LSP.LspFuncs () -> IdeState -> DocumentSymbolParams -> IO DSResult
+  :: LSP.LspFuncs () -> IdeState -> DocumentSymbolParams -> IO (Either ResponseError DSResult)
 moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentIdentifier uri }
   = case uriToFilePath uri of
     Just (toNormalizedFilePath -> fp) -> do
       mb_decls <- runAction ideState $ use GetParsedModule fp
-      pure $ case mb_decls of
+      pure $ Right $ case mb_decls of
         Nothing -> DSDocumentSymbols (List [])
         Just (ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } })
           -> let
@@ -61,7 +61,7 @@ moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentI
                DSDocumentSymbols (List allSymbols)
 
 
-    Nothing -> pure $ DSDocumentSymbols (List [])
+    Nothing -> pure $ Right $ DSDocumentSymbols (List [])
 
 documentSymbolForDecl :: Located (HsDecl GhcPs) -> Maybe DocumentSymbol
 documentSymbolForDecl (L l (TyClD FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))

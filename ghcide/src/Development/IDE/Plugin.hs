@@ -26,8 +26,9 @@ instance Monoid Plugin where
     mempty = def
 
 
-codeActionPlugin :: (LSP.LspFuncs () -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO [CAResult]) -> Plugin
+codeActionPlugin :: (LSP.LspFuncs () -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO (Either ResponseError [CAResult])) -> Plugin
 codeActionPlugin f = Plugin mempty $ PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeActionHandler = withResponse RspCodeAction g
     }
-    where g lsp state (CodeActionParams a b c _) = List <$> f lsp state a b c
+    where
+      g lsp state (CodeActionParams a b c _) = fmap List <$> f lsp state a b c
