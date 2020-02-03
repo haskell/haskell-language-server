@@ -11,3 +11,5 @@ _build/
 # stack 2.1 stack.yaml lock files
 stack*.yaml.lock
 shake.yaml.lock
+
+.vscode
