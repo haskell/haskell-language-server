@@ -26,10 +26,10 @@ stackInstallHie mbVersionNumber = do
   versionNumber <-
     case mbVersionNumber of
       Nothing -> do
-        execStackWithCfgFile_ "stack.yaml" ["install", "ide"]
+        execStackWithCfgFile_ "stack.yaml" ["install", "haskell-language-server"]
         getGhcVersionOfCfgFile "stack.yaml"
       Just vn -> do
-        execStackWithGhc_ vn ["install", "ide"]
+        execStackWithGhc_ vn ["install", "haskell-language-server"]
         return vn
 
   localBinDir <- getLocalBin
