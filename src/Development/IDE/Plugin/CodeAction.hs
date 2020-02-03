@@ -48,7 +48,7 @@ codeAction
     -> TextDocumentIdentifier
     -> Range
     -> CodeActionContext
-    -> IO [CAResult]
+    -> IO (Either ResponseError [CAResult])
 codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
     -- disable logging as its quite verbose
     -- logInfo (ideLogger ide) $ T.pack $ "Code action req: " ++ show arg
@@ -57,7 +57,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
     (ideOptions, parsedModule) <- runAction state $
       (,) <$> getIdeOptions
           <*> (getParsedModule . toNormalizedFilePath) `traverse` uriToFilePath uri
-    pure
+    pure $ Right
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
         | x <- xs, (title, tedit) <- suggestAction ideOptions ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
@@ -68,21 +68,21 @@ codeLens
     :: LSP.LspFuncs ()
     -> IdeState
     -> CodeLensParams
-    -> IO (List CodeLens)
+    -> IO (Either ResponseError (List CodeLens))
 codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
-    case uriToFilePath' uri of
+    fmap (Right . List) $ case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
         diag <- getDiagnostics ideState
         hDiag <- getHiddenDiagnostics ideState
-        pure $ List
+        pure
           [ CodeLens _range (Just (Command title "typesignature.add" (Just $ List [toJSON edit]))) Nothing
           | (dFile, _, dDiag@Diagnostic{_range=_range@Range{..},..}) <- diag ++ hDiag
           , dFile == filePath
           , (title, tedit) <- suggestSignature False dDiag
           , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
           ]
-      Nothing -> pure $ List []
+      Nothing -> pure []
 
 -- | Execute the "typesignature.add" command.
 executeAddSignatureCommand
@@ -93,7 +93,7 @@ executeAddSignatureCommand
 executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | _command == "typesignature.add"
     , Just (List [edit]) <- _arguments
-    , Success wedit <- fromJSON edit 
+    , Success wedit <- fromJSON edit
     = return (Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
     | otherwise
     = return (Null, Nothing)

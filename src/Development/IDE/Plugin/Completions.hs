@@ -58,13 +58,13 @@ getCompletionsLSP
     :: LSP.LspFuncs ()
     -> IdeState
     -> CompletionParams
-    -> IO CompletionResponseResult
+    -> IO (Either ResponseError CompletionResponseResult)
 getCompletionsLSP lsp ide
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
                   ,_context=completionContext} = do
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
-    case (contents, uriToFilePath' uri) of
+    fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath path
         (ideOpts, compls) <- runAction ide ((,) <$> getIdeOptions <*> useWithStale ProduceCompletions npath)
