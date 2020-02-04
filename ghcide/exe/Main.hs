@@ -107,7 +107,9 @@ main = do
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
 
         putStrLn $ "\nStep 1/6: Finding files to test in " ++ dir
-        files <- nubOrd <$> expandFiles (argFiles ++ ["." | null argFiles])
+        files <- expandFiles (argFiles ++ ["." | null argFiles])
+        -- LSP works with absolute file paths, so try and behave similarly
+        files <- nubOrd <$> mapM canonicalizePath files
         putStrLn $ "Found " ++ show (length files) ++ " files"
 
         putStrLn "\nStep 2/6: Looking for hie.yaml files that control setup"
