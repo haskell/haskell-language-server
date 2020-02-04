@@ -88,22 +88,14 @@ defaultMain = do
     phony "haskell-language-server"  (need ["data", "latest"])
 
     -- stack specific targets
-    when isRunFromStack $ do
-
+    when isRunFromStack $
       phony "dev" $ stackInstallHieWithErrMsg Nothing
 
     -- cabal specific targets
     when isRunFromCabal $ do
-
-      phony "ghcs" $ do
-        let
-          msg =
-            "Found the following GHC paths: \n"
-              ++ unlines
-                  (map (\(version, path) -> "ghc-" ++ version ++ ": " ++ path)
-                        ghcPaths
-                  )
-        printInStars msg
+      -- It throws an error if there is no ghc in $PATH
+      checkInstalledGhcs ghcPaths
+      phony "ghcs" $ showInstalledGhcs ghcPaths
 
     -- macos specific targets
     phony "icu-macos-fix"

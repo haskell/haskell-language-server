@@ -62,6 +62,23 @@ findInstalledGhcs = do
     -- filter out stack provided GHCs (assuming that stack programs path is the default one in linux)
     $ filter (not . isInfixOf ".stack" . snd) (knownGhcs ++ availableGhcs)
 
+showInstalledGhcs :: MonadIO m => [(VersionNumber, GhcPath)] -> m ()
+showInstalledGhcs ghcPaths = do
+  let msg = "Found the following GHC paths: \n"
+              ++ unlines
+                  (map (\(version, path) -> "ghc-" ++ version ++ ": " ++ path)
+                    ghcPaths
+                  )
+  printInStars msg
+
+checkInstalledGhcs :: MonadIO m => [(VersionNumber, GhcPath)] -> m ()
+checkInstalledGhcs ghcPaths = when (null ghcPaths) $ do
+  let msg = "No ghc installations found in $PATH. \n"
+             ++ "The script requires at least one ghc in $PATH \n"
+             ++ "  to be able to build haskell-language-server.\n"
+  printInStars msg
+  error msg
+
 -- | Get the path to a GHC that has the version specified by `VersionNumber`
 -- If no such GHC can be found, Nothing is returned.
 -- First, it is checked whether there is a GHC with the name `ghc-$VersionNumber`.
