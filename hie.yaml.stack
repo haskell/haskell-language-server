@@ -1,7 +1,13 @@
 # This is a sample hie.yaml file for opening haskell-language-server
 # in hie, using stack as the build system.  To use is, copy it to a
 # file called 'hie.yaml'
-
+# WARNING: This configuration does not currently work.
+#          It needs support for multi-cradle in ghcide:
+#          https://github.com/digital-asset/ghcide/issues/113
+#          A "working" hie.yaml (only for lib modules) could be
+#          ```
+#          cradle: { stack: { component: "haskell-language-server:lib" } }
+#          ```
 cradle:
   stack:
     - path: "./test"

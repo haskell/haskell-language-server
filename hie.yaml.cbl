@@ -1,7 +1,9 @@
 # This is a sample hie.yaml file for opening haskell-language-server
 # in hie, using cabal as the build system.  To use is, copy it to a
 # file called 'hie.yaml'
-
+# WARNING: This configuration does not currently work.
+#          It needs support for multi-cradle in ghcide:
+#          https://github.com/digital-asset/ghcide/issues/113
 cradle:
   cabal:
 
