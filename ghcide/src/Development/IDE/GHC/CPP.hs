@@ -29,7 +29,7 @@ import DynFlags
 import Panic
 import FileCleanup
 #if MIN_GHC_API_VERSION(8,8,2)
-import LlvmCodeGen (LlvmVersion, llvmVersionList)
+import LlvmCodeGen (llvmVersionList)
 #elif MIN_GHC_API_VERSION(8,8,0)
 import LlvmCodeGen (LlvmVersion (..))
 #endif
