@@ -177,7 +177,7 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
 showEvent lock e = withLock lock $ print e
 
 
-cradleToSession :: Cradle -> IO HscEnvEq
+cradleToSession :: Cradle a -> IO HscEnvEq
 cradleToSession cradle = do
     cradleRes <- getCompilerOptions "" cradle
     opts <- case cradleRes of
