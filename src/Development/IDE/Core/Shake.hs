@@ -325,6 +325,9 @@ shakeOpen getLspId eventer logger shakeProfileDir (IdeReportProgress reportProgr
 
 lspShakeProgress :: Show a => IO LSP.LspId -> (LSP.FromServerMessage -> IO ()) -> Var (Map a Int) -> IO ()
 lspShakeProgress getLspId sendMsg inProgress = do
+    -- first sleep a bit, so we only show progress messages if it's going to take
+    -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
+    sleep 0.1
     lspId <- getLspId
     u <- ProgressTextToken . T.pack . show . hashUnique <$> newUnique
     sendMsg $ LSP.ReqWorkDoneProgressCreate $ LSP.fmServerWorkDoneProgressCreateRequest
