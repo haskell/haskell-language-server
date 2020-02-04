@@ -138,7 +138,7 @@ getParsedModuleRule =
         (_, contents) <- getFileContents file
         packageState <- hscEnv <$> use_ GhcSession file
         opt <- getIdeOptions
-        (diag, res) <- liftIO $ parseModule opt packageState (fromNormalizedFilePath file) contents
+        (diag, res) <- liftIO $ parseModule opt packageState (fromNormalizedFilePath file) (fmap textToStringBuffer contents)
         case res of
             Nothing -> pure (Nothing, (diag, Nothing))
             Just (contents, modu) -> do

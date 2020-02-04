@@ -14,9 +14,7 @@ module Development.IDE.Core.FileStore(
     makeLSPVFSHandle
     ) where
 
-import           StringBuffer
 import Development.IDE.GHC.Orphans()
-import Development.IDE.GHC.Util
 import           Development.IDE.Core.Shake
 import Control.Concurrent.Extra
 import qualified Data.Map.Strict as Map
@@ -85,7 +83,7 @@ makeLSPVFSHandle lspFuncs = VFSHandle
 
 
 -- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
-type instance RuleResult GetFileContents = (FileVersion, Maybe StringBuffer)
+type instance RuleResult GetFileContents = (FileVersion, Maybe T.Text)
 
 data GetFileContents = GetFileContents
     deriving (Eq, Show, Generic)
@@ -143,7 +141,7 @@ getFileContentsRule vfs =
         time <- use_ GetModificationTime file
         res <- liftIO $ ideTryIOException file $ do
             mbVirtual <- getVirtualFile vfs $ filePathToUri' file
-            pure $ textToStringBuffer . Rope.toText . _text <$> mbVirtual
+            pure $ Rope.toText . _text <$> mbVirtual
         case res of
             Left err -> return ([err], Nothing)
             Right contents -> return ([], Just (time, contents))
@@ -155,7 +153,7 @@ ideTryIOException fp act =
       <$> try act
 
 
-getFileContents :: NormalizedFilePath -> Action (FileVersion, Maybe StringBuffer)
+getFileContents :: NormalizedFilePath -> Action (FileVersion, Maybe T.Text)
 getFileContents = use_ GetFileContents
 
 fileStoreRules :: VFSHandle -> Rules ()
