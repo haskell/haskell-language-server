@@ -1,5 +1,20 @@
 ### unreleased
 
+### 0.1.0 (2020-02-04)
+
+* Code action for inserting new definitions (see #309).
+* Better default GC settings (see #329 and #333).
+* Various performance improvements (see #322 and #384).
+* Improvements to hover information (see #317 and #338).
+* Support GHC 8.8.2 (see #355).
+* Include keywords in completions (see #351).
+* Fix some issues with aborted requests (see #353).
+* Use hie-bios 0.4.0 (see #382).
+* Avoid stuck progress reporting (see #400).
+* Only show progress notifications after 0.1s (see #392).
+* Progress reporting is now in terms of the number of files rather
+  than the number of shake rules (see #379).
+
 ### 0.0.6 (2020-01-10)
 
 * Fix type in hover information for do-notation and list
