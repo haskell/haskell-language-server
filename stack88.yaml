@@ -3,5 +3,8 @@ packages:
 - .
 extra-deps:
 - fuzzy-0.1.0.0
+- haskell-lsp-0.20.0.0
+- haskell-lsp-types-0.20.0.0
+- lsp-test-0.10.1.0
 nix:
   packages: [zlib]
