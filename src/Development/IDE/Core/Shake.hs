@@ -414,7 +414,7 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts =
                        profile = case res of
                             Right (_, Just fp) ->
                                 let link = case filePathToUri' $ toNormalizedFilePath fp of
-                                                NormalizedUri x -> x
+                                                NormalizedUri _ x -> x
                                 in ", profile saved at " <> T.unpack link
                             _ -> ""
                    let logMsg = logDebug logger $ T.pack $
@@ -800,7 +800,7 @@ getAllDiagnostics ::
     DiagnosticStore ->
     [FileDiagnostic]
 getAllDiagnostics =
-    concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v) . Map.toList
+    concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v) . HMap.toList
 
 getFileDiagnostics ::
     NormalizedFilePath ->
@@ -808,14 +808,14 @@ getFileDiagnostics ::
     [LSP.Diagnostic]
 getFileDiagnostics fp ds =
     maybe [] getDiagnosticsFromStore $
-    Map.lookup (filePathToUri' fp) ds
+    HMap.lookup (filePathToUri' fp) ds
 
 filterDiagnostics ::
     (NormalizedFilePath -> Bool) ->
     DiagnosticStore ->
     DiagnosticStore
 filterDiagnostics keep =
-    Map.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)
+    HMap.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)
 
 filterVersionMap
     :: Map NormalizedUri (Set.Set TextDocumentVersion)
