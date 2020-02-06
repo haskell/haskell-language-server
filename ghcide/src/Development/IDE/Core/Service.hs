@@ -23,6 +23,7 @@ import           Control.Concurrent.Async
 import Data.Maybe
 import Development.IDE.Types.Options (IdeOptions(..))
 import Control.Monad
+import Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileStore  (VFSHandle, fileStoreRules)
 import           Development.IDE.Core.FileExists (fileExistsRules)
 import           Development.IDE.Core.OfInterest
@@ -49,14 +50,16 @@ initialise :: LSP.ClientCapabilities
            -> IO LSP.LspId
            -> (LSP.FromServerMessage -> IO ())
            -> Logger
+           -> Debouncer LSP.NormalizedUri
            -> IdeOptions
            -> VFSHandle
            -> IO IdeState
-initialise caps mainRule getLspId toDiags logger options vfs =
+initialise caps mainRule getLspId toDiags logger debouncer options vfs =
     shakeOpen
         getLspId
         toDiags
         logger
+        debouncer
         (optShakeProfiling options)
         (optReportProgress options)
         shakeOptions
