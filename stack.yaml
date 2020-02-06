@@ -30,9 +30,9 @@ extra-deps:
 - temporary-1.2.1.1
 - topograph-1
 
-flags:
-  haskell-language-server:
-    pedantic: true
+# flags:
+#   haskell-language-server:
+#     pedantic: true
 
 # allow-newer: true
 

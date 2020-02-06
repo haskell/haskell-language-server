@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns #-}
 module TestUtils
-  -- (
-  --   withFileLogging
-  -- , setupBuildToolFiles
+  (
+    withFileLogging
+  , setupBuildToolFiles
   -- , testCommand
   -- , runSingle
   -- , runSingle'
@@ -10,17 +10,17 @@ module TestUtils
   -- , makeRequest
   -- , runIGM
   -- , runIGM'
-  -- , ghcVersion, GhcVersion(..)
-  -- , logFilePath
-  -- , readResolver
-  -- , hieCommand
-  -- , hieCommandVomit
-  -- , hieCommandExamplePlugin
-  -- , getHspecFormattedConfig
+  , ghcVersion, GhcVersion(..)
+  , logFilePath
+  , readResolver
+  , hieCommand
+  , hieCommandVomit
+  , hieCommandExamplePlugin
+  , getHspecFormattedConfig
   -- , testOptions
-  -- , flushStackEnvironment
-  -- , dummyLspFuncs
-  -- )
+  , flushStackEnvironment
+  , dummyLspFuncs
+  )
 where
 
 import           Control.Concurrent.STM
@@ -143,17 +143,17 @@ setupDirectFilesIn f =
 files :: [FilePath]
 files =
   [  "./test/testdata/"
-   , "./test/testdata/addPackageTest/cabal-exe/"
-   , "./test/testdata/addPackageTest/hpack-exe/"
-   , "./test/testdata/addPackageTest/cabal-lib/"
-   , "./test/testdata/addPackageTest/hpack-lib/"
-   , "./test/testdata/addPragmas/"
-   , "./test/testdata/badProjects/cabal/"
-   , "./test/testdata/completion/"
-   , "./test/testdata/definition/"
-   , "./test/testdata/gototest/"
-   , "./test/testdata/redundantImportTest/"
-   , "./test/testdata/wErrorTest/"
+   -- , "./test/testdata/addPackageTest/cabal-exe/"
+   -- , "./test/testdata/addPackageTest/hpack-exe/"
+   -- , "./test/testdata/addPackageTest/cabal-lib/"
+   -- , "./test/testdata/addPackageTest/hpack-lib/"
+   -- , "./test/testdata/addPragmas/"
+   -- , "./test/testdata/badProjects/cabal/"
+   -- , "./test/testdata/completion/"
+   -- , "./test/testdata/definition/"
+   -- , "./test/testdata/gototest/"
+   -- , "./test/testdata/redundantImportTest/"
+   -- , "./test/testdata/wErrorTest/"
   ]
 
 data GhcVersion
@@ -204,7 +204,8 @@ logFilePath = "hie-" ++ stackYaml ++ ".log"
 -- on PATH. Cabal seems to respond to @build-tool-depends@ specifically while
 -- stack just puts all project executables on PATH.
 hieCommand :: String
-hieCommand = "hie --lsp --bios-verbose -d -l test-logs/" ++ logFilePath
+-- hieCommand = "hie --lsp --bios-verbose -d -l test-logs/" ++ logFilePath
+hieCommand = "haskell-language-server --lsp"
 
 hieCommandVomit :: String
 hieCommandVomit = hieCommand ++ " --vomit"

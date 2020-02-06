@@ -173,12 +173,14 @@ executable haskell-language-server-wrapper
   default-language:    Haskell2010
 
 
-test-suite hls-tests
+test-suite func-test
   type: exitcode-stdio-1.0
   default-language: Haskell2010
-  build-tool-depends:
-        haskell-language-server:haskell-language-server,
-        ghcide:ghcide-test-preprocessor
+  build-tool-depends:  hspec-discover:hspec-discover
+                     , haskell-language-server:haskell-language-server
+                     , cabal-helper:cabal-helper-main
+                     , ghcide:ghcide-test-preprocessor
+
   build-depends:
       base >=4.7 && <5
     , haskell-language-server
@@ -186,6 +188,7 @@ test-suite hls-tests
     , base
     , bytestring
     , containers
+    , data-default
     , directory
     , extra
     , filepath
@@ -204,20 +207,39 @@ test-suite hls-tests
     , haskell-lsp-types
     , hls-test-utils
     , lens
-    , lsp-test >= 0.8
+    , lsp-test >= 0.10.0.0
     , parser-combinators
     , QuickCheck
     , quickcheck-instances
     , rope-utf16-splay
-    , tasty
-    , tasty-expected-failure
-    , tasty-hunit
-    , tasty-quickcheck
     , text
+    , hspec
+    , hspec-core
   other-modules:
-      Paths_haskell_language_server
+                     --  CompletionSpec
+                     -- , CommandSpec
+                     -- , DeferredSpec
+                     -- , DefinitionSpec
+                     -- , DiagnosticsSpec
+                      FormatSpec
+                     -- , FunctionalBadProjectSpec
+                     -- , FunctionalCodeActionsSpec
+                     -- , FunctionalLiquidSpec
+                     , FunctionalSpec
+                     -- , HaReSpec
+                     -- , HieBiosSpec
+                     -- , HighlightSpec
+                     -- , HoverSpec
+                     -- , ProgressSpec
+                     -- , ReferencesSpec
+                     -- , RenameSpec
+                     -- , SymbolsSpec
+                     -- , TypeDefinitionSpec
+                     , Utils
+                     , Paths_haskell_language_server
+
   hs-source-dirs:
-      test/exe
+      test/functional
   ghc-options:
          -Wall
          -Wredundant-constraints
