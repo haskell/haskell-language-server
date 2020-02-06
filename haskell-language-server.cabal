@@ -30,6 +30,8 @@ library
       Ide.Cradle
       Ide.Plugin.Example
       Ide.Plugin.Ormolu
+      Ide.Plugin.Floskell
+      Ide.Plugin.Formatter
       Ide.Version
   other-modules:
       Paths_haskell_language_server
@@ -39,12 +41,14 @@ library
       base >=4.7 && <5
     , aeson
     , binary
+    , bytestring
     , Cabal
     , cabal-helper >= 1.0
     , containers
     , deepseq
     , directory
     , filepath
+    , floskell == 0.10.*
     , ghc
     , ghcide >= 0.1
     , gitrev
