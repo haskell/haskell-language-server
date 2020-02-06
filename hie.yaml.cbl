@@ -9,7 +9,10 @@ cradle:
   cabal:
 
     - path: "./test"
-      component: "haskell-language-server:test"
+      component: "haskell-language-server:hls-tests"
+
+    - path: "./test/utils/"
+      component: "haskell-language-server:hls-test-utils"
 
     - path: "./exe/Main.hs"
       component: "haskell-language-server:exe:haskell-language-server"
