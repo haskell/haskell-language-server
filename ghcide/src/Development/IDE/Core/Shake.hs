@@ -294,12 +294,13 @@ seqValue v b = case v of
 shakeOpen :: IO LSP.LspId
           -> (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
           -> Logger
+          -> Debouncer NormalizedUri
           -> Maybe FilePath
           -> IdeReportProgress
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen getLspId eventer logger shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
+shakeOpen getLspId eventer logger debouncer shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
     inProgress <- newVar Map.empty
     shakeExtras <- do
         globals <- newVar HMap.empty
@@ -307,7 +308,6 @@ shakeOpen getLspId eventer logger shakeProfileDir (IdeReportProgress reportProgr
         diagnostics <- newVar mempty
         hiddenDiagnostics <- newVar mempty
         publishedDiagnostics <- newVar mempty
-        debouncer <- newDebouncer
         positionMapping <- newVar Map.empty
         pure ShakeExtras{..}
     (shakeDb, shakeClose) <-
