@@ -16,6 +16,7 @@ import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Data.Default
 import System.Time.Extra
+import Development.IDE.Core.Debouncer
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
 import Development.IDE.Core.Service
@@ -101,7 +102,8 @@ main = do
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     }
-            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) options vfs
+            debouncer <- newAsyncDebouncer
+            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) debouncer options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
@@ -136,7 +138,7 @@ main = do
         let options =
               (defaultIdeOptions $ return $ return . grab)
                     { optShakeProfiling = argsShakeProfiling }
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) options vfs
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files

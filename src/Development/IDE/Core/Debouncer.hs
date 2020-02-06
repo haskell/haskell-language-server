@@ -3,8 +3,9 @@
 
 module Development.IDE.Core.Debouncer
     ( Debouncer
-    , newDebouncer
     , registerEvent
+    , newAsyncDebouncer
+    , noopDebouncer
     ) where
 
 import Control.Concurrent.Extra
@@ -22,13 +23,14 @@ import System.Time.Extra
 -- by delaying each event for a given time. If another event
 -- is registered for the same key within that timeframe,
 -- only the new event will fire.
-newtype Debouncer k = Debouncer (Var (HashMap k (Async ())))
+--
+-- We abstract over the debouncer used so we an use a proper debouncer in the IDE but disable
+-- debouncing in the DAML CLI compiler.
+newtype Debouncer k = Debouncer { registerEvent :: Seconds -> k -> IO () -> IO () }
 
--- | Create a new empty debouncer.
-newDebouncer :: IO (Debouncer k)
-newDebouncer = do
-    m <- newVar Map.empty
-    pure $ Debouncer m
+-- | Debouncer used in the IDE that delays events as expected.
+newAsyncDebouncer :: (Eq k, Hashable k) => IO (Debouncer k)
+newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> newVar Map.empty
 
 -- | Register an event that will fire after the given delay if no other event
 -- for the same key gets registered until then.
@@ -36,11 +38,15 @@ newDebouncer = do
 -- If there is a pending event for the same key, the pending event will be killed.
 -- Events are run unmasked so it is up to the user of `registerEvent`
 -- to mask if required.
-registerEvent :: (Eq k, Hashable k) => Debouncer k -> Seconds -> k -> IO () -> IO ()
-registerEvent (Debouncer d) delay k fire = modifyVar_ d $ \m -> mask_ $ do
+asyncRegisterEvent :: (Eq k, Hashable k) => Var (HashMap k (Async ())) -> Seconds -> k -> IO () -> IO ()
+asyncRegisterEvent d delay k fire = modifyVar_ d $ \m -> mask_ $ do
     whenJust (Map.lookup k m) cancel
     a <- asyncWithUnmask $ \unmask -> unmask $ do
         sleep delay
         fire
         modifyVar_ d (pure . Map.delete k)
     pure $ Map.insert k a m
+
+-- | Debouncer used in the DAML CLI compiler that emits events immediately.
+noopDebouncer :: Debouncer k
+noopDebouncer = Debouncer $ \_ _ a -> a

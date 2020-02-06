@@ -99,6 +99,7 @@ library
     include-dirs:
         include
     exposed-modules:
+        Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
@@ -121,7 +122,6 @@ library
         Development.IDE.Plugin.Completions
         Development.IDE.Plugin.CodeAction
     other-modules:
-        Development.IDE.Core.Debouncer
         Development.IDE.Core.Compile
         Development.IDE.Core.Preprocessor
         Development.IDE.Core.FileExists
