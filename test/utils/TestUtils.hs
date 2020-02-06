@@ -23,33 +23,33 @@ module TestUtils
   )
 where
 
-import           Control.Concurrent.STM
+-- import           Control.Concurrent.STM
 import           Control.Monad
 import           Data.Aeson.Types (typeMismatch)
 import           Data.Default
 import           Data.List (intercalate)
 import           Data.Text (pack)
-import           Data.Typeable
+-- import           Data.Typeable
 import           Data.Yaml
-import qualified Data.Map as Map
+-- import qualified Data.Map as Map
 import           Data.Maybe
 import           Language.Haskell.LSP.Core
 import           Language.Haskell.LSP.Types
 -- import           Haskell.Ide.Engine.MonadTypes hiding (withProgress, withIndefiniteProgress)
-import qualified Ide.Cradle as Bios
+-- import qualified Ide.Cradle as Bios
 -- import qualified Ide.Engine.Config as Config
 import           System.Directory
 import           System.Environment
 import           System.FilePath
 import qualified System.Log.Logger as L
-import           Test.Hspec
+-- import           Test.Hspec
 import           Test.Hspec.Runner
 import           Test.Hspec.Core.Formatters
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal
 -- import qualified Haskell.Ide.Engine.PluginApi as HIE (BiosOptions, defaultOptions)
 
-import HIE.Bios.Types
+-- import HIE.Bios.Types
 
 -- testOptions :: HIE.BiosOptions
 -- testOptions = HIE.defaultOptions { cradleOptsVerbosity = Verbose }
