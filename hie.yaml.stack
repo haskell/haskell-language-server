@@ -12,7 +12,7 @@
 cradle:
   stack:
     - path: "./test"
-      component: "haskell-language-server:test"
+      component: "haskell-language-server:hls-tests"
 
     - path: "./exe/Main.hs"
       component: "haskell-language-server:exe:haskell-language-server"

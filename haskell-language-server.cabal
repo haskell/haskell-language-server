@@ -38,46 +38,27 @@ library
   build-depends:
       base >=4.7 && <5
     , aeson
-    , async
     , binary
-    , bytestring
     , Cabal
     , cabal-helper >= 1.0
     , containers
-    , data-default
     , deepseq
     , directory
-    , extra
     , filepath
-    , fuzzy
     , ghc
     , ghcide >= 0.1
     , gitrev
-    , haddock-library
     , hashable
     , haskell-lsp == 0.19.*
-    , haskell-lsp-types == 0.19.*
-    , hie-bios
+    , hie-bios >= 0.4
     , hslogger
-    , mtl
-    , network-uri
     , optparse-simple
-    , prettyprinter
-    , prettyprinter-ansi-terminal
-    , prettyprinter-ansi-terminal
     , process
     , regex-tdfa >= 1.3.1.0
-    , rope-utf16-splay
-    , safe-exceptions
     , shake >= 0.17.5
-    , sorted-list
-    , stm
-    , syb
     , text
-    , time
     , transformers
     , unordered-containers
-    , utf8-string
   if impl(ghc >= 8.6)
      build-depends: ormolu >= 0.0.3.1
 
@@ -117,16 +98,21 @@ executable haskell-language-server
       base >=4.7 && <5
     , containers
     , data-default
-    , directory
     , extra
     , filepath
+     --------------------------------------------------------------
+     -- The MIN_GHC_API_VERSION macro relies on MIN_VERSION pragmas
+     -- which require depending on ghc. So the tests need to depend
+     -- on ghc if they need to use MIN_GHC_API_VERSION. Maybe a
+     -- better solution can be found, but this is a quick solution
+     -- which works for now.
     , ghc
+     --------------------------------------------------------------
     , ghc-paths
     , ghcide
     , gitrev
     , haskell-lsp
     , hie-bios >= 0.4
-    , hslogger
     , haskell-language-server
     , optparse-applicative
     , shake >= 0.17.5
@@ -162,24 +148,55 @@ executable haskell-language-server-wrapper
     , filepath
     , gitrev
     , ghc
-    , ghcide
     , ghc-paths
-    , haskell-lsp
     , hie-bios
     , haskell-language-server
     , optparse-applicative
     , process
-    , text
   default-language:    Haskell2010
 
 
-test-suite test
+test-suite func-test
   type: exitcode-stdio-1.0
-  main-is: Spec.hs
+  default-language: Haskell2010
+  build-tool-depends:  hspec-discover:hspec-discover
+                     , haskell-language-server:haskell-language-server
+                     , cabal-helper:cabal-helper-main
+                     , ghcide:ghcide-test-preprocessor
+
+  build-depends:
+      base >=4.7 && <5
+    , aeson
+    , data-default
+    , hls-test-utils
+    , lsp-test >= 0.10.0.0
+    , text
+    , hspec
   other-modules:
-      Paths_haskell_language_server
+                     --  CompletionSpec
+                     -- , CommandSpec
+                     -- , DeferredSpec
+                     -- , DefinitionSpec
+                     -- , DiagnosticsSpec
+                      FormatSpec
+                     -- , FunctionalBadProjectSpec
+                     -- , FunctionalCodeActionsSpec
+                     -- , FunctionalLiquidSpec
+                     , FunctionalSpec
+                     -- , HaReSpec
+                     -- , HieBiosSpec
+                     -- , HighlightSpec
+                     -- , HoverSpec
+                     -- , ProgressSpec
+                     -- , ReferencesSpec
+                     -- , RenameSpec
+                     -- , SymbolsSpec
+                     -- , TypeDefinitionSpec
+                     , Utils
+                     , Paths_haskell_language_server
+
   hs-source-dirs:
-      test
+      test/functional
   ghc-options:
          -Wall
          -Wredundant-constraints
@@ -187,7 +204,32 @@ test-suite test
          -threaded -rtsopts -with-rtsopts=-N
   if flag(pedantic)
      ghc-options:      -Werror
-  build-depends:
-      base >=4.7 && <5
-    , haskell-language-server
-  default-language: Haskell2010
+  main-is: Main.hs
+  -- other-modules:
+  --       Development.IDE.Test
+  --       Development.IDE.Test.Runfiles
+
+library hls-test-utils
+  hs-source-dirs:      test/utils
+  exposed-modules:     TestUtils
+  build-depends:       base
+                     , haskell-language-server
+                     , haskell-lsp
+                     , hie-bios
+                     , aeson
+                     , blaze-markup
+                     , containers
+                     , data-default
+                     , directory
+                     , filepath
+                     , hslogger
+                     , hspec
+                     , hspec-core
+                     , stm
+                     , text
+                     , unordered-containers
+                     , yaml
+  ghc-options:         -Wall -Wredundant-constraints
+  if flag(pedantic)
+     ghc-options:      -Werror
+  default-language:    Haskell2010
