@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Ide.Cradle
+      Ide.Plugin.Config
       Ide.Plugin.Example
       Ide.Plugin.Ormolu
       Ide.Plugin.Floskell
@@ -45,15 +46,17 @@ library
     , Cabal
     , cabal-helper >= 1.0
     , containers
+    , data-default
     , deepseq
     , directory
+    , extra
     , filepath
     , floskell == 0.10.*
     , ghc
     , ghcide >= 0.1
     , gitrev
     , hashable
-    , haskell-lsp == 0.19.*
+    , haskell-lsp == 0.20.*
     , hie-bios >= 0.4
     , hslogger
     , optparse-simple

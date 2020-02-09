@@ -2,7 +2,7 @@ resolver: lts-13.19 # GHC 8.6.4
 
 packages:
 - .
-# - ./ghcide/
+- ./ghcide/
 
 extra-deps:
 - brittany-0.12.1.0
@@ -11,7 +11,7 @@ extra-deps:
 - cabal-helper-1.0.0.0
 - cabal-plan-0.5.0.0
 - constrained-dynamic-0.1.0.0
-- ghcide-0.1.0
+# - ghcide-0.1.0
 - extra-1.6.18
 - floskell-0.10.2
 - fuzzy-0.1.0.0
@@ -20,14 +20,14 @@ extra-deps:
 - ghc-lib-parser-ex-8.8.2
 - haddock-api-2.22.0
 - haddock-library-1.8.0
-- haskell-lsp-0.19.0.0
-- haskell-lsp-types-0.19.0.0
+- haskell-lsp-0.20.0.0
+- haskell-lsp-types-0.20.0.0
 - haskell-src-exts-1.21.1
 - hie-bios-0.4.0
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
-- lsp-test-0.10.0.0
+- lsp-test-0.10.1.0
 - monad-dijkstra-0.1.1.2
 - monad-memo-0.4.1
 - multistate-0.8.0.1

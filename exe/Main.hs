@@ -4,6 +4,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main(main) where
 
@@ -19,6 +20,7 @@ import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Development.IDE.Core.Debouncer
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
 import Development.IDE.Core.RuleTypes
@@ -36,6 +38,8 @@ import Development.IDE.Types.Options
 import Development.Shake (Action, action)
 import GHC hiding (def)
 import HIE.Bios
+import Ide.Plugin.Formatter
+import Ide.Plugin.Config
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types (LspId(IdInt))
 import Linker
@@ -50,6 +54,7 @@ import System.Time.Extra
 import Development.IDE.Plugin.CodeAction  as CodeAction
 import Development.IDE.Plugin.Completions as Completions
 import Ide.Plugin.Example                 as Example
+import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
 
 -- ---------------------------------------------------------------------
@@ -58,11 +63,12 @@ import Ide.Plugin.Ormolu                  as Ormolu
 -- server.
 -- These can be freely added or removed to tailor the available
 -- features of the server.
-idePlugins :: Bool -> Plugin
+idePlugins :: Bool -> Plugin Config
 idePlugins includeExample
   = Completions.plugin <>
     CodeAction.plugin <>
-    Ormolu.plugin <>
+    formatterPlugins [("ormolu",   Ormolu.provider)
+                     ,("floskell", Floskell.provider)] <>
     if includeExample then Example.plugin else mempty
 
 -- ---------------------------------------------------------------------
@@ -91,7 +97,7 @@ main = do
         t <- offsetTime
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer def (pluginHandler plugins) $ \getLspId event vfs caps -> do
+        runLanguageServer def (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             -- very important we only call loadSession once, and it's fast, so just do it before starting
@@ -100,7 +106,8 @@ main = do
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     }
-            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) options vfs
+            debouncer <- newAsyncDebouncer
+            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) debouncer options vfs
     else do
         putStrLn $ "(haskell-language-server)Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
@@ -135,7 +142,7 @@ main = do
         let options =
               (defaultIdeOptions $ return $ return . grab)
                     { optShakeProfiling = argsShakeProfiling }
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) options vfs
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files

@@ -1,6 +1,6 @@
 packages:
          ./
-         -- ghcide
+         ghcide
 
 tests: true
 
@@ -11,4 +11,4 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-02-04T19:45:47Z
+index-state: 2020-02-09T06:58:05Z

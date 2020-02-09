@@ -7,24 +7,13 @@
 
 module Ide.Plugin.Floskell
   (
-    plugin
+    provider
   )
 where
 
-#if __GLASGOW_HASKELL__ >= 806
-#if __GLASGOW_HASKELL__ >= 808
-import           Control.Monad.IO.Class         ( MonadIO(..) )
-#else
-import           Control.Monad.IO.Class         ( liftIO
-                                                , MonadIO(..)
-                                                )
-#endif
-import qualified Data.Text as T
-#endif
-
 import qualified Data.ByteString.Lazy           as BS
+import qualified Data.Text as T
 import qualified Data.Text.Encoding             as T
-import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Floskell
@@ -33,14 +22,6 @@ import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
--- New style plugin
-
-plugin :: Plugin
-plugin = formatterPlugin provider
-
--- ---------------------------------------------------------------------
--- ---------------------------------------------------------------------
--- ---------------------------------------------------------------------
 
 -- | Format provider of Floskell.
 -- Formats the given source in either a given Range or the whole Document.
@@ -48,7 +29,7 @@ plugin = formatterPlugin provider
 provider :: FormattingProvider IO
 provider _ideState typ contents fp _ = do
     let file = fromNormalizedFilePath fp
-    config <- liftIO $ findConfigOrDefault file
+    config <- findConfigOrDefault file
     let (range, selectedContents) = case typ of
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (r, extractRange r contents)
@@ -69,29 +50,5 @@ findConfigOrDefault file = do
     Nothing ->
       let gibiansky = head (filter (\s -> styleName s == "gibiansky") styles)
       in return $ defaultAppConfig { appStyle = gibiansky }
-
--- ---------------------------------------------------------------------
--- ---------------------------------------------------------------------
--- ---------------------------------------------------------------------
-
-
-extractRange :: Range -> T.Text -> T.Text
-extractRange (Range (Position sl _) (Position el _)) s = newS
-  where focusLines = take (el-sl+1) $ drop sl $ T.lines s
-        newS = T.unlines focusLines
-
--- | Gets the range that covers the entire text
-fullRange :: T.Text -> Range
-fullRange s = Range startPos endPos
-  where startPos = Position 0 0
-        endPos = Position lastLine 0
-        {-
-        In order to replace everything including newline characters,
-        the end range should extend below the last line. From the specification:
-        "If you want to specify a range that contains a line including
-        the line ending character(s) then use an end position denoting
-        the start of the next line"
-        -}
-        lastLine = length $ T.lines s
 
 -- ---------------------------------------------------------------------

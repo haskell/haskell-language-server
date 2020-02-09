@@ -7,13 +7,16 @@
 
 module Ide.Plugin.Formatter
   (
-    formatterPlugin
+    formatterPlugins
   , FormattingType(..)
   , FormattingProvider
   , responseError
+  , extractRange
+  , fullRange
   )
 where
 
+import qualified Data.Map  as Map
 import qualified Data.Text as T
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.Rules
@@ -22,6 +25,7 @@ import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Development.Shake hiding ( Diagnostic )
+import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
@@ -29,8 +33,8 @@ import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-formatterPlugin :: FormattingProvider IO -> Plugin
-formatterPlugin provider = Plugin rules (handlers provider)
+formatterPlugins :: [(T.Text, FormattingProvider IO)] -> Plugin Config
+formatterPlugins providers = Plugin rules (handlers (Map.fromList providers))
 
 -- ---------------------------------------------------------------------
 -- New style plugin
@@ -38,45 +42,58 @@ formatterPlugin provider = Plugin rules (handlers provider)
 rules :: Rules ()
 rules = mempty
 
-handlers :: FormattingProvider IO -> PartialHandlers
-handlers provider = PartialHandlers $ \WithMessage{..} x -> return x
+handlers :: Map.Map T.Text (FormattingProvider IO) -> PartialHandlers Config
+handlers providers = PartialHandlers $ \WithMessage{..} x -> return x
     { LSP.documentFormattingHandler
-        = withResponse RspDocumentFormatting (formatting provider)
+        = withResponse RspDocumentFormatting (formatting providers)
     , LSP.documentRangeFormattingHandler
-        = withResponse RspDocumentRangeFormatting (rangeFormatting provider)
+        = withResponse RspDocumentRangeFormatting (rangeFormatting providers)
     }
 
+-- handlers :: FormattingProvider IO -> T.Text -> PartialHandlers c
+-- handlers provider configName = PartialHandlers $ \WithMessage{..} x -> return x
+--     { LSP.documentFormattingHandler
+--         = withResponse RspDocumentFormatting (formatting provider configName)
+--     , LSP.documentRangeFormattingHandler
+--         = withResponse RspDocumentRangeFormatting (rangeFormatting provider configName)
+--     }
+
 -- ---------------------------------------------------------------------
 
-formatting :: FormattingProvider IO
-           -> LSP.LspFuncs () -> IdeState -> DocumentFormattingParams
+formatting :: Map.Map T.Text (FormattingProvider IO)
+           -> LSP.LspFuncs Config -> IdeState -> DocumentFormattingParams
            -> IO (Either ResponseError (List TextEdit))
-formatting provider _lf ideState
+formatting providers lf ideState
     (DocumentFormattingParams (TextDocumentIdentifier uri) params _mprogress)
-  = doFormatting provider ideState FormatText uri params
+  = doFormatting lf providers ideState FormatText uri params
 
 -- ---------------------------------------------------------------------
 
-rangeFormatting :: FormattingProvider IO
-                -> LSP.LspFuncs () -> IdeState -> DocumentRangeFormattingParams
+rangeFormatting :: Map.Map T.Text (FormattingProvider IO)
+                -> LSP.LspFuncs Config -> IdeState -> DocumentRangeFormattingParams
                 -> IO (Either ResponseError (List TextEdit))
-rangeFormatting provider _lf ideState
+rangeFormatting providers lf ideState
     (DocumentRangeFormattingParams (TextDocumentIdentifier uri) range params _mprogress)
-  = doFormatting provider ideState (FormatRange range) uri params
+  = doFormatting lf providers ideState (FormatRange range) uri params
 
 -- ---------------------------------------------------------------------
 
-doFormatting :: FormattingProvider IO
+doFormatting :: LSP.LspFuncs Config -> Map.Map T.Text (FormattingProvider IO)
              -> IdeState -> FormattingType -> Uri -> FormattingOptions
              -> IO (Either ResponseError (List TextEdit))
-doFormatting provider ideState ft uri params
-  = case uriToFilePath uri of
-    Just (toNormalizedFilePath -> fp) -> do
-      (_, mb_contents) <- runAction ideState $ getFileContents fp
-      case mb_contents of
-        Just contents -> provider ideState ft contents fp params
-        Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
-    Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
+doFormatting lf providers ideState ft uri params = do
+  mc <- LSP.config lf
+  let mf = maybe "none" formattingProvider mc
+  case Map.lookup mf providers of
+      Just provider ->
+        case uriToFilePath uri of
+          Just (toNormalizedFilePath -> fp) -> do
+            (_, mb_contents) <- runAction ideState $ getFileContents fp
+            case mb_contents of
+              Just contents -> provider ideState ft contents fp params
+              Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
+          Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
+      Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: no formatter found for:[" ++ T.unpack mf ++ "]"
 
 -- ---------------------------------------------------------------------
 
@@ -103,5 +120,26 @@ type FormattingProvider m
 
 responseError :: T.Text -> ResponseError
 responseError txt = ResponseError InvalidParams txt Nothing
+
+-- ---------------------------------------------------------------------
+
+extractRange :: Range -> T.Text -> T.Text
+extractRange (Range (Position sl _) (Position el _)) s = newS
+  where focusLines = take (el-sl+1) $ drop sl $ T.lines s
+        newS = T.unlines focusLines
+
+-- | Gets the range that covers the entire text
+fullRange :: T.Text -> Range
+fullRange s = Range startPos endPos
+  where startPos = Position 0 0
+        endPos = Position lastLine 0
+        {-
+        In order to replace everything including newline characters,
+        the end range should extend below the last line. From the specification:
+        "If you want to specify a range that contains a line including
+        the line ending character(s) then use an end position denoting
+        the start of the next line"
+        -}
+        lastLine = length $ T.lines s
 
 -- ---------------------------------------------------------------------
