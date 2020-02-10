@@ -54,7 +54,20 @@ with the following content:
 cradle: {cabal: {component: "mylibrary"}}
 ```
 
+If you are using stack, find the list of names you can use:
+
+    $ stack ide targets
+    mypackage:lib
+    mypackage:exe:mypackage-exe
+    mypackage:test:mypackage-test
+
+and create a `hie.yaml` file as follows:
+
+    {stack: {component: "mypackage:lib"}}
+
 ## ghc: readCreateProcess: does not exist
+
+On Linux: try `stack exec ghcide`` instead of `ghcide` directly.
 
 I was getting this in Windows: `ghcide.exe: ghc: readCreateProcess: does not exist (No such file or directory)`
 
@@ -69,7 +82,21 @@ Since I use stack. Required if you don't have a `ghc` on your path.
 
 ## Could not find module ...
 
-Try adding an explicit hie.yaml file and see if that helps.
+Try adding an explicit `hie.yaml` file and see if that helps.
+
+## Ambiguous main module
+
+```console
+$ stack exec ghcide
+
+...
+
+ghcide: CradleError (ExitFailure 1) ["Failed to parse result of calling stack","","* * * * * * * *","The main module to load is ambiguous. Candidates are: ","1. Package `mypackage' component mypackage:exe:mypackage-exe with main-is file: /home/user/mypackage/app/Main.hs","2. Package `mypackage' component mypackage:exe:otherbin-exe with main-is file: /home/user/mypackage/app/otherbin.hs","You can specify which one to pick by: "," * Specifying targets to stack ghci e.g. stack ghci mypackage:exe:mypackage-exe"," * Specifying what the main is e.g. stack ghci --main-is mypackage:exe:mypackage-exe"," * Choosing from the candidate above [1..2]","* * * * * * * *","","<stdin>: hGetLine: end of file"]
+```
+
+Add a `hie.yaml` file to specify the module, e.g.
+
+    cradle: {stack: {component: "mypackage:exe:mypackage-exe"}}
 
 ## Works in `ghcide` but not my editor
 
