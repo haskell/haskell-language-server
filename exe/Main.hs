@@ -55,6 +55,7 @@ import Development.IDE.Plugin.CodeAction  as CodeAction
 import Development.IDE.Plugin.Completions as Completions
 import Ide.Plugin.Example                 as Example
 import Ide.Plugin.Floskell                as Floskell
+import Ide.Plugin.Hlint                   as Hlint
 import Ide.Plugin.Ormolu                  as Ormolu
 
 -- ---------------------------------------------------------------------
@@ -69,6 +70,7 @@ idePlugins includeExample
     CodeAction.plugin <>
     formatterPlugins [("ormolu",   Ormolu.provider)
                      ,("floskell", Floskell.provider)] <>
+    Hlint.plugin <>
     if includeExample then Example.plugin else mempty
 
 -- ---------------------------------------------------------------------

@@ -30,6 +30,7 @@ library
       Ide.Cradle
       Ide.Plugin.Config
       Ide.Plugin.Example
+      Ide.Plugin.Hlint
       Ide.Plugin.Ormolu
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
@@ -57,7 +58,9 @@ library
     , gitrev
     , hashable
     , haskell-lsp == 0.20.*
+    , haskell-src-exts
     , hie-bios >= 0.4
+    , hlint >= 2.2.10
     , hslogger
     , optparse-simple
     , process
