@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
   CachedCompletions
@@ -25,6 +26,12 @@ import Type
 import Var
 import Packages
 import DynFlags
+#if MIN_GHC_API_VERSION(8,10,0)
+import Predicate (isDictTy)
+import GHC.Platform
+import Pair
+import Coercion
+#endif
 
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
@@ -169,7 +176,12 @@ getArgText typ = argText
               then getArgs ret
               else Prelude.filter (not . isDictTy) args
       | isPiTy t = getArgs $ snd (splitPiTys t)
+#if MIN_GHC_API_VERSION(8,10,0)
+      | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
+      = getArgs t
+#else
       | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
+#endif
       | otherwise = []
 
 mkModCompl :: T.Text -> CompletionItem
@@ -387,7 +399,11 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
 
 -- The supported languages and extensions
 languagesAndExts :: [T.Text]
+#if MIN_GHC_API_VERSION(8,10,0)
+languagesAndExts = map T.pack $ DynFlags.supportedLanguagesAndExtensions ( PlatformMini ArchUnknown OSUnknown )
+#else
 languagesAndExts = map T.pack DynFlags.supportedLanguagesAndExtensions
+#endif
   
 -- ---------------------------------------------------------------------
 -- helper functions for pragmas

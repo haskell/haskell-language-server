@@ -59,7 +59,11 @@ doCpp dflags raw input_fn output_fn = do
     let verbFlags = getVerbFlags dflags
 
     let cpp_prog args | raw       = SysTools.runCpp dflags args
+#if MIN_GHC_API_VERSION(8,10,0)
+                      | otherwise = SysTools.runCc Nothing
+#else
                       | otherwise = SysTools.runCc
+#endif
                                           dflags (SysTools.Option "-E" : args)
 
     let target_defs =
