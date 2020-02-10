@@ -25,7 +25,7 @@ module Development.IDE.GHC.Util(
     hDuplicateTo',
     ) where
 
-import Config
+
 import Control.Concurrent
 import Data.List.Extra
 import Data.Maybe
@@ -47,7 +47,11 @@ import GHC.IO.Encoding
 import GHC.IO.Exception
 import GHC.IO.Handle.Types
 import GHC.IO.Handle.Internals
+#if MIN_GHC_API_VERSION(8,10,0)
+#else
+import Config
 import Platform
+#endif
 import Data.Unique
 import Development.Shake.Classes
 import qualified Data.Text                as T
@@ -109,7 +113,12 @@ runGhcEnv env act = do
 -- | A 'DynFlags' value where most things are undefined. It's sufficient to call pretty printing,
 --   but not much else.
 fakeDynFlags :: DynFlags
-fakeDynFlags = defaultDynFlags settings mempty
+#if MIN_GHC_API_VERSION(8,10,0)
+fakeDynFlags = unsafeGlobalDynFlags
+#else
+fakeDynFlags = defaultDynFlags
+                  settings
+                  mempty
     where
         settings = Settings
                    { sTargetPlatform = platform
@@ -117,9 +126,9 @@ fakeDynFlags = defaultDynFlags settings mempty
                    , sProgramName = "ghc"
                    , sProjectVersion = cProjectVersion
 #if MIN_GHC_API_VERSION(8,6,0)
-                    , sOpt_P_fingerprint = fingerprint0
+                   , sOpt_P_fingerprint = fingerprint0
 #endif
-                    }
+                   }
         platform = Platform
           { platformWordSize=8
           , platformOS=OSUnknown
@@ -129,6 +138,7 @@ fakeDynFlags = defaultDynFlags settings mempty
           { pc_DYNAMIC_BY_DEFAULT=False
           , pc_WORD_SIZE=8
           }
+#endif
 
 -- | Given a module location, and its parse tree, figure out what is the include directory implied by it.
 --   For example, given the file @\/usr\/\Test\/Foo\/Bar.hs@ with the module name @Foo.Bar@ the directory

@@ -37,7 +37,10 @@ import           DynamicLoading (initializePlugins)
 import           GHC hiding (parseModule, typecheckModule)
 import qualified Parser
 import           Lexer
+#if MIN_GHC_API_VERSION(8,10,0)
+#else
 import ErrUtils
+#endif
 
 import qualified GHC
 import           GhcMonad
@@ -157,7 +160,11 @@ generateByteCode hscEnv deps tmr guts =
           setupEnv (deps ++ [tmr])
           session <- getSession
           (warnings, (_, bytecode, sptEntries)) <- withWarnings "bytecode" $ \tweak ->
-              liftIO $ hscInteractive session guts (tweak $ GHC.pm_mod_summary $ GHC.tm_parsed_module $ tmrModule tmr)
+#if MIN_GHC_API_VERSION(8,10,0)
+                liftIO $ hscInteractive session guts (GHC.ms_location $ tweak $ GHC.pm_mod_summary $ GHC.tm_parsed_module $ tmrModule tmr)
+#else
+                liftIO $ hscInteractive session guts (tweak $ GHC.pm_mod_summary $ GHC.tm_parsed_module $ tmrModule tmr)
+#endif
           let summary = pm_mod_summary $ tm_parsed_module $ tmrModule tmr
           let unlinked = BCOs bytecode sptEntries
           let linkable = LM (ms_hs_date summary) (ms_mod summary) [unlinked]
@@ -217,7 +224,11 @@ mkTcModuleResult
     -> m TcModuleResult
 mkTcModuleResult tcm = do
     session <- getSession
+#if MIN_GHC_API_VERSION(8,10,0)
+    iface <- liftIO $ mkIfaceTc session Sf_None details tcGblEnv
+#else
     (iface, _) <- liftIO $ mkIfaceTc session Nothing Sf_None details tcGblEnv
+#endif
     let mod_info = HomeModInfo iface details Nothing
     return $ TcModuleResult tcm mod_info
   where
@@ -361,8 +372,12 @@ parseFileContents
 parseFileContents customPreprocessor dflags filename contents = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    case unP Parser.parseModule (mkPState dflags contents loc) of
+#if MIN_GHC_API_VERSION(8,10,0)
+     PFailed pst -> throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
+#else
      PFailed _ locErr msgErr ->
       throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
+#endif
      POk pst rdr_module ->
          let hpm_annotations =
                (Map.fromListWith (++) $ annotations pst,
