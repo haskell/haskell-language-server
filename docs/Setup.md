@@ -133,3 +133,13 @@ find ~/.emacs.d -name '*.elc' -exec rm {} \;
 ## Docker stack builds
 
 You're likely to see `ghcide: (ExitFailure 1,"","")`. Because ghcide can't get at the ghc installed inside Docker, your best bet is to `stack exec ghcide` and make sure `ghcide` is installed within the container. Full details at [issue 221](https://github.com/digital-asset/ghcide/issues/221).
+
+## stty error on Windows + Stack
+
+If you get an error like:
+
+```
+ghcide.exe: CradleError (ExitFailure 1) ["Failed to parse result of calling stack","'stty' is not recognized as an internal or external command,","operable program or batch file."
+```
+
+Then the workaround from https://github.com/haskell/haskell-ide-engine/issues/1428#issuecomment-547530794 might help.
