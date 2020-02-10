@@ -53,6 +53,7 @@ import GHC hiding (def)
 import qualified GHC.Paths
 
 import HIE.Bios
+import HIE.Bios.Types
 
 -- Set the GHC libdir to the nix libdir if it's present.
 getLibdir :: IO FilePath
@@ -181,7 +182,8 @@ showEvent lock e = withLock lock $ print e
 
 cradleToSession :: Cradle a -> IO HscEnvEq
 cradleToSession cradle = do
-    cradleRes <- getCompilerOptions "" cradle
+    let showLine s = putStrLn ("> " ++ s)
+    cradleRes <- runCradle (cradleOptsProg cradle) showLine ""
     opts <- case cradleRes of
         CradleSuccess r -> pure r
         CradleFail err -> throwIO err
