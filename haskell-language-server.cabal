@@ -77,6 +77,53 @@ library
 
   default-language: Haskell2010
 
+flag ghc-lib
+  default: False
+  manual: True
+  description: Force dependency on ghc-lib-parser even if GHC API in the ghc package is supported
+
+library hls-ghc-lib
+  exposed-modules:
+    Ide.Plugin.Hlint
+  hs-source-dirs:
+    src
+  build-depends:
+      base
+    , aeson
+    , binary
+    , bytestring
+    , containers
+    , data-default
+    , deepseq
+    , directory
+    , extra
+    , filepath
+    , ghcide
+    , hashable
+    , haskell-lsp
+    , haskell-src-exts
+    , hlint >= 3.0
+    , regex-tdfa
+    , shake
+    , text
+    , transformers
+    , unordered-containers
+  if !flag(ghc-lib) && impl(ghc >= 8.10.1) && impl(ghc < 8.11.0)
+    build-depends:
+      ghc == 8.10.*
+  else
+    build-depends:
+      ghc-lib == 8.10.*
+
+  ghc-options:
+         -Wall
+         -Wredundant-constraints
+         -Wno-name-shadowing
+  if flag(pedantic)
+     ghc-options:      -Werror
+
+  default-language: Haskell2010
+
 executable haskell-language-server
   import:           agpl, common-deps
   main-is:          Main.hs

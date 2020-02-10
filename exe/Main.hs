@@ -11,6 +11,7 @@ import           Ide.Main                  (defaultMain)
 import           Ide.Types                 (IdePlugins)
 
  -- haskell-language-server plugins
+
 import           Ide.Plugin.Eval           as Eval
 import           Ide.Plugin.Example        as Example
 import           Ide.Plugin.Example2       as Example2
@@ -22,6 +23,7 @@ import           Ide.Plugin.Ormolu         as Ormolu
 import           Ide.Plugin.Retrie         as Retrie
 import           Ide.Plugin.StylishHaskell as StylishHaskell
 import           Ide.Plugin.Tactic         as Tactic
+import           Ide.Plugin.Hlint          as Hlint
 #if AGPL
 import           Ide.Plugin.Brittany       as Brittany
 #endif
@@ -55,11 +57,12 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"
 #if AGPL
-      , Brittany.descriptor    "brittany"
+      , Brittany.descriptor "brittany"
 #endif
       , Eval.descriptor "eval"
       , ImportLens.descriptor "importLens"
       , ModuleName.descriptor "moduleName"
+      , Hlint.descriptor "hlint"
       ]
     examplePlugins =
       [Example.descriptor  "eg"
