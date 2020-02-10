@@ -172,7 +172,11 @@ documentSymbolForImport (L l ImportDecl { ideclName, ideclQualified }) = Just
   (defDocumentSymbol l :: DocumentSymbol)
     { _name   = "import " <> pprText ideclName
     , _kind   = SkModule
+#if MIN_GHC_API_VERSION(8,10,0)
+    , _detail = case ideclQualified of { NotQualified -> Nothing; _ -> Just "qualified" }
+#else
     , _detail = if ideclQualified then Just "qualified" else Nothing
+#endif
     }
 #if MIN_GHC_API_VERSION(8,6,0)
 documentSymbolForImport (L _ XImportDecl {}) = Nothing

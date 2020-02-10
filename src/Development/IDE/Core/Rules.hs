@@ -253,7 +253,7 @@ reportImportCyclesRule =
 getDependenciesRule :: Rules ()
 getDependenciesRule =
     defineEarlyCutoff $ \GetDependencies file -> do
-        depInfo@DependencyInformation{..} <- use_ GetDependencyInformation file
+        depInfo <- use_ GetDependencyInformation file
         let allFiles = reachableModules depInfo
         _ <- uses_ ReportImportCycles allFiles
         opts <- getIdeOptions

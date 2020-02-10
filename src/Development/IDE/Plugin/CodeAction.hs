@@ -77,7 +77,7 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
         hDiag <- getHiddenDiagnostics ideState
         pure
           [ CodeLens _range (Just (Command title "typesignature.add" (Just $ List [toJSON edit]))) Nothing
-          | (dFile, _, dDiag@Diagnostic{_range=_range@Range{..},..}) <- diag ++ hDiag
+          | (dFile, _, dDiag@Diagnostic{_range=_range}) <- diag ++ hDiag
           , dFile == filePath
           , (title, tedit) <- suggestSignature False dDiag
           , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
@@ -115,7 +115,7 @@ suggestAction ideOptions parsedModule text diag = concat
 
 
 suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range@Range{..},..}
+suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegex _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L l _) -> srcSpanToRange l == _range ) hsmodImports
@@ -133,7 +133,7 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | otherwise = []
 
 suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestReplaceIdentifier contents Diagnostic{_range=_range@Range{..},..}
+suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
 -- File.hs:52:41: error:
 --     * Variable not in scope:
 --         suggestAcion :: Maybe T.Text -> Range -> Range
@@ -180,7 +180,7 @@ newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
 
 
 suggestFillTypeWildcard :: Diagnostic -> [(T.Text, [TextEdit])]
-suggestFillTypeWildcard Diagnostic{_range=_range@Range{..},..}
+suggestFillTypeWildcard Diagnostic{_range=_range,..}
 -- Foo.hs:3:8: error:
 --     * Found type wildcard `_' standing for `p -> p1 -> p'
 
@@ -191,7 +191,7 @@ suggestFillTypeWildcard Diagnostic{_range=_range@Range{..},..}
     | otherwise = []
 
 suggestAddExtension :: Diagnostic -> [(T.Text, [TextEdit])]
-suggestAddExtension Diagnostic{_range=_range@Range{..},..}
+suggestAddExtension Diagnostic{_range=_range,..}
 -- File.hs:22:8: error:
 --     Illegal lambda-case (use -XLambdaCase)
 -- File.hs:22:6: error:
@@ -221,7 +221,7 @@ ghcExtensions :: Map.HashMap T.Text Extension
 ghcExtensions = Map.fromList . map ( ( T.pack . flagSpecName ) &&& flagSpecFlag ) $ xFlags
 
 suggestModuleTypo :: Diagnostic -> [(T.Text, [TextEdit])]
-suggestModuleTypo Diagnostic{_range=_range@Range{..},..}
+suggestModuleTypo Diagnostic{_range=_range,..}
 -- src/Development/IDE/Core/Compile.hs:58:1: error:
 --     Could not find module ‘Data.Cha’
 --     Perhaps you meant Data.Char (from base-4.12.0.0)
@@ -233,7 +233,7 @@ suggestModuleTypo Diagnostic{_range=_range@Range{..},..}
     | otherwise = []
 
 suggestFillHole :: Diagnostic -> [(T.Text, [TextEdit])]
-suggestFillHole Diagnostic{_range=_range@Range{..},..}
+suggestFillHole Diagnostic{_range=_range,..}
 --  ...Development/IDE/LSP/CodeAction.hs:103:9: warning:
 --   * Found hole: _ :: Int -> String
 --   * In the expression: _
