@@ -210,8 +210,8 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-cacheDataProducer :: HscEnv -> DynFlags -> TypecheckedModule -> [TypecheckedModule] -> IO CachedCompletions
-cacheDataProducer packageState dflags tm tcs = do
+cacheDataProducer :: HscEnv -> DynFlags -> TypecheckedModule -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer packageState dflags tm deps = do
   let parsedMod = tm_parsed_module tm
       curMod = moduleName $ ms_mod $ pm_mod_summary parsedMod
       Just (_,limports,_,_) = tm_renamed_source tm
@@ -269,12 +269,12 @@ cacheDataProducer packageState dflags tm tcs = do
         let typ = Just $ varType var
             name = Var.varName var
             label = T.pack $ showGhc name
-        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm:tcs) name
+        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm_parsed_module tm : deps) name
         return $ CI name (showModName curMod) typ label Nothing docs
 
       toCompItem :: ModuleName -> Name -> IO CompItem
       toCompItem mn n = do
-        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm:tcs) n
+        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm_parsed_module tm : deps) n
 -- lookupName uses runInteractiveHsc, i.e., GHCi stuff which does not work with GHCi
 -- and leads to fun errors like "Cannot continue after interface file error".
 #ifdef GHC_LIB
