@@ -49,7 +49,6 @@ import           Development.Shake.Classes
 import           Development.Shake.Rule
 import qualified Data.HashMap.Strict as HMap
 import qualified Data.Map.Strict as Map
-import qualified Data.Map.Merge.Strict as Map
 import qualified Data.ByteString.Char8 as BS
 import           Data.Dynamic
 import           Data.Maybe
@@ -95,13 +94,13 @@ data ShakeExtras = ShakeExtras
     ,state :: Var Values
     ,diagnostics :: Var DiagnosticStore
     ,hiddenDiagnostics :: Var DiagnosticStore
-    ,publishedDiagnostics :: Var (Map NormalizedUri [Diagnostic])
+    ,publishedDiagnostics :: Var (HMap.HashMap NormalizedUri [Diagnostic])
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
-    ,positionMapping :: Var (Map NormalizedUri (Map TextDocumentVersion PositionMapping))
+    ,positionMapping :: Var (HMap.HashMap NormalizedUri (Map TextDocumentVersion PositionMapping))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
-    ,inProgress :: Var (Map NormalizedFilePath Int)
+    ,inProgress :: Var (HMap.HashMap NormalizedFilePath Int)
     -- ^ How many rules are running for each file
     }
 
@@ -200,14 +199,14 @@ valueVersion = \case
     Failed -> Nothing
 
 mappingForVersion
-    :: Map NormalizedUri (Map TextDocumentVersion PositionMapping)
+    :: HMap.HashMap NormalizedUri (Map TextDocumentVersion PositionMapping)
     -> NormalizedFilePath
     -> TextDocumentVersion
     -> PositionMapping
 mappingForVersion allMappings file ver =
     fromMaybe idMapping $
     Map.lookup ver =<<
-    Map.lookup (filePathToUri' file) allMappings
+    HMap.lookup (filePathToUri' file) allMappings
 
 type IdeRule k v =
   ( Shake.RuleResult k ~ v
@@ -301,14 +300,14 @@ shakeOpen :: IO LSP.LspId
           -> Rules ()
           -> IO IdeState
 shakeOpen getLspId eventer logger debouncer shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
-    inProgress <- newVar Map.empty
+    inProgress <- newVar HMap.empty
     shakeExtras <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
         diagnostics <- newVar mempty
         hiddenDiagnostics <- newVar mempty
         publishedDiagnostics <- newVar mempty
-        positionMapping <- newVar Map.empty
+        positionMapping <- newVar HMap.empty
         pure ShakeExtras{..}
     (shakeDb, shakeClose) <-
         shakeOpenDatabase
@@ -323,7 +322,7 @@ shakeOpen getLspId eventer logger debouncer shakeProfileDir (IdeReportProgress r
     shakeDb <- shakeDb
     return IdeState{..}
 
-lspShakeProgress :: Show a => IO LSP.LspId -> (LSP.FromServerMessage -> IO ()) -> Var (Map a Int) -> IO ()
+lspShakeProgress :: Hashable a => IO LSP.LspId -> (LSP.FromServerMessage -> IO ()) -> Var (HMap.HashMap a Int) -> IO ()
 lspShakeProgress getLspId sendMsg inProgress = do
     -- first sleep a bit, so we only show progress messages if it's going to take
     -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
@@ -356,8 +355,8 @@ lspShakeProgress getLspId sendMsg inProgress = do
         loop id prev = do
             sleep sample
             current <- readVar inProgress
-            let done = length $ filter (== 0) $ Map.elems current
-            let todo = Map.size current
+            let done = length $ filter (== 0) $ HMap.elems current
+            let todo = HMap.size current
             let next = Just $ T.pack $ show done <> "/" <> show todo
             when (next /= prev) $
                 sendMsg $ LSP.NotWorkDoneProgressReport $ LSP.fmServerWorkDoneProgressReportNotification
@@ -452,9 +451,9 @@ garbageCollect keep = do
                return $! dupe values
            modifyVar_ diagnostics $ \diags -> return $! filterDiagnostics keep diags
            modifyVar_ hiddenDiagnostics $ \hdiags -> return $! filterDiagnostics keep hdiags
-           modifyVar_ publishedDiagnostics $ \diags -> return $! Map.filterWithKey (\uri _ -> keep (fromUri uri)) diags
+           modifyVar_ publishedDiagnostics $ \diags -> return $! HMap.filterWithKey (\uri _ -> keep (fromUri uri)) diags
            let versionsForFile =
-                   Map.fromListWith Set.union $
+                   HMap.fromListWith Set.union $
                    mapMaybe (\((file, _key), v) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
                    HMap.toList newState
            modifyVar_ positionMapping $ \mappings -> return $! filterVersionMap versionsForFile mappings
@@ -534,9 +533,9 @@ usesWithStale key files = do
     mapM (uncurry lastValue) (zip files values)
 
 
-withProgress :: Ord a => Var (Map a Int) -> a -> Action b -> Action b
+withProgress :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
 withProgress var file = actionBracket (f succ) (const $ f pred) . const
-    where f shift = modifyVar_ var $ return . Map.alter (Just . shift . fromMaybe 0) file
+    where f shift = modifyVar_ var $ return . HMap.alter (Just . shift . fromMaybe 0) file
 
 
 defineEarlyCutoff
@@ -724,10 +723,10 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, published
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
              mask_ $ modifyVar_ publishedDiagnostics $ \published -> do
-                 let lastPublish = Map.findWithDefault [] uri published
+                 let lastPublish = HMap.lookupDefault [] uri published
                  when (lastPublish /= newDiags) $
                      eventer $ publishDiagnosticsNotification (fromNormalizedUri uri) newDiags
-                 pure $! Map.insert uri newDiags published
+                 pure $! HMap.insert uri newDiags published
 
 publishDiagnosticsNotification :: Uri -> [Diagnostic] -> LSP.FromServerMessage
 publishDiagnosticsNotification uri diags =
@@ -818,19 +817,18 @@ filterDiagnostics keep =
     HMap.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)
 
 filterVersionMap
-    :: Map NormalizedUri (Set.Set TextDocumentVersion)
-    -> Map NormalizedUri (Map TextDocumentVersion a)
-    -> Map NormalizedUri (Map TextDocumentVersion a)
+    :: HMap.HashMap NormalizedUri (Set.Set TextDocumentVersion)
+    -> HMap.HashMap NormalizedUri (Map TextDocumentVersion a)
+    -> HMap.HashMap NormalizedUri (Map TextDocumentVersion a)
 filterVersionMap =
-    Map.merge Map.dropMissing Map.dropMissing $
-    Map.zipWithMatched $ \_ versionsToKeep versionMap -> Map.restrictKeys versionMap versionsToKeep
+    HMap.intersectionWith $ \versionsToKeep versionMap -> Map.restrictKeys versionMap versionsToKeep
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
 updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes = do
     modifyVar_ positionMapping $ \allMappings -> do
         let uri = toNormalizedUri _uri
-        let mappingForUri = Map.findWithDefault Map.empty uri allMappings
+        let mappingForUri = HMap.lookupDefault Map.empty uri allMappings
         let updatedMapping =
                 Map.insert _version idMapping $
                 Map.map (\oldMapping -> foldl' applyChange oldMapping changes) mappingForUri
-        pure $! Map.insert uri updatedMapping allMappings
+        pure $! HMap.insert uri updatedMapping allMappings

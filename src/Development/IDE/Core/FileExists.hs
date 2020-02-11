@@ -14,8 +14,8 @@ import           Control.Monad.Extra
 import qualified Data.Aeson                    as A
 import           Data.Binary
 import qualified Data.ByteString               as BS
-import           Data.Map.Strict                ( Map )
-import qualified Data.Map.Strict               as Map
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HashMap
 import           Data.Maybe
 import qualified Data.Text                     as T
 import           Development.IDE.Core.FileStore
@@ -30,7 +30,7 @@ import           Language.Haskell.LSP.Types.Capabilities
 import qualified System.Directory as Dir
 
 -- | A map for tracking the file existence
-type FileExistsMap = (Map NormalizedFilePath Bool)
+type FileExistsMap = (HashMap NormalizedFilePath Bool)
 
 -- | A wrapper around a mutable 'FileExistsMap'
 newtype FileExistsMapVar = FileExistsMapVar (Var FileExistsMap)
@@ -53,12 +53,12 @@ modifyFileExistsAction f = do
 modifyFileExists :: IdeState -> [(NormalizedFilePath, Bool)] -> IO ()
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
-  changesMap           <- evaluate $ Map.fromList changes
+  changesMap           <- evaluate $ HashMap.fromList changes
 
   -- Masked to ensure that the previous values are flushed together with the map update
   mask $ \_ -> do
     -- update the map
-    modifyVar_ var $ evaluate . Map.union changesMap
+    modifyVar_ var $ evaluate . HashMap.union changesMap
     -- flush previous values
     mapM_ (deleteValue state GetFileExists . fst) changes
 
@@ -102,7 +102,7 @@ fileExistsRulesFast getLspId vfs = do
   addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
   defineEarlyCutoff $ \GetFileExists file -> do
     fileExistsMap <- getFileExistsMapUntracked
-    let mbFilesWatched = Map.lookup file fileExistsMap
+    let mbFilesWatched = HashMap.lookup file fileExistsMap
     case mbFilesWatched of
       Just fv -> pure (summarizeExists fv, ([], Just fv))
       Nothing -> do
@@ -113,7 +113,7 @@ fileExistsRulesFast getLspId vfs = do
         -- taking the FileExistsMap lock to prevent race conditions
         -- that would lead to multiple listeners for the same path
         modifyFileExistsAction $ \x -> do
-          case Map.insertLookupWithKey (\_ x _ -> x) file exist x of
+          case HashMap.alterF (,Just exist) file x of
             (Nothing, x') -> do
             -- if the listener addition fails, we never recover. This is a bug.
               addListener eventer file
