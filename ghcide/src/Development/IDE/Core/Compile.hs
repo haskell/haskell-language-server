@@ -42,6 +42,7 @@ import           Lexer
 import ErrUtils
 #endif
 
+import           Finder
 import qualified GHC
 import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
@@ -212,7 +213,7 @@ upgradeWarningToError (nfp, sh, fd) =
 hideDiag :: DynFlags -> (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
 hideDiag originalFlags (Reason warning, (nfp, _sh, fd))
   | not (wopt warning originalFlags) = (Reason warning, (nfp, HideDiag, fd))
-hideDiag _originalFlags t = t 
+hideDiag _originalFlags t = t
 
 addRelativeImport :: NormalizedFilePath -> ParsedModule -> DynFlags -> DynFlags
 addRelativeImport fp modu dflags = dflags
@@ -317,18 +318,8 @@ getModSummaryFromBuffer
 getModSummaryFromBuffer fp contents dflags parsed = do
   (modName, imports) <- liftEither $ getImportsParsed dflags parsed
 
-  let modLoc = ModLocation
-          { ml_hs_file  = Just fp
-          , ml_hi_file  = derivedFile "hi"
-          , ml_obj_file = derivedFile "o"
-#if MIN_GHC_API_VERSION(8,8,0)
-          , ml_hie_file = derivedFile "hie"
-#endif
-          -- This does not consider the dflags configuration
-          -- (-osuf and -hisuf, object and hi dir.s).
-          -- However, we anyway don't want to generate them.
-          }
-      InstalledUnitId unitId = thisInstalledUnitId dflags
+  modLoc <- liftIO $ mkHomeModLocation dflags modName fp
+  let InstalledUnitId unitId = thisInstalledUnitId dflags
   return $ ModSummary
     { ms_mod          = mkModule (fsToUnitId unitId) modName
     , ms_location     = modLoc
@@ -353,11 +344,7 @@ getModSummaryFromBuffer fp contents dflags parsed = do
     , ms_parsed_mod   = Nothing
     }
     where
-      (sourceType, derivedFile) =
-          let (stem, ext) = splitExtension fp in
-          if "-boot" `isSuffixOf` ext
-          then (HsBootFile, \newExt -> stem <.> newExt ++ "-boot")
-          else (HsSrcFile , \newExt -> stem <.> newExt)
+      sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
 
 
 -- | Given a buffer, flags, file path and module summary, produce a
