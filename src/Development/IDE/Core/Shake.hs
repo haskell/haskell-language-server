@@ -36,7 +36,7 @@ module Development.IDE.Core.Shake(
     sendEvent,
     ideLogger,
     actionLogger,
-    FileVersion(..),
+    FileVersion(..), modificationTime,
     Priority(..),
     updatePositionMapping,
     deleteValue,
@@ -762,19 +762,22 @@ instance Binary   GetModificationTime
 -- | Get the modification time of a file.
 type instance RuleResult GetModificationTime = FileVersion
 
--- | We store the modification time as a ByteString since we need
--- a ByteString anyway for Shake and we do not care about how times
--- are represented.
-data FileVersion = VFSVersion Int | ModificationTime BS.ByteString
+data FileVersion
+    = VFSVersion Int
+    | ModificationTime
+      !Int   -- ^ Large unit (platform dependent, do not make assumptions)
+      !Int   -- ^ Small unit (platform dependent, do not make assumptions)
     deriving (Show, Generic)
 
 instance NFData FileVersion
 
 vfsVersion :: FileVersion -> Maybe Int
 vfsVersion (VFSVersion i) = Just i
-vfsVersion (ModificationTime _) = Nothing
+vfsVersion ModificationTime{} = Nothing
 
-
+modificationTime :: FileVersion -> Maybe (Int, Int)
+modificationTime VFSVersion{} = Nothing
+modificationTime (ModificationTime large small) = Just (large, small)
 
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
