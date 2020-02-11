@@ -20,7 +20,7 @@ import           Development.IDE.Types.Logger
 import           Control.Monad.Extra
 import           Data.Foldable                    as F
 import           Data.Maybe
-import qualified Data.Set                         as S
+import qualified Data.HashSet                     as S
 import qualified Data.Text                        as Text
 
 import           Development.IDE.Core.FileStore   (setSomethingModified)

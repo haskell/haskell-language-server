@@ -19,8 +19,8 @@ import GHC.Generics
 import Data.Typeable
 import qualified Data.ByteString.UTF8 as BS
 import Control.Exception
-import Data.Set (Set)
-import qualified Data.Set as Set
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as HashSet
 import qualified Data.Text as T
 import Data.Tuple.Extra
 import Data.Functor
@@ -31,10 +31,10 @@ import Development.IDE.Types.Logger
 import Development.IDE.Core.Shake
 
 
-newtype OfInterestVar = OfInterestVar (Var (Set NormalizedFilePath))
+newtype OfInterestVar = OfInterestVar (Var (HashSet NormalizedFilePath))
 instance IsIdeGlobal OfInterestVar
 
-type instance RuleResult GetFilesOfInterest = Set NormalizedFilePath
+type instance RuleResult GetFilesOfInterest = HashSet NormalizedFilePath
 
 data GetFilesOfInterest = GetFilesOfInterest
     deriving (Eq, Show, Typeable, Generic)
@@ -46,7 +46,7 @@ instance Binary   GetFilesOfInterest
 -- | The rule that initialises the files of interest state.
 ofInterestRules :: Rules ()
 ofInterestRules = do
-    addIdeGlobal . OfInterestVar =<< liftIO (newVar Set.empty)
+    addIdeGlobal . OfInterestVar =<< liftIO (newVar HashSet.empty)
     defineEarlyCutoff $ \GetFilesOfInterest _file -> assert (null $ fromNormalizedFilePath _file) $ do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
@@ -54,7 +54,7 @@ ofInterestRules = do
 
 
 -- | Get the files that are open in the IDE.
-getFilesOfInterest :: Action (Set NormalizedFilePath)
+getFilesOfInterest :: Action (HashSet NormalizedFilePath)
 getFilesOfInterest = useNoFile_ GetFilesOfInterest
 
 
@@ -64,19 +64,19 @@ getFilesOfInterest = useNoFile_ GetFilesOfInterest
 
 -- | Set the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
-setFilesOfInterest :: IdeState -> Set NormalizedFilePath -> IO ()
+setFilesOfInterest :: IdeState -> HashSet NormalizedFilePath -> IO ()
 setFilesOfInterest state files = modifyFilesOfInterest state (const files)
 
-getFilesOfInterestUntracked :: Action (Set NormalizedFilePath)
+getFilesOfInterestUntracked :: Action (HashSet NormalizedFilePath)
 getFilesOfInterestUntracked = do
     OfInterestVar var <- getIdeGlobalAction
     liftIO $ readVar var
 
 -- | Modify the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
-modifyFilesOfInterest :: IdeState -> (Set NormalizedFilePath -> Set NormalizedFilePath) -> IO ()
+modifyFilesOfInterest :: IdeState -> (HashSet NormalizedFilePath -> HashSet NormalizedFilePath) -> IO ()
 modifyFilesOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar var $ pure . dupe . f
-    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ Set.toList files)
+    logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ HashSet.toList files)
     void $ shakeRun state []
