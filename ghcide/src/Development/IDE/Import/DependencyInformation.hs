@@ -29,6 +29,8 @@ import Data.List
 import Development.IDE.GHC.Orphans()
 import Data.Either
 import Data.Graph
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HMS
 import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.IntMap (IntMap)
@@ -36,8 +38,6 @@ import qualified Data.IntMap.Strict as IntMap
 import qualified Data.IntMap.Lazy as IntMapLazy
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
-import Data.Map (Map)
-import qualified Data.Map.Strict as MS
 import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -68,32 +68,32 @@ newtype FilePathId = FilePathId { getFilePathId :: Int }
 
 data PathIdMap = PathIdMap
   { idToPathMap :: !(IntMap NormalizedFilePath)
-  , pathToIdMap :: !(Map NormalizedFilePath FilePathId)
+  , pathToIdMap :: !(HashMap NormalizedFilePath FilePathId)
   }
   deriving (Show, Generic)
 
 instance NFData PathIdMap
 
 emptyPathIdMap :: PathIdMap
-emptyPathIdMap = PathIdMap IntMap.empty MS.empty
+emptyPathIdMap = PathIdMap IntMap.empty HMS.empty
 
 getPathId :: NormalizedFilePath -> PathIdMap -> (FilePathId, PathIdMap)
 getPathId path m@PathIdMap{..} =
-    case MS.lookup path pathToIdMap of
+    case HMS.lookup path pathToIdMap of
         Nothing ->
-            let !newId = FilePathId $ MS.size pathToIdMap
+            let !newId = FilePathId $ HMS.size pathToIdMap
             in (newId, insertPathId path newId m)
         Just id -> (id, m)
 
 insertPathId :: NormalizedFilePath -> FilePathId -> PathIdMap -> PathIdMap
 insertPathId path id PathIdMap{..} =
-    PathIdMap (IntMap.insert (getFilePathId id) path idToPathMap) (MS.insert path id pathToIdMap)
+    PathIdMap (IntMap.insert (getFilePathId id) path idToPathMap) (HMS.insert path id pathToIdMap)
 
 insertImport :: FilePathId -> Either ModuleParseError ModuleImports -> RawDependencyInformation -> RawDependencyInformation
 insertImport (FilePathId k) v rawDepInfo = rawDepInfo { rawImports = IntMap.insert k v (rawImports rawDepInfo) }
 
 pathToId :: PathIdMap -> NormalizedFilePath -> FilePathId
-pathToId PathIdMap{pathToIdMap} path = pathToIdMap MS.! path
+pathToId PathIdMap{pathToIdMap} path = pathToIdMap HMS.! path
 
 idToPath :: PathIdMap -> FilePathId -> NormalizedFilePath
 idToPath PathIdMap{idToPathMap} (FilePathId id) = idToPathMap IntMap.! id
