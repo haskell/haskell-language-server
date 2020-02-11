@@ -51,25 +51,25 @@ getSrcSpanInfos
     :: HscEnv
     -> [(Located ModuleName, Maybe NormalizedFilePath)]
     -> TcModuleResult
-    -> [TcModuleResult]
+    -> [ParsedModule]
     -> IO SpansInfo
-getSrcSpanInfos env imports tc tms =
+getSrcSpanInfos env imports tc deps =
     runGhcEnv env $
-        getSpanInfo imports (tmrModule tc) (map tmrModule tms)
+        getSpanInfo imports (tmrModule tc) deps
 
 -- | Get ALL source spans in the module.
 getSpanInfo :: GhcMonad m
             => [(Located ModuleName, Maybe NormalizedFilePath)] -- ^ imports
             -> TypecheckedModule
-            -> [TypecheckedModule]
+            -> [ParsedModule]
             -> m SpansInfo
-getSpanInfo mods tcm tcms =
+getSpanInfo mods tcm deps =
   do let tcs = tm_typechecked_source tcm
          bs  = listifyAllSpans  tcs :: [LHsBind GhcTc]
          es  = listifyAllSpans  tcs :: [LHsExpr GhcTc]
          ps  = listifyAllSpans' tcs :: [Pat GhcTc]
          ts  = listifyAllSpans $ tm_renamed_source tcm :: [LHsType GhcRn]
-         allModules = tcm:tcms
+         allModules = tm_parsed_module tcm : deps
          funBinds = funBindMap $ tm_parsed_module tcm
      bts <- mapM (getTypeLHsBind allModules funBinds) bs   -- binds
      ets <- mapM (getTypeLHsExpr allModules) es -- expressions
@@ -117,19 +117,19 @@ ieLNames _ = []
 
 -- | Get the name and type of a binding.
 getTypeLHsBind :: (GhcMonad m)
-               => [TypecheckedModule]
+               => [ParsedModule]
                -> OccEnv (HsBind GhcPs)
                -> LHsBind GhcTc
                -> m [(SpanSource, SrcSpan, Maybe Type, SpanDoc)]
-getTypeLHsBind tms funBinds (L _spn FunBind{fun_id = pid})
+getTypeLHsBind deps funBinds (L _spn FunBind{fun_id = pid})
   | Just FunBind {fun_matches = MG{mg_alts=L _ matches}} <- lookupOccEnv funBinds (occName $ unLoc pid) = do
   let name = getName (unLoc pid)
-  docs <- getDocumentationTryGhc tms name
+  docs <- getDocumentationTryGhc deps name
   return [(Named name, getLoc mc_fun, Just (varType (unLoc pid)), docs) | match <- matches, FunRhs{mc_fun = mc_fun} <- [m_ctxt $ unLoc match] ]
 -- In theory this shouldn’t ever fail but if it does, we can at least show the first clause.
-getTypeLHsBind tms _ (L _spn FunBind{fun_id = pid,fun_matches = MG{}}) = do
+getTypeLHsBind deps _ (L _spn FunBind{fun_id = pid,fun_matches = MG{}}) = do
   let name = getName (unLoc pid)
-  docs <- getDocumentationTryGhc tms name
+  docs <- getDocumentationTryGhc deps name
   return [(Named name, getLoc pid, Just (varType (unLoc pid)), docs)]
 getTypeLHsBind _ _ _ = return []
 
@@ -142,17 +142,17 @@ getConstraintsLHsBind _ = []
 
 -- | Get the name and type of an expression.
 getTypeLHsExpr :: (GhcMonad m)
-               => [TypecheckedModule]
+               => [ParsedModule]
                -> LHsExpr GhcTc
                -> m (Maybe (SpanSource, SrcSpan, Maybe Type, SpanDoc))
-getTypeLHsExpr tms e = do
+getTypeLHsExpr deps e = do
   hs_env <- getSession
   (_, mbe) <- liftIO (deSugarExpr hs_env e)
   case mbe of
     Just expr -> do
       let ss = getSpanSource (unLoc e)
       docs <- case ss of
-                Named n -> getDocumentationTryGhc tms n
+                Named n -> getDocumentationTryGhc deps n
                 _       -> return emptySpanDoc
       return $ Just (ss, getLoc e, Just (CoreUtils.exprType expr), docs)
     Nothing -> return Nothing
@@ -198,13 +198,13 @@ getTypeLHsExpr tms e = do
 
 -- | Get the name and type of a pattern.
 getTypeLPat :: (GhcMonad m)
-            => [TypecheckedModule]
+            => [ParsedModule]
             -> Pat GhcTc
             -> m (Maybe (SpanSource, SrcSpan, Maybe Type, SpanDoc))
-getTypeLPat tms pat = do
+getTypeLPat deps pat = do
   let (src, spn) = getSpanSource pat
   docs <- case src of
-            Named n -> getDocumentationTryGhc tms n
+            Named n -> getDocumentationTryGhc deps n
             _       -> return emptySpanDoc
   return $ Just (src, spn, Just (hsPatType pat), docs)
   where
@@ -216,12 +216,12 @@ getTypeLPat tms pat = do
 
 getLHsType
     :: GhcMonad m
-    => [TypecheckedModule]
+    => [ParsedModule]
     -> LHsType GhcRn
     -> m [(SpanSource, SrcSpan, Maybe Type, SpanDoc)]
-getLHsType tms (L spn (HsTyVar U _ v)) = do
+getLHsType deps (L spn (HsTyVar U _ v)) = do
   let n = unLoc v
-  docs <- getDocumentationTryGhc tms n
+  docs <- getDocumentationTryGhc deps n
 #ifdef GHC_LIB
   let ty = Right Nothing
 #else
