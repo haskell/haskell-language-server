@@ -1374,6 +1374,27 @@ thTests =
         _ <- openDoc' "A.hs" "haskell" sourceA
         _ <- openDoc' "B.hs" "haskell" sourceB
         expectDiagnostics [ ( "B.hs", [(DsError, (6, 29), "Variable not in scope: n")] ) ]
+    , testSessionWait "newtype-closure" $ do
+        let sourceA =
+              T.unlines
+                [ "{-# LANGUAGE DeriveDataTypeable #-}"
+                  ,"{-# LANGUAGE TemplateHaskell #-}"
+                  ,"module A (a) where"
+                  ,"import Data.Data"
+                  ,"import Language.Haskell.TH"
+                  ,"newtype A = A () deriving (Data)"
+                  ,"a :: ExpQ"
+                  ,"a = [| 0 |]"]
+        let sourceB =
+              T.unlines
+                [ "{-# LANGUAGE TemplateHaskell #-}"
+                ,"module B where"
+                ,"import A"
+                ,"b :: Int"
+                ,"b = $( a )" ]
+        _ <- openDoc' "A.hs" "haskell" sourceA
+        _ <- openDoc' "B.hs" "haskell" sourceB
+        return ()
     ]
 
 completionTests :: TestTree
