@@ -47,9 +47,10 @@ import qualified GHC
 import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
-import           HscMain                        (hscInteractive)
+import           HscMain                        (hscInteractive, hscSimplify)
 import           MkIface
 import           StringBuffer                   as SB
+import           TcRnMonad (tcg_th_coreplugins)
 import           TidyPgm
 
 import Control.Monad.Extra
@@ -148,9 +149,14 @@ compileModule packageState deps tmr =
                 let pm' = pm{pm_mod_summary = tweak $ pm_mod_summary pm}
                 let tm' = tm{tm_parsed_module  = pm'}
                 GHC.dm_core_module <$> GHC.desugarModule tm'
-
+            let tc_result = fst (tm_internals_ (tmrModule tmr))
+            -- Have to call the simplifier on the code even if we are at
+            -- -O0 as otherwise the code generation fails which leads to
+            -- errors like #256
+            plugins <- liftIO $ readIORef (tcg_th_coreplugins tc_result)
+            desugared_guts <- liftIO $ hscSimplify session plugins desugar
             -- give variables unique OccNames
-            (guts, details) <- liftIO $ tidyProgram session desugar
+            (guts, details) <- liftIO $ tidyProgram session desugared_guts
             return (map snd warnings, (mg_safe_haskell desugar, guts, details))
 
 generateByteCode :: HscEnv -> [TcModuleResult] -> TcModuleResult -> CgGuts -> IO (IdeResult Linkable)
