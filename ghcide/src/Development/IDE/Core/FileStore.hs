@@ -120,8 +120,8 @@ getModificationTimeRule vfs =
     getModTime f =
 #ifdef mingw32_HOST_OS
         do time <- Dir.getModificationTime f
-           let !day = toModifiedJulianDay $ utctDay time
-               !dayTime = diffTimeToPicoseconds $ utctDayTime time
+           let !day = fromInteger $ toModifiedJulianDay $ utctDay time
+               !dayTime = fromInteger $ diffTimeToPicoseconds $ utctDayTime time
            pure (day, dayTime)
 #else
         withCString f $ \f' ->
