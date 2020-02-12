@@ -108,7 +108,7 @@ provider ideState typ contents fp _ = do
   ret r (Right new) = Right (List [TextEdit r new])
 
 #else
-provider _ _ _ _ = return $ IdeResultOk [] -- NOP formatter
+provider _ _ _ _ = return $ Right [] -- NOP formatter
 #endif
 
 -- ---------------------------------------------------------------------

@@ -35,35 +35,38 @@ spec = do
       -- formatRange doc (FormattingOptions 5 True) (Range (Position 4 0) (Position 7 19))
       -- documentContents doc >>= liftIO . (`shouldBe` formattedRangeTabSize5)
 
-  -- describe "formatting provider" $ do
-  --   let formatLspConfig provider =
-  --         object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
-  --       formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }
+  describe "formatting provider" $ do
+    let formatLspConfig provider =
+          object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
+        formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }
 
-  --   it "respects none" $ runSessionWithConfig (formatConfig "none") hieCommand fullCaps "test/testdata" $ do
-  --     doc <- openDoc "Format.hs" "haskell"
-  --     orig <- documentContents doc
+    it "respects none" $ runSessionWithConfig (formatConfig "none") hieCommand fullCaps "test/testdata" $ do
+      doc <- openDoc "Format.hs" "haskell"
+      orig <- documentContents doc
 
-  --     formatDoc doc (FormattingOptions 2 True)
-  --     documentContents doc >>= liftIO . (`shouldBe` orig)
+      formatDoc doc (FormattingOptions 2 True)
+      documentContents doc >>= liftIO . (`shouldBe` orig)
 
-  --     formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
-  --     documentContents doc >>= liftIO . (`shouldBe` orig)
+      formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
+      documentContents doc >>= liftIO . (`shouldBe` orig)
 
-  --   it "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
-  --     doc <- openDoc "Format.hs" "haskell"
+    it "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
+      doc <- openDoc "Format.hs" "haskell"
 
-  --     sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
-  --     formatDoc doc (FormattingOptions 2 True)
-  --     documentContents doc >>= liftIO . (`shouldBe` formattedDocTabSize2)
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+      formatDoc doc (FormattingOptions 2 True)
+      documentContents doc >>= liftIO . (`shouldBe` formattedDocOrmolu)
+      -- sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+      -- formatDoc doc (FormattingOptions 2 True)
+      -- documentContents doc >>= liftIO . (`shouldBe` formattedDocTabSize2)
 
-  --     sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "floskell"))
-  --     formatDoc doc (FormattingOptions 2 True)
-  --     documentContents doc >>= liftIO . (`shouldBe` formattedFloskell)
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "floskell"))
+      formatDoc doc (FormattingOptions 2 True)
+      documentContents doc >>= liftIO . (`shouldBe` formattedFloskell)
 
-  --     sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
-  --     formatDoc doc (FormattingOptions 2 True)
-  --     documentContents doc >>= liftIO . (`shouldBe` formattedBrittanyPostFloskell)
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+      formatDoc doc (FormattingOptions 2 True)
+      documentContents doc >>= liftIO . (`shouldBe` formattedBrittanyPostFloskell)
 
   -- describe "brittany" $ do
   --   it "formats a document with LF endings" $ runSession hieCommand fullCaps "test/testdata" $ do

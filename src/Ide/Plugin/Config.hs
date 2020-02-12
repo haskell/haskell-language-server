@@ -63,6 +63,7 @@ instance Default Config where
     , formatOnImportOn            = True
     -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
+    -- , formattingProvider          = "floskell"
     }
 
 -- TODO: Add API for plugins to expose their own LSP config options

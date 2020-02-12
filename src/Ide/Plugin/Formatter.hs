@@ -34,7 +34,7 @@ import           Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 formatterPlugins :: [(T.Text, FormattingProvider IO)] -> Plugin Config
-formatterPlugins providers = Plugin rules (handlers (Map.fromList providers))
+formatterPlugins providers = Plugin rules (handlers (Map.fromList (("none",noneProvider):providers)))
 
 -- ---------------------------------------------------------------------
 -- New style plugin
@@ -49,14 +49,6 @@ handlers providers = PartialHandlers $ \WithMessage{..} x -> return x
     , LSP.documentRangeFormattingHandler
         = withResponse RspDocumentRangeFormatting (rangeFormatting providers)
     }
-
--- handlers :: FormattingProvider IO -> T.Text -> PartialHandlers c
--- handlers provider configName = PartialHandlers $ \WithMessage{..} x -> return x
---     { LSP.documentFormattingHandler
---         = withResponse RspDocumentFormatting (formatting provider configName)
---     , LSP.documentRangeFormattingHandler
---         = withResponse RspDocumentRangeFormatting (rangeFormatting provider configName)
---     }
 
 -- ---------------------------------------------------------------------
 
@@ -115,6 +107,11 @@ type FormattingProvider m
         -> NormalizedFilePath -- ^ location of the file being formatted
         -> FormattingOptions -- ^ Options for the formatter
         -> m (Either ResponseError (List TextEdit)) -- ^ Result of the formatting
+
+-- ---------------------------------------------------------------------
+
+noneProvider :: FormattingProvider IO
+noneProvider _ _ _ _ _ = return $ Right (List [])
 
 -- ---------------------------------------------------------------------
 
