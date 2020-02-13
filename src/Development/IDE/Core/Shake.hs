@@ -19,7 +19,7 @@
 --   always stored as real Haskell values, whereas Shake serialises all 'A' values
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
-    IdeState,
+    IdeState, shakeExtras,
     ShakeExtras(..), getShakeExtras,
     IdeRule, IdeResult, GetModificationTime(..),
     shakeOpen, shakeShut,
@@ -30,7 +30,7 @@ module Development.IDE.Core.Shake(
     define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks,
     getDiagnostics, unsafeClearDiagnostics,
     getHiddenDiagnostics,
-    IsIdeGlobal, addIdeGlobal, getIdeGlobalState, getIdeGlobalAction,
+    IsIdeGlobal, addIdeGlobal, addIdeGlobalExtras, getIdeGlobalState, getIdeGlobalAction,
     garbageCollect,
     setPriority,
     sendEvent,
@@ -114,13 +114,15 @@ getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
 
-
-
 class Typeable a => IsIdeGlobal a where
 
 addIdeGlobal :: IsIdeGlobal a => a -> Rules ()
-addIdeGlobal x@(typeOf -> ty) = do
-    ShakeExtras{globals} <- getShakeExtrasRules
+addIdeGlobal x = do
+    extras <- getShakeExtrasRules
+    liftIO $ addIdeGlobalExtras extras x
+
+addIdeGlobalExtras :: IsIdeGlobal a => ShakeExtras -> a -> IO ()
+addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
     liftIO $ modifyVar_ globals $ \mp -> case HMap.lookup ty mp of
         Just _ -> error $ "Can't addIdeGlobal twice on the same type, got " ++ show ty
         Nothing -> return $! HMap.insert ty (toDyn x) mp

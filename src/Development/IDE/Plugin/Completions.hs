@@ -17,6 +17,7 @@ import Development.IDE.Plugin
 import Development.IDE.Core.Service
 import Development.IDE.Plugin.Completions.Logic
 import Development.IDE.Types.Location
+import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
@@ -55,7 +56,7 @@ instance Binary   ProduceCompletions
 
 -- | Generate code actions.
 getCompletionsLSP
-    :: LSP.LspFuncs ()
+    :: LSP.LspFuncs IdeConfiguration
     -> IdeState
     -> CompletionParams
     -> IO (Either ResponseError CompletionResponseResult)
