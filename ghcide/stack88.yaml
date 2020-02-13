@@ -1,7 +1,6 @@
-resolver: nightly-2020-02-08
+resolver: nightly-2020-02-13
 packages:
 - .
 extra-deps:
-- fuzzy-0.1.0.0
 nix:
   packages: [zlib]
