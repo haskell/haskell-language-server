@@ -7,6 +7,7 @@ import Development.IDE.LSP.Server
 
 import           Language.Haskell.LSP.Types
 import Development.IDE.Core.Rules
+import           Development.IDE.Core.IdeConfiguration
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 
@@ -26,7 +27,7 @@ instance Monoid Plugin where
     mempty = def
 
 
-codeActionPlugin :: (LSP.LspFuncs () -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO (Either ResponseError [CAResult])) -> Plugin
+codeActionPlugin :: (LSP.LspFuncs IdeConfiguration -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO (Either ResponseError [CAResult])) -> Plugin
 codeActionPlugin f = Plugin mempty $ PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeActionHandler = withResponse RspCodeAction g
     }

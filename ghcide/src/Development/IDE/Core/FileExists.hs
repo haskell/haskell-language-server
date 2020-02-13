@@ -19,6 +19,7 @@ import qualified Data.HashMap.Strict as HashMap
 import           Data.Maybe
 import qualified Data.Text                     as T
 import           Development.IDE.Core.FileStore
+import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.Shake
@@ -101,6 +102,11 @@ fileExistsRulesFast :: IO LspId -> VFSHandle -> Rules ()
 fileExistsRulesFast getLspId vfs = do
   addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
   defineEarlyCutoff $ \GetFileExists file -> do
+    isWf <- isWorkspaceFile file
+    if isWf then fileExistsFast getLspId vfs file else fileExistsSlow vfs file
+
+fileExistsFast :: IO LspId -> VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([a], Maybe Bool))
+fileExistsFast getLspId vfs file = do
     fileExistsMap <- getFileExistsMapUntracked
     let mbFilesWatched = HashMap.lookup file fileExistsMap
     case mbFilesWatched of
@@ -145,8 +151,11 @@ summarizeExists :: Bool -> Maybe BS.ByteString
 summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
 fileExistsRulesSlow:: VFSHandle -> Rules ()
-fileExistsRulesSlow vfs = do
-  defineEarlyCutoff $ \GetFileExists file -> do
+fileExistsRulesSlow vfs =
+  defineEarlyCutoff $ \GetFileExists file -> fileExistsSlow vfs file
+
+fileExistsSlow :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([a], Maybe Bool))
+fileExistsSlow vfs file = do
     alwaysRerun
     exist <- liftIO $ getFileExistsVFS vfs file
     pure (summarizeExists exist, ([], Just exist))

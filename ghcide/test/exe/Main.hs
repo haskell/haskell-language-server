@@ -63,6 +63,7 @@ main = defaultMain $ testGroup "HIE"
   , unitTests
   , haddockTests
   , positionMappingTests
+  , watchedFilesTests
   ]
 
 initializeResponseTests :: TestTree
@@ -99,7 +100,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO color"                         _colorProvider (Just $ ColorOptionsStatic False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ FoldingRangeOptionsStatic False)
     , chk "   execute command"      _executeCommandProvider (Just $ ExecuteCommandOptions $ List ["typesignature.add"])
-    , chk "NO workspace"                         _workspace  nothingWorkspace
+    , chk "   workspace"                         _workspace (Just $ WorkspaceOptions (Just WorkspaceFolderOptions{_supported = Just True, _changeNotifications = Just ( WorkspaceFolderChangeNotificationsBool True )}))
     , chk "NO experimental"                   _experimental  Nothing
     ] where
 
@@ -109,8 +110,6 @@ initializeResponseTests = withResource acquire release tests where
                               , _willSave  = Nothing
                               , _willSaveWaitUntil = Nothing
                               , _save = Just (SaveOptions {_includeText = Nothing})}))
-
-      nothingWorkspace = Just (WorkspaceOptions {_workspaceFolders = Nothing})
 
       chk :: (Eq a, Show a) => TestName -> (InitializeResponseCapabilitiesInner -> a) -> a -> TestTree
       chk title getActual expected =
@@ -243,6 +242,16 @@ diagnosticTests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- openDoc' "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
+  , testSessionWait "add missing module (non workspace)" $ do
+      let contentB = T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA"
+            ]
+      _ <- openDoc'' "/tmp/ModuleB.hs" "haskell" contentB
+      expectDiagnostics [("/tmp/ModuleB.hs", [(DsError, (1, 7), "Could not find module")])]
+      let contentA = T.unlines [ "module ModuleA where" ]
+      _ <- openDoc'' "/tmp/ModuleA.hs" "haskell" contentA
+      expectDiagnostics [("/tmp/ModuleB.hs", [])]
   , testSessionWait "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
@@ -413,6 +422,26 @@ codeActionTests = testGroup "code actions"
 codeLensesTests :: TestTree
 codeLensesTests = testGroup "code lenses"
   [ addSigLensesTests
+  ]
+
+watchedFilesTests :: TestTree
+watchedFilesTests = testGroup "watched files"
+  [ testSession "workspace file" $ do
+      _ <- openDoc' "A.hs" "haskell" "module A where"
+      RequestMessage{_params = RegistrationParams (List regs)} <- skipManyTill anyMessage (message @RegisterCapabilityRequest)
+      let watchedFileRegs =
+            [ args | Registration _id WorkspaceDidChangeWatchedFiles args <- regs ]
+      liftIO $ assertBool "watches workspace files" $ not $ null watchedFileRegs
+  , testSession "non workspace file" $ do
+      _ <- openDoc' "/tmp/A.hs" "haskell" "module A where"
+      msgs <- manyTill (Just <$> message @RegisterCapabilityRequest <|> Nothing <$ anyMessage) (message @WorkDoneProgressEndNotification)
+      let watchedFileRegs =
+            [ args
+            | Just (RequestMessage{_params = RegistrationParams (List regs)}) <- msgs
+            , Registration _id WorkspaceDidChangeWatchedFiles args <- regs
+            ]
+      liftIO $ watchedFileRegs @?= []
+  -- TODO add a test for didChangeWorkspaceFolder
   ]
 
 renameActionTests :: TestTree
@@ -1812,8 +1841,15 @@ unitTests = do
 openDoc' :: FilePath -> String -> T.Text -> Session TextDocumentIdentifier
 openDoc' fp name contents = do
   res@(TextDocumentIdentifier uri) <- LSPTest.openDoc' fp name contents
+  -- Needed as ghcide sets up and relies on WatchedFiles but lsp-test does not track them
   sendNotification WorkspaceDidChangeWatchedFiles (DidChangeWatchedFilesParams $ List [FileEvent uri FcCreated])
   return res
+
+-- | Version of 'LSPTest.openDoc'' that does not send WatchedFiles events for files outside the workspace
+openDoc'' :: FilePath -> String -> T.Text -> Session TextDocumentIdentifier
+-- At the moment this is just LSPTest.openDoc' but it may change in the future
+-- when/if lsp-test implements WatchedFiles
+openDoc'' = LSPTest.openDoc'
 
 positionMappingTests :: TestTree
 positionMappingTests =
