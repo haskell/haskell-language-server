@@ -101,6 +101,7 @@ library
     exposed-modules:
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
+        Development.IDE.Core.IdeConfiguration
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
         Development.IDE.Core.Rules

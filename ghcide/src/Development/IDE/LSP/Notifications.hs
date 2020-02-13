@@ -13,6 +13,7 @@ import qualified Language.Haskell.LSP.Core        as LSP
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types       as LSP
 
+import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
@@ -69,4 +70,11 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             logInfo (ideLogger ide) $ "Files created or deleted: " <> msg
             modifyFileExists ide events
             setSomethingModified ide
+    ,LSP.didChangeWorkspaceFoldersNotificationHandler = withNotification (LSP.didChangeWorkspaceFoldersNotificationHandler x) $
+        \_ ide (DidChangeWorkspaceFoldersParams events) -> do
+            let add       = S.union
+                substract = flip S.difference
+            modifyWorkspaceFolders ide
+              $ add       (foldMap (S.singleton . parseWorkspaceFolder) (_added   events))
+              . substract (foldMap (S.singleton . parseWorkspaceFolder) (_removed events))
     }

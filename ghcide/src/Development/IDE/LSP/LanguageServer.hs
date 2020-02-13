@@ -28,10 +28,11 @@ import GHC.IO.Handle (hDuplicate)
 import System.IO
 import Control.Monad.Extra
 
+import Development.IDE.Core.IdeConfiguration
+import Development.IDE.Core.Shake
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Notifications
 import Development.IDE.LSP.Outline
-import Development.IDE.Core.Service
 import Development.IDE.Types.Logger
 import Development.IDE.Core.FileStore
 import Language.Haskell.LSP.Core (LspFuncs(..))
@@ -105,8 +106,8 @@ runLanguageServer options userHandlers getIdeState = do
     handlers <- parts WithMessage{withResponse, withNotification, withResponseAndRequest} def
 
     let initializeCallbacks = LSP.InitializeCallbacks
-            { LSP.onInitialConfiguration = const $ Right ()
-            , LSP.onConfigurationChange = const $ Right ()
+            { LSP.onInitialConfiguration = Right . parseConfiguration
+            , LSP.onConfigurationChange = const $ Left "Configuration changes not supported yet"
             , LSP.onStartup = handleInit (signalBarrier clientMsgBarrier ()) clearReqId waitForCancel clientMsgChan
             }
 
@@ -121,9 +122,13 @@ runLanguageServer options userHandlers getIdeState = do
         , void $ waitBarrier clientMsgBarrier
         ]
     where
-        handleInit :: IO () -> (LspId -> IO ()) -> (LspId -> IO ()) -> Chan Message -> LSP.LspFuncs () -> IO (Maybe err)
+        handleInit :: IO () -> (LspId -> IO ()) -> (LspId -> IO ()) -> Chan Message -> LSP.LspFuncs IdeConfiguration -> IO (Maybe err)
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan lspFuncs@LSP.LspFuncs{..} = do
+
             ide <- getIdeState getNextReqId sendFunc (makeLSPVFSHandle lspFuncs) clientCapabilities
+
+            mapM_ (registerIdeConfiguration (shakeExtras ide)) =<< config
+
             _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- readChan clientMsgChan
                 case msg of
@@ -193,12 +198,12 @@ cancelHandler cancelRequest = PartialHandlers $ \_ x -> return x
 -- | A message that we need to deal with - the pieces are split up with existentials to gain additional type safety
 --   and defer precise processing until later (allows us to keep at a higher level of abstraction slightly longer)
 data Message
-    = forall m req resp . (Show m, Show req) => Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (LSP.LspFuncs () -> IdeState -> req -> IO (Either ResponseError resp))
+    = forall m req resp . (Show m, Show req) => Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (LSP.LspFuncs IdeConfiguration -> IdeState -> req -> IO (Either ResponseError resp))
     -- | Used for cases in which we need to send not only a response,
     --   but also an additional request to the client.
     --   For example, 'executeCommand' may generate an 'applyWorkspaceEdit' request.
-    | forall m rm req resp newReqParams newReqBody . (Show m, Show rm, Show req) => ResponseAndRequest (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (RequestMessage rm newReqParams newReqBody -> FromServerMessage) (LSP.LspFuncs () -> IdeState -> req -> IO (resp, Maybe (rm, newReqParams)))
-    | forall m req . (Show m, Show req) => Notification (NotificationMessage m req) (LSP.LspFuncs () -> IdeState -> req -> IO ())
+    | forall m rm req resp newReqParams newReqBody . (Show m, Show rm, Show req) => ResponseAndRequest (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (RequestMessage rm newReqParams newReqBody -> FromServerMessage) (LSP.LspFuncs IdeConfiguration -> IdeState -> req -> IO (resp, Maybe (rm, newReqParams)))
+    | forall m req . (Show m, Show req) => Notification (NotificationMessage m req) (LSP.LspFuncs IdeConfiguration -> IdeState -> req -> IO ())
 
 
 modifyOptions :: LSP.Options -> LSP.Options

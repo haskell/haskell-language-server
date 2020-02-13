@@ -12,6 +12,7 @@ import           Language.Haskell.LSP.Types
 import Control.Monad (join)
 import Development.IDE.Plugin
 import Development.IDE.GHC.Compat
+import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Service
@@ -43,7 +44,7 @@ plugin = codeActionPlugin codeAction <> Plugin mempty setHandlersCodeLens
 
 -- | Generate code actions.
 codeAction
-    :: LSP.LspFuncs ()
+    :: LSP.LspFuncs IdeConfiguration
     -> IdeState
     -> TextDocumentIdentifier
     -> Range
@@ -65,7 +66,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
 
 -- | Generate code lenses.
 codeLens
-    :: LSP.LspFuncs ()
+    :: LSP.LspFuncs IdeConfiguration
     -> IdeState
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
@@ -86,7 +87,7 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
 
 -- | Execute the "typesignature.add" command.
 executeAddSignatureCommand
-    :: LSP.LspFuncs ()
+    :: LSP.LspFuncs IdeConfiguration
     -> IdeState
     -> ExecuteCommandParams
     -> IO (Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
