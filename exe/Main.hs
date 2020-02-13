@@ -17,7 +17,6 @@ import Data.Default
 import Data.List.Extra
 import qualified Data.Map.Strict as Map
 import Data.Maybe
-import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Development.IDE.Core.Debouncer
@@ -43,6 +42,7 @@ import Ide.Plugin.Config
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types (LspId(IdInt))
 import Linker
+import qualified Data.HashSet as HashSet
 import System.Directory.Extra as IO
 import System.Exit
 import System.FilePath
@@ -145,7 +145,7 @@ main = do
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
-        setFilesOfInterest ide $ Set.fromList $ map toNormalizedFilePath files
+        setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath files
         results <- runActionSync ide $ uses TypeCheck $ map toNormalizedFilePath files
         let (worked, failed) = partition fst $ zip (map isJust results) files
         when (failed /= []) $
@@ -173,7 +173,7 @@ expandFiles = concatMapM $ \x -> do
 kick :: Action ()
 kick = do
     files <- getFilesOfInterest
-    void $ uses TypeCheck $ Set.toList files
+    void $ uses TypeCheck $ HashSet.toList files
 
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()

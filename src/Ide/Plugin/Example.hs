@@ -20,7 +20,7 @@ import Data.Binary
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
 import Data.Hashable
-import qualified Data.Set                     as Set
+import qualified Data.HashSet as HashSet
 import qualified Data.Text as T
 import Data.Typeable
 import Development.IDE.Core.OfInterest
@@ -78,7 +78,7 @@ exampleRules = do
 
   action $ do
     files <- getFilesOfInterest
-    void $ uses Example $ Set.toList files
+    void $ uses Example $ HashSet.toList files
 
 mkDiag :: NormalizedFilePath
        -> DiagnosticSource
