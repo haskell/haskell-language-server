@@ -7,27 +7,26 @@ import Development.IDE.LSP.Server
 
 import           Language.Haskell.LSP.Types
 import Development.IDE.Core.Rules
-import           Development.IDE.Core.IdeConfiguration
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 
 
-data Plugin = Plugin
+data Plugin c = Plugin
     {pluginRules :: Rules ()
-    ,pluginHandler :: PartialHandlers
+    ,pluginHandler :: PartialHandlers c
     }
 
-instance Default Plugin where
+instance Default (Plugin c) where
     def = Plugin mempty def
 
-instance Semigroup Plugin where
+instance Semigroup (Plugin c) where
     Plugin x1 y1 <> Plugin x2 y2 = Plugin (x1<>x2) (y1<>y2)
 
-instance Monoid Plugin where
+instance Monoid (Plugin c) where
     mempty = def
 
 
-codeActionPlugin :: (LSP.LspFuncs IdeConfiguration -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO (Either ResponseError [CAResult])) -> Plugin
+codeActionPlugin :: (LSP.LspFuncs c -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO (Either ResponseError [CAResult])) -> Plugin c
 codeActionPlugin f = Plugin mempty $ PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeActionHandler = withResponse RspCodeAction g
     }

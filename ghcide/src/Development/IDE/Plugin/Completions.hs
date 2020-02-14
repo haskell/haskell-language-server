@@ -17,7 +17,6 @@ import Development.IDE.Plugin
 import Development.IDE.Core.Service
 import Development.IDE.Plugin.Completions.Logic
 import Development.IDE.Types.Location
-import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
@@ -26,7 +25,7 @@ import Development.IDE.LSP.Server
 import Development.IDE.Import.DependencyInformation
 
 
-plugin :: Plugin
+plugin :: Plugin c
 plugin = Plugin produceCompletions setHandlersCompletion
 
 produceCompletions :: Rules ()
@@ -56,7 +55,7 @@ instance Binary   ProduceCompletions
 
 -- | Generate code actions.
 getCompletionsLSP
-    :: LSP.LspFuncs IdeConfiguration
+    :: LSP.LspFuncs c
     -> IdeState
     -> CompletionParams
     -> IO (Either ResponseError CompletionResponseResult)
@@ -83,7 +82,7 @@ getCompletionsLSP lsp ide
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
 
-setHandlersCompletion :: PartialHandlers
+setHandlersCompletion :: PartialHandlers c
 setHandlersCompletion = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.completionHandler = withResponse RspCompletion getCompletionsLSP
     }
