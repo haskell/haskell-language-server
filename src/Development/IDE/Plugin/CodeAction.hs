@@ -17,6 +17,7 @@ import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Error
+import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
@@ -32,9 +33,13 @@ import Data.Maybe
 import Data.List.Extra
 import qualified Data.Text as T
 import Data.Tuple.Extra ((&&&))
+import HscTypes
+import OccName
+import Parser
+import RdrName
 import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
-import Outputable (ppr, showSDocUnsafe)
+import Outputable (showSDoc, ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
 
@@ -54,12 +59,15 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
     -- logInfo (ideLogger ide) $ T.pack $ "Code action req: " ++ show arg
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
-    (ideOptions, parsedModule) <- runAction state $
-      (,) <$> getIdeOptions
-          <*> (getParsedModule . toNormalizedFilePath) `traverse` uriToFilePath uri
+        mbFile = toNormalizedFilePath <$> uriToFilePath uri
+    (ideOptions, parsedModule, env) <- runAction state $
+      (,,) <$> getIdeOptions
+           <*> getParsedModule `traverse` mbFile
+           <*> use_ GhcSession `traverse` mbFile
+    let dflags = hsc_dflags . hscEnv <$> env
     pure $ Right
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction ideOptions ( join parsedModule ) text x
+        | x <- xs, (title, tedit) <- suggestAction dflags ideOptions ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
 
@@ -98,10 +106,10 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | otherwise
     = return (Null, Nothing)
 
-suggestAction  :: IdeOptions -> Maybe ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAction ideOptions parsedModule text diag = concat
+suggestAction :: Maybe DynFlags -> IdeOptions -> Maybe ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAction dflags ideOptions parsedModule text diag = concat
     [ suggestAddExtension diag
-    , suggestExtendImport text diag
+    , suggestExtendImport dflags text diag
     , suggestFillHole diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
@@ -268,20 +276,23 @@ suggestFillHole Diagnostic{_range=_range,..}
 
     | otherwise = []
 
-suggestExtendImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestExtendImport contents Diagnostic{_range=_range,..}
+suggestExtendImport :: Maybe DynFlags -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestExtendImport (Just dflags) contents Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegex _message
       "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
     , Just c <- contents
+    , POk _ (L _ name) <- runParser dflags (T.unpack binding) parseIdentifier
     = let range = case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
             [s] -> let x = srcSpanToRange s
                    in x{_end = (_end x){_character = succ (_character (_end x))}}
             _ -> error "bug in srcspan parser"
           importLine = textInRange range c
+          printedName = let rn = rdrNameOcc name in showSDoc dflags $ parenSymOcc rn (ppr rn)
         in [("Add " <> binding <> " to the import list of " <> mod
-        , [TextEdit range (addBindingToImportList binding importLine)])]
+        , [TextEdit range (addBindingToImportList (T.pack printedName) importLine)])]
     | otherwise = []
+suggestExtendImport Nothing _ _ = []
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestFixConstructorImport _ Diagnostic{_range=_range,..}

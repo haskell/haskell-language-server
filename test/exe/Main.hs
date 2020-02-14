@@ -752,6 +752,26 @@ extendImportTests = testGroup "extend import actions"
             , "import ModuleA as A (stuffA, stuffB)"
             , "main = print (stuffA, stuffB)"
             ])
+  , testSession "extend single line import with operator" $ template
+      (T.unlines
+            [ "module ModuleA where"
+            , "(.*) :: Integer -> Integer -> Integer"
+            , "x .* y = x * y"
+            , "stuffB :: Integer"
+            , "stuffB = 123"
+            ])
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA as A (stuffB)"
+            , "main = print (stuffB .* stuffB)"
+            ])
+      (Range (Position 3 17) (Position 3 18))
+      "Add .* to the import list of ModuleA"
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA as A ((.*), stuffB)"
+            , "main = print (stuffB .* stuffB)"
+            ])
   , testSession "extend single line import with type" $ template
       (T.unlines
             [ "module ModuleA where"

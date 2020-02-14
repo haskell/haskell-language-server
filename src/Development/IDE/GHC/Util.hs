@@ -9,6 +9,7 @@ module Development.IDE.GHC.Util(
     runGhcEnv,
     -- * GHC wrappers
     prettyPrint,
+    ParseResult(..), runParser,
     lookupPackageConfig,
     moduleImportPath,
     cgGutsToCoreModule,
@@ -47,6 +48,7 @@ import qualified Data.Text                as T
 import qualified Data.Text.Encoding       as T
 import qualified Data.Text.Encoding.Error as T
 import qualified Data.ByteString          as BS
+import Lexer
 import StringBuffer
 import System.FilePath
 
@@ -82,6 +84,13 @@ lookupPackageConfig unitId env =
 textToStringBuffer :: T.Text -> StringBuffer
 textToStringBuffer = stringToStringBuffer . T.unpack
 
+runParser :: DynFlags -> String -> P a -> ParseResult a
+runParser flags str parser = unP parser parseState
+    where
+      filename = "<interactive>"
+      location = mkRealSrcLoc (mkFastString filename) 1 1
+      buffer = stringToStringBuffer str
+      parseState = mkPState flags buffer location
 
 -- | Pretty print a GHC value using 'unsafeGlobalDynFlags '.
 prettyPrint :: Outputable a => a -> String
