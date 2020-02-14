@@ -18,7 +18,6 @@ import           Data.Text                      ( Text
                                                 )
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
-import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      ( srcSpanToRange )
@@ -29,13 +28,13 @@ import           Outputable                     ( Outputable
                                                 , showSDocUnsafe
                                                 )
 
-setHandlersOutline :: PartialHandlers
+setHandlersOutline :: PartialHandlers c
 setHandlersOutline = PartialHandlers $ \WithMessage {..} x -> return x
   { LSP.documentSymbolHandler = withResponse RspDocumentSymbols moduleOutline
   }
 
 moduleOutline
-  :: LSP.LspFuncs IdeConfiguration -> IdeState -> DocumentSymbolParams -> IO (Either ResponseError DSResult)
+  :: LSP.LspFuncs c -> IdeState -> DocumentSymbolParams -> IO (Either ResponseError DSResult)
 moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentIdentifier uri }
   = case uriToFilePath uri of
     Just (toNormalizedFilePath -> fp) -> do

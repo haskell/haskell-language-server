@@ -36,8 +36,8 @@ getIdeConfiguration :: Action IdeConfiguration
 getIdeConfiguration =
   getIdeGlobalAction >>= liftIO . readVar . unIdeConfigurationRef
 
-parseConfiguration :: InitializeRequest -> IdeConfiguration
-parseConfiguration RequestMessage { _params = InitializeParams {..} } =
+parseConfiguration :: InitializeParams -> IdeConfiguration
+parseConfiguration InitializeParams {..} =
   IdeConfiguration { .. }
  where
   workspaceFolders =

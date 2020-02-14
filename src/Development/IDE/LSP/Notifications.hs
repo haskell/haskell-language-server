@@ -32,7 +32,7 @@ import           Development.IDE.Core.OfInterest
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath
 
-setHandlersNotifications :: PartialHandlers
+setHandlersNotifications :: PartialHandlers c
 setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
     {LSP.didOpenTextDocumentNotificationHandler = withNotification (LSP.didOpenTextDocumentNotificationHandler x) $
         \_ ide (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> do
@@ -70,6 +70,7 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             logInfo (ideLogger ide) $ "Files created or deleted: " <> msg
             modifyFileExists ide events
             setSomethingModified ide
+
     ,LSP.didChangeWorkspaceFoldersNotificationHandler = withNotification (LSP.didChangeWorkspaceFoldersNotificationHandler x) $
         \_ ide (DidChangeWorkspaceFoldersParams events) -> do
             let add       = S.union

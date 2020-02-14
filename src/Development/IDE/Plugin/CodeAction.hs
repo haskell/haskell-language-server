@@ -12,7 +12,6 @@ import           Language.Haskell.LSP.Types
 import Control.Monad (join)
 import Development.IDE.Plugin
 import Development.IDE.GHC.Compat
-import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Service
@@ -39,12 +38,12 @@ import Outputable (ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
 
-plugin :: Plugin
+plugin :: Plugin c
 plugin = codeActionPlugin codeAction <> Plugin mempty setHandlersCodeLens
 
 -- | Generate code actions.
 codeAction
-    :: LSP.LspFuncs IdeConfiguration
+    :: LSP.LspFuncs c
     -> IdeState
     -> TextDocumentIdentifier
     -> Range
@@ -66,7 +65,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
 
 -- | Generate code lenses.
 codeLens
-    :: LSP.LspFuncs IdeConfiguration
+    :: LSP.LspFuncs c
     -> IdeState
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
@@ -87,7 +86,7 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
 
 -- | Execute the "typesignature.add" command.
 executeAddSignatureCommand
-    :: LSP.LspFuncs IdeConfiguration
+    :: LSP.LspFuncs c
     -> IdeState
     -> ExecuteCommandParams
     -> IO (Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
@@ -445,7 +444,7 @@ matchRegex message regex = case unifySpaces message =~~ regex of
     Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
     Nothing -> Nothing
 
-setHandlersCodeLens :: PartialHandlers
+setHandlersCodeLens :: PartialHandlers c
 setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeLensHandler = withResponse RspCodeLens codeLens,
     LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
