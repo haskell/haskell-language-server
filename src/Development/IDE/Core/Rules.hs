@@ -11,7 +11,7 @@
 --
 module Development.IDE.Core.Rules(
     IdeState, GetDependencies(..), GetParsedModule(..), TransitiveDependencies(..),
-    Priority(..),
+    Priority(..), GhcSessionIO(..), GhcSessionFun(..),
     priorityTypeCheck,
     priorityGenerateCore,
     priorityFilesOfInterest,
@@ -339,7 +339,7 @@ loadGhcSession :: Rules ()
 loadGhcSession = do
     defineNoFile $ \GhcSessionIO -> do
         opts <- getIdeOptions
-        liftIO $ GhcSessionFun <$> optGhcSession opts
+        GhcSessionFun <$> optGhcSession opts
     defineEarlyCutoff $ \GhcSession file -> do
         GhcSessionFun fun <- useNoFile_ GhcSessionIO
         val <- fun $ fromNormalizedFilePath file
