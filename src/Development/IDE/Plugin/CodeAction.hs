@@ -343,7 +343,7 @@ topOfHoleFitsMarker =
 
 mkRenameEdit :: Maybe T.Text -> Range -> T.Text -> TextEdit
 mkRenameEdit contents range name =
-    if fromMaybe False maybeIsInfixFunction
+    if maybeIsInfixFunction == Just True
       then TextEdit range ("`" <> name <> "`")
       else TextEdit range name
   where
