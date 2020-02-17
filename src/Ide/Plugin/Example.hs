@@ -20,7 +20,7 @@ import Data.Binary
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
 import Data.Hashable
-import qualified Data.Set                     as Set
+import qualified Data.HashSet as HashSet
 import qualified Data.Text as T
 import Data.Typeable
 import Development.IDE.Core.OfInterest
@@ -42,7 +42,7 @@ import Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-plugin :: Plugin
+plugin :: Plugin c
 plugin = Plugin exampleRules handlersExample
          <> codeActionPlugin codeAction
          <> Plugin mempty handlersCodeLens
@@ -54,7 +54,7 @@ blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
   = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover"])
 
-handlersExample :: PartialHandlers
+handlersExample :: PartialHandlers c
 handlersExample = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.hoverHandler = withResponse RspHover $ const hover}
 
@@ -78,7 +78,7 @@ exampleRules = do
 
   action $ do
     files <- getFilesOfInterest
-    void $ uses Example $ Set.toList files
+    void $ uses Example $ HashSet.toList files
 
 mkDiag :: NormalizedFilePath
        -> DiagnosticSource
@@ -100,7 +100,7 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 
 -- | Generate code actions.
 codeAction
-    :: LSP.LspFuncs ()
+    :: LSP.LspFuncs c
     -> IdeState
     -> TextDocumentIdentifier
     -> Range
@@ -118,14 +118,14 @@ codeAction _lsp _state (TextDocumentIdentifier uri) _range CodeActionContext{_di
 -- ---------------------------------------------------------------------
 
 -- | Generate code lenses.
-handlersCodeLens :: PartialHandlers
+handlersCodeLens :: PartialHandlers c
 handlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeLensHandler = withResponse RspCodeLens codeLens,
     LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
     }
 
 codeLens
-    :: LSP.LspFuncs ()
+    :: LSP.LspFuncs c
     -> IdeState
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
@@ -149,7 +149,7 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
 
 -- | Execute the "codelens.todo" command.
 executeAddSignatureCommand
-    :: LSP.LspFuncs ()
+    :: LSP.LspFuncs c
     -> IdeState
     -> ExecuteCommandParams
     -> IO (Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
