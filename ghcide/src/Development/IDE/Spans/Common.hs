@@ -18,6 +18,7 @@ module Development.IDE.Spans.Common (
 import Data.Data
 import qualified Data.Generics
 import qualified Data.Text as T
+import Data.List.Extra
 
 import GHC
 import Outputable
@@ -28,7 +29,6 @@ import DataCon
 import Var
 #endif
 
-import           Data.Char (isSpace)
 import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types as H
 
@@ -135,9 +135,9 @@ haddockToMarkdown (H.DocHeader (H.Header level title))
   = replicate level '#' ++ " " ++ haddockToMarkdown title
 
 haddockToMarkdown (H.DocUnorderedList things)
-  = '\n' : (unlines $ map (("+ " ++) . dropWhile isSpace . splitForList . haddockToMarkdown) things)
+  = '\n' : (unlines $ map (("+ " ++) . trimStart . splitForList . haddockToMarkdown) things)
 haddockToMarkdown (H.DocOrderedList things)
-  = '\n' : (unlines $ map (("1. " ++) . dropWhile isSpace . splitForList . haddockToMarkdown) things)
+  = '\n' : (unlines $ map (("1. " ++) . trimStart . splitForList . haddockToMarkdown) things)
 haddockToMarkdown (H.DocDefList things)
   = '\n' : (unlines $ map (\(term, defn) -> "+ **" ++ haddockToMarkdown term ++ "**: " ++ haddockToMarkdown defn) things)
 
@@ -159,4 +159,4 @@ splitForList :: String -> String
 splitForList s
   = case lines s of
       [] -> ""
-      (first:rest) -> unlines $ first : map (("  " ++) . dropWhile isSpace) rest
+      (first:rest) -> unlines $ first : map (("  " ++) . trimStart) rest
