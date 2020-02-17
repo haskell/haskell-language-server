@@ -54,6 +54,7 @@ import System.Time.Extra
 import Development.IDE.Plugin.CodeAction  as CodeAction
 import Development.IDE.Plugin.Completions as Completions
 import Ide.Plugin.Example                 as Example
+import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
 
@@ -69,7 +70,8 @@ idePlugins includeExample
     CodeAction.plugin <>
     formatterPlugins [("ormolu",   Ormolu.provider)
                      ,("floskell", Floskell.provider)] <>
-    if includeExample then Example.plugin else mempty
+    if includeExample then Example.plugin <> Example2.plugin
+                      else mempty
 
 -- ---------------------------------------------------------------------
 

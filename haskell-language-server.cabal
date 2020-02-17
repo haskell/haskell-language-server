@@ -28,11 +28,14 @@ source-repository head
 library
   exposed-modules:
       Ide.Cradle
+      Ide.Plugin
       Ide.Plugin.Config
       Ide.Plugin.Example
+      Ide.Plugin.Example2
       Ide.Plugin.Ormolu
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
+      Ide.Types
       Ide.Version
   other-modules:
       Paths_haskell_language_server
@@ -176,10 +179,13 @@ test-suite func-test
       base >=4.7 && <5
     , aeson
     , data-default
+    , haskell-lsp-types
     , hls-test-utils
+    , hspec
+    , lens
     , lsp-test >= 0.10.0.0
     , text
-    , hspec
+    , unordered-containers
   other-modules:
                      --  CompletionSpec
                      -- , CommandSpec
@@ -195,6 +201,7 @@ test-suite func-test
                      -- , HieBiosSpec
                      -- , HighlightSpec
                      -- , HoverSpec
+                     , PluginSpec
                      -- , ProgressSpec
                      -- , ReferencesSpec
                      -- , RenameSpec

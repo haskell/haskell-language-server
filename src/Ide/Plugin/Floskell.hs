@@ -18,6 +18,7 @@ import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Floskell
 import           Ide.Plugin.Formatter
+import           Ide.Types
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 

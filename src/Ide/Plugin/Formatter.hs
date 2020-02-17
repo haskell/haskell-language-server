@@ -8,8 +8,6 @@
 module Ide.Plugin.Formatter
   (
     formatterPlugins
-  , FormattingType(..)
-  , FormattingProvider
   , responseError
   , extractRange
   , fullRange
@@ -25,6 +23,7 @@ import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Development.Shake hiding ( Diagnostic )
+import           Ide.Types
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Messages
@@ -86,27 +85,6 @@ doFormatting lf providers ideState ft uri params = do
               Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
           Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: no formatter found for:[" ++ T.unpack mf ++ "]"
-
--- ---------------------------------------------------------------------
-
--- | Format the given Text as a whole or only a @Range@ of it.
--- Range must be relative to the text to format.
--- To format the whole document, read the Text from the file and use 'FormatText'
--- as the FormattingType.
-data FormattingType = FormatText
-                    | FormatRange Range
-
-
--- | To format a whole document, the 'FormatText' @FormattingType@ can be used.
--- It is required to pass in the whole Document Text for that to happen, an empty text
--- and file uri, does not suffice.
-type FormattingProvider m
-        = IdeState
-        -> FormattingType  -- ^ How much to format
-        -> T.Text -- ^ Text to format
-        -> NormalizedFilePath -- ^ location of the file being formatted
-        -> FormattingOptions -- ^ Options for the formatter
-        -> m (Either ResponseError (List TextEdit)) -- ^ Result of the formatting
 
 -- ---------------------------------------------------------------------
 
