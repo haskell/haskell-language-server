@@ -25,12 +25,10 @@ data IdeOptions = IdeOptions
   { optPreprocessor :: GHC.ParsedSource -> IdePreprocessedSource
     -- ^ Preprocessor to run over all parsed source trees, generating a list of warnings
     --   and a list of errors, along with a new parse tree.
-  , optGhcSession :: IO (FilePath -> Action HscEnvEq)
+  , optGhcSession :: Action (FilePath -> Action HscEnvEq)
     -- ^ Setup a GHC session for a given file, e.g. @Foo.hs@.
-    --   The 'IO' will be called once, then the resulting function will be applied once per file.
+    --   For the same 'ComponentOptions' from hie-bios, the resulting function will be applied once per file.
     --   It is desirable that many files get the same 'HscEnvEq', so that more IDE features work.
-    --   You should not use 'newCacheIO' to get that caching, because of
-    --   https://github.com/ndmitchell/shake/issues/725.
   , optPkgLocationOpts :: IdePkgLocationOptions
     -- ^ How to locate source and @.hie@ files given a module name.
   , optExtensions :: [String]
@@ -73,7 +71,7 @@ clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress
 clientSupportsProgress caps = IdeReportProgress $ fromMaybe False $
     LSP._workDoneProgress =<< LSP._window (caps :: LSP.ClientCapabilities)
 
-defaultIdeOptions :: IO (FilePath -> Action HscEnvEq) -> IdeOptions
+defaultIdeOptions :: Action (FilePath -> Action HscEnvEq) -> IdeOptions
 defaultIdeOptions session = IdeOptions
     {optPreprocessor = IdePreprocessedSource [] []
     ,optGhcSession = session

@@ -169,14 +169,17 @@ executable ghcide
     build-depends:
         hslogger,
         base == 4.*,
+        binary,
         containers,
         data-default,
+        deepseq,
         directory,
         extra,
         filepath,
         ghc-paths,
         ghc,
         gitrev,
+        hashable,
         haskell-lsp,
         hie-bios >= 0.4.0 && < 0.5,
         ghcide,
@@ -189,6 +192,7 @@ executable ghcide
         Paths_ghcide
 
     default-extensions:
+        DeriveGeneric
         RecordWildCards
         TupleSections
         ViewPatterns
