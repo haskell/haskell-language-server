@@ -64,6 +64,7 @@ main = defaultMain $ testGroup "HIE"
   , haddockTests
   , positionMappingTests
   , watchedFilesTests
+  , sessionDepsArePickedUp
   ]
 
 initializeResponseTests :: TestTree
@@ -1774,12 +1775,53 @@ haddockTests
   where
     checkHaddock s txt = spanDocToMarkdownForTest s @?= txt
 
+
+sessionDepsArePickedUp :: TestTree
+sessionDepsArePickedUp = testSession'
+  "session-deps-are-picked-up"
+  $ \dir -> do
+    liftIO $
+      writeFileUTF8
+        (dir </> "hie.yaml")
+        "cradle: {direct: {arguments: []}}"
+    -- Open without OverloadedStrings and expect an error.
+    doc <- openDoc' "Foo.hs" "haskell" fooContent
+    expectDiagnostics
+      [("Foo.hs", [(DsError, (3, 6), "Couldn't match expected type")])]
+    -- Update hie.yaml to enable OverloadedStrings.
+    liftIO $
+      writeFileUTF8
+        (dir </> "hie.yaml")
+        "cradle: {direct: {arguments: [-XOverloadedStrings]}}"
+    -- Send change event.
+    let change =
+          TextDocumentContentChangeEvent
+            { _range = Just (Range (Position 4 0) (Position 4 0)),
+              _rangeLength = Nothing,
+              _text = "\n"
+            }
+    changeDoc doc [change]
+    -- Now no errors.
+    expectDiagnostics [("Foo.hs", [])]
+  where
+    fooContent =
+      T.unlines
+        [ "module Foo where",
+          "import Data.Text",
+          "foo :: Text",
+          "foo = \"hello\""
+        ]
+
+
 ----------------------------------------------------------------------
 -- Utils
 
 
 testSession :: String -> Session () -> TestTree
 testSession name = testCase name . run
+
+testSession' :: String -> (FilePath -> Session ()) -> TestTree
+testSession' name = testCase name . run'
 
 testSessionWait :: String -> Session () -> TestTree
 testSessionWait name = testSession name .
@@ -1801,7 +1843,13 @@ mkRange :: Int -> Int -> Int -> Int -> Range
 mkRange a b c d = Range (Position a b) (Position c d)
 
 run :: Session a -> IO a
-run s = withTempDir $ \dir -> do
+run s = withTempDir $ \dir -> runInDir dir s
+
+run' :: (FilePath -> Session a) -> IO a
+run' s = withTempDir $ \dir -> runInDir dir (s dir)
+
+runInDir :: FilePath -> Session a -> IO a
+runInDir dir s = do
   ghcideExe <- locateGhcideExecutable
 
   -- Temporarily hack around https://github.com/mpickering/hie-bios/pull/56

@@ -3,14 +3,19 @@
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE CPP #-} -- To get precise GHC version
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main(main) where
 
 import Arguments
+import Data.Binary (Binary)
+import Data.Dynamic (Typeable)
+import Data.Hashable (Hashable)
 import Data.Maybe
 import Data.List.Extra
 import System.FilePath
 import Control.Concurrent.Extra
+import Control.DeepSeq (NFData)
 import Control.Exception
 import Control.Monad.Extra
 import Control.Monad.IO.Class
@@ -39,20 +44,22 @@ import Language.Haskell.LSP.Types (LspId(IdInt))
 import Linker
 import Data.Version
 import Development.IDE.LSP.LanguageServer
-import System.Directory.Extra as IO
+import qualified System.Directory.Extra as IO
 import System.Environment
 import System.IO
 import System.Exit
 import Paths_ghcide
 import Development.GitRev
-import Development.Shake (Action, action)
+import Development.Shake (Action, RuleResult, Rules, action, doesFileExist, need)
 import qualified Data.HashSet as HashSet
 import qualified Data.Map.Strict as Map
 
 import GHC hiding (def)
+import GHC.Generics (Generic)
 import qualified GHC.Paths
 
 import HIE.Bios
+import HIE.Bios.Cradle
 import HIE.Bios.Types
 
 -- Set the GHC libdir to the nix libdir if it's present.
@@ -84,9 +91,9 @@ main = do
     let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
             T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
 
-    whenJust argsCwd setCurrentDirectory
+    whenJust argsCwd IO.setCurrentDirectory
 
-    dir <- getCurrentDirectory
+    dir <- IO.getCurrentDirectory
 
     let plugins = Completions.plugin <> CodeAction.plugin
         onInitialConfiguration = const $ Right ()
@@ -99,14 +106,13 @@ main = do
         runLanguageServer def (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
-            -- very important we only call loadSession once, and it's fast, so just do it before starting
-            session <- loadSession dir
-            let options = (defaultIdeOptions $ return session)
+            let options = (defaultIdeOptions $ loadSession dir)
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) debouncer options vfs
+            initialise caps (loadGhcSessionIO >> mainRule >> pluginRules plugins >> action kick)
+                getLspId event (logger minBound) debouncer options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
@@ -114,7 +120,7 @@ main = do
         putStrLn $ "\nStep 1/6: Finding files to test in " ++ dir
         files <- expandFiles (argFiles ++ ["." | null argFiles])
         -- LSP works with absolute file paths, so try and behave similarly
-        files <- nubOrd <$> mapM canonicalizePath files
+        files <- nubOrd <$> mapM IO.canonicalizePath files
         putStrLn $ "Found " ++ show (length files) ++ " files"
 
         putStrLn "\nStep 2/6: Looking for hie.yaml files that control setup"
@@ -128,7 +134,8 @@ main = do
             cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle x
             when (isNothing x) $ print cradle
             putStrLn $ "\nStep 4/6, Cradle " ++ show i ++ "/" ++ show n ++ ": Loading GHC Session"
-            cradleToSession cradle
+            opts <- getComponentOptions cradle
+            createSession opts
 
         putStrLn "\nStep 5/6: Initializing the IDE"
         vfs <- makeVFSHandle
@@ -141,7 +148,7 @@ main = do
         let options =
               (defaultIdeOptions $ return $ return . grab)
                     { optShakeProfiling = argsShakeProfiling }
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
+        ide <- initialise def (loadGhcSessionIO >> mainRule) (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath files
@@ -163,7 +170,7 @@ expandFiles = concatMapM $ \x -> do
         let recurse "." = True
             recurse x | "." `isPrefixOf` takeFileName x = False -- skip .git etc
             recurse x = takeFileName x `notElem` ["dist","dist-newstyle"] -- cabal directories
-        files <- filter (\x -> takeExtension x `elem` [".hs",".lhs"]) <$> listFilesInside (return . recurse) x
+        files <- filter (\x -> takeExtension x `elem` [".hs",".lhs"]) <$> IO.listFilesInside (return . recurse) x
         when (null files) $
             fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
         return files
@@ -182,16 +189,42 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
 showEvent lock e = withLock lock $ print e
 
 
-cradleToSession :: Cradle a -> IO HscEnvEq
-cradleToSession cradle = do
+-- Rule type for caching GHC sessions.
+type instance RuleResult GetHscEnv = HscEnvEq
+
+data GetHscEnv = GetHscEnv
+    { hscenvOptions :: [String]        -- componentOptions from hie-bios
+    , hscenvDependencies :: [FilePath] -- componentDependencies from hie-bios
+    }
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetHscEnv
+instance NFData   GetHscEnv
+instance Binary   GetHscEnv
+
+
+loadGhcSessionIO :: Rules ()
+loadGhcSessionIO =
+    -- This rule is for caching the GHC session. E.g., even when the cabal file
+    -- changed, if the resulting flags did not change, we would continue to use
+    -- the existing session.
+    defineNoFile $ \(GetHscEnv opts deps) ->
+        liftIO $ createSession $ ComponentOptions opts deps
+
+
+getComponentOptions :: Cradle a -> IO ComponentOptions
+getComponentOptions cradle = do
     let showLine s = putStrLn ("> " ++ s)
     cradleRes <- runCradle (cradleOptsProg cradle) showLine ""
-    opts <- case cradleRes of
+    case cradleRes of
         CradleSuccess r -> pure r
         CradleFail err -> throwIO err
         -- TODO Rather than failing here, we should ignore any files that use this cradle.
         -- That will require some more changes.
         CradleNone -> fail "'none' cradle is not yet supported"
+
+
+createSession :: ComponentOptions -> IO HscEnvEq
+createSession opts = do
     libdir <- getLibdir
     env <- runGhc (Just libdir) $ do
         _targets <- initSession opts
@@ -200,19 +233,34 @@ cradleToSession cradle = do
     newHscEnvEq env
 
 
-loadSession :: FilePath -> IO (FilePath -> Action HscEnvEq)
-loadSession dir = do
+cradleToSession :: Maybe FilePath -> Cradle a -> Action HscEnvEq
+cradleToSession mbYaml cradle = do
+    cmpOpts <- liftIO $ getComponentOptions cradle
+    let opts = componentOptions cmpOpts
+        deps = componentDependencies cmpOpts
+        deps' = case mbYaml of
+                  -- For direct cradles, the hie.yaml file itself must be watched.
+                  Just yaml | isDirectCradle cradle -> yaml : deps
+                  _ -> deps
+    existingDeps <- filterM doesFileExist deps'
+    need existingDeps
+    useNoFile_ $ GetHscEnv opts deps
+
+
+loadSession :: FilePath -> Action (FilePath -> Action HscEnvEq)
+loadSession dir = liftIO $ do
     cradleLoc <- memoIO $ \v -> do
         res <- findCradle v
         -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
         -- try and normalise that
         -- e.g. see https://github.com/digital-asset/ghcide/issues/126
-        res' <- traverse makeAbsolute res
+        res' <- traverse IO.makeAbsolute res
         return $ normalise <$> res'
-    session <- memoIO $ \file -> do
-        c <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle file
-        cradleToSession c
-    return $ \file -> liftIO $ session =<< cradleLoc file
+    let session :: Maybe FilePath -> Action HscEnvEq
+        session file = do
+          c <- liftIO $ maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle file
+          cradleToSession file c
+    return $ \file -> session =<< liftIO (cradleLoc file)
 
 
 -- | Memoize an IO function, with the characteristics:
