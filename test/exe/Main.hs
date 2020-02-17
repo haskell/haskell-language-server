@@ -1095,8 +1095,8 @@ fillTypedHoleTests = let
 
 addSigActionTests :: TestTree
 addSigActionTests = let
-  header = "{-# OPTIONS_GHC -Wmissing-signatures #-}"
-  moduleH = "module Sigs where"
+  header = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures #-}"
+  moduleH = "{-# LANGUAGE PatternSynonyms #-}\nmodule Sigs where"
   before def     = T.unlines [header, moduleH,      def]
   after' def sig = T.unlines [header, moduleH, sig, def]
 
@@ -1112,19 +1112,20 @@ addSigActionTests = let
     liftIO $ expectedCode @=? modifiedCode
   in
   testGroup "add signature"
-    [ "abc = True"             >:: "abc :: Bool"
-    , "foo a b = a + b"        >:: "foo :: Num a => a -> a -> a"
-    , "bar a b = show $ a + b" >:: "bar :: (Show a, Num a) => a -> a -> String"
-    , "(!!!) a b = a > b"      >:: "(!!!) :: Ord a => a -> a -> Bool"
-    , "a >>>> b = a + b"       >:: "(>>>>) :: Num a => a -> a -> a"
-    , "a `haha` b = a b"       >:: "haha :: (t1 -> t2) -> t1 -> t2"
+    [ "abc = True"              >:: "abc :: Bool"
+    , "foo a b = a + b"         >:: "foo :: Num a => a -> a -> a"
+    , "bar a b = show $ a + b"  >:: "bar :: (Show a, Num a) => a -> a -> String"
+    , "(!!!) a b = a > b"       >:: "(!!!) :: Ord a => a -> a -> Bool"
+    , "a >>>> b = a + b"        >:: "(>>>>) :: Num a => a -> a -> a"
+    , "a `haha` b = a b"        >:: "haha :: (t1 -> t2) -> t1 -> t2"
+    , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
     ]
 
 addSigLensesTests :: TestTree
 addSigLensesTests = let
-  missing = "{-# OPTIONS_GHC -Wmissing-signatures -Wunused-matches #-}"
+  missing = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures -Wunused-matches #-}"
   notMissing = "{-# OPTIONS_GHC -Wunused-matches #-}"
-  moduleH = "module Sigs where"
+  moduleH = "{-# LANGUAGE PatternSynonyms #-}\nmodule Sigs where"
   other = T.unlines ["f :: Integer -> Integer", "f x = 3"]
   before  withMissing def
     = T.unlines $ (if withMissing then (missing :) else (notMissing :)) [moduleH, def, other]
@@ -1141,22 +1142,19 @@ addSigLensesTests = let
     liftIO $ expectedCode @=? modifiedCode
   in
   testGroup "add signature"
-    [ testGroup "with warnings enabled"
-      [ sigSession True "abc = True"             "abc :: Bool"
-      , sigSession True "foo a b = a + b"        "foo :: Num a => a -> a -> a"
-      , sigSession True "bar a b = show $ a + b" "bar :: (Show a, Num a) => a -> a -> String"
-      , sigSession True "(!!!) a b = a > b"      "(!!!) :: Ord a => a -> a -> Bool"
-      , sigSession True "a >>>> b = a + b"       "(>>>>) :: Num a => a -> a -> a"
-      , sigSession True "a `haha` b = a b"       "haha :: (t1 -> t2) -> t1 -> t2"
+    [ testGroup title
+      [ sigSession enableWarnings "abc = True"              "abc :: Bool"
+      , sigSession enableWarnings "foo a b = a + b"         "foo :: Num a => a -> a -> a"
+      , sigSession enableWarnings "bar a b = show $ a + b"  "bar :: (Show a, Num a) => a -> a -> String"
+      , sigSession enableWarnings "(!!!) a b = a > b"       "(!!!) :: Ord a => a -> a -> Bool"
+      , sigSession enableWarnings "a >>>> b = a + b"        "(>>>>) :: Num a => a -> a -> a"
+      , sigSession enableWarnings "a `haha` b = a b"        "haha :: (t1 -> t2) -> t1 -> t2"
+      , sigSession enableWarnings "pattern Some a = Just a" "pattern Some :: a -> Maybe a"
       ]
-    , testGroup "with warnings disabled"
-      [ sigSession False "abc = True"             "abc :: Bool"
-      , sigSession False "foo a b = a + b"        "foo :: Num a => a -> a -> a"
-      , sigSession False "bar a b = show $ a + b" "bar :: (Show a, Num a) => a -> a -> String"
-      , sigSession False "(!!!) a b = a > b"      "(!!!) :: Ord a => a -> a -> Bool"
-      , sigSession False "a >>>> b = a + b"       "(>>>>) :: Num a => a -> a -> a"
-      , sigSession False "a `haha` b = a b"       "haha :: (t1 -> t2) -> t1 -> t2"
-      ]
+      | (title, enableWarnings) <-
+        [("with warnings enabled", True)
+        ,("with warnings disabled", False)
+        ]
     ]
 
 findDefinitionAndHoverTests :: TestTree
