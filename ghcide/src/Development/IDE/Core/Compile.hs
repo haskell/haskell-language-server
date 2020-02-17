@@ -193,9 +193,10 @@ demoteTypeErrorsToWarnings =
 enableTopLevelWarnings :: ParsedModule -> ParsedModule
 enableTopLevelWarnings =
   (update_pm_mod_summary . update_hspp_opts)
-  (`wopt_set` Opt_WarnMissingSignatures)
+  ((`wopt_set` Opt_WarnMissingPatternSynonymSignatures) .
+   (`wopt_set` Opt_WarnMissingSignatures))
   -- the line below would show also warnings for let bindings without signature
-  -- ((`wopt_set` Opt_WarnMissingSignatures) . (`wopt_set` Opt_WarnMissingLocalSignatures))
+  -- ((`wopt_set` Opt_WarnMissingSignatures) . (`wopt_set` Opt_WarnMissingLocalSignatures)))
 
 update_hspp_opts :: (DynFlags -> DynFlags) -> ModSummary -> ModSummary
 update_hspp_opts up ms = ms{ms_hspp_opts = up $ ms_hspp_opts ms}

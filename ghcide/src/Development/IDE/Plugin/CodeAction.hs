@@ -310,27 +310,26 @@ suggestFixConstructorImport _ Diagnostic{_range=_range,..}
 
 suggestSignature :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
-    | "Top-level binding with no type signature" `T.isInfixOf` _message = let
-      signature      = T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
-      startOfLine    = Position (_line _start) 0
-      beforeLine     = Range startOfLine startOfLine
-      title          = if isQuickFix then "add signature: " <> signature else signature
-      action         = TextEdit beforeLine $ signature <> "\n"
-      in [(title, [action])]
-suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
-    | "Polymorphic local binding with no type signature" `T.isInfixOf` _message = let
+    | _message =~
+      ("(Top-level binding|Polymorphic local binding|Pattern synonym) with no type signature" :: T.Text) = let
       signature      = removeInitialForAll
                      $ T.takeWhile (\x -> x/='*' && x/='•')
                      $ T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
-      startOfLine    = Position (_line _start) (_character _start)
+      startOfLine    = Position (_line _start) startCharacter
       beforeLine     = Range startOfLine startOfLine
       title          = if isQuickFix then "add signature: " <> signature else signature
-      action         = TextEdit beforeLine $ signature <> "\n" <> T.replicate (_character _start) " "
+      action         = TextEdit beforeLine $ signature <> "\n" <> T.replicate startCharacter " "
       in [(title, [action])]
     where removeInitialForAll :: T.Text -> T.Text
           removeInitialForAll (T.breakOnEnd " :: " -> (nm, ty))
               | "forall" `T.isPrefixOf` ty = nm <> T.drop 2 (snd (T.breakOn "." ty))
               | otherwise                  = nm <> ty
+          startCharacter
+            | "Polymorphic local binding" `T.isPrefixOf` _message
+            = _character _start
+            | otherwise
+            = 0
+
 suggestSignature _ _ = []
 
 topOfHoleFitsMarker :: T.Text
