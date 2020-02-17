@@ -31,7 +31,7 @@ plugin = Plugin produceCompletions setHandlersCompletion
 produceCompletions :: Rules ()
 produceCompletions =
     define $ \ProduceCompletions file -> do
-        deps <- maybe (TransitiveDependencies [] []) fst <$> useWithStale GetDependencies file
+        deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
         parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps deps)
         tm <- fmap fst <$> useWithStale TypeCheck file
         packageState <- fmap (hscEnv . fst) <$> useWithStale GhcSession file
