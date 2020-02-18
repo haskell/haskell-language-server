@@ -138,6 +138,7 @@ library
         Development.IDE.Spans.Calculate
         Development.IDE.Spans.Documentation
         Development.IDE.Spans.Type
+        Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Plugin.Completions.Types
     ghc-options: -Wall -Wno-name-shadowing

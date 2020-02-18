@@ -22,6 +22,7 @@ module Development.IDE.GHC.Compat(
     pattern TyClD,
     pattern ValD,
     pattern ClassOpSig,
+    pattern IEThingAll,
     pattern IEThingWith,
     GHC.ModLocation,
     pattern ModLocation,
@@ -34,7 +35,7 @@ import DynFlags
 import FieldLabel
 
 import qualified GHC
-import GHC hiding (ClassOpSig, DerivD, ForD, IEThingWith, InstD, TyClD, ValD, ModLocation)
+import GHC hiding (ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, ModLocation)
 
 #if MIN_GHC_API_VERSION(8,8,0)
 import HieAst
@@ -146,4 +147,12 @@ pattern ModLocation a b c <-
     GHC.ModLocation a b c _ where ModLocation a b c = GHC.ModLocation a b c ""
 #else
     GHC.ModLocation a b c where ModLocation a b c = GHC.ModLocation a b c
+#endif
+
+pattern IEThingAll :: LIEWrappedName (IdP pass) -> IE pass
+pattern IEThingAll a <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.IEThingAll _ a
+#else
+    GHC.IEThingAll a
 #endif
