@@ -19,6 +19,7 @@ import Development.IDE.Core.Shake
 import Development.IDE.GHC.Error
 import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
+import Development.IDE.Plugin.CodeAction.PositionIndexed
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import qualified Data.HashMap.Strict as Map
@@ -130,6 +131,7 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     , Just c <- contents
     , ranges <- map (rangesForBinding impDecl . T.unpack) (T.splitOn ", " bindings)
     , ranges' <- extendAllToIncludeCommaIfPossible (indexedByPosition $ T.unpack c) (concat ranges)
+    , not (null ranges')
     = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
 
 -- File.hs:16:1: warning:
@@ -424,7 +426,7 @@ rangesForBinding _ _ = []
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
 rangesForBinding' b (L l x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
 rangesForBinding' b (L l x@IEThingAbs{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L l x@IEThingAll{}) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L l (IEThingAll x)) | showSDocUnsafe (ppr x) == b = [l]
 rangesForBinding' b (L l (IEThingWith thing _  inners labels))
     | showSDocUnsafe (ppr thing) == b = [l]
     | otherwise =
@@ -465,51 +467,3 @@ filterNewlines = T.concat  . T.lines
 
 unifySpaces :: T.Text -> T.Text
 unifySpaces    = T.unwords . T.words
-
---------------------------------------------------------------------------------
-
-type PositionIndexedString = [(Position, Char)]
-
-indexedByPosition :: String -> PositionIndexedString
-indexedByPosition = unfoldr f . (Position 0 0,) where
-  f (_, []) = Nothing
-  f (p@(Position l _), '\n' : rest) = Just ((p,'\n'), (Position (l+1) 0, rest))
-  f (p@(Position l c),    x : rest) = Just ((p,   x), (Position l (c+1), rest))
-
--- | Returns a tuple (before, contents, after)
-unconsRange :: Range -> PositionIndexedString -> (PositionIndexedString, PositionIndexedString, PositionIndexedString)
-unconsRange Range {..} indexedString = (before, mid, after)
-  where
-    (before, rest) = span ((/= _start) . fst) indexedString
-    (mid, after) = span ((/= _end) . fst) rest
-
-stripRange :: Range -> PositionIndexedString -> PositionIndexedString
-stripRange r s = case unconsRange r s of
-  (b, _, a) -> b ++ a
-
-extendAllToIncludeCommaIfPossible :: PositionIndexedString -> [Range] -> [Range]
-extendAllToIncludeCommaIfPossible _             [] =  []
-extendAllToIncludeCommaIfPossible indexedString (r : rr) = r' : extendAllToIncludeCommaIfPossible indexedString' rr
-  where
-    r' = case extendToIncludeCommaIfPossible indexedString r of
-          [] -> r
-          r' : _ -> r'
-    indexedString' = stripRange r' indexedString
-
--- | Returns a sorted list of ranges with extended selections includindg preceding or trailing commas
-extendToIncludeCommaIfPossible :: PositionIndexedString -> Range -> [Range]
-extendToIncludeCommaIfPossible indexedString range =
-    -- a, |b|, c ===> a|, b|, c
-    [ range{_start = start'}
-    | (start', ',') : _ <- [before']
-    ]
-    ++
-    -- a, |b|, c ===> a, |b, |c
-    [ range{_end = end'}
-    |  (_, ',') : rest <- [after']
-    , let (end', _) : _ = dropWhile (isSpace . snd) rest
-    ]
-  where
-    (before, _, after) = unconsRange range indexedString
-    after' = dropWhile (isSpace . snd) after
-    before' = dropWhile (isSpace . snd) (reverse before)
