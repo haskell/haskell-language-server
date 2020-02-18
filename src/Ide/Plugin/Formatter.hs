@@ -7,7 +7,9 @@
 
 module Ide.Plugin.Formatter
   (
-    formatterPlugins
+    formatting
+  , rangeFormatting
+  , noneProvider
   , responseError
   , extractRange
   , fullRange
@@ -18,36 +20,17 @@ import qualified Data.Map  as Map
 import qualified Data.Text as T
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.Rules
-import           Development.IDE.LSP.Server
-import           Development.IDE.Plugin
+-- import           Development.IDE.LSP.Server
+-- import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
-import           Development.Shake hiding ( Diagnostic )
+-- import           Development.Shake hiding ( Diagnostic )
 import           Ide.Types
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
-import           Language.Haskell.LSP.Messages
+-- import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
-
--- ---------------------------------------------------------------------
-
-formatterPlugins :: [(T.Text, FormattingProvider IO)] -> Plugin Config
-formatterPlugins providers = Plugin rules (handlers (Map.fromList (("none",noneProvider):providers)))
-
--- ---------------------------------------------------------------------
--- New style plugin
-
-rules :: Rules ()
-rules = mempty
-
-handlers :: Map.Map T.Text (FormattingProvider IO) -> PartialHandlers Config
-handlers providers = PartialHandlers $ \WithMessage{..} x -> return x
-    { LSP.documentFormattingHandler
-        = withResponse RspDocumentFormatting (formatting providers)
-    , LSP.documentRangeFormattingHandler
-        = withResponse RspDocumentRangeFormatting (rangeFormatting providers)
-    }
 
 -- ---------------------------------------------------------------------
 

@@ -10,6 +10,7 @@ module Ide.Types
     , DiagnosticProviderFunc(..)
     , FormattingType(..)
     , FormattingProvider
+    , HoverProvider
     ) where
 
 import           Data.Aeson                    hiding (defaultOptions)
@@ -23,8 +24,6 @@ import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
--- import           Development.IDE.Plugin
--- import           Ide.Plugin.Config
 
 -- ---------------------------------------------------------------------
 
@@ -90,7 +89,8 @@ data DiagnosticTrigger = DiagnosticOnOpen
                        | DiagnosticOnSave
                        deriving (Show,Ord,Eq)
 
-type HoverProvider = Uri -> Position -> IO (Either ResponseError [Hover])
+-- type HoverProvider = Uri -> Position -> IO (Either ResponseError [Hover])
+type HoverProvider = IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 
 type SymbolProvider = Uri -> IO (Either ResponseError [DocumentSymbol])
 

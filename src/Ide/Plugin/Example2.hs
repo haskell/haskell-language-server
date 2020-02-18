@@ -11,6 +11,7 @@
 module Ide.Plugin.Example2
   (
     plugin
+  , hover
   ) where
 
 import Control.DeepSeq ( NFData )
@@ -52,11 +53,12 @@ hover = request "Hover" blah (Right Nothing) foundHover
 
 blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
-  = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover"])
+  = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover 2\n"])
 
 handlersExample2 :: PartialHandlers c
-handlersExample2 = PartialHandlers $ \WithMessage{..} x ->
-  return x{LSP.hoverHandler = withResponse RspHover $ const hover}
+handlersExample2 = mempty
+-- handlersExample2 = PartialHandlers $ \WithMessage{..} x ->
+--   return x{LSP.hoverHandler = withResponse RspHover $ const hover}
 
 
 -- ---------------------------------------------------------------------
