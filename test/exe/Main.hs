@@ -669,10 +669,11 @@ removeImportTests = testGroup "remove import actions"
             , "main = print stuffB"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , testSession "redundant symbol binding" $ do
+  , testSession "redundant operator" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "a !! b = a"
+            , "a <?> b = a"
             , "stuffB :: Integer"
             , "stuffB = 123"
             ]
@@ -680,7 +681,7 @@ removeImportTests = testGroup "remove import actions"
       let contentB = T.unlines
             [ "{-# OPTIONS_GHC -Wunused-imports #-}"
             , "module ModuleB where"
-            , "import qualified ModuleA as A ((!!), stuffB, (!!))"
+            , "import qualified ModuleA as A ((<?>), stuffB, (!!))"
             , "main = print A.stuffB"
             ]
       docB <- openDoc' "ModuleB.hs" "haskell" contentB
@@ -688,9 +689,9 @@ removeImportTests = testGroup "remove import actions"
       [CACodeAction action@CodeAction { _title = actionTitle }]
           <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
 #if MIN_GHC_API_VERSION(8,6,0)
-      liftIO $ "Remove !! from import" @=? actionTitle
+      liftIO $ "Remove !!, <?> from import" @=? actionTitle
 #else
-      liftIO $ "Remove A.!! from import" @=? actionTitle
+      liftIO $ "Remove A.!!, A.<?> from import" @=? actionTitle
 #endif
       executeCodeAction action
       contentAfterAction <- documentContents docB
@@ -701,7 +702,7 @@ removeImportTests = testGroup "remove import actions"
             , "main = print A.stuffB"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
-  , (`xfail` "known broken (#299)") $ testSession "redundant hierarchical import" $ do
+  , testSession "redundant all import" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
             , "data A = A"
@@ -727,6 +728,33 @@ removeImportTests = testGroup "remove import actions"
             , "module ModuleB where"
             , "import ModuleA (stuffB)"
             , "main = print stuffB"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "redundant constructor import" $ do
+      let contentA = T.unlines
+            [ "module ModuleA where"
+            , "data D = A | B"
+            , "data E = F"
+            ]
+      _docA <- openDoc' "ModuleA.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (D(A,B), E(F))"
+            , "main = B"
+            ]
+      docB <- openDoc' "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      [CACodeAction action@CodeAction { _title = actionTitle }]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove A, E, F from import" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import ModuleA (D(B))"
+            , "main = B"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
