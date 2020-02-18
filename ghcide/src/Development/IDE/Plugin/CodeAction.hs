@@ -8,6 +8,7 @@
 -- | Go to the definition of a variable.
 module Development.IDE.Plugin.CodeAction(plugin) where
 
+import Avail (availNames)
 import           Language.Haskell.LSP.Types
 import Control.Monad (join)
 import Development.IDE.Plugin
@@ -43,6 +44,9 @@ import Text.Regex.TDFA.Text()
 import Outputable (showSDoc, ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
+import Data.Function (on)
+import Data.IORef (readIORef)
+import Name (nameModule_maybe, nameOccName)
 
 plugin :: Plugin c
 plugin = codeActionPlugin codeAction <> Plugin mempty setHandlersCodeLens
@@ -66,9 +70,10 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
            <*> getParsedModule `traverse` mbFile
            <*> use_ GhcSession `traverse` mbFile
     let dflags = hsc_dflags . hscEnv <$> env
+    eps <- traverse readIORef (hsc_EPS . hscEnv <$> env)
     pure $ Right
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction dflags ideOptions ( join parsedModule ) text x
+        | x <- xs, (title, tedit) <- suggestAction dflags eps ideOptions ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
 
@@ -107,8 +112,15 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | otherwise
     = return (Null, Nothing)
 
-suggestAction :: Maybe DynFlags -> IdeOptions -> Maybe ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestAction dflags ideOptions parsedModule text diag = concat
+suggestAction
+  :: Maybe DynFlags
+  -> Maybe ExternalPackageState
+  -> IdeOptions
+  -> Maybe ParsedModule
+  -> Maybe T.Text
+  -> Diagnostic
+  -> [(T.Text, [TextEdit])]
+suggestAction dflags eps ideOptions parsedModule text diag = concat
     [ suggestAddExtension diag
     , suggestExtendImport dflags text diag
     , suggestFillHole diag
@@ -120,6 +132,7 @@ suggestAction dflags ideOptions parsedModule text diag = concat
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestRemoveRedundantImport pm text diag
+    ++ concat [suggestNewImport eps pm diag | Just eps <- [eps]]
     | Just pm <- [parsedModule]]
 
 
@@ -333,6 +346,38 @@ suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
             = 0
 
 suggestSignature _ _ = []
+
+suggestNewImport :: ExternalPackageState -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestNewImport eps ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
+  | Just [name] <- matchRegex (unifySpaces _message) "Variable not in scope: ([^ ]+)"
+  , items <- typeEnvElts $ eps_PTE eps
+  , Just insertLine <- case hsmodImports of
+        [] -> case srcSpanStart $ getLoc (head hsmodDecls) of
+          RealSrcLoc s -> Just $ srcLocLine s - 1
+          _ -> Nothing
+        _ -> case srcSpanEnd $ getLoc (last hsmodImports) of
+          RealSrcLoc s -> Just $ srcLocLine s
+          _ -> Nothing
+  , insertPos <- Position insertLine 0
+  , extendImportSuggestions <- -- Just [binding, mod, srcspan] <-
+    matchRegex _message
+    "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
+  =
+    nubOrdBy
+      (compare `on` fst)
+      [ ( edit,
+          [TextEdit (Range insertPos insertPos) (edit <> "\n")]
+        )
+        | item <- items,
+          avail <- tyThingAvailInfo item,
+          candidate <- availNames avail,
+          occNameString (nameOccName candidate) == T.unpack name,
+          Just m <- [nameModule_maybe candidate],
+          let modName = T.pack $ moduleNameString $ moduleName m,
+          modName `notElem` fromMaybe [] extendImportSuggestions,
+          let edit = "import " <> modName <> " (" <> T.pack (prettyPrint candidate) <> ")"
+      ]
+suggestNewImport _ _ _ = []
 
 topOfHoleFitsMarker :: T.Text
 topOfHoleFitsMarker =
