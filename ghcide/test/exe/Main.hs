@@ -412,6 +412,7 @@ codeActionTests = testGroup "code actions"
   , typeWildCardActionTests
   , removeImportTests
   , extendImportTests
+  , suggestImportTests
   , addExtensionTests
   , fixConstructorImportTests
   , importRenameActionTests
@@ -894,6 +895,38 @@ extendImportTests = testGroup "extend import actions"
       executeCodeAction action
       contentAfterAction <- documentContents docB
       liftIO $ expectedContentB @=? contentAfterAction
+
+suggestImportTests :: TestTree
+suggestImportTests = testGroup "suggest import actions"
+  [ testGroup "Dont want suggestion"
+    [ test False ["Data.List.NonEmpty ()"] "f = nonEmpty" "import Data.List.NonEmpty (nonEmpty)"
+    ]
+  , testGroup "want suggestion"
+    [ test True [] "f = nonEmpty" "import Data.List.NonEmpty (nonEmpty)"
+    , test True ["Prelude"] "f = nonEmpty" "import Data.List.NonEmpty (nonEmpty)"
+    ]
+  ]
+  where
+    test wanted imps def newImp = testSession (T.unpack def) $ do
+      let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [def]
+          after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp, def]
+      doc <- openDoc' "Test.hs" "haskell" before
+      -- load another module in the session to exercise the package cache
+      _   <- openDoc' "Other.hs" "haskell" after
+      _diags <- waitForDiagnostics
+      liftIO $ print _diags
+      let defLine = length imps + 1
+          range = Range (Position defLine 0) (Position defLine maxBound)
+      actions <- getCodeActions doc range
+      case wanted of
+        False ->
+          liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
+        True -> do
+          liftIO $ print [_title | CACodeAction CodeAction{_title} <- actions]
+          let action = pickActionWithTitle newImp actions
+          executeCodeAction action
+          contentAfterAction <- documentContents doc
+          liftIO $ after @=? contentAfterAction
 
 addExtensionTests :: TestTree
 addExtensionTests = testGroup "add language extension actions"
@@ -1914,7 +1947,7 @@ findCodeActions doc range expectedTitles = do
             [ actionTitle
             | CACodeAction CodeAction { _title = actionTitle } <- actions
             ]
-            ++ "is not a superset of "
+            ++ " is not a superset of "
             ++ show expectedTitles
   liftIO $ case matches of
     Nothing -> assertFailure msg
