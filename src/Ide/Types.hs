@@ -6,11 +6,14 @@ module Ide.Types
       IdePlugins(..)
     , PluginDescriptor(..)
     , PluginCommand(..)
+    , PluginId(..)
+    , CommandId(..)
     , DiagnosticProvider(..)
     , DiagnosticProviderFunc(..)
     , FormattingType(..)
     , FormattingProvider
     , HoverProvider
+    , CodeActionProvider
     ) where
 
 import           Data.Aeson                    hiding (defaultOptions)
@@ -59,11 +62,12 @@ data PluginCommand = forall a b. (FromJSON a, ToJSON b, Typeable b) =>
 
 -- ---------------------------------------------------------------------
 
-type CodeActionProvider =  PluginId
-                        -> VersionedTextDocumentIdentifier
+type CodeActionProvider =  IdeState
+                        -> PluginId
+                        -> TextDocumentIdentifier
                         -> Range
                         -> CodeActionContext
-                        -> IO (Either ResponseError [CodeAction])
+                        -> IO (Either ResponseError (List CAResult))
 
 type DiagnosticProviderFuncSync
   = DiagnosticTrigger -> Uri

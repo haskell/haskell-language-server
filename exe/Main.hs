@@ -82,6 +82,8 @@ idePlugins includeExample
     CodeAction.plugin <>
     formatterPlugins [("ormolu",   Ormolu.provider)
                      ,("floskell", Floskell.provider)] <>
+    codeActionPlugins [("eg",  Example.codeAction)
+                      ,("eg2", Example2.codeAction)] <>
     hoverPlugins [Example.hover, Example2.hover] <>
     if includeExample then Example.plugin <> Example2.plugin
                       else mempty

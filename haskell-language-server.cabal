@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      Ide.Compat
       Ide.Cradle
       Ide.Plugin
       Ide.Plugin.Config
@@ -69,6 +70,7 @@ library
     , shake >= 0.17.5
     , text
     , transformers
+    , unix
     , unordered-containers
   if impl(ghc >= 8.6)
      build-depends: ormolu >= 0.0.3.1

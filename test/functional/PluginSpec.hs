@@ -31,25 +31,31 @@ spec = do
     it "provides 3.8 code actions" $ runSession hieCommandExamplePlugin fullCaps "test/testdata" $ do
 
       doc <- openDoc "Format.hs" "haskell"
-      diags@(_reduceDiag:_) <- waitForDiagnostics
+      _diags@(diag1:_) <- waitForDiagnostics
 
-      liftIO $ putStrLn $ "diags = " ++ show diags -- AZ
-      -- liftIO $ do
-      --   length diags `shouldBe` 2
-      --   reduceDiag ^. L.range `shouldBe` Range (Position 1 0) (Position 1 12)
-      --   reduceDiag ^. L.severity `shouldBe` Just DsInfo
-      --   reduceDiag ^. L.code `shouldBe` Just (StringValue "Eta reduce")
-      --   reduceDiag ^. L.source `shouldBe` Just "hlint"
+      -- liftIO $ putStrLn $ "diags = " ++ show diags -- AZ
+      liftIO $ do
+        -- length diags `shouldBe` 1
+        diag1 ^. L.range `shouldBe` Range (Position 0 0) (Position 1 0)
+        diag1 ^. L.severity `shouldBe` Just DsError
+        diag1 ^. L.code `shouldBe` Nothing
+        -- diag1 ^. L.source `shouldBe` Just "example2"
+
+        -- diag2 ^. L.source `shouldBe` Just "example"
 
       cas@(CACodeAction ca:_) <- getAllCodeActions doc
+      liftIO $ length cas `shouldBe` 2
 
       liftIO $ putStrLn $ "cas = " ++ show cas -- AZ
 
-      liftIO $ [ca ^. L.title] `shouldContain` ["Apply hint:Redundant id", "Apply hint:Evaluate"]
+      liftIO $ [ca ^. L.title] `shouldContain` ["Add TODO Item 1"]
 
+      liftIO $ putStrLn $ "A" -- AZ
       executeCodeAction ca
+      liftIO $ putStrLn $ "B" -- AZ
 
       contents <- getDocumentEdit doc
+      liftIO $ putStrLn $ "C" -- AZ
       liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
 
       noDiagnostics

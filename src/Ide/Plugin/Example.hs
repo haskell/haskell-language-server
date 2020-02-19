@@ -12,6 +12,7 @@ module Ide.Plugin.Example
   (
     plugin
   , hover
+  , codeAction
   ) where
 
 import Control.DeepSeq ( NFData )
@@ -35,6 +36,7 @@ import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.Shake hiding ( Diagnostic )
+import Ide.Types
 import GHC.Generics
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
@@ -45,7 +47,7 @@ import Text.Regex.TDFA.Text()
 
 plugin :: Plugin c
 plugin = Plugin exampleRules handlersExample
-         <> codeActionPlugin codeAction
+         -- <> codeActionPlugin codeAction
          <> Plugin mempty handlersCodeLens
 
 hover :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
@@ -101,19 +103,19 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 
 -- | Generate code actions.
 codeAction
-    :: LSP.LspFuncs c
-    -> IdeState
+    :: IdeState
+    -> PluginId
     -> TextDocumentIdentifier
     -> Range
     -> CodeActionContext
-    -> IO (Either ResponseError [CAResult])
-codeAction _lsp _state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
+    -> IO (Either ResponseError (List CAResult))
+codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let
-      title = "Add TODO Item"
+      title = "Add TODO Item 1"
       tedit = [TextEdit (Range (Position 0 0) (Position 0 0))
-               "-- TODO added by Example Plugin directly\n"]
+               "-- TODO1 added by Example Plugin directly\n"]
       edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-    pure $ Right
+    pure $ Right $ List
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) (Just edit) Nothing ]
 
 -- ---------------------------------------------------------------------
