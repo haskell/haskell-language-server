@@ -12,6 +12,8 @@ module Development.IDE.GHC.Compat(
     mkHieFile,
     writeHieFile,
     readHieFile,
+    setDefaultHieDir,
+    dontWriteHieFiles,
     hPutStringBuffer,
     includePathsGlobal,
     includePathsQuote,
@@ -155,4 +157,20 @@ pattern IEThingAll a <-
     GHC.IEThingAll _ a
 #else
     GHC.IEThingAll a
+#endif
+
+setDefaultHieDir :: FilePath -> DynFlags -> DynFlags
+setDefaultHieDir _f d =
+#if MIN_GHC_API_VERSION(8,8,0)
+    d { hieDir     = hieDir d `mappend` Just _f}
+#else
+    d
+#endif
+
+dontWriteHieFiles :: DynFlags -> DynFlags
+dontWriteHieFiles d =
+#if MIN_GHC_API_VERSION(8,8,0)
+    gopt_unset d Opt_WriteHie
+#else
+    d
 #endif
