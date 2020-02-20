@@ -19,6 +19,9 @@ import Control.DeepSeq (NFData)
 import Control.Exception
 import Control.Monad.Extra
 import Control.Monad.IO.Class
+import qualified Crypto.Hash.SHA1 as H
+import qualified Data.ByteString.Char8 as B
+import Data.ByteString.Base16
 import Data.Default
 import System.Time.Extra
 import Development.IDE.Core.Debouncer
@@ -57,14 +60,27 @@ import qualified Data.Map.Strict as Map
 import GHC hiding (def)
 import GHC.Generics (Generic)
 import qualified GHC.Paths
+import           DynFlags
 
+import HIE.Bios.Environment
 import HIE.Bios
 import HIE.Bios.Cradle
 import HIE.Bios.Types
 
+-- Prefix for the cache path
+cacheDir :: String
+cacheDir = "ghcide"
+
 -- Set the GHC libdir to the nix libdir if it's present.
 getLibdir :: IO FilePath
 getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
+
+getCacheDir :: [String] -> IO FilePath
+getCacheDir opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> opts_hash)
+    where
+        -- Create a unique folder per set of different GHC options, assuming that each different set of
+        -- GHC options will create incompatible interface files.
+        opts_hash = B.unpack $ encode $ H.finalize $ H.updates H.init (map B.pack opts)
 
 ghcideVersion :: IO String
 ghcideVersion = do
@@ -224,14 +240,50 @@ getComponentOptions cradle = do
 
 
 createSession :: ComponentOptions -> IO HscEnvEq
-createSession opts = do
+createSession (ComponentOptions theOpts _) = do
     libdir <- getLibdir
+
+    cacheDir <- Main.getCacheDir theOpts
+
     env <- runGhc (Just libdir) $ do
-        _targets <- initSession opts
+        dflags <- getSessionDynFlags
+        (dflags', _targets) <- addCmdOpts theOpts dflags
+        _ <- setSessionDynFlags $
+             -- disabled, generated directly by ghcide instead
+             flip gopt_unset Opt_WriteInterface $
+             -- disabled, generated directly by ghcide instead
+             -- also, it can confuse the interface stale check
+             dontWriteHieFiles $
+             setHiDir cacheDir $
+             setDefaultHieDir cacheDir $
+             setIgnoreInterfacePragmas $
+             setLinkerOptions $
+             disableOptimisation dflags'
         getSession
     initDynLinker env
     newHscEnvEq env
 
+-- we don't want to generate object code so we compile to bytecode
+-- (HscInterpreted) which implies LinkInMemory
+-- HscInterpreted
+setLinkerOptions :: DynFlags -> DynFlags
+setLinkerOptions df = df {
+    ghcLink   = LinkInMemory
+  , hscTarget = HscNothing
+  , ghcMode = CompManager
+  }
+
+setIgnoreInterfacePragmas :: DynFlags -> DynFlags
+setIgnoreInterfacePragmas df =
+    gopt_set (gopt_set df Opt_IgnoreInterfacePragmas) Opt_IgnoreOptimChanges
+
+disableOptimisation :: DynFlags -> DynFlags
+disableOptimisation df = updOptLevel 0 df
+
+setHiDir :: FilePath -> DynFlags -> DynFlags
+setHiDir f d =
+    -- override user settings to avoid conflicts leading to recompilation
+    d { hiDir      = Just f}
 
 cradleToSession :: Maybe FilePath -> Cradle a -> Action HscEnvEq
 cradleToSession mbYaml cradle = do
