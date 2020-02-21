@@ -34,11 +34,14 @@ data Import
   | PackageImport !M.InstalledUnitId
   deriving (Show)
 
-newtype ArtifactsLocation =  ArtifactsLocation ModLocation
+data ArtifactsLocation = ArtifactsLocation
+  { artifactFilePath :: !NormalizedFilePath
+  , artifactModLocation :: !ModLocation
+  }
     deriving (Show)
 
 instance NFData ArtifactsLocation where
-  rnf = const ()
+  rnf ArtifactsLocation{..} = rnf artifactFilePath `seq` rwhnf artifactModLocation
 
 instance NFData Import where
   rnf (FileImport x) = rnf x
@@ -94,7 +97,7 @@ locateModule dflags exts doesExist modName mbPkgName isSource = do
   where
     toModLocation file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
-        return $ Right $ FileImport $ ArtifactsLocation loc
+        return $ Right $ FileImport $ ArtifactsLocation file loc
 
 
     lookupInPackageDB dfs =
