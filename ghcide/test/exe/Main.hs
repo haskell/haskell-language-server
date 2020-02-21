@@ -1717,7 +1717,24 @@ outlineTests = testGroup
     docId   <- openDoc' "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Left
-      [docSymbol "import Data.Maybe" SkModule (R 0 0 0 17)]
+      [docSymbolWithChildren "imports" 
+                             SkModule 
+                             (R 0 0 0 17)
+                             [ docSymbol "import Data.Maybe" SkModule (R 0 0 0 17) 
+                             ]
+      ]
+  , testSessionWait "multiple import" $ do
+    let source = T.unlines ["", "import Data.Maybe", "", "import Control.Exception", ""]
+    docId   <- openDoc' "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @?= Left
+      [docSymbolWithChildren "imports" 
+                             SkModule 
+                             (R 1 0 3 24)
+                             [ docSymbol "import Data.Maybe" SkModule (R 1 0 1 17)
+                             , docSymbol "import Control.Exception" SkModule (R 3 0 3 24) 
+                             ]
+      ]
   , testSessionWait "foreign import" $ do
     let source = T.unlines
           [ "{-# language ForeignFunctionInterface #-}"

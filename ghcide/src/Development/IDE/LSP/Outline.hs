@@ -50,7 +50,9 @@ moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentI
                    , _kind  = SkFile
                    , _range = Range (Position 0 0) (Position maxBound 0) -- _ltop is 0 0 0 0
                    }
-               importSymbols = mapMaybe documentSymbolForImport hsmodImports
+               importSymbols = maybe [] pure $
+                  documentSymbolForImportSummary
+                    (mapMaybe documentSymbolForImport hsmodImports)
                allSymbols    = case moduleSymbol of
                  Nothing -> importSymbols <> declSymbols
                  Just x ->
@@ -166,6 +168,25 @@ documentSymbolForDecl (L l (ForD x)) = Just
   where name = showRdrName $ unLoc $ fd_name x
 
 documentSymbolForDecl _ = Nothing
+
+-- | Wrap the Document imports into a hierarchical outline for
+-- a better overview of symbols in scope.
+-- If there are no imports, then no hierarchy will be created.
+documentSymbolForImportSummary :: [DocumentSymbol] -> Maybe DocumentSymbol
+documentSymbolForImportSummary [] = Nothing
+documentSymbolForImportSummary importSymbols =
+    let
+      -- safe because if we have no ranges then we don't take this branch
+      mergeRanges xs = Range (minimum $ map _start xs) (maximum $ map _end xs)
+      importRange = mergeRanges $ map (_range :: DocumentSymbol -> Range) importSymbols
+    in
+      Just (defDocumentSymbol empty :: DocumentSymbol)
+          { _name = "imports"
+          , _kind = SkModule
+          , _children = Just (List importSymbols)
+          , _range = importRange
+          , _selectionRange = importRange
+          }
 
 documentSymbolForImport :: Located (ImportDecl GhcPs) -> Maybe DocumentSymbol
 documentSymbolForImport (L l ImportDecl { ideclName, ideclQualified }) = Just
