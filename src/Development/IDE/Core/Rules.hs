@@ -177,7 +177,8 @@ getLocatedImportsRule =
 -- imports recursively.
 rawDependencyInformation :: NormalizedFilePath -> Action RawDependencyInformation
 rawDependencyInformation f = do
-    let (initialId, initialMap) = getPathId (ArtifactsLocation $ ModLocation (Just $ fromNormalizedFilePath f) "" "") emptyPathIdMap
+    let initialArtifact = ArtifactsLocation f (ModLocation (Just $ fromNormalizedFilePath f) "" "")
+        (initialId, initialMap) = getPathId initialArtifact emptyPathIdMap
     go (IntSet.singleton $ getFilePathId initialId)
        (RawDependencyInformation IntMap.empty initialMap)
   where
@@ -270,7 +271,8 @@ getSpanInfoRule =
         parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps deps)
         (fileImports, _) <- use_ GetLocatedImports file
         packageState <- hscEnv <$> use_ GhcSession file
-        x <- liftIO $ getSrcSpanInfos packageState (fmap (second (fmap modLocationToNormalizedFilePath)) fileImports) tc parsedDeps
+        let imports = second (fmap artifactFilePath) <$> fileImports
+        x <- liftIO $ getSrcSpanInfos packageState imports tc parsedDeps
         return ([], Just x)
 
 -- Typechecks a module.
