@@ -32,7 +32,7 @@ import           System.Directory (getCurrentDirectory, canonicalizePath, findEx
 import           System.Exit
 import           System.FilePath
 import           System.Log.Logger
-import           System.Process (readCreateProcessWithExitCode, shell)
+import           System.Process (readCreateProcessWithExitCode, shell, CreateProcess(..))
 
 
 -- ---------------------------------------------------------------------
@@ -105,7 +105,7 @@ execProjectGhc crdl args = do
   ghcOutput <- if isStackCradle crdl && isStackInstalled
     then do
       logm $ "Executing Stack GHC with args: " <> unwords args
-      catch (Just <$> tryCommand stackCmd) $ \(_ :: IOException) -> do
+      catch (Just <$> tryCommand crdl stackCmd) $ \(_ :: IOException) -> do
         errorm $ "Command `" ++ stackCmd ++"` failed."
         execWithGhc
     -- The command `cabal v2-exec -v0 ghc` only works if the project has been
@@ -115,7 +115,7 @@ execProjectGhc crdl args = do
     --
     -- else if isCabalCradle crdl && isCabalInstalled then do
     --   let cmd = "cabal v2-exec -v0 ghc -- " ++ unwords args
-    --   catch (Just <$> tryCommand cmd) $ \(_ ::IOException) -> do
+    --   catch (Just <$> tryCommand crdl cmd) $ \(_ ::IOException) -> do
     --     errorm $ "Command `" ++ cmd ++ "` failed."
     --     return Nothing
     else do
@@ -128,13 +128,14 @@ execProjectGhc crdl args = do
     plainCmd = "ghc " ++ unwords args
 
     execWithGhc =
-      catch (Just <$> tryCommand plainCmd) $ \(_ :: IOException) -> do
+      catch (Just <$> tryCommand crdl plainCmd) $ \(_ :: IOException) -> do
         errorm $ "Command `" ++ plainCmd ++"` failed."
         return Nothing
 
-tryCommand :: String -> IO String
-tryCommand cmd = do
-  (code, sout, serr) <- readCreateProcessWithExitCode (shell cmd) ""
+tryCommand :: Cradle CabalHelper -> String -> IO String
+tryCommand crdl cmd = do
+  let p = (shell cmd) { cwd = Just (cradleRootDir crdl) }
+  (code, sout, serr) <- readCreateProcessWithExitCode p ""
   case code of
     ExitFailure e -> do
       let errmsg = concat
