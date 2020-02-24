@@ -16,6 +16,7 @@ module Development.IDE.Core.Compile
   , addRelativeImport
   , mkTcModuleResult
   , generateByteCode
+  , loadHieFile
   ) where
 
 import Development.IDE.Core.RuleTypes
@@ -43,12 +44,13 @@ import ErrUtils
 #endif
 
 import           Finder
-import qualified GHC
+import qualified Development.IDE.GHC.Compat     as GHC
 import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
 import           HscMain                        (hscInteractive, hscSimplify)
 import           MkIface
+import           NameCache
 import           StringBuffer                   as SB
 import           TcRnMonad (tcg_th_coreplugins)
 import           TidyPgm
@@ -406,3 +408,9 @@ parseFileContents customPreprocessor dflags filename contents = do
                       }
                    warnings = diagFromErrMsgs "parser" dflags warns
                pure (warnings ++ preproc_warnings, pm)
+
+loadHieFile :: FilePath -> IO GHC.HieFile
+loadHieFile f = do
+        u <- mkSplitUniqSupply 'a'
+        let nameCache = initNameCache u []
+        fmap (GHC.hie_file_result . fst) $ GHC.readHieFile nameCache f
