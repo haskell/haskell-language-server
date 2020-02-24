@@ -19,7 +19,8 @@
 --
 -----------------------------------------------------------------------------
 
-module Development.IDE.GHC.CPP(doCpp) where
+module Development.IDE.GHC.CPP(doCpp, addOptP)
+where
 
 import Development.IDE.GHC.Compat
 import Packages
@@ -32,6 +33,10 @@ import FileCleanup
 import LlvmCodeGen (llvmVersionList)
 #elif MIN_GHC_API_VERSION(8,8,0)
 import LlvmCodeGen (LlvmVersion (..))
+#endif
+#if MIN_GHC_API_VERSION (8,10,0)
+import Fingerprint
+import ToolSettings
 #endif
 
 import System.Directory
@@ -161,6 +166,22 @@ getBackendDefs dflags | hscTarget dflags == HscLlvm = do
 
 getBackendDefs _ =
     return []
+
+addOptP :: String -> DynFlags -> DynFlags
+#if MIN_GHC_API_VERSION (8,10,0)
+addOptP f = alterToolSettings $ \s -> s
+          { toolSettings_opt_P             = f : toolSettings_opt_P s
+          , toolSettings_opt_P_fingerprint = fingerprintStrings (f : toolSettings_opt_P s)
+          }
+  where
+    fingerprintStrings ss = fingerprintFingerprints $ map fingerprintString ss
+    alterToolSettings f dynFlags = dynFlags { toolSettings = f (toolSettings dynFlags) }
+#else
+addOptP opt = onSettings (onOptP (opt:))
+  where
+    onSettings f x = x{settings = f $ settings x}
+    onOptP f x = x{sOpt_P = f $ sOpt_P x}
+#endif
 
 -- ---------------------------------------------------------------------------
 -- Macros (cribbed from Cabal)
