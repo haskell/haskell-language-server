@@ -13,8 +13,6 @@ import Development.IDE.GHC.Orphans()
 import Development.IDE.Types.Location
 
 -- DAML compiler and infrastructure
-import Development.Shake
-import Development.IDE.GHC.Util
 import Development.IDE.GHC.Compat
 import Development.IDE.Types.Options
 import Development.IDE.Spans.Type as SpanInfo
@@ -40,14 +38,13 @@ import qualified Data.Text as T
 -- | Locate the definition of the name at a given position.
 gotoDefinition
   :: MonadIO m
-  => (FilePath -> m (Maybe HieFile))
+  => (Module -> m (Maybe (HieFile, FilePath)))
   -> IdeOptions
-  -> HscEnv
   -> [SpanInfo]
   -> Position
   -> m (Maybe Location)
-gotoDefinition getHieFile ideOpts pkgState srcSpans pos =
-  listToMaybe <$> locationsAtPoint getHieFile ideOpts pkgState pos srcSpans
+gotoDefinition getHieFile ideOpts srcSpans pos =
+  listToMaybe <$> locationsAtPoint getHieFile ideOpts pos srcSpans
 
 -- | Synopsis for the name at a given position.
 atPoint
@@ -119,8 +116,15 @@ atPoint IdeOptions{..} (SpansInfo srcSpans cntsSpans) pos = do
         Just name -> any (`isInfixOf` getOccString name) ["==", "showsPrec"]
         Nothing -> False
 
-locationsAtPoint :: forall m . MonadIO m => (FilePath -> m (Maybe HieFile)) -> IdeOptions -> HscEnv -> Position -> [SpanInfo] -> m [Location]
-locationsAtPoint getHieFile IdeOptions{..} pkgState pos =
+locationsAtPoint
+  :: forall m
+   . MonadIO m
+  => (Module -> m (Maybe (HieFile, FilePath)))
+  -> IdeOptions
+  -> Position
+  -> [SpanInfo]
+  -> m [Location]
+locationsAtPoint getHieFile IdeOptions{..} pos =
     fmap (map srcSpanToLocation) . mapMaybeM (getSpan . spaninfoSource) . spansAtPoint pos
   where getSpan :: SpanSource -> m (Maybe SrcSpan)
         getSpan NoSource = pure Nothing
@@ -134,12 +138,8 @@ locationsAtPoint getHieFile IdeOptions{..} pkgState pos =
                 -- In this case the interface files contain garbage source spans
                 -- so we instead read the .hie files to get useful source spans.
                 mod <- MaybeT $ return $ nameModule_maybe name
-                let unitId = moduleUnitId mod
-                pkgConfig <- MaybeT $ pure $ lookupPackageConfig unitId pkgState
-                hiePath <- MaybeT $ liftIO $ optLocateHieFile optPkgLocationOpts pkgConfig mod
-                hieFile <- MaybeT $ getHieFile hiePath
+                (hieFile, srcPath) <- MaybeT $ getHieFile mod
                 avail <- MaybeT $ pure $ listToMaybe (filterAvails (eqName name) $ hie_exports hieFile)
-                srcPath <- MaybeT $ liftIO $ optLocateSrcFile optPkgLocationOpts pkgConfig mod
                 -- The location will point to the source file used during compilation.
                 -- This file might no longer exists and even if it does the path will be relative
                 -- to the compilation directory which we don’t know.

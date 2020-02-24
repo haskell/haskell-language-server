@@ -29,7 +29,7 @@ import Fingerprint
 
 import Data.Binary
 import Data.Bifunctor (second)
-import Control.Monad
+import Control.Monad.Extra
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Development.IDE.Core.Compile
@@ -50,6 +50,7 @@ import           Data.Foldable
 import qualified Data.IntMap.Strict as IntMap
 import qualified Data.IntSet as IntSet
 import Data.List
+import Data.Ord
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
 import           Development.IDE.GHC.Error
@@ -58,8 +59,6 @@ import Development.IDE.Core.RuleTypes
 import Development.IDE.Spans.Type
 
 import qualified GHC.LanguageExtensions as LangExt
-import           UniqSupply
-import NameCache
 import HscTypes
 import DynFlags (xopt)
 import GHC.Generics(Generic)
@@ -112,9 +111,60 @@ getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
 getDefinition file pos = fmap join $ runMaybeT $ do
     opts <- lift getIdeOptions
     spans <- useE GetSpanInfo file
-    pkgState <- hscEnv <$> useE GhcSession file
-    let getHieFile x = useNoFile (GetHieFile x)
-    lift $ AtPoint.gotoDefinition getHieFile opts pkgState (spansExprs spans) pos
+    lift $ AtPoint.gotoDefinition (getHieFile file) opts (spansExprs spans) pos
+
+getHieFile
+  :: NormalizedFilePath -- ^ file we're editing
+  -> Module -- ^ module dep we want info for
+  -> Action (Maybe (HieFile, FilePath)) -- ^ hie stuff for the module
+getHieFile file mod = do
+  TransitiveDependencies {transitiveNamedModuleDeps} <- use_ GetDependencies file
+  case find (\x -> nmdModuleName x == moduleName mod) transitiveNamedModuleDeps of
+    Just NamedModuleDep{nmdFilePath=nfp} -> do
+        let modPath = fromNormalizedFilePath nfp
+        (_diags, hieFile) <- getHomeHieFile nfp
+        return $ (, modPath) <$> hieFile
+    _ -> getPackageHieFile mod file
+
+
+getHomeHieFile :: NormalizedFilePath -> Action ([a], Maybe HieFile)
+getHomeHieFile f = do
+  pm <- use_ GetParsedModule f
+  let normal_hie_f = toNormalizedFilePath hie_f
+      hie_f = ml_hie_file $ ms_location $ pm_mod_summary pm
+  mbHieTimestamp <- use GetModificationTime normal_hie_f
+  srcTimestamp   <- use_ GetModificationTime f
+
+  let isUpToDate
+        | Just d <- mbHieTimestamp = comparing modificationTime d srcTimestamp == GT
+        | otherwise = False
+
+-- In the future, TypeCheck will emit .hie files as a side effect
+--   unless isUpToDate $
+--       void $ use_ TypeCheck f
+
+  hf <- liftIO $ if isUpToDate then Just <$> loadHieFile hie_f else pure Nothing
+  return ([], hf)
+
+getPackageHieFile :: Module             -- ^ Package Module to load .hie file for
+                  -> NormalizedFilePath -- ^ Path of home module importing the package module
+                  -> Action (Maybe (HieFile, FilePath))
+getPackageHieFile mod file = do
+    pkgState  <- hscEnv <$> use_ GhcSession file
+    IdeOptions {..} <- getIdeOptions
+    let unitId = moduleUnitId mod
+    case lookupPackageConfig unitId pkgState of
+        Just pkgConfig -> do
+            -- 'optLocateHieFile' returns Nothing if the file does not exist
+            hieFile <- liftIO $ optLocateHieFile optPkgLocationOpts pkgConfig mod
+            path    <- liftIO $ optLocateSrcFile optPkgLocationOpts pkgConfig mod
+            case (hieFile, path) of
+                (Just hiePath, Just modPath) ->
+                    -- deliberately loaded outside the Shake graph
+                    -- to avoid dependencies on non-workspace files
+                        liftIO $ Just . (, modPath) <$> loadHieFile hiePath
+                _ -> return Nothing
+        _ -> return Nothing
 
 -- | Parse the contents of a daml file.
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
@@ -348,14 +398,6 @@ loadGhcSession = do
         opts <- getIdeOptions
         return ("" <$ optShakeFiles opts, ([], Just val))
 
-
-getHieFileRule :: Rules ()
-getHieFileRule =
-    defineNoFile $ \(GetHieFile f) -> do
-        u <- liftIO $ mkSplitUniqSupply 'a'
-        let nameCache = initNameCache u []
-        liftIO $ fmap (hie_file_result . fst) $ readHieFile nameCache f
-
 -- | A rule that wires per-file rules together
 mainRule :: Rules ()
 mainRule = do
@@ -369,4 +411,3 @@ mainRule = do
     generateCoreRule
     generateByteCodeRule
     loadGhcSession
-    getHieFileRule

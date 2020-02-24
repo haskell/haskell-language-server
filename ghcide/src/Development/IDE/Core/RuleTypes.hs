@@ -24,7 +24,6 @@ import           GHC.Generics                             (Generic)
 import           GHC
 import Module (InstalledUnitId)
 import HscTypes (CgGuts, Linkable, HomeModInfo, ModDetails)
-import Development.IDE.GHC.Compat
 
 import           Development.IDE.Spans.Type
 import           Development.IDE.Import.FindImports (ArtifactsLocation)
@@ -81,10 +80,6 @@ type instance RuleResult GetLocatedImports = ([(Located ModuleName, Maybe Artifa
 -- We cannot report the cycles directly from GetDependencyInformation since
 -- we can only report diagnostics for the current file.
 type instance RuleResult ReportImportCycles = ()
-
--- | Read the given HIE file.
-type instance RuleResult GetHieFile = HieFile
-
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
@@ -145,11 +140,3 @@ data GhcSession = GhcSession
 instance Hashable GhcSession
 instance NFData   GhcSession
 instance Binary   GhcSession
-
--- Note that we embed the filepath here instead of using the filepath associated with Shake keys.
--- Otherwise we will garbage collect the result since files in package dependencies will not be declared reachable.
-data GetHieFile = GetHieFile FilePath
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetHieFile
-instance NFData   GetHieFile
-instance Binary   GetHieFile

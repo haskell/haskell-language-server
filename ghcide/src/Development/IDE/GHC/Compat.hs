@@ -14,6 +14,9 @@ module Development.IDE.GHC.Compat(
     readHieFile,
     setDefaultHieDir,
     dontWriteHieFiles,
+#if !MIN_GHC_API_VERSION(8,8,0)
+    ml_hie_file,
+#endif
     hPutStringBuffer,
     includePathsGlobal,
     includePathsQuote,
@@ -52,12 +55,10 @@ import System.IO
 import Foreign.ForeignPtr
 
 
-#if !MIN_GHC_API_VERSION(8,8,0)
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
 hPutStringBuffer hdl (StringBuffer buf len cur)
     = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
              hPutBuf hdl ptr len
-#endif
 
 mkHieFile :: ModSummary -> TcGblEnv -> RenamedSource -> Hsc HieFile
 mkHieFile _ _ _ = return (HieFile () [])
@@ -67,6 +68,9 @@ writeHieFile _ _ = return ()
 
 readHieFile :: NameCache -> FilePath -> IO (HieFileResult, ())
 readHieFile _ _ = return (HieFileResult (HieFile () []), ())
+
+ml_hie_file :: GHC.ModLocation -> FilePath
+ml_hie_file _ = ""
 
 data HieFile = HieFile {hie_module :: (), hie_exports :: [AvailInfo]}
 data HieFileResult = HieFileResult { hie_file_result :: HieFile }
