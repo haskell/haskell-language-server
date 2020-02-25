@@ -8,7 +8,7 @@
 -- | Go to the definition of a variable.
 module Development.IDE.Plugin.CodeAction(plugin) where
 
-import Avail (availNames)
+import Avail (AvailInfo(Avail), AvailInfo(AvailTC), availNames)
 import           Language.Haskell.LSP.Types
 import Control.Monad (join)
 import Development.IDE.Plugin
@@ -41,12 +41,12 @@ import Parser
 import RdrName
 import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
-import Outputable (showSDoc, ppr, showSDocUnsafe)
+import Outputable (ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
-import Data.Function (on)
 import Data.IORef (readIORef)
-import Name (nameModule_maybe, nameOccName)
+import Name (isDataConName, nameModule_maybe, nameOccName)
+import Packages (exposedModules, lookupPackage)
 
 plugin :: Plugin c
 plugin = codeActionPlugin codeAction <> Plugin mempty setHandlersCodeLens
@@ -132,7 +132,7 @@ suggestAction dflags eps ideOptions parsedModule text diag = concat
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestRemoveRedundantImport pm text diag
-    ++ concat [suggestNewImport eps pm diag | Just eps <- [eps]]
+    ++ concat [suggestNewImport dflags eps pm diag | Just eps <- [eps], Just dflags <- [dflags]]
     | Just pm <- [parsedModule]]
 
 
@@ -303,11 +303,15 @@ suggestExtendImport (Just dflags) contents Diagnostic{_range=_range,..}
                    in x{_end = (_end x){_character = succ (_character (_end x))}}
             _ -> error "bug in srcspan parser"
           importLine = textInRange range c
-          printedName = let rn = rdrNameOcc name in showSDoc dflags $ parenSymOcc rn (ppr rn)
         in [("Add " <> binding <> " to the import list of " <> mod
-        , [TextEdit range (addBindingToImportList (T.pack printedName) importLine)])]
+        , [TextEdit range (addBindingToImportList (printRdrName name) importLine)])]
     | otherwise = []
 suggestExtendImport Nothing _ _ = []
+
+printRdrName :: RdrName -> T.Text
+printRdrName name = T.pack $ showSDocUnsafe $ parenSymOcc rn (ppr rn)
+  where
+    rn = rdrNameOcc name
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestFixConstructorImport _ Diagnostic{_range=_range,..}
@@ -347,10 +351,12 @@ suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
 
 suggestSignature _ _ = []
 
-suggestNewImport :: ExternalPackageState -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestNewImport eps ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
-  | Just [name] <- matchRegex (unifySpaces _message) "Variable not in scope: ([^ ]+)"
-  , items <- typeEnvElts $ eps_PTE eps
+-------------------------------------------------------------------------------------------------
+
+suggestNewImport :: DynFlags -> ExternalPackageState -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestNewImport dflags eps ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
+  | msg <- unifySpaces _message
+  , Just name <- extractNotInScopeName msg
   , Just insertLine <- case hsmodImports of
         [] -> case srcSpanStart $ getLoc (head hsmodDecls) of
           RealSrcLoc s -> Just $ srcLocLine s - 1
@@ -360,24 +366,77 @@ suggestNewImport eps ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnos
           _ -> Nothing
   , insertPos <- Position insertLine 0
   , extendImportSuggestions <- -- Just [binding, mod, srcspan] <-
-    matchRegex _message
+    matchRegex msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  =
-    nubOrdBy
-      (compare `on` fst)
-      [ ( edit,
-          [TextEdit (Range insertPos insertPos) (edit <> "\n")]
-        )
+  = [(imp, [TextEdit (Range insertPos insertPos) (imp <> "\n")])
+    | imp <- constructNewImportSuggestions dflags eps name extendImportSuggestions
+    ]
+suggestNewImport _ _ _ _ = []
+
+constructNewImportSuggestions :: DynFlags -> ExternalPackageState -> NotInScope -> Maybe [T.Text] -> [T.Text]
+constructNewImportSuggestions dflags eps thingMissing notTheseModules = nubOrd
+      [ case qual of
+          Nothing -> "import " <> modName <> " (" <> importWhat candidate avail <> ")"
+          Just q  -> "import qualified " <> modName <> " as " <> q
         | item <- items,
           avail <- tyThingAvailInfo item,
+          canUseAvail thingMissing avail,
           candidate <- availNames avail,
+          canUseName thingMissing candidate,
           occNameString (nameOccName candidate) == T.unpack name,
           Just m <- [nameModule_maybe candidate],
+          Just package <- [lookupPackage dflags (moduleUnitId m)],
+          moduleName m `elem` map fst (exposedModules package),
           let modName = T.pack $ moduleNameString $ moduleName m,
-          modName `notElem` fromMaybe [] extendImportSuggestions,
-          let edit = "import " <> modName <> " (" <> T.pack (prettyPrint candidate) <> ")"
+          modName `notElem` fromMaybe [] notTheseModules
       ]
-suggestNewImport _ _ _ = []
+    where
+        (qual, name) = case T.splitOn "." (notInScope thingMissing) of
+            [n]      -> (Nothing, n)
+            segments -> (Just (T.concat $ init segments), last segments)
+        items = typeEnvElts $ eps_PTE eps
+        importWhat this (AvailTC parent _ _)
+          -- "Maybe(Just)"
+          | this /= parent
+          = T.pack (occNameString (nameOccName parent)) <>
+            "(" <> printName this <> ")"
+        importWhat this _ = printName this
+
+        printName = printRdrName . nameRdrName
+
+canUseAvail :: NotInScope -> AvailInfo -> Bool
+canUseAvail NotInScopeDataConstructor{} Avail{} = False
+canUseAvail _ _ = True
+
+canUseName :: NotInScope -> Name -> Bool
+canUseName NotInScopeDataConstructor{} = isDataConName
+canUseName _ = const True
+
+data NotInScope
+    = NotInScopeDataConstructor T.Text
+    | NotInScopeTypeConstructorOrClass T.Text
+    | NotInScopeThing T.Text
+    deriving Show
+
+notInScope :: NotInScope -> T.Text
+notInScope (NotInScopeDataConstructor t) = t
+notInScope (NotInScopeTypeConstructorOrClass t) = t
+notInScope (NotInScopeThing t) = t
+
+extractNotInScopeName :: T.Text -> Maybe NotInScope
+extractNotInScopeName x
+  | Just [name] <- matchRegex x "Data constructor not in scope: ([^ ]+)"
+  = Just $ NotInScopeDataConstructor name
+  | Just [name] <- matchRegex x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
+  = Just $ NotInScopeTypeConstructorOrClass name
+  | Just [name] <- matchRegex x "ot in scope: ([^‘ ]+)"
+  = Just $ NotInScopeThing name
+  | Just [name] <- matchRegex x "ot in scope:[^‘]*‘([^’]*)’"
+  = Just $ NotInScopeThing name
+  | otherwise
+  = Nothing
+
+-------------------------------------------------------------------------------------------------
 
 topOfHoleFitsMarker :: T.Text
 topOfHoleFitsMarker =
