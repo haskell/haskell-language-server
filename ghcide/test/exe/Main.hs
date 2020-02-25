@@ -899,22 +899,36 @@ extendImportTests = testGroup "extend import actions"
 suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
   [ testGroup "Dont want suggestion"
-    [ test False ["Data.List.NonEmpty ()"] "f = nonEmpty" "import Data.List.NonEmpty (nonEmpty)"
+    [ -- extend import
+      test False ["Data.List.NonEmpty ()"] "f = nonEmpty" [] "import Data.List.NonEmpty (nonEmpty)"
+      -- data constructor
+    , test False []                        "f = First"    [] "import Data.Monoid (First)"
+      -- internal module
+    , test False []         "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable.Internal (Typeable)"
     ]
   , testGroup "want suggestion"
-    [ test True [] "f = nonEmpty" "import Data.List.NonEmpty (nonEmpty)"
-    , test True ["Prelude"] "f = nonEmpty" "import Data.List.NonEmpty (nonEmpty)"
+    [ test True []          "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
+    , test True []          "f = (:|)"                    []                "import GHC.Base (NonEmpty((:|)))"
+    , test True []          "f :: Natural"                ["f = undefined"] "import GHC.Natural (Natural)"
+    , test True []          "f :: NonEmpty ()"            ["f = () :| []"]  "import GHC.Base (NonEmpty)"
+    , test True []          "f = First"                   []                "import Data.Monoid (First(First))"
+    , test True ["Prelude"] "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
+    , test True []          "f :: Alternative f => f ()"  ["f = undefined"] "import GHC.Base (Alternative)"
+    , test True []          "f = empty"                   []                "import GHC.Base (Alternative(empty))"
+    , test True []          "f = (&)"                     []                "import Data.Function ((&))"
+    , test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
+    , expectFailBecause "known broken - reexported name" $
+      test True []          "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable (Typeable)"
     ]
   ]
   where
-    test wanted imps def newImp = testSession (T.unpack def) $ do
-      let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [def]
-          after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp, def]
+    test wanted imps def other newImp = testSession (T.unpack def) $ do
+      let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
+          after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
       doc <- openDoc' "Test.hs" "haskell" before
       -- load another module in the session to exercise the package cache
       _   <- openDoc' "Other.hs" "haskell" after
       _diags <- waitForDiagnostics
-      liftIO $ print _diags
       let defLine = length imps + 1
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
@@ -922,8 +936,7 @@ suggestImportTests = testGroup "suggest import actions"
         False ->
           liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
         True -> do
-          liftIO $ print [_title | CACodeAction CodeAction{_title} <- actions]
-          let action = pickActionWithTitle newImp actions
+          action <- liftIO $ pickActionWithTitle newImp actions
           executeCodeAction action
           contentAfterAction <- documentContents doc
           liftIO $ after @=? contentAfterAction
@@ -1119,7 +1132,7 @@ fillTypedHoleTests = let
     doc <- openDoc' "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 9 0) (Position 9 maxBound))
-    let chosenAction = pickActionWithTitle actionTitle actionsOrCommands
+    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -1167,7 +1180,7 @@ addSigActionTests = let
     doc <- openDoc' "Sigs.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 3 1) (Position 3 maxBound))
-    let chosenAction = pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
+    chosenAction <- liftIO $ pickActionWithTitle ("add signature: " <> sig) actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
     liftIO $ expectedCode @=? modifiedCode
@@ -1717,10 +1730,10 @@ outlineTests = testGroup
     docId   <- openDoc' "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Left
-      [docSymbolWithChildren "imports" 
-                             SkModule 
+      [docSymbolWithChildren "imports"
+                             SkModule
                              (R 0 0 0 17)
-                             [ docSymbol "import Data.Maybe" SkModule (R 0 0 0 17) 
+                             [ docSymbol "import Data.Maybe" SkModule (R 0 0 0 17)
                              ]
       ]
   , testSessionWait "multiple import" $ do
@@ -1728,11 +1741,11 @@ outlineTests = testGroup
     docId   <- openDoc' "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Left
-      [docSymbolWithChildren "imports" 
-                             SkModule 
+      [docSymbolWithChildren "imports"
+                             SkModule
                              (R 1 0 3 24)
                              [ docSymbol "import Data.Maybe" SkModule (R 1 0 1 17)
-                             , docSymbol "import Control.Exception" SkModule (R 3 0 3 24) 
+                             , docSymbol "import Control.Exception" SkModule (R 3 0 3 24)
                              ]
       ]
   , testSessionWait "foreign import" $ do
@@ -1909,11 +1922,20 @@ testSessionWait name = testSession name .
       -- Experimentally, 0.5s seems to be long enough to wait for any final diagnostics to appear.
       ( >> expectNoMoreDiagnostics 0.5)
 
-pickActionWithTitle :: T.Text -> [CAResult] -> CodeAction
-pickActionWithTitle title actions = head
-  [ action
-  | CACodeAction action@CodeAction{ _title = actionTitle } <- actions
-  , title == actionTitle ]
+pickActionWithTitle :: T.Text -> [CAResult] -> IO CodeAction
+pickActionWithTitle title actions = do
+  assertBool ("Found no matching actions: " <> show titles) (not $ null matches)
+  return $ head matches
+  where
+    titles =
+        [ actionTitle
+        | CACodeAction CodeAction { _title = actionTitle } <- actions
+        ]
+    matches =
+        [ action
+        | CACodeAction action@CodeAction { _title = actionTitle } <- actions
+        , title == actionTitle
+        ]
 
 mkRange :: Int -> Int -> Int -> Int -> Range
 mkRange a b c d = Range (Position a b) (Position c d)
