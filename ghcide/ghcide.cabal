@@ -194,6 +194,7 @@ executable ghcide
     other-modules:
         Arguments
         Paths_ghcide
+        RuleTypes
 
     default-extensions:
         DeriveGeneric

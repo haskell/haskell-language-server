@@ -8,14 +8,11 @@
 module Main(main) where
 
 import Arguments
-import Data.Binary (Binary)
-import Data.Dynamic (Typeable)
-import Data.Hashable (Hashable)
+import Data.Functor ((<&>))
 import Data.Maybe
 import Data.List.Extra
 import System.FilePath
 import Control.Concurrent.Extra
-import Control.DeepSeq (NFData)
 import Control.Exception
 import Control.Monad.Extra
 import Control.Monad.IO.Class
@@ -53,12 +50,11 @@ import System.IO
 import System.Exit
 import Paths_ghcide
 import Development.GitRev
-import Development.Shake (Action, RuleResult, Rules, action, doesFileExist, need)
+import Development.Shake (doesDirectoryExist, Action, Rules, action, doesFileExist, need)
 import qualified Data.HashSet as HashSet
 import qualified Data.Map.Strict as Map
 
 import GHC hiding (def)
-import GHC.Generics (Generic)
 import qualified GHC.Paths
 import           DynFlags
 
@@ -66,6 +62,7 @@ import HIE.Bios.Environment
 import HIE.Bios
 import HIE.Bios.Cradle
 import HIE.Bios.Types
+import RuleTypes
 
 -- Prefix for the cache path
 cacheDir :: String
@@ -127,7 +124,7 @@ main = do
                     , optShakeProfiling = argsShakeProfiling
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (loadGhcSessionIO >> mainRule >> pluginRules plugins >> action kick)
+            initialise caps (cradleRules >> mainRule >> pluginRules plugins >> action kick)
                 getLspId event (logger minBound) debouncer options vfs
     else do
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
@@ -164,7 +161,7 @@ main = do
         let options =
               (defaultIdeOptions $ return $ return . grab)
                     { optShakeProfiling = argsShakeProfiling }
-        ide <- initialise def (loadGhcSessionIO >> mainRule) (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
+        ide <- initialise def (cradleRules >> mainRule) (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath files
@@ -178,6 +175,10 @@ main = do
 
         unless (null failed) exitFailure
 
+cradleRules :: Rules ()
+cradleRules = do
+    loadGhcSessionIO
+    cradleToSession
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do
@@ -204,20 +205,6 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,ShowDiag,) diags
 showEvent lock e = withLock lock $ print e
 
-
--- Rule type for caching GHC sessions.
-type instance RuleResult GetHscEnv = HscEnvEq
-
-data GetHscEnv = GetHscEnv
-    { hscenvOptions :: [String]        -- componentOptions from hie-bios
-    , hscenvDependencies :: [FilePath] -- componentDependencies from hie-bios
-    }
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetHscEnv
-instance NFData   GetHscEnv
-instance Binary   GetHscEnv
-
-
 loadGhcSessionIO :: Rules ()
 loadGhcSessionIO =
     -- This rule is for caching the GHC session. E.g., even when the cabal file
@@ -226,10 +213,10 @@ loadGhcSessionIO =
     defineNoFile $ \(GetHscEnv opts deps) ->
         liftIO $ createSession $ ComponentOptions opts deps
 
-
 getComponentOptions :: Cradle a -> IO ComponentOptions
 getComponentOptions cradle = do
     let showLine s = putStrLn ("> " ++ s)
+    -- WARNING 'runCradle is very expensive and must be called as few times as possible
     cradleRes <- runCradle (cradleOptsProg cradle) showLine ""
     case cradleRes of
         CradleSuccess r -> pure r
@@ -285,8 +272,14 @@ setHiDir f d =
     -- override user settings to avoid conflicts leading to recompilation
     d { hiDir      = Just f}
 
-cradleToSession :: Maybe FilePath -> Cradle a -> Action HscEnvEq
-cradleToSession mbYaml cradle = do
+cradleToSession :: Rules ()
+cradleToSession = define $ \LoadCradle nfp -> do
+    let f = fromNormalizedFilePath nfp
+
+    -- If the path points to a directory, load the implicit cradle
+    mbYaml <- doesDirectoryExist f <&> \isDir -> if isDir then Nothing else Just f
+    cradle <- liftIO $  maybe (loadImplicitCradle $ addTrailingPathSeparator f) loadCradle mbYaml
+
     cmpOpts <- liftIO $ getComponentOptions cradle
     let opts = componentOptions cmpOpts
         deps = componentDependencies cmpOpts
@@ -296,7 +289,7 @@ cradleToSession mbYaml cradle = do
                   _ -> deps
     existingDeps <- filterM doesFileExist deps'
     need existingDeps
-    useNoFile_ $ GetHscEnv opts deps
+    ([],) . pure <$> useNoFile_ (GetHscEnv opts deps)
 
 
 loadSession :: FilePath -> Action (FilePath -> Action HscEnvEq)
@@ -310,8 +303,9 @@ loadSession dir = liftIO $ do
         return $ normalise <$> res'
     let session :: Maybe FilePath -> Action HscEnvEq
         session file = do
-          c <- liftIO $ maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle file
-          cradleToSession file c
+          -- In the absence of a cradle file, just pass the directory from where to calculate an implicit cradle
+          let cradle = toNormalizedFilePath $ fromMaybe dir file
+          use_ LoadCradle cradle
     return $ \file -> session =<< liftIO (cradleLoc file)
 
 
