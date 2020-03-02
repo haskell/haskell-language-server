@@ -252,6 +252,7 @@ using `stack install ghcide` within a project.
 
 To build and work on `ghcide` itself, you can use Stack or cabal, e.g.,
 running `stack test` will execute the test suite.
+If you are using Windows, you should disable the `auto.crlf` setting and configure your editor to use LF line endings, directly or making it use the existing `.editor-config`.
 
 ### Building the extension
 
