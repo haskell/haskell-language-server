@@ -14,6 +14,7 @@ module Ide.Types
     , FormattingProvider
     , HoverProvider
     , CodeActionProvider
+    , ExecuteCommandProvider
     ) where
 
 import           Data.Aeson                    hiding (defaultOptions)
@@ -21,8 +22,9 @@ import qualified Data.Map  as Map
 import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
-import           Data.Typeable
+-- import           Data.Typeable
 import           Development.IDE.Core.Rules
+import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Language.Haskell.LSP.Types
@@ -46,19 +48,19 @@ data PluginDescriptor =
                    , pluginFormattingProvider :: Maybe (FormattingProvider IO)
                    }
 
-instance Show PluginCommand where
-  show (PluginCommand i _ _) = "PluginCommand { name = " ++ show i ++ " }"
+-- instance Show PluginCommand where
+--   show (PluginCommand i _ _) = "PluginCommand { name = " ++ show i ++ " }"
 
-newtype CommandId = CommandId T.Text
-  deriving (Show, Read, Eq, Ord)
-instance IsString CommandId where
-  fromString = CommandId . T.pack
+-- newtype CommandId = CommandId T.Text
+--   deriving (Show, Read, Eq, Ord)
+-- instance IsString CommandId where
+--   fromString = CommandId . T.pack
 
-data PluginCommand = forall a b. (FromJSON a, ToJSON b, Typeable b) =>
-  PluginCommand { commandId   :: CommandId
-                , commandDesc :: T.Text
-                , commandFunc :: a -> IO (Either ResponseError b)
-                }
+-- data PluginCommand = forall a b. (FromJSON a, ToJSON b, Typeable b) =>
+--   PluginCommand { commandId   :: CommandId
+--                 , commandDesc :: T.Text
+--                 , commandFunc :: a -> IO (Either ResponseError b)
+--                 }
 
 -- ---------------------------------------------------------------------
 
@@ -97,6 +99,10 @@ data DiagnosticTrigger = DiagnosticOnOpen
 type HoverProvider = IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 
 type SymbolProvider = Uri -> IO (Either ResponseError [DocumentSymbol])
+
+type ExecuteCommandProvider = IdeState
+                            -> ExecuteCommandParams
+                            -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 
 -- ---------------------------------------------------------------------
 

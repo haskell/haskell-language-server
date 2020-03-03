@@ -16,7 +16,10 @@ import Control.DeepSeq (NFData)
 import Control.Exception
 import Control.Monad.Extra
 import Control.Monad.IO.Class
+import qualified Crypto.Hash.SHA1 as H
 import Data.Binary (Binary)
+import Data.ByteString.Base16
+import qualified Data.ByteString.Char8 as B
 import Data.Default
 import Data.Dynamic (Typeable)
 import qualified Data.HashSet as HashSet
@@ -26,6 +29,8 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+-- import Data.Version
+-- import Development.GitRev
 import Development.IDE.Core.Debouncer
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
@@ -42,18 +47,22 @@ import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
 import Development.Shake (Action, RuleResult, Rules, action, doesFileExist, need)
+import           DynFlags
 import GHC hiding (def)
 import GHC.Generics (Generic)
 -- import qualified GHC.Paths
 import HIE.Bios
 import HIE.Bios.Cradle
+import HIE.Bios.Environment
 import HIE.Bios.Types
 import Ide.Plugin
 import Ide.Plugin.Config
 -- import Ide.Plugin.Formatter
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types (LspId(IdInt))
+import qualified Language.Haskell.LSP.Core as LSP
 import Linker
+-- import Paths_haskell_language_server
 import qualified System.Directory.Extra as IO
 -- import System.Environment
 import System.Exit
@@ -69,6 +78,7 @@ import Ide.Plugin.Example                 as Example
 import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
+import Ide.Plugin.Pragmas                 as Pragmas
 
 -- ---------------------------------------------------------------------
 
@@ -82,13 +92,29 @@ idePlugins includeExample
     CodeAction.plugin <>
     formatterPlugins [("ormolu",   Ormolu.provider)
                      ,("floskell", Floskell.provider)] <>
-    codeActionPlugins [("eg",  Example.codeAction)
-                      ,("eg2", Example2.codeAction)] <>
+    codeActionPlugins [("eg",      Example.codeAction)
+                      ,("eg2",     Example2.codeAction)
+                      ,("pragmas", Pragmas.codeAction)] <>
+    executeCommandPlugins [("pragmas", Pragmas.commands)] <>
     hoverPlugins [Example.hover, Example2.hover] <>
     if includeExample then Example.plugin <> Example2.plugin
                       else mempty
 
+commandIds :: T.Text -> [T.Text]
+commandIds pid = "typesignature.add" : allLspCmdIds pid [("pragmas", Pragmas.commands)]
+
 -- ---------------------------------------------------------------------
+-- Prefix for the cache path
+cacheDir :: String
+cacheDir = "ghcide"
+
+getCacheDir :: [String] -> IO FilePath
+getCacheDir opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> opts_hash)
+    where
+        -- Create a unique folder per set of different GHC options, assuming that each different set of
+        -- GHC options will create incompatible interface files.
+        opts_hash = B.unpack $ encode $ H.finalize $ H.updates H.init (map B.pack opts)
+
 
 main :: IO ()
 main = do
@@ -108,13 +134,17 @@ main = do
 
     dir <- IO.getCurrentDirectory
 
+    pid <- getPid
     let plugins = idePlugins argsExamplePlugin
+        options = def { LSP.executeCommandCommands = Just (commandIds pid)
+                      , LSP.completionTriggerCharacters = Just "."
+                      }
 
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer def (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
+        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             let options = (defaultIdeOptions $ loadSession dir)
@@ -235,14 +265,50 @@ getComponentOptions cradle = do
 
 
 createSession :: ComponentOptions -> IO HscEnvEq
-createSession opts = do
+createSession (ComponentOptions theOpts _) = do
     libdir <- getLibdir
+
+    cacheDir <- Main.getCacheDir theOpts
+
     env <- runGhc (Just libdir) $ do
-        _targets <- initSession opts
+        dflags <- getSessionDynFlags
+        (dflags', _targets) <- addCmdOpts theOpts dflags
+        _ <- setSessionDynFlags $
+             -- disabled, generated directly by ghcide instead
+             flip gopt_unset Opt_WriteInterface $
+             -- disabled, generated directly by ghcide instead
+             -- also, it can confuse the interface stale check
+             dontWriteHieFiles $
+             setHiDir cacheDir $
+             setDefaultHieDir cacheDir $
+             setIgnoreInterfacePragmas $
+             setLinkerOptions $
+             disableOptimisation dflags'
         getSession
     initDynLinker env
     newHscEnvEq env
 
+-- we don't want to generate object code so we compile to bytecode
+-- (HscInterpreted) which implies LinkInMemory
+-- HscInterpreted
+setLinkerOptions :: DynFlags -> DynFlags
+setLinkerOptions df = df {
+    ghcLink   = LinkInMemory
+  , hscTarget = HscNothing
+  , ghcMode = CompManager
+  }
+
+setIgnoreInterfacePragmas :: DynFlags -> DynFlags
+setIgnoreInterfacePragmas df =
+    gopt_set (gopt_set df Opt_IgnoreInterfacePragmas) Opt_IgnoreOptimChanges
+
+disableOptimisation :: DynFlags -> DynFlags
+disableOptimisation df = updOptLevel 0 df
+
+setHiDir :: FilePath -> DynFlags -> DynFlags
+setHiDir f d =
+    -- override user settings to avoid conflicts leading to recompilation
+    d { hiDir      = Just f}
 
 cradleToSession :: Maybe FilePath -> Cradle a -> Action HscEnvEq
 cradleToSession mbYaml cradle = do

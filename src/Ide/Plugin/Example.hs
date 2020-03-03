@@ -46,9 +46,9 @@ import Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 plugin :: Plugin c
-plugin = Plugin exampleRules handlersExample
+plugin = Plugin mempty exampleRules handlersExample
          -- <> codeActionPlugin codeAction
-         <> Plugin mempty handlersCodeLens
+         <> Plugin mempty mempty handlersCodeLens
 
 hover :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 hover = request "Hover" blah (Right Nothing) foundHover
@@ -155,14 +155,14 @@ executeAddSignatureCommand
     :: LSP.LspFuncs c
     -> IdeState
     -> ExecuteCommandParams
-    -> IO (Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+    -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | _command == "codelens.todo"
     , Just (List [edit]) <- _arguments
     , Success wedit <- fromJSON edit
-    = return (Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
+    = return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
     | otherwise
-    = return (Null, Nothing)
+    = return (Right Null, Nothing)
 
 -- ---------------------------------------------------------------------
 

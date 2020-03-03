@@ -34,6 +34,7 @@ library
       Ide.Plugin.Example
       Ide.Plugin.Example2
       Ide.Plugin.Ormolu
+      Ide.Plugin.Pragmas
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
       Ide.Types
@@ -109,7 +110,10 @@ executable haskell-language-server
 
   build-depends:
       base >=4.7 && <5
+    , base16-bytestring
     , binary
+    , bytestring
+    , cryptohash-sha1
     , containers
     , data-default
     , deepseq

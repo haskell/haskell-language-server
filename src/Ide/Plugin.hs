@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveGeneric     #-}
@@ -11,20 +13,24 @@ module Ide.Plugin
     , formatterPlugins
     , hoverPlugins
     , codeActionPlugins
+    , executeCommandPlugins
+    , mkLspCommand
+    , allLspCmdIds
+    , getPid
     ) where
 
 import           Control.Lens ( (^.) )
+import           Control.Monad
 import qualified Data.Aeson as J
 import           Data.Either
+import qualified Data.List                     as List
 import qualified Data.Map  as Map
 import           Data.Maybe
 import qualified Data.Text                     as T
--- import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.Rules
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
--- import           Development.IDE.Types.Location
 import           Development.Shake hiding ( Diagnostic, command )
 import           GHC.Generics
 import           Ide.Compat
@@ -34,7 +40,9 @@ import           Ide.Types
 import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
+import qualified Language.Haskell.LSP.Types              as J
 import qualified Language.Haskell.LSP.Types.Capabilities as C
+-- import qualified Language.Haskell.LSP.Types.Lens         as J
 import           Language.Haskell.LSP.Types.Lens as L hiding (formatting, rangeFormatting)
 import           Text.Regex.TDFA.Text()
 
@@ -44,14 +52,14 @@ import           Text.Regex.TDFA.Text()
 -- IdePlugins are arranged by kind of operation, 'Plugin' is arranged by message
 -- category ('Notifaction', 'Request' etc).
 asGhcIdePlugin :: IdePlugins -> Plugin Config
-asGhcIdePlugin _ = Plugin mempty mempty
+asGhcIdePlugin _ = Plugin mempty mempty mempty
 
 -- First strp will be to bring the machinery from Ide.Plugin.Formatter over.
 
 -- ---------------------------------------------------------------------
 
 codeActionPlugins :: [(T.Text, CodeActionProvider)] -> Plugin Config
-codeActionPlugins cas = Plugin codeActionRules (codeActionHandlers cas)
+codeActionPlugins cas = Plugin mempty codeActionRules (codeActionHandlers cas)
 
 codeActionRules :: Rules ()
 codeActionRules = mempty
@@ -106,20 +114,189 @@ data FallbackCodeActionParams =
     }
   deriving (Generic, J.ToJSON, J.FromJSON)
 
+-- -----------------------------------------------------------
+
+executeCommandPlugins :: [(PluginId, [PluginCommand])] -> Plugin Config
+executeCommandPlugins ecs = Plugin mempty mempty (executeCommandHandlers ecs)
+
+executeCommandHandlers :: [(PluginId, [PluginCommand])] -> PartialHandlers Config
+executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
+    LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit (makeExecuteCommands ecs)
+    }
+
+-- type ExecuteCommandProvider = IdeState
+--                             -> ExecuteCommandParams
+--                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+makeExecuteCommands :: [(PluginId, [PluginCommand])] -> LSP.LspFuncs Config -> ExecuteCommandProvider
+makeExecuteCommands ecs _lf _params = do
+  let
+      pluginMap = Map.fromList ecs
+      parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
+      parseCmdId x = case T.splitOn ":" x of
+        [plugin, command] -> Just (PluginId plugin, CommandId command)
+        [_, plugin, command] -> Just (PluginId plugin, CommandId command)
+        _ -> Nothing
+
+      execCmd :: ExecuteCommandParams -> IO (Either ResponseError J.Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+      execCmd (ExecuteCommandParams cmdId args _) = do
+        -- The parameters to the HIE command are always the first element
+        let cmdParams :: J.Value
+            cmdParams = case args of
+             Just (J.List (x:_)) -> x
+             _ -> J.Null
+
+        case parseCmdId cmdId of
+          -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
+          Just ("hie", "fallbackCodeAction") ->
+            case J.fromJSON cmdParams of
+              J.Success (FallbackCodeActionParams mEdit mCmd) -> do
+
+                -- Send off the workspace request if it has one
+                forM_ mEdit $ \edit -> do
+                  let eParams = J.ApplyWorkspaceEditParams edit
+                  -- TODO: Use lspfuncs to send an applyedit message. Or change
+                  -- the API to allow a list of messages to be returned.
+                  return (Right J.Null, Just(J.WorkspaceApplyEdit, eParams))
+
+                case mCmd of
+                  -- If we have a command, continue to execute it
+                  Just (J.Command _ innerCmdId innerArgs)
+                      -> execCmd (ExecuteCommandParams innerCmdId innerArgs Nothing)
+                  Nothing -> return (Right J.Null, Nothing)
+
+              J.Error _str -> return (Right J.Null, Nothing)
+              -- Couldn't parse the fallback command params
+              -- _ -> liftIO $
+              --   LSP.sendErrorResponseS (LSP.sendFunc lf)
+              --                           (J.responseId (req ^. J.id))
+              --                           J.InvalidParams
+              --                           "Invalid fallbackCodeAction params"
+
+          -- Just an ordinary HIE command
+          Just (plugin, cmd) -> runPluginCommand pluginMap plugin cmd cmdParams
+
+          -- Couldn't parse the command identifier
+          _ -> return (Left $ ResponseError InvalidParams "Invalid command identifier" Nothing, Nothing)
+
+  execCmd
+
+{-
+       ReqExecuteCommand req -> do
+          liftIO $ U.logs $ "reactor:got ExecuteCommandRequest:" ++ show req
+          lf <- asks lspFuncs
+
+          let params = req ^. J.params
+
+              parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
+              parseCmdId x = case T.splitOn ":" x of
+                [plugin, command] -> Just (PluginId plugin, CommandId command)
+                [_, plugin, command] -> Just (PluginId plugin, CommandId command)
+                _ -> Nothing
+
+              callback obj = do
+                liftIO $ U.logs $ "ExecuteCommand response got:r=" ++ show obj
+                case fromDynJSON obj :: Maybe J.WorkspaceEdit of
+                  Just v -> do
+                    lid <- nextLspReqId
+                    reactorSend $ RspExecuteCommand $ Core.makeResponseMessage req (A.Object mempty)
+                    let msg = fmServerApplyWorkspaceEditRequest lid $ J.ApplyWorkspaceEditParams v
+                    liftIO $ U.logs $ "ExecuteCommand sending edit: " ++ show msg
+                    reactorSend $ ReqApplyWorkspaceEdit msg
+                  Nothing -> reactorSend $ RspExecuteCommand $ Core.makeResponseMessage req $ dynToJSON obj
+
+              execCmd cmdId args = do
+                -- The parameters to the HIE command are always the first element
+                let cmdParams = case args of
+                     Just (J.List (x:_)) -> x
+                     _ -> A.Null
+
+                case parseCmdId cmdId of
+                  -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
+                  Just ("hie", "fallbackCodeAction") -> do
+                    case A.fromJSON cmdParams of
+                      A.Success (FallbackCodeActionParams mEdit mCmd) -> do
+
+                        -- Send off the workspace request if it has one
+                        forM_ mEdit $ \edit -> do
+                          lid <- nextLspReqId
+                          let eParams = J.ApplyWorkspaceEditParams edit
+                              eReq = fmServerApplyWorkspaceEditRequest lid eParams
+                          reactorSend $ ReqApplyWorkspaceEdit eReq
+
+                        case mCmd of
+                          -- If we have a command, continue to execute it
+                          Just (J.Command _ innerCmdId innerArgs) -> execCmd innerCmdId innerArgs
+
+                          -- Otherwise we need to send back a response oureslves
+                          Nothing -> reactorSend $ RspExecuteCommand $ Core.makeResponseMessage req (A.Object mempty)
+
+                      -- Couldn't parse the fallback command params
+                      _ -> liftIO $
+                        Core.sendErrorResponseS (Core.sendFunc lf)
+                                                (J.responseId (req ^. J.id))
+                                                J.InvalidParams
+                                                "Invalid fallbackCodeAction params"
+                  -- Just an ordinary HIE command
+                  Just (plugin, cmd) ->
+                    let preq = GReq tn "plugin" Nothing Nothing (Just $ req ^. J.id) callback (toDynJSON (Nothing :: Maybe J.WorkspaceEdit))
+                               $ runPluginCommand plugin cmd cmdParams
+                    in makeRequest preq
+
+                  -- Couldn't parse the command identifier
+                  _ -> liftIO $
+                    Core.sendErrorResponseS (Core.sendFunc lf)
+                                            (J.responseId (req ^. J.id))
+                                            J.InvalidParams
+                                            "Invalid command identifier"
+
+          execCmd (params ^. J.command) (params ^. J.arguments)
+-}
+-- | Runs a plugin command given a PluginId, CommandId and
+-- arguments in the form of a JSON object.
+runPluginCommand :: Map.Map PluginId [PluginCommand] -> PluginId -> CommandId -> J.Value
+                  -> IO (Either ResponseError J.Value,
+                        Maybe (ServerMethod, ApplyWorkspaceEditParams))
+runPluginCommand m p@(PluginId p') com@(CommandId com') arg =
+  case Map.lookup p m of
+    Nothing -> return
+      (Left $ ResponseError InvalidRequest ("Plugin " <> p' <> " doesn't exist") Nothing, Nothing)
+    Just xs -> case List.find ((com ==) . commandId) xs of
+      Nothing -> return (Left $
+        ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p' <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing, Nothing)
+      Just (PluginCommand _ _ f) -> case J.fromJSON arg of
+        J.Error err -> return (Left $
+          ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p' <> ": " <> T.pack err) Nothing, Nothing)
+        J.Success a -> do
+            res <- f a
+            case res of
+                Left e ->  return (Left e,             Nothing)
+                Right r -> return (Right $ J.toJSON r, Nothing)
+
+-- -----------------------------------------------------------
+
 mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [J.Value] -> IO Command
 mkLspCommand plid cn title args' = do
-  cmdId <- mkLspCmdId plid cn
+  pid <- getPid
+  let cmdId = mkLspCmdId pid plid cn
   let args = List <$> args'
   return $ Command title cmdId args
 
-mkLspCmdId :: PluginId -> CommandId -> IO T.Text
-mkLspCmdId (PluginId plid) (CommandId cid) = do
-  pid <- T.pack . show <$> getProcessID
-  return $ pid <> ":" <> plid <> ":" <> cid
+mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
+mkLspCmdId pid (PluginId plid) (CommandId cid)
+  = pid <> ":" <> plid <> ":" <> cid
+
+getPid :: IO T.Text
+getPid = T.pack . show <$> getProcessID
+
+allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand])] -> [T.Text]
+allLspCmdIds pid commands = concat $ map go commands
+  where
+    go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
+
 -- ---------------------------------------------------------------------
 
 hoverPlugins :: [HoverProvider] -> Plugin Config
-hoverPlugins hs = Plugin hoverRules (hoverHandlers hs)
+hoverPlugins hs = Plugin mempty hoverRules (hoverHandlers hs)
 
 hoverRules :: Rules ()
 hoverRules = mempty
@@ -152,7 +329,8 @@ makeHover hps _lf ideState params
 
 formatterPlugins :: [(T.Text, FormattingProvider IO)] -> Plugin Config
 formatterPlugins providers
-    = Plugin formatterRules
+    = Plugin mempty
+             formatterRules
              (formatterHandlers (Map.fromList (("none",noneProvider):providers)))
 
 formatterRules :: Rules ()
