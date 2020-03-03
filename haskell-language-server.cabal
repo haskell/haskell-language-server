@@ -92,6 +92,7 @@ executable haskell-language-server
   other-modules:
       Arguments
       Paths_haskell_language_server
+      RuleTypes
   autogen-modules:
       Paths_haskell_language_server
   ghc-options:
