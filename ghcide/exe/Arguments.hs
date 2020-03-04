@@ -12,6 +12,7 @@ data Arguments = Arguments
     ,argFiles :: [FilePath]
     ,argsVersion :: Bool
     ,argsShakeProfiling :: Maybe FilePath
+    ,argsTesting :: Bool
     }
 
 getArguments :: IO Arguments
@@ -29,3 +30,4 @@ arguments = Arguments
       <*> many (argument str (metavar "FILES/DIRS..."))
       <*> switch (long "version" <> help "Show ghcide and GHC versions")
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory")
+      <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")

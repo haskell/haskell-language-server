@@ -169,6 +169,7 @@ executable ghcide
     main-is: Main.hs
     build-depends:
         hslogger,
+        aeson,
         base == 4.*,
         binary,
         base16-bytestring >=0.1.1 && <0.2,
@@ -185,6 +186,7 @@ executable ghcide
         gitrev,
         hashable,
         haskell-lsp,
+        haskell-lsp-types,
         hie-bios >= 0.4.0 && < 0.5,
         ghcide,
         optparse-applicative,
@@ -194,12 +196,22 @@ executable ghcide
     other-modules:
         Arguments
         Paths_ghcide
+        Rules
         RuleTypes
 
     default-extensions:
+        BangPatterns
+        DeriveFunctor
         DeriveGeneric
+        GeneralizedNewtypeDeriving
+        LambdaCase
+        NamedFieldPuns
+        OverloadedStrings
         RecordWildCards
+        ScopedTypeVariables
+        StandaloneDeriving
         TupleSections
+        TypeApplications
         ViewPatterns
 
 test-suite ghcide-tests
