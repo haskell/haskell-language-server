@@ -10,7 +10,8 @@
 
 module Ide.Plugin.Example
   (
-    plugin
+    descriptor
+  , plugin
   , hover
   , codeAction
   ) where
@@ -21,13 +22,13 @@ import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
 import Data.Binary
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
-import Data.Hashable
 import qualified Data.HashSet as HashSet
+import Data.Hashable
 import qualified Data.Text as T
 import Data.Typeable
 import Development.IDE.Core.OfInterest
-import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
+import Development.IDE.Core.Rules
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.LSP.Server
@@ -36,12 +37,27 @@ import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.Shake hiding ( Diagnostic )
-import Ide.Types
 import GHC.Generics
+import Ide.Types
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
+
+-- ---------------------------------------------------------------------
+
+descriptor :: PluginId -> PluginDescriptor
+descriptor plId = PluginDescriptor
+  { pluginId = plId
+  , pluginRules = exampleRules
+  , pluginCommands = []
+  , pluginCodeActionProvider = Just codeAction
+  , pluginDiagnosticProvider = Nothing
+  , pluginHoverProvider = Just hover
+  , pluginSymbolProvider = Nothing
+  , pluginFormattingProvider = Nothing
+  , pluginCompletionProvider = Nothing
+  }
 
 -- ---------------------------------------------------------------------
 

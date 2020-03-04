@@ -34,7 +34,7 @@ import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-formatting :: Map.Map T.Text (FormattingProvider IO)
+formatting :: Map.Map PluginId (FormattingProvider IO)
            -> LSP.LspFuncs Config -> IdeState -> DocumentFormattingParams
            -> IO (Either ResponseError (List TextEdit))
 formatting providers lf ideState
@@ -43,7 +43,7 @@ formatting providers lf ideState
 
 -- ---------------------------------------------------------------------
 
-rangeFormatting :: Map.Map T.Text (FormattingProvider IO)
+rangeFormatting :: Map.Map PluginId (FormattingProvider IO)
                 -> LSP.LspFuncs Config -> IdeState -> DocumentRangeFormattingParams
                 -> IO (Either ResponseError (List TextEdit))
 rangeFormatting providers lf ideState
@@ -52,13 +52,13 @@ rangeFormatting providers lf ideState
 
 -- ---------------------------------------------------------------------
 
-doFormatting :: LSP.LspFuncs Config -> Map.Map T.Text (FormattingProvider IO)
+doFormatting :: LSP.LspFuncs Config -> Map.Map PluginId (FormattingProvider IO)
              -> IdeState -> FormattingType -> Uri -> FormattingOptions
              -> IO (Either ResponseError (List TextEdit))
 doFormatting lf providers ideState ft uri params = do
   mc <- LSP.config lf
   let mf = maybe "none" formattingProvider mc
-  case Map.lookup mf providers of
+  case Map.lookup (PluginId mf) providers of
       Just provider ->
         case uriToFilePath uri of
           Just (toNormalizedFilePath -> fp) -> do

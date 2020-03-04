@@ -15,6 +15,7 @@ module Ide.Types
     , HoverProvider
     , CodeActionProvider
     , ExecuteCommandProvider
+    , CompletionProvider
     ) where
 
 import           Data.Aeson                    hiding (defaultOptions)
@@ -22,11 +23,12 @@ import qualified Data.Map  as Map
 import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
--- import           Data.Typeable
 import           Development.IDE.Core.Rules
 import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
+import           Development.Shake
+-- import           Development.Shake.Classes
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 
@@ -39,13 +41,17 @@ newtype IdePlugins = IdePlugins
 -- ---------------------------------------------------------------------
 
 data PluginDescriptor =
-  PluginDescriptor { pluginId                 :: PluginId
-                   , pluginCommands           :: [PluginCommand]
-                   , pluginCodeActionProvider :: Maybe CodeActionProvider
-                   , pluginDiagnosticProvider :: Maybe DiagnosticProvider
-                   , pluginHoverProvider      :: Maybe HoverProvider
-                   , pluginSymbolProvider     :: Maybe SymbolProvider
-                   , pluginFormattingProvider :: Maybe (FormattingProvider IO)
+  PluginDescriptor { pluginId                 :: !PluginId
+                   , pluginRules              :: !(Rules ())
+                   , pluginCommands           :: ![PluginCommand]
+                   , pluginCodeActionProvider :: !(Maybe CodeActionProvider)
+                   , pluginDiagnosticProvider :: !(Maybe DiagnosticProvider)
+                     -- ^ TODO: diagnostics are generally provided via rules,
+                     -- this is probably redundant.
+                   , pluginHoverProvider      :: !(Maybe HoverProvider)
+                   , pluginSymbolProvider     :: !(Maybe SymbolProvider)
+                   , pluginFormattingProvider :: !(Maybe (FormattingProvider IO))
+                   , pluginCompletionProvider :: !(Maybe CompletionProvider)
                    }
 
 -- instance Show PluginCommand where
@@ -103,6 +109,10 @@ type SymbolProvider = Uri -> IO (Either ResponseError [DocumentSymbol])
 type ExecuteCommandProvider = IdeState
                             -> ExecuteCommandParams
                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+
+type CompletionProvider = IdeState
+                        -> CompletionParams
+                        -> IO (Either ResponseError CompletionResponseResult)
 
 -- ---------------------------------------------------------------------
 

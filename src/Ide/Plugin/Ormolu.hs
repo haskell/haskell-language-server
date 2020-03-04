@@ -7,7 +7,8 @@
 
 module Ide.Plugin.Ormolu
   (
-    provider
+    descriptor
+  , provider
   )
 where
 
@@ -29,6 +30,21 @@ import           Ide.Plugin.Formatter
 import           Language.Haskell.LSP.Types
 import           Ormolu
 import           Text.Regex.TDFA.Text()
+
+-- ---------------------------------------------------------------------
+
+descriptor :: PluginId -> PluginDescriptor
+descriptor plId = PluginDescriptor
+  { pluginId = plId
+  , pluginRules = mempty
+  , pluginCommands = []
+  , pluginCodeActionProvider = Nothing
+  , pluginDiagnosticProvider = Nothing
+  , pluginHoverProvider      = Nothing
+  , pluginSymbolProvider     = Nothing
+  , pluginFormattingProvider = Just provider
+  , pluginCompletionProvider = Nothing
+  }
 
 -- ---------------------------------------------------------------------
 

@@ -10,7 +10,8 @@
 
 module Ide.Plugin.Example2
   (
-    plugin
+    descriptor
+  , plugin
   , hover
   , codeAction
   ) where
@@ -42,6 +43,21 @@ import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
+
+-- ---------------------------------------------------------------------
+
+descriptor :: PluginId -> PluginDescriptor
+descriptor plId = PluginDescriptor
+  { pluginId = plId
+  , pluginRules = exampleRules
+  , pluginCommands = []
+  , pluginCodeActionProvider = Just codeAction
+  , pluginDiagnosticProvider = Nothing
+  , pluginHoverProvider = Just hover
+  , pluginSymbolProvider = Nothing
+  , pluginFormattingProvider = Nothing
+  , pluginCompletionProvider = Nothing
+  }
 
 -- ---------------------------------------------------------------------
 

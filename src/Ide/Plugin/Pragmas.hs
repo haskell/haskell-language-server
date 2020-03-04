@@ -27,8 +27,7 @@ import           Language.Haskell.LSP.Types
 _pragmasDescriptor :: PluginId -> PluginDescriptor
 _pragmasDescriptor plId = PluginDescriptor
   { pluginId = plId
-  -- , pluginName = "Add Missing Pragmas"
-  -- , pluginDesc = "Provide code actions to add missing pragmas when GHC suggests this"
+  , pluginRules = mempty
   , pluginCommands =
       [ PluginCommand "addPragma" "add the given pragma" addPragmaCmd
       ]
@@ -37,6 +36,7 @@ _pragmasDescriptor plId = PluginDescriptor
   , pluginHoverProvider = Nothing
   , pluginSymbolProvider = Nothing
   , pluginFormattingProvider = Nothing
+  , pluginCompletionProvider = Nothing
   }
 
 -- ---------------------------------------------------------------------

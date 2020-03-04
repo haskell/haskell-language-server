@@ -52,6 +52,7 @@ import HIE.Bios.Cradle
 import HIE.Bios.Environment
 import HIE.Bios.Types
 import Ide.Plugin
+-- import Ide.PluginDescriptors
 import Ide.Plugin.Config
 -- import Ide.Plugin.Formatter
 import Language.Haskell.LSP.Messages
@@ -79,12 +80,16 @@ import Ide.Plugin.Pragmas                 as Pragmas
 
 -- ---------------------------------------------------------------------
 
--- The plugins configured for use in this instance of the language
+-- | TODO: these should come out of something like asGhcIdePlugin
+commandIds :: T.Text -> [T.Text]
+commandIds pid = "typesignature.add" : allLspCmdIds pid [("pragmas", Pragmas.commands)]
+
+-- | The plugins configured for use in this instance of the language
 -- server.
 -- These can be freely added or removed to tailor the available
 -- features of the server.
-idePlugins :: Bool -> Plugin Config
-idePlugins includeExample
+_idePlugins :: Bool -> Plugin Config
+_idePlugins includeExample
   = Completions.plugin <>
     CodeAction.plugin <>
     formatterPlugins [("ormolu",   Ormolu.provider)
@@ -93,12 +98,44 @@ idePlugins includeExample
                       ,("eg2",     Example2.codeAction)
                       ,("pragmas", Pragmas.codeAction)] <>
     executeCommandPlugins [("pragmas", Pragmas.commands)] <>
-    hoverPlugins [Example.hover, Example2.hover] <>
+    hoverPlugins [("eg", Example.hover)
+                 ,("eg2", Example2.hover)] <>
     if includeExample then Example.plugin <> Example2.plugin
                       else mempty
 
-commandIds :: T.Text -> [T.Text]
-commandIds pid = "typesignature.add" : allLspCmdIds pid [("pragmas", Pragmas.commands)]
+
+-- | The plugins configured for use in this instance of the language
+-- server.
+-- These can be freely added or removed to tailor the available
+-- features of the server.
+idePlugins :: Bool -> Plugin Config
+idePlugins includeExamples
+    = asGhcIdePlugin $ pluginDescToIdePlugins allPlugins
+  where
+    allPlugins = if includeExamples
+                   then basePlugins ++ examplePlugins
+                   else basePlugins
+    basePlugins =
+      [
+      --   applyRefactDescriptor "applyrefact"
+      -- , brittanyDescriptor    "brittany"
+      -- , haddockDescriptor     "haddock"
+      -- -- , hareDescriptor        "hare"
+      -- , hsimportDescriptor    "hsimport"
+      -- , liquidDescriptor      "liquid"
+      -- , packageDescriptor     "package"
+      -- , pragmasDescriptor     "pragmas"
+        Floskell.descriptor "floskell"
+      -- , genericDescriptor     "generic"
+      -- , ghcmodDescriptor      "ghcmod"
+      , Ormolu.descriptor   "ormolu"
+      ]
+    examplePlugins =
+      [Example.descriptor  "eg"
+      ,Example2.descriptor "eg2"
+      -- ,hfaAlignDescriptor "hfaa"
+      ]
+
 
 -- ---------------------------------------------------------------------
 -- Prefix for the cache path

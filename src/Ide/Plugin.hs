@@ -10,6 +10,7 @@
 module Ide.Plugin
     (
       asGhcIdePlugin
+    , pluginDescToIdePlugins
     , formatterPlugins
     , hoverPlugins
     , codeActionPlugins
@@ -29,7 +30,7 @@ import           Data.Maybe
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.LSP.Server
-import           Development.IDE.Plugin
+import           Development.IDE.Plugin hiding (pluginCommands)
 import           Development.IDE.Types.Diagnostics as D
 import           Development.Shake hiding ( Diagnostic, command )
 import           GHC.Generics
@@ -42,7 +43,6 @@ import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types              as J
 import qualified Language.Haskell.LSP.Types.Capabilities as C
--- import qualified Language.Haskell.LSP.Types.Lens         as J
 import           Language.Haskell.LSP.Types.Lens as L hiding (formatting, rangeFormatting)
 import           Text.Regex.TDFA.Text()
 
@@ -52,32 +52,50 @@ import           Text.Regex.TDFA.Text()
 -- IdePlugins are arranged by kind of operation, 'Plugin' is arranged by message
 -- category ('Notifaction', 'Request' etc).
 asGhcIdePlugin :: IdePlugins -> Plugin Config
-asGhcIdePlugin _ = Plugin mempty mempty mempty
+asGhcIdePlugin mp =
+    mkPlugin executeCommandPlugins (Just . pluginCommands) <>
+    mkPlugin codeActionPlugins     pluginCodeActionProvider <>
+    -- diagnostics from pluginDiagnosticProvider
+    mkPlugin hoverPlugins          pluginHoverProvider <>
+    -- symbols via pluginSymbolProvider
+    mkPlugin formatterPlugins      pluginFormattingProvider
+    -- completions
+    where
+        justs (p, Just x)  = [(p, x)]
+        justs (_, Nothing) = []
 
--- First strp will be to bring the machinery from Ide.Plugin.Formatter over.
+        ls = Map.toList (ipMap mp)
+
+        mkPlugin :: ([(PluginId, b)] -> t) -> (PluginDescriptor -> Maybe b) -> t
+        mkPlugin maker selector
+            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
+
+
+pluginDescToIdePlugins :: [PluginDescriptor] -> IdePlugins
+pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginId p, p)) plugins
 
 -- ---------------------------------------------------------------------
 
-codeActionPlugins :: [(T.Text, CodeActionProvider)] -> Plugin Config
+codeActionPlugins :: [(PluginId, CodeActionProvider)] -> Plugin Config
 codeActionPlugins cas = Plugin mempty codeActionRules (codeActionHandlers cas)
 
 codeActionRules :: Rules ()
 codeActionRules = mempty
 
-codeActionHandlers :: [(T.Text, CodeActionProvider)] -> PartialHandlers Config
+codeActionHandlers :: [(PluginId, CodeActionProvider)] -> PartialHandlers Config
 codeActionHandlers cas = PartialHandlers $ \WithMessage{..} x -> return x
     { LSP.codeActionHandler
         = withResponse RspCodeAction (makeCodeAction cas)
     }
 
-makeCodeAction :: [(T.Text, CodeActionProvider)]
+makeCodeAction :: [(PluginId, CodeActionProvider)]
       -> LSP.LspFuncs Config -> IdeState
       -> CodeActionParams
       -> IO (Either ResponseError (List CAResult))
 makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
     let caps = LSP.clientCapabilities lf
         unL (List ls) = ls
-    r <- mapM (\(pid,provider) -> provider ideState (PluginId pid) docId range context) cas
+    r <- mapM (\(pid,provider) -> provider ideState pid docId range context) cas
     let actions = filter wasRequested . concat $ map unL $ rights r
     res <- send caps actions
     return $ Right res
@@ -295,23 +313,23 @@ allLspCmdIds pid commands = concat $ map go commands
 
 -- ---------------------------------------------------------------------
 
-hoverPlugins :: [HoverProvider] -> Plugin Config
+hoverPlugins :: [(PluginId, HoverProvider)] -> Plugin Config
 hoverPlugins hs = Plugin mempty hoverRules (hoverHandlers hs)
 
 hoverRules :: Rules ()
 hoverRules = mempty
 
-hoverHandlers :: [HoverProvider] -> PartialHandlers Config
+hoverHandlers :: [(PluginId, HoverProvider)] -> PartialHandlers Config
 hoverHandlers hps = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.hoverHandler = withResponse RspHover (makeHover hps)}
 
-makeHover :: [HoverProvider]
+makeHover :: [(PluginId, HoverProvider)]
       -> LSP.LspFuncs Config -> IdeState
       -> TextDocumentPositionParams
       -> IO (Either ResponseError (Maybe Hover))
 makeHover hps _lf ideState params
   = do
-      mhs <- mapM (\p -> p ideState params) hps
+      mhs <- mapM (\(_,p) -> p ideState params) hps
       -- TODO: We should support ServerCapabilities and declare that
       -- we don't support hover requests during initialization if we
       -- don't have any hover providers
@@ -327,7 +345,7 @@ makeHover hps _lf ideState params
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
 
-formatterPlugins :: [(T.Text, FormattingProvider IO)] -> Plugin Config
+formatterPlugins :: [(PluginId, FormattingProvider IO)] -> Plugin Config
 formatterPlugins providers
     = Plugin mempty
              formatterRules
@@ -336,7 +354,7 @@ formatterPlugins providers
 formatterRules :: Rules ()
 formatterRules = mempty
 
-formatterHandlers :: Map.Map T.Text (FormattingProvider IO) -> PartialHandlers Config
+formatterHandlers :: Map.Map PluginId (FormattingProvider IO) -> PartialHandlers Config
 formatterHandlers providers = PartialHandlers $ \WithMessage{..} x -> return x
     { LSP.documentFormattingHandler
         = withResponse RspDocumentFormatting (formatting providers)
