@@ -26,6 +26,7 @@ import Development.IDE.Test.Runfiles
 import Development.IDE.Types.Location
 import qualified Language.Haskell.LSP.Test as LSPTest
 import Language.Haskell.LSP.Test hiding (openDoc')
+import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
 import Language.Haskell.LSP.VFS (applyChange)
@@ -45,10 +46,10 @@ main :: IO ()
 main = defaultMain $ testGroup "HIE"
   [ testSession "open close" $ do
       doc <- openDoc' "Testing.hs" "haskell" ""
-      void (message :: Session WorkDoneProgressCreateRequest)
-      void (message :: Session WorkDoneProgressBeginNotification)
+      void (skipManyTill anyMessage message :: Session WorkDoneProgressCreateRequest)
+      void (skipManyTill anyMessage message :: Session WorkDoneProgressBeginNotification)
       closeDoc doc
-      void (message :: Session WorkDoneProgressEndNotification)
+      void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
   , initializeResponseTests
   , completionTests
   , cppTests
@@ -64,7 +65,7 @@ main = defaultMain $ testGroup "HIE"
   , haddockTests
   , positionMappingTests
   , watchedFilesTests
-  , sessionDepsArePickedUp
+  , cradleTests
   ]
 
 initializeResponseTests :: TestTree
@@ -143,8 +144,8 @@ diagnosticTests = testGroup "diagnostics"
   , testSessionWait "introduce syntax error" $ do
       let content = T.unlines [ "module Testing where" ]
       doc <- openDoc' "Testing.hs" "haskell" content
-      void (message :: Session WorkDoneProgressCreateRequest)
-      void (message :: Session WorkDoneProgressBeginNotification)
+      void $ skipManyTill anyMessage (message :: Session WorkDoneProgressCreateRequest)
+      void $ skipManyTill anyMessage (message :: Session WorkDoneProgressBeginNotification)
       let change = TextDocumentContentChangeEvent
             { _range = Just (Range (Position 0 15) (Position 0 18))
             , _rangeLength = Nothing
@@ -1864,6 +1865,42 @@ haddockTests
   where
     checkHaddock s txt = spanDocToMarkdownForTest s @?= txt
 
+cradleTests :: TestTree
+cradleTests = testGroup "cradle"
+    [testGroup "dependencies" [sessionDepsArePickedUp]
+    ,testGroup "loading" [loadCradleOnlyonce]
+    ]
+
+loadCradleOnlyonce :: TestTree
+loadCradleOnlyonce = testGroup "load cradle only once"
+    [ testSession' "implicit" implicit
+    , testSession' "direct"   direct
+    ]
+    where
+        direct dir = do
+            liftIO $ writeFileUTF8 (dir </> "hie.yaml")
+                "cradle: {direct: {arguments: []}}"
+            test dir
+        implicit dir = test dir
+        test _dir = do
+            doc <- openDoc' "B.hs" "haskell" "module B where\nimport Data.Foo"
+            msgs <- someTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message @PublishDiagnosticsNotification))
+            liftIO $ length msgs @?= 1
+            changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing "module B where\nimport Data.Maybe"]
+            msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message @PublishDiagnosticsNotification))
+            liftIO $ length msgs @?= 0
+            _ <- openDoc' "A.hs" "haskell" "module A where\nimport Bar"
+            msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message @PublishDiagnosticsNotification))
+            liftIO $ length msgs @?= 0
+
+
+cradleLoadedMessage :: Session FromServerMessage
+cradleLoadedMessage = satisfy $ \case
+        NotCustomServer (NotificationMessage _ (CustomServerMethod m) _) -> m == cradleLoadedMethod
+        _ -> False
+
+cradleLoadedMethod :: T.Text
+cradleLoadedMethod = "ghcide/cradle/loaded"
 
 sessionDepsArePickedUp :: TestTree
 sessionDepsArePickedUp = testSession'
@@ -1954,7 +1991,7 @@ runInDir dir s = do
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
   createDirectoryIfMissing True $ dir ++ "/Data"
 
-  let cmd = unwords [ghcideExe, "--lsp", "--cwd", dir]
+  let cmd = unwords [ghcideExe, "--lsp", "--test", "--cwd", dir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False

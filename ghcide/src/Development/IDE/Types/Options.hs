@@ -9,6 +9,7 @@ module Development.IDE.Types.Options
   , IdePreprocessedSource(..)
   , IdeReportProgress(..)
   , IdeDefer(..)
+  , IdeTesting(..)
   , clientSupportsProgress
   , IdePkgLocationOptions(..)
   , defaultIdeOptions
@@ -40,6 +41,8 @@ data IdeOptions = IdeOptions
   -- meaning we keep everything in memory but the daml CLI compiler uses this for incremental builds.
   , optShakeProfiling :: Maybe FilePath
     -- ^ Set to 'Just' to create a directory of profiling reports.
+  , optTesting :: IdeTesting
+    -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
   , optReportProgress :: IdeReportProgress
     -- ^ Whether to report progress during long operations.
   , optLanguageSyntax :: String
@@ -65,6 +68,7 @@ data IdePreprocessedSource = IdePreprocessedSource
 
 newtype IdeReportProgress = IdeReportProgress Bool
 newtype IdeDefer          = IdeDefer          Bool
+newtype IdeTesting        = IdeTesting        Bool
 
 clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress
 clientSupportsProgress caps = IdeReportProgress $ Just True ==
@@ -83,6 +87,7 @@ defaultIdeOptions session = IdeOptions
     ,optLanguageSyntax = "haskell"
     ,optNewColonConvention = False
     ,optDefer = IdeDefer True
+    ,optTesting = IdeTesting False
     }
 
 
