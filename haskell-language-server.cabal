@@ -92,6 +92,7 @@ executable haskell-language-server
   other-modules:
       Arguments
       Paths_haskell_language_server
+      Rules
       RuleTypes
   autogen-modules:
       Paths_haskell_language_server
@@ -111,6 +112,7 @@ executable haskell-language-server
 
   build-depends:
       base >=4.7 && <5
+    , aeson
     , base16-bytestring
     , binary
     , bytestring
