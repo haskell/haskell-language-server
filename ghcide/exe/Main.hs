@@ -101,6 +101,10 @@ main = do
             initialise caps (cradleRules >> mainRule >> pluginRules plugins >> action kick)
                 getLspId event (logger minBound) debouncer options vfs
     else do
+        -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
+        hSetEncoding stdout utf8
+        hSetEncoding stderr utf8
+
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
 
