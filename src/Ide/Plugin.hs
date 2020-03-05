@@ -30,7 +30,7 @@ import           Data.Maybe
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.LSP.Server
-import           Development.IDE.Plugin hiding (pluginCommands)
+import           Development.IDE.Plugin hiding (pluginCommands, pluginRules)
 import           Development.IDE.Types.Diagnostics as D
 import           Development.Shake hiding ( Diagnostic, command )
 import           GHC.Generics
@@ -53,6 +53,7 @@ import           Text.Regex.TDFA.Text()
 -- category ('Notifaction', 'Request' etc).
 asGhcIdePlugin :: IdePlugins -> Plugin Config
 asGhcIdePlugin mp =
+    mkPlugin rulesPlugins (Just . pluginRules) <>
     mkPlugin executeCommandPlugins (Just . pluginCommands) <>
     mkPlugin codeActionPlugins     pluginCodeActionProvider <>
     -- diagnostics from pluginDiagnosticProvider
@@ -66,7 +67,7 @@ asGhcIdePlugin mp =
 
         ls = Map.toList (ipMap mp)
 
-        mkPlugin :: ([(PluginId, b)] -> t) -> (PluginDescriptor -> Maybe b) -> t
+        mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor -> Maybe b) -> Plugin Config
         mkPlugin maker selector
             = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
 
@@ -75,6 +76,11 @@ pluginDescToIdePlugins :: [PluginDescriptor] -> IdePlugins
 pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginId p, p)) plugins
 
 -- ---------------------------------------------------------------------
+
+rulesPlugins :: [(PluginId, Rules ())] -> Plugin Config
+rulesPlugins rs = Plugin mempty rules mempty
+    where
+        rules = mconcat $ map snd rs
 
 codeActionPlugins :: [(PluginId, CodeActionProvider)] -> Plugin Config
 codeActionPlugins cas = Plugin mempty codeActionRules (codeActionHandlers cas)
@@ -286,9 +292,12 @@ runPluginCommand m p@(PluginId p') com@(CommandId com') arg =
           ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p' <> ": " <> T.pack err) Nothing, Nothing)
         J.Success a -> do
             res <- f a
-            case res of
-                Left e ->  return (Left e,             Nothing)
-                Right r -> return (Right $ J.toJSON r, Nothing)
+            return res
+            -- case res of
+            --     Left e ->  return (Left e,             Nothing)
+            --     -- Right r -> return (Right $ J.toJSON r, Nothing)
+            --     Right r -> return r
+            --         -- return (Right J.Null, Just(WorkspaceApplyEdit, _ r))
 
 -- -----------------------------------------------------------
 

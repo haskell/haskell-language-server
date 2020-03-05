@@ -15,11 +15,7 @@ import Control.Concurrent.Extra
 import Control.Exception
 import Control.Monad.Extra
 import Control.Monad.IO.Class
--- import qualified Crypto.Hash.SHA1 as H
--- import Data.ByteString.Base16
--- import qualified Data.ByteString.Char8 as B
 import Data.Default
--- import Data.Functor ((<&>))
 import qualified Data.HashSet as HashSet
 import Data.List.Extra
 import qualified Data.Map.Strict as Map
@@ -44,23 +40,12 @@ import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
 import Development.Shake (Action, Rules, action)
--- import           DynFlags
--- import GHC hiding (def)
--- import qualified GHC.Paths
 import HIE.Bios
 import qualified Language.Haskell.LSP.Core as LSP
--- import HIE.Bios.Cradle
--- import HIE.Bios.Environment
--- import HIE.Bios.Types
 import Ide.Plugin
--- import Ide.PluginDescriptors
 import Ide.Plugin.Config
--- import Ide.Plugin.Formatter
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types (LspId(IdInt))
--- import qualified Language.Haskell.LSP.Core as LSP
--- import Linker
--- import Paths_haskell_language_server
 import RuleTypes
 import Rules
 import qualified System.Directory.Extra as IO
@@ -126,8 +111,8 @@ idePlugins includeExamples
       -- , hsimportDescriptor    "hsimport"
       -- , liquidDescriptor      "liquid"
       -- , packageDescriptor     "package"
-      -- , pragmasDescriptor     "pragmas"
-        Floskell.descriptor "floskell"
+        Pragmas.descriptor  "pragmas"
+      , Floskell.descriptor "floskell"
       -- , genericDescriptor     "generic"
       -- , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
@@ -172,7 +157,8 @@ main = do
     dir <- IO.getCurrentDirectory
 
     pid <- getPid
-    let plugins = idePlugins argsExamplePlugin
+    -- let plugins = idePlugins argsExamplePlugin
+    let plugins = idePlugins True
         options = def { LSP.executeCommandCommands = Just (commandIds pid)
                       , LSP.completionTriggerCharacters = Just "."
                       }

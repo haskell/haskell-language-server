@@ -5,7 +5,8 @@
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
   (
-      codeAction
+      descriptor
+  ,   codeAction
   ,   commands
   ) where
 
@@ -18,19 +19,16 @@ import           Ide.Types
 import qualified GHC.Generics                    as Generics
 import qualified Language.Haskell.LSP.Types      as J
 import qualified Language.Haskell.LSP.Types.Lens as J
-
 import           Development.IDE.Types.Diagnostics as D
 import           Language.Haskell.LSP.Types
 
 -- ---------------------------------------------------------------------
 
-_pragmasDescriptor :: PluginId -> PluginDescriptor
-_pragmasDescriptor plId = PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor
+descriptor plId = PluginDescriptor
   { pluginId = plId
   , pluginRules = mempty
-  , pluginCommands =
-      [ PluginCommand "addPragma" "add the given pragma" addPragmaCmd
-      ]
+  , pluginCommands = commands
   , pluginCodeActionProvider = Just codeActionProvider
   , pluginDiagnosticProvider = Nothing
   , pluginHoverProvider = Nothing
@@ -58,7 +56,9 @@ data AddPragmaParams = AddPragmaParams
 -- Pragma is added to the first line of the Uri.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
-addPragmaCmd :: AddPragmaParams -> IO (Either ResponseError J.WorkspaceEdit)
+-- addPragmaCmd :: AddPragmaParams -> IO (Either ResponseError J.WorkspaceEdit)
+addPragmaCmd :: AddPragmaParams -> IO (Either ResponseError Value,
+                           Maybe (ServerMethod, ApplyWorkspaceEditParams))
 addPragmaCmd (AddPragmaParams uri pragmaName) = do
   let
     pos = J.Position 0 0
@@ -69,7 +69,7 @@ addPragmaCmd (AddPragmaParams uri pragmaName) = do
     res = J.WorkspaceEdit
       (Just $ H.singleton uri textEdits)
       Nothing
-  return $ Right res
+  return $ (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
 
 -- ---------------------------------------------------------------------
 
@@ -80,11 +80,12 @@ codeAction = codeActionProvider
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 codeActionProvider :: CodeActionProvider
 codeActionProvider _ plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
-  cmds <- mapM mkCommand pragmas
+  -- cmds <- mapM mkCommand pragmas
+  cmds <- mapM mkCommand ("FooPragma":pragmas)
   return $ Right $ List cmds
   where
     -- Filter diagnostics that are from ghcmod
-    ghcDiags = filter (\d -> d ^. J.source == Just "bios") diags
+    ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
     -- Get all potential Pragmas for all diagnostics.
     pragmas = concatMap (\d -> findPragma (d ^. J.message)) ghcDiags
     mkCommand pragmaName = do
