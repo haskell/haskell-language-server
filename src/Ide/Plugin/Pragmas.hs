@@ -80,8 +80,8 @@ codeAction = codeActionProvider
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 codeActionProvider :: CodeActionProvider
 codeActionProvider _ plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
-  -- cmds <- mapM mkCommand pragmas
-  cmds <- mapM mkCommand ("FooPragma":pragmas)
+  cmds <- mapM mkCommand pragmas
+  -- cmds <- mapM mkCommand ("FooPragma":pragmas)
   return $ Right $ List cmds
   where
     -- Filter diagnostics that are from ghcmod

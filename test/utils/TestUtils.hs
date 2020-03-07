@@ -205,7 +205,8 @@ logFilePath = "hie-" ++ stackYaml ++ ".log"
 -- stack just puts all project executables on PATH.
 hieCommand :: String
 -- hieCommand = "hie --lsp --bios-verbose -d -l test-logs/" ++ logFilePath
-hieCommand = "haskell-language-server --lsp"
+-- hieCommand = "haskell-language-server --lsp"
+hieCommand = "haskell-language-server --lsp --test --shake-profiling=test-logs/" ++ logFilePath
 
 hieCommandVomit :: String
 hieCommandVomit = hieCommand ++ " --vomit"

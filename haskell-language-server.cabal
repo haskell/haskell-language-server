@@ -29,6 +29,7 @@ library
   exposed-modules:
       Ide.Compat
       Ide.Cradle
+      Ide.Logger
       Ide.Plugin
       Ide.Plugin.Config
       Ide.Plugin.Example
@@ -137,6 +138,7 @@ executable haskell-language-server
     , haskell-lsp
     , hie-bios >= 0.4
     , haskell-language-server
+    , hslogger
     , optparse-applicative
     , shake >= 0.17.5
     , text

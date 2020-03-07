@@ -42,6 +42,7 @@ import Development.IDE.Types.Options
 import Development.Shake (Action, Rules, action)
 import HIE.Bios
 import qualified Language.Haskell.LSP.Core as LSP
+import Ide.Logger
 import Ide.Plugin
 import Ide.Plugin.Config
 import Language.Haskell.LSP.Messages
@@ -53,6 +54,7 @@ import qualified System.Directory.Extra as IO
 import System.Exit
 import System.FilePath
 import System.IO
+import System.Log.Logger as L
 import System.Time.Extra
 
 -- ---------------------------------------------------------------------
@@ -147,6 +149,11 @@ main = do
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
+    -- LSP.setupLogger (optLogFile opts) ["hie", "hie-bios"]
+    --   $ if optDebugOn opts then L.DEBUG else L.INFO
+    LSP.setupLogger argsShakeProfiling ["hie", "hie-bios"]
+      $ if argsTesting then L.DEBUG else L.INFO
+
     -- lock to avoid overlapping output on stdout
     lock <- newLock
     let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
@@ -177,7 +184,7 @@ main = do
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (cradleRules >> mainRule >> pluginRules plugins >> action kick)
-                getLspId event (logger minBound) debouncer options vfs
+                getLspId event hlsLogger debouncer options vfs
     else do
         putStrLn $ "(haskell-language-server)Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"

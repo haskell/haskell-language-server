@@ -1,8 +1,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 module PluginSpec where
 
--- import           Control.Applicative.Combinators
+import           Control.Applicative.Combinators
 import           Control.Lens hiding (List)
 -- import           Control.Monad
 import           Control.Monad.IO.Class
@@ -26,8 +27,8 @@ import           TestUtils
 -- ---------------------------------------------------------------------
 
 spec :: Spec
-spec = do
-  describe "composes code actions" $ do
+spec =
+  describe "composes code actions" $
     it "provides 3.8 code actions" $ runSession hieCommandExamplePlugin fullCaps "test/testdata" $ do
 
       doc <- openDoc "Format.hs" "haskell"
@@ -53,6 +54,9 @@ spec = do
       liftIO $ putStrLn $ "A" -- AZ
       executeCodeAction ca
       liftIO $ putStrLn $ "B" -- AZ
+
+      _ <- skipManyTill anyMessage (message @RegisterCapabilityRequest)
+      liftIO $ putStrLn $ "B2" -- AZ
 
       contents <- getDocumentEdit doc
       liftIO $ putStrLn $ "C" -- AZ
