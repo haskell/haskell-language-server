@@ -2,21 +2,18 @@
 module Help where
 
 import           Development.Shake
-import           Data.List                                ( intersperse
-                                                          , intercalate
-                                                          )
+import           Data.List                                ( intercalate )
 
 import           Env
 import           Print
 import           Version
 import           BuildSystem
-import           Cabal
 
 stackCommand :: TargetDescription -> String
-stackCommand target = "stack install.hs " ++ fst target
+stackCommand target = "stack install.hs " ++ fst target ++ " [options]"
 
 cabalCommand :: TargetDescription -> String
-cabalCommand target = "cabal v2-run install.hs --project-file install/shake.project " ++ fst target
+cabalCommand target = "cabal v2-run install.hs --project-file install/shake.project -- " ++ fst target ++ " [options]"
 
 buildCommand :: TargetDescription -> String
 buildCommand | isRunFromCabal = cabalCommand
@@ -37,7 +34,7 @@ shortHelpMessage = do
   printUsage
   printLine ""
   printLine "Targets:"
-  mapM_ (printLineIndented . showTarget (spaces hieVersions)) (targets hieVersions)
+  mapM_ (printLineIndented . showHelpItem (spaces hieVersions)) (targets hieVersions)
   printLine ""
  where
   spaces hieVersions = space (targets hieVersions)
@@ -68,7 +65,10 @@ helpMessage versions@BuildableVersions {..} = do
   printUsage
   printLine ""
   printLine "Targets:"
-  mapM_ (printLineIndented . showTarget spaces) targets
+  mapM_ (printLineIndented . showHelpItem spaces) targets
+  printLine ""
+  printLine "Options:"
+  mapM_ (printLineIndented . showHelpItem spaces) options
   printLine ""
  where
   spaces = space targets
@@ -81,6 +81,10 @@ helpMessage versions@BuildableVersions {..} = do
     , if isRunFromCabal then [cabalGhcsTarget] else [stackDevTarget]
     , [macosIcuTarget]
     ]
+  options = [ ("-s, --silent", "Don't print anything.")
+            , ("-q, --quiet", "Print less (pass repeatedly for even less).")
+            , ("-V, --verbose", "Print more (pass repeatedly for even more).")
+            ]
 
   -- All targets with their respective help message.
   generalTargets = [helpTarget]
@@ -97,10 +101,10 @@ templateTarget = ("<target>", "")
 
 hieTarget :: String -> TargetDescription
 hieTarget version =
-  ("haskell-language-server-" ++ version, "Install haskell-language-server for GHC version " ++ version)
+  ("hls-" ++ version, "Install haskell-language-server for GHC version " ++ version)
 
 buildTarget :: TargetDescription
-buildTarget = ("haskell-language-server", "Install haskell-language-server with the latest available GHC and the data files")
+buildTarget = ("hls", "Install haskell-language-server with the latest available GHC and the data files")
 
 buildLatestTarget :: TargetDescription
 buildLatestTarget = ("latest", "Install haskell-language-server with the latest available GHC")

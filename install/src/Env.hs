@@ -1,15 +1,11 @@
 module Env where
 
 import           Development.Shake
-import           Development.Shake.Command
 import           Control.Monad.IO.Class
 import           Control.Monad
 import           Development.Shake.FilePath
-import           System.Info                              ( os
-                                                          , arch
-                                                          )
+import           System.Info                              ( os )
 import           Data.Maybe                               ( isJust
-                                                          , isNothing
                                                           , mapMaybe
                                                           )
 import           System.Directory                         ( findExecutable
