@@ -11,14 +11,11 @@
 module Ide.Plugin.Example2
   (
     descriptor
-  , plugin
-  , hover
-  , codeAction
   ) where
 
 import Control.DeepSeq ( NFData )
 import Control.Monad.Trans.Maybe
-import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
+import Data.Aeson.Types (toJSON)
 import Data.Binary
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
@@ -31,16 +28,12 @@ import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
-import Development.IDE.LSP.Server
-import Development.IDE.Plugin
 import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.Shake hiding ( Diagnostic )
 import Ide.Types
 import GHC.Generics
-import qualified Language.Haskell.LSP.Core as LSP
-import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
 
@@ -52,19 +45,15 @@ descriptor plId = PluginDescriptor
   , pluginRules = exampleRules
   , pluginCommands = []
   , pluginCodeActionProvider = Just codeAction
+  , pluginCodeLensProvider   = Just codeLens
   , pluginDiagnosticProvider = Nothing
-  , pluginHoverProvider = Just hover
-  , pluginSymbolProvider = Nothing
+  , pluginHoverProvider      = Just hover
+  , pluginSymbolProvider     = Nothing
   , pluginFormattingProvider = Nothing
   , pluginCompletionProvider = Nothing
   }
 
 -- ---------------------------------------------------------------------
-
-plugin :: Plugin c
-plugin = Plugin mempty exampleRules handlersExample2
-         -- <> codeActionPlugin codeAction
-         <> Plugin mempty mempty handlersCodeLens
 
 hover :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 hover = request "Hover" blah (Right Nothing) foundHover
@@ -72,12 +61,6 @@ hover = request "Hover" blah (Right Nothing) foundHover
 blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
   = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover 2\n"])
-
-handlersExample2 :: PartialHandlers c
-handlersExample2 = mempty
--- handlersExample2 = PartialHandlers $ \WithMessage{..} x ->
---   return x{LSP.hoverHandler = withResponse RspHover $ const hover}
-
 
 -- ---------------------------------------------------------------------
 
@@ -137,19 +120,12 @@ codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_di
 
 -- ---------------------------------------------------------------------
 
--- | Generate code lenses.
-handlersCodeLens :: PartialHandlers c
-handlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
-    LSP.codeLensHandler = withResponse RspCodeLens codeLens,
-    LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
-    }
-
 codeLens
-    :: LSP.LspFuncs c
-    -> IdeState
+    :: IdeState
+    -> PluginId
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
-codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+codeLens ideState _plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} =
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
@@ -160,26 +136,12 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
           tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
                "-- TODO2 added by Example2 Plugin via code lens action\n"]
           edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-          range = (Range (Position 3 0) (Position 4 0))
+          range = Range (Position 3 0) (Position 4 0)
         pure $ Right $ List
           -- [ CodeLens range (Just (Command title "codelens.do" (Just $ List [toJSON edit]))) Nothing
           [ CodeLens range (Just (Command title "codelens.todo" (Just $ List [toJSON edit]))) Nothing
           ]
       Nothing -> pure $ Right $ List []
-
--- | Execute the "codelens.todo2" command.
-executeAddSignatureCommand
-    :: LSP.LspFuncs c
-    -> IdeState
-    -> ExecuteCommandParams
-    -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
-    | _command == "codelens.todo2"
-    , Just (List [edit]) <- _arguments
-    , Success wedit <- fromJSON edit
-    = return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
-    | otherwise
-    = return (Right Null, Nothing)
 
 -- ---------------------------------------------------------------------
 

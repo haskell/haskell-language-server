@@ -39,6 +39,7 @@ descriptor plId = PluginDescriptor
   , pluginRules = mempty
   , pluginCommands = []
   , pluginCodeActionProvider = Nothing
+  , pluginCodeLensProvider   = Nothing
   , pluginDiagnosticProvider = Nothing
   , pluginHoverProvider      = Nothing
   , pluginSymbolProvider     = Nothing

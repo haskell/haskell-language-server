@@ -14,6 +14,7 @@ module Ide.Types
     , FormattingProvider
     , HoverProvider
     , CodeActionProvider
+    , CodeLensProvider
     , ExecuteCommandProvider
     , CompletionProvider
     ) where
@@ -45,6 +46,7 @@ data PluginDescriptor =
                    , pluginRules              :: !(Rules ())
                    , pluginCommands           :: ![PluginCommand]
                    , pluginCodeActionProvider :: !(Maybe CodeActionProvider)
+                   , pluginCodeLensProvider   :: !(Maybe CodeLensProvider)
                    , pluginDiagnosticProvider :: !(Maybe DiagnosticProvider)
                      -- ^ TODO: diagnostics are generally provided via rules,
                      -- this is probably redundant.
@@ -76,6 +78,12 @@ type CodeActionProvider =  IdeState
                         -> Range
                         -> CodeActionContext
                         -> IO (Either ResponseError (List CAResult))
+
+
+type CodeLensProvider = IdeState
+                      -> PluginId
+                      -> CodeLensParams
+                      -> IO (Either ResponseError (List CodeLens))
 
 type DiagnosticProviderFuncSync
   = DiagnosticTrigger -> Uri

@@ -1,3 +1,6 @@
+{- | Provides an implementation of the ghcide @Logger@ which uses
+   @System.Log.Logger@ under the hood.
+-}
 module Ide.Logger
   (
     hlsLogger
@@ -13,7 +16,7 @@ import qualified Development.IDE.Types.Logger as L
 import           System.Log.Logger
 
 -- ---------------------------------------------------------------------
--- data Logger = Logger {logPriority :: Priority -> T.Text -> IO ()}
+
 hlsLogger :: L.Logger
 hlsLogger = L.Logger $ \pri txt ->
     case pri of

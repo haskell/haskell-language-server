@@ -69,38 +69,15 @@ import Ide.Plugin.Pragmas                 as Pragmas
 
 -- ---------------------------------------------------------------------
 
--- | TODO: these should come out of something like asGhcIdePlugin
-commandIds :: T.Text -> [T.Text]
-commandIds pid = "typesignature.add" : allLspCmdIds pid [("pragmas", Pragmas.commands)]
-
 -- | The plugins configured for use in this instance of the language
 -- server.
 -- These can be freely added or removed to tailor the available
 -- features of the server.
-_idePlugins :: Bool -> Plugin Config
-_idePlugins includeExample
-  = Completions.plugin <>
-    CodeAction.plugin <>
-    formatterPlugins [("ormolu",   Ormolu.provider)
-                     ,("floskell", Floskell.provider)] <>
-    codeActionPlugins [("eg",      Example.codeAction)
-                      ,("eg2",     Example2.codeAction)
-                      ,("pragmas", Pragmas.codeAction)] <>
-    executeCommandPlugins [("pragmas", Pragmas.commands)] <>
-    hoverPlugins [("eg", Example.hover)
-                 ,("eg2", Example2.hover)] <>
-    if includeExample then Example.plugin <> Example2.plugin
-                      else mempty
-
-
--- | The plugins configured for use in this instance of the language
--- server.
--- These can be freely added or removed to tailor the available
--- features of the server.
-idePlugins :: Bool -> Plugin Config
-idePlugins includeExamples
-    = asGhcIdePlugin $ pluginDescToIdePlugins allPlugins
+idePlugins :: T.Text -> Bool -> (Plugin Config, [T.Text])
+idePlugins pid includeExamples
+    = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
   where
+    ps = pluginDescToIdePlugins allPlugins
     allPlugins = if includeExamples
                    then basePlugins ++ examplePlugins
                    else basePlugins
@@ -164,9 +141,12 @@ main = do
     dir <- IO.getCurrentDirectory
 
     pid <- getPid
-    -- let plugins = idePlugins argsExamplePlugin
-    let plugins = idePlugins True
-        options = def { LSP.executeCommandCommands = Just (commandIds pid)
+    let
+        -- (ps, commandIds) = idePlugins pid argsExamplePlugin
+        (ps, commandIds) = idePlugins pid True
+        plugins = Completions.plugin <> CodeAction.plugin <>
+                  ps
+        options = def { LSP.executeCommandCommands = Just commandIds
                       , LSP.completionTriggerCharacters = Just "."
                       }
 

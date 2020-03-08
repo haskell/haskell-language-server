@@ -58,6 +58,8 @@ spec =
       _ <- skipManyTill anyMessage (message @RegisterCapabilityRequest)
       liftIO $ putStrLn $ "B2" -- AZ
 
+       -- <- skipManyTill anyMessage $ between (satisfy startPred) (satisfy donePred) $
+
       contents <- getDocumentEdit doc
       liftIO $ putStrLn $ "C" -- AZ
       liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"

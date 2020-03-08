@@ -6,8 +6,7 @@
 module Ide.Plugin.Pragmas
   (
       descriptor
-  ,   codeAction
-  ,   commands
+  -- ,   commands -- TODO: get rid of this
   ) where
 
 import           Control.Lens hiding (List)
@@ -30,6 +29,7 @@ descriptor plId = PluginDescriptor
   , pluginRules = mempty
   , pluginCommands = commands
   , pluginCodeActionProvider = Just codeActionProvider
+  , pluginCodeLensProvider   = Nothing
   , pluginDiagnosticProvider = Nothing
   , pluginHoverProvider = Nothing
   , pluginSymbolProvider = Nothing
@@ -69,12 +69,9 @@ addPragmaCmd (AddPragmaParams uri pragmaName) = do
     res = J.WorkspaceEdit
       (Just $ H.singleton uri textEdits)
       Nothing
-  return $ (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+  return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
 
 -- ---------------------------------------------------------------------
-
-codeAction :: CodeActionProvider
-codeAction = codeActionProvider
 
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.

@@ -11,12 +11,9 @@ module Ide.Plugin
     (
       asGhcIdePlugin
     , pluginDescToIdePlugins
-    , formatterPlugins
-    , hoverPlugins
-    , codeActionPlugins
-    , executeCommandPlugins
     , mkLspCommand
     , allLspCmdIds
+    , allLspCmdIds'
     , getPid
     ) where
 
@@ -29,9 +26,11 @@ import qualified Data.Map  as Map
 import           Data.Maybe
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin hiding (pluginCommands, pluginRules)
 import           Development.IDE.Types.Diagnostics as D
+import           Development.IDE.Types.Logger
 import           Development.Shake hiding ( Diagnostic, command )
 import           GHC.Generics
 import           Ide.Compat
@@ -56,11 +55,12 @@ asGhcIdePlugin mp =
     mkPlugin rulesPlugins (Just . pluginRules) <>
     mkPlugin executeCommandPlugins (Just . pluginCommands) <>
     mkPlugin codeActionPlugins     pluginCodeActionProvider <>
-    -- diagnostics from pluginDiagnosticProvider
+    mkPlugin codeLensPlugins       pluginCodeLensProvider <>
+    -- Note: diagnostics are provided via Rules from pluginDiagnosticProvider
     mkPlugin hoverPlugins          pluginHoverProvider <>
-    -- symbols via pluginSymbolProvider
+    -- TODO: symbols via pluginSymbolProvider
     mkPlugin formatterPlugins      pluginFormattingProvider
-    -- completions
+    -- TODO: completions
     where
         justs (p, Just x)  = [(p, x)]
         justs (_, Nothing) = []
@@ -74,6 +74,17 @@ asGhcIdePlugin mp =
 
 pluginDescToIdePlugins :: [PluginDescriptor] -> IdePlugins
 pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginId p, p)) plugins
+
+allLspCmdIds' :: T.Text -> IdePlugins -> [T.Text]
+allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
+    where
+        justs (p, Just x)  = [(p, x)]
+        justs (_, Nothing) = []
+
+        ls = Map.toList (ipMap mp)
+
+        mkPlugin maker selector
+            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
 
 -- ---------------------------------------------------------------------
 
@@ -137,6 +148,46 @@ data FallbackCodeActionParams =
     , fallbackCommand       :: Maybe Command
     }
   deriving (Generic, J.ToJSON, J.FromJSON)
+
+-- -----------------------------------------------------------
+
+codeLensPlugins :: [(PluginId, CodeLensProvider)] -> Plugin Config
+codeLensPlugins cas = Plugin mempty codeLensRules (codeLensHandlers cas)
+
+codeLensRules :: Rules ()
+codeLensRules = mempty
+
+codeLensHandlers :: [(PluginId, CodeLensProvider)] -> PartialHandlers Config
+codeLensHandlers cas = PartialHandlers $ \WithMessage{..} x -> return x
+    { LSP.codeLensHandler
+        = withResponse RspCodeLens (makeCodeLens cas)
+    }
+
+makeCodeLens :: [(PluginId, CodeLensProvider)]
+      -> LSP.LspFuncs Config
+      -> IdeState
+      -> CodeLensParams
+      -> IO (Either ResponseError (List CodeLens))
+makeCodeLens cas _lf ideState params = do
+    logInfo (ideLogger ideState) "Plugin.makeCodeLens (ideLogger)" -- AZ
+    let
+      makeLens (pid, provider) = do
+          r <- provider ideState pid params
+          return (pid, r)
+      breakdown :: [(PluginId, Either ResponseError a)] -> ([(PluginId, ResponseError)], [(PluginId, a)])
+      breakdown ls = (concatMap doOneLeft ls, concatMap doOneRight ls)
+        where
+          doOneLeft (pid, Left err) = [(pid,err)]
+          doOneLeft (_, Right _) = []
+
+          doOneRight (pid, Right a) = [(pid,a)]
+          doOneRight (_, Left _) = []
+
+    r <- mapM makeLens cas
+    case breakdown r of
+        ([],[]) -> return $ Right $ List []
+        (es,[]) -> return $ Left $ ResponseError InternalError (T.pack $ "codeLens failed:" ++ show es) Nothing
+        (_,rs) -> return $ Right $ List (concatMap (\(_,List cs) -> cs) rs)
 
 -- -----------------------------------------------------------
 
@@ -275,6 +326,9 @@ makeExecuteCommands ecs _lf _params = do
 
           execCmd (params ^. J.command) (params ^. J.arguments)
 -}
+
+-- -----------------------------------------------------------
+
 -- | Runs a plugin command given a PluginId, CommandId and
 -- arguments in the form of a JSON object.
 runPluginCommand :: Map.Map PluginId [PluginCommand] -> PluginId -> CommandId -> J.Value
@@ -290,14 +344,7 @@ runPluginCommand m p@(PluginId p') com@(CommandId com') arg =
       Just (PluginCommand _ _ f) -> case J.fromJSON arg of
         J.Error err -> return (Left $
           ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p' <> ": " <> T.pack err) Nothing, Nothing)
-        J.Success a -> do
-            res <- f a
-            return res
-            -- case res of
-            --     Left e ->  return (Left e,             Nothing)
-            --     -- Right r -> return (Right $ J.toJSON r, Nothing)
-            --     Right r -> return r
-            --         -- return (Right J.Null, Just(WorkspaceApplyEdit, _ r))
+        J.Success a -> f a
 
 -- -----------------------------------------------------------
 
