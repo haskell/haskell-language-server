@@ -1,43 +1,13 @@
 module HieInstall where
 
 import           Development.Shake
-import           Development.Shake.Command
-import           Development.Shake.FilePath
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.Extra                      ( unlessM
-                                                          , mapMaybeM
-                                                          )
-import           Data.Maybe                               ( isJust )
-import           System.Directory                         ( listDirectory )
 import           System.Environment                       ( unsetEnv )
-import           System.Info                              ( os
-                                                          , arch
-                                                          )
-
-import           Data.Maybe                               ( isNothing
-                                                          , mapMaybe
-                                                          )
-import           Data.List                                ( dropWhileEnd
-                                                          , intersperse
-                                                          , intercalate
-                                                          , sort
-                                                          , sortOn
-                                                          )
-import qualified Data.Text                     as T
-import           Data.Char                                ( isSpace )
-import           Data.Version                             ( parseVersion
-                                                          , makeVersion
-                                                          , showVersion
-                                                          )
-import           Data.Function                            ( (&) )
-import           Text.ParserCombinators.ReadP             ( readP_to_S )
 
 import           BuildSystem
 import           Stack
 import           Cabal
 import           Version
-import           Print
 import           Env
 import           Help
 
@@ -60,36 +30,54 @@ defaultMain = do
   let latestVersion = last versions
 
   shakeArgs shakeOptions { shakeFiles = "_build" } $ do
+
+    shakeOptionsRules <- getShakeOptionsRules
+
+    let verbosityArg = if isRunFromStack then Stack.getVerbosityArg else Cabal.getVerbosityArg
+
+    let args = [verbosityArg (shakeVerbosity shakeOptionsRules)]
+
+    phony "show-options" $ do
+      putNormal $ "Options:"
+      putNormal $ "    Verbosity level: " ++ show (shakeVerbosity shakeOptionsRules)
+
     want ["short-help"]
     -- general purpose targets
     phony "submodules"  updateSubmodules
     phony "short-help"  shortHelpMessage
     phony "help"        (helpMessage toolsVersions)
 
-    phony "check" (if isRunFromStack then checkStack else checkCabal_)
+    phony "check" (if isRunFromStack then checkStack args else checkCabal_ args)
 
     phony "data" $ do
+      need ["show-options"]
       need ["submodules"]
       need ["check"]
-      if isRunFromStack then stackBuildData else cabalBuildData
+      if isRunFromStack then stackBuildData args else cabalBuildData args
 
     forM_
       versions
-      (\version -> phony ("haskell-language-server-" ++ version) $ do
+      (\version -> phony ("hls-" ++ version) $ do
+        need ["show-options"]
         need ["submodules"]
         need ["check"]
-        if isRunFromStack then do
-          stackInstallHieWithErrMsg (Just version)
+        if isRunFromStack then
+          stackInstallHieWithErrMsg (Just version) args
         else
-          cabalInstallHie version
+          cabalInstallHie version args
       )
 
-    phony "latest" (need ["haskell-language-server-" ++ latestVersion])
-    phony "haskell-language-server"  (need ["data", "latest"])
+    unless (null versions) $ do
+      phony "latest" (need ["hls-" ++ latestVersion])
+      phony "hls"  (need ["data", "latest"])
 
     -- stack specific targets
-    when isRunFromStack $
-      phony "dev" $ stackInstallHieWithErrMsg Nothing
+    -- Default `stack.yaml` uses ghc-8.8.2 and we can't build hie in windows
+    -- TODO: Enable for windows when it uses ghc-8.8.3
+    when (isRunFromStack && not isWindowsSystem) $
+      phony "dev" $ do
+        need ["show-options"]
+        stackInstallHieWithErrMsg Nothing args
 
     -- cabal specific targets
     when isRunFromCabal $ do
@@ -98,20 +86,23 @@ defaultMain = do
       phony "ghcs" $ showInstalledGhcs ghcPaths
 
     -- macos specific targets
-    phony "icu-macos-fix"
-          (need ["icu-macos-fix-install"] >> need ["icu-macos-fix-build"])
+    phony "icu-macos-fix" $ do
+      need ["show-options"]
+      need ["icu-macos-fix-install"]
+      need ["icu-macos-fix-build"]
+
     phony "icu-macos-fix-install" (command_ [] "brew" ["install", "icu4c"])
-    phony "icu-macos-fix-build" $ mapM_ buildIcuMacosFix versions
+    phony "icu-macos-fix-build" $ mapM_ (flip buildIcuMacosFix $ args) versions
 
 
-buildIcuMacosFix :: VersionNumber -> Action ()
-buildIcuMacosFix version = execStackWithGhc_
-  version
+buildIcuMacosFix :: VersionNumber -> [String] -> Action ()
+buildIcuMacosFix version args = execStackWithGhc_
+  version $
   [ "build"
   , "text-icu"
   , "--extra-lib-dirs=/usr/local/opt/icu4c/lib"
   , "--extra-include-dirs=/usr/local/opt/icu4c/include"
-  ]
+  ] ++ args
 
 -- | update the submodules that the project is in the state as required by the `stack.yaml` files
 updateSubmodules :: Action ()

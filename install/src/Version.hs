@@ -6,7 +6,6 @@ import           Data.Version                             ( Version
                                                           , showVersion
                                                           )
 import           Text.ParserCombinators.ReadP             ( readP_to_S )
-import           Control.Monad.IO.Class
 
 
 type VersionNumber = String

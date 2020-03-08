@@ -1,10 +1,8 @@
 module Print where
 
 import           Development.Shake
-import           Development.Shake.Command
 import           Control.Monad.IO.Class
 import           Data.List                                ( dropWhileEnd
-                                                          , dropWhile
                                                           )
 import           Data.Char                                ( isSpace )
 
@@ -37,11 +35,11 @@ type TargetDescription = (String, String)
 
 -- | Number of spaces the target name including whitespace should have.
 -- At least twenty, maybe more if target names are long. At most the length of the longest target plus five.
-space :: [TargetDescription] -> Int
-space phonyTargets = maximum (20 : map ((+ 5) . length . fst) phonyTargets)
+space :: [(String,String)] -> Int
+space helpItems = maximum (20 : map ((+ 5) . length . fst) helpItems)
 
 -- | Show a target.
 -- Concatenates the target with its help message and inserts whitespace between them.
-showTarget :: Int -> TargetDescription -> String
-showTarget spaces (target, msg) =
-  target ++ replicate (spaces - length target) ' ' ++ msg
+showHelpItem :: Int -> (String,String) -> String
+showHelpItem spaces (helpItemKey, msg) =
+  helpItemKey ++ replicate (spaces - length helpItemKey) ' ' ++ msg
