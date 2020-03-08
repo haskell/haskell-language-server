@@ -7,7 +7,9 @@ packages:
 extra-deps:
 - ansi-terminal-0.10.2
 - base-compat-0.11.0
-- cabal-helper-1.0.0.0
+# - cabal-helper-1.0.0.0
+- github: DanielG/cabal-helper
+  commit: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - floskell-0.10.2
