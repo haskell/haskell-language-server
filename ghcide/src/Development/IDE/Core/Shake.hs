@@ -102,8 +102,6 @@ data ShakeExtras = ShakeExtras
     -- positions in a version of that document to positions in the latest version
     ,inProgress :: Var (HMap.HashMap NormalizedFilePath Int)
     -- ^ How many rules are running for each file
-    ,isTesting :: Bool
-    -- ^ enable additional messages used by the test suite to check invariants
     }
 
 getShakeExtras :: Action ShakeExtras
@@ -299,12 +297,11 @@ shakeOpen :: IO LSP.LspId
           -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
-          -> IdeTesting
           -> IdeReportProgress
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen getLspId eventer logger debouncer shakeProfileDir (IdeTesting isTesting) (IdeReportProgress reportProgress) opts rules = do
+shakeOpen getLspId eventer logger debouncer shakeProfileDir (IdeReportProgress reportProgress) opts rules = do
     inProgress <- newVar HMap.empty
     shakeExtras <- do
         globals <- newVar HMap.empty
