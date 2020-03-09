@@ -488,13 +488,13 @@ uses_ :: IdeRule k v => k -> [NormalizedFilePath] -> Action [v]
 uses_ key files = do
     res <- uses key files
     case sequence res of
-        Nothing -> liftIO $ throwIO BadDependency
+        Nothing -> liftIO $ throwIO $ BadDependency (show key)
         Just v -> return v
 
 
 -- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
 --   which short-circuits the rest of the action
-data BadDependency = BadDependency deriving Show
+data BadDependency = BadDependency String deriving Show
 instance Exception BadDependency
 
 isBadDependency :: SomeException -> Bool
@@ -659,12 +659,12 @@ defineOnDisk act = addBuiltinRule noLint noIdentity $
 needOnDisk :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> NormalizedFilePath -> Action ()
 needOnDisk k file = do
     successfull <- apply1 (QDisk k file)
-    liftIO $ unless successfull $ throwIO BadDependency
+    liftIO $ unless successfull $ throwIO $ BadDependency (show k)
 
 needOnDisks :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> [NormalizedFilePath] -> Action ()
 needOnDisks k files = do
     successfulls <- apply $ map (QDisk k) files
-    liftIO $ unless (and successfulls) $ throwIO BadDependency
+    liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
 
 toShakeValue :: (BS.ByteString -> ShakeValue) -> Maybe BS.ByteString -> ShakeValue
 toShakeValue = maybe ShakeNoCutoff

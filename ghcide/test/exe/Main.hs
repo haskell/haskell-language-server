@@ -901,34 +901,41 @@ suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
   [ testGroup "Dont want suggestion"
     [ -- extend import
-      test False ["Data.List.NonEmpty ()"] "f = nonEmpty" [] "import Data.List.NonEmpty (nonEmpty)"
+      test False ["Data.List.NonEmpty ()"] "f = nonEmpty" []                "import Data.List.NonEmpty (nonEmpty)"
       -- data constructor
-    , test False []                        "f = First"    [] "import Data.Monoid (First)"
+    , test False []                        "f = First"    []                "import Data.Monoid (First)"
       -- internal module
     , test False []         "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable.Internal (Typeable)"
+      -- package not in scope
+    , test False []         "f = quickCheck"              []                "import Test.QuickCheck (quickCheck)"
     ]
   , testGroup "want suggestion"
     [ test True []          "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
-    , test True []          "f = (:|)"                    []                "import GHC.Base (NonEmpty((:|)))"
-    , test True []          "f :: Natural"                ["f = undefined"] "import GHC.Natural (Natural)"
-    , test True []          "f :: NonEmpty ()"            ["f = () :| []"]  "import GHC.Base (NonEmpty)"
+    , test True []          "f = (:|)"                    []                "import Data.List.NonEmpty (NonEmpty((:|)))"
+    , test True []          "f :: Natural"                ["f = undefined"] "import Numeric.Natural (Natural)"
+    , test True []          "f :: NonEmpty ()"            ["f = () :| []"]  "import Data.List.NonEmpty (NonEmpty)"
     , test True []          "f = First"                   []                "import Data.Monoid (First(First))"
+    , test True []          "f = Endo"                    []                "import Data.Monoid (Endo(Endo))"
+    , test True []          "f = Version"                 []                "import Data.Version (Version(Version))"
+    , test True []          "f ExitSuccess = ()"          []                "import System.Exit (ExitCode(ExitSuccess))"
+    , test True []          "f = AssertionFailed"         []                "import Control.Exception (AssertionFailed(AssertionFailed))"
     , test True ["Prelude"] "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
-    , test True []          "f :: Alternative f => f ()"  ["f = undefined"] "import GHC.Base (Alternative)"
-    , test True []          "f = empty"                   []                "import GHC.Base (Alternative(empty))"
+    , test True []          "f :: Alternative f => f ()"  ["f = undefined"] "import Control.Applicative (Alternative)"
+    , test True []          "f = empty"                   []                "import Control.Applicative (Alternative(empty))"
     , test True []          "f = (&)"                     []                "import Data.Function ((&))"
     , test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
-    , expectFailBecause "known broken - reexported name" $
-      test True []          "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable (Typeable)"
+    , test True []          "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable (Typeable)"
+    , test True []          "f = pack"                    []                "import Data.Text (pack)"
+    , test True []          "f :: Text"                   ["f = undefined"] "import Data.Text (Text)"
     ]
   ]
   where
-    test wanted imps def other newImp = testSession (T.unpack def) $ do
+    test wanted imps def other newImp = testSession' (T.unpack def) $ \dir -> do
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
           after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -]}}"
+      liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
       doc <- openDoc' "Test.hs" "haskell" before
-      -- load another module in the session to exercise the package cache
-      _   <- openDoc' "Other.hs" "haskell" after
       _diags <- waitForDiagnostics
       let defLine = length imps + 1
           range = Range (Position defLine 0) (Position defLine maxBound)
