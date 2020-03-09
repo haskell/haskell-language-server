@@ -1,5 +1,5 @@
 
-module Development.IDE.Plugin(Plugin(..), codeActionPlugin) where
+module Development.IDE.Plugin(Plugin(..), codeActionPlugin, codeActionPluginWithRules) where
 
 import Data.Default
 import Development.Shake
@@ -27,7 +27,10 @@ instance Monoid (Plugin c) where
 
 
 codeActionPlugin :: (LSP.LspFuncs c -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO (Either ResponseError [CAResult])) -> Plugin c
-codeActionPlugin f = Plugin mempty $ PartialHandlers $ \WithMessage{..} x -> return x{
+codeActionPlugin = codeActionPluginWithRules mempty
+
+codeActionPluginWithRules :: Rules () -> (LSP.LspFuncs c -> IdeState -> TextDocumentIdentifier -> Range -> CodeActionContext -> IO (Either ResponseError [CAResult])) -> Plugin c
+codeActionPluginWithRules rr f = Plugin rr $ PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.codeActionHandler = withResponse RspCodeAction g
     }
     where

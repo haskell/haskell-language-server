@@ -9,6 +9,8 @@ module Development.IDE.GHC.Util(
     runGhcEnv,
     -- * GHC wrappers
     prettyPrint,
+    printRdrName,
+    printName,
     ParseResult(..), runParser,
     lookupPackageConfig,
     moduleImportPath,
@@ -98,6 +100,16 @@ runParser flags str parser = unP parser parseState
 prettyPrint :: Outputable a => a -> String
 prettyPrint = showSDoc unsafeGlobalDynFlags . ppr
 
+-- | Pretty print a 'RdrName' wrapping operators in parens
+printRdrName :: RdrName -> String
+printRdrName name = showSDocUnsafe $ parenSymOcc rn (ppr rn)
+  where
+    rn = rdrNameOcc name
+
+-- | Pretty print a 'Name' wrapping operators in parens
+printName :: Name -> String
+printName = printRdrName . nameRdrName
+
 -- | Run a 'Ghc' monad value using an existing 'HscEnv'. Sets up and tears down all the required
 --   pieces, but designed to be more efficient than a standard 'runGhc'.
 runGhcEnv :: HscEnv -> Ghc a -> IO a
@@ -150,6 +162,15 @@ instance Eq HscEnvEq where
 
 instance NFData HscEnvEq where
   rnf (HscEnvEq a b) = rnf (hashUnique a) `seq` b `seq` ()
+
+instance Hashable HscEnvEq where
+  hashWithSalt salt (HscEnvEq u _) = hashWithSalt salt u
+
+-- Fake instance needed to persuade Shake to accept this type as a key.
+-- No harm done as ghcide never persists these keys currently
+instance Binary HscEnvEq where
+  put _ = error "not really"
+  get = error "not really"
 
 -- | Read a UTF8 file, with lenient decoding, so it will never raise a decoding error.
 readFileUtf8 :: FilePath -> IO T.Text

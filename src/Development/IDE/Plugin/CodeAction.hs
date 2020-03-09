@@ -8,7 +8,6 @@
 -- | Go to the definition of a variable.
 module Development.IDE.Plugin.CodeAction(plugin) where
 
-import Avail (AvailInfo(Avail), AvailInfo(AvailTC), availNames)
 import           Language.Haskell.LSP.Types
 import Control.Monad (join)
 import Development.IDE.Plugin
@@ -21,8 +20,11 @@ import Development.IDE.GHC.Error
 import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
 import Development.IDE.Plugin.CodeAction.PositionIndexed
+import Development.IDE.Plugin.CodeAction.RuleTypes
+import Development.IDE.Plugin.CodeAction.Rules
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
+import Development.Shake (Rules)
 import qualified Data.HashMap.Strict as Map
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.VFS
@@ -36,20 +38,18 @@ import Data.List.Extra
 import qualified Data.Text as T
 import Data.Tuple.Extra ((&&&))
 import HscTypes
-import OccName
 import Parser
-import RdrName
 import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
 import Outputable (ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
-import Data.IORef (readIORef)
-import Name (isDataConName, nameModule_maybe, nameOccName)
-import Packages (exposedModules, lookupPackage)
 
 plugin :: Plugin c
-plugin = codeActionPlugin codeAction <> Plugin mempty setHandlersCodeLens
+plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
+
+rules :: Rules ()
+rules = rulePackageExports
 
 -- | Generate code actions.
 codeAction
@@ -65,15 +65,15 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath <$> uriToFilePath uri
-    (ideOptions, parsedModule, env) <- runAction state $
+    (ideOptions, parsedModule, join -> env) <- runAction state $
       (,,) <$> getIdeOptions
-           <*> getParsedModule `traverse` mbFile
-           <*> use_ GhcSession `traverse` mbFile
+            <*> getParsedModule `traverse` mbFile
+            <*> use GhcSession `traverse` mbFile
+    pkgExports <- runAction state $ (useNoFile_ . PackageExports) `traverse` env
     let dflags = hsc_dflags . hscEnv <$> env
-    eps <- traverse readIORef (hsc_EPS . hscEnv <$> env)
     pure $ Right
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction dflags eps ideOptions ( join parsedModule ) text x
+        | x <- xs, (title, tedit) <- suggestAction dflags (fromMaybe mempty pkgExports) ideOptions ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
 
@@ -114,13 +114,13 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
 
 suggestAction
   :: Maybe DynFlags
-  -> Maybe ExternalPackageState
+  -> PackageExportsMap
   -> IdeOptions
   -> Maybe ParsedModule
   -> Maybe T.Text
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
-suggestAction dflags eps ideOptions parsedModule text diag = concat
+suggestAction dflags packageExports ideOptions parsedModule text diag = concat
     [ suggestAddExtension diag
     , suggestExtendImport dflags text diag
     , suggestFillHole diag
@@ -132,7 +132,7 @@ suggestAction dflags eps ideOptions parsedModule text diag = concat
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestRemoveRedundantImport pm text diag
-    ++ concat [suggestNewImport dflags eps pm diag | Just eps <- [eps], Just dflags <- [dflags]]
+    ++ suggestNewImport packageExports pm diag
     | Just pm <- [parsedModule]]
 
 
@@ -304,14 +304,9 @@ suggestExtendImport (Just dflags) contents Diagnostic{_range=_range,..}
             _ -> error "bug in srcspan parser"
           importLine = textInRange range c
         in [("Add " <> binding <> " to the import list of " <> mod
-        , [TextEdit range (addBindingToImportList (printRdrName name) importLine)])]
+        , [TextEdit range (addBindingToImportList (T.pack $ printRdrName name) importLine)])]
     | otherwise = []
 suggestExtendImport Nothing _ _ = []
-
-printRdrName :: RdrName -> T.Text
-printRdrName name = T.pack $ showSDocUnsafe $ parenSymOcc rn (ppr rn)
-  where
-    rn = rdrNameOcc name
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestFixConstructorImport _ Diagnostic{_range=_range,..}
@@ -353,8 +348,8 @@ suggestSignature _ _ = []
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewImport :: DynFlags -> ExternalPackageState -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestNewImport dflags eps ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
+suggestNewImport :: PackageExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
   | msg <- unifySpaces _message
   , Just name <- extractNotInScopeName msg
   , Just insertLine <- case hsmodImports of
@@ -365,52 +360,36 @@ suggestNewImport dflags eps ParsedModule {pm_parsed_source = L _ HsModule {..}} 
           RealSrcLoc s -> Just $ srcLocLine s
           _ -> Nothing
   , insertPos <- Position insertLine 0
-  , extendImportSuggestions <- -- Just [binding, mod, srcspan] <-
-    matchRegex msg
+  , extendImportSuggestions <- matchRegex msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = [(imp, [TextEdit (Range insertPos insertPos) (imp <> "\n")])
-    | imp <- constructNewImportSuggestions dflags eps name extendImportSuggestions
+    | imp <- constructNewImportSuggestions packageExportsMap name extendImportSuggestions
     ]
-suggestNewImport _ _ _ _ = []
+suggestNewImport _ _ _ = []
 
-constructNewImportSuggestions :: DynFlags -> ExternalPackageState -> NotInScope -> Maybe [T.Text] -> [T.Text]
-constructNewImportSuggestions dflags eps thingMissing notTheseModules = nubOrd
-      [ case qual of
-          Nothing -> "import " <> modName <> " (" <> importWhat candidate avail <> ")"
-          Just q  -> "import qualified " <> modName <> " as " <> q
-        | item <- items,
-          avail <- tyThingAvailInfo item,
-          canUseAvail thingMissing avail,
-          candidate <- availNames avail,
-          canUseName thingMissing candidate,
-          occNameString (nameOccName candidate) == T.unpack name,
-          Just m <- [nameModule_maybe candidate],
-          Just package <- [lookupPackage dflags (moduleUnitId m)],
-          moduleName m `elem` map fst (exposedModules package),
-          let modName = T.pack $ moduleNameString $ moduleName m,
-          modName `notElem` fromMaybe [] notTheseModules
-      ]
-    where
-        (qual, name) = case T.splitOn "." (notInScope thingMissing) of
-            [n]      -> (Nothing, n)
-            segments -> (Just (T.concat $ init segments), last segments)
-        items = typeEnvElts $ eps_PTE eps
-        importWhat this (AvailTC parent _ _)
-          -- "Maybe(Just)"
-          | this /= parent
-          = T.pack (occNameString (nameOccName parent)) <>
-            "(" <> printName this <> ")"
-        importWhat this _ = printName this
+constructNewImportSuggestions
+  :: PackageExportsMap -> NotInScope -> Maybe [T.Text] -> [T.Text]
+constructNewImportSuggestions exportsMap thingMissing notTheseModules = nubOrd
+  [ renderNewImport identInfo m
+  | (identInfo, m) <- fromMaybe [] $ Map.lookup name exportsMap
+  , canUseIdent thingMissing identInfo
+  , m `notElem` fromMaybe [] notTheseModules
+  ]
+ where
+  renderNewImport identInfo m
+    | Just q <- qual = "import qualified " <> m <> " as " <> q
+    | otherwise      = "import " <> m <> " (" <> importWhat identInfo <> ")"
 
-        printName = printRdrName . nameRdrName
+  (qual, name) = case T.splitOn "." (notInScope thingMissing) of
+    [n]      -> (Nothing, n)
+    segments -> (Just (T.concat $ init segments), last segments)
+  importWhat IdentInfo {parent, rendered}
+    | Just p <- parent = p <> "(" <> rendered <> ")"
+    | otherwise        = rendered
 
-canUseAvail :: NotInScope -> AvailInfo -> Bool
-canUseAvail NotInScopeDataConstructor{} Avail{} = False
-canUseAvail _ _ = True
-
-canUseName :: NotInScope -> Name -> Bool
-canUseName NotInScopeDataConstructor{} = isDataConName
-canUseName _ = const True
+canUseIdent :: NotInScope -> IdentInfo -> Bool
+canUseIdent NotInScopeDataConstructor{} = isDatacon
+canUseIdent _                           = const True
 
 data NotInScope
     = NotInScopeDataConstructor T.Text
@@ -426,6 +405,8 @@ notInScope (NotInScopeThing t) = t
 extractNotInScopeName :: T.Text -> Maybe NotInScope
 extractNotInScopeName x
   | Just [name] <- matchRegex x "Data constructor not in scope: ([^ ]+)"
+  = Just $ NotInScopeDataConstructor name
+  | Just [name] <- matchRegex x "Not in scope: data constructor [^‘]*‘([^’]*)’"
   = Just $ NotInScopeDataConstructor name
   | Just [name] <- matchRegex x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
   = Just $ NotInScopeTypeConstructorOrClass name
