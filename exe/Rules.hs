@@ -16,9 +16,11 @@ import           Data.Functor                   ((<&>))
 import           Data.Maybe                     (fromMaybe)
 import           Data.Text                      (Text)
 import           Development.IDE.Core.Rules     (defineNoFile)
-import           Development.IDE.Core.Shake     (ShakeExtras(ShakeExtras,isTesting), getShakeExtras, sendEvent, define, useNoFile_)
+import           Development.IDE.Core.Service   (getIdeOptions)
+import           Development.IDE.Core.Shake     (sendEvent, define, useNoFile_)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Types.Location (fromNormalizedFilePath)
+import           Development.IDE.Types.Options  (IdeOptions(IdeOptions, optTesting))
 import           Development.Shake
 import           DynFlags                       (gopt_set, gopt_unset,
                                                  updOptLevel)
@@ -60,13 +62,13 @@ cradleToSession :: Rules ()
 cradleToSession = define $ \LoadCradle nfp -> do
     let f = fromNormalizedFilePath nfp
 
-    ShakeExtras{isTesting} <- getShakeExtras
+    IdeOptions{optTesting} <- getIdeOptions
 
     -- If the path points to a directory, load the implicit cradle
     mbYaml <- doesDirectoryExist f <&> \isDir -> if isDir then Nothing else Just f
     cradle <- liftIO $  maybe (loadImplicitCradle $ addTrailingPathSeparator f) loadCradle mbYaml
 
-    when isTesting $
+    when optTesting $
         sendEvent $ notifyCradleLoaded f
 
     cmpOpts <- liftIO $ getComponentOptions cradle
