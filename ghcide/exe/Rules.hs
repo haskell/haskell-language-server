@@ -14,10 +14,10 @@ import           Data.ByteString.Base16         (encode)
 import qualified Data.ByteString.Char8          as B
 import           Data.Functor                   ((<&>))
 import           Data.Maybe                     (fromMaybe)
-import           Data.Text                      (Text)
+import           Data.Text                      (pack, Text)
 import           Development.IDE.Core.Rules     (defineNoFile)
 import           Development.IDE.Core.Service   (getIdeOptions)
-import           Development.IDE.Core.Shake     (sendEvent, define, useNoFile_)
+import           Development.IDE.Core.Shake     (actionLogger, sendEvent, define, useNoFile_)
 import           Development.IDE.GHC.Util
 import           Development.IDE.Types.Location (fromNormalizedFilePath)
 import           Development.IDE.Types.Options  (IdeOptions(IdeOptions, optTesting))
@@ -39,6 +39,7 @@ import           System.FilePath.Posix          (addTrailingPathSeparator,
 import Language.Haskell.LSP.Messages as LSP
 import Language.Haskell.LSP.Types as LSP
 import Data.Aeson (ToJSON(toJSON))
+import Development.IDE.Types.Logger (logDebug)
 
 -- Prefix for the cache path
 cacheDir :: String
@@ -60,18 +61,23 @@ loadGhcSession =
 
 cradleToSession :: Rules ()
 cradleToSession = define $ \LoadCradle nfp -> do
+
     let f = fromNormalizedFilePath nfp
 
     IdeOptions{optTesting} <- getIdeOptions
 
+    logger <- actionLogger
+    liftIO $ logDebug logger $ "Running cradle " <> pack (fromNormalizedFilePath nfp)
+
     -- If the path points to a directory, load the implicit cradle
     mbYaml <- doesDirectoryExist f <&> \isDir -> if isDir then Nothing else Just f
-    cradle <- liftIO $  maybe (loadImplicitCradle $ addTrailingPathSeparator f) loadCradle mbYaml
+    cradle <- liftIO $ maybe (loadImplicitCradle $ addTrailingPathSeparator f) loadCradle mbYaml
 
     when optTesting $
         sendEvent $ notifyCradleLoaded f
 
-    cmpOpts <- liftIO $ getComponentOptions cradle
+    -- Avoid interrupting `getComponentOptions` since it calls external processes
+    cmpOpts <- liftIO $ mask $ \_ -> getComponentOptions cradle
     let opts = componentOptions cmpOpts
         deps = componentDependencies cmpOpts
         deps' = case mbYaml of

@@ -20,7 +20,7 @@
 --   between runs. To deserialise a Shake value, we just consult Values.
 module Development.IDE.Core.Shake(
     IdeState, shakeExtras,
-    ShakeExtras(..), getShakeExtras,
+    ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
     IdeRule, IdeResult, GetModificationTime(..),
     shakeOpen, shakeShut,
     shakeRun,
