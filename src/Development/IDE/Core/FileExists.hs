@@ -22,6 +22,7 @@ import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger
 import           Development.Shake
 import           Development.Shake.Classes
 import           GHC.Generics
@@ -90,12 +91,15 @@ getFileExists fp = use_ GetFileExists fp
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
 fileExistsRules :: IO LspId -> ClientCapabilities -> VFSHandle -> Rules ()
-fileExistsRules getLspId ClientCapabilities{_workspace}
+fileExistsRules getLspId ClientCapabilities{_workspace} vfs
   | Just WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
   , Just DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
   , Just True <- _dynamicRegistration
-  = fileExistsRulesFast getLspId
-  | otherwise = fileExistsRulesSlow
+  = fileExistsRulesFast getLspId vfs
+  | otherwise = do
+      logger <- logger <$> getShakeExtrasRules
+      liftIO $ logDebug logger "Warning: Client does not support watched files. Falling back to OS polling"
+      fileExistsRulesSlow vfs
 
 --   Requires an lsp client that provides WatchedFiles notifications.
 fileExistsRulesFast :: IO LspId -> VFSHandle -> Rules ()
@@ -103,7 +107,9 @@ fileExistsRulesFast getLspId vfs = do
   addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
   defineEarlyCutoff $ \GetFileExists file -> do
     isWf <- isWorkspaceFile file
-    if isWf then fileExistsFast getLspId vfs file else fileExistsSlow vfs file
+    if isWf
+        then fileExistsFast getLspId vfs file
+        else fileExistsSlow vfs file
 
 fileExistsFast :: IO LspId -> VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([a], Maybe Bool))
 fileExistsFast getLspId vfs file = do
