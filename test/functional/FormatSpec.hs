@@ -26,7 +26,7 @@ spec = do
   describe "format range" $ do
     it "works" $ runSession hieCommand fullCaps "test/testdata" $ do
       doc <- openDoc "Format.hs" "haskell"
-      formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
+      formatRange doc (FormattingOptions 2 True) (Range (Position 2 0) (Position 4 10))
       documentContents doc >>= liftIO . (`shouldBe` formattedRangeTabSize2)
     it "works with custom tab size" $ do
       pendingWith "ormolu does not accept parameters"
@@ -47,7 +47,7 @@ spec = do
       formatDoc doc (FormattingOptions 2 True)
       documentContents doc >>= liftIO . (`shouldBe` orig)
 
-      formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
+      formatRange doc (FormattingOptions 2 True) (Range (Position 2 0) (Position 4 10))
       documentContents doc >>= liftIO . (`shouldBe` orig)
 
     it "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
@@ -116,7 +116,8 @@ spec = do
 
 formattedDocOrmolu :: T.Text
 formattedDocOrmolu =
-  "module Format where\n\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\n\
+  \module Format where\n\n\
   \foo :: Int -> Int\n\
   \foo 3 = 2\n\
   \foo x = x\n\n\
@@ -149,7 +150,8 @@ formattedDocTabSize5 =
 
 formattedRangeTabSize2 :: T.Text
 formattedRangeTabSize2 =
-  "module    Format where\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\
+  \module    Format where\n\
   \foo :: Int -> Int\n\
   \foo 3 = 2\n\
   \foo x = x\n\
@@ -157,11 +159,12 @@ formattedRangeTabSize2 =
   \bar s =  do\n\
   \      x <- return \"hello\"\n\
   \      return \"asdf\"\n\
-  \      \n"
+  \"
 
 formattedRangeTabSize5 :: T.Text
 formattedRangeTabSize5 =
-  "module    Format where\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\n\
+  \module    Format where\n\
   \foo   :: Int ->  Int\n\
   \foo  3 = 2\n\
   \foo    x  = x\n\
@@ -173,7 +176,8 @@ formattedRangeTabSize5 =
 
 formattedFloskell :: T.Text
 formattedFloskell =
-  "module Format where\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\n\
+  \module Format where\n\
   \\n\
   \foo :: Int -> Int\n\
   \foo 3 = 2\n\
@@ -189,7 +193,8 @@ formattedFloskell =
 --       (duplicated last line)
 formattedFloskellPostBrittany :: T.Text
 formattedFloskellPostBrittany =
-  "module Format where\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\n\
+  \module Format where\n\
   \\n\
   \foo :: Int -> Int\n\
   \foo 3 = 2\n\
@@ -204,7 +209,8 @@ formattedFloskellPostBrittany =
 
 formattedBrittanyPostFloskell :: T.Text
 formattedBrittanyPostFloskell =
-  "module Format where\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\n\
+  \module Format where\n\
   \\n\
   \foo :: Int -> Int\n\
   \foo 3 = 2\n\
@@ -217,7 +223,8 @@ formattedBrittanyPostFloskell =
 
 formattedOrmolu :: T.Text
 formattedOrmolu =
-  "module Format where\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\n\
+  \module Format where\n\
   \\n\
   \foo :: Int -> Int\n\
   \foo 3 = 2\n\
@@ -230,7 +237,8 @@ formattedOrmolu =
 
 unchangedOrmolu :: T.Text
 unchangedOrmolu =
-  "module    Format where\n\
+  "{-# LANGUAGE NoImplicitPrelude #-}\n\n\
+  \module    Format where\n\
   \foo   :: Int ->  Int\n\
   \foo  3 = 2\n\
   \foo    x  = x\n\

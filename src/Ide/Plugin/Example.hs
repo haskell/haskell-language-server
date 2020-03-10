@@ -163,7 +163,7 @@ addTodoCmd (AddTodoParams uri todoText) = do
     pos = Position 0 0
     textEdits = List
       [TextEdit (Range pos pos)
-                  ("-- TODO:" <> todoText)
+                  ("-- TODO:" <> todoText <> "\n")
       ]
     res = WorkspaceEdit
       (Just $ Map.singleton uri textEdits)

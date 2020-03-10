@@ -1,10 +1,10 @@
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
@@ -15,25 +15,26 @@ module Ide.Plugin.Example2
 
 import Control.DeepSeq ( NFData )
 import Control.Monad.Trans.Maybe
-import Data.Aeson.Types (toJSON)
+import Data.Aeson
 import Data.Binary
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
-import Data.Hashable
 import qualified Data.HashSet as HashSet
+import Data.Hashable
 import qualified Data.Text as T
 import Data.Typeable
 import Development.IDE.Core.OfInterest
-import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
+import Development.IDE.Core.Rules
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.Shake hiding ( Diagnostic )
-import Ide.Types
 import GHC.Generics
+import Ide.Plugin
+import Ide.Types
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
 
@@ -43,12 +44,12 @@ descriptor :: PluginId -> PluginDescriptor
 descriptor plId = PluginDescriptor
   { pluginId = plId
   , pluginRules = exampleRules
-  , pluginCommands = []
+  , pluginCommands = [PluginCommand "codelens.todo" "example adding" addTodoCmd]
   , pluginCodeActionProvider = Just codeAction
   , pluginCodeLensProvider   = Just codeLens
   , pluginDiagnosticProvider = Nothing
-  , pluginHoverProvider      = Just hover
-  , pluginSymbolProvider     = Nothing
+  , pluginHoverProvider = Just hover
+  , pluginSymbolProvider = Nothing
   , pluginFormattingProvider = Nothing
   , pluginCompletionProvider = Nothing
   }
@@ -62,6 +63,8 @@ blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
   = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover 2\n"])
 
+-- ---------------------------------------------------------------------
+-- Generating Diagnostics via rules
 -- ---------------------------------------------------------------------
 
 data Example2 = Example2
@@ -100,6 +103,8 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
     }
 
 -- ---------------------------------------------------------------------
+-- code actions
+-- ---------------------------------------------------------------------
 
 -- | Generate code actions.
 codeAction
@@ -125,7 +130,8 @@ codeLens
     -> PluginId
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
-codeLens ideState _plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} =
+codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+    logInfo (ideLogger ideState) "Example2.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
@@ -133,15 +139,33 @@ codeLens ideState _plId CodeLensParams{_textDocument=TextDocumentIdentifier uri}
         _hDiag <- getHiddenDiagnostics ideState
         let
           title = "Add TODO2 Item via Code Lens"
-          tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
-               "-- TODO2 added by Example2 Plugin via code lens action\n"]
-          edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
           range = Range (Position 3 0) (Position 4 0)
-        pure $ Right $ List
-          -- [ CodeLens range (Just (Command title "codelens.do" (Just $ List [toJSON edit]))) Nothing
-          [ CodeLens range (Just (Command title "codelens.todo" (Just $ List [toJSON edit]))) Nothing
-          ]
+        let cmdParams = AddTodoParams uri "do abc"
+        cmd <- mkLspCommand plId "codelens.todo" title (Just [toJSON cmdParams])
+        pure $ Right $ List [ CodeLens range (Just cmd) Nothing ]
       Nothing -> pure $ Right $ List []
+
+-- ---------------------------------------------------------------------
+-- | Parameters for the addTodo PluginCommand.
+data AddTodoParams = AddTodoParams
+  { file   :: Uri  -- ^ Uri of the file to add the pragma to
+  , todoText :: T.Text
+  }
+  deriving (Show, Eq, Generic, ToJSON, FromJSON)
+
+addTodoCmd :: AddTodoParams -> IO (Either ResponseError Value,
+                           Maybe (ServerMethod, ApplyWorkspaceEditParams))
+addTodoCmd (AddTodoParams uri todoText) = do
+  let
+    pos = Position 0 0
+    textEdits = List
+      [TextEdit (Range pos pos)
+                  ("-- TODO2:" <> todoText <> "\n")
+      ]
+    res = WorkspaceEdit
+      (Just $ Map.singleton uri textEdits)
+      Nothing
+  return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
 
 -- ---------------------------------------------------------------------
 
@@ -166,7 +190,8 @@ request label getResults notFound found ide (TextDocumentPositionParams (TextDoc
         Nothing   -> pure Nothing
     pure $ maybe notFound found mbResult
 
-logAndRunRequest :: T.Text -> (NormalizedFilePath -> Position -> Action b) -> IdeState -> Position -> String -> IO b
+logAndRunRequest :: T.Text -> (NormalizedFilePath -> Position -> Action b)
+                  -> IdeState -> Position -> String -> IO b
 logAndRunRequest label getResults ide pos path = do
   let filePath = toNormalizedFilePath path
   logInfo (ideLogger ide) $
