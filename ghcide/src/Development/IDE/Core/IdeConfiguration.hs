@@ -17,6 +17,7 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.Shake
 import           Language.Haskell.LSP.Types
+import           System.FilePath (isRelative)
 
 -- | Lsp client relevant configuration details
 data IdeConfiguration = IdeConfiguration
@@ -58,9 +59,13 @@ modifyWorkspaceFolders ide f = do
   writeVar var (IdeConfiguration (f ws))
 
 isWorkspaceFile :: NormalizedFilePath -> Action Bool
-isWorkspaceFile file = do
-  IdeConfiguration {..} <- getIdeConfiguration
-  let toText = getUri . fromNormalizedUri
-  return $ any
-    (\root -> toText root `isPrefixOf` toText (filePathToUri' file))
-    workspaceFolders
+isWorkspaceFile file =
+  if isRelative (fromNormalizedFilePath file)
+    then return True
+    else do
+      IdeConfiguration {..} <- getIdeConfiguration
+      let toText = getUri . fromNormalizedUri
+      return $
+        any
+          (\root -> toText root `isPrefixOf` toText (filePathToUri' file))
+          workspaceFolders

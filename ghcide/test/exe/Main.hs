@@ -12,6 +12,7 @@ import Control.Applicative.Combinators
 import Control.Exception (catch)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
+import Data.Aeson (Value)
 import Data.Char (toLower)
 import Data.Foldable
 import Data.List
@@ -429,21 +430,28 @@ codeLensesTests = testGroup "code lenses"
 
 watchedFilesTests :: TestTree
 watchedFilesTests = testGroup "watched files"
-  [ testSession "workspace file" $ do
-      _ <- openDoc' "A.hs" "haskell" "module A where"
-      RequestMessage{_params = RegistrationParams (List regs)} <- skipManyTill anyMessage (message @RegisterCapabilityRequest)
-      let watchedFileRegs =
-            [ args | Registration _id WorkspaceDidChangeWatchedFiles args <- regs ]
-      liftIO $ assertBool "watches workspace files" $ not $ null watchedFileRegs
-  , testSession "non workspace file" $ do
-      _ <- openDoc' "/tmp/A.hs" "haskell" "module A where"
-      msgs <- manyTill (Just <$> message @RegisterCapabilityRequest <|> Nothing <$ anyMessage) (message @WorkDoneProgressEndNotification)
-      let watchedFileRegs =
-            [ args
-            | Just (RequestMessage{_params = RegistrationParams (List regs)}) <- msgs
-            , Registration _id WorkspaceDidChangeWatchedFiles args <- regs
-            ]
-      liftIO $ watchedFileRegs @?= []
+  [ testSession' "workspace files" $ \sessionDir -> do
+      liftIO $ writeFile (sessionDir </> "hie.yaml") $ "cradle: {direct: {arguments: [\"-isrc\"]}}"
+      _ <- openDoc' "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport B"
+      watchedFileRegs <- getWatchedFilesSubscriptionsUntilProgressEnd
+
+      -- Expect 6 subscriptions (A does not get any because it's VFS):
+      --  - /path-to-workspace/B.hs
+      --  - /path-to-workspace/B.lhs
+      --  - B.hs
+      --  - B.lhs
+      --  - src/B.hs
+      --  - src/B.lhs
+      liftIO $ length watchedFileRegs @?= 6
+
+  , testSession' "non workspace file" $ \sessionDir -> do
+      liftIO $ writeFile (sessionDir </> "hie.yaml") $ "cradle: {direct: {arguments: [\"-i/tmp\"]}}"
+      _ <- openDoc' "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport B"
+      watchedFileRegs <- getWatchedFilesSubscriptionsUntilProgressEnd
+
+      -- Expect 4 subscriptions:
+      liftIO $ length watchedFileRegs @?= 4
+
   -- TODO add a test for didChangeWorkspaceFolder
   ]
 
@@ -2229,3 +2237,12 @@ nthLine i r
     | i == 0 && Rope.rows r == 0 = r
     | i >= Rope.rows r = error $ "Row number out of bounds: " <> show i <> "/" <> show (Rope.rows r)
     | otherwise = Rope.takeWhile (/= '\n') $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (i - 1) r
+
+getWatchedFilesSubscriptionsUntilProgressEnd :: Session [Maybe Value]
+getWatchedFilesSubscriptionsUntilProgressEnd = do
+      msgs <- manyTill (Just <$> message @RegisterCapabilityRequest <|> Nothing <$ anyMessage) (message @WorkDoneProgressEndNotification)
+      return
+            [ args
+            | Just (RequestMessage{_params = RegistrationParams (List regs)}) <- msgs
+            , Registration _id WorkspaceDidChangeWatchedFiles args <- regs
+            ]
