@@ -28,7 +28,7 @@ import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server
-import           Development.IDE.Plugin hiding (pluginCommands, pluginRules)
+import           Development.IDE.Plugin hiding (pluginRules)
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Logger
 import           Development.Shake hiding ( Diagnostic, command )
@@ -89,12 +89,12 @@ allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
 -- ---------------------------------------------------------------------
 
 rulesPlugins :: [(PluginId, Rules ())] -> Plugin Config
-rulesPlugins rs = Plugin mempty rules mempty
+rulesPlugins rs = Plugin rules mempty
     where
         rules = mconcat $ map snd rs
 
 codeActionPlugins :: [(PluginId, CodeActionProvider)] -> Plugin Config
-codeActionPlugins cas = Plugin mempty codeActionRules (codeActionHandlers cas)
+codeActionPlugins cas = Plugin codeActionRules (codeActionHandlers cas)
 
 codeActionRules :: Rules ()
 codeActionRules = mempty
@@ -152,7 +152,7 @@ data FallbackCodeActionParams =
 -- -----------------------------------------------------------
 
 codeLensPlugins :: [(PluginId, CodeLensProvider)] -> Plugin Config
-codeLensPlugins cas = Plugin mempty codeLensRules (codeLensHandlers cas)
+codeLensPlugins cas = Plugin codeLensRules (codeLensHandlers cas)
 
 codeLensRules :: Rules ()
 codeLensRules = mempty
@@ -192,7 +192,7 @@ makeCodeLens cas _lf ideState params = do
 -- -----------------------------------------------------------
 
 executeCommandPlugins :: [(PluginId, [PluginCommand])] -> Plugin Config
-executeCommandPlugins ecs = Plugin mempty mempty (executeCommandHandlers ecs)
+executeCommandPlugins ecs = Plugin mempty (executeCommandHandlers ecs)
 
 executeCommandHandlers :: [(PluginId, [PluginCommand])] -> PartialHandlers Config
 executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
@@ -370,7 +370,7 @@ allLspCmdIds pid commands = concat $ map go commands
 -- ---------------------------------------------------------------------
 
 hoverPlugins :: [(PluginId, HoverProvider)] -> Plugin Config
-hoverPlugins hs = Plugin mempty hoverRules (hoverHandlers hs)
+hoverPlugins hs = Plugin hoverRules (hoverHandlers hs)
 
 hoverRules :: Rules ()
 hoverRules = mempty
@@ -403,8 +403,7 @@ makeHover hps _lf ideState params
 
 formatterPlugins :: [(PluginId, FormattingProvider IO)] -> Plugin Config
 formatterPlugins providers
-    = Plugin mempty
-             formatterRules
+    = Plugin formatterRules
              (formatterHandlers (Map.fromList (("none",noneProvider):providers)))
 
 formatterRules :: Rules ()

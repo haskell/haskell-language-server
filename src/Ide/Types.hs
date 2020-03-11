@@ -25,7 +25,7 @@ import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
-import           Development.IDE.Plugin
+-- import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Development.Shake
@@ -70,6 +70,16 @@ data PluginDescriptor =
 --                 , commandFunc :: a -> IO (Either ResponseError b)
 --                 }
 
+newtype CommandId = CommandId T.Text
+  deriving (Show, Read, Eq, Ord)
+instance IsString CommandId where
+  fromString = CommandId . T.pack
+
+data PluginCommand = forall a. (FromJSON a) =>
+  PluginCommand { commandId   :: CommandId
+                , commandDesc :: T.Text
+                , commandFunc :: a -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+                }
 -- ---------------------------------------------------------------------
 
 type CodeActionProvider =  IdeState
