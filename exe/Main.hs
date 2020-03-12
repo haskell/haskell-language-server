@@ -128,8 +128,8 @@ main = do
 
     -- LSP.setupLogger (optLogFile opts) ["hie", "hie-bios"]
     --   $ if optDebugOn opts then L.DEBUG else L.INFO
-    LSP.setupLogger argsShakeProfiling ["hie", "hie-bios"]
-      $ if argsTesting then L.DEBUG else L.INFO
+    LSP.setupLogger argsLogFile ["hie", "hie-bios"]
+      $ if argsDebugOn then L.DEBUG else L.INFO
 
     -- lock to avoid overlapping output on stdout
     lock <- newLock

@@ -50,6 +50,20 @@ spec = do
       formatRange doc (FormattingOptions 2 True) (Range (Position 2 0) (Position 4 10))
       documentContents doc >>= liftIO . (`shouldBe` orig)
 
+    -- ---------------------------------
+
+    it "formatting is idempotent" $ runSession hieCommand fullCaps "test/testdata" $ do
+      doc <- openDoc "Format.hs" "haskell"
+
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+      formatDoc doc (FormattingOptions 2 True)
+      documentContents doc >>= liftIO . (`shouldBe` formattedDocOrmolu)
+
+      formatDoc doc (FormattingOptions 2 True)
+      documentContents doc >>= liftIO . (`shouldBe` formattedDocOrmolu)
+
+    -- ---------------------------------
+
     it "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
       doc <- openDoc "Format.hs" "haskell"
 
@@ -99,6 +113,8 @@ spec = do
   --     liftIO $ edits `shouldBe` [TextEdit (Range (Position 1 0) (Position 3 0))
   --                                   "foo x y = do\n    print x\n    return 42\n"]
 
+    -- ---------------------------------
+
   describe "ormolu" $ do
     let formatLspConfig provider =
           object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
@@ -113,6 +129,8 @@ spec = do
         GHC88 -> formatted
         GHC86 -> formatted
         _ -> liftIO $ docContent `shouldBe` unchangedOrmolu
+
+-- ---------------------------------------------------------------------
 
 formattedDocOrmolu :: T.Text
 formattedDocOrmolu =
@@ -203,7 +221,6 @@ formattedFloskellPostBrittany =
   \bar :: String -> IO String\n\
   \bar s = do\n\
   \  x <- return \"hello\"\n\
-  \  return \"asdf\"\n\
   \  return \"asdf\"\n\
   \"
 

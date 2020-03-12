@@ -32,6 +32,11 @@ data Arguments = Arguments
     ,argsShakeProfiling :: Maybe FilePath
     ,argsTesting :: Bool
     ,argsExamplePlugin :: Bool
+    -- These next two are for compatibility with existing hie clients, allowing
+    -- them to just change the name of the exe and still work.
+    , argsDebugOn       :: Bool
+    , argsLogFile       :: Maybe String
+
     }
 
 getArguments :: String -> IO Arguments
@@ -56,6 +61,18 @@ arguments exeName = Arguments
                   <> help "Enable additional lsp messages used by the testsuite")
       <*> switch (long "example"
                   <> help "Include the Example Plugin. For Plugin devs only")
+
+      <*> switch
+           ( long "debug"
+          <> short 'd'
+          <> help "Generate debug output"
+           )
+      <*> optional (strOption
+           ( long "logfile"
+          <> short 'l'
+          <> metavar "LOGFILE"
+          <> help "File to log to, defaults to stdout"
+           ))
 
 -- ---------------------------------------------------------------------
 -- Set the GHC libdir to the nix libdir if it's present.

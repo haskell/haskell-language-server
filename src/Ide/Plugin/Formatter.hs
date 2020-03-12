@@ -20,12 +20,15 @@ import qualified Data.Map  as Map
 import qualified Data.Text as T
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Shake
 -- import           Development.IDE.LSP.Server
 -- import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 -- import           Development.Shake hiding ( Diagnostic )
+-- import           Ide.Logger
 import           Ide.Types
+import           Development.IDE.Types.Logger
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
 -- import           Language.Haskell.LSP.Messages
@@ -64,7 +67,10 @@ doFormatting lf providers ideState ft uri params = do
           Just (toNormalizedFilePath -> fp) -> do
             (_, mb_contents) <- runAction ideState $ getFileContents fp
             case mb_contents of
-              Just contents -> provider ideState ft contents fp params
+              Just contents -> do
+                  logDebug (ideLogger ideState) $ T.pack $
+                      "Formatter.doFormatting: contents=" ++ show contents -- AZ
+                  provider ideState ft contents fp params
               Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
           Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: no formatter found for:[" ++ T.unpack mf ++ "]"
