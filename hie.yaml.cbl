@@ -8,8 +8,8 @@
 cradle:
   cabal:
 
-    - path: "./test"
-      component: "haskell-language-server:hls-tests"
+    - path: "./test/functional/"
+      component: "haskell-language-server:func-test"
 
     - path: "./test/utils/"
       component: "haskell-language-server:hls-test-utils"
