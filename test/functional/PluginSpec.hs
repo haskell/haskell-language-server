@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeApplications #-}
 module PluginSpec where
 
--- import           Control.Applicative.Combinators
+import           Control.Applicative.Combinators
 import           Control.Lens hiding (List)
 -- import           Control.Monad
 import           Control.Monad.IO.Class
@@ -27,7 +27,7 @@ import           TestUtils
 -- ---------------------------------------------------------------------
 
 spec :: Spec
-spec =
+spec = do
   describe "composes code actions" $
     it "provides 3.8 code actions" $ runSession hieCommandExamplePlugin fullCaps "test/testdata" $ do
 
@@ -66,4 +66,39 @@ spec =
       -- liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
 
       -- noDiagnostics
+      return ()
+
+  describe "symbol providers" $
+    it "combines symbol providers" $ runSession hieCommandExamplePlugin fullCaps "test/testdata" $ do
+
+      doc <- openDoc "Format.hs" "haskell"
+
+      _ <- waitForDiagnostics
+
+      id2 <- sendRequest TextDocumentDocumentSymbol (DocumentSymbolParams doc Nothing)
+      symbolsRsp <- skipManyTill anyNotification message :: Session DocumentSymbolsResponse
+      liftIO $ symbolsRsp ^. L.id `shouldBe` responseId id2
+
+      liftIO $ symbolsRsp ^. L.result `shouldBe`
+         Just (DSDocumentSymbols
+               (List [DocumentSymbol
+                        "Example_symbol_name"
+                        Nothing
+                        SkVariable
+                        Nothing
+                        (Range {_start = Position {_line = 2, _character = 0}
+                                       , _end = Position {_line = 2, _character = 5}})
+                        (Range {_start = Position {_line = 2, _character = 0}
+                                                , _end = Position {_line = 2, _character = 5}})
+                      Nothing
+                     ,DocumentSymbol "Example2_symbol_name"
+                                     Nothing
+                                     SkVariable
+                                     Nothing
+                                     (Range {_start = Position {_line = 4, _character = 1}
+                                                      , _end = Position {_line = 4, _character = 7}})
+                                     (Range {_start = Position {_line = 4, _character = 1}
+                                                               , _end = Position {_line = 4, _character = 7}})
+                                     Nothing]))
+
       return ()

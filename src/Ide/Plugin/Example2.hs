@@ -48,8 +48,8 @@ descriptor plId = PluginDescriptor
   , pluginCodeActionProvider = Just codeAction
   , pluginCodeLensProvider   = Just codeLens
   , pluginDiagnosticProvider = Nothing
-  , pluginHoverProvider = Just hover
-  , pluginSymbolProvider = Nothing
+  , pluginHoverProvider      = Just hover
+  , pluginSymbolsProvider    = Just symbols
   , pluginFormattingProvider = Nothing
   , pluginCompletionProvider = Nothing
   }
@@ -198,3 +198,20 @@ logAndRunRequest label getResults ide pos path = do
     label <> " request at position " <> T.pack (showPosition pos) <>
     " in file: " <> T.pack path
   runAction ide $ getResults filePath pos
+
+-- ---------------------------------------------------------------------
+
+symbols :: SymbolsProvider
+symbols _ide (DocumentSymbolParams _doc _mt)
+    = pure $ Right [r]
+    where
+        r = DocumentSymbol name detail kind deprecation range selR chList
+        name = "Example2_symbol_name"
+        detail = Nothing
+        kind = SkVariable
+        deprecation = Nothing
+        range = Range (Position 4 1) (Position 4 7)
+        selR = range
+        chList = Nothing
+
+-- ---------------------------------------------------------------------

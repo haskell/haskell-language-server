@@ -15,6 +15,7 @@ module Ide.Plugin
     , allLspCmdIds
     , allLspCmdIds'
     , getPid
+    , responseError
     ) where
 
 import           Control.Lens ( (^.) )
@@ -59,6 +60,7 @@ asGhcIdePlugin mp =
     -- Note: diagnostics are provided via Rules from pluginDiagnosticProvider
     mkPlugin hoverPlugins          pluginHoverProvider <>
     -- TODO: symbols via pluginSymbolProvider
+    mkPlugin symbolsPlugin         pluginSymbolsProvider <>
     mkPlugin formatterPlugins      pluginFormattingProvider
     -- TODO: completions
     where
@@ -397,6 +399,49 @@ makeHover hps _lf ideState params
             HoverContentsMS (List []) -> Nothing
             hh                        -> Just $ Hover hh r
       return $ Right h
+
+-- ---------------------------------------------------------------------
+-- ---------------------------------------------------------------------
+
+symbolsPlugin :: [(PluginId, SymbolsProvider)] -> Plugin Config
+symbolsPlugin hs = Plugin symbolsRules (symbolsHandlers hs)
+
+symbolsRules :: Rules ()
+symbolsRules = mempty
+
+symbolsHandlers :: [(PluginId, SymbolsProvider)] -> PartialHandlers Config
+symbolsHandlers hps = PartialHandlers $ \WithMessage{..} x ->
+  return x {LSP.documentSymbolHandler = withResponse RspDocumentSymbols (makeSymbols hps)}
+
+makeSymbols :: [(PluginId, SymbolsProvider)]
+      -> LSP.LspFuncs Config
+      -> IdeState
+      -> DocumentSymbolParams
+      -> IO (Either ResponseError DSResult)
+makeSymbols sps lf ideState params
+  = do
+      let uri' = params ^. textDocument . uri
+          (C.ClientCapabilities _ tdc _ _) = LSP.clientCapabilities lf
+          supportsHierarchy = fromMaybe False $ tdc >>= C._documentSymbol
+                              >>= C._hierarchicalDocumentSymbolSupport
+          convertSymbols :: [DocumentSymbol] -> DSResult
+          convertSymbols symbs
+            | supportsHierarchy = DSDocumentSymbols $ List symbs
+            | otherwise = DSSymbolInformation (List $ concatMap (go Nothing) symbs)
+            where
+                go :: Maybe T.Text -> DocumentSymbol -> [SymbolInformation]
+                go parent ds =
+                  let children' :: [SymbolInformation]
+                      children' = concatMap (go (Just name')) (fromMaybe mempty (ds ^. children))
+                      loc = Location uri' (ds ^. range)
+                      name' = ds ^. name
+                      si = SymbolInformation name' (ds ^. kind) (ds ^. deprecated) loc parent
+                  in [si] <> children'
+
+      mhs <- mapM (\(_,p) -> p ideState params) sps
+      case rights mhs of
+          [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
+          hs -> return $ Right $ convertSymbols $ concat hs
 
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------

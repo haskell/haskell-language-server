@@ -42,7 +42,7 @@ descriptor plId = PluginDescriptor
   , pluginCodeLensProvider   = Nothing
   , pluginDiagnosticProvider = Nothing
   , pluginHoverProvider      = Nothing
-  , pluginSymbolProvider     = Nothing
+  , pluginSymbolsProvider    = Nothing
   , pluginFormattingProvider = Just provider
   , pluginCompletionProvider = Nothing
   }

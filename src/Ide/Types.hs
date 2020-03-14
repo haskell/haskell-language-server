@@ -10,6 +10,7 @@ module Ide.Types
     , CommandId(..)
     , DiagnosticProvider(..)
     , DiagnosticProviderFunc(..)
+    , SymbolsProvider
     , FormattingType(..)
     , FormattingProvider
     , HoverProvider
@@ -51,7 +52,7 @@ data PluginDescriptor =
                      -- ^ TODO: diagnostics are generally provided via rules,
                      -- this is probably redundant.
                    , pluginHoverProvider      :: !(Maybe HoverProvider)
-                   , pluginSymbolProvider     :: !(Maybe SymbolProvider)
+                   , pluginSymbolsProvider    :: !(Maybe SymbolsProvider)
                    , pluginFormattingProvider :: !(Maybe (FormattingProvider IO))
                    , pluginCompletionProvider :: !(Maybe CompletionProvider)
                    }
@@ -122,7 +123,9 @@ data DiagnosticTrigger = DiagnosticOnOpen
 -- type HoverProvider = Uri -> Position -> IO (Either ResponseError [Hover])
 type HoverProvider = IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 
-type SymbolProvider = Uri -> IO (Either ResponseError [DocumentSymbol])
+type SymbolsProvider = IdeState
+                     -> DocumentSymbolParams
+                     -> IO (Either ResponseError [DocumentSymbol])
 
 type ExecuteCommandProvider = IdeState
                             -> ExecuteCommandParams
