@@ -18,6 +18,7 @@ module Ide.Types
     , CodeLensProvider
     , ExecuteCommandProvider
     , CompletionProvider
+    , WithSnippets(..)
     ) where
 
 import           Data.Aeson                    hiding (defaultOptions)
@@ -130,6 +131,8 @@ type SymbolsProvider = IdeState
 type ExecuteCommandProvider = IdeState
                             -> ExecuteCommandParams
                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+
+newtype WithSnippets = WithSnippets Bool
 
 type CompletionProvider = IdeState
                         -> CompletionParams

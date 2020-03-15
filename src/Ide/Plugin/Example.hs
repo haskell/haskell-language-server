@@ -51,7 +51,7 @@ descriptor plId = PluginDescriptor
   , pluginHoverProvider      = Just hover
   , pluginSymbolsProvider    = Just symbols
   , pluginFormattingProvider = Nothing
-  , pluginCompletionProvider = Nothing
+  , pluginCompletionProvider = Just completion
   }
 
 -- ---------------------------------------------------------------------
@@ -216,5 +216,31 @@ symbols _ide (DocumentSymbolParams _doc _mt)
         range = Range (Position 2 0) (Position 2 5)
         selR = range
         chList = Nothing
+
+-- ---------------------------------------------------------------------
+
+completion :: CompletionProvider
+completion _ide (CompletionParams _doc _pos _mctxt _mt)
+    = pure $ Right $ Completions $ List [r]
+    where
+        r = CompletionItem label kind detail documentation deprecated preselect
+                           sortText filterText insertText insertTextFormat
+                           textEdit additionalTextEdits commitCharacters
+                           command xd
+        label = "Example completion"
+        kind = Nothing
+        detail = Nothing
+        documentation = Nothing
+        deprecated = Nothing
+        preselect = Nothing
+        sortText = Nothing
+        filterText = Nothing
+        insertText = Nothing
+        insertTextFormat = Nothing
+        textEdit = Nothing
+        additionalTextEdits = Nothing
+        commitCharacters = Nothing
+        command = Nothing
+        xd = Nothing
 
 -- ---------------------------------------------------------------------

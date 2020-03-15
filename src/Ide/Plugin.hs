@@ -21,6 +21,7 @@ module Ide.Plugin
 import           Control.Lens ( (^.) )
 import           Control.Monad
 import qualified Data.Aeson as J
+import qualified Data.Default
 import           Data.Either
 import qualified Data.List                     as List
 import qualified Data.Map  as Map
@@ -44,6 +45,7 @@ import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types              as J
 import qualified Language.Haskell.LSP.Types.Capabilities as C
 import           Language.Haskell.LSP.Types.Lens as L hiding (formatting, rangeFormatting)
+import qualified Language.Haskell.LSP.VFS                as VFS
 import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
@@ -59,10 +61,9 @@ asGhcIdePlugin mp =
     mkPlugin codeLensPlugins       pluginCodeLensProvider <>
     -- Note: diagnostics are provided via Rules from pluginDiagnosticProvider
     mkPlugin hoverPlugins          pluginHoverProvider <>
-    -- TODO: symbols via pluginSymbolProvider
-    mkPlugin symbolsPlugin         pluginSymbolsProvider <>
-    mkPlugin formatterPlugins      pluginFormattingProvider
-    -- TODO: completions
+    mkPlugin symbolsPlugins        pluginSymbolsProvider <>
+    mkPlugin formatterPlugins      pluginFormattingProvider <>
+    mkPlugin completionsPlugins    pluginCompletionProvider
     where
         justs (p, Just x)  = [(p, x)]
         justs (_, Nothing) = []
@@ -403,8 +404,8 @@ makeHover hps _lf ideState params
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
 
-symbolsPlugin :: [(PluginId, SymbolsProvider)] -> Plugin Config
-symbolsPlugin hs = Plugin symbolsRules (symbolsHandlers hs)
+symbolsPlugins :: [(PluginId, SymbolsProvider)] -> Plugin Config
+symbolsPlugins hs = Plugin symbolsRules (symbolsHandlers hs)
 
 symbolsRules :: Rules ()
 symbolsRules = mempty
@@ -461,5 +462,87 @@ formatterHandlers providers = PartialHandlers $ \WithMessage{..} x -> return x
     , LSP.documentRangeFormattingHandler
         = withResponse RspDocumentRangeFormatting (rangeFormatting providers)
     }
+
+-- ---------------------------------------------------------------------
+-- ---------------------------------------------------------------------
+
+completionsPlugins :: [(PluginId, CompletionProvider)] -> Plugin Config
+completionsPlugins cs = Plugin completionsRules (completionsHandlers cs)
+
+completionsRules :: Rules ()
+completionsRules = mempty
+
+completionsHandlers :: [(PluginId, CompletionProvider)] -> PartialHandlers Config
+completionsHandlers cps = PartialHandlers $ \WithMessage{..} x ->
+  return x {LSP.completionHandler = withResponse RspCompletion (makeCompletions cps)}
+
+makeCompletions :: [(PluginId, CompletionProvider)]
+      -> LSP.LspFuncs Config
+      -> IdeState
+      -> CompletionParams
+      -> IO (Either ResponseError CompletionResponseResult)
+makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier doc) pos _context _mt)
+  = do
+      mprefix <- getPrefixAtPos lf doc pos
+      _snippets <- WithSnippets <$> completionSnippetsOn <$> (getClientConfig lf)
+
+      let
+          combine :: [CompletionResponseResult] -> CompletionResponseResult
+          combine cs = go (Completions $ List []) cs
+              where
+                  go acc [] = acc
+                  go (Completions (List ls)) (Completions (List ls2):rest)
+                      = go (Completions (List (ls <> ls2))) rest
+                  go (Completions (List ls)) (CompletionList (CompletionListType complete (List ls2)):rest)
+                      = go (CompletionList $ CompletionListType complete (List (ls <> ls2))) rest
+                  go (CompletionList (CompletionListType complete (List ls))) (CompletionList (CompletionListType complete2 (List ls2)):rest)
+                      = go (CompletionList $ CompletionListType (complete || complete2) (List (ls <> ls2))) rest
+                  go (CompletionList (CompletionListType complete (List ls))) (Completions (List ls2):rest)
+                      = go (CompletionList $ CompletionListType complete (List (ls <> ls2))) rest
+
+      case mprefix of
+          Nothing -> return $ Right $ Completions $ List []
+          Just _prefix -> do
+            mhs <- mapM (\(_,p) -> p ideState params) sps
+            case rights mhs of
+                [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
+                hs -> return $ Right $ combine hs
+
+{-
+        ReqCompletion req -> do
+          liftIO $ U.logs $ "reactor:got CompletionRequest:" ++ show req
+          let (_, doc, pos) = reqParams req
+
+          mprefix <- getPrefixAtPos doc pos
+
+          let callback compls = do
+                let rspMsg = Core.makeResponseMessage req
+                              $ J.Completions $ J.List compls
+                reactorSend $ RspCompletion rspMsg
+          case mprefix of
+            Nothing -> callback []
+            Just prefix -> do
+              snippets <- Completions.WithSnippets <$> configVal completionSnippetsOn
+              let hreq = IReq tn "completion" (req ^. J.id) callback
+                           $ lift $ Completions.getCompletions doc prefix snippets
+              makeRequest hreq
+-}
+
+getPrefixAtPos :: LSP.LspFuncs Config -> Uri -> Position -> IO (Maybe VFS.PosPrefixInfo)
+getPrefixAtPos lf uri pos = do
+  mvf <-  (LSP.getVirtualFileFunc lf) (J.toNormalizedUri uri)
+  case mvf of
+    Just vf -> VFS.getCompletionPrefix pos vf
+    Nothing -> return Nothing
+
+-- ---------------------------------------------------------------------
+-- | Returns the current client configuration. It is not wise to permanently
+-- cache the returned value of this function, as clients can at runitime change
+-- their configuration.
+--
+-- If no custom configuration has been set by the client, this function returns
+-- our own defaults.
+getClientConfig :: LSP.LspFuncs Config -> IO Config
+getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
 
 -- ---------------------------------------------------------------------
