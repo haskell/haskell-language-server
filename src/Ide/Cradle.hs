@@ -31,8 +31,7 @@ import qualified HIE.Bios.Types as Bios
 import           System.Directory (getCurrentDirectory, canonicalizePath, findExecutable)
 import           System.Exit
 import           System.FilePath
-import           System.Log.Logger
-import           System.Process (readCreateProcessWithExitCode, shell)
+import           System.Process (readCreateProcessWithExitCode, shell, CreateProcess(..))
 
 
 -- ---------------------------------------------------------------------
