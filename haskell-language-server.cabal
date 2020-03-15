@@ -72,8 +72,11 @@ library
     , shake >= 0.17.5
     , text
     , transformers
-    , unix
     , unordered-containers
+  if os(windows)
+    build-depends:     Win32
+  else
+    build-depends:     unix
   if impl(ghc >= 8.6)
      build-depends: ormolu >= 0.0.3.1
 
