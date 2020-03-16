@@ -30,7 +30,13 @@ data Arguments = Arguments
     ,argFiles :: [FilePath]
     ,argsVersion :: Bool
     ,argsShakeProfiling :: Maybe FilePath
+    ,argsTesting :: Bool
     ,argsExamplePlugin :: Bool
+    -- These next two are for compatibility with existing hie clients, allowing
+    -- them to just change the name of the exe and still work.
+    , argsDebugOn       :: Bool
+    , argsLogFile       :: Maybe String
+
     }
 
 getArguments :: String -> IO Arguments
@@ -45,14 +51,28 @@ arguments :: String -> Parser Arguments
 arguments exeName = Arguments
       <$> switch (long "lsp" <> help "Start talking to an LSP server")
       <*> optional (strOption $ long "cwd" <> metavar "DIR"
-                    <> help "Change to this directory")
+                  <> help "Change to this directory")
       <*> many (argument str (metavar "FILES/DIRS..."))
       <*> switch (long "version"
                   <> help ("Show " ++ exeName  ++ " and GHC versions"))
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR"
-                    <> help "Dump profiling reports to this directory")
+                  <> help "Dump profiling reports to this directory")
+      <*> switch (long "test"
+                  <> help "Enable additional lsp messages used by the testsuite")
       <*> switch (long "example"
                   <> help "Include the Example Plugin. For Plugin devs only")
+
+      <*> switch
+           ( long "debug"
+          <> short 'd'
+          <> help "Generate debug output"
+           )
+      <*> optional (strOption
+           ( long "logfile"
+          <> short 'l'
+          <> metavar "LOGFILE"
+          <> help "File to log to, defaults to stdout"
+           ))
 
 -- ---------------------------------------------------------------------
 -- Set the GHC libdir to the nix libdir if it's present.

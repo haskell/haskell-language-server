@@ -7,7 +7,8 @@
 
 module Ide.Plugin.Floskell
   (
-    provider
+    descriptor
+  , provider
   )
 where
 
@@ -18,8 +19,25 @@ import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Floskell
 import           Ide.Plugin.Formatter
+import           Ide.Types
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
+
+-- ---------------------------------------------------------------------
+
+descriptor :: PluginId -> PluginDescriptor
+descriptor plId = PluginDescriptor
+  { pluginId = plId
+  , pluginRules = mempty
+  , pluginCommands = []
+  , pluginCodeActionProvider = Nothing
+  , pluginCodeLensProvider   = Nothing
+  , pluginDiagnosticProvider = Nothing
+  , pluginHoverProvider      = Nothing
+  , pluginSymbolsProvider    = Nothing
+  , pluginFormattingProvider = Just provider
+  , pluginCompletionProvider = Nothing
+  }
 
 -- ---------------------------------------------------------------------
 

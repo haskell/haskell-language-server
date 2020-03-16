@@ -8,7 +8,7 @@
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
 
-module Ide.Plugin.Example
+module Ide.Plugin.Example2
   (
     descriptor
   ) where
@@ -61,30 +61,30 @@ hover = request "Hover" blah (Right Nothing) foundHover
 
 blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
-  = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover 1\n"])
+  = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover 2\n"])
 
 -- ---------------------------------------------------------------------
 -- Generating Diagnostics via rules
 -- ---------------------------------------------------------------------
 
-data Example = Example
+data Example2 = Example2
     deriving (Eq, Show, Typeable, Generic)
-instance Hashable Example
-instance NFData   Example
-instance Binary   Example
+instance Hashable Example2
+instance NFData   Example2
+instance Binary   Example2
 
-type instance RuleResult Example = ()
+type instance RuleResult Example2 = ()
 
 exampleRules :: Rules ()
 exampleRules = do
-  define $ \Example file -> do
+  define $ \Example2 file -> do
     _pm <- getParsedModule file
-    let diag = mkDiag file "example" DsError (Range (Position 0 0) (Position 1 0)) "example diagnostic, hello world"
+    let diag = mkDiag file "example2" DsError (Range (Position 0 0) (Position 1 0)) "example2 diagnostic, hello world"
     return ([diag], Just ())
 
   action $ do
     files <- getFilesOfInterest
-    void $ uses Example $ HashSet.toList files
+    void $ uses Example2 $ HashSet.toList files
 
 mkDiag :: NormalizedFilePath
        -> DiagnosticSource
@@ -116,9 +116,9 @@ codeAction
     -> IO (Either ResponseError (List CAResult))
 codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let
-      title = "Add TODO Item 1"
-      tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
-               "-- TODO1 added by Example Plugin directly\n"]
+      title = "Add TODO2 Item"
+      tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
+               "-- TODO2 added by Example2 Plugin directly\n"]
       edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
     pure $ Right $ List
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) (Just edit) Nothing ]
@@ -131,20 +131,17 @@ codeLens
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
 codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
-    logInfo (ideLogger ideState) "Example.codeLens entered (ideLogger)" -- AZ
+    logInfo (ideLogger ideState) "Example2.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
         _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
         _diag <- getDiagnostics ideState
         _hDiag <- getHiddenDiagnostics ideState
         let
-          title = "Add TODO Item via Code Lens"
-          -- tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
-          --      "-- TODO added by Example Plugin via code lens action\n"]
-          -- edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+          title = "Add TODO2 Item via Code Lens"
           range = Range (Position 3 0) (Position 4 0)
         let cmdParams = AddTodoParams uri "do abc"
-        cmd <- mkLspCommand plId "codelens.todo" title (Just [(toJSON cmdParams)])
+        cmd <- mkLspCommand plId "codelens.todo" title (Just [toJSON cmdParams])
         pure $ Right $ List [ CodeLens range (Just cmd) Nothing ]
       Nothing -> pure $ Right $ List []
 
@@ -160,10 +157,10 @@ addTodoCmd :: AddTodoParams -> IO (Either ResponseError Value,
                            Maybe (ServerMethod, ApplyWorkspaceEditParams))
 addTodoCmd (AddTodoParams uri todoText) = do
   let
-    pos = Position 3 0
+    pos = Position 5 0
     textEdits = List
       [TextEdit (Range pos pos)
-                  ("-- TODO:" <> todoText <> "\n")
+                  ("-- TODO2:" <> todoText <> "\n")
       ]
     res = WorkspaceEdit
       (Just $ Map.singleton uri textEdits)
@@ -209,11 +206,11 @@ symbols _ide (DocumentSymbolParams _doc _mt)
     = pure $ Right [r]
     where
         r = DocumentSymbol name detail kind deprecation range selR chList
-        name = "Example_symbol_name"
+        name = "Example2_symbol_name"
         detail = Nothing
         kind = SkVariable
         deprecation = Nothing
-        range = Range (Position 2 0) (Position 2 5)
+        range = Range (Position 4 1) (Position 4 7)
         selR = range
         chList = Nothing
 
@@ -227,7 +224,7 @@ completion _ide (CompletionParams _doc _pos _mctxt _mt)
                            sortText filterText insertText insertTextFormat
                            textEdit additionalTextEdits commitCharacters
                            command xd
-        label = "Example completion"
+        label = "Example2 completion"
         kind = Nothing
         detail = Nothing
         documentation = Nothing

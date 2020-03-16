@@ -13,7 +13,7 @@ stack*.yaml.lock
 shake.yaml.lock
 
 .vscode
-/test-logs/
+/test-logs/*.log
 
 # stack 2.1 stack.yaml lock files
 stack*.yaml.lock

@@ -27,12 +27,18 @@ source-repository head
 
 library
   exposed-modules:
+      Ide.Compat
       Ide.Cradle
+      Ide.Logger
+      Ide.Plugin
       Ide.Plugin.Config
       Ide.Plugin.Example
+      Ide.Plugin.Example2
       Ide.Plugin.Ormolu
+      Ide.Plugin.Pragmas
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
+      Ide.Types
       Ide.Version
   other-modules:
       Paths_haskell_language_server
@@ -59,6 +65,7 @@ library
     , haskell-lsp == 0.20.*
     , hie-bios >= 0.4
     , hslogger
+    , lens
     , optparse-simple
     , process
     , regex-tdfa >= 1.3.1.0
@@ -66,6 +73,10 @@ library
     , text
     , transformers
     , unordered-containers
+  if os(windows)
+    build-depends:     Win32
+  else
+    build-depends:     unix
   if impl(ghc >= 8.6)
      build-depends: ormolu >= 0.0.3.1
 
@@ -85,6 +96,8 @@ executable haskell-language-server
   other-modules:
       Arguments
       Paths_haskell_language_server
+      Rules
+      RuleTypes
   autogen-modules:
       Paths_haskell_language_server
   ghc-options:
@@ -103,8 +116,14 @@ executable haskell-language-server
 
   build-depends:
       base >=4.7 && <5
+    , aeson
+    , base16-bytestring
+    , binary
+    , bytestring
+    , cryptohash-sha1
     , containers
     , data-default
+    , deepseq
     , extra
     , filepath
      --------------------------------------------------------------
@@ -118,9 +137,11 @@ executable haskell-language-server
     , ghc-paths
     , ghcide
     , gitrev
+    , hashable
     , haskell-lsp
     , hie-bios >= 0.4
     , haskell-language-server
+    , hslogger
     , optparse-applicative
     , shake >= 0.17.5
     , text
@@ -176,10 +197,13 @@ test-suite func-test
       base >=4.7 && <5
     , aeson
     , data-default
+    , haskell-lsp-types
     , hls-test-utils
+    , hspec
+    , lens
     , lsp-test >= 0.10.0.0
     , text
-    , hspec
+    , unordered-containers
   other-modules:
                      --  CompletionSpec
                      -- , CommandSpec
@@ -195,6 +219,7 @@ test-suite func-test
                      -- , HieBiosSpec
                      -- , HighlightSpec
                      -- , HoverSpec
+                     , PluginSpec
                      -- , ProgressSpec
                      -- , ReferencesSpec
                      -- , RenameSpec

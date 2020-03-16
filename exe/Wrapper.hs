@@ -18,7 +18,8 @@ import           Data.List
 -- import qualified Data.Text.IO as T
 -- import Development.IDE.Types.Logger
 import HIE.Bios
-import           Ide.Cradle (findLocalCradle, logm)
+import           Ide.Cradle (findLocalCradle)
+import           Ide.Logger (logm)
 import           Ide.Version
 import           System.Directory
 import           System.Environment

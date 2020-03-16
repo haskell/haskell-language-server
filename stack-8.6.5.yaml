@@ -31,6 +31,7 @@ extra-deps:
 - regex-pcre-builtin-0.95.1.1.8.43
 - regex-tdfa-1.3.1.0
 - semialign-1.1
+- tasty-rerun-1.1.17
 - temporary-1.2.1.1
 - topograph-1
 

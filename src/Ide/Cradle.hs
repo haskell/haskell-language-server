@@ -6,7 +6,6 @@
 module Ide.Cradle where
 
 import           Control.Exception
-import           Control.Monad.IO.Class
 import           Data.Foldable (toList)
 import           Data.Function ((&))
 import           Data.List (isPrefixOf, sortOn, find)
@@ -24,6 +23,7 @@ import           Distribution.Helper (Package, projectPackages, pUnits,
                                       Unit, unitInfo, uiComponents,
                                       ChEntrypoint(..), UnitInfo(..))
 import           Distribution.Helper.Discover (findProjects, getDefaultDistDir)
+import           Ide.Logger
 import           HIE.Bios as Bios
 import qualified HIE.Bios.Cradle as Bios
 import           HIE.Bios.Types (CradleAction(..))
@@ -31,7 +31,6 @@ import qualified HIE.Bios.Types as Bios
 import           System.Directory (getCurrentDirectory, canonicalizePath, findExecutable)
 import           System.Exit
 import           System.FilePath
-import           System.Log.Logger
 import           System.Process (readCreateProcessWithExitCode, shell, CreateProcess(..))
 
 
@@ -901,19 +900,5 @@ cradleDisplay cradle = fromString result
     | otherwise
     = "project"
   name = Bios.actionName (Bios.cradleOptsProg cradle)
-
--- ---------------------------------------------------------------------
-
-logm :: MonadIO m => String -> m ()
-logm s = liftIO $ infoM "hie" s
-
-debugm :: MonadIO m => String -> m ()
-debugm s = liftIO $ debugM "hie" s
-
-warningm :: MonadIO m => String -> m ()
-warningm s = liftIO $ warningM "hie" s
-
-errorm :: MonadIO m => String -> m ()
-errorm s = liftIO $ errorM "hie" s
 
 -- ---------------------------------------------------------------------

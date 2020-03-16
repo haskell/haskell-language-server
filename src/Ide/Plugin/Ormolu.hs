@@ -7,31 +7,45 @@
 
 module Ide.Plugin.Ormolu
   (
-    provider
+    descriptor
+  , provider
   )
 where
 
-#if __GLASGOW_HASKELL__ >= 806
 import           Control.Exception
-import           Data.Char
-import qualified Data.Text as T
-import           GHC
-import           Ormolu
-import qualified DynFlags as D
-import qualified EnumSet  as S
-import qualified HIE.Bios as BIOS
-#endif
-
 import           Control.Monad
+import           Data.Char
 import           Data.List
 import           Data.Maybe
+import qualified Data.Text as T
 import           Development.IDE.Core.Rules
--- import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
+import qualified DynFlags as D
+import qualified EnumSet  as S
+import           GHC
+import           Ide.Types
+import qualified HIE.Bios as BIOS
 import           Ide.Plugin.Formatter
 import           Language.Haskell.LSP.Types
+import           Ormolu
 import           Text.Regex.TDFA.Text()
+
+-- ---------------------------------------------------------------------
+
+descriptor :: PluginId -> PluginDescriptor
+descriptor plId = PluginDescriptor
+  { pluginId = plId
+  , pluginRules = mempty
+  , pluginCommands = []
+  , pluginCodeActionProvider = Nothing
+  , pluginCodeLensProvider   = Nothing
+  , pluginDiagnosticProvider = Nothing
+  , pluginHoverProvider      = Nothing
+  , pluginSymbolsProvider    = Nothing
+  , pluginFormattingProvider = Just provider
+  , pluginCompletionProvider = Nothing
+  }
 
 -- ---------------------------------------------------------------------
 

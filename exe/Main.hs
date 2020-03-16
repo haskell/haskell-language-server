@@ -1,10 +1,12 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Main(main) where
 
@@ -14,11 +16,14 @@ import Control.Exception
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Data.Default
+import qualified Data.HashSet as HashSet
 import Data.List.Extra
 import qualified Data.Map.Strict as Map
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+-- import Data.Version
+-- import Development.GitRev
 import Development.IDE.Core.Debouncer
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
@@ -34,19 +39,22 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
-import Development.Shake (Action, action)
-import GHC hiding (def)
+import Development.Shake (Action, Rules, action)
 import HIE.Bios
-import Ide.Plugin.Formatter
+import qualified Language.Haskell.LSP.Core as LSP
+import Ide.Logger
+import Ide.Plugin
 import Ide.Plugin.Config
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types (LspId(IdInt))
-import Linker
-import qualified Data.HashSet as HashSet
-import System.Directory.Extra as IO
+import RuleTypes
+import Rules
+import qualified System.Directory.Extra as IO
+-- import System.Environment
 import System.Exit
 import System.FilePath
 import System.IO
+import System.Log.Logger as L
 import System.Time.Extra
 
 -- ---------------------------------------------------------------------
@@ -54,24 +62,60 @@ import System.Time.Extra
 import Development.IDE.Plugin.CodeAction  as CodeAction
 import Development.IDE.Plugin.Completions as Completions
 import Ide.Plugin.Example                 as Example
+import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
+import Ide.Plugin.Pragmas                 as Pragmas
 
 -- ---------------------------------------------------------------------
 
--- The plugins configured for use in this instance of the language
+-- | The plugins configured for use in this instance of the language
 -- server.
 -- These can be freely added or removed to tailor the available
 -- features of the server.
-idePlugins :: Bool -> Plugin Config
-idePlugins includeExample
-  = Completions.plugin <>
-    CodeAction.plugin <>
-    formatterPlugins [("ormolu",   Ormolu.provider)
-                     ,("floskell", Floskell.provider)] <>
-    if includeExample then Example.plugin else mempty
+idePlugins :: T.Text -> Bool -> (Plugin Config, [T.Text])
+idePlugins pid includeExamples
+    = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
+  where
+    ps = pluginDescToIdePlugins allPlugins
+    allPlugins = if includeExamples
+                   then basePlugins ++ examplePlugins
+                   else basePlugins
+    basePlugins =
+      [
+      --   applyRefactDescriptor "applyrefact"
+      -- , brittanyDescriptor    "brittany"
+      -- , haddockDescriptor     "haddock"
+      -- -- , hareDescriptor        "hare"
+      -- , hsimportDescriptor    "hsimport"
+      -- , liquidDescriptor      "liquid"
+      -- , packageDescriptor     "package"
+        Pragmas.descriptor  "pragmas"
+      , Floskell.descriptor "floskell"
+      -- , genericDescriptor     "generic"
+      -- , ghcmodDescriptor      "ghcmod"
+      , Ormolu.descriptor   "ormolu"
+      ]
+    examplePlugins =
+      [Example.descriptor  "eg"
+      ,Example2.descriptor "eg2"
+      -- ,hfaAlignDescriptor "hfaa"
+      ]
+
 
 -- ---------------------------------------------------------------------
+-- Prefix for the cache path
+{-
+cacheDir :: String
+cacheDir = "ghcide"
+
+getCacheDir :: [String] -> IO FilePath
+getCacheDir opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> opts_hash)
+    where
+        -- Create a unique folder per set of different GHC options, assuming that each different set of
+        -- GHC options will create incompatible interface files.
+        opts_hash = B.unpack $ encode $ H.finalize $ H.updates H.init (map B.pack opts)
+-}
 
 main :: IO ()
 main = do
@@ -82,40 +126,57 @@ main = do
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
+    -- LSP.setupLogger (optLogFile opts) ["hie", "hie-bios"]
+    --   $ if optDebugOn opts then L.DEBUG else L.INFO
+    LSP.setupLogger argsLogFile ["hie", "hie-bios"]
+      $ if argsDebugOn then L.DEBUG else L.INFO
+
     -- lock to avoid overlapping output on stdout
     lock <- newLock
     let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
             T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
 
-    whenJust argsCwd setCurrentDirectory
+    whenJust argsCwd IO.setCurrentDirectory
 
-    dir <- getCurrentDirectory
+    dir <- IO.getCurrentDirectory
 
-    let plugins = idePlugins argsExamplePlugin
+    pid <- getPid
+    let
+        -- (ps, commandIds) = idePlugins pid argsExamplePlugin
+        (ps, commandIds) = idePlugins pid True
+        plugins = Completions.plugin <> CodeAction.plugin <>
+                  ps
+        options = def { LSP.executeCommandCommands = Just commandIds
+                      , LSP.completionTriggerCharacters = Just "."
+                      }
 
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer def (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
+        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
-            -- very important we only call loadSession once, and it's fast, so just do it before starting
-            session <- loadSession dir
-            let options = (defaultIdeOptions $ return session)
+            let options = (defaultIdeOptions $ loadSession dir)
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
+                    , optTesting        = argsTesting
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins >> action kick) getLspId event (logger minBound) debouncer options vfs
+            initialise caps (cradleRules >> mainRule >> pluginRules plugins >> action kick)
+                getLspId event hlsLogger debouncer options vfs
     else do
+        -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
+        hSetEncoding stdout utf8
+        hSetEncoding stderr utf8
+
         putStrLn $ "(haskell-language-server)Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
 
         putStrLn $ "\nStep 1/6: Finding files to test in " ++ dir
         files <- expandFiles (argFiles ++ ["." | null argFiles])
         -- LSP works with absolute file paths, so try and behave similarly
-        files <- nubOrd <$> mapM canonicalizePath files
+        files <- nubOrd <$> mapM IO.canonicalizePath files
         putStrLn $ "Found " ++ show (length files) ++ " files"
 
         putStrLn "\nStep 2/6: Looking for hie.yaml files that control setup"
@@ -129,7 +190,8 @@ main = do
             cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle x
             when (isNothing x) $ print cradle
             putStrLn $ "\nStep 4/6, Cradle " ++ show i ++ "/" ++ show n ++ ": Loading GHC Session"
-            cradleToSession cradle
+            opts <- getComponentOptions cradle
+            createSession opts
 
         putStrLn "\nStep 5/6: Initializing the IDE"
         vfs <- makeVFSHandle
@@ -142,7 +204,7 @@ main = do
         let options =
               (defaultIdeOptions $ return $ return . grab)
                     { optShakeProfiling = argsShakeProfiling }
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
+        ide <- initialise def (cradleRules >> mainRule) (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath files
@@ -156,6 +218,10 @@ main = do
 
         unless (null failed) exitFailure
 
+cradleRules :: Rules ()
+cradleRules = do
+    loadGhcSession
+    cradleToSession
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do
@@ -164,7 +230,7 @@ expandFiles = concatMapM $ \x -> do
         let recurse "." = True
             recurse x | "." `isPrefixOf` takeFileName x = False -- skip .git etc
             recurse x = takeFileName x `notElem` ["dist","dist-newstyle"] -- cabal directories
-        files <- filter (\x -> takeExtension x `elem` [".hs",".lhs"]) <$> listFilesInside (return . recurse) x
+        files <- filter (\x -> takeExtension x `elem` [".hs",".lhs"]) <$> IO.listFilesInside (return . recurse) x
         when (null files) $
             fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
         return files
@@ -182,37 +248,21 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,ShowDiag,) diags
 showEvent lock e = withLock lock $ print e
 
-
-cradleToSession :: Cradle a -> IO HscEnvEq
-cradleToSession cradle = do
-    cradleRes <- getCompilerOptions "" cradle
-    opts <- case cradleRes of
-        CradleSuccess r -> pure r
-        CradleFail err -> throwIO err
-        -- TODO Rather than failing here, we should ignore any files that use this cradle.
-        -- That will require some more changes.
-        CradleNone -> fail "'none' cradle is not yet supported"
-    libdir <- getLibdir
-    env <- runGhc (Just libdir) $ do
-        _targets <- initSession opts
-        getSession
-    initDynLinker env
-    newHscEnvEq env
-
-
-loadSession :: FilePath -> IO (FilePath -> Action HscEnvEq)
-loadSession dir = do
+loadSession :: FilePath -> Action (FilePath -> Action HscEnvEq)
+loadSession dir = liftIO $ do
     cradleLoc <- memoIO $ \v -> do
         res <- findCradle v
         -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
         -- try and normalise that
         -- e.g. see https://github.com/digital-asset/ghcide/issues/126
-        res' <- traverse makeAbsolute res
+        res' <- traverse IO.makeAbsolute res
         return $ normalise <$> res'
-    session <- memoIO $ \file -> do
-        c <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle file
-        cradleToSession c
-    return $ \file -> liftIO $ session =<< cradleLoc file
+    let session :: Maybe FilePath -> Action HscEnvEq
+        session file = do
+          -- In the absence of a cradle file, just pass the directory from where to calculate an implicit cradle
+          let cradle = toNormalizedFilePath $ fromMaybe dir file
+          use_ LoadCradle cradle
+    return $ \file -> session =<< liftIO (cradleLoc file)
 
 
 -- | Memoize an IO function, with the characteristics:

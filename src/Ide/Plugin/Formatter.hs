@@ -7,9 +7,9 @@
 
 module Ide.Plugin.Formatter
   (
-    formatterPlugins
-  , FormattingType(..)
-  , FormattingProvider
+    formatting
+  , rangeFormatting
+  , noneProvider
   , responseError
   , extractRange
   , fullRange
@@ -20,39 +20,24 @@ import qualified Data.Map  as Map
 import qualified Data.Text as T
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.Rules
-import           Development.IDE.LSP.Server
-import           Development.IDE.Plugin
+import           Development.IDE.Core.Shake
+-- import           Development.IDE.LSP.Server
+-- import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
-import           Development.Shake hiding ( Diagnostic )
+-- import           Development.Shake hiding ( Diagnostic )
+-- import           Ide.Logger
+import           Ide.Types
+import           Development.IDE.Types.Logger
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
-import           Language.Haskell.LSP.Messages
+-- import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-formatterPlugins :: [(T.Text, FormattingProvider IO)] -> Plugin Config
-formatterPlugins providers = Plugin rules (handlers (Map.fromList (("none",noneProvider):providers)))
-
--- ---------------------------------------------------------------------
--- New style plugin
-
-rules :: Rules ()
-rules = mempty
-
-handlers :: Map.Map T.Text (FormattingProvider IO) -> PartialHandlers Config
-handlers providers = PartialHandlers $ \WithMessage{..} x -> return x
-    { LSP.documentFormattingHandler
-        = withResponse RspDocumentFormatting (formatting providers)
-    , LSP.documentRangeFormattingHandler
-        = withResponse RspDocumentRangeFormatting (rangeFormatting providers)
-    }
-
--- ---------------------------------------------------------------------
-
-formatting :: Map.Map T.Text (FormattingProvider IO)
+formatting :: Map.Map PluginId (FormattingProvider IO)
            -> LSP.LspFuncs Config -> IdeState -> DocumentFormattingParams
            -> IO (Either ResponseError (List TextEdit))
 formatting providers lf ideState
@@ -61,7 +46,7 @@ formatting providers lf ideState
 
 -- ---------------------------------------------------------------------
 
-rangeFormatting :: Map.Map T.Text (FormattingProvider IO)
+rangeFormatting :: Map.Map PluginId (FormattingProvider IO)
                 -> LSP.LspFuncs Config -> IdeState -> DocumentRangeFormattingParams
                 -> IO (Either ResponseError (List TextEdit))
 rangeFormatting providers lf ideState
@@ -70,43 +55,25 @@ rangeFormatting providers lf ideState
 
 -- ---------------------------------------------------------------------
 
-doFormatting :: LSP.LspFuncs Config -> Map.Map T.Text (FormattingProvider IO)
+doFormatting :: LSP.LspFuncs Config -> Map.Map PluginId (FormattingProvider IO)
              -> IdeState -> FormattingType -> Uri -> FormattingOptions
              -> IO (Either ResponseError (List TextEdit))
 doFormatting lf providers ideState ft uri params = do
   mc <- LSP.config lf
   let mf = maybe "none" formattingProvider mc
-  case Map.lookup mf providers of
+  case Map.lookup (PluginId mf) providers of
       Just provider ->
         case uriToFilePath uri of
           Just (toNormalizedFilePath -> fp) -> do
             (_, mb_contents) <- runAction ideState $ getFileContents fp
             case mb_contents of
-              Just contents -> provider ideState ft contents fp params
+              Just contents -> do
+                  logDebug (ideLogger ideState) $ T.pack $
+                      "Formatter.doFormatting: contents=" ++ show contents -- AZ
+                  provider ideState ft contents fp params
               Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
           Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: no formatter found for:[" ++ T.unpack mf ++ "]"
-
--- ---------------------------------------------------------------------
-
--- | Format the given Text as a whole or only a @Range@ of it.
--- Range must be relative to the text to format.
--- To format the whole document, read the Text from the file and use 'FormatText'
--- as the FormattingType.
-data FormattingType = FormatText
-                    | FormatRange Range
-
-
--- | To format a whole document, the 'FormatText' @FormattingType@ can be used.
--- It is required to pass in the whole Document Text for that to happen, an empty text
--- and file uri, does not suffice.
-type FormattingProvider m
-        = IdeState
-        -> FormattingType  -- ^ How much to format
-        -> T.Text -- ^ Text to format
-        -> NormalizedFilePath -- ^ location of the file being formatted
-        -> FormattingOptions -- ^ Options for the formatter
-        -> m (Either ResponseError (List TextEdit)) -- ^ Result of the formatting
 
 -- ---------------------------------------------------------------------
 
