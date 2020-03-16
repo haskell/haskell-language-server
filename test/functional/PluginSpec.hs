@@ -51,9 +51,9 @@ spec = do
 
       liftIO $ [ca ^. L.title] `shouldContain` ["Add TODO Item 1"]
 
-      -- liftIO $ putStrLn $ "A" -- AZ
+      liftIO $ putStrLn $ "A" -- AZ
       executeCodeAction ca
-      -- liftIO $ putStrLn $ "B" -- AZ
+      liftIO $ putStrLn $ "B" -- AZ
 
       -- _ <- skipMany (message @RegisterCapabilityRequest)
       -- liftIO $ putStrLn $ "B2" -- AZ
@@ -62,7 +62,7 @@ spec = do
       -- liftIO $ putStrLn $ "diags2 = " ++ show _diags2 -- AZ
 
       -- contents <- getDocumentEdit doc
-      -- liftIO $ putStrLn $ "C" -- AZ
+      liftIO $ putStrLn $ "C" -- AZ
       -- liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
 
       -- noDiagnostics
