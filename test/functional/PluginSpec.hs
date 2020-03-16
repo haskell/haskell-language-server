@@ -42,16 +42,17 @@ spec = do
       mark "provides 3.8 code actions"
 
       doc <- openDoc "Format.hs" "haskell"
-      _diags@(diag1:_) <- waitForDiagnostics
+      diags@(diag1:_) <- waitForDiagnosticsSource "typecheck"
 
       -- liftIO $ putStrLn $ "diags = " ++ show diags -- AZ
       liftIO $ do
-        -- length diags `shouldBe` 1
-        diag1 ^. L.range `shouldBe` Range (Position 0 0) (Position 1 0)
+        length diags `shouldBe` 5
+        diag1 ^. L.range `shouldBe` Range (Position 2 9) (Position 2 12)
         diag1 ^. L.severity `shouldBe` Just DsError
         diag1 ^. L.code `shouldBe` Nothing
         -- diag1 ^. L.source `shouldBe` Just "example2"
 
+        diag1 ^. L.source `shouldBe` Just "typecheck"
         -- diag2 ^. L.source `shouldBe` Just "example"
 
       _cas@(CACodeAction ca:_) <- getAllCodeActions doc
@@ -61,18 +62,18 @@ spec = do
 
       liftIO $ [ca ^. L.title] `shouldContain` ["Add TODO Item 1"]
 
-      mark "A" -- AZ
+      -- mark "A" -- AZ
       executeCodeAction ca
-      mark "B" -- AZ
+      -- mark "B" -- AZ
 
       -- _ <- skipMany (message @RegisterCapabilityRequest)
       -- liftIO $ putStrLn $ "B2" -- AZ
 
-      _diags2 <- waitForDiagnostics
+      -- _diags2 <- waitForDiagnosticsSource "typecheck"
       -- liftIO $ putStrLn $ "diags2 = " ++ show _diags2 -- AZ
 
       -- contents <- getDocumentEdit doc
-      mark "C" -- AZ
+      -- mark "C" -- AZ
       -- liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
 
       -- noDiagnostics

@@ -117,7 +117,7 @@ codeAction
 codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let
       title = "Add TODO2 Item"
-      tedit = [TextEdit (Range (Position 0 0) (Position 0 0))
+      tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
                "-- TODO2 added by Example2 Plugin directly\n"]
       edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
     pure $ Right $ List
@@ -157,7 +157,7 @@ addTodoCmd :: AddTodoParams -> IO (Either ResponseError Value,
                            Maybe (ServerMethod, ApplyWorkspaceEditParams))
 addTodoCmd (AddTodoParams uri todoText) = do
   let
-    pos = Position 0 0
+    pos = Position 5 0
     textEdits = List
       [TextEdit (Range pos pos)
                   ("-- TODO2:" <> todoText <> "\n")
