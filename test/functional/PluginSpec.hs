@@ -26,13 +26,20 @@ import           TestUtils
 
 -- ---------------------------------------------------------------------
 
+-- | Put a text marker on stdout in the client and the server log
+mark :: String -> Session ()
+mark str = do
+    sendNotification (CustomClientMethod "$/testid")  (T.pack str)
+    liftIO $ putStrLn str
+
+-- ---------------------------------------------------------------------
+
 spec :: Spec
 spec = do
   describe "composes code actions" $
     it "provides 3.8 code actions" $ runSession hieCommandExamplePlugin fullCaps "test/testdata" $ do
 
-      -- sendNotification (CustomClientMethod "$/progress")  (T.pack "provides 3.8 code actions")
-      sendNotification (CustomClientMethod "$/testid")  (T.pack "provides 3.8 code actions")
+      mark "provides 3.8 code actions"
 
       doc <- openDoc "Format.hs" "haskell"
       _diags@(diag1:_) <- waitForDiagnostics
@@ -54,9 +61,9 @@ spec = do
 
       liftIO $ [ca ^. L.title] `shouldContain` ["Add TODO Item 1"]
 
-      liftIO $ putStrLn $ "A" -- AZ
+      mark "A" -- AZ
       executeCodeAction ca
-      liftIO $ putStrLn $ "B" -- AZ
+      mark "B" -- AZ
 
       -- _ <- skipMany (message @RegisterCapabilityRequest)
       -- liftIO $ putStrLn $ "B2" -- AZ
@@ -65,7 +72,7 @@ spec = do
       -- liftIO $ putStrLn $ "diags2 = " ++ show _diags2 -- AZ
 
       -- contents <- getDocumentEdit doc
-      liftIO $ putStrLn $ "C" -- AZ
+      mark "C" -- AZ
       -- liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
 
       -- noDiagnostics
