@@ -103,14 +103,14 @@ executeAddSignatureCommand
     :: LSP.LspFuncs c
     -> IdeState
     -> ExecuteCommandParams
-    -> IO (Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+    -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
     | _command == "typesignature.add"
     , Just (List [edit]) <- _arguments
     , Success wedit <- fromJSON edit
-    = return (Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
+    = return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
     | otherwise
-    = return (Null, Nothing)
+    = return (Right Null, Nothing)
 
 suggestAction
   :: Maybe DynFlags

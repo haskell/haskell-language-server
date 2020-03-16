@@ -29,7 +29,7 @@ data WithMessage c = WithMessage
         (Show m, Show rm, Show req, Show newReqParams, Show newReqBody) =>
         (ResponseMessage resp -> LSP.FromServerMessage) -> -- how to wrap a response
         (RequestMessage rm newReqParams newReqBody -> LSP.FromServerMessage) -> -- how to wrap the additional req
-        (LSP.LspFuncs c -> IdeState -> req -> IO (resp, Maybe (rm, newReqParams))) -> -- actual work
+        (LSP.LspFuncs c -> IdeState -> req -> IO (Either ResponseError resp, Maybe (rm, newReqParams))) -> -- actual work
         Maybe (LSP.Handler (RequestMessage m req resp))
     , withInitialize :: (LSP.LspFuncs c -> IdeState -> InitializeParams -> IO ())
                      -> Maybe (LSP.Handler InitializeRequest)
