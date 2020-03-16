@@ -39,12 +39,13 @@ import Test.QuickCheck
 import Test.QuickCheck.Instances ()
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
+import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import Data.Maybe
 
 main :: IO ()
-main = defaultMain $ testGroup "HIE"
+main = defaultMainWithRerun $ testGroup "HIE"
   [ testSession "open close" $ do
       doc <- openDoc' "Testing.hs" "haskell" ""
       void (skipManyTill anyMessage message :: Session WorkDoneProgressCreateRequest)

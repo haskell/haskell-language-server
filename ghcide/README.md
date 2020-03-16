@@ -254,6 +254,13 @@ To build and work on `ghcide` itself, you can use Stack or cabal, e.g.,
 running `stack test` will execute the test suite.
 If you are using Windows, you should disable the `auto.crlf` setting and configure your editor to use LF line endings, directly or making it use the existing `.editor-config`.
 
+If you are chasing down test failures, you can use the tasty-rerun feature by running tests as
+
+    stack --stack-yaml=stack84.yaml test --test-arguments "--rerun"
+
+This writes a log file called `.tasty-rerun-log` of the failures, and only runs those.
+See the [tasty-rerun](https://hackage.haskell.org/package/tasty-rerun-1.1.17/docs/Test-Tasty-Ingredients-Rerun.html) documentation for other options.
+
 ### Building the extension
 
 For development, you can also the VSCode extension from this repository (see
