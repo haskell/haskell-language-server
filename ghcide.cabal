@@ -255,6 +255,7 @@ test-suite ghcide-tests
         tasty-expected-failure,
         tasty-hunit,
         tasty-quickcheck,
+        tasty-rerun,
         text
     hs-source-dirs: test/cabal test/exe test/src
     include-dirs: include

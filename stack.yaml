@@ -13,5 +13,6 @@ extra-deps:
 - shake-0.18.5
 - parser-combinators-1.2.1
 - haddock-library-1.8.0
+- tasty-rerun-1.1.17
 nix:
   packages: [zlib]

@@ -22,5 +22,11 @@ extra-deps:
 - unordered-containers-0.2.10.0
 - file-embed-0.0.11.2
 - heaps-0.3.6.1
+
+# For tasty-retun
+- ansi-terminal-0.10.3
+- ansi-wl-pprint-0.6.9
+- tasty-1.2.3
+- tasty-rerun-1.1.17
 nix:
   packages: [zlib]

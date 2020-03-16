@@ -4,3 +4,4 @@ dist-newstyle/
 cabal.project.local
 *~
 *.lock
+/.tasty-rerun-log
