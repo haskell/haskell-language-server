@@ -11,7 +11,7 @@ import           Control.Monad.IO.Class
 -- import           Data.Default
 -- import qualified Data.HashMap.Strict as HM
 -- import           Data.Maybe
--- import qualified Data.Text as T
+import qualified Data.Text as T
 -- import Language.Haskell.LSP.Test
 import           Language.Haskell.LSP.Test as Test
 import           Language.Haskell.LSP.Types
@@ -30,6 +30,9 @@ spec :: Spec
 spec = do
   describe "composes code actions" $
     it "provides 3.8 code actions" $ runSession hieCommandExamplePlugin fullCaps "test/testdata" $ do
+
+      -- sendNotification (CustomClientMethod "$/progress")  (T.pack "provides 3.8 code actions")
+      sendNotification (CustomClientMethod "$/testid")  (T.pack "provides 3.8 code actions")
 
       doc <- openDoc "Format.hs" "haskell"
       _diags@(diag1:_) <- waitForDiagnostics
