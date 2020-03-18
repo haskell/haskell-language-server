@@ -40,7 +40,6 @@ import           Ide.Plugin.Config
 import           Ide.Plugin.Formatter
 import           Ide.Types
 import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.Messages as LSP
 import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types              as J
