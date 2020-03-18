@@ -58,14 +58,19 @@ import System.Log.Logger as L
 import System.Time.Extra
 
 -- ---------------------------------------------------------------------
-
+-- ghcide partialhandlers
 import Development.IDE.Plugin.CodeAction  as CodeAction
 import Development.IDE.Plugin.Completions as Completions
+import Development.IDE.LSP.HoverDefinition as HoverDefinition
+
+ -- haskell-language-server plugins
 import Ide.Plugin.Example                 as Example
 import Ide.Plugin.Example2                as Example2
+import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.Pragmas                 as Pragmas
+
 
 -- ---------------------------------------------------------------------
 
@@ -90,7 +95,8 @@ idePlugins pid includeExamples
       -- , hsimportDescriptor    "hsimport"
       -- , liquidDescriptor      "liquid"
       -- , packageDescriptor     "package"
-        Pragmas.descriptor  "pragmas"
+        GhcIde.descriptor  "ghc"
+      , Pragmas.descriptor  "pragmas"
       , Floskell.descriptor "floskell"
       -- , genericDescriptor     "generic"
       -- , ghcmodDescriptor      "ghcmod"
@@ -145,6 +151,7 @@ main = do
         -- (ps, commandIds) = idePlugins pid argsExamplePlugin
         (ps, commandIds) = idePlugins pid True
         plugins = Completions.plugin <> CodeAction.plugin <>
+                  Plugin mempty HoverDefinition.setHandlersDefinition <>
                   ps
         options = def { LSP.executeCommandCommands = Just commandIds
                       , LSP.completionTriggerCharacters = Just "."
