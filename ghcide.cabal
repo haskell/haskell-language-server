@@ -111,6 +111,7 @@ library
         Development.IDE.GHC.Error
         Development.IDE.GHC.Util
         Development.IDE.Import.DependencyInformation
+        Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.LanguageServer
         Development.IDE.LSP.Protocol
         Development.IDE.LSP.Server
@@ -131,7 +132,6 @@ library
         Development.IDE.GHC.Orphans
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
-        Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.Notifications
         Development.IDE.LSP.Outline
         Development.IDE.Spans.AtPoint
