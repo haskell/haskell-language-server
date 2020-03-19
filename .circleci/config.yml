@@ -148,13 +148,21 @@ jobs:
             - cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
       - run:
           name: Update
-          command: cabal update
+          command: cabal new-update
       - run:
           name: Configure
-          command: cabal configure --enable-tests
+          command: cabal new-configure --enable-tests
+      - run:
+          name: Build dependencies
+          command: cabal new-build -j1 --dependencies-only # need j1, else ghc-lib-parser triggers OOM
+          no_output_timeout: 30m
+      - save_cache:
+          key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
+          paths:
+            - ~/.cabal
       - run:
           name: Build
-          command: cabal build -j1 # need j1, else ghc-lib-parser triggers OOM
+          command: cabal new-build -j1 # need j1, else ghc-lib-parser triggers OOM
           no_output_timeout: 30m
       - save_cache:
           key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
