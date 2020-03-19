@@ -6,6 +6,9 @@
 module Development.IDE.LSP.HoverDefinition
     ( setHandlersHover
     , setHandlersDefinition
+    -- * For haskell-language-server
+    , hover
+    , gotoDefinition
     ) where
 
 import           Development.IDE.Core.Rules
