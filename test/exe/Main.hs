@@ -63,6 +63,7 @@ main = defaultMainWithRerun $ testGroup "HIE"
   , pluginTests
   , preprocessorTests
   , thTests
+  , safeTests
   , unitTests
   , haddockTests
   , positionMappingTests
@@ -1484,6 +1485,36 @@ preprocessorTests = testSessionWait "preprocessor" $ do
         [(DsError, (2, 8), "Variable not in scope: z")]
       )
     ]
+
+
+safeTests :: TestTree
+safeTests =
+  testGroup
+    "SafeHaskell"
+    [ -- Test for https://github.com/digital-asset/ghcide/issues/424
+      testSessionWait "load" $ do
+        let sourceA =
+              T.unlines
+                ["{-# LANGUAGE Trustworthy #-}"
+                ,"module A where"
+                ,"import System.IO.Unsafe"
+                ,"import System.IO"
+                ,"trustWorthyId :: a -> a"
+                ,"trustWorthyId i = unsafePerformIO $ do"
+                ,"  putStrLn \"I'm safe\""
+                ,"  return i"]
+            sourceB =
+              T.unlines
+                ["{-# LANGUAGE Safe #-}"
+                ,"module B where"
+                ,"import A"
+                ,"safeId :: a -> a"
+                ,"safeId = trustWorthyId"
+                ]
+
+        _ <- openDoc' "A.hs" "haskell" sourceA
+        _ <- openDoc' "B.hs" "haskell" sourceB
+        expectNoMoreDiagnostics 1 ]
 
 thTests :: TestTree
 thTests =
