@@ -9,6 +9,7 @@
 --   Given a list of paths to find libraries, and a file to compile, produce a list of 'CoreModule' values.
 module Development.IDE.Core.Compile
   ( TcModuleResult(..)
+  , RunSimplifier(..)
   , compileModule
   , parseModule
   , typecheckModule
@@ -131,14 +132,21 @@ initPlugins modSummary = do
     return modSummary
 #endif
 
+-- | Whether we should run the -O0 simplifier when generating core.
+--
+-- This is required for template Haskell to work but we disable this in DAML.
+-- See #256
+newtype RunSimplifier = RunSimplifier Bool
+
 -- | Compile a single type-checked module to a 'CoreModule' value, or
 -- provide errors.
 compileModule
-    :: HscEnv
+    :: RunSimplifier
+    -> HscEnv
     -> [TcModuleResult]
     -> TcModuleResult
     -> IO (IdeResult (SafeHaskellMode, CgGuts, ModDetails))
-compileModule packageState deps tmr =
+compileModule (RunSimplifier simplify) packageState deps tmr =
     fmap (either (, Nothing) (second Just)) $
     runGhcEnv packageState $
         catchSrcErrors "compile" $ do
@@ -152,11 +160,12 @@ compileModule packageState deps tmr =
                 let tm' = tm{tm_parsed_module  = pm'}
                 GHC.dm_core_module <$> GHC.desugarModule tm'
             let tc_result = fst (tm_internals_ (tmrModule tmr))
-            -- Have to call the simplifier on the code even if we are at
-            -- -O0 as otherwise the code generation fails which leads to
-            -- errors like #256
-            plugins <- liftIO $ readIORef (tcg_th_coreplugins tc_result)
-            desugared_guts <- liftIO $ hscSimplify session plugins desugar
+            desugared_guts <-
+                if simplify
+                    then do
+                        plugins <- liftIO $ readIORef (tcg_th_coreplugins tc_result)
+                        liftIO $ hscSimplify session plugins desugar
+                    else pure desugar
             -- give variables unique OccNames
             (guts, details) <- liftIO $ tidyProgram session desugared_guts
             return (map snd warnings, (mg_safe_haskell desugar, guts, details))

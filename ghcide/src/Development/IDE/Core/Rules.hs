@@ -351,17 +351,17 @@ typeCheckRule =
         addByteCode :: Linkable -> TcModuleResult -> TcModuleResult
         addByteCode lm tmr = tmr { tmrModInfo = (tmrModInfo tmr) { hm_linkable = Just lm } }
 
-generateCore :: NormalizedFilePath -> Action (IdeResult (SafeHaskellMode, CgGuts, ModDetails))
-generateCore file = do
+generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult (SafeHaskellMode, CgGuts, ModDetails))
+generateCore runSimplifier file = do
     deps <- use_ GetDependencies file
     (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
     setPriority priorityGenerateCore
     packageState <- hscEnv <$> use_ GhcSession file
-    liftIO $ compileModule packageState tms tm
+    liftIO $ compileModule runSimplifier packageState tms tm
 
 generateCoreRule :: Rules ()
 generateCoreRule =
-    define $ \GenerateCore -> generateCore
+    define $ \GenerateCore -> generateCore (RunSimplifier True)
 
 generateByteCodeRule :: Rules ()
 generateByteCodeRule =
