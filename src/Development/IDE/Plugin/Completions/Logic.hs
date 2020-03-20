@@ -373,7 +373,9 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
       filtImportCompls = filtListWith (mkImportCompl enteredQual) importableModules
       filtPragmaCompls = filtListWithSnippet mkPragmaCompl validPragmas
       filtOptsCompls   = filtListWith mkExtCompl
-      filtKeywordCompls = if T.null prefixModule then filtListWith mkExtCompl keywords else []
+      filtKeywordCompls
+          | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
+          | otherwise = []
 
       stripLeading :: Char -> String -> String
       stripLeading _ [] = []
@@ -526,25 +528,4 @@ prefixes =
   , "$t"
   , "$c"
   , "$m"
-  ]
-
-keywords :: [T.Text]
-keywords =
-  [
-    -- From https://wiki.haskell.org/Keywords
-    "as"
-  , "case", "of"
-  , "class", "instance", "type"
-  , "data", "family", "newtype"
-  , "default"
-  , "deriving"
-  , "do", "mdo", "proc", "rec"
-  , "forall"
-  , "foreign"
-  , "hiding"
-  , "if", "then", "else"
-  , "import", "qualified", "hiding"
-  , "infix", "infixl", "infixr"
-  , "let", "in", "where"
-  , "module"
   ]

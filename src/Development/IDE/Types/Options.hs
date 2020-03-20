@@ -19,6 +19,7 @@ import Development.IDE.GHC.Util
 import           GHC hiding (parseModule, typecheckModule)
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified Language.Haskell.LSP.Types.Capabilities as LSP
+import qualified Data.Text as T
 
 data IdeOptions = IdeOptions
   { optPreprocessor :: GHC.ParsedSource -> IdePreprocessedSource
@@ -48,6 +49,9 @@ data IdeOptions = IdeOptions
     -- ^ the ```language to use
   , optNewColonConvention :: Bool
     -- ^ whether to use new colon convention
+  , optKeywords :: [T.Text]
+    -- ^ keywords used for completions. These are customizable
+    -- since DAML has a different set of keywords than Haskell.
   , optDefer :: IdeDefer
     -- ^ Whether to defer type errors, typed holes and out of scope
     --   variables. Deferral allows the IDE to continue to provide
@@ -84,6 +88,7 @@ defaultIdeOptions session = IdeOptions
     ,optReportProgress = IdeReportProgress False
     ,optLanguageSyntax = "haskell"
     ,optNewColonConvention = False
+    ,optKeywords = haskellKeywords
     ,optDefer = IdeDefer True
     ,optTesting = False
     }
@@ -103,3 +108,23 @@ data IdePkgLocationOptions = IdePkgLocationOptions
 defaultIdePkgLocationOptions :: IdePkgLocationOptions
 defaultIdePkgLocationOptions = IdePkgLocationOptions f f
     where f _ _ = return Nothing
+
+-- | From https://wiki.haskell.org/Keywords
+haskellKeywords :: [T.Text]
+haskellKeywords =
+  [ "as"
+  , "case", "of"
+  , "class", "instance", "type"
+  , "data", "family", "newtype"
+  , "default"
+  , "deriving"
+  , "do", "mdo", "proc", "rec"
+  , "forall"
+  , "foreign"
+  , "hiding"
+  , "if", "then", "else"
+  , "import", "qualified", "hiding"
+  , "infix", "infixl", "infixr"
+  , "let", "in", "where"
+  , "module"
+  ]
