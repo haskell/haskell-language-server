@@ -1630,6 +1630,27 @@ completionTests
         docId <- openDoc' "A.hs" "haskell" source
         compls <- getCompletions docId (Position 1 9)
         liftIO $ compls @?= [keywordItem "newtype"]
+    , testSessionWait "type context" $ do
+        let source = T.unlines
+                [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+                , "module A () where"
+                , "f = f"
+                ]
+        docId <- openDoc' "A.hs" "haskell" source
+        expectDiagnostics [("A.hs", [(DsWarning, (2, 0), "not used")])]
+        changeDoc docId
+             [ TextDocumentContentChangeEvent Nothing Nothing $ T.unlines
+                   [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+                   , "module A () where"
+                   , "f = f"
+                   , "g :: Intege"
+                   ]
+             ]
+        -- At this point the module parses but does not typecheck.
+        -- This should be sufficient to detect that we are in a
+        -- type context and only show the completion to the type.
+        compls <- getCompletions docId (Position 3 11)
+        liftIO $ map dropDocs compls @?= [complItem "Integer"(Just CiStruct) (Just "*")]
     ]
   where
     dropDocs :: CompletionItem -> CompletionItem

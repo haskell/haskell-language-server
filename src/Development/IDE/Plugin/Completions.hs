@@ -2,6 +2,8 @@
 
 module Development.IDE.Plugin.Completions(plugin) where
 
+import Control.Applicative
+import Data.Maybe
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Core as LSP
@@ -10,8 +12,6 @@ import Language.Haskell.LSP.Types.Capabilities
 import Development.Shake.Classes
 import Development.Shake
 import GHC.Generics
-import Data.Maybe
-import HscTypes
 
 import Development.IDE.Plugin
 import Development.IDE.Core.Service
@@ -37,14 +37,14 @@ produceCompletions =
         packageState <- fmap (hscEnv . fst) <$> useWithStale GhcSession file
         case (tm, packageState) of
             (Just tm', Just packageState') -> do
-                cdata <- liftIO $ cacheDataProducer packageState' (hsc_dflags packageState')
+                cdata <- liftIO $ cacheDataProducer packageState'
                                                     (tmrModule tm') parsedDeps
-                return ([], Just (cdata, tm'))
+                return ([], Just cdata)
             _ -> return ([], Nothing)
 
 
 -- | Produce completions info for a file
-type instance RuleResult ProduceCompletions = (CachedCompletions, TcModuleResult)
+type instance RuleResult ProduceCompletions = CachedCompletions
 
 data ProduceCompletions = ProduceCompletions
     deriving (Eq, Show, Typeable, Generic)
@@ -67,17 +67,21 @@ getCompletionsLSP lsp ide
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath path
-        (ideOpts, compls) <- runAction ide ((,) <$> getIdeOptions <*> useWithStale ProduceCompletions npath)
+        (ideOpts, compls) <- runAction ide $ do
+            opts <- getIdeOptions
+            compls <- useWithStale ProduceCompletions npath
+            pm <- useWithStale GetParsedModule npath
+            pure (opts, liftA2 (,) compls pm)
         case compls of
-          Just ((cci', tm'), mapping) -> do
-            let position' = fromCurrentPosition mapping position
+          Just ((cci', _), (pm, mapping)) -> do
+            let !position' = fromCurrentPosition mapping position
             pfix <- maybe (return Nothing) (flip VFS.getCompletionPrefix cnts) position'
             case (pfix, completionContext) of
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (Completions $ List [])
               (Just pfix', _) -> do
                 let fakeClientCapabilities = ClientCapabilities Nothing Nothing Nothing Nothing
-                Completions . List <$> getCompletions ideOpts cci' (tmrModule tm') pfix' fakeClientCapabilities (WithSnippets True)
+                Completions . List <$> getCompletions ideOpts cci' pm pfix' fakeClientCapabilities (WithSnippets True)
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
