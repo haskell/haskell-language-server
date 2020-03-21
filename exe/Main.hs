@@ -164,7 +164,7 @@ main = do
         plugins = Completions.plugin <> CodeAction.plugin <>
                   Plugin mempty HoverDefinition.setHandlersDefinition <>
                   ps
-        options = def { LSP.executeCommandCommands = Just commandIds
+        options = def { LSP.executeCommandCommands = Just (pid <> ":typesignature.add":commandIds)
                       , LSP.completionTriggerCharacters = Just "."
                       }
 
