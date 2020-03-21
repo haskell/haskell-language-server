@@ -76,7 +76,7 @@ addPragmaCmd (AddPragmaParams uri pragmaName) = do
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 codeActionProvider :: CodeActionProvider
-codeActionProvider _ plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
+codeActionProvider _ _ plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
   cmds <- mapM mkCommand pragmas
   -- cmds <- mapM mkCommand ("FooPragma":pragmas)
   return $ Right $ List cmds

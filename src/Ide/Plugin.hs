@@ -35,7 +35,6 @@ import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Logger
 import           Development.Shake hiding ( Diagnostic, command )
 import           GHC.Generics
-import           Ide.Compat
 import           Ide.Plugin.Config
 import           Ide.Plugin.Formatter
 import           Ide.Types
@@ -115,7 +114,7 @@ makeCodeAction :: [(PluginId, CodeActionProvider)]
 makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
     let caps = LSP.clientCapabilities lf
         unL (List ls) = ls
-    r <- mapM (\(pid,provider) -> provider ideState pid docId range context) cas
+    r <- mapM (\(pid,provider) -> provider lf ideState pid docId range context) cas
     let actions = filter wasRequested . concat $ map unL $ rights r
     res <- send caps actions
     return $ Right res
@@ -171,11 +170,11 @@ makeCodeLens :: [(PluginId, CodeLensProvider)]
       -> IdeState
       -> CodeLensParams
       -> IO (Either ResponseError (List CodeLens))
-makeCodeLens cas _lf ideState params = do
+makeCodeLens cas lf ideState params = do
     logInfo (ideLogger ideState) "Plugin.makeCodeLens (ideLogger)" -- AZ
     let
       makeLens (pid, provider) = do
-          r <- provider ideState pid params
+          r <- provider lf ideState pid params
           return (pid, r)
       breakdown :: [(PluginId, Either ResponseError a)] -> ([(PluginId, ResponseError)], [(PluginId, a)])
       breakdown ls = (concatMap doOneLeft ls, concatMap doOneRight ls)
@@ -361,9 +360,6 @@ mkLspCommand plid cn title args' = do
 mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
 mkLspCmdId pid (PluginId plid) (CommandId cid)
   = pid <> ":" <> plid <> ":" <> cid
-
-getPid :: IO T.Text
-getPid = T.pack . show <$> getProcessID
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand])] -> [T.Text]
 allLspCmdIds pid commands = concat $ map go commands

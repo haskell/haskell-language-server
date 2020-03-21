@@ -27,7 +27,6 @@ source-repository head
 
 library
   exposed-modules:
-      Ide.Compat
       Ide.Cradle
       Ide.Logger
       Ide.Plugin

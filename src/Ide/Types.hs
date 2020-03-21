@@ -27,11 +27,11 @@ import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
--- import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Development.Shake
--- import           Development.Shake.Classes
+import           Ide.Plugin.Config
+import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 
@@ -84,7 +84,8 @@ data PluginCommand = forall a. (FromJSON a) =>
                 }
 -- ---------------------------------------------------------------------
 
-type CodeActionProvider =  IdeState
+type CodeActionProvider = LSP.LspFuncs Config
+                        -> IdeState
                         -> PluginId
                         -> TextDocumentIdentifier
                         -> Range
@@ -92,7 +93,8 @@ type CodeActionProvider =  IdeState
                         -> IO (Either ResponseError (List CAResult))
 
 
-type CodeLensProvider = IdeState
+type CodeLensProvider = LSP.LspFuncs Config
+                      -> IdeState
                       -> PluginId
                       -> CodeLensParams
                       -> IO (Either ResponseError (List CodeLens))

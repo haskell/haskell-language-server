@@ -107,14 +107,8 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 -- ---------------------------------------------------------------------
 
 -- | Generate code actions.
-codeAction
-    :: IdeState
-    -> PluginId
-    -> TextDocumentIdentifier
-    -> Range
-    -> CodeActionContext
-    -> IO (Either ResponseError (List CAResult))
-codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
+codeAction :: CodeActionProvider
+codeAction _lf _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let
       title = "Add TODO Item 1"
       tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
@@ -125,12 +119,8 @@ codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_di
 
 -- ---------------------------------------------------------------------
 
-codeLens
-    :: IdeState
-    -> PluginId
-    -> CodeLensParams
-    -> IO (Either ResponseError (List CodeLens))
-codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+codeLens :: CodeLensProvider
+codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
     logInfo (ideLogger ideState) "Example.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
