@@ -96,8 +96,6 @@ executable haskell-language-server
   other-modules:
       Arguments
       Paths_haskell_language_server
-      Rules
-      RuleTypes
   autogen-modules:
       Paths_haskell_language_server
   ghc-options:
@@ -124,6 +122,7 @@ executable haskell-language-server
     , containers
     , data-default
     , deepseq
+    , directory
     , extra
     , filepath
      --------------------------------------------------------------
