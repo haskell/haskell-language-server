@@ -191,7 +191,7 @@ logAndRunRequest label getResults ide pos path = do
 -- ---------------------------------------------------------------------
 
 symbols :: SymbolsProvider
-symbols _ide (DocumentSymbolParams _doc _mt)
+symbols _lf _ide (DocumentSymbolParams _doc _mt)
     = pure $ Right [r]
     where
         r = DocumentSymbol name detail kind deprecation range selR chList

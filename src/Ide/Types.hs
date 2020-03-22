@@ -132,7 +132,8 @@ data DiagnosticTrigger = DiagnosticOnOpen
 -- type HoverProvider = Uri -> Position -> IO (Either ResponseError [Hover])
 type HoverProvider = IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 
-type SymbolsProvider = IdeState
+type SymbolsProvider = LSP.LspFuncs Config
+                     -> IdeState
                      -> DocumentSymbolParams
                      -> IO (Either ResponseError [DocumentSymbol])
 

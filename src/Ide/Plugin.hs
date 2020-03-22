@@ -448,7 +448,7 @@ makeSymbols sps lf ideState params
                       si = SymbolInformation name' (ds ^. kind) (ds ^. deprecated) loc parent
                   in [si] <> children'
 
-      mhs <- mapM (\(_,p) -> p ideState params) sps
+      mhs <- mapM (\(_,p) -> p lf ideState params) sps
       case rights mhs of
           [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
           hs -> return $ Right $ convertSymbols $ concat hs
