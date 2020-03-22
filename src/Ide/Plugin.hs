@@ -205,7 +205,7 @@ executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
 --                             -> ExecuteCommandParams
 --                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 makeExecuteCommands :: [(PluginId, [PluginCommand])] -> LSP.LspFuncs Config -> ExecuteCommandProvider
-makeExecuteCommands ecs _lf _params = do
+makeExecuteCommands ecs lf ide = do
   let
       pluginMap = Map.fromList ecs
       parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
@@ -250,7 +250,7 @@ makeExecuteCommands ecs _lf _params = do
               --                           "Invalid fallbackCodeAction params"
 
           -- Just an ordinary HIE command
-          Just (plugin, cmd) -> runPluginCommand pluginMap plugin cmd cmdParams
+          Just (plugin, cmd) -> runPluginCommand pluginMap lf ide plugin cmd cmdParams
 
           -- Couldn't parse the command identifier
           _ -> return (Left $ ResponseError InvalidParams "Invalid command identifier" Nothing, Nothing)
@@ -333,20 +333,33 @@ makeExecuteCommands ecs _lf _params = do
 
 -- | Runs a plugin command given a PluginId, CommandId and
 -- arguments in the form of a JSON object.
-runPluginCommand :: Map.Map PluginId [PluginCommand] -> PluginId -> CommandId -> J.Value
-                  -> IO (Either ResponseError J.Value,
+runPluginCommand :: Map.Map PluginId [PluginCommand]
+                 -> LSP.LspFuncs Config
+                 -> IdeState
+                 -> PluginId
+                 -> CommandId
+                 -> J.Value
+                 -> IO (Either ResponseError J.Value,
                         Maybe (ServerMethod, ApplyWorkspaceEditParams))
-runPluginCommand m p@(PluginId p') com@(CommandId com') arg =
+runPluginCommand m lf ide  p@(PluginId p') com@(CommandId com') arg =
   case Map.lookup p m of
     Nothing -> return
       (Left $ ResponseError InvalidRequest ("Plugin " <> p' <> " doesn't exist") Nothing, Nothing)
     Just xs -> case List.find ((com ==) . commandId) xs of
       Nothing -> return (Left $
-        ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p' <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing, Nothing)
+        ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p'
+                                      <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing, Nothing)
       Just (PluginCommand _ _ f) -> case J.fromJSON arg of
         J.Error err -> return (Left $
-          ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p' <> ": " <> T.pack err) Nothing, Nothing)
-        J.Success a -> f a
+          ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p'
+                                       <> ": " <> T.pack err
+                                       <> "\narg = " <> T.pack (show arg)) Nothing, Nothing)
+        J.Success a -> f lf ide a
+
+-- lsp-request: error while parsing args for typesignature.add in plugin ghcide:
+-- When parsing the record ExecuteCommandParams of type
+-- Language.Haskell.LSP.Types.DataTypesJSON.ExecuteCommandParams the key command
+-- was not present.
 
 -- -----------------------------------------------------------
 

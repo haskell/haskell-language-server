@@ -143,9 +143,8 @@ data AddTodoParams = AddTodoParams
   }
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
-addTodoCmd :: AddTodoParams -> IO (Either ResponseError Value,
-                           Maybe (ServerMethod, ApplyWorkspaceEditParams))
-addTodoCmd (AddTodoParams uri todoText) = do
+addTodoCmd :: CommandFunction AddTodoParams
+addTodoCmd _lf _ide (AddTodoParams uri todoText) = do
   let
     pos = Position 5 0
     textEdits = List

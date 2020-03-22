@@ -114,7 +114,7 @@ idePlugins pid includeExamples
       -- , hsimportDescriptor    "hsimport"
       -- , liquidDescriptor      "liquid"
       -- , packageDescriptor     "package"
-        GhcIde.descriptor  "ghc"
+        GhcIde.descriptor  "ghcide"
       , Pragmas.descriptor  "pragmas"
       , Floskell.descriptor "floskell"
       -- , genericDescriptor     "generic"
@@ -164,7 +164,7 @@ main = do
         plugins = Completions.plugin <> CodeAction.plugin <>
                   Plugin mempty HoverDefinition.setHandlersDefinition <>
                   ps
-        options = def { LSP.executeCommandCommands = Just (pid <> ":typesignature.add":commandIds)
+        options = def { LSP.executeCommandCommands = Just commandIds
                       , LSP.completionTriggerCharacters = Just "."
                       }
 

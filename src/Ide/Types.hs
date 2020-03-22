@@ -16,6 +16,7 @@ module Ide.Types
     , HoverProvider
     , CodeActionProvider
     , CodeLensProvider
+    , CommandFunction
     , ExecuteCommandProvider
     , CompletionProvider
     , WithSnippets(..)
@@ -80,9 +81,14 @@ instance IsString CommandId where
 data PluginCommand = forall a. (FromJSON a) =>
   PluginCommand { commandId   :: CommandId
                 , commandDesc :: T.Text
-                , commandFunc :: a -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+                , commandFunc :: CommandFunction a
                 }
 -- ---------------------------------------------------------------------
+
+type CommandFunction a = LSP.LspFuncs Config
+                       -> IdeState
+                       -> a
+                       -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 
 type CodeActionProvider = LSP.LspFuncs Config
                         -> IdeState
