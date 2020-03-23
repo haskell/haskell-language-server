@@ -4,10 +4,11 @@ packages:
 
 source-repository-package
     type: git
-    location: https://github.com/DanielG/cabal-helper.git
-    tag: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
+    location: https://github.com/jneira/cabal-helper.git
+    tag: ffb1f57a5ffc6b7ac3c46a9974c4420a6d2bb9b2
 
 tests: true
+-- documentation: true
 
 package haskell-language-server
   test-show-details: direct
