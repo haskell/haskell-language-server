@@ -180,6 +180,7 @@ main = do
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = argsTesting
                     , optInterfaceLoadingDiagnostics = argsTesting
+                    , optThreads = 1
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins >> action kick)
