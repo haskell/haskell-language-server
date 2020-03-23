@@ -132,7 +132,7 @@ occNameToComKind ty oc
 
 mkCompl :: IdeOptions -> CompItem -> CompletionItem
 mkCompl IdeOptions{..} CI{origName,importedFrom,thingType,label,isInfix,docs} =
-  CompletionItem label kind ((colon <>) <$> typeText)
+  CompletionItem label kind (List []) ((colon <>) <$> typeText)
     (Just $ CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator docs')
     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
@@ -186,13 +186,13 @@ getArgText typ = argText
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
-  CompletionItem label (Just CiModule) Nothing
+  CompletionItem label (Just CiModule) (List []) Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
-  CompletionItem m (Just CiModule) (Just label)
+  CompletionItem m (Just CiModule) (List []) (Just label)
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing
   where
@@ -200,13 +200,13 @@ mkImportCompl enteredQual label =
 
 mkExtCompl :: T.Text -> CompletionItem
 mkExtCompl label =
-  CompletionItem label (Just CiKeyword) Nothing
+  CompletionItem label (Just CiKeyword) (List []) Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing
 
 mkPragmaCompl :: T.Text -> T.Text -> CompletionItem
 mkPragmaCompl label insertText =
-  CompletionItem label (Just CiKeyword) Nothing
+  CompletionItem label (Just CiKeyword) (List []) Nothing
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 

@@ -93,7 +93,7 @@ computePackageDeps
 computePackageDeps env pkg = do
     let dflags = hsc_dflags env
     case lookupInstalledPackage dflags pkg of
-        Nothing -> return $ Left [ideErrorText (toNormalizedFilePath noFilePath) $
+        Nothing -> return $ Left [ideErrorText (toNormalizedFilePath' noFilePath) $
             T.pack $ "unknown package: " ++ show pkg]
         Just pkgInfo -> return $ Right $ depends pkgInfo
 

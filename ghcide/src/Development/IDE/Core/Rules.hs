@@ -80,14 +80,14 @@ useE :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
 useE k = MaybeT . use k
 
 useNoFileE :: IdeRule k v => k -> MaybeT Action v
-useNoFileE k = useE k ""
+useNoFileE k = useE k emptyFilePath
 
 usesE :: IdeRule k v => k -> [NormalizedFilePath] -> MaybeT Action [v]
 usesE k = MaybeT . fmap sequence . uses k
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
 defineNoFile f = define $ \k file -> do
-    if file == "" then do res <- f k; return ([], Just res) else
+    if file == emptyFilePath then do res <- f k; return ([], Just res) else
         fail $ "Rule " ++ show k ++ " should always be called with the empty string for a file"
 
 
@@ -130,7 +130,7 @@ getHieFile file mod = do
 getHomeHieFile :: NormalizedFilePath -> Action ([a], Maybe HieFile)
 getHomeHieFile f = do
   pm <- use_ GetParsedModule f
-  let normal_hie_f = toNormalizedFilePath hie_f
+  let normal_hie_f = toNormalizedFilePath' hie_f
       hie_f = ml_hie_file $ ms_location $ pm_mod_summary pm
   mbHieTimestamp <- use GetModificationTime normal_hie_f
   srcTimestamp   <- use_ GetModificationTime f
@@ -292,9 +292,10 @@ reportImportCyclesRule =
             , _message = "Cyclic module dependency between " <> showCycle mods
             , _code = Nothing
             , _relatedInformation = Nothing
+            , _tags = Nothing
             }
             where loc = srcSpanToLocation (getLoc imp)
-                  fp = toNormalizedFilePath $ srcSpanToFilename (getLoc imp)
+                  fp = toNormalizedFilePath' $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
            pm <- use_ GetParsedModule file
            pure (moduleNameString . moduleName . ms_mod $ pm_mod_summary pm)

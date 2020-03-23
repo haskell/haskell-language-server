@@ -36,8 +36,8 @@ import qualified System.Directory.Extra         as IO
 import           System.Environment             (lookupEnv)
 import           System.FilePath.Posix          (addTrailingPathSeparator,
                                                  (</>))
-import Language.Haskell.LSP.Messages as LSP
-import Language.Haskell.LSP.Types as LSP
+import qualified Language.Haskell.LSP.Messages  as LSP
+import qualified Language.Haskell.LSP.Types     as LSP
 import Data.Aeson (ToJSON(toJSON))
 import Development.IDE.Types.Logger (logDebug)
 
