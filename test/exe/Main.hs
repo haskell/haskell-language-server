@@ -31,6 +31,7 @@ import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
 import Language.Haskell.LSP.VFS (applyChange)
+import Network.URI
 import System.Environment.Blank (setEnv)
 import System.FilePath
 import System.IO.Extra
@@ -2110,6 +2111,13 @@ unitTests = do
          uriToFilePath' (fromNormalizedUri $ filePathToUri' "") @?= Just "."
      , testCase "empty file path works using toNormalizedFilePath'" $
          uriToFilePath' (fromNormalizedUri $ filePathToUri' (toNormalizedFilePath' "")) @?= Just ""
+     , testCase "empty path URI" $ do
+         Just URI{..} <- pure $ parseURI (T.unpack $ getUri $ fromNormalizedUri emptyPathUri)
+         uriScheme @?= "file:"
+         uriPath @?= ""
+     , testCase "from empty path URI" $ do
+         let uri = Uri "file://"
+         uriToFilePath' uri @?= Just ""
      ]
 
 -- | Wrapper around 'LSPTest.openDoc'' that sends file creation events
