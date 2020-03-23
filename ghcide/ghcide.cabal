@@ -245,6 +245,7 @@ test-suite ghcide-tests
         haddock-library,
         haskell-lsp,
         haskell-lsp-types,
+        network-uri,
         lens,
         lsp-test >= 0.8,
         parser-combinators,

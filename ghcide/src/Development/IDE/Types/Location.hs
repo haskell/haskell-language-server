@@ -17,6 +17,7 @@ module Development.IDE.Types.Location
     , LSP.NormalizedFilePath
     , fromUri
     , emptyFilePath
+    , emptyPathUri
     , toNormalizedFilePath'
     , LSP.fromNormalizedFilePath
     , filePathToUri'
@@ -53,7 +54,9 @@ uriToFilePath' uri
     | otherwise = LSP.uriToFilePath uri
 
 emptyPathUri :: LSP.NormalizedUri
-emptyPathUri = LSP.NormalizedUri (hash ("" :: String)) ""
+emptyPathUri =
+    let s = "file://"
+    in LSP.NormalizedUri (hash s) s
 
 filePathToUri' :: LSP.NormalizedFilePath -> LSP.NormalizedUri
 filePathToUri' = LSP.normalizedFilePathToUri
