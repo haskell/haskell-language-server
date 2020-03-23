@@ -30,7 +30,7 @@ import           Development.IDE.Core.OfInterest
 
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
-whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath
+whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
 
 setHandlersNotifications :: PartialHandlers c
 setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
@@ -62,7 +62,7 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             let events =
                     mapMaybe
                         (\(FileEvent uri ev) ->
-                            (, ev /= FcDeleted) . toNormalizedFilePath
+                            (, ev /= FcDeleted) . toNormalizedFilePath'
                             <$> LSP.uriToFilePath uri
                         )
                         ( F.toList fileEvents )

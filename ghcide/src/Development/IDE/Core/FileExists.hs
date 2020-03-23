@@ -146,9 +146,10 @@ fileExistsFast getLspId vfs file = do
                                   WorkspaceDidChangeWatchedFiles
                                   (Just (A.toJSON regOptions))
       regOptions =
-        DidChangeWatchedFilesRegistrationOptions { watchers = List [watcher] }
-      watcher = FileSystemWatcher { globPattern = fromNormalizedFilePath fp
-                                  , kind        = Just 5 -- Create and Delete events only
+        DidChangeWatchedFilesRegistrationOptions { _watchers = List [watcher] }
+      watchKind = WatchKind { _watchCreate = True, _watchChange = False, _watchDelete = True}
+      watcher = FileSystemWatcher { _globPattern = fromNormalizedFilePath fp
+                                  , _kind        = Just watchKind
                                   }
 
     eventer $ ReqRegisterCapability req
@@ -174,29 +175,3 @@ getFileExistsVFS vfs file = do
     handle (\(_ :: IOException) -> return False) $
         (isJust <$> getVirtualFile vfs (filePathToUri' file)) ||^
         Dir.doesFileExist (fromNormalizedFilePath file)
-
---------------------------------------------------------------------------------------------------
--- The message definitions below probably belong in haskell-lsp-types
-
-data DidChangeWatchedFilesRegistrationOptions = DidChangeWatchedFilesRegistrationOptions
-    { watchers :: List FileSystemWatcher
-    }
-
-instance A.ToJSON DidChangeWatchedFilesRegistrationOptions where
-  toJSON DidChangeWatchedFilesRegistrationOptions {..} =
-    A.object ["watchers" A..= watchers]
-
-data FileSystemWatcher = FileSystemWatcher
-    { -- | The glob pattern to watch.
-      --   For details on glob pattern syntax, check the spec: https://microsoft.github.io/language-server-protocol/specifications/specification-3-14/#workspace_didChangeWatchedFiles
-      globPattern :: String
-        -- | The kind of event to subscribe to. Defaults to all.
-        --   Defined as a bitmap of Create(1), Change(2), and Delete(4)
-    , kind        :: Maybe Int
-    }
-
-instance A.ToJSON FileSystemWatcher where
-  toJSON FileSystemWatcher {..} =
-    A.object
-      $  ["globPattern" A..= globPattern]
-      ++ [ "kind" A..= x | Just x <- [kind] ]

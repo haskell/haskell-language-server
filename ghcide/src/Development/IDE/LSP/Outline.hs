@@ -37,7 +37,7 @@ moduleOutline
   :: LSP.LspFuncs c -> IdeState -> DocumentSymbolParams -> IO (Either ResponseError DSResult)
 moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentIdentifier uri }
   = case uriToFilePath uri of
-    Just (toNormalizedFilePath -> fp) -> do
+    Just (toNormalizedFilePath' -> fp) -> do
       mb_decls <- runAction ideState $ use GetParsedModule fp
       pure $ Right $ case mb_decls of
         Nothing -> DSDocumentSymbols (List [])

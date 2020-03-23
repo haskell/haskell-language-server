@@ -40,7 +40,7 @@ import qualified Outputable                 as Out
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
-diagFromText diagSource sev loc msg = (toNormalizedFilePath $ srcSpanToFilename loc,ShowDiag,)
+diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ srcSpanToFilename loc,ShowDiag,)
     Diagnostic
     { _range    = srcSpanToRange loc
     , _severity = Just sev
@@ -48,6 +48,7 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath $ srcSpanToFilename 
     , _message  = msg
     , _code     = Nothing
     , _relatedInformation = Nothing
+    , _tags     = Nothing
     }
 
 -- | Produce a GHC-style error from a source span and a message.
@@ -80,7 +81,7 @@ srcSpanToFilename (RealSrcSpan real) = FS.unpackFS $ srcSpanFile real
 srcSpanToLocation :: SrcSpan -> Location
 srcSpanToLocation src =
   -- important that the URI's we produce have been properly normalized, otherwise they point at weird places in VS Code
-  Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath $ srcSpanToFilename src) (srcSpanToRange src)
+  Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' $ srcSpanToFilename src) (srcSpanToRange src)
 
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = sp <= p && p <= ep

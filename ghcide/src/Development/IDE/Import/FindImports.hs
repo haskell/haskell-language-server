@@ -58,7 +58,7 @@ locateModuleFile :: MonadIO m
              -> m (Maybe NormalizedFilePath)
 locateModuleFile dflags exts doesExist isSource modName = do
   let candidates =
-        [ toNormalizedFilePath (prefix </> M.moduleNameSlashes modName <.> maybeBoot ext)
+        [ toNormalizedFilePath' (prefix </> M.moduleNameSlashes modName <.> maybeBoot ext)
            | prefix <- importPaths dflags, ext <- exts]
   findM doesExist candidates
   where

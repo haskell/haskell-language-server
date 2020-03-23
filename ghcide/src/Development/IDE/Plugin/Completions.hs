@@ -66,7 +66,7 @@ getCompletionsLSP lsp ide
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
-        let npath = toNormalizedFilePath path
+        let npath = toNormalizedFilePath' path
         (ideOpts, compls) <- runAction ide $ do
             opts <- getIdeOptions
             compls <- useWithStale ProduceCompletions npath
