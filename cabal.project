@@ -8,6 +8,7 @@ source-repository-package
     tag: ffb1f57a5ffc6b7ac3c46a9974c4420a6d2bb9b2
 
 tests: true
+documentation: false
 -- documentation: true
 
 package haskell-language-server

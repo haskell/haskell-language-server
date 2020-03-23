@@ -48,7 +48,7 @@ commandAddSignature lf ide params
 -- ---------------------------------------------------------------------
 
 codeAction' :: CodeActionProvider
-codeAction' lf ide _ doc range context = codeAction lf ide doc range context
+codeAction' lf ide _ doc range context = fmap List <$> codeAction lf ide doc range context
 
 -- ---------------------------------------------------------------------
 
