@@ -64,7 +64,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
     -- logInfo (ideLogger ide) $ T.pack $ "Code action req: " ++ show arg
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
-        mbFile = toNormalizedFilePath <$> uriToFilePath uri
+        mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     (ideOptions, parsedModule, join -> env) <- runAction state $
       (,,) <$> getIdeOptions
             <*> getParsedModule `traverse` mbFile
@@ -85,7 +85,7 @@ codeLens
     -> IO (Either ResponseError (List CodeLens))
 codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
     fmap (Right . List) $ case uriToFilePath' uri of
-      Just (toNormalizedFilePath -> filePath) -> do
+      Just (toNormalizedFilePath' -> filePath) -> do
         _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
         diag <- getDiagnostics ideState
         hDiag <- getHiddenDiagnostics ideState

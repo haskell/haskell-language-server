@@ -139,7 +139,7 @@ moduleImportPath (takeDirectory . fromNormalizedFilePath -> pathDir) pm
     -- A for module A.B
     modDir =
         takeDirectory $
-        fromNormalizedFilePath $ toNormalizedFilePath $
+        fromNormalizedFilePath $ toNormalizedFilePath' $
         moduleNameSlashes $ GHC.moduleName mod'
 
 -- | An 'HscEnv' with equality. Two values are considered equal

@@ -146,8 +146,8 @@ main = do
         ide <- initialise def (cradleRules >> mainRule) (pure $ IdInt 0) (showEvent lock) (logger Info) noopDebouncer options vfs
 
         putStrLn "\nStep 6/6: Type checking the files"
-        setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath files
-        results <- runActionSync ide $ uses TypeCheck $ map toNormalizedFilePath files
+        setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
+        results <- runActionSync ide $ uses TypeCheck $ map toNormalizedFilePath' files
         let (worked, failed) = partition fst $ zip (map isJust results) files
         when (failed /= []) $
             putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
@@ -183,7 +183,7 @@ kick = do
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
 showEvent _ (EventFileDiagnostics _ []) = return ()
-showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
+showEvent lock (EventFileDiagnostics (toNormalizedFilePath' -> file) diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,ShowDiag,) diags
 showEvent lock e = withLock lock $ print e
 
@@ -199,7 +199,7 @@ loadSession dir = liftIO $ do
     let session :: Maybe FilePath -> Action HscEnvEq
         session file = do
           -- In the absence of a cradle file, just pass the directory from where to calculate an implicit cradle
-          let cradle = toNormalizedFilePath $ fromMaybe dir file
+          let cradle = toNormalizedFilePath' $ fromMaybe dir file
           use_ LoadCradle cradle
     return $ \file -> session =<< liftIO (cradleLoc file)
 

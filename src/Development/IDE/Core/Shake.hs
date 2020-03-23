@@ -414,7 +414,7 @@ shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts =
                             Right _ -> "completed"
                        profile = case res of
                             Right (_, Just fp) ->
-                                let link = case filePathToUri' $ toNormalizedFilePath fp of
+                                let link = case filePathToUri' $ toNormalizedFilePath' fp of
                                                 NormalizedUri _ x -> x
                                 in ", profile saved at " <> T.unpack link
                             _ -> ""
@@ -473,13 +473,13 @@ useWithStale :: IdeRule k v
 useWithStale key file = head <$> usesWithStale key [file]
 
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
-useNoFile key = use key ""
+useNoFile key = use key emptyFilePath
 
 use_ :: IdeRule k v => k -> NormalizedFilePath -> Action v
 use_ key file = head <$> uses_ key [file]
 
 useNoFile_ :: IdeRule k v => k -> Action v
-useNoFile_ key = use_ key ""
+useNoFile_ key = use_ key emptyFilePath
 
 uses_ :: IdeRule k v => k -> [NormalizedFilePath] -> Action [v]
 uses_ key files = do
@@ -819,7 +819,7 @@ filterDiagnostics ::
     DiagnosticStore ->
     DiagnosticStore
 filterDiagnostics keep =
-    HMap.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath) $ uriToFilePath' $ fromNormalizedUri uri)
+    HMap.filterWithKey (\uri _ -> maybe True (keep . toNormalizedFilePath') $ uriToFilePath' $ fromNormalizedUri uri)
 
 filterVersionMap
     :: HMap.HashMap NormalizedUri (Set.Set TextDocumentVersion)
