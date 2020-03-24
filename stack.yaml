@@ -14,5 +14,6 @@ extra-deps:
 - parser-combinators-1.2.1
 - haddock-library-1.8.0
 - tasty-rerun-1.1.17
+- ghc-check-0.1.0.3
 nix:
   packages: [zlib]

@@ -187,6 +187,7 @@ executable ghcide
         directory,
         extra,
         filepath,
+        ghc-check >= 0.1.0.3,
         ghc-paths,
         ghc,
         gitrev,
@@ -204,6 +205,7 @@ executable ghcide
         Paths_ghcide
         Rules
         RuleTypes
+        Util
 
     default-extensions:
         BangPatterns
