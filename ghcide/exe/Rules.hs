@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Rules
   ( loadGhcSession
   , cradleToSession
@@ -13,8 +14,8 @@ import qualified Crypto.Hash.SHA1               as H
 import           Data.ByteString.Base16         (encode)
 import qualified Data.ByteString.Char8          as B
 import           Data.Functor                   ((<&>))
-import           Data.Maybe                     (fromMaybe)
-import           Data.Text                      (pack, Text)
+import           Data.Text                      (Text, pack)
+import           Data.Version                   (Version)
 import           Development.IDE.Core.Rules     (defineNoFile)
 import           Development.IDE.Core.Service   (getIdeOptions)
 import           Development.IDE.Core.Shake     (actionLogger, sendEvent, define, useNoFile_)
@@ -22,10 +23,8 @@ import           Development.IDE.GHC.Util
 import           Development.IDE.Types.Location (fromNormalizedFilePath)
 import           Development.IDE.Types.Options  (IdeOptions(IdeOptions, optTesting))
 import           Development.Shake
-import           DynFlags                       (gopt_set, gopt_unset,
-                                                 updOptLevel)
 import           GHC
-import qualified GHC.Paths
+import           GHC.Check                      (runTimeVersion, compileTimeVersionFromLibdir)
 import           HIE.Bios
 import           HIE.Bios.Cradle
 import           HIE.Bios.Environment           (addCmdOpts)
@@ -33,13 +32,13 @@ import           HIE.Bios.Types
 import           Linker                         (initDynLinker)
 import           RuleTypes
 import qualified System.Directory.Extra         as IO
-import           System.Environment             (lookupEnv)
 import           System.FilePath.Posix          (addTrailingPathSeparator,
                                                  (</>))
 import qualified Language.Haskell.LSP.Messages  as LSP
 import qualified Language.Haskell.LSP.Types     as LSP
 import Data.Aeson (ToJSON(toJSON))
 import Development.IDE.Types.Logger (logDebug)
+import Util
 
 -- Prefix for the cache path
 cacheDir :: String
@@ -103,55 +102,33 @@ getComponentOptions cradle = do
         -- That will require some more changes.
         CradleNone      -> fail "'none' cradle is not yet supported"
 
+compileTimeGhcVersion :: Version
+compileTimeGhcVersion = $$(compileTimeVersionFromLibdir getLibdir)
+
+checkGhcVersion :: Ghc (Maybe HscEnvEq)
+checkGhcVersion = do
+    v <- runTimeVersion
+    return $ if v == Just compileTimeGhcVersion
+        then Nothing
+        else Just GhcVersionMismatch {compileTime = compileTimeGhcVersion, runTime = v}
+
 createSession :: ComponentOptions -> IO HscEnvEq
 createSession (ComponentOptions theOpts _) = do
     libdir <- getLibdir
 
     cacheDir <- getCacheDir theOpts
 
-    env <- runGhc (Just libdir) $ do
+    runGhc (Just libdir) $ do
         dflags <- getSessionDynFlags
         (dflags', _targets) <- addCmdOpts theOpts dflags
-        _ <- setSessionDynFlags $
-             -- disabled, generated directly by ghcide instead
-             flip gopt_unset Opt_WriteInterface $
-             -- disabled, generated directly by ghcide instead
-             -- also, it can confuse the interface stale check
-             dontWriteHieFiles $
-             setHiDir cacheDir $
-             setDefaultHieDir cacheDir $
-             setIgnoreInterfacePragmas $
-             setLinkerOptions $
-             disableOptimisation dflags'
-        getSession
-    initDynLinker env
-    newHscEnvEq env
-
--- Set the GHC libdir to the nix libdir if it's present.
-getLibdir :: IO FilePath
-getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
-
--- we don't want to generate object code so we compile to bytecode
--- (HscInterpreted) which implies LinkInMemory
--- HscInterpreted
-setLinkerOptions :: DynFlags -> DynFlags
-setLinkerOptions df = df {
-    ghcLink   = LinkInMemory
-  , hscTarget = HscNothing
-  , ghcMode = CompManager
-  }
-
-setIgnoreInterfacePragmas :: DynFlags -> DynFlags
-setIgnoreInterfacePragmas df =
-    gopt_set (gopt_set df Opt_IgnoreInterfacePragmas) Opt_IgnoreOptimChanges
-
-disableOptimisation :: DynFlags -> DynFlags
-disableOptimisation df = updOptLevel 0 df
-
-setHiDir :: FilePath -> DynFlags -> DynFlags
-setHiDir f d =
-    -- override user settings to avoid conflicts leading to recompilation
-    d { hiDir      = Just f}
+        setupDynFlags cacheDir dflags'
+        versionMismatch <- checkGhcVersion
+        case versionMismatch of
+            Just mismatch -> return mismatch
+            Nothing ->  do
+                env <- getSession
+                liftIO $ initDynLinker env
+                liftIO $ newHscEnvEq env
 
 getCacheDir :: [String] -> IO FilePath
 getCacheDir opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> opts_hash)
