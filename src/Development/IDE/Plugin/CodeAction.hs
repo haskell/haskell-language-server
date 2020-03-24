@@ -6,7 +6,15 @@
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
-module Development.IDE.Plugin.CodeAction(plugin) where
+module Development.IDE.Plugin.CodeAction
+    (
+      plugin
+
+    -- * For haskell-language-server
+    , codeAction
+    , codeLens
+    , rulePackageExports
+    ) where
 
 import           Language.Haskell.LSP.Types
 import Control.Monad (join)

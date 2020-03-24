@@ -4,6 +4,8 @@
 
 module Development.IDE.LSP.Outline
   ( setHandlersOutline
+    -- * For haskell-language-server
+  , moduleOutline
   )
 where
 
