@@ -4,7 +4,7 @@
 -- | General utility functions, mostly focused around GHC operations.
 module Development.IDE.GHC.Util(
     -- * HcsEnv and environment
-    HscEnvEq, hscEnv, newHscEnvEq,
+    HscEnvEq(GhcVersionMismatch, compileTime, runTime), hscEnv, newHscEnvEq,
     modifyDynFlags,
     evalGhcEnv,
     runGhcEnv,
@@ -35,9 +35,9 @@ import Data.Typeable
 import qualified Data.ByteString.Internal as BS
 import Fingerprint
 import GhcMonad
-import GhcPlugins hiding (Unique)
-import Data.IORef
 import Control.Exception
+import Data.IORef
+import Data.Version (showVersion, Version)
 import FileCleanup
 import Foreign.Ptr
 import Foreign.ForeignPtr
@@ -57,6 +57,16 @@ import qualified Data.ByteString          as BS
 import Lexer
 import StringBuffer
 import System.FilePath
+import HscTypes (cg_binds, md_types, cg_module, ModDetails, CgGuts, ic_dflags, hsc_IC, HscEnv(hsc_dflags))
+import PackageConfig (PackageConfig)
+import Outputable (showSDocUnsafe, ppr, showSDoc, Outputable)
+import Packages (getPackageConfigMap, lookupPackage')
+import SrcLoc (mkRealSrcLoc)
+import FastString (mkFastString)
+import DynFlags (emptyFilesToClean, unsafeGlobalDynFlags)
+import Module (moduleNameSlashes)
+import OccName (parenSymOcc)
+import RdrName (nameRdrName, rdrNameOcc)
 
 import Development.IDE.GHC.Compat as GHC
 import Development.IDE.Types.Location
@@ -156,11 +166,26 @@ moduleImportPath (takeDirectory . fromNormalizedFilePath -> pathDir) pm
 
 -- | An 'HscEnv' with equality. Two values are considered equal
 --   if they are created with the same call to 'newHscEnvEq'.
-data HscEnvEq = HscEnvEq Unique HscEnv
+data HscEnvEq
+    = HscEnvEq !Unique !HscEnv
+    | GhcVersionMismatch { compileTime :: !Version
+                         , runTime     :: !(Maybe Version)
+                         }
 
 -- | Unwrap an 'HsEnvEq'.
 hscEnv :: HscEnvEq -> HscEnv
-hscEnv (HscEnvEq _ x) = x
+hscEnv = either error id . hscEnv'
+
+hscEnv' :: HscEnvEq -> Either String HscEnv
+hscEnv' (HscEnvEq _ x) = Right x
+hscEnv' GhcVersionMismatch{..} = Left $
+    unwords
+        ["ghcide compiled against GHC"
+        ,showVersion compileTime
+        ,"but currently using"
+        ,maybe "an unknown version of GHC" (\v -> "GHC " <> showVersion v) runTime
+        ,". This is unsupported, ghcide must be compiled with the same GHC version as the project."
+        ]
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: HscEnv -> IO HscEnvEq
@@ -168,15 +193,20 @@ newHscEnvEq e = do u <- newUnique; return $ HscEnvEq u e
 
 instance Show HscEnvEq where
   show (HscEnvEq a _) = "HscEnvEq " ++ show (hashUnique a)
+  show GhcVersionMismatch{..} = "GhcVersionMismatch " <> show (compileTime, runTime)
 
 instance Eq HscEnvEq where
   HscEnvEq a _ == HscEnvEq b _ = a == b
+  GhcVersionMismatch a b == GhcVersionMismatch c d = a == c && b == d
+  _ == _ = False
 
 instance NFData HscEnvEq where
   rnf (HscEnvEq a b) = rnf (hashUnique a) `seq` b `seq` ()
+  rnf GhcVersionMismatch{} = rnf runTime
 
 instance Hashable HscEnvEq where
   hashWithSalt salt (HscEnvEq u _) = hashWithSalt salt u
+  hashWithSalt salt GhcVersionMismatch{..} = hashWithSalt salt (compileTime, runTime)
 
 -- Fake instance needed to persuade Shake to accept this type as a key.
 -- No harm done as ghcide never persists these keys currently
