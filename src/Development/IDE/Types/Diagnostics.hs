@@ -10,6 +10,7 @@ module Development.IDE.Types.Diagnostics (
   DiagnosticStore,
   List(..),
   ideErrorText,
+  ideErrorWithSource,
   showDiagnostics,
   showDiagnosticsColored,
   ) where
@@ -18,7 +19,7 @@ import Control.DeepSeq
 import Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
-import Language.Haskell.LSP.Types as LSP (
+import Language.Haskell.LSP.Types as LSP (DiagnosticSource,
     DiagnosticSeverity(..)
   , Diagnostic(..)
   , List(..)
@@ -32,11 +33,19 @@ import Development.IDE.Types.Location
 
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
-ideErrorText fp msg = (fp, ShowDiag, LSP.Diagnostic {
+ideErrorText = ideErrorWithSource (Just "compiler") (Just DsError)
+
+ideErrorWithSource
+  :: Maybe DiagnosticSource
+  -> Maybe DiagnosticSeverity
+  -> a
+  -> T.Text
+  -> (a, ShowDiagnostic, Diagnostic)
+ideErrorWithSource source sev fp msg = (fp, ShowDiag, LSP.Diagnostic {
     _range = noRange,
-    _severity = Just LSP.DsError,
+    _severity = sev,
     _code = Nothing,
-    _source = Just "compiler",
+    _source = source,
     _message = msg,
     _relatedInformation = Nothing,
     _tags = Nothing
