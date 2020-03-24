@@ -62,7 +62,7 @@ library
     , ghcide >= 0.1
     , gitrev
     , hashable
-    , haskell-lsp == 0.20.*
+    , haskell-lsp == 0.21.*
     , hie-bios >= 0.4
     , hslogger
     , lens

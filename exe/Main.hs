@@ -211,10 +211,10 @@ main = do
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSession dir) vfs
 
         putStrLn "\nStep 4/6: Type checking the files"
-        setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath files
-        _ <- runActionSync ide $ uses TypeCheck (map toNormalizedFilePath files)
---        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath "src/Development/IDE/Core/Rules.hs"
---        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath "exe/Main.hs"
+        setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
+        _ <- runActionSync ide $ uses TypeCheck (map toNormalizedFilePath' files)
+--        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "src/Development/IDE/Core/Rules.hs"
+--        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "exe/Main.hs"
         return ()
 
 expandFiles :: [FilePath] -> IO [FilePath]
@@ -238,7 +238,7 @@ kick = do
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
 showEvent _ (EventFileDiagnostics _ []) = return ()
-showEvent lock (EventFileDiagnostics (toNormalizedFilePath -> file) diags) =
+showEvent lock (EventFileDiagnostics (toNormalizedFilePath' -> file) diags) =
     withLock lock $ T.putStrLn $ showDiagnosticsColored $ map (file,ShowDiag,) diags
 showEvent lock e = withLock lock $ print e
 
@@ -271,10 +271,10 @@ targetToFile :: [FilePath] -> TargetId -> IO [NormalizedFilePath]
 targetToFile is (TargetModule mod) = do
     let fps = [i </> (moduleNameSlashes mod) -<.> ext | ext <- exts, i <- is ]
         exts = ["hs", "hs-boot", "lhs"]
-    mapM (fmap (toNormalizedFilePath) . canonicalizePath) fps
+    mapM (fmap (toNormalizedFilePath') . canonicalizePath) fps
 targetToFile _ (TargetFile f _) = do
   f' <- canonicalizePath f
-  return [(toNormalizedFilePath f')]
+  return [(toNormalizedFilePath' f')]
 
 setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }
@@ -395,7 +395,7 @@ loadSession dir = liftIO $ do
         let v = fromMaybe HM.empty mv
         cfp <- liftIO $ canonicalizePath file
         -- We sort so exact matches come first.
-        case HM.lookup (toNormalizedFilePath cfp) v of
+        case HM.lookup (toNormalizedFilePath' cfp) v of
             Just opts -> do
                 --putStrLn $ "Cached component of " <> show file
                 pure opts

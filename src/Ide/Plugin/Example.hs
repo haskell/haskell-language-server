@@ -99,6 +99,7 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
     , _source   = Just diagSource
     , _message  = msg
     , _code     = Nothing
+    , _tags     = Nothing
     , _relatedInformation = Nothing
     }
 
@@ -212,12 +213,13 @@ completion :: CompletionProvider
 completion _ide (CompletionParams _doc _pos _mctxt _mt)
     = pure $ Right $ Completions $ List [r]
     where
-        r = CompletionItem label kind detail documentation deprecated preselect
+        r = CompletionItem label kind tags detail documentation deprecated preselect
                            sortText filterText insertText insertTextFormat
                            textEdit additionalTextEdits commitCharacters
                            command xd
         label = "Example completion"
         kind = Nothing
+        tags = List []
         detail = Nothing
         documentation = Nothing
         deprecated = Nothing
