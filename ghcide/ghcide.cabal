@@ -114,6 +114,7 @@ library
         Development.IDE.Import.DependencyInformation
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.LanguageServer
+        Development.IDE.LSP.Outline
         Development.IDE.LSP.Protocol
         Development.IDE.LSP.Server
         Development.IDE.Spans.Common
@@ -134,7 +135,6 @@ library
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
         Development.IDE.LSP.Notifications
-        Development.IDE.LSP.Outline
         Development.IDE.Spans.AtPoint
         Development.IDE.Spans.Calculate
         Development.IDE.Spans.Documentation
