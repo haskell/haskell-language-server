@@ -8,10 +8,13 @@
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
     HieFileResult(..),
-    HieFile(..),
+    HieFile,
+    hieExportNames,
+    hie_module,
     mkHieFile,
     writeHieFile,
     readHieFile,
+    supportsHieFiles,
     setDefaultHieDir,
     dontWriteHieFiles,
 #if !MIN_GHC_API_VERSION(8,8,0)
@@ -30,6 +33,7 @@ module Development.IDE.GHC.Compat(
     pattern IEThingAll,
     pattern IEThingWith,
     GHC.ModLocation,
+    Module.addBootSuffix,
     pattern ModLocation,
 
     module GHC
@@ -38,21 +42,40 @@ module Development.IDE.GHC.Compat(
 import StringBuffer
 import DynFlags
 import FieldLabel
+import qualified Module
 
 import qualified GHC
 import GHC hiding (ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, ModLocation)
+import Avail
 
 #if MIN_GHC_API_VERSION(8,8,0)
-import HieAst
+import Control.Applicative ((<|>))
+import Development.IDE.GHC.HieAst
 import HieBin
 import HieTypes
+
+supportsHieFiles :: Bool
+supportsHieFiles = True
+
+hieExportNames :: HieFile -> [(SrcSpan, Name)]
+hieExportNames = nameListFromAvails . hie_exports
+
 #else
+
+#if MIN_GHC_API_VERSION(8,6,0)
+import BinIface
+import Data.IORef
+import IfaceEnv
+#endif
+
+import Binary
+import Data.ByteString (ByteString)
 import GhcPlugins hiding (ModLocation)
 import NameCache
-import Avail
 import TcRnTypes
 import System.IO
 import Foreign.ForeignPtr
+import MkIface
 
 
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
@@ -60,20 +83,6 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
     = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
              hPutBuf hdl ptr len
 
-mkHieFile :: ModSummary -> TcGblEnv -> RenamedSource -> Hsc HieFile
-mkHieFile _ _ _ = return (HieFile () [])
-
-writeHieFile :: FilePath -> HieFile -> IO ()
-writeHieFile _ _ = return ()
-
-readHieFile :: NameCache -> FilePath -> IO (HieFileResult, ())
-readHieFile _ _ = return (HieFileResult (HieFile () []), ())
-
-ml_hie_file :: GHC.ModLocation -> FilePath
-ml_hie_file _ = ""
-
-data HieFile = HieFile {hie_module :: (), hie_exports :: [AvailInfo]}
-data HieFileResult = HieFileResult { hie_file_result :: HieFile }
 #endif
 
 #if !MIN_GHC_API_VERSION(8,6,0)
@@ -166,7 +175,7 @@ pattern IEThingAll a <-
 setDefaultHieDir :: FilePath -> DynFlags -> DynFlags
 setDefaultHieDir _f d =
 #if MIN_GHC_API_VERSION(8,8,0)
-    d { hieDir     = hieDir d `mappend` Just _f}
+    d { hieDir     = hieDir d <|> Just _f}
 #else
     d
 #endif
@@ -177,4 +186,67 @@ dontWriteHieFiles d =
     gopt_unset d Opt_WriteHie
 #else
     d
+#endif
+
+nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
+nameListFromAvails as =
+  map (\n -> (nameSrcSpan n, n)) (concatMap availNames as)
+
+#if !MIN_GHC_API_VERSION(8,8,0)
+-- Reimplementations of functions for HIE files for GHC 8.6
+
+mkHieFile :: ModSummary -> TcGblEnv -> RenamedSource -> ByteString -> Hsc HieFile
+mkHieFile ms ts _ _ = return (HieFile (ms_mod ms) es)
+  where
+    es = nameListFromAvails (mkIfaceExports (tcg_exports ts))
+
+ml_hie_file :: GHC.ModLocation -> FilePath
+ml_hie_file ml = ml_hi_file ml ++ ".hie"
+
+data HieFile = HieFile {hie_module :: Module, hie_exports :: [(SrcSpan, Name)]}
+
+hieExportNames :: HieFile -> [(SrcSpan, Name)]
+hieExportNames = hie_exports
+
+instance Binary HieFile where
+  put_ bh (HieFile m es) = do
+    put_ bh m
+    put_ bh es
+
+  get bh = do
+    mod <- get bh
+    es <- get bh
+    return (HieFile mod es)
+
+data HieFileResult = HieFileResult { hie_file_result :: HieFile }
+
+writeHieFile :: FilePath -> HieFile -> IO ()
+readHieFile :: NameCache -> FilePath -> IO (HieFileResult, ())
+supportsHieFiles :: Bool
+
+#if MIN_GHC_API_VERSION(8,6,0)
+
+writeHieFile fp hie = do
+  bh <- openBinMem (1024 * 1024)
+  putWithUserData (const $ return ()) bh hie
+  writeBinMem bh fp
+
+readHieFile nc fp = do
+  bh <- readBinMem fp
+  nc' <- newIORef nc
+  hie_file <- getWithUserData (NCU (atomicModifyIORef' nc')) bh
+  return (HieFileResult hie_file, ())
+
+supportsHieFiles = True
+
+#else
+
+supportsHieFiles = False
+
+writeHieFile _ _ = return ()
+
+readHieFile _ _ = return undefined
+
+#endif
+
 #endif

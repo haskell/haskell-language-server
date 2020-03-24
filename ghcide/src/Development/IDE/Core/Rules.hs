@@ -33,6 +33,7 @@ import Control.Monad.Extra
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Development.IDE.Core.Compile
+import Development.IDE.Core.OfInterest
 import Development.IDE.Types.Options
 import Development.IDE.Spans.Calculate
 import Development.IDE.Import.DependencyInformation
@@ -48,6 +49,7 @@ import Data.Either.Extra
 import Data.Maybe
 import           Data.Foldable
 import qualified Data.IntMap.Strict as IntMap
+import Data.IntMap.Strict (IntMap)
 import qualified Data.IntSet as IntSet
 import Data.List
 import Data.Ord
@@ -139,9 +141,8 @@ getHomeHieFile f = do
         | Just d <- mbHieTimestamp = comparing modificationTime d srcTimestamp == GT
         | otherwise = False
 
--- In the future, TypeCheck will emit .hie files as a side effect
---   unless isUpToDate $
---       void $ use_ TypeCheck f
+  unless isUpToDate $
+       void $ use_ TypeCheck f
 
   hf <- liftIO $ if isUpToDate then Just <$> loadHieFile hie_f else pure Nothing
   return ([], hf)
@@ -227,15 +228,17 @@ getLocatedImportsRule =
 -- imports recursively.
 rawDependencyInformation :: NormalizedFilePath -> Action RawDependencyInformation
 rawDependencyInformation f = do
-    let initialArtifact = ArtifactsLocation f (ModLocation (Just $ fromNormalizedFilePath f) "" "")
+    let initialArtifact = ArtifactsLocation f (ModLocation (Just $ fromNormalizedFilePath f) "" "") False
         (initialId, initialMap) = getPathId initialArtifact emptyPathIdMap
-    go (IntSet.singleton $ getFilePathId initialId)
-       (RawDependencyInformation IntMap.empty initialMap)
+    (rdi, ss) <- go (IntSet.singleton $ getFilePathId initialId)
+                    ((RawDependencyInformation IntMap.empty initialMap IntMap.empty), IntMap.empty)
+    let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
+    return (rdi { rawBootMap = bm })
   where
-    go fs rawDepInfo =
+    go fs (rawDepInfo, ss) =
         case IntSet.minView fs of
             -- Queue is empty
-            Nothing -> pure rawDepInfo
+            Nothing -> pure (rawDepInfo, ss)
             -- Pop f from the queue and process it
             Just (f, fs) -> do
                 let fId = FilePathId f
@@ -244,22 +247,43 @@ rawDependencyInformation f = do
                   Nothing ->
                     -- File doesn’t parse
                     let rawDepInfo' = insertImport fId (Left ModuleParseError) rawDepInfo
-                    in go fs rawDepInfo'
+                    in go fs (rawDepInfo', ss)
                   Just (modImports, pkgImports) -> do
-                    let f :: PathIdMap -> (a, Maybe ArtifactsLocation) -> (PathIdMap, (a, Maybe FilePathId))
-                        f pathMap (imp, mbPath) = case mbPath of
-                            Nothing -> (pathMap, (imp, Nothing))
+                    let f :: (PathIdMap, IntMap ArtifactsLocation)
+                          -> (a, Maybe ArtifactsLocation)
+                          -> ((PathIdMap, IntMap ArtifactsLocation), (a, Maybe FilePathId))
+                        f (pathMap, ss) (imp, mbPath) = case mbPath of
+                            Nothing -> ((pathMap, ss), (imp, Nothing))
                             Just path ->
                                 let (pathId, pathMap') = getPathId path pathMap
-                                in (pathMap', (imp, Just pathId))
+                                    ss' = if isBootLocation path
+                                            then IntMap.insert (getFilePathId pathId) path ss
+                                            else ss
+                                in ((pathMap', ss'), (imp, Just pathId))
                     -- Convert paths in imports to ids and update the path map
-                    let (pathIdMap, modImports') = mapAccumL f (rawPathIdMap rawDepInfo) modImports
+                    let ((pathIdMap, ss'), modImports') = mapAccumL f (rawPathIdMap rawDepInfo, ss) modImports
                     -- Files that we haven’t seen before are added to the queue.
                     let newFiles =
                             IntSet.fromList (coerce $ mapMaybe snd modImports')
                             IntSet.\\ IntMap.keysSet (rawImports rawDepInfo)
                     let rawDepInfo' = insertImport fId (Right $ ModuleImports modImports' pkgImports) rawDepInfo
-                    go (newFiles `IntSet.union` fs) (rawDepInfo' { rawPathIdMap = pathIdMap })
+                    go (newFiles `IntSet.union` fs)
+                       (rawDepInfo' { rawPathIdMap = pathIdMap }, ss')
+
+
+
+    updateBootMap pm boot_mod_id ArtifactsLocation{..} bm =
+      if not artifactIsSource
+        then
+          let msource_mod_id = lookupPathToId (rawPathIdMap pm) (toNormalizedFilePath' $ dropBootSuffix artifactModLocation)
+          in case msource_mod_id of
+               Just source_mod_id -> insertBootId source_mod_id (FilePathId boot_mod_id) bm
+               Nothing -> bm
+        else bm
+
+    dropBootSuffix :: ModLocation -> FilePath
+    dropBootSuffix (ModLocation (Just hs_src) _ _) = reverse . drop (length @[] "-boot") . reverse $ hs_src
+    dropBootSuffix _ = error "dropBootSuffix"
 
 getDependencyInformationRule :: Rules ()
 getDependencyInformationRule =
@@ -319,38 +343,67 @@ getSpanInfoRule =
     define $ \GetSpanInfo file -> do
         tc <- use_ TypeCheck file
         deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
-        parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps deps)
+        let tdeps = transitiveModuleDeps deps
+        parsedDeps <- uses_ GetParsedModule tdeps
+        ifaces <- uses_ GetModIface tdeps
         (fileImports, _) <- use_ GetLocatedImports file
         packageState <- hscEnv <$> use_ GhcSession file
         let imports = second (fmap artifactFilePath) <$> fileImports
-        x <- liftIO $ getSrcSpanInfos packageState imports tc parsedDeps
+        x <- liftIO $ getSrcSpanInfos packageState imports tc (zip parsedDeps $ map hirModIface ifaces)
         return ([], Just x)
 
 -- Typechecks a module.
 typeCheckRule :: Rules ()
-typeCheckRule =
-    define $ \TypeCheck file -> do
-        pm <- use_ GetParsedModule file
-        deps <- use_ GetDependencies file
-        packageState <- hscEnv <$> use_ GhcSession file
-        -- Figure out whether we need TemplateHaskell or QuasiQuotes support
-        let graph_needs_th_qq = needsTemplateHaskellOrQQ $ hsc_mod_graph packageState
-            file_uses_th_qq = uses_th_qq $ ms_hspp_opts (pm_mod_summary pm)
-            any_uses_th_qq = graph_needs_th_qq || file_uses_th_qq
-        tms <- if any_uses_th_qq
-                  -- If we use TH or QQ, we must obtain the bytecode
-                  then do
-                    bytecodes <- uses_ GenerateByteCode (transitiveModuleDeps deps)
-                    tmrs <- uses_ TypeCheck (transitiveModuleDeps deps)
-                    pure (zipWith addByteCode bytecodes tmrs)
-                  else uses_ TypeCheck (transitiveModuleDeps deps)
-        setPriority priorityTypeCheck
-        IdeOptions{ optDefer = defer} <- getIdeOptions
-        liftIO $ typecheckModule defer packageState tms pm
-    where
-        uses_th_qq dflags = xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-        addByteCode :: Linkable -> TcModuleResult -> TcModuleResult
-        addByteCode lm tmr = tmr { tmrModInfo = (tmrModInfo tmr) { hm_linkable = Just lm } }
+typeCheckRule = define $ \TypeCheck file ->
+    -- do not generate interface files as this rule is called
+    -- for files of interest on every keystroke
+    typeCheckRuleDefinition file SkipGenerationOfInterfaceFiles
+
+data GenerateInterfaceFiles
+    = DoGenerateInterfaceFiles
+    | SkipGenerationOfInterfaceFiles
+    deriving (Show)
+
+-- This is factored out so it can be directly called from the GetModIface
+-- rule. Directly calling this rule means that on the initial load we can
+-- garbage collect all the intermediate typechecked modules rather than
+-- retain the information forever in the shake graph.
+typeCheckRuleDefinition
+    :: NormalizedFilePath     -- ^ Path to source file
+    -> GenerateInterfaceFiles -- ^ Should generate .hi and .hie files ?
+    -> Action (IdeResult TcModuleResult)
+typeCheckRuleDefinition file generateArtifacts = do
+  pm   <- use_ GetParsedModule file
+  deps <- use_ GetDependencies file
+  hsc  <- hscEnv <$> use_ GhcSession file
+  -- Figure out whether we need TemplateHaskell or QuasiQuotes support
+  let graph_needs_th_qq = needsTemplateHaskellOrQQ $ hsc_mod_graph hsc
+      file_uses_th_qq   = uses_th_qq $ ms_hspp_opts (pm_mod_summary pm)
+      any_uses_th_qq    = graph_needs_th_qq || file_uses_th_qq
+  mirs      <- uses_ GetModIface (transitiveModuleDeps deps)
+  bytecodes <- if any_uses_th_qq
+    then -- If we use TH or QQ, we must obtain the bytecode
+      fmap Just <$> uses_ GenerateByteCode (transitiveModuleDeps deps)
+    else
+      pure $ repeat Nothing
+
+  setPriority priorityTypeCheck
+  IdeOptions { optDefer = defer } <- getIdeOptions
+
+  liftIO $ do
+    res <- typecheckModule defer hsc (zipWith unpack mirs bytecodes) pm
+    case res of
+      (diags, Just (hsc,tcm)) | DoGenerateInterfaceFiles <- generateArtifacts -> do
+        diagsHie <- generateAndWriteHieFile hsc (tmrModule tcm)
+        diagsHi  <- generateAndWriteHiFile hsc tcm
+        return (diags <> diagsHi <> diagsHie, Just tcm)
+      (diags, res) ->
+        return (diags, snd <$> res)
+ where
+  unpack HiFileResult{..} bc = (hirModSummary, (hirModIface, bc))
+  uses_th_qq dflags =
+    xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
+
 
 generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult (SafeHaskellMode, CgGuts, ModDetails))
 generateCore runSimplifier file = do
@@ -358,7 +411,7 @@ generateCore runSimplifier file = do
     (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
     setPriority priorityGenerateCore
     packageState <- hscEnv <$> use_ GhcSession file
-    liftIO $ compileModule runSimplifier packageState tms tm
+    liftIO $ compileModule runSimplifier packageState [(tmrModSummary x, tmrModInfo x) | x <- tms] tm
 
 generateCoreRule :: Rules ()
 generateCoreRule =
@@ -371,7 +424,7 @@ generateByteCodeRule =
       (tm : tms) <- uses_ TypeCheck (file: transitiveModuleDeps deps)
       session <- hscEnv <$> use_ GhcSession file
       (_, guts, _) <- use_ GenerateCore file
-      liftIO $ generateByteCode session tms tm guts
+      liftIO $ generateByteCode session [(tmrModSummary x, tmrModInfo x) | x <- tms] tm guts
 
 -- A local rule type to get caching. We want to use newCache, but it has
 -- thread killed exception issues, so we lift it to a full rule.
@@ -399,6 +452,97 @@ loadGhcSession = do
         opts <- getIdeOptions
         return ("" <$ optShakeFiles opts, ([], Just val))
 
+getHiFileRule :: Rules ()
+getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
+  session <- hscEnv <$> use_ GhcSession f
+  -- get all dependencies interface files, to check for freshness
+  (deps,_) <- use_ GetLocatedImports f
+  depHis  <- traverse (use GetHiFile) (mapMaybe (fmap artifactFilePath . snd) deps)
+
+  -- TODO find the hi file without relying on the parsed module
+  --      it should be possible to construct a ModSummary parsing just the imports
+  --      (see HeaderInfo in the GHC package)
+  pm      <- use_ GetParsedModule f
+  let hiFile = toNormalizedFilePath' $
+            case ms_hsc_src ms of
+                HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
+                _ -> ml_hi_file $ ms_location ms
+      ms     = pm_mod_summary pm
+
+  IdeOptions{optInterfaceLoadingDiagnostics} <- getIdeOptions
+
+  let mkInterfaceFilesGenerationDiag f intro
+        | optInterfaceLoadingDiagnostics = mkDiag $ intro <> msg
+        | otherwise = []
+            where
+                msg =
+                    ": additional resource use while generating interface files in the background."
+                mkDiag = pure
+                       . ideErrorWithSource (Just "interface file loading") (Just DsInfo) f
+                       . T.pack
+
+  case sequence depHis of
+    Nothing -> do
+          let d = mkInterfaceFilesGenerationDiag f "Missing interface file dependencies"
+          pure (Nothing, (d, Nothing))
+    Just deps -> do
+      gotHiFile <- getFileExists hiFile
+      if not gotHiFile
+        then do
+          let d = mkInterfaceFilesGenerationDiag f "Missing interface file"
+          pure (Nothing, (d, Nothing))
+        else do
+          hiVersion  <- use_ GetModificationTime hiFile
+          modVersion <- use_ GetModificationTime f
+          let sourceModified = modificationTime hiVersion < modificationTime modVersion
+          if sourceModified
+            then do
+              let d = mkInterfaceFilesGenerationDiag f "Stale interface file"
+              pure (Nothing, (d, Nothing))
+            else do
+              r <- liftIO $ loadInterface session ms deps
+              case r of
+                Right iface -> do
+                  let result = HiFileResult ms iface
+                  return (Just (fingerprintToBS (mi_mod_hash iface)), ([], Just result))
+                Left err -> do
+                  let diag = ideErrorWithSource (Just "interface file loading") (Just DsError) f . T.pack $ err
+                  return (Nothing, (pure diag, Nothing))
+
+
+getModIfaceRule :: Rules ()
+getModIfaceRule = define $ \GetModIface f -> do
+    fileOfInterest <- use_ IsFileOfInterest f
+    let useHiFile =
+          -- Never load interface files for files of interest
+          not fileOfInterest
+    mbHiFile <- if useHiFile then use GetHiFile f else return Nothing
+    case mbHiFile of
+        Just x ->
+            return ([], Just x)
+        Nothing
+          | fileOfInterest -> do
+            -- For files of interest only, create a Shake dependency on typecheck
+            tmr <- use TypeCheck f
+            return ([], extract tmr)
+          | otherwise -> do
+            -- Otherwise the interface file does not exist or is out of date. Invoke typechecking directly to update it without incurring a dependency on the typecheck rule.
+            (diags, tmr) <- typeCheckRuleDefinition f DoGenerateInterfaceFiles
+            -- Bang pattern is important to avoid leaking 'tmr'
+            let !res = extract tmr
+            return (diags, res)
+    where
+      extract Nothing = Nothing
+      extract (Just tmr) =
+        -- Bang patterns are important to force the inner fields
+        Just $! HiFileResult (tmrModSummary tmr) (hm_iface $ tmrModInfo tmr)
+
+isFileOfInterestRule :: Rules ()
+isFileOfInterestRule = defineEarlyCutoff $ \IsFileOfInterest f -> do
+    filesOfInterest <- getFilesOfInterest
+    let res = f `elem` filesOfInterest
+    return (Just (if res then "1" else ""), ([], Just res))
+
 -- | A rule that wires per-file rules together
 mainRule :: Rules ()
 mainRule = do
@@ -412,3 +556,6 @@ mainRule = do
     generateCoreRule
     generateByteCodeRule
     loadGhcSession
+    getHiFileRule
+    getModIfaceRule
+    isFileOfInterestRule

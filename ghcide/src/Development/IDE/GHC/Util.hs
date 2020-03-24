@@ -6,6 +6,7 @@ module Development.IDE.GHC.Util(
     -- * HcsEnv and environment
     HscEnvEq, hscEnv, newHscEnvEq,
     modifyDynFlags,
+    evalGhcEnv,
     runGhcEnv,
     -- * GHC wrappers
     prettyPrint,
@@ -13,12 +14,13 @@ module Development.IDE.GHC.Util(
     printName,
     ParseResult(..), runParser,
     lookupPackageConfig,
+    textToStringBuffer,
+    stringBufferToByteString,
     moduleImportPath,
     cgGutsToCoreModule,
     fingerprintToBS,
     fingerprintFromStringBuffer,
     -- * General utilities
-    textToStringBuffer,
     readFileUtf8,
     hDuplicateTo',
     setDefaultHieDir,
@@ -27,6 +29,7 @@ module Development.IDE.GHC.Util(
 
 import Control.Concurrent
 import Data.List.Extra
+import Data.ByteString.Internal (ByteString(..))
 import Data.Maybe
 import Data.Typeable
 import qualified Data.ByteString.Internal as BS
@@ -96,6 +99,9 @@ runParser flags str parser = unP parser parseState
       buffer = stringToStringBuffer str
       parseState = mkPState flags buffer location
 
+stringBufferToByteString :: StringBuffer -> ByteString
+stringBufferToByteString StringBuffer{..} = PS buf cur len
+
 -- | Pretty print a GHC value using 'unsafeGlobalDynFlags '.
 prettyPrint :: Outputable a => a -> String
 prettyPrint = showSDoc unsafeGlobalDynFlags . ppr
@@ -112,15 +118,21 @@ printName = printRdrName . nameRdrName
 
 -- | Run a 'Ghc' monad value using an existing 'HscEnv'. Sets up and tears down all the required
 --   pieces, but designed to be more efficient than a standard 'runGhc'.
-runGhcEnv :: HscEnv -> Ghc a -> IO a
+evalGhcEnv :: HscEnv -> Ghc b -> IO b
+evalGhcEnv env act = snd <$> runGhcEnv env act
+
+-- | Run a 'Ghc' monad value using an existing 'HscEnv'. Sets up and tears down all the required
+--   pieces, but designed to be more efficient than a standard 'runGhc'.
+runGhcEnv :: HscEnv -> Ghc a -> IO (HscEnv, a)
 runGhcEnv env act = do
     filesToClean <- newIORef emptyFilesToClean
     dirsToClean <- newIORef mempty
     let dflags = (hsc_dflags env){filesToClean=filesToClean, dirsToClean=dirsToClean, useUnicode=True}
     ref <- newIORef env{hsc_dflags=dflags}
-    unGhc act (Session ref) `finally` do
+    res <- unGhc act (Session ref) `finally` do
         cleanTempFiles dflags
         cleanTempDirs dflags
+    (,res) <$> readIORef ref
 
 -- | Given a module location, and its parse tree, figure out what is the include directory implied by it.
 --   For example, given the file @\/usr\/\Test\/Foo\/Bar.hs@ with the module name @Foo.Bar@ the directory

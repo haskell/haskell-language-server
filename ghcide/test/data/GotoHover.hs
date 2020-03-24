@@ -1,6 +1,10 @@
 {- HLINT ignore -}
 module Testing ( module Testing ) where
 import Data.Text (Text, pack)
+import Foo (Bar, foo)
+
+
+
 data TypeConstructor = DataConstructor
   { fff :: Text
   , ggg :: Int }
@@ -48,3 +52,6 @@ outer = undefined where
 
   inner :: Char
   inner = undefined
+
+imported :: Bar
+imported = foo

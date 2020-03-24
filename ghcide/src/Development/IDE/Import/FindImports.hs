@@ -8,6 +8,7 @@ module Development.IDE.Import.FindImports
   ( locateModule
   , Import(..)
   , ArtifactsLocation(..)
+  , isBootLocation
   ) where
 
 import           Development.IDE.GHC.Error as ErrUtils
@@ -35,13 +36,17 @@ data Import
   deriving (Show)
 
 data ArtifactsLocation = ArtifactsLocation
-  { artifactFilePath :: !NormalizedFilePath
+  { artifactFilePath    :: !NormalizedFilePath
   , artifactModLocation :: !ModLocation
+  , artifactIsSource    :: !Bool          -- ^ True if a module is a source input
   }
     deriving (Show)
 
 instance NFData ArtifactsLocation where
-  rnf ArtifactsLocation{..} = rnf artifactFilePath `seq` rwhnf artifactModLocation
+  rnf ArtifactsLocation{..} = rnf artifactFilePath `seq` rwhnf artifactModLocation `seq` rnf artifactIsSource
+
+isBootLocation :: ArtifactsLocation -> Bool
+isBootLocation = not . artifactIsSource
 
 instance NFData Import where
   rnf (FileImport x) = rnf x
@@ -97,7 +102,7 @@ locateModule dflags exts doesExist modName mbPkgName isSource = do
   where
     toModLocation file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
-        return $ Right $ FileImport $ ArtifactsLocation file loc
+        return $ Right $ FileImport $ ArtifactsLocation file loc (not isSource)
 
 
     lookupInPackageDB dfs =

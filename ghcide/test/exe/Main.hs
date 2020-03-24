@@ -25,6 +25,7 @@ import Development.IDE.Spans.Common
 import Development.IDE.Test
 import Development.IDE.Test.Runfiles
 import Development.IDE.Types.Location
+import Development.Shake (getDirectoryFilesIO)
 import qualified Language.Haskell.LSP.Test as LSPTest
 import Language.Haskell.LSP.Test hiding (openDoc')
 import Language.Haskell.LSP.Messages
@@ -400,7 +401,7 @@ diagnosticTests = testGroup "diagnostics"
           let itemA = TextDocumentItem uriA "haskell" 0 aContent
           let a = TextDocumentIdentifier uriA
           sendNotification TextDocumentDidOpen (DidOpenTextDocumentParams itemA)
-          diagsNot <- skipManyTill anyMessage message :: Session PublishDiagnosticsNotification
+          diagsNot <- skipManyTill anyMessage diagnostic
           let PublishDiagnosticsParams fileUri diags = _params (diagsNot :: PublishDiagnosticsNotification)
           -- Check that if we put a lower-case drive in for A.A
           -- the diagnostics for A.B will also be lower-case.
@@ -1258,12 +1259,15 @@ findDefinitionAndHoverTests = let
     found <- get doc pos
     check found targetRange
 
-  checkDefs :: [Location] -> [Expect] -> Session ()
-  checkDefs defs expectations = traverse_ check expectations where
+  checkDefs :: [Location] -> Session [Expect] -> Session ()
+  checkDefs defs mkExpectations = traverse_ check =<< mkExpectations where
 
     check (ExpectRange expectedRange) = do
       assertNDefinitionsFound 1 defs
       assertRangeCorrect (head defs) expectedRange
+    check (ExpectLocation expectedLocation) = do
+      assertNDefinitionsFound 1 defs
+      liftIO $ head defs @?= expectedLocation
     check ExpectNoDefinitions = do
       assertNDefinitionsFound 0 defs
     check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
@@ -1275,8 +1279,8 @@ findDefinitionAndHoverTests = let
   assertRangeCorrect Location{_range = foundRange} expectedRange =
     liftIO $ expectedRange @=? foundRange
 
-  checkHover :: Maybe Hover -> [Expect] -> Session ()
-  checkHover hover expectations = traverse_ check expectations where
+  checkHover :: Maybe Hover -> Session [Expect] -> Session ()
+  checkHover hover expectations = traverse_ check =<< expectations where
 
     check expected =
       case hover of
@@ -1321,7 +1325,9 @@ findDefinitionAndHoverTests = let
     [ testGroup "definition" $ mapMaybe fst tests
     , testGroup "hover"      $ mapMaybe snd tests ]
 
-  test runDef runHover look expect title =
+  test runDef runHover look expect = testM runDef runHover look (return expect)
+
+  testM runDef runHover look expect title =
     ( runDef   $ tst def   look expect title
     , runHover $ tst hover look expect title ) where
       def   = (getDefinitions, checkDefs)
@@ -1329,79 +1335,83 @@ findDefinitionAndHoverTests = let
       --type_ = (getTypeDefinitions, checkTDefs) -- getTypeDefinitions always times out
 
   -- search locations            expectations on results
-  fffL4  = _start fffR     ;  fffR = mkRange 4  4    4  7 ; fff  = [ExpectRange fffR]
-  fffL8  = Position  8  4  ;
-  fffL14 = Position 14  7  ;
-  aaaL14 = Position 14 20  ;  aaa    = [mkR   7  0    7  3]
-  dcL7   = Position  7 11  ;  tcDC   = [mkR   3 23    5 16]
-  dcL12  = Position 12 11  ;
-  xtcL5  = Position  5 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in ‘GHC.Types’"]]
-  tcL6   = Position  6 11  ;  tcData = [mkR   3  0    5 16, ExpectHoverText ["TypeConstructor", "GotoHover.hs:4:1"]]
-  vvL16  = Position 16 12  ;  vv     = [mkR  16  4   16  6]
-  opL16  = Position 16 15  ;  op     = [mkR  17  2   17  4]
-  opL18  = Position 18 22  ;  opp    = [mkR  18 13   18 17]
-  aL18   = Position 18 20  ;  apmp   = [mkR  18 10   18 11]
-  b'L19  = Position 19 13  ;  bp     = [mkR  19  6   19  7]
-  xvL20  = Position 20  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["Data.Text.pack", ":: String -> Text"]]
-  clL23  = Position 23 11  ;  cls    = [mkR  21  0   22 20, ExpectHoverText ["MyClass", "GotoHover.hs:22:1"]]
-  clL25  = Position 25  9
-  eclL15 = Position 15  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ‘GHC.Num’"]]
-  dnbL29 = Position 29 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  29 12   29 21]
-  dnbL30 = Position 30 23
-  lcbL33 = Position 33 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  33 26   33 27]
-  lclL33 = Position 33 22
-  mclL36 = Position 36  1  ;  mcl    = [mkR  36  0   36 14]
-  mclL37 = Position 37  1
-  spaceL37 = Position 37  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
-  docL41 = Position 41  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
+  fffL4  = _start fffR     ;  fffR = mkRange 8  4    8  7 ; fff  = [ExpectRange fffR]
+  fffL8  = Position 12  4  ;
+  fffL14 = Position 18  7  ;
+  aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
+  dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
+  dcL12  = Position 16 11  ;
+  xtcL5  = Position  9 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in ‘GHC.Types’"]]
+  tcL6   = Position 10 11  ;  tcData = [mkR   7  0    9 16, ExpectHoverText ["TypeConstructor", "GotoHover.hs:8:1"]]
+  vvL16  = Position 20 12  ;  vv     = [mkR  20  4   20  6]
+  opL16  = Position 20 15  ;  op     = [mkR  21  2   21  4]
+  opL18  = Position 22 22  ;  opp    = [mkR  22 13   22 17]
+  aL18   = Position 22 20  ;  apmp   = [mkR  22 10   22 11]
+  b'L19  = Position 23 13  ;  bp     = [mkR  23  6   23  7]
+  xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["Data.Text.pack", ":: String -> Text"]]
+  clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
+  clL25  = Position 29  9
+  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ‘GHC.Num’"]]
+  dnbL29 = Position 33 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  33 12   33 21]
+  dnbL30 = Position 34 23
+  lcbL33 = Position 37 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  37 26   37 27]
+  lclL33 = Position 37 22
+  mclL36 = Position 40  1  ;  mcl    = [mkR  40  0   40 14]
+  mclL37 = Position 41  1
+  spaceL37 = Position 41  24 ; space = [ExpectNoDefinitions, ExpectHoverText [":: Char"]]
+  docL41 = Position 45  1  ;  doc    = [ExpectHoverText ["Recognizable docs: kpqz"]]
                            ;  constr = [ExpectHoverText ["Monad m"]]
-  eitL40 = Position 40 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
-  intL40 = Position 40 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
-  tvrL40 = Position 40 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
-  intL41 = Position 41 20  ;  litI   = [ExpectHoverText ["7518"]]
-  chrL36 = Position 37 24  ;  litC   = [ExpectHoverText ["'f'"]]
-  txtL8  = Position  8 14  ;  litT   = [ExpectHoverText ["\"dfgy\""]]
-  lstL43 = Position 43 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
-  outL45 = Position 45  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
-  innL48 = Position 48  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
+  eitL40 = Position 44 28  ;  kindE  = [ExpectHoverText [":: * -> * -> *\n"]]
+  intL40 = Position 44 34  ;  kindI  = [ExpectHoverText [":: *\n"]]
+  tvrL40 = Position 44 37  ;  kindV  = [ExpectHoverText [":: * -> *\n"]]
+  intL41 = Position 45 20  ;  litI   = [ExpectHoverText ["7518"]]
+  chrL36 = Position 41 24  ;  litC   = [ExpectHoverText ["'f'"]]
+  txtL8  = Position 12 14  ;  litT   = [ExpectHoverText ["\"dfgy\""]]
+  lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
+  outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
+  innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
+  imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo"], mkL foo 4 0 4 3]
+  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar"], mkL bar 2 0 2 14]
   in
   mkFindTests
-  --     def    hover  look   expect
-  [ test yes    yes    fffL4  fff    "field in record definition"
-  , test broken broken fffL8  fff    "field in record construction     #71"
-  , test yes    yes    fffL14 fff    "field name used as accessor"          -- 120 in Calculate.hs
-  , test yes    yes    aaaL14 aaa    "top-level name"                       -- 120
-  , test yes    yes    dcL7   tcDC   "data constructor record         #247"
-  , test yes    yes    dcL12  tcDC   "data constructor plain"               -- 121
-  , test yes    yes    tcL6   tcData "type constructor                #248" -- 147
-  , test broken yes    xtcL5  xtc    "type constructor external   #248,249"
-  , test broken yes    xvL20  xvMsg  "value external package          #249" -- 120
-  , test yes    yes    vvL16  vv     "plain parameter"                      -- 120
-  , test yes    yes    aL18   apmp   "pattern match name"                   -- 120
-  , test yes    yes    opL16  op     "top-level operator"                   -- 120, 123
-  , test yes    yes    opL18  opp    "parameter operator"                   -- 120
-  , test yes    yes    b'L19  bp     "name in backticks"                    -- 120
-  , test yes    yes    clL23  cls    "class in instance declaration   #250"
-  , test yes    yes    clL25  cls    "class in signature              #250" -- 147
-  , test broken yes    eclL15 ecls   "external class in signature #249,250"
-  , test yes    yes    dnbL29 dnb    "do-notation   bind"                   -- 137
-  , test yes    yes    dnbL30 dnb    "do-notation lookup"
-  , test yes    yes    lcbL33 lcb    "listcomp   bind"                      -- 137
-  , test yes    yes    lclL33 lcb    "listcomp lookup"
-  , test yes    yes    mclL36 mcl    "top-level fn 1st clause"
-  , test yes    yes    mclL37 mcl    "top-level fn 2nd clause         #246"
-  , test yes    yes    spaceL37 space "top-level fn on space #315"
-  , test no     broken docL41 doc    "documentation                     #7"
-  , test no     yes    eitL40 kindE  "kind of Either                  #273"
-  , test no     yes    intL40 kindI  "kind of Int                     #273"
-  , test no     broken tvrL40 kindV  "kind of (* -> *) type variable  #273"
-  , test no     yes    intL41 litI   "literal Int  in hover info      #274"
-  , test no     yes    chrL36 litC   "literal Char in hover info      #274"
-  , test no     yes    txtL8  litT   "literal Text in hover info      #274"
-  , test no     yes    lstL43 litL   "literal List in hover info      #274"
-  , test no     yes    docL41 constr "type constraint in hover info   #283"
-  , test broken broken outL45 outSig "top-level signature             #310"
-  , test broken broken innL48 innSig "inner     signature             #310"
+  --     def    hover  look       expect
+  [ test  yes    yes    fffL4      fff           "field in record definition"
+  , test  broken broken fffL8      fff           "field in record construction     #71"
+  , test  yes    yes    fffL14     fff           "field name used as accessor"          -- 120 in Calculate.hs
+  , test  yes    yes    aaaL14     aaa           "top-level name"                       -- 120
+  , test  yes    yes    dcL7       tcDC          "data constructor record         #247"
+  , test  yes    yes    dcL12      tcDC          "data constructor plain"               -- 121
+  , test  yes    yes    tcL6       tcData        "type constructor                #248" -- 147
+  , test  broken yes    xtcL5      xtc           "type constructor external   #248,249"
+  , test  broken yes    xvL20      xvMsg         "value external package          #249" -- 120
+  , test  yes    yes    vvL16      vv            "plain parameter"                      -- 120
+  , test  yes    yes    aL18       apmp          "pattern match name"                   -- 120
+  , test  yes    yes    opL16      op            "top-level operator"                   -- 120, 123
+  , test  yes    yes    opL18      opp           "parameter operator"                   -- 120
+  , test  yes    yes    b'L19      bp            "name in backticks"                    -- 120
+  , test  yes    yes    clL23      cls           "class in instance declaration   #250"
+  , test  yes    yes    clL25      cls           "class in signature              #250" -- 147
+  , test  broken yes    eclL15     ecls          "external class in signature #249,250"
+  , test  yes    yes    dnbL29     dnb           "do-notation   bind"                   -- 137
+  , test  yes    yes    dnbL30     dnb           "do-notation lookup"
+  , test  yes    yes    lcbL33     lcb           "listcomp   bind"                      -- 137
+  , test  yes    yes    lclL33     lcb           "listcomp lookup"
+  , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
+  , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #246"
+  , test  yes    yes    spaceL37   space        "top-level fn on space #315"
+  , test  no     broken docL41     doc           "documentation                     #7"
+  , test  no     yes    eitL40     kindE         "kind of Either                  #273"
+  , test  no     yes    intL40     kindI         "kind of Int                     #273"
+  , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #273"
+  , test  no     yes    intL41     litI          "literal Int  in hover info      #274"
+  , test  no     yes    chrL36     litC          "literal Char in hover info      #274"
+  , test  no     yes    txtL8      litT          "literal Text in hover info      #274"
+  , test  no     yes    lstL43     litL          "literal List in hover info      #274"
+  , test  no     yes    docL41     constr        "type constraint in hover info   #283"
+  , test  broken broken outL45     outSig        "top-level signature             #310"
+  , test  broken broken innL48     innSig        "inner     signature             #310"
+  , testM yes    yes    imported   importedSig   "Imported symbol"
+  , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
@@ -1869,6 +1879,7 @@ xfail = flip expectFailBecause
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
+  | ExpectLocation Location
 --  | ExpectDefRange Range -- Only gotoDef should report this range
   | ExpectHoverRange Range -- Only hover should report this range
   | ExpectHoverText [T.Text] -- the hover message must contain these snippets
@@ -1880,6 +1891,9 @@ data Expect
 
 mkR :: Int -> Int -> Int -> Int -> Expect
 mkR startLine startColumn endLine endColumn = ExpectRange $ mkRange startLine startColumn endLine endColumn
+
+mkL :: Uri -> Int -> Int -> Int -> Int -> Expect
+mkL uri startLine startColumn endLine endColumn = ExpectLocation $ Location uri $ mkRange startLine startColumn endLine endColumn
 
 haddockTests :: TestTree
 haddockTests
@@ -1960,7 +1974,7 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing "module B where\nimport Data.Maybe"]
             msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message @PublishDiagnosticsNotification))
             liftIO $ length msgs @?= 0
-            _ <- openDoc' "A.hs" "haskell" "module A where\nimport Bar"
+            _ <- openDoc' "A.hs" "haskell" "module A where\nimport LoadCradleBar"
             msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message @PublishDiagnosticsNotification))
             liftIO $ length msgs @?= 0
 
@@ -2061,6 +2075,12 @@ runInDir dir s = do
   -- Temporarily hack around https://github.com/mpickering/hie-bios/pull/56
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
   createDirectoryIfMissing True $ dir ++ "/Data"
+
+  -- Copy all the test data files to the temporary workspace
+  testDataFiles <- getDirectoryFilesIO "test/data" ["//*"]
+  for_ testDataFiles $ \f -> do
+    createDirectoryIfMissing True $ dir </> takeDirectory f
+    copyFile ("test/data" </> f) (dir </> f)
 
   let cmd = unwords [ghcideExe, "--lsp", "--test", "--cwd", dir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.
