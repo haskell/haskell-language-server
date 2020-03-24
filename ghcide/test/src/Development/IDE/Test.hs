@@ -1,10 +1,13 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE DuplicateRecordFields #-}
+
 module Development.IDE.Test
   ( Cursor
   , cursorPosition
   , requireDiagnostic
+  , diagnostic
   , expectDiagnostics
   , expectNoMoreDiagnostics
   ) where
@@ -13,6 +16,7 @@ import Control.Applicative.Combinators
 import Control.Lens hiding (List)
 import Control.Monad
 import Control.Monad.IO.Class
+import           Data.Foldable
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import Language.Haskell.LSP.Test hiding (message, openDoc')
@@ -70,14 +74,17 @@ expectNoMoreDiagnostics timeout = do
     ignoreOthers = void anyMessage >> handleMessages
 
 expectDiagnostics :: [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])] -> Session ()
-expectDiagnostics expected = do
+expectDiagnostics = expectDiagnostics' diagnostic
+
+expectDiagnostics' :: Session PublishDiagnosticsNotification -> [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])] -> Session ()
+expectDiagnostics' messageParser expected = do
     expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) (fmap toNormalizedUri . getDocUri) expected
     go expected'
     where
         go m
             | Map.null m = pure ()
             | otherwise = do
-                  diagsNot <- skipManyTill anyMessage LspTest.message :: Session PublishDiagnosticsNotification
+                  diagsNot <- skipManyTill anyMessage messageParser
                   let fileUri = diagsNot ^. params . uri
                   case Map.lookup (diagsNot ^. params . uri . to toNormalizedUri) m of
                       Nothing -> do
@@ -95,6 +102,22 @@ expectDiagnostics expected = do
                               ", expected " <> show expected <>
                               " but got " <> show actual
                           go $ Map.delete (diagsNot ^. params . uri . to toNormalizedUri) m
+
+-- | Matches all diagnostic messages expect those from interface loading files
+diagnostic :: Session PublishDiagnosticsNotification
+diagnostic = do
+  m <- LspTest.message
+  let PublishDiagnosticsParams uri diags = _params (m :: PublishDiagnosticsNotification)
+  let diags' = filter (\d -> _source (d:: Diagnostic) /= Just "interface file loading") (toList diags)
+  -- interface loading warnings get sent on a first message,
+  -- followed up by a second message including all other warnings.
+  -- unless the debouncer merges them.
+  -- This can lead to a test matching on the first message and missing
+  -- the interesting warnings.
+  -- Therefore we do not match messages containing only interface loading warnings,
+  -- but, importantly, do match messages containing no warnings.
+  guard (null diags || not (null diags'))
+  return $ (m :: PublishDiagnosticsNotification){_params = PublishDiagnosticsParams uri (List diags')}
 
 standardizeQuotes :: T.Text -> T.Text
 standardizeQuotes msg = let

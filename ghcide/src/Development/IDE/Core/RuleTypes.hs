@@ -57,6 +57,22 @@ instance Show TcModuleResult where
 instance NFData TcModuleResult where
     rnf = rwhnf
 
+tmrModSummary :: TcModuleResult -> ModSummary
+tmrModSummary = pm_mod_summary . tm_parsed_module . tmrModule
+
+data HiFileResult = HiFileResult
+    { hirModSummary :: !ModSummary
+    -- Bang patterns here are important to stop the result retaining
+    -- a reference to a typechecked module
+    , hirModIface :: !ModIface
+    }
+
+instance NFData HiFileResult where
+    rnf = rwhnf
+
+instance Show HiFileResult where
+    show = show . hirModSummary
+
 -- | The type checked version of this file, requires TypeCheck+
 type instance RuleResult TypeCheck = TcModuleResult
 
@@ -80,6 +96,14 @@ type instance RuleResult GetLocatedImports = ([(Located ModuleName, Maybe Artifa
 -- We cannot report the cycles directly from GetDependencyInformation since
 -- we can only report diagnostics for the current file.
 type instance RuleResult ReportImportCycles = ()
+
+-- | Read the module interface file
+type instance RuleResult GetHiFile = HiFileResult
+
+-- | Get a module interface, either from an interface file or a typechecked module
+type instance RuleResult GetModIface = HiFileResult
+
+type instance RuleResult IsFileOfInterest = Bool
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
@@ -140,3 +164,22 @@ data GhcSession = GhcSession
 instance Hashable GhcSession
 instance NFData   GhcSession
 instance Binary   GhcSession
+
+data GetHiFile = GetHiFile
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetHiFile
+instance NFData   GetHiFile
+instance Binary   GetHiFile
+
+data GetModIface = GetModIface
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetModIface
+instance NFData   GetModIface
+instance Binary   GetModIface
+
+
+data IsFileOfInterest = IsFileOfInterest
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable IsFileOfInterest
+instance NFData   IsFileOfInterest
+instance Binary   IsFileOfInterest

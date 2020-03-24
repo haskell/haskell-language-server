@@ -19,7 +19,6 @@ import Development.IDE.Spans.Type as SpanInfo
 import Development.IDE.Spans.Common (spanDocToMarkdown)
 
 -- GHC API imports
-import Avail
 import DynFlags
 import FastString
 import Name
@@ -84,7 +83,7 @@ atPoint IdeOptions{..} (SpansInfo srcSpans cntsSpans) pos = do
        constraintsOverFVs = filter (\cnt -> not (tyCoVarsOfType cnt `disjointVarSet` thisFVs)) cnts
        constraintsT = T.intercalate ", " (map showName constraintsOverFVs)
 
-       typeAnnotation = case constraintsOverFVs of 
+       typeAnnotation = case constraintsOverFVs of
                           []  -> colon <> showName typ
                           [_] -> colon <> constraintsT <> "\n=> " <> showName typ
                           _   -> colon <> "(" <> constraintsT <> ")\n=> " <> showName typ
@@ -134,16 +133,16 @@ locationsAtPoint getHieFile IdeOptions{..} pos =
             sp@(RealSrcSpan _) -> pure $ Just sp
             sp@(UnhelpfulSpan _) -> runMaybeT $ do
                 guard (sp /= wiredInSrcSpan)
-                -- This case usually arises when the definition is in an external package.
+                -- This case usually arises when the definition is in an external package (DAML only).
                 -- In this case the interface files contain garbage source spans
                 -- so we instead read the .hie files to get useful source spans.
                 mod <- MaybeT $ return $ nameModule_maybe name
                 (hieFile, srcPath) <- MaybeT $ getHieFile mod
-                avail <- MaybeT $ pure $ listToMaybe (filterAvails (eqName name) $ hie_exports hieFile)
+                avail <- MaybeT $ pure $ find (eqName name . snd) $ hieExportNames hieFile
                 -- The location will point to the source file used during compilation.
                 -- This file might no longer exists and even if it does the path will be relative
                 -- to the compilation directory which we don’t know.
-                let span = setFileName srcPath $ nameSrcSpan $ availName avail
+                let span = setFileName srcPath $ fst avail
                 pure span
         -- We ignore uniques and source spans and only compare the name and the module.
         eqName :: Name -> Name -> Bool

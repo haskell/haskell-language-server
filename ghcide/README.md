@@ -64,6 +64,10 @@ The `ghcide` executable mostly relies on [`hie-bios`](https://github.com/mpicker
 
 If you can't get `ghcide` working outside the editor, see [this setup troubleshooting guide](docs/Setup.md). Once you have got `ghcide` working outside the editor, the next step is to pick which editor to integrate with.
 
+### Optimal project setup
+
+`ghcide` has been designed to handle projects with hundreds or thousands of modules. If `ghci` can handle it, then `ghcide` should be able to handle it. The only caveat is that this currently requires GHC >= 8.6, and that the first time a module is loaded in the editor will trigger generation of support files in the background if those do not already exist.
+
 ### Using with VS Code
 
 You can install the VSCode extension from the [VSCode

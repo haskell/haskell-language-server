@@ -100,6 +100,7 @@ main = do
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = argsTesting
+                    , optInterfaceLoadingDiagnostics = argsTesting
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (cradleRules >> mainRule >> pluginRules plugins >> action kick)

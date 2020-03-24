@@ -270,18 +270,18 @@ cacheDataProducer packageState tm deps = do
         let typ = Just $ varType var
             name = Var.varName var
             label = T.pack $ showGhc name
-        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm_parsed_module tm : deps) name
+        docs <- evalGhcEnv packageState $ getDocumentationTryGhc (tm_parsed_module tm : deps) name
         return $ CI name (showModName curMod) typ label Nothing docs
 
       toCompItem :: ModuleName -> Name -> IO CompItem
       toCompItem mn n = do
-        docs <- runGhcEnv packageState $ getDocumentationTryGhc (tm_parsed_module tm : deps) n
+        docs <- evalGhcEnv packageState $ getDocumentationTryGhc (tm_parsed_module tm : deps) n
 -- lookupName uses runInteractiveHsc, i.e., GHCi stuff which does not work with GHCi
 -- and leads to fun errors like "Cannot continue after interface file error".
 #ifdef GHC_LIB
         let ty = Right Nothing
 #else
-        ty <- runGhcEnv packageState $ catchSrcErrors "completion" $ do
+        ty <- evalGhcEnv packageState $ catchSrcErrors "completion" $ do
                 name' <- lookupName n
                 return $ name' >>= safeTyThingType
 #endif
