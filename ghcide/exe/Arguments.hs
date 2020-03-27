@@ -13,6 +13,7 @@ data Arguments = Arguments
     ,argsVersion :: Bool
     ,argsShakeProfiling :: Maybe FilePath
     ,argsTesting :: Bool
+    ,argsThreads :: Int
     }
 
 getArguments :: IO Arguments
@@ -31,3 +32,4 @@ arguments = Arguments
       <*> switch (long "version" <> help "Show ghcide and GHC versions")
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory")
       <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")
+      <*> option auto (short 'j' <> help "Number of threads (0: automatic)" <> metavar "NUM" <> value 0 <> showDefault)
