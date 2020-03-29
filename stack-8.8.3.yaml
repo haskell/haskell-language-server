@@ -1,27 +1,21 @@
-resolver: lts-13.19 # GHC 8.6.4
+resolver: lts-15.5
 
 packages:
 - .
 - ./ghcide/
 
 extra-deps:
-- brittany-0.12.1.0
-- butcher-1.3.2.1
+- apply-refact-0.7.0.0
 - bytestring-trie-0.2.5.0
 # - cabal-helper-1.0.0.0
 - github: jneira/cabal-helper
   commit: ffb1f57a5ffc6b7ac3c46a9974c4420a6d2bb9b2
-- cabal-plan-0.5.0.0
+- clock-0.7.2
 - constrained-dynamic-0.1.0.0
-# - ghcide-0.1.0
-- extra-1.6.18
 - floskell-0.10.2
-- fuzzy-0.1.0.0
+# - ghcide-0.1.0
 - ghc-check-0.1.0.3
-- ghc-exactprint-0.6.2 # for HaRe
-- ghc-lib-parser-8.8.1
 - ghc-lib-parser-ex-8.8.2
-- haddock-api-2.22.0
 - haddock-library-1.8.0
 - haskell-lsp-0.21.0.0
 - haskell-lsp-types-0.21.0.0
@@ -30,30 +24,14 @@ extra-deps:
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
-- lsp-test-0.10.1.0
+- ilist-0.3.1.0
 - monad-dijkstra-0.1.1.2
-- monad-memo-0.4.1
-- multistate-0.8.0.1
-- ormolu-0.0.3.1
-- parser-combinators-1.2.1
-- regex-base-0.94.0.0
-- regex-tdfa-1.3.1.0
-- rope-utf16-splay-0.3.1.0
-- shake-0.18.5
-- syz-0.2.0.0
-- tasty-rerun-1.1.17
+- semigroups-0.18.5
 - temporary-1.2.1.1
-- unix-compat-0.5.2
-- unordered-containers-0.2.10.0
-- yaml-0.11.1.2
-# To make build work in windows 7
-- unix-time-0.4.7
-
 
 flags:
   haskell-language-server:
     pedantic: true
-
 
 # allow-newer: true
 
