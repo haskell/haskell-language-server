@@ -30,7 +30,7 @@ stackInstallHie mbVersionNumber args = do
         return vn
 
   localBinDir <- getLocalBin args
-  let hie = "hie" <.> exe
+  let hie = "haskell-language-server" <.> exe
   liftIO $ do
     copyFile (localBinDir </> hie)
              (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
