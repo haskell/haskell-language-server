@@ -8,8 +8,8 @@ extra-deps:
 - ansi-terminal-0.10.2
 - base-compat-0.11.0
 # - cabal-helper-1.0.0.0
-- github: jneira/cabal-helper
-  commit: ffb1f57a5ffc6b7ac3c46a9974c4420a6d2bb9b2
+- github: DanielG/cabal-helper
+  commit: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - floskell-0.10.2
@@ -22,7 +22,7 @@ extra-deps:
 - haskell-lsp-types-0.21.0.0
 - hie-bios-0.4.0
 - indexed-profunctors-0.1
-- lsp-test-0.10.1.0
+- lsp-test-0.10.2.0
 - monad-dijkstra-0.1.1.2
 - optics-core-0.2
 - optparse-applicative-0.15.1.0
