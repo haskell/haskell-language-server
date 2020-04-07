@@ -90,9 +90,11 @@ spec = do
       symbolsRsp <- skipManyTill anyNotification message :: Session DocumentSymbolsResponse
       liftIO $ symbolsRsp ^. L.id `shouldBe` responseId id2
 
-      liftIO $ symbolsRsp ^. L.result `shouldBe`
-         Just (DSDocumentSymbols
-               (List [DocumentSymbol
+
+      let Just (DSDocumentSymbols (List ds)) = symbolsRsp ^. L.result
+      liftIO $ length ds `shouldBe` 3
+      liftIO $ (take 2 ds) `shouldBe`
+                     [DocumentSymbol
                         "Example_symbol_name"
                         Nothing
                         SkVariable
@@ -110,6 +112,6 @@ spec = do
                                                       , _end = Position {_line = 4, _character = 7}})
                                      (Range {_start = Position {_line = 4, _character = 1}
                                                                , _end = Position {_line = 4, _character = 7}})
-                                     Nothing]))
+                                     Nothing]
 
       return ()
