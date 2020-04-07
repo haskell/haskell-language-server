@@ -35,7 +35,6 @@ import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Logger
 import           Development.Shake hiding ( Diagnostic, command )
 import           GHC.Generics
-import           Ide.Compat
 import           Ide.Plugin.Config
 import           Ide.Plugin.Formatter
 import           Ide.Types
@@ -115,7 +114,7 @@ makeCodeAction :: [(PluginId, CodeActionProvider)]
 makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
     let caps = LSP.clientCapabilities lf
         unL (List ls) = ls
-    r <- mapM (\(pid,provider) -> provider ideState pid docId range context) cas
+    r <- mapM (\(pid,provider) -> provider lf ideState pid docId range context) cas
     let actions = filter wasRequested . concat $ map unL $ rights r
     res <- send caps actions
     return $ Right res
@@ -171,11 +170,11 @@ makeCodeLens :: [(PluginId, CodeLensProvider)]
       -> IdeState
       -> CodeLensParams
       -> IO (Either ResponseError (List CodeLens))
-makeCodeLens cas _lf ideState params = do
+makeCodeLens cas lf ideState params = do
     logInfo (ideLogger ideState) "Plugin.makeCodeLens (ideLogger)" -- AZ
     let
       makeLens (pid, provider) = do
-          r <- provider ideState pid params
+          r <- provider lf ideState pid params
           return (pid, r)
       breakdown :: [(PluginId, Either ResponseError a)] -> ([(PluginId, ResponseError)], [(PluginId, a)])
       breakdown ls = (concatMap doOneLeft ls, concatMap doOneRight ls)
@@ -206,7 +205,7 @@ executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
 --                             -> ExecuteCommandParams
 --                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 makeExecuteCommands :: [(PluginId, [PluginCommand])] -> LSP.LspFuncs Config -> ExecuteCommandProvider
-makeExecuteCommands ecs _lf _params = do
+makeExecuteCommands ecs lf ide = do
   let
       pluginMap = Map.fromList ecs
       parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
@@ -251,7 +250,7 @@ makeExecuteCommands ecs _lf _params = do
               --                           "Invalid fallbackCodeAction params"
 
           -- Just an ordinary HIE command
-          Just (plugin, cmd) -> runPluginCommand pluginMap plugin cmd cmdParams
+          Just (plugin, cmd) -> runPluginCommand pluginMap lf ide plugin cmd cmdParams
 
           -- Couldn't parse the command identifier
           _ -> return (Left $ ResponseError InvalidParams "Invalid command identifier" Nothing, Nothing)
@@ -334,20 +333,33 @@ makeExecuteCommands ecs _lf _params = do
 
 -- | Runs a plugin command given a PluginId, CommandId and
 -- arguments in the form of a JSON object.
-runPluginCommand :: Map.Map PluginId [PluginCommand] -> PluginId -> CommandId -> J.Value
-                  -> IO (Either ResponseError J.Value,
+runPluginCommand :: Map.Map PluginId [PluginCommand]
+                 -> LSP.LspFuncs Config
+                 -> IdeState
+                 -> PluginId
+                 -> CommandId
+                 -> J.Value
+                 -> IO (Either ResponseError J.Value,
                         Maybe (ServerMethod, ApplyWorkspaceEditParams))
-runPluginCommand m p@(PluginId p') com@(CommandId com') arg =
+runPluginCommand m lf ide  p@(PluginId p') com@(CommandId com') arg =
   case Map.lookup p m of
     Nothing -> return
       (Left $ ResponseError InvalidRequest ("Plugin " <> p' <> " doesn't exist") Nothing, Nothing)
     Just xs -> case List.find ((com ==) . commandId) xs of
       Nothing -> return (Left $
-        ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p' <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing, Nothing)
+        ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p'
+                                      <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing, Nothing)
       Just (PluginCommand _ _ f) -> case J.fromJSON arg of
         J.Error err -> return (Left $
-          ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p' <> ": " <> T.pack err) Nothing, Nothing)
-        J.Success a -> f a
+          ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p'
+                                       <> ": " <> T.pack err
+                                       <> "\narg = " <> T.pack (show arg)) Nothing, Nothing)
+        J.Success a -> f lf ide a
+
+-- lsp-request: error while parsing args for typesignature.add in plugin ghcide:
+-- When parsing the record ExecuteCommandParams of type
+-- Language.Haskell.LSP.Types.DataTypesJSON.ExecuteCommandParams the key command
+-- was not present.
 
 -- -----------------------------------------------------------
 
@@ -361,9 +373,6 @@ mkLspCommand plid cn title args' = do
 mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
 mkLspCmdId pid (PluginId plid) (CommandId cid)
   = pid <> ":" <> plid <> ":" <> cid
-
-getPid :: IO T.Text
-getPid = T.pack . show <$> getProcessID
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand])] -> [T.Text]
 allLspCmdIds pid commands = concat $ map go commands
@@ -439,7 +448,7 @@ makeSymbols sps lf ideState params
                       si = SymbolInformation name' (ds ^. kind) (ds ^. deprecated) loc parent
                   in [si] <> children'
 
-      mhs <- mapM (\(_,p) -> p ideState params) sps
+      mhs <- mapM (\(_,p) -> p lf ideState params) sps
       case rights mhs of
           [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
           hs -> return $ Right $ convertSymbols $ concat hs

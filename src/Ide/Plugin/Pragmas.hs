@@ -56,10 +56,8 @@ data AddPragmaParams = AddPragmaParams
 -- Pragma is added to the first line of the Uri.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
--- addPragmaCmd :: AddPragmaParams -> IO (Either ResponseError J.WorkspaceEdit)
-addPragmaCmd :: AddPragmaParams -> IO (Either ResponseError Value,
-                           Maybe (ServerMethod, ApplyWorkspaceEditParams))
-addPragmaCmd (AddPragmaParams uri pragmaName) = do
+addPragmaCmd :: CommandFunction AddPragmaParams
+addPragmaCmd _lf _ide (AddPragmaParams uri pragmaName) = do
   let
     pos = J.Position 0 0
     textEdits = J.List
@@ -76,7 +74,7 @@ addPragmaCmd (AddPragmaParams uri pragmaName) = do
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 codeActionProvider :: CodeActionProvider
-codeActionProvider _ plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
+codeActionProvider _ _ plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
   cmds <- mapM mkCommand pragmas
   -- cmds <- mapM mkCommand ("FooPragma":pragmas)
   return $ Right $ List cmds

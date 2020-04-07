@@ -99,6 +99,7 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
     , _source   = Just diagSource
     , _message  = msg
     , _code     = Nothing
+    , _tags     = Nothing
     , _relatedInformation = Nothing
     }
 
@@ -107,14 +108,8 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 -- ---------------------------------------------------------------------
 
 -- | Generate code actions.
-codeAction
-    :: IdeState
-    -> PluginId
-    -> TextDocumentIdentifier
-    -> Range
-    -> CodeActionContext
-    -> IO (Either ResponseError (List CAResult))
-codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
+codeAction :: CodeActionProvider
+codeAction _lf _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let
       title = "Add TODO2 Item"
       tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
@@ -125,12 +120,8 @@ codeAction _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_di
 
 -- ---------------------------------------------------------------------
 
-codeLens
-    :: IdeState
-    -> PluginId
-    -> CodeLensParams
-    -> IO (Either ResponseError (List CodeLens))
-codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+codeLens :: CodeLensProvider
+codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
     logInfo (ideLogger ideState) "Example2.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
@@ -153,9 +144,8 @@ data AddTodoParams = AddTodoParams
   }
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
-addTodoCmd :: AddTodoParams -> IO (Either ResponseError Value,
-                           Maybe (ServerMethod, ApplyWorkspaceEditParams))
-addTodoCmd (AddTodoParams uri todoText) = do
+addTodoCmd :: CommandFunction AddTodoParams
+addTodoCmd _lf _ide (AddTodoParams uri todoText) = do
   let
     pos = Position 5 0
     textEdits = List
@@ -202,7 +192,7 @@ logAndRunRequest label getResults ide pos path = do
 -- ---------------------------------------------------------------------
 
 symbols :: SymbolsProvider
-symbols _ide (DocumentSymbolParams _doc _mt)
+symbols _lf _ide (DocumentSymbolParams _doc _mt)
     = pure $ Right [r]
     where
         r = DocumentSymbol name detail kind deprecation range selR chList
@@ -220,12 +210,13 @@ completion :: CompletionProvider
 completion _ide (CompletionParams _doc _pos _mctxt _mt)
     = pure $ Right $ Completions $ List [r]
     where
-        r = CompletionItem label kind detail documentation deprecated preselect
+        r = CompletionItem label kind tags detail documentation deprecated preselect
                            sortText filterText insertText insertTextFormat
                            textEdit additionalTextEdits commitCharacters
                            command xd
         label = "Example2 completion"
         kind = Nothing
+        tags = List []
         detail = Nothing
         documentation = Nothing
         deprecated = Nothing

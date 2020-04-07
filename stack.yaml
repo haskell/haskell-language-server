@@ -15,13 +15,14 @@ extra-deps:
 - floskell-0.10.2
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
+- ghc-check-0.1.0.3
 - ghc-lib-parser-8.8.2
 - haddock-library-1.8.0
-- haskell-lsp-0.20.0.0
-- haskell-lsp-types-0.20.0.0
+- haskell-lsp-0.21.0.0
+- haskell-lsp-types-0.21.0.0
 - hie-bios-0.4.0
 - indexed-profunctors-0.1
-- lsp-test-0.10.1.0
+- lsp-test-0.10.2.0
 - monad-dijkstra-0.1.1.2
 - optics-core-0.2
 - optparse-applicative-0.15.1.0

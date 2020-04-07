@@ -16,6 +16,7 @@ module Ide.Types
     , HoverProvider
     , CodeActionProvider
     , CodeLensProvider
+    , CommandFunction
     , ExecuteCommandProvider
     , CompletionProvider
     , WithSnippets(..)
@@ -27,11 +28,11 @@ import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
--- import           Development.IDE.Plugin
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Development.Shake
--- import           Development.Shake.Classes
+import           Ide.Plugin.Config
+import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 
@@ -80,11 +81,17 @@ instance IsString CommandId where
 data PluginCommand = forall a. (FromJSON a) =>
   PluginCommand { commandId   :: CommandId
                 , commandDesc :: T.Text
-                , commandFunc :: a -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+                , commandFunc :: CommandFunction a
                 }
 -- ---------------------------------------------------------------------
 
-type CodeActionProvider =  IdeState
+type CommandFunction a = LSP.LspFuncs Config
+                       -> IdeState
+                       -> a
+                       -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
+
+type CodeActionProvider = LSP.LspFuncs Config
+                        -> IdeState
                         -> PluginId
                         -> TextDocumentIdentifier
                         -> Range
@@ -92,7 +99,8 @@ type CodeActionProvider =  IdeState
                         -> IO (Either ResponseError (List CAResult))
 
 
-type CodeLensProvider = IdeState
+type CodeLensProvider = LSP.LspFuncs Config
+                      -> IdeState
                       -> PluginId
                       -> CodeLensParams
                       -> IO (Either ResponseError (List CodeLens))
@@ -124,7 +132,8 @@ data DiagnosticTrigger = DiagnosticOnOpen
 -- type HoverProvider = Uri -> Position -> IO (Either ResponseError [Hover])
 type HoverProvider = IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 
-type SymbolsProvider = IdeState
+type SymbolsProvider = LSP.LspFuncs Config
+                     -> IdeState
                      -> DocumentSymbolParams
                      -> IO (Either ResponseError [DocumentSymbol])
 

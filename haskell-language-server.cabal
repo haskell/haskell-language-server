@@ -27,7 +27,6 @@ source-repository head
 
 library
   exposed-modules:
-      Ide.Compat
       Ide.Cradle
       Ide.Logger
       Ide.Plugin
@@ -63,7 +62,7 @@ library
     , ghcide >= 0.1
     , gitrev
     , hashable
-    , haskell-lsp == 0.20.*
+    , haskell-lsp == 0.21.*
     , hie-bios >= 0.4
     , hslogger
     , lens
@@ -97,8 +96,6 @@ executable haskell-language-server
   other-modules:
       Arguments
       Paths_haskell_language_server
-      Rules
-      RuleTypes
   autogen-modules:
       Paths_haskell_language_server
   ghc-options:
@@ -125,6 +122,7 @@ executable haskell-language-server
     , containers
     , data-default
     , deepseq
+    , directory
     , extra
     , filepath
      --------------------------------------------------------------
@@ -135,6 +133,7 @@ executable haskell-language-server
      -- which works for now.
     , ghc
      --------------------------------------------------------------
+    , ghc-check
     , ghc-paths
     , ghcide
     , gitrev
@@ -146,6 +145,7 @@ executable haskell-language-server
     , optparse-applicative
     , shake >= 0.17.5
     , text
+    , time
     , unordered-containers
   default-language: Haskell2010
 
