@@ -37,7 +37,7 @@ data Arguments = Arguments
     , argsDebugOn       :: Bool
     , argsLogFile       :: Maybe String
     , argsThread        :: Int
-    }
+    } deriving Show
 
 getArguments :: String -> IO Arguments
 getArguments exeName = execParser opts
