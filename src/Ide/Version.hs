@@ -17,8 +17,8 @@ import qualified Paths_haskell_language_server as Meta
 import           System.Directory
 import           System.Info
 
-hieVersion :: String
-hieVersion =
+hlsVersion :: String
+hlsVersion =
   let commitCount = $gitCommitCount
   in concat $ concat
     [ [$(simpleVersion Meta.version)]
@@ -27,13 +27,13 @@ hieVersion =
     , [" (" ++ commitCount ++ " commits)" | commitCount /= ("1"::String) &&
                                             commitCount /= ("UNKNOWN" :: String)]
     , [" ", display buildArch]
-    , [" ", hieGhcDisplayVersion]
+    , [" ", hlsGhcDisplayVersion]
     ]
 
 -- ---------------------------------------------------------------------
 
-hieGhcDisplayVersion :: String
-hieGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
+hlsGhcDisplayVersion :: String
+hlsGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
 
 getProjectGhcVersion :: Bios.Cradle Bios.CabalHelper -> IO String
 getProjectGhcVersion crdl =
@@ -42,8 +42,8 @@ getProjectGhcVersion crdl =
     (execProjectGhc crdl ["--numeric-version"])
 
 
-hieGhcVersion :: String
-hieGhcVersion = VERSION_ghc
+hlsGhcVersion :: String
+hlsGhcVersion = VERSION_ghc
 
 -- ---------------------------------------------------------------------
 

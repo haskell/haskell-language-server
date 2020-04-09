@@ -29,15 +29,15 @@ hlsLogger = L.Logger $ \pri txt ->
 -- ---------------------------------------------------------------------
 
 logm :: MonadIO m => String -> m ()
-logm s = liftIO $ infoM "hie" s
+logm s = liftIO $ infoM "hls" s
 
 debugm :: MonadIO m => String -> m ()
-debugm s = liftIO $ debugM "hie" s
+debugm s = liftIO $ debugM "hls" s
 
 warningm :: MonadIO m => String -> m ()
-warningm s = liftIO $ warningM "hie" s
+warningm s = liftIO $ warningM "hls" s
 
 errorm :: MonadIO m => String -> m ()
-errorm s = liftIO $ errorM "hie" s
+errorm s = liftIO $ errorM "hls" s
 
 -- ---------------------------------------------------------------------
