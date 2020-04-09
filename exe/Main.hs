@@ -48,24 +48,25 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
-import Development.Shake (Action,  action)
-import           DynFlags                       (gopt_set, gopt_unset,
+import Development.Shake                        (Action,  action)
+import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
-import DynFlags (PackageFlag(..), PackageArg(..))
-import GHC hiding (def)
+import DynFlags                                 (PackageFlag(..), PackageArg(..))
+import GHC hiding                               (def)
 import           GHC.Check                      (runTimeVersion, compileTimeVersionFromLibdir)
 -- import GhcMonad
 import           HIE.Bios.Cradle
-import HIE.Bios.Environment (addCmdOpts)
+import HIE.Bios.Environment                     (addCmdOpts)
 import           HIE.Bios.Types
-import HscTypes (HscEnv(..), ic_dflags)
+import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
 import Ide.Logger
 import Ide.Plugin
 import Ide.Plugin.Config
+import Ide.Types                                (IdePlugins, ipMap)
 import Language.Haskell.LSP.Messages
-import Language.Haskell.LSP.Types (LspId(IdInt))
-import Linker (initDynLinker)
+import Language.Haskell.LSP.Types               (LspId(IdInt))
+import Linker                                   (initDynLinker)
 import Module
 import NameCache
 import Packages
@@ -96,15 +97,16 @@ import Ide.Plugin.Pragmas                 as Pragmas
 
 -- ---------------------------------------------------------------------
 
+
+
 -- | The plugins configured for use in this instance of the language
 -- server.
 -- These can be freely added or removed to tailor the available
 -- features of the server.
-idePlugins :: T.Text -> Bool -> (Plugin Config, [T.Text])
-idePlugins pid includeExamples
-    = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
+
+idePlugins :: Bool -> IdePlugins
+idePlugins includeExamples = pluginDescToIdePlugins allPlugins
   where
-    ps = pluginDescToIdePlugins allPlugins
     allPlugins = if includeExamples
                    then basePlugins ++ examplePlugins
                    else basePlugins
@@ -113,7 +115,7 @@ idePlugins pid includeExamples
       --   applyRefactDescriptor "applyrefact"
       -- , brittanyDescriptor    "brittany"
       -- , haddockDescriptor     "haddock"
-      -- -- , hareDescriptor        "hare"
+      -- , hareDescriptor        "hare"
       -- , hsimportDescriptor    "hsimport"
       -- , liquidDescriptor      "liquid"
       -- , packageDescriptor     "package"
@@ -130,6 +132,8 @@ idePlugins pid includeExamples
       -- ,hfaAlignDescriptor "hfaa"
       ]
 
+ghcIdePlugins :: T.Text -> IdePlugins -> (Plugin Config, [T.Text])
+ghcIdePlugins pid ps = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
 
 -- ---------------------------------------------------------------------
 
@@ -141,14 +145,12 @@ main :: IO ()
 main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    Arguments{..} <- getArguments "haskell-language-server"
+    args@Arguments{..} <- getArguments "haskell-language-server"
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
-    -- LSP.setupLogger (optLogFile opts) ["hie", "hie-bios"]
-    --   $ if optDebugOn opts then L.DEBUG else L.INFO
-    LSP.setupLogger argsLogFile ["hie", "hie-bios"]
+    LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 
     -- lock to avoid overlapping output on stdout
@@ -162,8 +164,8 @@ main = do
 
     pid <- getPid
     let
-        (ps, commandIds) = idePlugins pid argsExamplePlugin
-        -- (ps, commandIds) = idePlugins pid True
+        idePlugins' = idePlugins argsExamplePlugin
+        (ps, commandIds) = ghcIdePlugins pid idePlugins'
         plugins = Completions.plugin <> CodeAction.plugin <>
                   Plugin mempty HoverDefinition.setHandlersDefinition <>
                   ps
@@ -174,6 +176,8 @@ main = do
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
+        hPutStrLn stderr $ "  with arguments: " <> show args
+        hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins')
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
         runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
             t <- t
@@ -183,7 +187,7 @@ main = do
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = argsTesting
                     , optInterfaceLoadingDiagnostics = argsTesting
-                    , optThreads = 1
+                    , optThreads = argsThread
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins >> action kick)
