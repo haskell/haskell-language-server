@@ -36,8 +36,8 @@ data Arguments = Arguments
     -- them to just change the name of the exe and still work.
     , argsDebugOn       :: Bool
     , argsLogFile       :: Maybe String
-
-    }
+    , argsThread        :: Int
+    } deriving Show
 
 getArguments :: String -> IO Arguments
 getArguments exeName = execParser opts
@@ -73,6 +73,13 @@ arguments exeName = Arguments
           <> metavar "LOGFILE"
           <> help "File to log to, defaults to stdout"
            ))
+      <*> option auto
+           (short 'j'
+          <> help "Number of threads (0: automatic)"
+          <> metavar "NUM"
+          <> value 1
+          <> showDefault
+           )
 
 -- ---------------------------------------------------------------------
 -- Set the GHC libdir to the nix libdir if it's present.

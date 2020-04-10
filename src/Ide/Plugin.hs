@@ -137,7 +137,7 @@ makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
       case literalSupport of
         Nothing -> do
             let cmdParams = [J.toJSON (FallbackCodeActionParams (action ^. edit) (action ^. command))]
-            cmd <- mkLspCommand "hie" "fallbackCodeAction" (action ^. title) (Just cmdParams)
+            cmd <- mkLspCommand "hls" "fallbackCodeAction" (action ^. title) (Just cmdParams)
             return $ Just (CACommand cmd)
         Just _ -> return $ Just (CACodeAction action)
 
@@ -224,7 +224,7 @@ makeExecuteCommands ecs lf ide = do
 
         case parseCmdId cmdId of
           -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
-          Just ("hie", "fallbackCodeAction") ->
+          Just ("hls", "fallbackCodeAction") ->
             case J.fromJSON cmdParams of
               J.Success (FallbackCodeActionParams mEdit mCmd) -> do
 
@@ -289,7 +289,7 @@ makeExecuteCommands ecs lf ide = do
 
                 case parseCmdId cmdId of
                   -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
-                  Just ("hie", "fallbackCodeAction") -> do
+                  Just ("hls", "fallbackCodeAction") -> do
                     case A.fromJSON cmdParams of
                       A.Success (FallbackCodeActionParams mEdit mCmd) -> do
 

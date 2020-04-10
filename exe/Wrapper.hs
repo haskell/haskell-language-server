@@ -57,7 +57,7 @@ main = do
 
   progName <- getProgName
   logm $  "run entered for haskell-language-server-wrapper(" ++ progName ++ ") "
-            ++ hieVersion
+            ++ hlsVersion
   d <- getCurrentDirectory
   logm $ "Current directory:" ++ d
   logm $ "Operating system:" ++ os
@@ -74,12 +74,12 @@ main = do
   logm $ "Project GHC version:" ++ ghcVersion
 
   let
-    hieBin = "haskell-language-server-" ++ ghcVersion
-    backupHieBin =
+    hlsBin = "haskell-language-server-" ++ ghcVersion
+    backupHlsBin =
       case dropWhileEnd (/='.') ghcVersion of
         [] -> "haskell-language-server"
         xs -> "haskell-language-server-" ++ init xs
-    candidates' = [hieBin, backupHieBin, "haskell-language-server"]
+    candidates' = [hlsBin, backupHlsBin, "haskell-language-server"]
     candidates = map (++ exeExtension) candidates'
 
   logm $ "haskell-language-server exe candidates :" ++ show candidates
