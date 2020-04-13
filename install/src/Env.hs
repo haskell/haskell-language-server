@@ -41,17 +41,17 @@ isWindowsSystem = os `elem` ["mingw32", "win32"]
 
 findInstalledGhcs :: IO [(VersionNumber, GhcPath)]
 findInstalledGhcs = do
-  hieVersions <- getHieVersions :: IO [VersionNumber]
+  hlsVersions <- getHlsVersions :: IO [VersionNumber]
   knownGhcs <- mapMaybeM
     (\version -> getGhcPathOf version >>= \case
         Nothing -> return Nothing
         Just p  -> return $ Just (version, p)
     )
-    (reverse hieVersions)
+    (reverse hlsVersions)
   -- filter out not supported ghc versions
-  availableGhcs <- filter ((`elem` hieVersions) . fst) <$> getGhcPaths
+  availableGhcs <- filter ((`elem` hlsVersions) . fst) <$> getGhcPaths
   return
-    -- sort by version to make it coherent with getHieVersions
+    -- sort by version to make it coherent with getHlsVersions
     $ sortBy (comparing fst)
     -- nub by version. knownGhcs takes precedence.
     $ nubBy ((==) `on` fst)
@@ -103,15 +103,15 @@ ghcVersionNotFoundFailMsg versionNumber =
     <> "Either install a fitting GHC, use the stack targets or modify the PATH variable accordingly."
 
 
--- | Defines all different hie versions that are buildable.
+-- | Defines all different hls versions that are buildable.
 --
 -- The current directory is scanned for `stack-*.yaml` files.
-getHieVersions :: MonadIO m => m [VersionNumber]
-getHieVersions = do
+getHlsVersions :: MonadIO m => m [VersionNumber]
+getHlsVersions = do
   let stackYamlPrefix = T.pack "stack-"
   let stackYamlSuffix = T.pack ".yaml"
   files <- liftIO $ listDirectory "."
-  let hieVersions =
+  let hlsVersions =
         files
           & map T.pack
           & mapMaybe
@@ -120,10 +120,10 @@ getHieVersions = do
         -- the following line excludes `8.6.3`, `8.8.1` and `8.8.2` on windows systems
           & filter (\p -> not (isWindowsSystem && p `elem` ["8.6.3", "8.8.1", "8.8.2"]))
           & sort
-  return hieVersions
+  return hlsVersions
 
 
--- | Most recent version of hie.
+-- | Most recent version of hls.
 -- Shown in the more concise help message.
-mostRecentHieVersion :: MonadIO m => m VersionNumber
-mostRecentHieVersion = last <$> getHieVersions
+mostRecentHlsVersion :: MonadIO m => m VersionNumber
+mostRecentHlsVersion = last <$> getHlsVersions

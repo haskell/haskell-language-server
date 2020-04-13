@@ -1,6 +1,6 @@
-name:                hie-install
+name:                hls-install
 version:             0.8.0.0
-synopsis:            Install the haskell-ide-engine
+synopsis:            Install the haskell-language-engine
 license:             BSD3
 author:              Many, TBD when we release
 maintainer:          samuel.pilz@posteo.net
@@ -10,7 +10,7 @@ cabal-version:       >=2.0
 
 library
   hs-source-dirs:      src
-  exposed-modules:     HieInstall
+  exposed-modules:     HlsInstall
   other-modules:       BuildSystem
                      , Stack
                      , Version
