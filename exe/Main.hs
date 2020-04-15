@@ -53,11 +53,11 @@ import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
 import DynFlags                                 (PackageFlag(..), PackageArg(..))
 import GHC hiding                               (def)
-import           GHC.Check                      (runTimeVersion, compileTimeVersionFromLibdir)
+import GHC.Check                                (runTimeVersion, compileTimeVersionFromLibdir)
 -- import GhcMonad
-import           HIE.Bios.Cradle
+import HIE.Bios.Cradle
 import HIE.Bios.Environment                     (addCmdOpts)
-import           HIE.Bios.Types
+import HIE.Bios.Types
 import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
 import Ide.Logger
@@ -497,9 +497,9 @@ memoIO op = do
             Just res -> return (mp, res)
 
 setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target])
-setOptions (ComponentOptions theOpts _) dflags = do
+setOptions (ComponentOptions theOpts compRoot _) dflags = do
     cacheDir <- liftIO $ getCacheDir theOpts
-    (dflags', targets) <- addCmdOpts theOpts dflags
+    (dflags', targets) <- addCmdOpts compRoot theOpts dflags
     let dflags'' =
           -- disabled, generated directly by ghcide instead
           flip gopt_unset Opt_WriteInterface $

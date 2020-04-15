@@ -7,6 +7,12 @@ source-repository-package
     location: https://github.com/DanielG/cabal-helper.git
     tag: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
 
+source-repository-package
+    type: git
+    location: https://github.com/fendor/hie-bios.git
+    tag: d5b7fc9bb3025b1d4d2ac9c48b588faf18dfce99
+
+
 tests: true
 documentation: false
 -- documentation: true
