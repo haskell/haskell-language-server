@@ -9,14 +9,14 @@ import           System.Directory                         ( copyFile )
 import           Version
 import           Print
 
-stackInstallHieWithErrMsg :: Maybe VersionNumber -> [String] -> Action ()
-stackInstallHieWithErrMsg mbVersionNumber args =
-  stackInstallHie mbVersionNumber args
+stackInstallHlsWithErrMsg :: Maybe VersionNumber -> [String] -> Action ()
+stackInstallHlsWithErrMsg mbVersionNumber args =
+  stackInstallHls mbVersionNumber args
     `actionOnException` liftIO (putStrLn stackBuildFailMsg)
 
 -- | copy the built binaries into the localBinDir
-stackInstallHie :: Maybe VersionNumber -> [String] -> Action ()
-stackInstallHie mbVersionNumber args = do
+stackInstallHls :: Maybe VersionNumber -> [String] -> Action ()
+stackInstallHls mbVersionNumber args = do
   versionNumber <-
     case mbVersionNumber of
       Nothing -> do
@@ -30,11 +30,11 @@ stackInstallHie mbVersionNumber args = do
         return vn
 
   localBinDir <- getLocalBin args
-  let hie = "haskell-language-server" <.> exe
+  let hls = "haskell-language-server" <.> exe
   liftIO $ do
-    copyFile (localBinDir </> hie)
+    copyFile (localBinDir </> hls)
              (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
-    copyFile (localBinDir </> hie)
+    copyFile (localBinDir </> hls)
              (localBinDir </> "haskell-language-server-" ++ dropExtension versionNumber <.> exe)
 
 getGhcVersionOfCfgFile :: String -> [String] -> Action VersionNumber

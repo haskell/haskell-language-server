@@ -30,20 +30,20 @@ printUsage = do
 -- | short help message is printed by default
 shortHelpMessage :: Action ()
 shortHelpMessage = do
-  hieVersions <- getHieVersions
+  hlsVersions <- getHlsVersions
   printUsage
   printLine ""
   printLine "Targets:"
-  mapM_ (printLineIndented . showHelpItem (spaces hieVersions)) (targets hieVersions)
+  mapM_ (printLineIndented . showHelpItem (spaces hlsVersions)) (targets hlsVersions)
   printLine ""
  where
-  spaces hieVersions = space (targets hieVersions)
-  targets hieVersions =
+  spaces hlsVersions = space (targets hlsVersions)
+  targets hlsVersions =
     [ ("help", "Show help message including all targets")
     , emptyTarget
     , buildTarget
     , buildLatestTarget
-    , hieTarget $ last hieVersions
+    , hlsTarget $ last hlsVersions
     , buildDataTarget
     , cabalGhcsTarget
     ]
@@ -90,7 +90,7 @@ helpMessage versions@BuildableVersions {..} = do
   generalTargets = [helpTarget]
 
   defaultTargets = [buildTarget, buildLatestTarget, buildDataTarget]
-    ++ map hieTarget (getDefaultBuildSystemVersions versions)
+    ++ map hlsTarget (getDefaultBuildSystemVersions versions)
 
 -- | Empty target. Purpose is to introduce a newline between the targets
 emptyTarget :: (String, String)
@@ -99,8 +99,8 @@ emptyTarget = ("", "")
 templateTarget :: (String, String)
 templateTarget = ("<target>", "")
 
-hieTarget :: String -> TargetDescription
-hieTarget version =
+hlsTarget :: String -> TargetDescription
+hlsTarget version =
   ("hls-" ++ version, "Install haskell-language-server for GHC version " ++ version)
 
 buildTarget :: TargetDescription

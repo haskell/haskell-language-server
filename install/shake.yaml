@@ -7,5 +7,5 @@ nix:
   packages: [ zlib ]
 
 flags:
-  hie-install:
+  hls-install:
     run-from-stack: true

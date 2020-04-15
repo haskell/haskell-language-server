@@ -1,4 +1,4 @@
-module HieInstall where
+module HlsInstall where
 
 import           Development.Shake
 import           Control.Monad
@@ -21,7 +21,7 @@ defaultMain = do
   let cabalVersions = map fst ghcPaths
 
   -- used for stack-based targets
-  stackVersions <- getHieVersions
+  stackVersions <- getHlsVersions
 
   let versions = if isRunFromStack then stackVersions else cabalVersions
 
@@ -62,9 +62,9 @@ defaultMain = do
         need ["submodules"]
         need ["check"]
         if isRunFromStack then
-          stackInstallHieWithErrMsg (Just version) args
+          stackInstallHlsWithErrMsg (Just version) args
         else
-          cabalInstallHie version args
+          cabalInstallHls version args
       )
 
     unless (null versions) $ do
@@ -72,12 +72,12 @@ defaultMain = do
       phony "hls"  (need ["data", "latest"])
 
     -- stack specific targets
-    -- Default `stack.yaml` uses ghc-8.8.2 and we can't build hie in windows
+    -- Default `stack.yaml` uses ghc-8.8.2 and we can't build hls in windows
     -- TODO: Enable for windows when it uses ghc-8.8.3
     when (isRunFromStack && not isWindowsSystem) $
       phony "dev" $ do
         need ["show-options"]
-        stackInstallHieWithErrMsg Nothing args
+        stackInstallHlsWithErrMsg Nothing args
 
     -- cabal specific targets
     when isRunFromCabal $ do
