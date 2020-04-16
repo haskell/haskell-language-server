@@ -18,10 +18,12 @@ library
                      , Print
                      , Env
                      , Help
+                     , Utils
   build-depends:       base >= 4.9 && < 5
-                     , shake >= 0.16.4 && < 0.19
                      , directory
+                     , process
                      , filepath
+                     , optparse-applicative
                      , extra
                      , text
   default-extensions: LambdaCase

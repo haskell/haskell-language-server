@@ -1,21 +1,22 @@
 {-# LANGUAGE CPP #-}
 module Stack where
 
-import           Development.Shake
-import           Development.Shake.FilePath
 import           Control.Monad
+import           Control.Exception
+import           System.FilePath
 import           System.Directory                         ( copyFile )
--- import           System.FilePath                          ( (</>) )
+import           System.Process
 import           Version
 import           Print
+import           Utils
 
-stackInstallHlsWithErrMsg :: Maybe VersionNumber -> [String] -> Action ()
+stackInstallHlsWithErrMsg :: Maybe VersionNumber -> [String] -> IO ()
 stackInstallHlsWithErrMsg mbVersionNumber args =
   stackInstallHls mbVersionNumber args
-    `actionOnException` liftIO (putStrLn stackBuildFailMsg)
+    `onException` (putStrLn stackBuildFailMsg)
 
 -- | copy the built binaries into the localBinDir
-stackInstallHls :: Maybe VersionNumber -> [String] -> Action ()
+stackInstallHls :: Maybe VersionNumber -> [String] -> IO ()
 stackInstallHls mbVersionNumber args = do
   versionNumber <-
     case mbVersionNumber of
@@ -31,20 +32,20 @@ stackInstallHls mbVersionNumber args = do
 
   localBinDir <- getLocalBin args
   let hls = "haskell-language-server" <.> exe
-  liftIO $ do
-    copyFile (localBinDir </> hls)
-             (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
-    copyFile (localBinDir </> hls)
-             (localBinDir </> "haskell-language-server-" ++ dropExtension versionNumber <.> exe)
+  
+  copyFile (localBinDir </> hls)
+            (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
+  copyFile (localBinDir </> hls)
+            (localBinDir </> "haskell-language-server-" ++ dropExtension versionNumber <.> exe)
 
-getGhcVersionOfCfgFile :: String -> [String] -> Action VersionNumber
+getGhcVersionOfCfgFile :: String -> [String] -> IO VersionNumber
 getGhcVersionOfCfgFile stackFile args = do
-  Stdout ghcVersion <-
+  ghcVersion <-
     execStackWithCfgFile stackFile $ ["exec", "ghc"] ++ args ++ ["--", "--numeric-version"]
   return $ trim ghcVersion
 
 -- | check `stack` has the required version
-checkStack :: [String] -> Action ()
+checkStack :: [String] -> IO ()
 checkStack args = do
   stackVersion <- trimmedStdout <$> (execStackShake $ ["--numeric-version"] ++ args)
   unless (checkVersion requiredStackVersion stackVersion) $ do
@@ -53,42 +54,43 @@ checkStack args = do
 
 -- | Get the local binary path of stack.
 -- Equal to the command `stack path --local-bin`
-getLocalBin :: [String] -> Action FilePath
+getLocalBin :: [String] -> IO FilePath
 getLocalBin args = do
-  Stdout stackLocalDir' <- execStackShake $ ["path", "--local-bin"] ++ args
+  stackLocalDir' <- execStackShake $ ["path", "--local-bin"] ++ args
   return $ trim stackLocalDir'
 
-stackBuildData :: [String] -> Action ()
+stackBuildData :: [String] -> IO ()
 stackBuildData args = do
   execStackShake_ $ ["build", "hoogle"] ++ args
   execStackShake_ $ ["exec", "hoogle", "generate"] ++ args
 
 -- | Execute a stack command for a specified ghc, discarding the output
-execStackWithGhc_ :: VersionNumber -> [String] -> Action ()
-execStackWithGhc_ = execStackWithGhc
+execStackWithGhc_ :: VersionNumber -> [String] -> IO ()
+execStackWithGhc_ =  fmap void . execStackWithGhc
 
 -- | Execute a stack command for a specified ghc
-execStackWithGhc :: CmdResult r => VersionNumber -> [String] -> Action r
+execStackWithGhc :: VersionNumber -> [String] -> IO String
 execStackWithGhc versionNumber args = do
   let stackFile = "stack-" ++ versionNumber ++ ".yaml"
   execStackWithCfgFile stackFile args
 
 -- | Execute a stack command for a specified stack.yaml file, discarding the output
-execStackWithCfgFile_ :: String -> [String] -> Action ()
-execStackWithCfgFile_ = execStackWithCfgFile
+execStackWithCfgFile_ :: String -> [String] -> IO ()
+execStackWithCfgFile_ = fmap void . execStackWithCfgFile
 
 -- | Execute a stack command for a specified stack.yaml file
-execStackWithCfgFile :: CmdResult r => String -> [String] -> Action r
+execStackWithCfgFile :: String -> [String] -> IO String
 execStackWithCfgFile stackFile args =
-  command [] "stack" (("--stack-yaml=" ++ stackFile) : args)
+  readProcess "stack" (("--stack-yaml=" ++ stackFile) : args) ""
 
 -- | Execute a stack command with the same resolver as the build script
-execStackShake :: CmdResult r => [String] -> Action r
-execStackShake args = command [] "stack" ("--stack-yaml=install/shake.yaml" : args)
+execStackShake :: [String] -> IO String
+execStackShake args = 
+  readProcess "stack" ("--stack-yaml=install/shake.yaml" : args) ""
 
 -- | Execute a stack command with the same resolver as the build script, discarding the output
-execStackShake_ :: [String] -> Action ()
-execStackShake_ = execStackShake
+execStackShake_ :: [String] -> IO ()
+execStackShake_ = fmap void execStackShake
 
 
 -- | Error message when the `stack` binary is an older version
@@ -114,21 +116,3 @@ stackBuildFailMsg =
     ++ "Try running `stack clean` and restart the build\n"
     ++ "If this does not work, open an issue at \n"
     ++ "\thttps://github.com/haskell/haskell-language-engine"
-
-getVerbosityArg :: Verbosity -> String
-getVerbosityArg v = "--verbosity=" ++ stackVerbosity
-  where stackVerbosity = case v of
-          Silent ->     "silent"
-#if MIN_VERSION_shake(0,18,4)
-          Error ->      "error"
-          Warn ->       "warn"
-          Info ->       "info"
-          Verbose ->    "info"
-#else
-          Quiet ->      "error"
-          Normal ->     "warn"
-          Loud ->       "info"
-          Chatty ->     "info"
-#endif
-
-          Diagnostic -> "debug"

@@ -1,2 +1,2 @@
 #!/bin/sh
-cabal v2-run ./install.hs --project-file install/shake.project $@
+cabal v2-run ./install.hs --project-file install/shake.project -- $@

@@ -1,14 +1,15 @@
 {-# LANGUAGE CPP #-}
 module Cabal where
 
-import           Development.Shake
-import           Development.Shake.FilePath
 import           Control.Monad
-import           System.Directory                         ( copyFile )
+import           System.Directory                         ( copyFile, doesFileExist )
+import           System.FilePath
+import           System.Process
 
 import           Version
 import           Print
 import           Env
+import           Utils
 #if RUN_FROM_STACK
 import           Control.Exception                        ( throwIO )
 #else
@@ -24,18 +25,20 @@ getInstallDir = throwIO $ userError "Stack and cabal should never be mixed"
 getInstallDir = runIdentity . cfgInstallDir <$> readConfig
 #endif
 
-execCabal :: CmdResult r => [String] -> Action r
-execCabal = command [] "cabal"
+execCabal :: [String] -> IO String
+execCabal args = readProcess "cabal" args ""
 
-execCabal_ :: [String] -> Action ()
-execCabal_ = execCabal
+execCabal_ :: [String] -> IO ()
+execCabal_ args = do 
+  _ <- execCabal args 
+  return ()
 
-cabalBuildData :: [String] -> Action ()
+cabalBuildData :: [String] -> IO ()
 cabalBuildData args = do
   execCabal_ $ ["v2-build", "hoogle"] ++ args
   execCabal_ $ ["v2-exec", "hoogle", "generate"] ++ args
 
-getGhcPathOfOrThrowError :: VersionNumber -> Action GhcPath
+getGhcPathOfOrThrowError :: VersionNumber -> IO GhcPath
 getGhcPathOfOrThrowError versionNumber =
   getGhcPathOf versionNumber >>= \case
     Nothing -> do
@@ -43,9 +46,9 @@ getGhcPathOfOrThrowError versionNumber =
       error (ghcVersionNotFoundFailMsg versionNumber)
     Just p -> return p
 
-cabalInstallHls :: VersionNumber -> [String] -> Action ()
+cabalInstallHls :: VersionNumber -> [String] -> IO ()
 cabalInstallHls versionNumber args = do
-  localBin <- liftIO $ getInstallDir
+  localBin <- getInstallDir
   cabalVersion <- getCabalVersion args
   ghcPath <- getGhcPathOfOrThrowError versionNumber
 
@@ -74,29 +77,29 @@ cabalInstallHls versionNumber args = do
   let minorVerExe = "haskell-language-server-" ++ versionNumber <.> exe
       majorVerExe = "haskell-language-server-" ++ dropExtension versionNumber <.> exe
 
-  liftIO $ do
-    copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> minorVerExe)
-    copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> majorVerExe)
+  
+  copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> minorVerExe)
+  copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> majorVerExe)
 
-  printLine $   "Copied executables "
+  putStrLn $ "Copied executables "
              ++ ("haskell-language-server-wrapper" <.> exe) ++ ", "
              ++ ("haskell-language-server" <.> exe) ++ ", "
              ++ majorVerExe ++ " and "
              ++ minorVerExe
              ++ " to " ++ localBin
 
-getProjectFile :: VersionNumber -> Action FilePath
+getProjectFile :: VersionNumber -> IO FilePath
 getProjectFile ver = do
   existFile <- doesFileExist $ "cabal.project-" ++ ver
   return $ if existFile
             then "cabal.project-" ++ ver
             else "cabal.project"
 
-checkCabal_ :: [String] -> Action ()
+checkCabal_ :: [String] -> IO ()
 checkCabal_ args = checkCabal args >> return ()
 
 -- | check `cabal` has the required version
-checkCabal :: [String] -> Action String
+checkCabal :: [String] -> IO String
 checkCabal args = do
   cabalVersion <- getCabalVersion args
   unless (checkVersion requiredCabalVersion cabalVersion) $ do
@@ -104,7 +107,7 @@ checkCabal args = do
     error $ cabalInstallIsOldFailMsg cabalVersion
   return cabalVersion
 
-getCabalVersion :: [String] -> Action String
+getCabalVersion :: [String] -> IO String
 getCabalVersion args = trimmedStdout <$> (execCabal $ ["--numeric-version"] ++ args)
 
 -- | Error message when the `cabal` binary is an older version
@@ -124,21 +127,3 @@ requiredCabalVersion | isWindowsSystem = requiredCabalVersionForWindows
 
 requiredCabalVersionForWindows :: RequiredVersion
 requiredCabalVersionForWindows = [3, 0, 0, 0]
-
-getVerbosityArg :: Verbosity -> String
-getVerbosityArg v = "-v" ++ cabalVerbosity
-  where cabalVerbosity = case v of
-          Silent ->     "0"
-#if MIN_VERSION_shake(0,18,4)
-          Error ->      "0"
-          Warn ->       "1"
-          Info ->       "1"
-          Verbose ->    "2"
-#else
-          Quiet ->      "0"
-          Normal ->     "1"
-          Loud ->       "2"
-          Chatty ->     "2"
-#endif
-          Diagnostic -> "3"
-

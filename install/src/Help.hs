@@ -1,7 +1,6 @@
 -- |Module for Help messages and traget descriptions
 module Help where
 
-import           Development.Shake
 import           Data.List                                ( intercalate )
 
 import           Env
@@ -19,23 +18,23 @@ buildCommand :: TargetDescription -> String
 buildCommand | isRunFromCabal = cabalCommand
              | otherwise = stackCommand
 
-printUsage :: Action ()
+printUsage :: IO ()
 printUsage = do
-  printLine ""
-  printLine "Usage:"
-  printLineIndented (stackCommand templateTarget)
-  printLineIndented "or"
-  printLineIndented (cabalCommand templateTarget)
+  putStrLn ""
+  putStrLn "Usage:"
+  putStrLnIndented (stackCommand templateTarget)
+  putStrLnIndented "or"
+  putStrLnIndented (cabalCommand templateTarget)
 
 -- | short help message is printed by default
-shortHelpMessage :: Action ()
+shortHelpMessage :: IO ()
 shortHelpMessage = do
   hlsVersions <- getHlsVersions
   printUsage
-  printLine ""
-  printLine "Targets:"
-  mapM_ (printLineIndented . showHelpItem (spaces hlsVersions)) (targets hlsVersions)
-  printLine ""
+  putStrLn ""
+  putStrLn "Targets:"
+  mapM_ (putStrLnIndented . showHelpItem (spaces hlsVersions)) (targets hlsVersions)
+  putStrLn ""
  where
   spaces hlsVersions = space (targets hlsVersions)
   targets hlsVersions =
@@ -60,16 +59,16 @@ getDefaultBuildSystemVersions BuildableVersions {..}
   | isRunFromCabal = cabalVersions
   | otherwise      = error $ "unknown build system: " ++ buildSystem
 
-helpMessage :: BuildableVersions -> Action ()
+helpMessage :: BuildableVersions -> IO ()
 helpMessage versions@BuildableVersions {..} = do
   printUsage
-  printLine ""
-  printLine "Targets:"
-  mapM_ (printLineIndented . showHelpItem spaces) targets
-  printLine ""
-  printLine "Options:"
-  mapM_ (printLineIndented . showHelpItem spaces) options
-  printLine ""
+  putStrLn ""
+  putStrLn "Targets:"
+  mapM_ (putStrLnIndented . showHelpItem spaces) targets
+  putStrLn ""
+  putStrLn "Options:"
+  mapM_ (putStrLnIndented . showHelpItem spaces) options
+  putStrLn ""
  where
   spaces = space targets
   -- All targets the shake file supports

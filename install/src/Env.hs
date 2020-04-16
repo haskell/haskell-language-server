@@ -1,10 +1,10 @@
 module Env where
 
-import           Development.Shake
 import           Control.Monad.IO.Class
 import           Control.Monad
-import           Development.Shake.FilePath
+import           System.FilePath
 import           System.Info                              ( os )
+import           System.Process
 import           Data.Maybe                               ( isJust
                                                           , mapMaybe
                                                           )
@@ -27,12 +27,13 @@ import qualified Data.Text                     as T
 
 import           Version
 import           Print
+import           Utils
 
 
 type GhcPath = String
 
-existsExecutable :: MonadIO m => String -> m Bool
-existsExecutable executable = liftIO $ isJust <$> findExecutable executable
+existsExecutable :: String -> IO Bool
+existsExecutable executable = isJust <$> findExecutable executable
 
 
 -- | Check if the current system is windows
@@ -41,7 +42,7 @@ isWindowsSystem = os `elem` ["mingw32", "win32"]
 
 findInstalledGhcs :: IO [(VersionNumber, GhcPath)]
 findInstalledGhcs = do
-  hlsVersions <- getHlsVersions :: IO [VersionNumber]
+  hlsVersions <- getHlsVersions
   knownGhcs <- mapMaybeM
     (\version -> getGhcPathOf version >>= \case
         Nothing -> return Nothing
@@ -58,7 +59,7 @@ findInstalledGhcs = do
     -- filter out stack provided GHCs (assuming that stack programs path is the default one in linux)
     $ filter (not . isInfixOf ".stack" . snd) (knownGhcs ++ availableGhcs)
 
-showInstalledGhcs :: MonadIO m => [(VersionNumber, GhcPath)] -> m ()
+showInstalledGhcs :: [(VersionNumber, GhcPath)] -> IO ()
 showInstalledGhcs ghcPaths = do
   let msg = "Found the following GHC paths: \n"
               ++ unlines
@@ -67,7 +68,7 @@ showInstalledGhcs ghcPaths = do
                   )
   printInStars msg
 
-checkInstalledGhcs :: MonadIO m => [(VersionNumber, GhcPath)] -> m ()
+checkInstalledGhcs :: [(VersionNumber, GhcPath)] -> IO ()
 checkInstalledGhcs ghcPaths = when (null ghcPaths) $ do
   let msg = "No ghc installations found in $PATH. \n"
              ++ "The script requires at least one ghc in $PATH \n"
@@ -80,18 +81,18 @@ checkInstalledGhcs ghcPaths = when (null ghcPaths) $ do
 -- First, it is checked whether there is a GHC with the name `ghc-$VersionNumber`.
 -- If this yields no result, it is checked, whether the numeric-version of the `ghc`
 -- command fits to the desired version.
-getGhcPathOf :: MonadIO m => VersionNumber -> m (Maybe GhcPath)
+getGhcPathOf :: VersionNumber -> IO (Maybe GhcPath)
 getGhcPathOf ghcVersion =
   liftIO $ findExecutable ("ghc-" ++ ghcVersion <.> exe) >>= \case
     Nothing -> lookup ghcVersion <$> getGhcPaths
     path -> return path
 
 -- | Get a list of GHCs that are available in $PATH
-getGhcPaths :: MonadIO m => m [(VersionNumber, GhcPath)]
-getGhcPaths = liftIO $ do
+getGhcPaths :: IO [(VersionNumber, GhcPath)]
+getGhcPaths = do
   paths <- findExecutables "ghc"
   forM paths $ \path -> do
-    Stdout version <- cmd path ["--numeric-version"]
+    version <- readProcess path ["--numeric-version"] ""
     return (trim version, path)
 
 -- | No suitable ghc version has been found. Show a message.
@@ -106,11 +107,11 @@ ghcVersionNotFoundFailMsg versionNumber =
 -- | Defines all different hls versions that are buildable.
 --
 -- The current directory is scanned for `stack-*.yaml` files.
-getHlsVersions :: MonadIO m => m [VersionNumber]
+getHlsVersions ::IO [VersionNumber]
 getHlsVersions = do
   let stackYamlPrefix = T.pack "stack-"
   let stackYamlSuffix = T.pack ".yaml"
-  files <- liftIO $ listDirectory "."
+  files <- listDirectory "."
   let hlsVersions =
         files
           & map T.pack
@@ -125,5 +126,5 @@ getHlsVersions = do
 
 -- | Most recent version of hls.
 -- Shown in the more concise help message.
-mostRecentHlsVersion :: MonadIO m => m VersionNumber
+mostRecentHlsVersion :: IO VersionNumber
 mostRecentHlsVersion = last <$> getHlsVersions
