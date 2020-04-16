@@ -24,7 +24,6 @@ library
                      , process
                      , filepath
                      , optparse-applicative
-                     , extra
                      , text
   default-extensions: LambdaCase
                     , TupleSections

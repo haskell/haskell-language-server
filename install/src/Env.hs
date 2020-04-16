@@ -21,7 +21,6 @@ import           Data.List                                ( sort
                                                           , nubBy
                                                           )
 import           Data.Ord                                 ( comparing )
-import           Control.Monad.Extra                      ( mapMaybeM )
 
 import qualified Data.Text                     as T
 
