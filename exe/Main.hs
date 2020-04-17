@@ -92,6 +92,7 @@ import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
+import Ide.Plugin.Brittany                as Brittany
 import Ide.Plugin.Pragmas                 as Pragmas
 
 
@@ -113,13 +114,13 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
     basePlugins =
       [
       --   applyRefactDescriptor "applyrefact"
-      -- , brittanyDescriptor    "brittany"
+        Brittany.descriptor    "brittany"
       -- , haddockDescriptor     "haddock"
       -- , hareDescriptor        "hare"
       -- , hsimportDescriptor    "hsimport"
       -- , liquidDescriptor      "liquid"
       -- , packageDescriptor     "package"
-        GhcIde.descriptor  "ghcide"
+      , GhcIde.descriptor  "ghcide"
       , Pragmas.descriptor  "pragmas"
       , Floskell.descriptor "floskell"
       -- , genericDescriptor     "generic"

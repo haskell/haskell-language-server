@@ -30,6 +30,7 @@ library
       Ide.Cradle
       Ide.Logger
       Ide.Plugin
+      Ide.Plugin.Brittany
       Ide.Plugin.Config
       Ide.Plugin.Example
       Ide.Plugin.Example2
@@ -48,6 +49,7 @@ library
       base >=4.7 && <5
     , aeson
     , binary
+    , brittany
     , bytestring
     , Cabal
     , cabal-helper >= 1.0
