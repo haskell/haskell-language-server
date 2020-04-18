@@ -467,6 +467,7 @@ cabalHelperCradle file = do
                                       $ CradleSuccess
                                         ComponentOptions
                                           { componentOptions = [file, fixImportDirs cwd "-i."]
+                                          , componentRoot = cwd
                                           , componentDependencies = []
                                           }
                                 }
@@ -551,8 +552,9 @@ cabalHelperAction proj env package root fp = do
         return
           $ CradleSuccess
             ComponentOptions { componentOptions = ghcOptions
-                              , componentDependencies = []
-                              }
+                             , componentRoot = root
+                             , componentDependencies = []
+                             }
       Left err   -> return
         $ CradleFail
         $ CradleError
