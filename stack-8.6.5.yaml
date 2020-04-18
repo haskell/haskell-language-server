@@ -20,7 +20,9 @@ extra-deps:
 - haddock-library-1.8.0
 - haskell-lsp-0.21.0.0
 - haskell-lsp-types-0.21.0.0
-- hie-bios-0.4.0
+# - hie-bios-0.4.0
+- github: fendor/hie-bios
+  commit: d5b7fc9bb3025b1d4d2ac9c48b588faf18dfce99
 - indexed-profunctors-0.1
 - lsp-test-0.10.2.0
 - monad-dijkstra-0.1.1.2
