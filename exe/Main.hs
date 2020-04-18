@@ -92,7 +92,9 @@ import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
+#if AGPL
 import Ide.Plugin.Brittany                as Brittany
+#endif
 import Ide.Plugin.Pragmas                 as Pragmas
 
 
@@ -114,18 +116,20 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
     basePlugins =
       [
       --   applyRefactDescriptor "applyrefact"
-        Brittany.descriptor    "brittany"
       -- , haddockDescriptor     "haddock"
       -- , hareDescriptor        "hare"
       -- , hsimportDescriptor    "hsimport"
       -- , liquidDescriptor      "liquid"
       -- , packageDescriptor     "package"
-      , GhcIde.descriptor  "ghcide"
+      GhcIde.descriptor  "ghcide"
       , Pragmas.descriptor  "pragmas"
       , Floskell.descriptor "floskell"
       -- , genericDescriptor     "generic"
       -- , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
+#if AGPL
+      , Brittany.descriptor    "brittany"
+#endif
       ]
     examplePlugins =
       [Example.descriptor  "eg"
@@ -173,7 +177,6 @@ main = do
         options = def { LSP.executeCommandCommands = Just commandIds
                       , LSP.completionTriggerCharacters = Just "."
                       }
-
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
