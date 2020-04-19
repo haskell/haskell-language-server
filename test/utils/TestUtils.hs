@@ -24,12 +24,9 @@ where
 
 -- import           Control.Concurrent.STM
 import           Control.Monad
-import           Data.Aeson.Types (typeMismatch)
 import           Data.Default
 import           Data.List (intercalate)
-import           Data.Text (pack)
 -- import           Data.Typeable
-import           Data.Yaml
 -- import qualified Data.Map as Map
 import           Data.Maybe
 import           Language.Haskell.LSP.Core
