@@ -1,4 +1,4 @@
-cabal-version: 1.12
+cabal-version:  2.2
 category:       Development
 name:           haskell-language-server
 version:        0.1.0.0
@@ -16,6 +16,11 @@ extra-source-files:
     README.md
     ChangeLog.md
 
+flag agpl
+  Description: Enable AGPL dependencies
+  Default:     True
+  Manual:      False
+
 flag pedantic
   Description: Enable -Werror
   Default:     False
@@ -25,7 +30,13 @@ source-repository head
   type: git
   location: https://github.com/haskell/haskell-language-server
 
+common agpl
+  if flag(agpl)
+    cpp-options:
+      -DAGPL
+
 library
+  import: agpl
   exposed-modules:
       Ide.Cradle
       Ide.Logger
@@ -77,6 +88,12 @@ library
     build-depends:     Win32
   else
     build-depends:     unix
+  if flag(agpl)
+    build-depends:
+      brittany
+    exposed-modules:
+      Ide.Plugin.Brittany
+
   if impl(ghc >= 8.6)
      build-depends: ormolu >= 0.0.3.1
 
@@ -90,6 +107,7 @@ library
   default-language: Haskell2010
 
 executable haskell-language-server
+  import: agpl
   main-is: Main.hs
   hs-source-dirs:
       exe
@@ -150,6 +168,7 @@ executable haskell-language-server
   default-language: Haskell2010
 
 executable haskell-language-server-wrapper
+  import: agpl
   main-is: Wrapper.hs
   hs-source-dirs:
       exe
@@ -187,6 +206,7 @@ executable haskell-language-server-wrapper
 
 
 test-suite func-test
+  import: agpl
   type: exitcode-stdio-1.0
   default-language: Haskell2010
   build-tool-depends:  hspec-discover:hspec-discover
@@ -244,6 +264,7 @@ test-suite func-test
   --       Development.IDE.Test.Runfiles
 
 library hls-test-utils
+  import: agpl
   hs-source-dirs:      test/utils
   exposed-modules:     TestUtils
   build-depends:       base
