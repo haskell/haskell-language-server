@@ -8,7 +8,7 @@
 [badge-circleci]: https://img.shields.io/circleci/project/github/haskell/haskell-language-server/master.svg
 [circleci]: https://circleci.com/gh/haskell/haskell-language-server/
 
-Integration point for ghcide and haskell-ide-engine. One IDE to rule
+Integration point for [ghcide](https://github.com/digital-asset/ghcide) and [haskell-ide-engine](https://github.com/haskell/haskell-ide-engine). One IDE to rule
 them all. Read the [project's
 background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html).
 
