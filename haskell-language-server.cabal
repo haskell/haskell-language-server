@@ -133,6 +133,7 @@ executable haskell-language-server
   build-depends:
       base >=4.7 && <5
     , aeson
+    , async
     , base16-bytestring
     , binary
     , bytestring

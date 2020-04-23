@@ -36,7 +36,7 @@ data Arguments = Arguments
     -- them to just change the name of the exe and still work.
     , argsDebugOn       :: Bool
     , argsLogFile       :: Maybe String
-    , argsThread        :: Int
+    , argsThreads       :: Int
     } deriving Show
 
 getArguments :: String -> IO Arguments
