@@ -56,7 +56,7 @@ import GHC hiding                               (def)
 import GHC.Check                                (runTimeVersion, compileTimeVersionFromLibdir)
 -- import GhcMonad
 import HIE.Bios.Cradle
-import HIE.Bios.Environment                     (addCmdOpts)
+import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute)
 import HIE.Bios.Types
 import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
@@ -503,7 +503,8 @@ memoIO op = do
 setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target])
 setOptions (ComponentOptions theOpts compRoot _) dflags = do
     cacheDir <- liftIO $ getCacheDir theOpts
-    (dflags', targets) <- addCmdOpts compRoot theOpts dflags
+    (dflags_, targets) <- addCmdOpts theOpts dflags
+    let dflags' = makeDynFlagsAbsolute compRoot dflags_
     let dflags'' =
           -- disabled, generated directly by ghcide instead
           flip gopt_unset Opt_WriteInterface $
