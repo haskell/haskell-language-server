@@ -36,7 +36,7 @@ descriptor plId = PluginDescriptor
 -- If the provider fails an error is returned that can be displayed to the user.
 provider
   :: FormattingProvider IO
-provider _ideState typ contents fp opts = do
+provider _lf _ideState typ contents fp opts = do
 -- text uri formatType opts = pluginGetFile "brittanyCmd: " uri $ \fp -> do
   confFile <- liftIO $ getConfFile fp
   let (range, selectedContents) = case typ of
