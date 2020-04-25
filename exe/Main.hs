@@ -523,7 +523,7 @@ memoIO op = do
             Just res -> return (mp, res)
 
 setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target])
-setOptions (ComponentOptions theOpts _compRoot _) dflags = do
+setOptions (ComponentOptions theOpts compRoot _) dflags = do
     cacheDir <- liftIO $ getCacheDir theOpts
     (dflags_, targets) <- addCmdOpts theOpts dflags
     let dflags' = makeDynFlagsAbsolute compRoot dflags_

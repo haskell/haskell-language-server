@@ -59,7 +59,7 @@ provider _lf ideState typ contents fp _ = do
       in
         return $ map DynOption $ pp <> pm <> ex
 
-  m_parsed <- runAction (fromNormalizedFilePath fp) ideState $ getParsedModule fp
+  m_parsed <- runAction "Ormolu" ideState $ getParsedModule fp
   fileOpts <- case m_parsed of
           Nothing -> return []
           Just pm -> fromDyn pm
