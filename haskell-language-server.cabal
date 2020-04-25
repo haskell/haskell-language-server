@@ -49,6 +49,7 @@ library
       Ide.Plugin.Pragmas
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
+      Ide.PluginUtils
       Ide.Types
       Ide.Version
   other-modules:
@@ -65,6 +66,7 @@ library
     , containers
     , data-default
     , deepseq
+    , Diff 
     , directory
     , extra
     , filepath
@@ -95,7 +97,7 @@ library
       Ide.Plugin.Brittany
 
   if impl(ghc >= 8.6)
-     build-depends: ormolu >= 0.0.3.1
+     build-depends: ormolu ^>= 0.0.5
 
   ghc-options:
          -Wall
@@ -151,7 +153,7 @@ executable haskell-language-server
      -- which works for now.
     , ghc
      --------------------------------------------------------------
-    , ghc-check
+    , ghc-check ^>= 0.1
     , ghc-paths
     , ghcide
     , gitrev

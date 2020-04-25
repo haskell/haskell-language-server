@@ -1,5 +1,4 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -45,7 +44,7 @@ descriptor plId = PluginDescriptor
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingProvider IO
-provider _ideState typ contents fp _ = do
+provider _lf _ideState typ contents fp _ = do
     let file = fromNormalizedFilePath fp
     config <- findConfigOrDefault file
     let (range, selectedContents) = case typ of

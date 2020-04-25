@@ -70,7 +70,7 @@ doFormatting lf providers ideState ft uri params = do
               Just contents -> do
                   logDebug (ideLogger ideState) $ T.pack $
                       "Formatter.doFormatting: contents=" ++ show contents -- AZ
-                  provider ideState ft contents fp params
+                  provider lf ideState ft contents fp params
               Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
           Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
       Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: no formatter found for:[" ++ T.unpack mf ++ "]"
@@ -78,7 +78,7 @@ doFormatting lf providers ideState ft uri params = do
 -- ---------------------------------------------------------------------
 
 noneProvider :: FormattingProvider IO
-noneProvider _ _ _ _ _ = return $ Right (List [])
+noneProvider _ _ _ _ _ _ = return $ Right (List [])
 
 -- ---------------------------------------------------------------------
 
