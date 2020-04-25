@@ -11,6 +11,9 @@ import TestUtils
 
 spec :: Spec
 spec = do
+  let formatLspConfig provider =
+        object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
+      formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }
   describe "format document" $ do
     it "works" $ runSession hieCommand fullCaps "test/testdata" $ do
       doc <- openDoc "Format.hs" "haskell"
@@ -36,10 +39,6 @@ spec = do
       -- documentContents doc >>= liftIO . (`shouldBe` formattedRangeTabSize5)
 
   describe "formatting provider" $ do
-    let formatLspConfig provider =
-          object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
-        formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }
-
     it "respects none" $ runSessionWithConfig (formatConfig "none") hieCommand fullCaps "test/testdata" $ do
       doc <- openDoc "Format.hs" "haskell"
       orig <- documentContents doc
@@ -177,7 +176,7 @@ formattedDocTabSize5 =
 formattedRangeTabSize2 :: T.Text
 formattedRangeTabSize2 =
   "{-# LANGUAGE NoImplicitPrelude #-}\n\
-  \module    Format where\n\
+  \module Format where\n\n\
   \foo :: Int -> Int\n\
   \foo 3 = 2\n\
   \foo x = x\n\
