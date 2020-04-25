@@ -16,7 +16,8 @@ extra-deps:
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
 - ghc-check-0.1.0.3
-- ghc-lib-parser-8.8.2
+- ghc-lib-parser-8.10.1.20200412
+- ghc-lib-parser-ex-8.10.0.4
 - haddock-library-1.8.0
 - haskell-lsp-0.21.0.0
 - haskell-lsp-types-0.21.0.0
