@@ -90,8 +90,3 @@ provider _lf ideState typ contents fp _ = do
 #else
 provider _ _ _ _ = return $ Right [] -- NOP formatter
 #endif
-
--- | Extend to the line below and above to replace newline character.
-normalize :: Range -> Range
-normalize (Range (Position sl _) (Position el _)) =
-  Range (Position sl 0) (Position (el + 1) 0)

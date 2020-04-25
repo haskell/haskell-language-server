@@ -10,6 +10,15 @@ import           Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.Types            as J
 import           Language.Haskell.LSP.Types
 
+-- ---------------------------------------------------------------------
+
+-- | Extend to the line below and above to replace newline character.
+normalize :: Range -> Range
+normalize (Range (Position sl _) (Position el _)) =
+  Range (Position sl 0) (Position (el + 1) 0)
+
+-- ---------------------------------------------------------------------
+
 data WithDeletions = IncludeDeletions | SkipDeletions
   deriving Eq
 
