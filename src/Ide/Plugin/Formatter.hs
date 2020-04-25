@@ -64,7 +64,7 @@ doFormatting lf providers ideState ft uri params = do
       Just provider ->
         case uriToFilePath uri of
           Just (toNormalizedFilePath -> fp) -> do
-            (_, mb_contents) <- runAction ideState $ getFileContents fp
+            (_, mb_contents) <- runAction (fromNormalizedFilePath fp) ideState $ getFileContents fp
             case mb_contents of
               Just contents -> do
                   logDebug (ideLogger ideState) $ T.pack $
