@@ -57,7 +57,7 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      base >=4.12 && <5
     , aeson
     , binary
     , bytestring
@@ -66,7 +66,7 @@ library
     , containers
     , data-default
     , deepseq
-    , Diff 
+    , Diff
     , directory
     , extra
     , filepath
@@ -79,6 +79,7 @@ library
     , hie-bios >= 0.4
     , hslogger
     , lens
+    , ormolu ^>= 0.0.5.0
     , optparse-simple
     , process
     , regex-tdfa >= 1.3.1.0
@@ -95,9 +96,6 @@ library
       brittany
     exposed-modules:
       Ide.Plugin.Brittany
-
-  if impl(ghc >= 8.6)
-     build-depends: ormolu ^>= 0.0.5
 
   ghc-options:
          -Wall

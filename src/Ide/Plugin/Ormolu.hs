@@ -1,5 +1,4 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -46,7 +45,6 @@ descriptor plId = PluginDescriptor
 -- ---------------------------------------------------------------------
 
 provider :: FormattingProvider IO
-#if __GLASGOW_HASKELL__ >= 806
 provider _lf ideState typ contents fp _ = do
   let
     fromDyn :: ParsedModule -> IO [DynOption]
@@ -86,7 +84,3 @@ provider _lf ideState typ contents fp _ = do
   ret (Left err) = Left
     (responseError (T.pack $ "ormoluCmd: " ++ show err) )
   ret (Right new) = Right (makeDiffTextEdit contents new)
-
-#else
-provider _ _ _ _ = return $ Right [] -- NOP formatter
-#endif
