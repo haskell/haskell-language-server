@@ -13,6 +13,7 @@
 module Main(main) where
 
 import Arguments
+import Control.Concurrent.Async
 import Control.Concurrent.Extra
 import Control.Exception
 import Control.Monad.Extra
@@ -48,7 +49,7 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
-import Development.Shake                        (Action,  action)
+import Development.Shake                        (Action)
 import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
 import DynFlags                                 (PackageFlag(..), PackageArg(..))
@@ -190,11 +191,11 @@ main = do
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = argsTesting
+                    , optThreads        = argsThreads
                     , optInterfaceLoadingDiagnostics = argsTesting
-                    , optThreads = argsThread
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins >> action kick)
+            initialise caps (mainRule >> pluginRules plugins)
                 getLspId event hlsLogger debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
@@ -223,7 +224,7 @@ main = do
 
         putStrLn "\nStep 4/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
-        _ <- runActionSync ide $ uses TypeCheck (map toNormalizedFilePath' files)
+        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "src/Development/IDE/Core/Rules.hs"
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "exe/Main.hs"
         return ()
@@ -240,11 +241,13 @@ expandFiles = concatMapM $ \x -> do
             fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
         return files
 
-
+-- Running this every hover is too expensive, 0.2s on GHC for example
+{-
 kick :: Action ()
 kick = do
     files <- getFilesOfInterest
     void $ uses TypeCheck $ HashSet.toList files
+    -}
 
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
@@ -408,7 +411,6 @@ loadSession dir = liftIO $ do
         return res
 
     lock <- newLock
-    cradle_lock <- newLock
 
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
     sessionOpts <- return $ \(hieYaml, file) -> do
@@ -435,17 +437,39 @@ loadSession dir = liftIO $ do
                 finished_barrier <- newBarrier
                 -- fork a new thread here which won't be killed by shake
                 -- throwing an async exception
-                void $ forkIO $ withLock cradle_lock $ do
-                  putStrLn $ "Shelling out to cabal " <> show file
+                void $ forkIO $ do
+                  putStrLn $ "Consulting the cradle for " <> show file
                   cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
                   opts <- cradleToSessionOpts cradle cfp
                   print opts
                   res <- fst <$> session (hieYaml, toNormalizedFilePath' cfp, opts)
                   signalBarrier finished_barrier res
                 waitBarrier finished_barrier
-    return $ \file -> liftIO $ mask_ $ withLock lock $ do
-              hieYaml <- cradleLoc file
-              sessionOpts (hieYaml, file)
+
+    dummyAs <- async $ return (error "Uninitialised")
+    runningCradle <- newIORef dummyAs
+    -- The main function which gets options for a file. We only want one of these running
+    -- at a time.
+    let getOptions file = do
+            hieYaml <- cradleLoc file
+            sessionOpts (hieYaml, file)
+    -- The lock is on the `runningCradle` resource
+    return $ \file -> liftIO $ withLock lock $ do
+        as <- readIORef runningCradle
+        finished <- poll as
+        case finished of
+            Just {} -> do
+                as <- async $ getOptions file
+                writeIORef runningCradle as
+                wait as
+             -- If it's not finished then wait and then get options, this could of course be killed still
+            Nothing -> do
+                _ <- wait as
+                getOptions file
+
+
+
+
 
 checkDependencyInfo :: Map.Map FilePath (Maybe UTCTime) -> IO Bool
 checkDependencyInfo old_di = do

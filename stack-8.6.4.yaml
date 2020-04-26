@@ -14,7 +14,7 @@ extra-deps:
 - cabal-plan-0.5.0.0
 - constrained-dynamic-0.1.0.0
 # - ghcide-0.1.0
-- extra-1.6.18
+- extra-1.6.21
 - floskell-0.10.2
 - fuzzy-0.1.0.0
 - ghc-check-0.1.0.3
@@ -28,7 +28,7 @@ extra-deps:
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
 - github: fendor/hie-bios
-  commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
+  commit: 87db34de1b10b03bb2c3d7f6bd3623bc1da96ba8
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
@@ -41,7 +41,9 @@ extra-deps:
 - regex-base-0.94.0.0
 - regex-tdfa-1.3.1.0
 - rope-utf16-splay-0.3.1.0
-- shake-0.18.5
+# - shake-0.18.5
+- github: mpickering/shake
+  commit: 4d56fe9f09bd3bd63ead541c571c756995da490a
 - syz-0.2.0.0
 - tasty-rerun-1.1.17
 - temporary-1.2.1.1

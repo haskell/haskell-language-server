@@ -14,6 +14,7 @@ extra-deps:
 - clock-0.7.2
 - floskell-0.10.2
 # - ghcide-0.1.0
+- extra-1.6.21
 - fuzzy-0.1.0.0
 - ghc-check-0.1.0.3
 - ghc-lib-parser-8.10.1.20200412
@@ -23,7 +24,7 @@ extra-deps:
 - haskell-lsp-types-0.21.0.0
 # - hie-bios-0.4.0
 - github: fendor/hie-bios
-  commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
+  commit: 87db34de1b10b03bb2c3d7f6bd3623bc1da96ba8
 - indexed-profunctors-0.1
 - lsp-test-0.10.2.0
 - monad-dijkstra-0.1.1.2
@@ -34,6 +35,8 @@ extra-deps:
 - regex-base-0.94.0.0
 - regex-pcre-builtin-0.95.1.1.8.43
 - regex-tdfa-1.3.1.0
+- github: mpickering/shake
+  commit: 4d56fe9f09bd3bd63ead541c571c756995da490a
 - semialign-1.1
 - tasty-rerun-1.1.17
 - temporary-1.2.1.1
