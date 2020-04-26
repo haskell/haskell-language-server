@@ -195,7 +195,7 @@ main = do
                     , optInterfaceLoadingDiagnostics = argsTesting
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins)
+            fst <$> initialise caps (mainRule >> pluginRules plugins)
                 getLspId event hlsLogger debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
@@ -219,7 +219,7 @@ main = do
         putStrLn "\nStep 3/6: Initializing the IDE"
         vfs <- makeVFSHandle
         debouncer <- newAsyncDebouncer
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSession dir) vfs
+        (ide, _worker) <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSession dir) vfs
 
         putStrLn "\nStep 4/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
