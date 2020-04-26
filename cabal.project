@@ -10,8 +10,12 @@ source-repository-package
 source-repository-package
     type: git
     location: https://github.com/fendor/hie-bios.git
-    tag: d5b7fc9bb3025b1d4d2ac9c48b588faf18dfce99
+    tag: 89d28817716a1c8df7e191f3a43c4504bc6379eb
 
+source-repository-package
+    type: git
+    location: https://github.com/mpickering/shake
+    tag: 4d56fe9f09bd3bd63ead541c571c756995da490a
 
 tests: true
 documentation: false
@@ -24,4 +28,4 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-03-24T21:15:10Z
+index-state: 2020-04-24T21:15:10Z

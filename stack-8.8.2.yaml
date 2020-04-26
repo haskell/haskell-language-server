@@ -15,21 +15,25 @@ extra-deps:
 - floskell-0.10.2
 # - ghcide-0.1.0
 - ghc-check-0.1.0.3
-- ghc-lib-parser-ex-8.8.2
+- ghc-lib-parser-8.10.1.20200412
+- ghc-lib-parser-ex-8.10.0.4
 - haddock-library-1.8.0
 - haskell-lsp-0.21.0.0
 - haskell-lsp-types-0.21.0.0
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
 - github: fendor/hie-bios
-  commit: d5b7fc9bb3025b1d4d2ac9c48b588faf18dfce99
+  commit: 87db34de1b10b03bb2c3d7f6bd3623bc1da96ba8
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
 - lsp-test-0.10.2.0
 - monad-dijkstra-0.1.1.2
+- ormolu-0.0.5.0
 - semigroups-0.18.5
+- github: mpickering/shake
+  commit: 4d56fe9f09bd3bd63ead541c571c756995da490a
 - temporary-1.2.1.1
 
 flags:

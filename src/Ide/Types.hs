@@ -169,7 +169,8 @@ data FormattingType = FormatText
 -- It is required to pass in the whole Document Text for that to happen, an empty text
 -- and file uri, does not suffice.
 type FormattingProvider m
-        = IdeState
+        = LSP.LspFuncs Config
+        -> IdeState
         -> FormattingType  -- ^ How much to format
         -> T.Text -- ^ Text to format
         -> NormalizedFilePath -- ^ location of the file being formatted

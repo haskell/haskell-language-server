@@ -125,7 +125,7 @@ codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier u
     logInfo (ideLogger ideState) "Example.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
-        _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
+        _ <- runAction "Example.codeLens" ideState $ runMaybeT $ useE TypeCheck filePath
         _diag <- getDiagnostics ideState
         _hDiag <- getHiddenDiagnostics ideState
         let
@@ -190,7 +190,7 @@ logAndRunRequest label getResults ide pos path = do
   logInfo (ideLogger ide) $
     label <> " request at position " <> T.pack (showPosition pos) <>
     " in file: " <> T.pack path
-  runAction ide $ getResults filePath pos
+  runAction "Example" ide $ getResults filePath pos
 
 -- ---------------------------------------------------------------------
 

@@ -49,6 +49,7 @@ library
       Ide.Plugin.Pragmas
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
+      Ide.PluginUtils
       Ide.Types
       Ide.Version
   other-modules:
@@ -56,7 +57,7 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      base >=4.12 && <5
     , aeson
     , binary
     , bytestring
@@ -65,6 +66,7 @@ library
     , containers
     , data-default
     , deepseq
+    , Diff
     , directory
     , extra
     , filepath
@@ -77,6 +79,7 @@ library
     , hie-bios >= 0.4
     , hslogger
     , lens
+    , ormolu ^>= 0.0.5.0
     , optparse-simple
     , process
     , regex-tdfa >= 1.3.1.0
@@ -93,9 +96,6 @@ library
       brittany
     exposed-modules:
       Ide.Plugin.Brittany
-
-  if impl(ghc >= 8.6)
-     build-depends: ormolu >= 0.0.3.1
 
   ghc-options:
          -Wall
@@ -152,7 +152,7 @@ executable haskell-language-server
      -- which works for now.
     , ghc
      --------------------------------------------------------------
-    , ghc-check
+    , ghc-check ^>= 0.1
     , ghc-paths
     , ghcide
     , gitrev

@@ -12,6 +12,7 @@ import           Language.Haskell.Brittany
 import           Language.Haskell.LSP.Types            as J
 import qualified Language.Haskell.LSP.Types.Lens       as J
 import           Ide.Plugin.Formatter
+import           Ide.PluginUtils
 import           Ide.Types
 
 import           System.FilePath
@@ -36,7 +37,7 @@ descriptor plId = PluginDescriptor
 -- If the provider fails an error is returned that can be displayed to the user.
 provider
   :: FormattingProvider IO
-provider _ideState typ contents fp opts = do
+provider _lf _ideState typ contents fp opts = do
 -- text uri formatType opts = pluginGetFile "brittanyCmd: " uri $ \fp -> do
   confFile <- liftIO $ getConfFile fp
   let (range, selectedContents) = case typ of
@@ -60,11 +61,6 @@ formatText
 formatText confFile opts text =
   liftIO $ runBrittany tabSize confFile text
   where tabSize = opts ^. J.tabSize
-
--- | Extend to the line below and above to replace newline character.
-normalize :: Range -> Range
-normalize (Range (Position sl _) (Position el _)) =
-  Range (Position sl 0) (Position (el + 1) 0)
 
 -- | Recursively search in every directory of the given filepath for brittany.yaml.
 -- If no such file has been found, return Nothing.

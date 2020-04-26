@@ -49,7 +49,7 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
-import Development.Shake                        (Action,  action)
+import Development.Shake                        (Action)
 import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
 import DynFlags                                 (PackageFlag(..), PackageArg(..))
@@ -57,7 +57,7 @@ import GHC hiding                               (def)
 import GHC.Check                                (runTimeVersion, compileTimeVersionFromLibdir)
 -- import GhcMonad
 import HIE.Bios.Cradle
-import HIE.Bios.Environment                     (addCmdOpts)
+import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute)
 import HIE.Bios.Types
 import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
@@ -195,7 +195,7 @@ main = do
                     , optInterfaceLoadingDiagnostics = argsTesting
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins >> action kick)
+            initialise caps (mainRule >> pluginRules plugins)
                 getLspId event hlsLogger debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
@@ -218,13 +218,12 @@ main = do
         putStrLn $ "Found " ++ show n ++ " cradle" ++ ['s' | n /= 1]
         putStrLn "\nStep 3/6: Initializing the IDE"
         vfs <- makeVFSHandle
-
         debouncer <- newAsyncDebouncer
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSession dir) vfs
 
         putStrLn "\nStep 4/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
-        _ <- runActionSync ide $ uses TypeCheck (map toNormalizedFilePath' files)
+        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "src/Development/IDE/Core/Rules.hs"
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "exe/Main.hs"
         return ()
@@ -241,11 +240,13 @@ expandFiles = concatMapM $ \x -> do
             fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
         return files
 
-
+-- Running this every hover is too expensive, 0.2s on GHC for example
+{-
 kick :: Action ()
 kick = do
     files <- getFilesOfInterest
     void $ uses TypeCheck $ HashSet.toList files
+    -}
 
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
@@ -525,7 +526,8 @@ memoIO op = do
 setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target])
 setOptions (ComponentOptions theOpts compRoot _) dflags = do
     cacheDir <- liftIO $ getCacheDir theOpts
-    (dflags', targets) <- addCmdOpts compRoot theOpts dflags
+    (dflags_, targets) <- addCmdOpts theOpts dflags
+    let dflags' = makeDynFlagsAbsolute compRoot dflags_
     let dflags'' =
           -- disabled, generated directly by ghcide instead
           flip gopt_unset Opt_WriteInterface $
