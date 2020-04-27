@@ -62,6 +62,7 @@ import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolut
 import HIE.Bios.Types
 import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
+import Ide.Cradle
 import Ide.Logger
 import Ide.Plugin
 import Ide.Plugin.Config
@@ -98,6 +99,7 @@ import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.Brittany                as Brittany
 #endif
 import Ide.Plugin.Pragmas                 as Pragmas
+import Data.Void (vacuous)
 
 
 -- ---------------------------------------------------------------------
@@ -443,7 +445,7 @@ loadSession dir = do
                 -- throwing an async exception
                 void $ forkIO $ do
                   putStrLn $ "Consulting the cradle for " <> show file
-                  cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+                  cradle <- maybe (cabalHelperCradle cfp) (fmap vacuous . loadCradle) hieYaml
                   eopts <- cradleToSessionOpts cradle cfp
                   print eopts
                   case eopts of
