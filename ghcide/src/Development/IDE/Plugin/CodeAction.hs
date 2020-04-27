@@ -92,13 +92,14 @@ codeLens
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
 codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+    commandId <- makeLspCommandId "typesignature.add"
     fmap (Right . List) $ case uriToFilePath' uri of
       Just (toNormalizedFilePath' -> filePath) -> do
         _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
         diag <- getDiagnostics ideState
         hDiag <- getHiddenDiagnostics ideState
         pure
-          [ CodeLens _range (Just (Command title "typesignature.add" (Just $ List [toJSON edit]))) Nothing
+          [ CodeLens _range (Just (Command title commandId (Just $ List [toJSON edit]))) Nothing
           | (dFile, _, dDiag@Diagnostic{_range=_range}) <- diag ++ hDiag
           , dFile == filePath
           , (title, tedit) <- suggestSignature False dDiag
@@ -113,7 +114,11 @@ executeAddSignatureCommand
     -> ExecuteCommandParams
     -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
-    | _command == "typesignature.add"
+    -- _command is prefixed with a process ID, because certain clients
+    -- have a global command registry, and all commands must be
+    -- unique. And there can be more than one ghcide instance running
+    -- at a time against the same client.
+    | T.isSuffixOf "typesignature.add" _command
     , Just (List [edit]) <- _arguments
     , Success wedit <- fromJSON edit
     = return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
