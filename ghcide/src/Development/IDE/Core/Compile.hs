@@ -19,6 +19,7 @@ module Development.IDE.Core.Compile
   , generateByteCode
   , generateAndWriteHieFile
   , generateAndWriteHiFile
+  , getModSummaryFromImports
   , loadHieFile
   , loadInterface
   , loadDepModule
@@ -70,16 +71,19 @@ import Control.Exception.Safe
 import Control.Monad.Extra
 import Control.Monad.Except
 import Control.Monad.Trans.Except
+import Data.Bifunctor                           (first, second)
 import qualified Data.Text as T
 import           Data.IORef
 import           Data.List.Extra
 import           Data.Maybe
-import           Data.Tuple.Extra
 import qualified Data.Map.Strict                          as Map
 import           System.FilePath
 import           System.Directory
 import           System.IO.Extra
 import Data.Either.Extra (maybeToEither)
+import Control.DeepSeq (rnf)
+import Control.Exception (evaluate)
+import Exception (ExceptionMonad)
 
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
@@ -250,7 +254,7 @@ hideDiag originalFlags (Reason warning, (nfp, _sh, fd))
   | not (wopt warning originalFlags) = (Reason warning, (nfp, HideDiag, fd))
 hideDiag _originalFlags t = t
 
-addRelativeImport :: NormalizedFilePath -> ParsedModule -> DynFlags -> DynFlags
+addRelativeImport :: NormalizedFilePath -> ModuleName -> DynFlags -> DynFlags
 addRelativeImport fp modu dflags = dflags
     {importPaths = nubOrd $ maybeToList (moduleImportPath fp modu) ++ importPaths dflags}
 
@@ -407,16 +411,14 @@ getImportsParsed dflags (L loc parsed) = do
     , GHC.moduleNameString (GHC.unLoc $ ideclName i) /= "GHC.Prim"
     ])
 
-
 -- | Produce a module summary from a StringBuffer.
 getModSummaryFromBuffer
     :: GhcMonad m
     => FilePath
-    -> SB.StringBuffer
     -> DynFlags
     -> GHC.ParsedSource
     -> ExceptT [FileDiagnostic] m ModSummary
-getModSummaryFromBuffer fp contents dflags parsed = do
+getModSummaryFromBuffer fp dflags parsed = do
   (modName, imports) <- liftEither $ getImportsParsed dflags parsed
 
   modLoc <- liftIO $ mkHomeModLocation dflags modName fp
@@ -432,7 +434,7 @@ getModSummaryFromBuffer fp contents dflags parsed = do
     , ms_textual_imps = [imp | (False, imp) <- imports]
     , ms_hspp_file    = fp
     , ms_hspp_opts    = dflags
-    , ms_hspp_buf     = Just contents
+    , ms_hspp_buf     = Nothing
 
     -- defaults:
     , ms_hsc_src      = sourceType
@@ -447,8 +449,51 @@ getModSummaryFromBuffer fp contents dflags parsed = do
     where
       sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
 
+-- | Given a buffer, env and filepath, produce a module summary by parsing only the imports.
+--   Runs preprocessors as needed.
+getModSummaryFromImports
+  :: (HasDynFlags m, ExceptionMonad m, MonadIO m)
+  => FilePath
+  -> Maybe SB.StringBuffer
+  -> ExceptT [FileDiagnostic] m ModSummary
+getModSummaryFromImports fp contents = do
+    (contents, dflags) <- preprocessor fp contents
+    (srcImports, textualImports, L _ moduleName) <-
+        ExceptT $ liftIO $ first (diagFromErrMsgs "parser" dflags) <$> GHC.getHeaderImports dflags contents fp fp
 
--- | Given a buffer, flags, file path and module summary, produce a
+    -- Force bits that might keep the string buffer and DynFlags alive unnecessarily
+    liftIO $ evaluate $ rnf srcImports
+    liftIO $ evaluate $ rnf textualImports
+
+    modLoc <- liftIO $ mkHomeModLocation dflags moduleName fp
+
+    let mod = mkModule (thisPackage dflags) moduleName
+        sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
+        summary =
+            ModSummary
+                { ms_mod          = mod
+#if MIN_GHC_API_VERSION(8,8,0)
+                , ms_hie_date     = Nothing
+#endif
+                , ms_hs_date      = error "Rules should not depend on ms_hs_date"
+        -- When we are working with a virtual file we do not have a file date.
+        -- To avoid silent issues where something is not processed because the date
+        -- has not changed, we make sure that things blow up if they depend on the date.
+                , ms_hsc_src      = sourceType
+                , ms_hspp_buf     = Nothing
+                , ms_hspp_file    = fp
+                , ms_hspp_opts    = dflags
+                , ms_iface_date   = Nothing
+                , ms_location     = modLoc
+                , ms_obj_date     = Nothing
+                , ms_parsed_mod   = Nothing
+                , ms_srcimps      = srcImports
+                , ms_textual_imps = textualImports
+                }
+    return summary
+
+
+-- | Given a buffer, flags, and file path, produce a
 -- parsed module (or errors) and any parse warnings. Does not run any preprocessors
 parseFileContents
        :: GhcMonad m
@@ -490,7 +535,7 @@ parseFileContents customPreprocessor dflags filename contents = do
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
                unless (null errs) $ throwE $ diagFromStrings "parser" DsError errs
                let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               ms <- getModSummaryFromBuffer filename contents dflags parsed
+               ms <- getModSummaryFromBuffer filename dflags parsed
                let pm =
                      ParsedModule {
                          pm_mod_summary = ms

@@ -1,10 +1,12 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE PatternSynonyms       #-}
+#include "ghc-api-version.h"
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -44,6 +46,7 @@ import           Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule)
 import Development.IDE.GHC.Util
+import Development.IDE.GHC.WithDynFlags
 import Data.Coerce
 import Data.Either.Extra
 import Data.Maybe
@@ -62,13 +65,16 @@ import Development.IDE.Spans.Type
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes
-import DynFlags (xopt)
+import DynFlags (gopt_set, xopt)
 import GHC.Generics(Generic)
 
 import qualified Development.IDE.Spans.AtPoint as AtPoint
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.Shake.Classes
+import Control.Monad.Trans.Except (runExceptT)
+import Data.ByteString (ByteString)
+import Control.Concurrent.Async (concurrently)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -131,9 +137,9 @@ getHieFile file mod = do
 
 getHomeHieFile :: NormalizedFilePath -> Action ([a], Maybe HieFile)
 getHomeHieFile f = do
-  pm <- use_ GetParsedModule f
+  ms <- use_ GetModSummary f
   let normal_hie_f = toNormalizedFilePath' hie_f
-      hie_f = ml_hie_file $ ms_location $ pm_mod_summary pm
+      hie_f = ml_hie_file $ ms_location ms
   mbHieTimestamp <- use GetModificationTime normal_hie_f
   srcTimestamp   <- use_ GetModificationTime f
 
@@ -185,28 +191,51 @@ priorityFilesOfInterest :: Priority
 priorityFilesOfInterest = Priority (-2)
 
 getParsedModuleRule :: Rules ()
-getParsedModuleRule =
-    defineEarlyCutoff $ \GetParsedModule file -> do
-        (_, contents) <- getFileContents file
-        packageState <- hscEnv <$> use_ GhcSession file
-        opt <- getIdeOptions
-        (diag, res) <- liftIO $ parseModule opt packageState (fromNormalizedFilePath file) (fmap textToStringBuffer contents)
-        case res of
-            Nothing -> pure (Nothing, (diag, Nothing))
-            Just (contents, modu) -> do
-                mbFingerprint <- if isNothing $ optShakeFiles opt
-                    then pure Nothing
-                    else liftIO $ Just . fingerprintToBS <$> fingerprintFromStringBuffer contents
-                pure (mbFingerprint, (diag, Just modu))
+getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
+    hsc <- hscEnv <$> use_ GhcSession file
+    opt <- getIdeOptions
+    (_, contents) <- getFileContents file
+
+    let dflags    = hsc_dflags hsc
+        mainParse = getParsedModuleDefinition hsc opt file contents
+
+    -- Parse again (if necessary) to capture Haddock parse errors
+    if gopt Opt_Haddock dflags
+        then
+            liftIO mainParse
+        else do
+            let hscHaddock = hsc{hsc_dflags = gopt_set dflags Opt_Haddock}
+                haddockParse = do
+                    (_, (!diagsHaddock, _)) <-
+                        getParsedModuleDefinition hscHaddock opt file contents
+                    return diagsHaddock
+
+            ((fingerPrint, (diags, res)), diagsHaddock) <-
+                -- parse twice, with and without Haddocks, concurrently
+                -- we cannot ignore Haddock parse errors because files of
+                -- non-interest are always parsed with Haddocks
+                liftIO $ concurrently mainParse haddockParse
+
+            return (fingerPrint, (mergeDiagnostics diags diagsHaddock, res))
+
+getParsedModuleDefinition :: HscEnv -> IdeOptions -> NormalizedFilePath -> Maybe T.Text -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
+getParsedModuleDefinition packageState opt file contents = do
+    (diag, res) <- parseModule opt packageState (fromNormalizedFilePath file) (fmap textToStringBuffer contents)
+    case res of
+        Nothing -> pure (Nothing, (diag, Nothing))
+        Just (contents, modu) -> do
+            mbFingerprint <- if isNothing $ optShakeFiles opt
+                then pure Nothing
+                else Just . fingerprintToBS <$> fingerprintFromStringBuffer contents
+            pure (mbFingerprint, (diag, Just modu))
 
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
     define $ \GetLocatedImports file -> do
-        pm <- use_ GetParsedModule file
-        let ms = pm_mod_summary pm
+        ms <- use_ GetModSummary file
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env <- hscEnv <$> use_ GhcSession file
-        let dflags = addRelativeImport file pm $ hsc_dflags env
+        let dflags = addRelativeImport file (moduleName $ ms_mod ms) $ hsc_dflags env
         opt <- getIdeOptions
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule dflags (optExtensions opt) getFileExists modName mbPkgName isSource
@@ -222,7 +251,6 @@ getLocatedImportsRule =
         case sequence pkgImports of
             Nothing -> pure (concat diags, Nothing)
             Just pkgImports -> pure (concat diags, Just (moduleImports, Set.fromList $ concat pkgImports))
-
 
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
@@ -321,8 +349,8 @@ reportImportCyclesRule =
             where loc = srcSpanToLocation (getLoc imp)
                   fp = toNormalizedFilePath' $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
-           pm <- use_ GetParsedModule file
-           pure (moduleNameString . moduleName . ms_mod $ pm_mod_summary pm)
+           ms <- use_ GetModSummary file
+           pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
 -- returns all transitive dependencies in topological order.
@@ -342,22 +370,31 @@ getSpanInfoRule :: Rules ()
 getSpanInfoRule =
     define $ \GetSpanInfo file -> do
         tc <- use_ TypeCheck file
+        packageState <- hscEnv <$> use_ GhcSession file
         deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
         let tdeps = transitiveModuleDeps deps
+
+-- When possible, rely on the haddocks embedded in our interface files
+-- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
+#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
+        let parsedDeps = []
+#else
         parsedDeps <- uses_ GetParsedModule tdeps
+#endif
+
         ifaces <- uses_ GetModIface tdeps
         (fileImports, _) <- use_ GetLocatedImports file
-        packageState <- hscEnv <$> use_ GhcSession file
         let imports = second (fmap artifactFilePath) <$> fileImports
-        x <- liftIO $ getSrcSpanInfos packageState imports tc (zip parsedDeps $ map hirModIface ifaces)
+        x <- liftIO $ getSrcSpanInfos packageState imports tc parsedDeps (map hirModIface ifaces)
         return ([], Just x)
 
 -- Typechecks a module.
 typeCheckRule :: Rules ()
-typeCheckRule = define $ \TypeCheck file ->
+typeCheckRule = define $ \TypeCheck file -> do
+    pm <- use_ GetParsedModule file
     -- do not generate interface files as this rule is called
     -- for files of interest on every keystroke
-    typeCheckRuleDefinition file SkipGenerationOfInterfaceFiles
+    typeCheckRuleDefinition file pm SkipGenerationOfInterfaceFiles
 
 data GenerateInterfaceFiles
     = DoGenerateInterfaceFiles
@@ -370,10 +407,10 @@ data GenerateInterfaceFiles
 -- retain the information forever in the shake graph.
 typeCheckRuleDefinition
     :: NormalizedFilePath     -- ^ Path to source file
+    -> ParsedModule
     -> GenerateInterfaceFiles -- ^ Should generate .hi and .hie files ?
     -> Action (IdeResult TcModuleResult)
-typeCheckRuleDefinition file generateArtifacts = do
-  pm   <- use_ GetParsedModule file
+typeCheckRuleDefinition file pm generateArtifacts = do
   deps <- use_ GetDependencies file
   hsc  <- hscEnv <$> use_ GhcSession file
   -- Figure out whether we need TemplateHaskell or QuasiQuotes support
@@ -454,20 +491,15 @@ loadGhcSession = do
 
 getHiFileRule :: Rules ()
 getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
-  session <- hscEnv <$> use_ GhcSession f
   -- get all dependencies interface files, to check for freshness
   (deps,_) <- use_ GetLocatedImports f
   depHis  <- traverse (use GetHiFile) (mapMaybe (fmap artifactFilePath . snd) deps)
 
-  -- TODO find the hi file without relying on the parsed module
-  --      it should be possible to construct a ModSummary parsing just the imports
-  --      (see HeaderInfo in the GHC package)
-  pm      <- use_ GetParsedModule f
-  let hiFile = toNormalizedFilePath' $
-            case ms_hsc_src ms of
+  ms <- use_ GetModSummary f
+  let hiFile = toNormalizedFilePath'
+             $ case ms_hsc_src ms of
                 HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
                 _ -> ml_hi_file $ ms_location ms
-      ms     = pm_mod_summary pm
 
   IdeOptions{optInterfaceLoadingDiagnostics} <- getIdeOptions
 
@@ -500,6 +532,7 @@ getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
               let d = mkInterfaceFilesGenerationDiag f "Stale interface file"
               pure (Nothing, (d, Nothing))
             else do
+              session <- hscEnv <$> use_ GhcSession f
               r <- liftIO $ loadInterface session ms deps
               case r of
                 Right iface -> do
@@ -509,6 +542,13 @@ getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
                   let diag = ideErrorWithSource (Just "interface file loading") (Just DsError) f . T.pack $ err
                   return (Nothing, (pure diag, Nothing))
 
+getModSummaryRule :: Rules ()
+getModSummaryRule = define $ \GetModSummary f -> do
+    dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
+    (_, mFileContent) <- getFileContents f
+    modS <- liftIO $ evalWithDynFlags dflags $ runExceptT $
+        getModSummaryFromImports (fromNormalizedFilePath f) (textToStringBuffer <$> mFileContent)
+    return $ either (,Nothing) (([], ) . Just) modS
 
 getModIfaceRule :: Rules ()
 getModIfaceRule = define $ \GetModIface f -> do
@@ -526,11 +566,22 @@ getModIfaceRule = define $ \GetModIface f -> do
             tmr <- use TypeCheck f
             return ([], extract tmr)
           | otherwise -> do
-            -- Otherwise the interface file does not exist or is out of date. Invoke typechecking directly to update it without incurring a dependency on the typecheck rule.
-            (diags, tmr) <- typeCheckRuleDefinition f DoGenerateInterfaceFiles
-            -- Bang pattern is important to avoid leaking 'tmr'
-            let !res = extract tmr
-            return (diags, res)
+            -- the interface file does not exist or is out of date.
+            -- Invoke typechecking directly to update it without incurring a dependency
+            -- on the parsed module and the typecheck rules
+            hsc <- hscEnv <$> use_ GhcSession f
+            opt <- getIdeOptions
+            (_, contents) <- getFileContents f
+            -- Embed --haddocks in the interface file
+            hsc <- pure hsc{hsc_dflags = gopt_set (hsc_dflags hsc) Opt_Haddock}
+            (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt f contents
+            case mb_pm of
+                Nothing -> return (diags, Nothing)
+                Just pm -> do
+                    (diags', tmr) <- typeCheckRuleDefinition f pm DoGenerateInterfaceFiles
+                    -- Bang pattern is important to avoid leaking 'tmr'
+                    let !res = extract tmr
+                    return (diags <> diags', res)
     where
       extract Nothing = Nothing
       extract (Just tmr) =
@@ -559,3 +610,4 @@ mainRule = do
     getHiFileRule
     getModIfaceRule
     isFileOfInterestRule
+    getModSummaryRule

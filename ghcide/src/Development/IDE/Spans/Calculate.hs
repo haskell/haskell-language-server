@@ -52,29 +52,31 @@ getSrcSpanInfos
     :: HscEnv
     -> [(Located ModuleName, Maybe NormalizedFilePath)] -- ^ Dependencies in topological order
     -> TcModuleResult
-    -> [(ParsedModule, ModIface)]
+    -> [ParsedModule]   -- ^ Dependencies parsed, optional
+    -> [ModIface]       -- ^ Dependencies module interfaces, required
     -> IO SpansInfo
-getSrcSpanInfos env imports tc deps =
+getSrcSpanInfos env imports tc parsedDeps deps =
     evalGhcEnv env $
-        getSpanInfo imports (tmrModule tc) deps
+        getSpanInfo imports (tmrModule tc) parsedDeps deps
 
 -- | Get ALL source spans in the module.
 getSpanInfo :: GhcMonad m
             => [(Located ModuleName, Maybe NormalizedFilePath)] -- ^ imports
             -> TypecheckedModule
-            -> [(ParsedModule, ModIface)]
+            -> [ParsedModule]
+            -> [ModIface]
             -> m SpansInfo
-getSpanInfo mods tcm@TypecheckedModule{..} deps =
+getSpanInfo mods tcm@TypecheckedModule{..} parsedDeps deps =
   do let tcs = tm_typechecked_source
          bs  = listifyAllSpans  tcs :: [LHsBind GhcTc]
          es  = listifyAllSpans  tcs :: [LHsExpr GhcTc]
          ps  = listifyAllSpans' tcs :: [Pat GhcTc]
          ts  = listifyAllSpans tm_renamed_source :: [LHsType GhcRn]
-         allModules = tm_parsed_module : map fst deps
+         allModules = tm_parsed_module : parsedDeps
          funBinds = funBindMap tm_parsed_module
 
      -- Load all modules in HPT to make their interface documentation available
-     mapM_ ((`loadDepModule` Nothing) . snd) (reverse deps)
+     mapM_ (`loadDepModule` Nothing) (reverse deps)
      forM_ (modInfoIface tm_checked_module_info) $ \modIface ->
        modifySession (loadModuleHome $ HomeModInfo modIface (snd tm_internals_) Nothing)
 
