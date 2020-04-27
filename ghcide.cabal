@@ -133,6 +133,7 @@ library
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Orphans
         Development.IDE.GHC.Warnings
+        Development.IDE.GHC.WithDynFlags
         Development.IDE.Import.FindImports
         Development.IDE.LSP.Notifications
         Development.IDE.Spans.AtPoint

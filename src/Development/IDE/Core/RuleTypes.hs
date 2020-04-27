@@ -105,6 +105,10 @@ type instance RuleResult GetModIface = HiFileResult
 
 type instance RuleResult IsFileOfInterest = Bool
 
+-- | Generate a ModSummary that has enough information to be used to get .hi and .hie files.
+-- without needing to parse the entire source
+type instance RuleResult GetModSummary = ModSummary
+
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetParsedModule
@@ -177,9 +181,14 @@ instance Hashable GetModIface
 instance NFData   GetModIface
 instance Binary   GetModIface
 
-
 data IsFileOfInterest = IsFileOfInterest
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable IsFileOfInterest
 instance NFData   IsFileOfInterest
 instance Binary   IsFileOfInterest
+
+data GetModSummary = GetModSummary
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetModSummary
+instance NFData   GetModSummary
+instance Binary   GetModSummary
