@@ -7,6 +7,7 @@
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
+    getHeaderImports,
     HieFileResult(..),
     HieFile,
     hieExportNames,
@@ -46,7 +47,10 @@ import qualified Module
 
 import qualified GHC
 import GHC hiding (ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, ModLocation)
+import qualified HeaderInfo as Hdr
 import Avail
+import ErrUtils (ErrorMessages)
+import FastString (FastString)
 
 #if MIN_GHC_API_VERSION(8,8,0)
 import Control.Applicative ((<|>))
@@ -69,6 +73,7 @@ import IfaceEnv
 #endif
 
 import Binary
+import Control.Exception (catch)
 import Data.ByteString (ByteString)
 import GhcPlugins hiding (ModLocation)
 import NameCache
@@ -249,4 +254,25 @@ readHieFile _ _ = return undefined
 
 #endif
 
+#endif
+
+getHeaderImports
+  :: DynFlags
+  -> StringBuffer
+  -> FilePath
+  -> FilePath
+  -> IO
+       ( Either
+           ErrorMessages
+           ( [(Maybe FastString, Located ModuleName)]
+           , [(Maybe FastString, Located ModuleName)]
+           , Located ModuleName
+           )
+       )
+#if MIN_GHC_API_VERSION(8,8,0)
+getHeaderImports = Hdr.getImports
+#else
+getHeaderImports a b c d =
+    catch (Right <$> Hdr.getImports a b c d)
+          (return . Left . srcErrorMessages)
 #endif

@@ -1,9 +1,10 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
+#include "ghc-api-version.h"
 
 module Development.IDE.Plugin.Completions(plugin) where
 
 import Control.Applicative
-import Data.Maybe
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Core as LSP
@@ -22,8 +23,11 @@ import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
-import Development.IDE.Import.DependencyInformation
 
+#if !MIN_GHC_API_VERSION(8,6,0) || defined(GHC_LIB)
+import Data.Maybe
+import Development.IDE.Import.DependencyInformation
+#endif
 
 plugin :: Plugin c
 plugin = Plugin produceCompletions setHandlersCompletion
@@ -31,8 +35,15 @@ plugin = Plugin produceCompletions setHandlersCompletion
 produceCompletions :: Rules ()
 produceCompletions =
     define $ \ProduceCompletions file -> do
+
+-- When possible, rely on the haddocks embedded in our interface files
+-- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
+#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
+        let parsedDeps = []
+#else
         deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
         parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps deps)
+#endif
         tm <- fmap fst <$> useWithStale TypeCheck file
         packageState <- fmap (hscEnv . fst) <$> useWithStale GhcSession file
         case (tm, packageState) of

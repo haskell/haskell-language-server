@@ -31,7 +31,7 @@ instance NFData Linkable where rnf = rwhnf
 instance Show InstalledUnitId where
     show = installedUnitIdString
 
-instance NFData InstalledUnitId where rnf = rwhnf
+instance NFData InstalledUnitId where rnf = rwhnf . installedUnitIdFS
 
 instance NFData SB.StringBuffer where rnf = rwhnf
 
@@ -40,8 +40,8 @@ instance Show Module where
 
 instance Show (GenLocated SrcSpan ModuleName) where show = prettyPrint
 
-instance NFData (GenLocated SrcSpan ModuleName) where
-    rnf = rwhnf
+instance (NFData l, NFData e) => NFData (GenLocated l e) where
+    rnf (L l e) = rnf l `seq` rnf e
 
 instance Show ModSummary where
     show = show . ms_mod
@@ -50,6 +50,9 @@ instance Show ParsedModule where
     show = show . pm_mod_summary
 
 instance NFData ModSummary where
+    rnf = rwhnf
+
+instance NFData FastString where
     rnf = rwhnf
 
 instance NFData ParsedModule where
