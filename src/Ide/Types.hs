@@ -83,6 +83,7 @@ data PluginCommand = forall a. (FromJSON a) =>
                 , commandDesc :: T.Text
                 , commandFunc :: CommandFunction a
                 }
+
 -- ---------------------------------------------------------------------
 
 type CommandFunction a = LSP.LspFuncs Config
