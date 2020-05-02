@@ -223,7 +223,7 @@ main = do
 
         putStrLn "\nStep 4/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
-        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
+--        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "src/Development/IDE/Core/Rules.hs"
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "exe/Main.hs"
         cancel worker
@@ -471,11 +471,11 @@ loadSession dir = liftIO $ do
       let cfps = map fst cs
       -- Delayed to avoid recursion and only run if something changed.
       unless (null cs) (
-        delay "InitialLoad" $ void $ do
+        delay "InitialLoad" ("InitialLoad" :: String, cfps) (void $ do
           cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cfps
           mmt <- uses GetModificationTime cfps'
           let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
-          uses GetModIface cs_exist)
+          uses GetModIface cs_exist))
       return opts
 
 
