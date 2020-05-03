@@ -64,15 +64,20 @@ data ModuleImports = ModuleImports
     -- ^ Transitive package dependencies unioned for all imports.
     }
 
--- | For processing dependency information, we need lots of maps and sets
--- of filepaths. Comparing Strings is really slow, so we work with IntMap/IntSet
--- instead and only convert at the edges
--- and
+-- | For processing dependency information, we need lots of maps and sets of
+-- filepaths. Comparing Strings is really slow, so we work with IntMap/IntSet
+-- instead and only convert at the edges.
 newtype FilePathId = FilePathId { getFilePathId :: Int }
   deriving (Show, NFData, Eq, Ord)
 
+-- | Map from 'FilePathId'
+type FilePathIdMap = IntMap
+
+-- | Set of 'FilePathId's
+type FilePathIdSet = IntSet
+
 data PathIdMap = PathIdMap
-  { idToPathMap :: !(IntMap ArtifactsLocation)
+  { idToPathMap :: !(FilePathIdMap ArtifactsLocation)
   , pathToIdMap :: !(HashMap NormalizedFilePath FilePathId)
   }
   deriving (Show, Generic)
@@ -109,16 +114,14 @@ idToPath pathIdMap filePathId = artifactFilePath $ idToModLocation pathIdMap fil
 idToModLocation :: PathIdMap -> FilePathId -> ArtifactsLocation
 idToModLocation PathIdMap{idToPathMap} (FilePathId id) = idToPathMap IntMap.! id
 
-
-type BootIdMap = IntMap FilePathId
+type BootIdMap = FilePathIdMap FilePathId
 
 insertBootId :: FilePathId -> FilePathId -> BootIdMap -> BootIdMap
 insertBootId k = IntMap.insert (getFilePathId k)
 
-
 -- | Unprocessed results that we find by following imports recursively.
 data RawDependencyInformation = RawDependencyInformation
-    { rawImports :: !(IntMap (Either ModuleParseError ModuleImports))
+    { rawImports :: !(FilePathIdMap (Either ModuleParseError ModuleImports))
     , rawPathIdMap :: !PathIdMap
     -- The rawBootMap maps the FilePathId of a hs-boot file to its
     -- corresponding hs file. It is used when topologically sorting as we
@@ -127,23 +130,24 @@ data RawDependencyInformation = RawDependencyInformation
     , rawBootMap :: !BootIdMap
     }
 
-pkgDependencies :: RawDependencyInformation -> IntMap (Set InstalledUnitId)
+pkgDependencies :: RawDependencyInformation -> FilePathIdMap (Set InstalledUnitId)
 pkgDependencies RawDependencyInformation{..} =
     IntMap.map (either (const Set.empty) packageImports) rawImports
 
 data DependencyInformation =
   DependencyInformation
-    { depErrorNodes :: !(IntMap (NonEmpty NodeError))
+    { depErrorNodes :: !(FilePathIdMap (NonEmpty NodeError))
     -- ^ Nodes that cannot be processed correctly.
-    , depModuleNames :: !(IntMap ShowableModuleName)
-    , depModuleDeps :: !(IntMap IntSet)
+    , depModuleNames :: !(FilePathIdMap ShowableModuleName)
+    , depModuleDeps :: !(FilePathIdMap FilePathIdSet)
     -- ^ For a non-error node, this contains the set of module immediate dependencies
     -- in the same package.
-    , depPkgDeps :: !(IntMap (Set InstalledUnitId))
+    , depPkgDeps :: !(FilePathIdMap (Set InstalledUnitId))
     -- ^ For a non-error node, this contains the set of immediate pkg deps.
     , depPathIdMap :: !PathIdMap
-    -- ^ Map from hs-boot file to the corresponding hs file
+    -- ^ Map from FilePath to FilePathId
     , depBootMap :: !BootIdMap
+    -- ^ Map from hs-boot file to the corresponding hs file
     } deriving (Show, Generic)
 
 newtype ShowableModuleName =
@@ -243,7 +247,7 @@ processDependencyInformation rawDepInfo@RawDependencyInformation{..} =
 -- 2. Mark each node that has a parse error as an error node.
 -- 3. Mark each node whose immediate children could not be located as an error.
 -- 4. Recursively propagate errors to parents if they are not already error nodes.
-buildResultGraph :: IntMap (Either ModuleParseError ModuleImports) -> IntMap NodeResult
+buildResultGraph :: FilePathIdMap (Either ModuleParseError ModuleImports) -> FilePathIdMap NodeResult
 buildResultGraph g = propagatedErrors
     where
         sccs = stronglyConnComp (graphEdges g)
@@ -290,7 +294,7 @@ buildResultGraph g = propagatedErrors
             Right ModuleImports{moduleImports} ->
               fmap fst $ find (\(_, resolvedImp) -> resolvedImp == Just importedFile) moduleImports
 
-graphEdges :: IntMap (Either ModuleParseError ModuleImports) -> [(FilePathId, FilePathId, [FilePathId])]
+graphEdges :: FilePathIdMap (Either ModuleParseError ModuleImports) -> [(FilePathId, FilePathId, [FilePathId])]
 graphEdges g =
   map (\(k, v) -> (FilePathId k, FilePathId k, deps v)) $ IntMap.toList g
   where deps :: Either e ModuleImports -> [FilePathId]
