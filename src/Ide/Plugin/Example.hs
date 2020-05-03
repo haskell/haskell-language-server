@@ -125,7 +125,7 @@ codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier u
     logInfo (ideLogger ideState) "Example.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
-        _ <- runAction "Example.codeLens" ideState $ runMaybeT $ useE TypeCheck filePath
+        _ <- runIdeAction "Example.codeLens" ideState $ runMaybeT $ useE TypeCheck filePath
         _diag <- getDiagnostics ideState
         _hDiag <- getHiddenDiagnostics ideState
         let

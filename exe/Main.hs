@@ -195,7 +195,7 @@ main = do
                     , optInterfaceLoadingDiagnostics = argsTesting
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins)
+            fst <$> initialise caps (mainRule >> pluginRules plugins)
                 getLspId event hlsLogger debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
@@ -218,15 +218,15 @@ main = do
         putStrLn $ "Found " ++ show n ++ " cradle" ++ ['s' | n /= 1]
         putStrLn "\nStep 3/6: Initializing the IDE"
         vfs <- makeVFSHandle
-
         debouncer <- newAsyncDebouncer
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSession dir) vfs
+        (ide, worker) <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSession dir) vfs
 
         putStrLn "\nStep 4/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
-        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
+--        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "src/Development/IDE/Core/Rules.hs"
 --        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "exe/Main.hs"
+        cancel worker
         return ()
 
 expandFiles :: [FilePath] -> IO [FilePath]
@@ -408,7 +408,7 @@ loadSession dir = liftIO $ do
         modifyVar_ fileToFlags $ \var -> do
             pure $ Map.insert hieYaml (HM.fromList (cs ++ cached_targets)) var
 
-        return res
+        return (cs, res)
 
     lock <- newLock
 
@@ -432,7 +432,7 @@ loadSession dir = liftIO $ do
         case HM.lookup (toNormalizedFilePath' cfp) v of
             Just opts -> do
                 --putStrLn $ "Cached component of " <> show file
-                pure (fst opts)
+                pure ([], fst opts)
             Nothing-> do
                 finished_barrier <- newBarrier
                 -- fork a new thread here which won't be killed by shake
@@ -442,8 +442,8 @@ loadSession dir = liftIO $ do
                   cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
                   opts <- cradleToSessionOpts cradle cfp
                   print opts
-                  res <- fst <$> session (hieYaml, toNormalizedFilePath' cfp, opts)
-                  signalBarrier finished_barrier res
+                  (cs, res)<- session (hieYaml, toNormalizedFilePath' cfp, opts)
+                  signalBarrier finished_barrier (cs, fst res)
                 waitBarrier finished_barrier
 
     dummyAs <- async $ return (error "Uninitialised")
@@ -454,18 +454,30 @@ loadSession dir = liftIO $ do
             hieYaml <- cradleLoc file
             sessionOpts (hieYaml, file)
     -- The lock is on the `runningCradle` resource
-    return $ \file -> liftIO $ withLock lock $ do
-        as <- readIORef runningCradle
-        finished <- poll as
-        case finished of
-            Just {} -> do
-                as <- async $ getOptions file
-                writeIORef runningCradle as
-                wait as
-             -- If it's not finished then wait and then get options, this could of course be killed still
-            Nothing -> do
-                _ <- wait as
-                getOptions file
+    return $ \file -> do
+      (cs, opts) <-
+        liftIO $ withLock lock $ do
+          as <- readIORef runningCradle
+          finished <- poll as
+          case finished of
+              Just {} -> do
+                  as <- async $ getOptions file
+                  writeIORef runningCradle as
+                  wait as
+              -- If it's not finished then wait and then get options, this could of course be killed still
+              Nothing -> do
+                  _ <- wait as
+                  getOptions file
+      let cfps = map fst cs
+      -- Delayed to avoid recursion and only run if something changed.
+      unless (null cs) (
+        delay "InitialLoad" ("InitialLoad" :: String, cfps) (void $ do
+          cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cfps
+          mmt <- uses GetModificationTime cfps'
+          let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+          uses GetModIface cs_exist))
+      return opts
+
 
 
 
