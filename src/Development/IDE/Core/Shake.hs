@@ -239,7 +239,6 @@ shakeRunDatabaseProfile mbProfileDir shakeDb acts = do
                 shakeProfileDatabase shakeDb $ dir </> file
                 return (dir </> file)
         return (res, proFile)
-    where
 
 {-# NOINLINE profileStartTime #-}
 profileStartTime :: String
@@ -393,6 +392,8 @@ withMVar' var unmasked masked = mask $ \restore -> do
     pure c
 
 -- | Spawn immediately. If you are already inside a call to shakeRun that will be aborted with an exception.
+{- HLINT ignore shakeRun "Redundant bracket" -}
+-- HLint seems to get confused by type applications and suggests to remove parentheses.
 shakeRun :: IdeState -> [Action a] -> IO (IO [a])
 shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts =
     withMVar'
@@ -532,7 +533,7 @@ usesWithStale :: IdeRule k v
     => k -> [NormalizedFilePath] -> Action [Maybe (v, PositionMapping)]
 usesWithStale key files = do
     values <- map (\(A value _) -> value) <$> apply (map (Q . (key,)) files)
-    mapM (uncurry lastValue) (zip files values)
+    zipWithM lastValue files values
 
 
 withProgress :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
@@ -561,9 +562,9 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
             Just res -> return res
             Nothing -> do
                 (bs, (diags, res)) <- actionCatch
-                    (do v <- op key file; liftIO $ evaluate $ force $ v) $
+                    (do v <- op key file; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-                modTime <- liftIO $ join . fmap currentValue <$> getValues state GetModificationTime file
+                modTime <- liftIO $ (currentValue =<<) <$> getValues state GetModificationTime file
                 (bs, res) <- case res of
                     Nothing -> do
                         staleV <- liftIO $ getValues state key file
@@ -573,7 +574,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                                 Succeeded ver v -> (toShakeValue ShakeStale bs, Stale ver v)
                                 Stale ver v -> (toShakeValue ShakeStale bs, Stale ver v)
                                 Failed -> (toShakeValue ShakeResult bs, Failed)
-                    Just v -> pure $ (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
+                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
                 liftIO $ setValues state key file res
                 updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                 let eq = case (bs, fmap decodeShakeValue old) of
@@ -700,7 +701,7 @@ updateFileDiagnostics ::
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> Action ()
 updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, eventer} current = liftIO $ do
-    modTime <- join . fmap currentValue <$> getValues state GetModificationTime fp
+    modTime <- (currentValue =<<) <$> getValues state GetModificationTime fp
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
@@ -713,7 +714,7 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, published
             let newDiags = getFileDiagnostics fp newDiagsStore
             _ <- evaluate newDiagsStore
             _ <- evaluate newDiags
-            pure $! (newDiagsStore, newDiags)
+            pure (newDiagsStore, newDiags)
         modifyVar_ hiddenDiagnostics $ \old -> do
             let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime)
                                   (T.pack $ show k) (map snd currentHidden) old
