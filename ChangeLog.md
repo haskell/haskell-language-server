@@ -1,12 +1,14 @@
+# Changelog for haskell-language-server
+
 ## 0.1
 
-## In this version
+### In this version
 
 - cabal to 2020-05-02T10:11:15Z
 - stack-8.8.3 to lts-15.10
 - stack to nightly-2020-05-01
 
-## Changes
+### Changes
 
 This is the initial version, so too many to list individually.
 
