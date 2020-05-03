@@ -119,7 +119,7 @@ typecheckModule :: IdeDefer
                 -> ParsedModule
                 -> IO (IdeResult (HscEnv, TcModuleResult))
 typecheckModule (IdeDefer defer) hsc depsIn pm = do
-    fmap (either (, Nothing) (second Just) . fmap sequence . sequence) $
+    fmap (either (, Nothing) (second Just . sequence) . sequence) $
       runGhcEnv hsc $
       catchSrcErrors "typecheck" $ do
         -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.

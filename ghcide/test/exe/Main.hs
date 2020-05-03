@@ -14,9 +14,8 @@ import Control.Exception (catch)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON, Value)
-import Data.Char (toLower)
 import Data.Foldable
-import Data.List
+import Data.List.Extra
 import Data.Rope.UTF16 (Rope)
 import qualified Data.Rope.UTF16 as Rope
 import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent)
@@ -129,8 +128,8 @@ initializeResponseTests = withResource acquire release tests where
         where
             doTest = do
                 ir <- getInitializeResponse
-                let Just (ExecuteCommandOptions {_commands = List [command]}) = getActual $ innerCaps ir
-                True @=? (T.isSuffixOf "typesignature.add" command)
+                let Just ExecuteCommandOptions {_commands = List [command]} = getActual $ innerCaps ir
+                True @=? T.isSuffixOf "typesignature.add" command
 
 
   innerCaps :: InitializeResponse -> InitializeResponseCapabilitiesInner
@@ -401,14 +400,14 @@ diagnosticTests = testGroup "diagnostics"
           Just pathB <- pure $ uriToFilePath uriB
           uriB <- pure $
               let (drive, suffix) = splitDrive pathB
-              in filePathToUri (joinDrive (map toLower drive ) suffix)
+              in filePathToUri (joinDrive (lower drive) suffix)
           liftIO $ createDirectoryIfMissing True (takeDirectory pathB)
           liftIO $ writeFileUTF8 pathB $ T.unpack bContent
           uriA <- getDocUri "A/A.hs"
           Just pathA <- pure $ uriToFilePath uriA
           uriA <- pure $
               let (drive, suffix) = splitDrive pathA
-              in filePathToUri (joinDrive (map toLower drive ) suffix)
+              in filePathToUri (joinDrive (lower drive) suffix)
           let itemA = TextDocumentItem uriA "haskell" 0 aContent
           let a = TextDocumentIdentifier uriA
           sendNotification TextDocumentDidOpen (DidOpenTextDocumentParams itemA)
@@ -459,7 +458,7 @@ codeLensesTests = testGroup "code lenses"
 watchedFilesTests :: TestTree
 watchedFilesTests = testGroup "watched files"
   [ testSession' "workspace files" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml") $ "cradle: {direct: {arguments: [\"-isrc\"]}}"
+      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\"]}}"
       _doc <- openDoc' "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
@@ -473,7 +472,7 @@ watchedFilesTests = testGroup "watched files"
       liftIO $ length watchedFileRegs @?= 6
 
   , testSession' "non workspace file" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml") $ "cradle: {direct: {arguments: [\"-i/tmp\"]}}"
+      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-i/tmp\"]}}"
       _doc <- openDoc' "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
@@ -980,14 +979,15 @@ suggestImportTests = testGroup "suggest import actions"
       let defLine = length imps + 1
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
-      case wanted of
-        False ->
-          liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
-        True -> do
-          action <- liftIO $ pickActionWithTitle newImp actions
-          executeCodeAction action
-          contentAfterAction <- documentContents doc
-          liftIO $ after @=? contentAfterAction
+      if wanted
+         then do
+             action <- liftIO $ pickActionWithTitle newImp actions
+             executeCodeAction action
+             contentAfterAction <- documentContents doc
+             liftIO $ after @=? contentAfterAction
+          else
+              liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
+
 
 addExtensionTests :: TestTree
 addExtensionTests = testGroup "add language extension actions"
@@ -1984,6 +1984,8 @@ cradleTests = testGroup "cradle"
     ,testGroup "loading" [loadCradleOnlyonce]
     ]
 
+{- HLINT ignore loadCradleOnlyonce "Redundant bracket" -}
+-- HLint seems to get confused by type applications and suggests to remove parentheses.
 loadCradleOnlyonce :: TestTree
 loadCradleOnlyonce = testGroup "load cradle only once"
     [ testSession' "implicit" implicit
@@ -2351,11 +2353,13 @@ nthLine i r
     | i >= Rope.rows r = error $ "Row number out of bounds: " <> show i <> "/" <> show (Rope.rows r)
     | otherwise = Rope.takeWhile (/= '\n') $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (i - 1) r
 
+{- HLINT ignore getWatchedFilesSubscriptionsUntil "Redundant bracket" -}
+-- HLint seems to get confused by type applications and suggests to remove parentheses.
 getWatchedFilesSubscriptionsUntil :: forall end . (FromJSON end, Typeable end) => Session [Maybe Value]
 getWatchedFilesSubscriptionsUntil = do
       msgs <- manyTill (Just <$> message @RegisterCapabilityRequest <|> Nothing <$ anyMessage) (message @end)
       return
             [ args
-            | Just (RequestMessage{_params = RegistrationParams (List regs)}) <- msgs
+            | Just RequestMessage{_params = RegistrationParams (List regs)} <- msgs
             , Registration _id WorkspaceDidChangeWatchedFiles args <- regs
             ]
