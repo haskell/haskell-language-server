@@ -1,4 +1,4 @@
-resolver: lts-15.5
+resolver: lts-15.10
 
 packages:
 - .
@@ -23,13 +23,14 @@ extra-deps:
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
 - github: fendor/hie-bios
-  commit: 87db34de1b10b03bb2c3d7f6bd3623bc1da96ba8
+  commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
 - lsp-test-0.10.2.0
 - monad-dijkstra-0.1.1.2
+- opentelemetry-0.3.2
 - ormolu-0.0.5.0
 - semigroups-0.18.5
 - github: mpickering/shake
