@@ -11,7 +11,7 @@ module Development.IDE.Plugin.Completions.Logic (
 import Control.Applicative
 import Data.Char (isSpace, isUpper)
 import Data.Generics
-import Data.List as List hiding (stripPrefix)
+import Data.List.Extra as List hiding (stripPrefix)
 import qualified Data.Map  as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import qualified Data.Text as T
@@ -162,7 +162,7 @@ getArgText typ = argText
   where
     argTypes = getArgs typ
     argText :: T.Text
-    argText =  mconcat $ List.intersperse " " $ zipWith snippet [1..] argTypes
+    argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
     snippet :: Int -> Type -> T.Text
     snippet i t = T.pack $ "${" <> show i <> ":" <> showGhc t <> "}"
     getArgs :: Type -> [Type]

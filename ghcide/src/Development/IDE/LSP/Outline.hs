@@ -43,7 +43,7 @@ moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentI
       mb_decls <- runAction ideState $ use GetParsedModule fp
       pure $ Right $ case mb_decls of
         Nothing -> DSDocumentSymbols (List [])
-        Just (ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } })
+        Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }
           -> let
                declSymbols  = mapMaybe documentSymbolForDecl hsmodDecls
                moduleSymbol = hsmodName <&> \(L l m) ->
@@ -118,17 +118,17 @@ documentSymbolForDecl (L l (TyClD SynDecl { tcdLName = L l' n })) = Just
                                           , _kind           = SkTypeParameter
                                           , _selectionRange = srcSpanToRange l'
                                           }
-documentSymbolForDecl (L l (InstD (ClsInstD { cid_inst = ClsInstDecl { cid_poly_ty } })))
+documentSymbolForDecl (L l (InstD ClsInstD { cid_inst = ClsInstDecl { cid_poly_ty } }))
   = Just (defDocumentSymbol l :: DocumentSymbol) { _name = pprText cid_poly_ty
                                                  , _kind = SkInterface
                                                  }
-documentSymbolForDecl (L l (InstD DataFamInstD { dfid_inst = DataFamInstDecl (HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } }) }))
+documentSymbolForDecl (L l (InstD DataFamInstD { dfid_inst = DataFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
                 (map pprText feqn_pats)
     , _kind = SkInterface
     }
-documentSymbolForDecl (L l (InstD TyFamInstD { tfid_inst = TyFamInstDecl (HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } }) }))
+documentSymbolForDecl (L l (InstD TyFamInstD { tfid_inst = TyFamInstDecl HsIB { hsib_body = FamEqn { feqn_tycon, feqn_pats } } }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
     { _name = showRdrName (unLoc feqn_tycon) <> " " <> T.unwords
                 (map pprText feqn_pats)

@@ -5,7 +5,6 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE PatternSynonyms       #-}
 #include "ghc-api-version.h"
 
 -- | A Shake implementation of the compiler service, built
@@ -150,7 +149,7 @@ getHomeHieFile f = do
   unless isUpToDate $
        void $ use_ TypeCheck f
 
-  hf <- liftIO $ if isUpToDate then Just <$> loadHieFile hie_f else pure Nothing
+  hf <- liftIO $ whenMaybe isUpToDate (loadHieFile hie_f)
   return ([], hf)
 
 getPackageHieFile :: Module             -- ^ Package Module to load .hie file for
@@ -259,7 +258,7 @@ rawDependencyInformation f = do
     let initialArtifact = ArtifactsLocation f (ModLocation (Just $ fromNormalizedFilePath f) "" "") False
         (initialId, initialMap) = getPathId initialArtifact emptyPathIdMap
     (rdi, ss) <- go (IntSet.singleton $ getFilePathId initialId)
-                    ((RawDependencyInformation IntMap.empty initialMap IntMap.empty), IntMap.empty)
+                    (RawDependencyInformation IntMap.empty initialMap IntMap.empty, IntMap.empty)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
     return (rdi { rawBootMap = bm })
   where
