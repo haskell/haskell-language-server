@@ -205,6 +205,36 @@ executable haskell-language-server-wrapper
     , process
   default-language:    Haskell2010
 
+test-suite tasty
+  import: agpl
+  type: exitcode-stdio-1.0
+  default-language: Haskell2010
+  build-tool-depends:
+      haskell-language-server:haskell-language-server
+    , cabal-helper:cabal-helper-main
+    , ghcide:ghcide-test-preprocessor
+  build-depends:
+      base >=4.7 && <5
+    , aeson
+    , data-default
+    , haskell-lsp-types
+    , lens
+    , tasty
+    , tasty-hunit
+    , text
+    , unordered-containers
+  hs-source-dirs: test/src
+  main-is: Main.hs
+  other-modules:
+    Ide.Plugin.Brittany,
+    TestUtil
+  ghc-options:
+    -Wall
+    -Wno-name-shadowing
+    -threaded -rtsopts -with-rtsopts=-N
+  if flag(pedantic)
+     ghc-options: -Werror -Wredundant-constraints
+
 
 test-suite func-test
   import: agpl
