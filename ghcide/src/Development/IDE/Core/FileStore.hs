@@ -59,19 +59,6 @@ import qualified Development.IDE.Types.Logger as L
 import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.VFS
 
--- | haskell-lsp manages the VFS internally and automatically so we cannot use
--- the builtin VFS without spawning up an LSP server. To be able to test things
--- like `setBufferModified` we abstract over the VFS implementation.
-data VFSHandle = VFSHandle
-    { getVirtualFile :: NormalizedUri -> IO (Maybe VirtualFile)
-        -- ^ get the contents of a virtual file
-    , setVirtualFileContents :: Maybe (NormalizedUri -> Maybe T.Text -> IO ())
-        -- ^ set a specific file to a value. If Nothing then we are ignoring these
-        --   signals anyway so can just say something was modified
-    }
-
-instance IsIdeGlobal VFSHandle
-
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
     vfsVar <- newVar (1, Map.empty)

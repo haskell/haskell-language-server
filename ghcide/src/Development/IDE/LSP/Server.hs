@@ -22,7 +22,8 @@ import Language.Haskell.LSP.Types.Lens (HasTextDocument (textDocument), HasUri (
 import Development.IDE.Core.Service
 import Data.Aeson (Value)
 import Development.IDE.Core.Tracing (otSetUri)
-import OpenTelemetry.Eventlog (SpanInFlight)
+import OpenTelemetry.Eventlog (SpanInFlight, setTag)
+import Data.Text.Encoding (encodeUtf8)
 
 data WithMessage c = WithMessage
     {withResponse :: forall m req resp . (Show m, Show req, HasTracing req) =>
@@ -68,6 +69,8 @@ instance HasTracing DidChangeWorkspaceFoldersParams
 instance HasTracing DidChangeConfigurationParams
 instance HasTracing InitializeParams
 instance HasTracing (Maybe InitializedParams)
+instance HasTracing WorkspaceSymbolParams where
+  traceWithSpan sp (WorkspaceSymbolParams query _) = setTag sp "query" (encodeUtf8 query)
 
 setUriAnd ::
   (HasTextDocument params a, HasUri a Uri) =>

@@ -47,7 +47,7 @@ library
         deepseq,
         directory,
         dlist,
-        extra,
+        extra >= 1.7.4,
         fuzzy,
         filepath,
         fingertree,
@@ -60,6 +60,7 @@ library
         hie-compat,
         hls-plugin-api >= 0.6,
         lens,
+        hiedb == 0.3.0.*,
         mtl,
         network-uri,
         parallel,
@@ -73,6 +74,7 @@ library
         safe-exceptions,
         shake >= 0.18.4,
         sorted-list,
+        sqlite-simple,
         stm,
         syb,
         text,
@@ -82,6 +84,9 @@ library
         utf8-string,
         vector,
         hslogger,
+        Diff,
+        vector,
+        bytestring-encoding,
         opentelemetry >=0.6.1,
         heapsize ==0.3.*
     if flag(ghc-lib)
@@ -251,6 +256,8 @@ executable ghcide
     if flag(ghc-lib)
       buildable: False
     default-language:   Haskell2010
+    include-dirs:
+        include
     hs-source-dirs:     exe
     ghc-options:
                 -threaded
@@ -264,6 +271,7 @@ executable ghcide
                 "-with-rtsopts=-I0 -A128M"
     main-is: Main.hs
     build-depends:
+        hiedb,
         aeson,
         base == 4.*,
         data-default,
@@ -271,6 +279,8 @@ executable ghcide
         extra,
         filepath,
         gitrev,
+        safe-exceptions,
+        ghc,
         hashable,
         haskell-lsp,
         haskell-lsp-types,
@@ -337,7 +347,7 @@ test-suite ghcide-tests
         hls-plugin-api,
         network-uri,
         lens,
-        lsp-test >= 0.11.0.6 && < 0.12,
+        lsp-test >= 0.12.0.0 && < 0.13,
         optparse-applicative,
         process,
         QuickCheck,
@@ -394,7 +404,7 @@ executable ghcide-bench
         extra,
         filepath,
         ghcide,
-        lsp-test >= 0.11.0.2 && < 0.12,
+        lsp-test >= 0.12.0.0 && < 0.13,
         optparse-applicative,
         process,
         safe-exceptions,

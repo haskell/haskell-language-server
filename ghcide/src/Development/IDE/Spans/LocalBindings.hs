@@ -31,14 +31,14 @@ realSrcSpanToInterval rss =
     (realSrcLocToPosition $ realSrcSpanStart rss)
     (realSrcLocToPosition $ realSrcSpanEnd   rss)
 
-bindings :: RefMap -> Bindings
+bindings :: RefMap Type -> Bindings
 bindings = uncurry Bindings . localBindings
 
 ------------------------------------------------------------------------------
 -- | Compute which identifiers are in scope at every point in the AST. Use
 -- 'getLocalScope' to find the results.
 localBindings
-    :: RefMap
+    :: RefMap Type
     -> ( IntervalMap Position (NameEnv (Name, Maybe Type))
        , IntervalMap Position (NameEnv (Name, Maybe Type))
        )

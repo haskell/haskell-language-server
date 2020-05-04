@@ -7,6 +7,8 @@ module Development.IDE.LSP.HoverDefinition
     ( setHandlersDefinition
     , setHandlersTypeDefinition
     , setHandlersDocHighlight
+    , setHandlersReferences
+    , setHandlersWsSymbols
     -- * For haskell-language-server
     , hover
     , gotoDefinition
@@ -28,22 +30,43 @@ gotoDefinition :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseE
 hover          :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError LocationResponseParams)
 documentHighlight :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (List DocumentHighlight))
-gotoDefinition = request "Definition" getDefinition (MultiLoc []) SingleLoc
+gotoDefinition = request "Definition" getDefinition (MultiLoc []) MultiLoc
 gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (MultiLoc []) MultiLoc
 hover          = request "Hover"      getAtPoint     Nothing      foundHover
 documentHighlight = request "DocumentHighlight" highlightAtPoint (List []) List
+
+references :: IdeState -> ReferenceParams -> IO (Either ResponseError (List Location))
+references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _) =
+  case uriToFilePath' uri of
+    Just path -> do
+      let filePath = toNormalizedFilePath' path
+      logDebug (ideLogger ide) $
+        "References request at position " <> T.pack (showPosition pos) <>
+        " in file: " <> T.pack path
+      Right . List <$> (runAction "references" ide $ refsAtPoint filePath pos)
+    Nothing -> pure $ Left $ ResponseError InvalidParams ("Invalid URI " <> T.pack (show uri)) Nothing
+
+wsSymbols :: IdeState -> WorkspaceSymbolParams -> IO (Either ResponseError (List SymbolInformation))
+wsSymbols ide (WorkspaceSymbolParams query _) = do
+  logDebug (ideLogger ide) $ "Workspace symbols request: " <> query
+  runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ Right . maybe (List []) List <$> workspaceSymbols query
 
 foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
 foundHover (mbRange, contents) =
   Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
 
-setHandlersDefinition, setHandlersTypeDefinition, setHandlersDocHighlight :: PartialHandlers c
+setHandlersDefinition, setHandlersTypeDefinition, setHandlersDocHighlight,
+  setHandlersReferences, setHandlersWsSymbols :: PartialHandlers c
 setHandlersDefinition = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.definitionHandler = withResponse RspDefinition $ const gotoDefinition}
 setHandlersTypeDefinition = PartialHandlers $ \WithMessage{..} x ->
   return x {LSP.typeDefinitionHandler = withResponse RspDefinition $ const gotoTypeDefinition}
 setHandlersDocHighlight = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.documentHighlightHandler = withResponse RspDocumentHighlights $ const documentHighlight}
+setHandlersReferences = PartialHandlers $ \WithMessage{..} x ->
+  return x{LSP.referencesHandler = withResponse RspFindReferences $ const references}
+setHandlersWsSymbols = PartialHandlers $ \WithMessage{..} x ->
+  return x{LSP.workspaceSymbolHandler = withResponse RspWorkspaceSymbols $ const wsSymbols}
 
 -- | Respond to and log a hover or go-to-definition request
 request

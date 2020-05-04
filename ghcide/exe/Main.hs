@@ -8,6 +8,7 @@ module Main(main) where
 import Arguments
 import Control.Concurrent.Extra
 import Control.Monad.Extra
+import Control.Exception.Safe
 import Control.Lens ( (^.) )
 import Data.Default
 import Data.List.Extra
@@ -29,7 +30,7 @@ import Development.IDE.Types.Options
 import Development.IDE.Types.Logger
 import Development.IDE.Plugin
 import Development.IDE.Plugin.Test as Test
-import Development.IDE.Session (loadSession)
+import Development.IDE.Session (loadSession, setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.Shake (ShakeOptions (shakeThreads))
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
@@ -58,6 +59,8 @@ import Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import Ide.Plugin.Config
 import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 
+import HieDb.Run (Options(..), runCommand)
+
 ghcideVersion :: IO String
 ghcideVersion = do
   path <- getExecutablePath
@@ -78,12 +81,29 @@ main = do
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
+    whenJust argsCwd IO.setCurrentDirectory
+
+
+    dir <- IO.getCurrentDirectory
+    dbLoc <- getHieDbLoc dir
+
+    case argFilesOrCmd of
+      DbCmd opts cmd -> do
+        mlibdir <- setInitialDynFlags
+        case mlibdir of
+          Nothing -> exitWith $ ExitFailure 1
+          Just libdir ->
+            runCommand libdir opts{database = dbLoc} cmd
+      Typecheck (Just -> argFilesOrCmd) | not argLSP -> runWithDb dbLoc $ runIde Arguments{..}
+      _ -> let argFilesOrCmd = Nothing in runWithDb dbLoc $ runIde Arguments{..}
+
+
+runIde :: Arguments' (Maybe [FilePath]) -> HieDb -> IndexQueue -> IO ()
+runIde Arguments{..} hiedb hiechan = do
     -- lock to avoid overlapping output on stdout
     lock <- newLock
     let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
             T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
-
-    whenJust argsCwd IO.setCurrentDirectory
 
     dir <- IO.getCurrentDirectory
 
@@ -107,14 +127,22 @@ main = do
         options = def { LSP.executeCommandCommands = Just hlsCommands
                       , LSP.completionTriggerCharacters = Just "."
                       }
-
-    if argLSP then do
+    case argFilesOrCmd of
+      Nothing -> do
         t <- offsetTime
         hPutStrLn stderr "Starting LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
         runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps wProg wIndefProg getConfig rootPath -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
+
+            -- We want to set the global DynFlags right now, so that we can use
+            -- `unsafeGlobalDynFlags` even before the project is configured
+            -- We do it here since haskell-lsp changes our working directory to the correct place ('rootPath')
+            -- before calling this function
+            _mlibdir <- setInitialDynFlags
+                          `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
+
             sessionLoader <- loadSession $ fromMaybe dir rootPath
             config <- fromMaybe def <$> getConfig
             let options = defOptions
@@ -138,8 +166,8 @@ main = do
                   unless argsDisableKick $
                     action kick
             initialise caps rules
-                getLspId event wProg wIndefProg (logger logLevel) debouncer options vfs
-    else do
+                getLspId event wProg wIndefProg (logger logLevel) debouncer options vfs hiedb hiechan
+      Just argFiles -> do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
         hSetEncoding stdout utf8
         hSetEncoding stderr utf8
@@ -174,7 +202,7 @@ main = do
                     }
             defOptions = defaultIdeOptions sessionLoader
             logLevel = if argsVerbose then minBound else Info
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs hiedb hiechan
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashMap.fromList $ map ((, OnDisk) . toNormalizedFilePath') files
@@ -203,7 +231,7 @@ main = do
 
         unless (null failed) (exitWith $ ExitFailure (length failed))
 
-{-# ANN main ("HLint: ignore Use nubOrd" :: String) #-}
+{-# ANN runIde ("HLint: ignore Use nubOrd" :: String) #-}
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do

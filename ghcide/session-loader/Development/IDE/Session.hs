@@ -1,4 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
@@ -8,6 +10,9 @@ module Development.IDE.Session
   ,defaultLoadingOptions
   ,loadSession
   ,loadSessionWithOptions
+  ,setInitialDynFlags
+  ,getHieDbLoc
+  ,runWithDb
   ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -72,6 +77,15 @@ import Control.Exception (evaluate)
 import Data.Void
 import Control.Applicative (Alternative((<|>)))
 
+import HieDb.Create
+import HieDb.Types
+import HieDb.Utils
+import Database.SQLite.Simple
+import Control.Concurrent.STM.TQueue
+import Control.Concurrent.STM (atomically)
+import Maybes (MaybeT(runMaybeT))
+import HIE.Bios.Cradle (yamlConfig)
+
 
 data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
@@ -91,6 +105,58 @@ defaultLoadingOptions = SessionLoadingOptions
     ,loadCradle = HieBios.loadCradle
     ,getCacheDirs = getCacheDirsDefault
     }
+
+-- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
+setInitialDynFlags :: IO (Maybe LibDir)
+setInitialDynFlags = do
+  dir <- IO.getCurrentDirectory
+  hieYaml <- runMaybeT $ yamlConfig dir
+  cradle <- maybe (HieBios.loadImplicitCradle $ addTrailingPathSeparator dir) HieBios.loadCradle hieYaml
+  libDirRes <- getRuntimeGhcLibDir cradle
+  libdir <- case libDirRes of
+      CradleSuccess libdir -> pure $ Just $ LibDir libdir
+      CradleFail err -> do
+        hPutStrLn stderr $ "Couldn't load cradle for libdir: " ++ show (err,dir,hieYaml,cradle)
+        pure Nothing
+      CradleNone -> do
+        hPutStrLn stderr $ "Couldn't load cradle (CradleNone)"
+        pure Nothing
+  dynFlags <- mapM dynFlagsForPrinting libdir
+  mapM_ setUnsafeGlobalDynFlags dynFlags
+  pure libdir
+
+-- | Wraps `withHieDb` to provide a database connection for reading, and a `HieWriterChan` for
+-- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
+-- by a worker thread using a dedicated database connection.
+-- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
+runWithDb :: FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
+runWithDb fp k = do
+  -- Delete the database if it has an incompatible schema version
+  withHieDb fp (const $ pure ())
+    `catch` \IncompatibleSchemaVersion{} -> removeFile fp
+  withHieDb fp $ \writedb -> do
+    initConn writedb
+    _ <- garbageCollectTypeNames writedb
+    chan <- newTQueueIO
+    withAsync (writerThread writedb chan) $ \_ -> do
+      withHieDb fp (flip k chan)
+  where
+    writerThread db chan = forever $ do
+      k <- atomically $ readTQueue chan
+      k db
+        `catch` \e@SQLError{} -> do
+          hPutStrLn stderr $ "SQLite error in worker, ignoring: " ++ show e
+        `catchAny` \e -> do
+          hPutStrLn stderr $ "Uncaught error in database worker, ignoring: " ++ show e
+
+
+getHieDbLoc :: FilePath -> IO FilePath
+getHieDbLoc dir = do
+  let db = dirHash++"-"++takeBaseName dir++"-"++VERSION_ghc <.> "hiedb"
+      dirHash = B.unpack $ B16.encode $ H.hash $ B.pack dir
+  cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
+  createDirectoryIfMissing True cDir
+  pure (cDir </> db)
 
 -- | Given a root directory, return a Shake 'Action' which setups an
 -- 'IdeGhcSession' given a file.
@@ -731,8 +797,8 @@ notifyUserImplicitCradle fp =
     NotificationMessage "2.0" WindowShowMessage $ ShowMessageParams MtInfo $
       "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
       <> T.pack fp <>
-      ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n\
-      \You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error."
+      ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n" <>
+      "You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error."
 
 notifyCradleLoaded :: FilePath -> FromServerMessage
 notifyCradleLoaded fp =

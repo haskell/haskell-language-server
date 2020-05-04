@@ -324,9 +324,17 @@ data BenchRun = BenchRun
 badRun :: BenchRun
 badRun = BenchRun 0 0 0 0 0 False
 
+-- | Wait for all progress to be done
+-- Needs at least one progress done notification to return
 waitForProgressDone :: Session ()
-waitForProgressDone =
-      void(skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+waitForProgressDone = loop
+  where
+    loop = do
+      void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+      done <- null <$> getIncompleteProgressSessions
+      if done
+      then pure ()
+      else do loop
 
 runBench ::
   (?config :: Config) =>
