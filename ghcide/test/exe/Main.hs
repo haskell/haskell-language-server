@@ -1984,8 +1984,6 @@ cradleTests = testGroup "cradle"
     ,testGroup "loading" [loadCradleOnlyonce]
     ]
 
-{- HLINT ignore loadCradleOnlyonce "Redundant bracket" -}
--- HLint seems to get confused by type applications and suggests to remove parentheses.
 loadCradleOnlyonce :: TestTree
 loadCradleOnlyonce = testGroup "load cradle only once"
     [ testSession' "implicit" implicit
@@ -2353,8 +2351,6 @@ nthLine i r
     | i >= Rope.rows r = error $ "Row number out of bounds: " <> show i <> "/" <> show (Rope.rows r)
     | otherwise = Rope.takeWhile (/= '\n') $ fst $ Rope.splitAtLine 1 $ snd $ Rope.splitAtLine (i - 1) r
 
-{- HLINT ignore getWatchedFilesSubscriptionsUntil "Redundant bracket" -}
--- HLint seems to get confused by type applications and suggests to remove parentheses.
 getWatchedFilesSubscriptionsUntil :: forall end . (FromJSON end, Typeable end) => Session [Maybe Value]
 getWatchedFilesSubscriptionsUntil = do
       msgs <- manyTill (Just <$> message @RegisterCapabilityRequest <|> Nothing <$ anyMessage) (message @end)
