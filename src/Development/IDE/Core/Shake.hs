@@ -392,8 +392,6 @@ withMVar' var unmasked masked = mask $ \restore -> do
     pure c
 
 -- | Spawn immediately. If you are already inside a call to shakeRun that will be aborted with an exception.
-{- HLINT ignore shakeRun "Redundant bracket" -}
--- HLint seems to get confused by type applications and suggests to remove parentheses.
 shakeRun :: IdeState -> [Action a] -> IO (IO [a])
 shakeRun IdeState{shakeExtras=ShakeExtras{..}, ..} acts =
     withMVar'
