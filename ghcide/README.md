@@ -207,7 +207,11 @@ Add this to your coc-settings.json (which you can edit with :CocConfig):
 ```
 
 Here's a nice article on setting up neovim and coc: [Vim and Haskell in
-2019](http://marco-lopes.com/articles/Vim-and-Haskell-in-2019/)
+2019](http://marco-lopes.com/articles/Vim-and-Haskell-in-2019/) (this is actually for haskell-ide, not ghcide)
+
+Here is a Docker container that pins down the build and configuration for
+Neovim and ghcide on a minimal Debian 10 base system:
+[docker-ghcide-neovim](https://github.com/carlohamalainen/docker-ghcide-neovim/).
 
 ### SpaceVim
 
