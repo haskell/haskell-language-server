@@ -14,6 +14,7 @@ module Development.IDE.Plugin.CodeAction
     , codeAction
     , codeLens
     , rulePackageExports
+    , executeAddSignatureCommand
     ) where
 
 import           Language.Haskell.LSP.Types
