@@ -75,7 +75,7 @@ library
     , ghcide >= 0.1
     , gitrev
     , hashable
-    , haskell-lsp == 0.21.*
+    , haskell-lsp == 0.22.*
     , hie-bios >= 0.4
     , hslogger
     , lens
@@ -219,7 +219,7 @@ test-suite func-test
       base >=4.7 && <5
     , aeson
     , data-default
-    , haskell-lsp-types
+    , haskell-lsp-types == 0.22.*
     , hls-test-utils
     , hspec
     , lens

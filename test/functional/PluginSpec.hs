@@ -91,7 +91,7 @@ spec = do
       liftIO $ symbolsRsp ^. L.id `shouldBe` responseId id2
 
 
-      let Just (DSDocumentSymbols (List ds)) = symbolsRsp ^. L.result
+      let Right (DSDocumentSymbols (List ds)) = symbolsRsp ^. L.result
       liftIO $ length ds `shouldBe` 3
       liftIO $ (take 2 ds) `shouldBe`
                      [DocumentSymbol
