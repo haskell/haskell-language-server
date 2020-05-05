@@ -90,7 +90,7 @@ spec = do
       doc <- openDoc "BrittanyLF.hs" "haskell"
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
       let opts = DocumentFormattingParams doc (FormattingOptions 4 True) Nothing
-      ResponseMessage _ _ (Just edits) _ <- request TextDocumentFormatting opts
+      ResponseMessage _ _ (Right (Just edits)) <- request TextDocumentFormatting opts
       liftIO $ edits `shouldBe` [TextEdit (Range (Position 0 0) (Position 5 0))
                                   "module BrittanyLF where\n\nfoo :: Int -> String -> IO ()\nfoo x y = do\n    print x\n    return ()\n"]
 
@@ -98,7 +98,7 @@ spec = do
       doc <- openDoc "BrittanyCRLF.hs" "haskell"
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
       let opts = DocumentFormattingParams doc (FormattingOptions 4 True) Nothing
-      ResponseMessage _ _ (Just edits) _ <- request TextDocumentFormatting opts
+      ResponseMessage _ _ (Right (Just edits)) <- request TextDocumentFormatting opts
       liftIO $ edits `shouldBe` [TextEdit (Range (Position 0 0) (Position 5 0))
                                   "module BrittanyCRLF where\n\nfoo :: Int -> String -> IO ()\nfoo x y = do\n    print x\n    return ()\n"]
 
@@ -107,7 +107,7 @@ spec = do
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
       let range = Range (Position 3 0) (Position 5 22)
           opts = DocumentRangeFormattingParams doc range (FormattingOptions 4 True) Nothing
-      ResponseMessage _ _ (Just edits) _ <- request TextDocumentRangeFormatting opts
+      ResponseMessage _ _ (Right (Just edits)) <- request TextDocumentRangeFormatting opts
       liftIO $ edits `shouldBe` [TextEdit (Range (Position 3 0) (Position 6 0))
                                     "foo x y = do\n    print x\n    return ()\n"]
 
@@ -116,7 +116,7 @@ spec = do
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
       let range = Range (Position 3 0) (Position 5 22)
           opts = DocumentRangeFormattingParams doc range (FormattingOptions 4 True) Nothing
-      ResponseMessage _ _ (Just edits) _ <- request TextDocumentRangeFormatting opts
+      ResponseMessage _ _ (Right (Just edits)) <- request TextDocumentRangeFormatting opts
       liftIO $ edits `shouldBe` [TextEdit (Range (Position 3 0) (Position 6 0))
                                     "foo x y = do\n    print x\n    return ()\n"]
 

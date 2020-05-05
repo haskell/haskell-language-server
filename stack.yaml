@@ -19,13 +19,13 @@ extra-deps:
 - ghc-lib-parser-8.10.1.20200412
 - ghc-lib-parser-ex-8.10.0.4
 - haddock-library-1.8.0
-- haskell-lsp-0.21.0.0
-- haskell-lsp-types-0.21.0.0
+- haskell-lsp-0.22.0.0
+- haskell-lsp-types-0.22.0.0
 # - hie-bios-0.4.0
 - github: fendor/hie-bios
   commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
 - indexed-profunctors-0.1
-- lsp-test-0.10.2.0
+- lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.3.0
 - optics-core-0.2

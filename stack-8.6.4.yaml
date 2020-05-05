@@ -23,8 +23,8 @@ extra-deps:
 - ghc-lib-parser-ex-8.10.0.4
 - haddock-api-2.22.0
 - haddock-library-1.8.0
-- haskell-lsp-0.21.0.0
-- haskell-lsp-types-0.21.0.0
+- haskell-lsp-0.22.0.0
+- haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
 - github: fendor/hie-bios
@@ -32,7 +32,7 @@ extra-deps:
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
-- lsp-test-0.10.2.0
+- lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
 - monad-memo-0.4.1
 - multistate-0.8.0.1
