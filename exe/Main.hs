@@ -359,11 +359,11 @@ loadSession dir = liftIO $ do
                 getSession
             -- Modify the map so the hieYaml now maps to the newly created
             -- HscEnv
-            -- Returns
-            -- * the new HscEnv so it can be used to modify the
+            -- Returns:
+            --   * The new HscEnv so it can be used to modify the
             --   FilePath -> HscEnv map
-            -- * The information for the new component which caused this cache miss
-            -- * The modified information (without -inplace flags) for
+            --   * The information for the new component which caused this cache miss
+            --   * The modified information (without -inplace flags) for
             --   existing packages
             pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 
