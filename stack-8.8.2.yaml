@@ -9,7 +9,7 @@ extra-deps:
 - bytestring-trie-0.2.5.0
 # - cabal-helper-1.0.0.0
 - github: DanielG/cabal-helper
-  commit: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
+  commit: 5b85a4b9e1c6463c94ffa595893ad02c9a3d2ec3
 - clock-0.7.2
 - constrained-dynamic-0.1.0.0
 - floskell-0.10.2
@@ -22,8 +22,8 @@ extra-deps:
 - haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
-- github: fendor/hie-bios
-  commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
+- github: mpickering/hie-bios
+  commit: f0abff9c855ea7e6624617df669825f3f62f723b
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0

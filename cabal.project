@@ -5,12 +5,12 @@ packages:
 source-repository-package
     type: git
     location: https://github.com/DanielG/cabal-helper.git
-    tag: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
+    tag: 5b85a4b9e1c6463c94ffa595893ad02c9a3d2ec3
 
 source-repository-package
     type: git
-    location: https://github.com/fendor/hie-bios.git
-    tag: 89d28817716a1c8df7e191f3a43c4504bc6379eb
+    location: https://github.com/mpickering/hie-bios.git
+    tag: f0abff9c855ea7e6624617df669825f3f62f723b
 
 source-repository-package
     type: git
@@ -29,3 +29,5 @@ package ghcide
 write-ghc-environment-files: never
 
 index-state: 2020-05-05T17:33:00Z
+
+allow-newer: cabal-plan:base,floskell:base,floskell:ghc-prim,tasty-rerun:base
