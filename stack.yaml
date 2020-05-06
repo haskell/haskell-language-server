@@ -9,7 +9,7 @@ extra-deps:
 - base-compat-0.11.0
 # - cabal-helper-1.0.0.0
 - github: DanielG/cabal-helper
-  commit: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
+  commit: 5b85a4b9e1c6463c94ffa595893ad02c9a3d2ec3
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - floskell-0.10.2
@@ -22,8 +22,8 @@ extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 # - hie-bios-0.4.0
-- github: fendor/hie-bios
-  commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
+- github: mpickering/hie-bios
+  commit: f0abff9c855ea7e6624617df669825f3f62f723b
 - indexed-profunctors-0.1
 - lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
