@@ -28,7 +28,7 @@ extra-deps:
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
 - github: mpickering/hie-bios
-  commit: f0abff9c855ea7e6624617df669825f3f62f723b
+  commit: 501cc337691cc9da45ff12db46d8b3af9a2a0eda
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
