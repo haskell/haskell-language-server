@@ -15,7 +15,6 @@ import           Data.ByteString.Base16         (encode)
 import qualified Data.ByteString.Char8          as B
 import           Data.Functor                   ((<&>))
 import           Data.Text                      (Text, pack)
-import           Data.Version                   (Version)
 import           Development.IDE.Core.Rules     (defineNoFile)
 import           Development.IDE.Core.Service   (getIdeOptions)
 import           Development.IDE.Core.Shake     (actionLogger, sendEvent, define, useNoFile_)
@@ -24,7 +23,7 @@ import           Development.IDE.Types.Location (fromNormalizedFilePath)
 import           Development.IDE.Types.Options  (IdeOptions(IdeOptions, optTesting))
 import           Development.Shake
 import           GHC
-import           GHC.Check                      (runTimeVersion, compileTimeVersionFromLibdir)
+import           GHC.Check                      (VersionCheck(..), makeGhcVersionChecker)
 import           HIE.Bios
 import           HIE.Bios.Cradle
 import           HIE.Bios.Environment           (addCmdOpts)
@@ -102,15 +101,20 @@ getComponentOptions cradle = do
         -- That will require some more changes.
         CradleNone      -> fail "'none' cradle is not yet supported"
 
-compileTimeGhcVersion :: Version
-compileTimeGhcVersion = $$(compileTimeVersionFromLibdir getLibdir)
+ghcVersionChecker :: IO VersionCheck
+ghcVersionChecker = $$(makeGhcVersionChecker (pure <$> getLibdir))
 
-checkGhcVersion :: Ghc (Maybe HscEnvEq)
+checkGhcVersion :: IO (Maybe HscEnvEq)
 checkGhcVersion = do
-    v <- runTimeVersion
-    return $ if v == Just compileTimeGhcVersion
-        then Nothing
-        else Just GhcVersionMismatch {compileTime = compileTimeGhcVersion, runTime = v}
+    res <- ghcVersionChecker
+    case res of
+        Failure err -> do
+          putStrLn $ "Error while checking GHC version: " ++ show err
+          return Nothing
+        Mismatch {..} ->
+          return $ Just GhcVersionMismatch {..}
+        _ ->
+          return Nothing
 
 createSession :: ComponentOptions -> IO HscEnvEq
 createSession (ComponentOptions theOpts _) = do
@@ -122,7 +126,7 @@ createSession (ComponentOptions theOpts _) = do
         dflags <- getSessionDynFlags
         (dflags', _targets) <- addCmdOpts theOpts dflags
         setupDynFlags cacheDir dflags'
-        versionMismatch <- checkGhcVersion
+        versionMismatch <- liftIO checkGhcVersion
         case versionMismatch of
             Just mismatch -> return mismatch
             Nothing ->  do
