@@ -167,7 +167,7 @@ moduleImportPath (takeDirectory . fromNormalizedFilePath -> pathDir) mn
 data HscEnvEq
     = HscEnvEq !Unique !HscEnv
     | GhcVersionMismatch { compileTime :: !Version
-                         , runTime     :: !(Maybe Version)
+                         , runTime     :: !Version
                          }
 
 -- | Unwrap an 'HsEnvEq'.
@@ -181,7 +181,7 @@ hscEnv' GhcVersionMismatch{..} = Left $
         ["ghcide compiled against GHC"
         ,showVersion compileTime
         ,"but currently using"
-        ,maybe "an unknown version of GHC" (\v -> "GHC " <> showVersion v) runTime
+        ,showVersion runTime
         ,". This is unsupported, ghcide must be compiled with the same GHC version as the project."
         ]
 
