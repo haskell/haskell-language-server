@@ -424,6 +424,8 @@ extractNotInScopeName x
   = Just $ NotInScopeDataConstructor name
   | Just [name] <- matchRegex x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
   = Just $ NotInScopeTypeConstructorOrClass name
+  | Just [name] <- matchRegex x "ot in scope: \\(([^‘ ]+)\\)"
+  = Just $ NotInScopeThing name
   | Just [name] <- matchRegex x "ot in scope: ([^‘ ]+)"
   = Just $ NotInScopeThing name
   | Just [name] <- matchRegex x "ot in scope:[^‘]*‘([^’]*)’"
