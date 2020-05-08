@@ -14,8 +14,8 @@ source-repository-package
 
 source-repository-package
     type: git
-    location: https://github.com/mpickering/shake
-    tag: 4d56fe9f09bd3bd63ead541c571c756995da490a
+    location: https://github.com/wz1000/shake
+    tag: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 
 tests: true
 documentation: false

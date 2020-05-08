@@ -33,8 +33,8 @@ extra-deps:
 - opentelemetry-0.3.2
 - ormolu-0.0.5.0
 - semigroups-0.18.5
-- github: mpickering/shake
-  commit: 4d56fe9f09bd3bd63ead541c571c756995da490a
+- github: wz1000/shake
+  commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - temporary-1.2.1.1
 
 flags:
