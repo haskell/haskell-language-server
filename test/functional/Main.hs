@@ -4,8 +4,9 @@ import Control.Monad.IO.Class
 import Language.Haskell.LSP.Test
 import Test.Tasty
 import TestUtils
-import Commands
-import Completions
+import Command
+-- import Completion
+import Deferred
 
 main :: IO ()
 main = do
@@ -16,6 +17,7 @@ main = do
     liftIO $ putStrLn "HIE cache is warmed up"
 
   defaultMain $ testGroup "HIE" [
-        Commands.tests
-      , Completions.tests
+          Command.tests
+        -- , Completion.tests
+        , Deferred.tests
     ]

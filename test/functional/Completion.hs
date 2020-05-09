@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Completions(tests) where
+module Completion(tests) where
 
 import Control.Applicative.Combinators
 import Control.Monad.IO.Class

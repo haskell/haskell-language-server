@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Commands (tests) where
+module Command (tests) where
 
 import Control.Lens hiding (List)
 import Control.Monad.IO.Class
