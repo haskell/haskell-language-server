@@ -28,9 +28,9 @@ extra-deps:
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
 - github: Avi-D-coder/hie-bios
-  commit: b67ebfdabe3d6801aca8f64ee8fe21fac77f24da
+  commit: 6d95e0343a35b44f6aa7600af46b0c3d48ffd3da
 - github: Avi-D-coder/implicit-hie
-  commit: e033a562a8b18878d354b91977dbcd33604ad554
+  commit: a71069c2baf6fb0a3fd3298ad59bd7d79afebe49
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
