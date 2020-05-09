@@ -1,0 +1,8 @@
+cabal-version:       >=1.10
+name:                hieBiosMainIs
+version:             0.1.0.0
+build-type:          Simple
+executable hieBiosMainIs
+  main-is:             Main.hs
+  build-depends:       base >=4.12 && <4.13
+  default-language:    Haskell2010

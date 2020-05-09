@@ -1,0 +1,17 @@
+• Found hole: _ :: A
+• In the expression: _
+  In an equation for ‘foo2’:
+      foo2 x
+        = _
+        where
+            stuff (A a) = A (a + 1)
+• Relevant bindings include
+    stuff :: A -> A (bound at test/testdata/TypedHoles2.hs:6:5)
+    x :: [A] (bound at test/testdata/TypedHoles2.hs:4:6)
+    foo2 :: [A] -> A (bound at test/testdata/TypedHoles2.hs:4:1)
+  Valid substitutions include
+    undefined :: forall (a :: TYPE r).
+                 GHC.Stack.Types.HasCallStack =>
+                 a
+      (imported from ‘Prelude’ at test/testdata/TypedHoles2.hs:1:8-18
+       (and originally defined in ‘GHC.Err’))

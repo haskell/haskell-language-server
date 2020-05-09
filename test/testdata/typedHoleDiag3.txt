@@ -1,0 +1,37 @@
+• Found hole: _ :: t -> FilePath
+  Where: ‘t’ is a rigid type variable bound by
+           the inferred type of
+             lintDockerfile :: [IgnoreRule]
+                               -> t
+                               -> IO (Either Language.Docker.Parser.Error [Rules.RuleCheck])
+           at app/Main.hs:(229,5)-(235,47)
+• In the expression: _
+  In the first argument of ‘Docker.parseFile’, namely
+    ‘(_ dockerFile)’
+  In a stmt of a 'do' block: ast <- Docker.parseFile (_ dockerFile)
+• Relevant bindings include
+    processedFile :: Either Language.Docker.Parser.Error Dockerfile
+                     -> Either Language.Docker.Parser.Error [Rules.RuleCheck]
+      (bound at app/Main.hs:233:9)
+    processRules :: Dockerfile -> [Rules.RuleCheck]
+      (bound at app/Main.hs:234:9)
+    ignoredRules :: Rules.RuleCheck -> Bool
+      (bound at app/Main.hs:235:9)
+    dockerFile :: t (bound at app/Main.hs:229:32)
+    ignoreRules :: [IgnoreRule] (bound at app/Main.hs:229:20)
+    lintDockerfile :: [IgnoreRule]
+                      -> t -> IO (Either Language.Docker.Parser.Error [Rules.RuleCheck])
+      (bound at app/Main.hs:229:5)
+    (Some bindings suppressed; use -fmax-relevant-binds=N or -fno-max-relevant-binds)
+  Valid substitutions include
+    mempty :: forall a. Monoid a => a
+      (imported from ‘Prelude’ at app/Main.hs:5:8-11
+       (and originally defined in ‘GHC.Base’))
+    undefined :: forall (a :: TYPE r).
+                 GHC.Stack.Types.HasCallStack =>
+                 a
+      (imported from ‘Prelude’ at app/Main.hs:5:8-11
+       (and originally defined in ‘GHC.Err’))
+    idm :: forall m. Monoid m => m
+      (imported from ‘Options.Applicative’ at app/Main.hs:21:1-46
+       (and originally defined in ‘Options.Applicative.Builder’))
