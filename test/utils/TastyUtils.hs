@@ -1,4 +1,8 @@
-module TestUtil where
+module TastyUtils (
+    (===)
+   ,assertTrue
+   ,assertFalse
+) where
 
 import Test.Tasty.HUnit ( (@?=), assertBool, Assertion)
 

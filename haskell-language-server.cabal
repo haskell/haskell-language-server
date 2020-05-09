@@ -218,7 +218,9 @@ test-suite tasty
     , aeson
     , data-default
     , haskell-lsp-types
+    , hls-test-utils
     , lens
+    , lsp-test >= 0.10.0.0
     , tasty
     , tasty-hunit
     , text
@@ -226,8 +228,7 @@ test-suite tasty
   hs-source-dirs: test/src
   main-is: Main.hs
   other-modules:
-    Ide.Plugin.Brittany,
-    TestUtil
+    Ide.Plugin.Brittany
   ghc-options:
     -Wall
     -Wno-name-shadowing
@@ -298,6 +299,7 @@ library hls-test-utils
   import: agpl
   hs-source-dirs:      test/utils
   exposed-modules:     TestUtils
+                     , TastyUtils
   build-depends:       base
                      , haskell-language-server
                      , haskell-lsp
@@ -312,6 +314,7 @@ library hls-test-utils
                      , hspec
                      , hspec-core
                      , stm
+                     , tasty-hunit
                      , text
                      , unordered-containers
                      , yaml
