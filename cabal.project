@@ -9,8 +9,13 @@ source-repository-package
 
 source-repository-package
     type: git
-    location: https://github.com/mpickering/hie-bios.git
-    tag: 501cc337691cc9da45ff12db46d8b3af9a2a0eda 
+    location: https://github.com/Avi-D-coder/hie-bios.git
+    tag: b67ebfdabe3d6801aca8f64ee8fe21fac77f24da
+
+source-repository-package
+    type: git
+    location: https://github.com/Avi-D-coder/implicit-hie.git
+    tag: e033a562a8b18878d354b91977dbcd33604ad554
 
 source-repository-package
     type: git
