@@ -22,8 +22,10 @@ extra-deps:
 - haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
-- github: mpickering/hie-bios
-  commit: 501cc337691cc9da45ff12db46d8b3af9a2a0eda
+- github: Avi-D-coder/hie-bios
+  commit: b67ebfdabe3d6801aca8f64ee8fe21fac77f24da
+- github: Avi-D-coder/implicit-hie
+  commit: e033a562a8b18878d354b91977dbcd33604ad554
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0

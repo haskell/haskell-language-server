@@ -23,8 +23,10 @@ extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 # - hie-bios-0.4.0
-- github: mpickering/hie-bios
-  commit: f0abff9c855ea7e6624617df669825f3f62f723b
+- github: Avi-D-coder/hie-bios
+  commit: b67ebfdabe3d6801aca8f64ee8fe21fac77f24da
+- github: Avi-D-coder/implicit-hie
+  commit: e033a562a8b18878d354b91977dbcd33604ad554
 - indexed-profunctors-0.1
 - lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
