@@ -7,23 +7,24 @@ packages:
 extra-deps:
 - ansi-terminal-0.10.2
 - base-compat-0.11.0
+- brittany-0.12.1.1
+- butcher-1.3.3.1
 # - cabal-helper-1.0.0.0
 - github: DanielG/cabal-helper
   commit: 5b85a4b9e1c6463c94ffa595893ad02c9a3d2ec3
 - cabal-plan-0.6.2.0
 - clock-0.7.2
+- extra-1.7.1
 - floskell-0.10.2
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
-- ghc-check-0.1.0.3
+- ghc-check-0.3.0.1
 - ghc-lib-parser-8.10.1.20200412
 - ghc-lib-parser-ex-8.10.0.4
 - haddock-library-1.8.0
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
-# - hie-bios-0.4.0
-- github: mpickering/hie-bios
-  commit: 501cc337691cc9da45ff12db46d8b3af9a2a0eda
+- hie-bios-0.5.0
 - indexed-profunctors-0.1
 - lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
