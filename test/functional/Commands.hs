@@ -14,7 +14,7 @@ import TestUtils
 import TastyUtils
 
 tests :: TestTree
-tests = testGroup "Commands" [
+tests = testGroup "commands" [
     testCase "are prefixed" $
         runSession hieCommand fullCaps "test/testdata/" $ do
             ResponseMessage _ _ (Just res) Nothing <- initializeResponse

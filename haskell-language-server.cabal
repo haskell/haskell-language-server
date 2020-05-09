@@ -228,7 +228,8 @@ test-suite func-test
   hs-source-dirs: test/functional
   main-is: Main.hs
   other-modules:
-    Commands
+      Commands
+    , Completions
   ghc-options:
     -Wall
     -Wno-name-shadowing

@@ -1,19 +1,19 @@
 module TastyUtils (
-    shouldSatisfy
-   ,shouldNotSatisfy
+      (===)
+    , shouldBe
+    , shouldSatisfy
+    , shouldNotSatisfy
 ) where
 
 import Test.Tasty.HUnit
 
--- (===) :: (Eq a, Show a) => a -> a -> Assertion
--- (===) = (@?=)
--- infixl 1 ===
+infix 1 ===, `shouldBe`, `shouldSatisfy`, `shouldNotSatisfy`
 
--- assertTrue :: Assertion
--- assertTrue = assertBool "Success" True
+(===) :: (Eq a, Show a) => a -> a -> Assertion
+(===) = (@?=)
 
--- assertFalse :: String -> Assertion
--- assertFalse msg = assertBool msg False
+shouldBe :: (HasCallStack, Show a, Eq a) => a -> a -> Assertion
+actual `shouldBe` expected = actual @?= expected
 
 shouldSatisfy :: (HasCallStack, Show a) => a -> (a -> Bool) -> Assertion
 v `shouldSatisfy` p = assertBool ("predicate failed on: " ++ show v) (p v)

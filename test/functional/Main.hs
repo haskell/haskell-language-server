@@ -5,6 +5,7 @@ import Language.Haskell.LSP.Test
 import Test.Tasty
 import TestUtils
 import Commands
+import Completions
 
 main :: IO ()
 main = do
@@ -16,4 +17,5 @@ main = do
 
   defaultMain $ testGroup "HIE" [
         Commands.tests
+      , Completions.tests
     ]
