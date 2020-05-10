@@ -20,10 +20,10 @@ import           Language.Haskell.LSP.Test as Test
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as L
 import qualified Language.Haskell.LSP.Types.Capabilities as C
-import           Test.HIE
+import           Test.HIE.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Test.Tasty.Expectations
+import           Test.Tasty.Expectation
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 

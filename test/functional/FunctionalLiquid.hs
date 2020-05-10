@@ -11,10 +11,10 @@ import           Language.Haskell.LSP.Test hiding (message)
 import           Language.Haskell.LSP.Types as LSP
 import           Language.Haskell.LSP.Types.Lens as LSP hiding (contents, error )
 import           Ide.Plugin.Config
-import           Test.HIE
+import           Test.HIE.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Test.Tasty.Expectations
+import           Test.Tasty.Expectation
 
 -- ---------------------------------------------------------------------
 

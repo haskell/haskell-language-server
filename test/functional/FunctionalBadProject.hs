@@ -8,10 +8,10 @@ module FunctionalBadProject (tests) where
 -- import           Language.Haskell.LSP.Test hiding (message)
 -- import           Language.Haskell.LSP.Types as LSP
 -- import           Language.Haskell.LSP.Types.Lens as LSP hiding (contents, error )
--- import Test.HIE
+-- import Test.HIE.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Expectations
+import Test.Tasty.Expectation
 
 -- ---------------------------------------------------------------------
 -- TODO: Currently this can not succeed, since such an error is thrown in "runActionWithContext" which

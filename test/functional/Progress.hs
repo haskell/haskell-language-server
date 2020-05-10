@@ -12,10 +12,10 @@ import Language.Haskell.LSP.Messages -- TODO: Move this into haskell-lsp-types
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Language.Haskell.LSP.Types.Capabilities
-import Test.HIE
+import Test.HIE.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Expectations
+import Test.Tasty.Expectation
 
 tests :: TestTree
 tests = testGroup "window/workDoneProgress" [

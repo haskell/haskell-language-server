@@ -5,10 +5,10 @@ import Control.Monad.IO.Class
 import Language.Haskell.LSP.Test as Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
-import Test.HIE
+import Test.HIE.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Expectations
+import Test.Tasty.Expectation
 
 tests :: TestTree
 tests = testGroup "document symbols" [

@@ -6,10 +6,10 @@ import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens
 import System.Directory
-import Test.HIE
+import Test.HIE.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Expectations
+import Test.Tasty.Expectation
 
 tests :: TestTree
 tests = testGroup "definitions" [

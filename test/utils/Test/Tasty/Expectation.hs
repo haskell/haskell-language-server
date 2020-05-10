@@ -1,4 +1,4 @@
-module Test.Tasty.Expectations where
+module Test.Tasty.Expectation where
 
 import Data.List
 import Test.Tasty.HUnit

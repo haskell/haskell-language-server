@@ -4,10 +4,10 @@ module Rename (tests) where
 -- import Control.Monad.IO.Class
 -- import Language.Haskell.LSP.Test
 -- import Language.Haskell.LSP.Types
--- import Test.HIE
+-- import Test.HIE.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Expectations
+import Test.Tasty.Expectation
 
 tests :: TestTree
 tests = testGroup "rename" [
