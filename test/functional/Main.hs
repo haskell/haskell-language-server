@@ -1,5 +1,10 @@
 module Main where
 
+import Control.Monad.IO.Class
+import Language.Haskell.LSP.Test
+import Test.HIE.Util
+import Test.Tasty
+
 import Command
 import Completion
 import Deferred
@@ -16,10 +21,20 @@ import Reference
 import Rename
 import Symbol
 import TypeDefinition
-import Test.Tasty
 
 main :: IO ()
-main = defaultMain $ testGroup "HIE" [
+main = do
+    setupBuildToolFiles
+
+    -- run a test session to warm up the cache to prevent timeouts in other tests
+    putStrLn "Warming up HIE cache..."
+    runSessionWithConfig (defaultConfig { messageTimeout = 120 }) hieCommand fullCaps "test/testdata" $
+        liftIO $ putStrLn "HIE cache is warmed up"
+
+    --TODO Test runner with config like HSpec??
+
+    -- test tree
+    defaultMain $ testGroup "HIE" [
           Command.tests
         , Completion.tests
         , Deferred.tests
@@ -36,4 +51,4 @@ main = defaultMain $ testGroup "HIE" [
         , Rename.tests
         , Symbol.tests
         , TypeDefinition.tests
-    ]
+        ]
