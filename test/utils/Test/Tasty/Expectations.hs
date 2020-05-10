@@ -1,14 +1,8 @@
-module TastyUtils (
-      (===)
-    , shouldBe
-    , shouldNotBe
-    , shouldSatisfy
-    , shouldNotSatisfy
-) where
+module Test.Tasty.Expectations where
 
 import Test.Tasty.HUnit
 
-infix 1 ===, `shouldBe`, `shouldNotBe`, `shouldSatisfy`, `shouldNotSatisfy`
+infix 1 ===, `shouldBe`, `shouldSatisfy`, `shouldNotBe`, `shouldNotSatisfy`
 
 (===) :: (Eq a, Show a) => a -> a -> Assertion
 (===) = (@?=)

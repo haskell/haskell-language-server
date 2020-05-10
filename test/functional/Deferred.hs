@@ -12,12 +12,11 @@ import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens hiding (id, message)
 import qualified Language.Haskell.LSP.Types.Lens as LSP
--- import System.Directory
--- import System.FilePath
+import Test.HIE
 import Test.Tasty
 import Test.Tasty.HUnit
-import TestUtils
-import TastyUtils
+import Test.Tasty.Expectations
+
 
 tests :: TestTree
 tests = testGroup "deferred responses" [

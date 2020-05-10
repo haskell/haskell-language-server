@@ -8,10 +8,10 @@ import Data.Char
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types.Lens as LSP
+import Test.HIE
 import Test.Tasty
 import Test.Tasty.HUnit
-import TestUtils
-import TastyUtils
+import Test.Tasty.Expectations
 
 tests :: TestTree
 tests = testGroup "commands" [

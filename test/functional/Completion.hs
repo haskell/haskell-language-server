@@ -9,10 +9,11 @@ import Control.Lens hiding ((.=))
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens hiding (applyEdit)
+import Test.HIE
 import Test.Tasty
 import Test.Tasty.HUnit
-import TestUtils
-import TastyUtils
+import Test.Tasty.Expectations
+
 
 tests :: TestTree
 tests = testGroup "completions" [
