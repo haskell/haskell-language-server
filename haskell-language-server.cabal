@@ -217,6 +217,7 @@ test-suite func-test
                       , data-default
                       , directory
                       , filepath
+                      , haskell-language-server
                       , haskell-lsp-types
                       , hls-test-utils
                       , lens
@@ -231,6 +232,7 @@ test-suite func-test
                       , Completion
                       , Deferred
                       , Definition
+                      , Diagnostic
   ghc-options:          -Wall
                         -Wno-name-shadowing
                         -threaded -rtsopts -with-rtsopts=-N
@@ -255,6 +257,7 @@ library hls-test-utils
                      , hslogger
                      , hspec
                      , hspec-core
+                     , lsp-test
                      , stm
                      , tasty-hunit
                      , text
