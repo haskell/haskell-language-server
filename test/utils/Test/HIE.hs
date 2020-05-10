@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP, OverloadedStrings #-}
 module Test.HIE (
       codeActionSupportCaps
+    , flushStackEnvironment
     , ghcVersion, GhcVersion(..)
     , hieCommand
     , hieCommandExamplePlugin
@@ -12,6 +13,8 @@ import           Data.Default
 import qualified Language.Haskell.LSP.Test as Test
 import           Language.Haskell.LSP.Test hiding (message)
 import qualified Language.Haskell.LSP.Types.Capabilities as C
+import           System.Environment
+
 
 data GhcVersion
   = GHC88
@@ -62,6 +65,16 @@ codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = C.CodeActionClientCapabilities (Just True) (Just literalSupport)
     literalSupport = C.CodeActionLiteralSupport def
+
+flushStackEnvironment :: IO ()
+flushStackEnvironment = do
+  -- We need to clear these environment variables to prevent
+  -- collisions with stack usages
+  -- See https://github.com/commercialhaskell/stack/issues/4875
+  unsetEnv "GHC_PACKAGE_PATH"
+  unsetEnv "GHC_ENVIRONMENT"
+  unsetEnv "HASKELL_PACKAGE_SANDBOX"
+  unsetEnv "HASKELL_PACKAGE_SANDBOXES"
 
 
 -- ---------------------------------------------------------------------
@@ -275,17 +288,6 @@ codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
 -- #endif
 
 -- ---------------------------------------------------------------------
-
--- flushStackEnvironment :: IO ()
--- flushStackEnvironment = do
---   -- We need to clear these environment variables to prevent
---   -- collisions with stack usages
---   -- See https://github.com/commercialhaskell/stack/issues/4875
---   unsetEnv "GHC_PACKAGE_PATH"
---   unsetEnv "GHC_ENVIRONMENT"
---   unsetEnv "HASKELL_PACKAGE_SANDBOX"
---   unsetEnv "HASKELL_PACKAGE_SANDBOXES"
-
 -- ---------------------------------------------------------------------
 
 -- dummyLspFuncs :: Default a => LspFuncs a

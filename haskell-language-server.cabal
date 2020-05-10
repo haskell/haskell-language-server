@@ -234,6 +234,7 @@ test-suite func-test
                       , Definition
                       , Diagnostic
                       , Format
+                      , FunctionalCodeAction
   ghc-options:          -Wall
                         -Wno-name-shadowing
                         -threaded -rtsopts -with-rtsopts=-N
