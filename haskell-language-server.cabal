@@ -230,6 +230,7 @@ test-suite func-test
   other-modules:        Command
                       , Completion
                       , Deferred
+                      , Definition
   ghc-options:          -Wall
                         -Wno-name-shadowing
                         -threaded -rtsopts -with-rtsopts=-N
