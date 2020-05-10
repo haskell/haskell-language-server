@@ -235,10 +235,16 @@ test-suite func-test
                       , Definition
                       , Diagnostic
                       , Format
+                      , FunctionalBadProject
                       , FunctionalCodeAction
                       , FunctionalLiquid
                       , HieBios
                       , Highlight
+                      , Progress
+                      , Reference
+                      , Rename
+                      , Symbol
+                      , TypeDefinition
   ghc-options:          -Wall
                         -Wno-name-shadowing
                         -threaded -rtsopts -with-rtsopts=-N
