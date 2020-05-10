@@ -218,6 +218,7 @@ test-suite func-test
                       , directory
                       , filepath
                       , haskell-language-server
+                      , haskell-lsp
                       , haskell-lsp-types
                       , hls-test-utils
                       , lens
@@ -235,6 +236,9 @@ test-suite func-test
                       , Diagnostic
                       , Format
                       , FunctionalCodeAction
+                      , FunctionalLiquid
+                      , HieBios
+                      , Highlight
   ghc-options:          -Wall
                         -Wno-name-shadowing
                         -threaded -rtsopts -with-rtsopts=-N

@@ -1,22 +1,28 @@
 module Main where
 
 import Command
--- import Completion
--- import Deferred
--- import Definition
--- import Diagnostic
--- import Format
+import Completion
+import Deferred
+import Definition
+import Diagnostic
+import Format
 import FunctionalCodeAction
+import FunctionalLiquid
+import HieBios
+import Highlight
 
 import Test.Tasty
 
 main :: IO ()
 main = defaultMain $ testGroup "HIE" [
           Command.tests
-        -- , Completion.tests
-        -- , Deferred.tests
-        -- , Definition.tests
-        -- , Diagnostic.tests
-        -- , Format.tests
+        , Completion.tests
+        , Deferred.tests
+        , Definition.tests
+        , Diagnostic.tests
+        , Format.tests
         , FunctionalCodeAction.tests
+        , FunctionalLiquid.tests
+        , HieBios.tests
+        , Highlight.tests
     ]

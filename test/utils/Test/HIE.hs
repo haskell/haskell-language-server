@@ -89,7 +89,7 @@ flushStackEnvironment = do
 -- import           Data.Maybe
 -- import           Language.Haskell.LSP.Core
 -- import           Language.Haskell.LSP.Types
--- -- import           Haskell.Ide.Engine.MonadTypes hiding (withProgress, withIndefiniteProgress)
+-- -- import           Ide.Plugin.MonadTypes hiding (withProgress, withIndefiniteProgress)
 -- -- import qualified Ide.Cradle as Bios
 -- -- import qualified Ide.Engine.Config as Config
 -- import           System.Directory
@@ -101,7 +101,7 @@ flushStackEnvironment = do
 -- import           Test.Hspec.Core.Formatters
 -- import           Text.Blaze.Renderer.String (renderMarkup)
 -- import           Text.Blaze.Internal
--- -- import qualified Haskell.Ide.Engine.PluginApi as HIE (BiosOptions, defaultOptions)
+-- -- import qualified Ide.Plugin.PluginApi as HIE (BiosOptions, defaultOptions)
 
 -- import HIE.Bios.Types
 
