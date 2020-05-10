@@ -223,9 +223,7 @@ main = do
 
         putStrLn "\nStep 4/6: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
---        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
---        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "src/Development/IDE/Core/Rules.hs"
---        results <- runActionSync ide $ use TypeCheck $ toNormalizedFilePath' "exe/Main.hs"
+        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
         cancel worker
         return ()
 
@@ -359,11 +357,11 @@ loadSession dir = liftIO $ do
                 getSession
             -- Modify the map so the hieYaml now maps to the newly created
             -- HscEnv
-            -- Returns
-            -- * the new HscEnv so it can be used to modify the
+            -- Returns:
+            --   * The new HscEnv so it can be used to modify the
             --   FilePath -> HscEnv map
-            -- * The information for the new component which caused this cache miss
-            -- * The modified information (without -inplace flags) for
+            --   * The information for the new component which caused this cache miss
+            --   * The modified information (without -inplace flags) for
             --   existing packages
             pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 

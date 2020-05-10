@@ -9,7 +9,7 @@ extra-deps:
 - base-compat-0.11.0
 # - cabal-helper-1.0.0.0
 - github: DanielG/cabal-helper
-  commit: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
+  commit: 5b85a4b9e1c6463c94ffa595893ad02c9a3d2ec3
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - floskell-0.10.2
@@ -19,13 +19,13 @@ extra-deps:
 - ghc-lib-parser-8.10.1.20200412
 - ghc-lib-parser-ex-8.10.0.4
 - haddock-library-1.8.0
-- haskell-lsp-0.21.0.0
-- haskell-lsp-types-0.21.0.0
+- haskell-lsp-0.22.0.0
+- haskell-lsp-types-0.22.0.0
 # - hie-bios-0.4.0
-- github: fendor/hie-bios
-  commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
+- github: mpickering/hie-bios
+  commit: 501cc337691cc9da45ff12db46d8b3af9a2a0eda
 - indexed-profunctors-0.1
-- lsp-test-0.10.2.0
+- lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.3.0
 - optics-core-0.2
@@ -36,6 +36,8 @@ extra-deps:
 - regex-pcre-builtin-0.95.1.1.8.43
 - regex-tdfa-1.3.1.0
 - semialign-1.1
+- github: wz1000/shake
+  commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - tasty-rerun-1.1.17
 - temporary-1.2.1.1
 - topograph-1

@@ -10,7 +10,7 @@ extra-deps:
 - bytestring-trie-0.2.5.0
 # - cabal-helper-1.0.0.0
 - github: DanielG/cabal-helper
-  commit: a18bbb2af92e9b4337e7f930cb80754f2408bcfd
+  commit: 5b85a4b9e1c6463c94ffa595893ad02c9a3d2ec3
 - cabal-plan-0.5.0.0
 - constrained-dynamic-0.1.0.0
 # - ghcide-0.1.0
@@ -23,16 +23,16 @@ extra-deps:
 - ghc-lib-parser-ex-8.10.0.4
 - haddock-api-2.22.0
 - haddock-library-1.8.0
-- haskell-lsp-0.21.0.0
-- haskell-lsp-types-0.21.0.0
+- haskell-lsp-0.22.0.0
+- haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
 # - hie-bios-0.4.0
-- github: fendor/hie-bios
-  commit: 89d28817716a1c8df7e191f3a43c4504bc6379eb
+- github: mpickering/hie-bios
+  commit: 501cc337691cc9da45ff12db46d8b3af9a2a0eda
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
-- lsp-test-0.10.2.0
+- lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
 - monad-memo-0.4.1
 - multistate-0.8.0.1
@@ -43,8 +43,8 @@ extra-deps:
 - regex-tdfa-1.3.1.0
 - rope-utf16-splay-0.3.1.0
 # - shake-0.18.5
-- github: mpickering/shake
-  commit: 4d56fe9f09bd3bd63ead541c571c756995da490a
+- github: wz1000/shake
+  commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - syz-0.2.0.0
 - tasty-rerun-1.1.17
 - temporary-1.2.1.1
