@@ -233,6 +233,7 @@ test-suite func-test
                       , Deferred
                       , Definition
                       , Diagnostic
+                      , Format
   ghc-options:          -Wall
                         -Wno-name-shadowing
                         -threaded -rtsopts -with-rtsopts=-N

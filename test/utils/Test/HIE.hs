@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP, OverloadedStrings #-}
 module Test.HIE (
       codeActionSupportCaps
+    , ghcVersion, GhcVersion(..)
     , hieCommand
     , hieCommandExamplePlugin
     , logConfig

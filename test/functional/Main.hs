@@ -5,6 +5,8 @@ import Completion
 import Deferred
 import Definition
 import Diagnostic
+import Format
+
 import Test.Tasty
 
 main :: IO ()
@@ -14,4 +16,5 @@ main = defaultMain $ testGroup "HIE" [
         , Deferred.tests
         , Definition.tests
         , Diagnostic.tests
+        , Format.tests
     ]
