@@ -1,8 +1,10 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+#include "ghc-api-version.h"
 
 -- | Orphan instances for GHC.
 --   Note that the 'NFData' instances may not be law abiding.
@@ -52,8 +54,10 @@ instance Show ParsedModule where
 instance NFData ModSummary where
     rnf = rwhnf
 
+#if !MIN_GHC_API_VERSION(8,10,0)
 instance NFData FastString where
     rnf = rwhnf
+#endif
 
 instance NFData ParsedModule where
     rnf = rwhnf
