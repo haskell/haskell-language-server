@@ -226,6 +226,7 @@ test-suite func-test
                       , lsp-test >= 0.10.0.0
                       , tasty
                       , tasty-hunit
+                      , tasty-rerun
                       , text
                       , unordered-containers
   hs-source-dirs:       test/functional

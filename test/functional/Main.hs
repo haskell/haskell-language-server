@@ -4,6 +4,7 @@ import Control.Monad.IO.Class
 import Language.Haskell.LSP.Test
 import Test.HIE.Util
 import Test.Tasty
+import Test.Tasty.Ingredients.Rerun
 
 import Command
 import Completion
@@ -34,7 +35,7 @@ main = do
     --TODO Test runner with config like HSpec??
 
     -- test tree
-    defaultMain $ testGroup "HIE" [
+    defaultMainWithRerun $ testGroup "HIE" [
           Command.tests
         , Completion.tests
         , Deferred.tests
