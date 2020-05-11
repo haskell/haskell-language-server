@@ -11,6 +11,7 @@ module Main (main) where
 
 import Control.Applicative.Combinators
 import Control.Exception (catch)
+import qualified Control.Lens as Lens
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON, Value)
@@ -32,6 +33,7 @@ import Language.Haskell.LSP.Test hiding (openDoc')
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
+import qualified Language.Haskell.LSP.Types.Lens as Lsp (diagnostics, params, message)
 import Language.Haskell.LSP.VFS (applyChange)
 import Network.URI
 import System.Environment.Blank (setEnv)
@@ -231,7 +233,6 @@ diagnosticTests = testGroup "diagnostics"
     [ deferralTest "type error"          "True"    "Couldn't match expected type"
     , deferralTest "typed hole"          "_"       "Found hole"
     , deferralTest "out of scope var"    "unbound" "Variable not in scope"
-    , deferralTest "message shows error" "True"    "A.hs:3:5: error:"
     ]
 
   , testSessionWait "remove required module" $ do
@@ -433,6 +434,25 @@ diagnosticTests = testGroup "diagnostics"
             ]
           )
         ]
+  , testSessionWait "strip file path" $ do
+      let
+          name = "Testing"
+          content = T.unlines
+            [ "module " <> name <> " where"
+            , "value :: Maybe ()"
+            , "value = [()]"
+            ]
+      _ <- openDoc' (T.unpack name <> ".hs") "haskell" content
+      notification <- skipManyTill anyMessage diagnostic
+      let
+          offenders =
+            Lsp.params .
+            Lsp.diagnostics .
+            Lens.folded .
+            Lsp.message .
+            Lens.filtered (T.isInfixOf ("/" <> name <> ".hs:"))
+          failure msg = liftIO $ assertFailure $ "Expected file path to be stripped but got " <> T.unpack msg
+      Lens.mapMOf_ offenders failure notification
   ]
 
 codeActionTests :: TestTree
@@ -729,11 +749,7 @@ removeImportTests = testGroup "remove import actions"
       _ <- waitForDiagnostics
       [CACodeAction action@CodeAction { _title = actionTitle }]
           <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-#if MIN_GHC_API_VERSION(8,6,0)
       liftIO $ "Remove !!, <?> from import" @=? actionTitle
-#else
-      liftIO $ "Remove A.!!, A.<?> from import" @=? actionTitle
-#endif
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
