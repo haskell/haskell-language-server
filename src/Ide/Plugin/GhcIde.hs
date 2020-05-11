@@ -10,6 +10,7 @@ import Development.IDE.Core.Service
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Outline
 import Development.IDE.Plugin.CodeAction
+import Development.IDE.Plugin.Completions
 import Development.IDE.Types.Logger
 import Ide.Plugin
 import Ide.Types
@@ -29,7 +30,7 @@ descriptor plId = PluginDescriptor
   , pluginHoverProvider      = Just hover'
   , pluginSymbolsProvider    = Just symbolsProvider
   , pluginFormattingProvider = Nothing
-  , pluginCompletionProvider = Nothing
+  , pluginCompletionProvider = Just getCompletionsLSP
   }
 
 -- ---------------------------------------------------------------------

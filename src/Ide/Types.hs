@@ -99,6 +99,12 @@ type CodeActionProvider = LSP.LspFuncs Config
                         -> CodeActionContext
                         -> IO (Either ResponseError (List CAResult))
 
+type CompletionProvider = LSP.LspFuncs Config
+                        -> IdeState
+                        -> CompletionParams
+                        -> IO (Either ResponseError CompletionResponseResult)
+
+
 
 type CodeLensProvider = LSP.LspFuncs Config
                       -> IdeState
@@ -143,10 +149,6 @@ type ExecuteCommandProvider = IdeState
                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 
 newtype WithSnippets = WithSnippets Bool
-
-type CompletionProvider = IdeState
-                        -> CompletionParams
-                        -> IO (Either ResponseError CompletionResponseResult)
 
 -- ---------------------------------------------------------------------
 
