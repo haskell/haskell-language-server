@@ -1,0 +1,17 @@
+resolver: nightly-2020-02-13
+compiler: ghc-8.10.1
+allow-newer: true
+packages:
+- .
+extra-deps:
+- haskell-lsp-0.21.0.0
+- haskell-lsp-types-0.21.0.0
+- lsp-test-0.10.2.0
+- ghc-check-0.3.0.1
+
+# for ghc-8.10
+- Cabal-3.2.0.0
+- lens-4.19.1
+
+nix:
+  packages: [zlib]

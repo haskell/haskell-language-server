@@ -81,6 +81,7 @@
     - Development.IDE.Core.Compile
     - Development.IDE.Core.Rules
     - Development.IDE.GHC.Compat
+    - Development.IDE.GHC.Orphans
     - Development.IDE.GHC.Util
     - Development.IDE.Import.FindImports
     - Development.IDE.LSP.Outline
