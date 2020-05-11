@@ -11,7 +11,7 @@ module FunctionalBadProject (tests) where
 -- import Test.HIE.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Expectation
+import Test.Hspec.Expectations
 
 -- ---------------------------------------------------------------------
 -- TODO: Currently this can not succeed, since such an error is thrown in "runActionWithContext" which

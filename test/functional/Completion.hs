@@ -12,7 +12,7 @@ import Language.Haskell.LSP.Types.Lens hiding (applyEdit)
 import Test.HIE.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.Expectation
+import Test.Hspec.Expectations
 
 
 tests :: TestTree

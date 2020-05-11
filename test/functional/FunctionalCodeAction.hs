@@ -23,7 +23,7 @@ import qualified Language.Haskell.LSP.Types.Capabilities as C
 import           Test.HIE.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import           Test.Tasty.Expectation
+import           Test.Hspec.Expectations
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
