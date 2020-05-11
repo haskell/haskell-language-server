@@ -56,7 +56,8 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ srcSpanToFilename
 -- | Produce a GHC-style error from a source span and a message.
 diagFromErrMsg :: T.Text -> DynFlags -> ErrMsg -> [FileDiagnostic]
 diagFromErrMsg diagSource dflags e =
-    [ diagFromText diagSource sev (errMsgSpan e) $ T.pack $ Out.showSDoc dflags $ ErrUtils.pprLocErrMsg e
+    [ diagFromText diagSource sev (errMsgSpan e) $ T.pack $ Out.showSDoc dflags $
+      ErrUtils.formatErrDoc dflags $ ErrUtils.errMsgDoc e
     | Just sev <- [toDSeverity $ errMsgSeverity e]]
 
 

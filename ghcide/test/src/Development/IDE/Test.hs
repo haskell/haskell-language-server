@@ -103,7 +103,7 @@ expectDiagnostics' messageParser expected = do
                               " but got " <> show actual
                           go $ Map.delete (diagsNot ^. params . uri . to toNormalizedUri) m
 
--- | Matches all diagnostic messages expect those from interface loading files
+-- | Matches all diagnostic messages except those from interface loading files
 diagnostic :: Session PublishDiagnosticsNotification
 diagnostic = do
   m <- LspTest.message
