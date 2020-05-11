@@ -1449,7 +1449,8 @@ findDefinitionAndHoverTests = let
         no = const Nothing -- don't run this test at all
 
 pluginTests :: TestTree
-pluginTests = testSessionWait "plugins" $ do
+pluginTests = (`xfail8101` "known broken (#556)")
+            $ testSessionWait "plugins" $ do
   let content =
         T.unlines
           [ "{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}"
@@ -1906,6 +1907,13 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
+
+xfail8101 :: TestTree -> String -> TestTree
+#if MIN_GHC_API_VERSION(8,10,0)
+xfail8101 = flip expectFailBecause
+#else
+xfail8101 t _ = t
+#endif
 
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range

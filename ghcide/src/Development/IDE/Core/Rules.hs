@@ -536,7 +536,7 @@ getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
               case r of
                 Right iface -> do
                   let result = HiFileResult ms iface
-                  return (Just (fingerprintToBS (mi_mod_hash iface)), ([], Just result))
+                  return (Just (fingerprintToBS (getModuleHash iface)), ([], Just result))
                 Left err -> do
                   let diag = ideErrorWithSource (Just "interface file loading") (Just DsError) f . T.pack $ err
                   return (Nothing, (pure diag, Nothing))
