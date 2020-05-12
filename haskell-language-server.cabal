@@ -152,7 +152,7 @@ executable haskell-language-server
      -- which works for now.
     , ghc
      --------------------------------------------------------------
-    , ghc-check ^>= 0.1
+    , ghc-check >= 0.3.0.1
     , ghc-paths
     , ghcide
     , gitrev

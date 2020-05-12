@@ -54,7 +54,7 @@ import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
 import DynFlags                                 (PackageFlag(..), PackageArg(..))
 import GHC hiding                               (def)
-import GHC.Check                                (runTimeVersion, compileTimeVersionFromLibdir)
+import GHC.Check                                ( VersionCheck(..), makeGhcVersionChecker )
 -- import GhcMonad
 import HIE.Bios.Cradle
 import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute)
@@ -267,12 +267,12 @@ cradleToSessionOpts cradle file = do
         CradleNone -> fail "'none' cradle is not yet supported"
     pure opts
 
-emptyHscEnv :: IO HscEnv
-emptyHscEnv = do
+emptyHscEnv :: IORef NameCache -> IO HscEnv
+emptyHscEnv nc = do
     libdir <- getLibdir
     env <- runGhc (Just libdir) getSession
     initDynLinker env
-    pure env
+    pure $ setNameCache nc env
 
 -- Convert a target to a list of potential absolute paths.
 -- A TargetModule can be anywhere listed by the supplied include
@@ -295,7 +295,9 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 -- components mapping to the same hie,yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 loadSession :: FilePath -> Action (FilePath -> Action HscEnvEq)
-loadSession dir = liftIO $ do
+loadSession dir = do
+  nc <- ideNc <$> getShakeExtras
+  liftIO $ do
     -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
     hscEnvs <- newVar Map.empty
     -- Mapping from a filepath to HscEnv
@@ -316,7 +318,7 @@ loadSession dir = liftIO $ do
     -- which contains both.
     packageSetup <- return $ \(hieYaml, cfp, opts) -> do
         -- Parse DynFlags for the newly discovered component
-        hscEnv <- emptyHscEnv
+        hscEnv <- emptyHscEnv nc
         (df, targets) <- evalGhcEnv hscEnv $ do
                           setOptions opts (hsc_dflags hscEnv)
         dep_info <- getDependencyInfo (componentDependencies opts)
@@ -347,9 +349,7 @@ loadSession dir = liftIO $ do
             -- It's important to keep the same NameCache though for reasons
             -- that I do not fully understand
             print ("Making new HscEnv" ++ (show inplace))
-            hscEnv <- case oldDeps of
-                        Nothing -> emptyHscEnv
-                        Just (old_hsc, _) -> setNameCache (hsc_NC old_hsc) <$> emptyHscEnv
+            hscEnv <- emptyHscEnv nc
             newHscEnv <-
               -- Add the options for the current component to the HscEnv
               evalGhcEnv hscEnv $ do
@@ -357,11 +357,11 @@ loadSession dir = liftIO $ do
                 getSession
             -- Modify the map so the hieYaml now maps to the newly created
             -- HscEnv
-            -- Returns:
-            --   * The new HscEnv so it can be used to modify the
+            -- Returns
+            --  * the new HscEnv so it can be used to modify the
             --   FilePath -> HscEnv map
-            --   * The information for the new component which caused this cache miss
-            --   * The modified information (without -inplace flags) for
+            --  * The information for the new component which caused this cache miss
+            --  * The modified information (without -inplace flags) for
             --   existing packages
             pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 
@@ -382,7 +382,7 @@ loadSession dir = liftIO $ do
               let hscEnv' = hscEnv { hsc_dflags = df
                                    , hsc_IC = (hsc_IC hscEnv) { ic_dflags = df } }
 
-              versionMismatch <- evalGhcEnv hscEnv' checkGhcVersion
+              versionMismatch <- checkGhcVersion
               henv <- case versionMismatch of
                         Just mismatch -> return mismatch
                         Nothing -> newHscEnvEq hscEnv' uids
@@ -590,12 +590,17 @@ getCacheDir opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> opts_hash)
 cacheDir :: String
 cacheDir = "ghcide"
 
-compileTimeGhcVersion :: Version
-compileTimeGhcVersion = $$(compileTimeVersionFromLibdir getLibdir)
+ghcVersionChecker :: IO VersionCheck
+ghcVersionChecker = $$(makeGhcVersionChecker (pure <$> getLibdir))
 
-checkGhcVersion :: Ghc (Maybe HscEnvEq)
+checkGhcVersion :: IO (Maybe HscEnvEq)
 checkGhcVersion = do
-    v <- runTimeVersion
-    return $ if v == Just compileTimeGhcVersion
-        then Nothing
-        else Just GhcVersionMismatch {compileTime = compileTimeGhcVersion, runTime = v}
+    res <- ghcVersionChecker
+    case res of
+        Failure err -> do
+          putStrLn $ "Error while checking GHC version: " ++ show err
+          return Nothing
+        Mismatch {..} ->
+          return $ Just GhcVersionMismatch {..}
+        _ ->
+          return Nothing
