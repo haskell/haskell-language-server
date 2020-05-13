@@ -28,7 +28,7 @@ extra-deps:
 - ilist-0.3.1.0
 - lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.3.2
+- opentelemetry-0.4.0
 - ormolu-0.0.5.0
 - semigroups-0.18.5
 - github: wz1000/shake
