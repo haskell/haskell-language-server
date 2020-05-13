@@ -144,14 +144,14 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
                     Response x@RequestMessage{_id, _params} wrap act ->
                         checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
                             \case
-                              Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) Nothing (Just e)
-                              Right r -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Just r) Nothing
+                              Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Left e)
+                              Right r -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Right r)
                     ResponseAndRequest x@RequestMessage{_id, _params} wrap wrapNewReq act ->
                         checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
                             \(res, newReq) -> do
                                 case res of
-                                    Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) Nothing (Just e)
-                                    Right r -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Just r) Nothing
+                                    Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Left e)
+                                    Right r -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Right r)
                                 whenJust newReq $ \(rm, newReqParams) -> do
                                     reqId <- getNextReqId
                                     sendFunc $ wrapNewReq $ RequestMessage "2.0" reqId rm newReqParams
@@ -175,16 +175,16 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
                         Left () -> do
                             logDebug (ideLogger ide) $ T.pack $
                                 "Cancelled request " <> show _id
-                            sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) Nothing $
-                                Just $ ResponseError RequestCancelled "" Nothing
+                            sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) $ Left
+                                $ ResponseError RequestCancelled "" Nothing
                         Right res -> k res
                 ) $ \(e :: SomeException) -> do
                     logError (ideLogger ide) $ T.pack $
                         "Unexpected exception on request, please report!\n" ++
                         "Message: " ++ show msg ++ "\n" ++
                         "Exception: " ++ show e
-                    sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) Nothing $
-                        Just $ ResponseError InternalError (T.pack $ show e) Nothing
+                    sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) $ Left
+                        $ ResponseError InternalError (T.pack $ show e) Nothing
 
 initializeRequestHandler :: PartialHandlers config
 initializeRequestHandler = PartialHandlers $ \WithMessage{..} x -> return x{

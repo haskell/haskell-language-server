@@ -2,9 +2,9 @@ resolver: nightly-2019-09-16
 packages:
 - .
 extra-deps:
-- haskell-lsp-0.21.0.0
-- haskell-lsp-types-0.21.0.0
-- lsp-test-0.10.2.0
+- haskell-lsp-0.22.0.0
+- haskell-lsp-types-0.22.0.0
+- lsp-test-0.10.3.0
 - hie-bios-0.4.0
 - ghc-lib-parser-8.8.1
 - ghc-lib-8.8.1
