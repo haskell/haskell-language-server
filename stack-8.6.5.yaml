@@ -28,7 +28,7 @@ extra-deps:
 - indexed-profunctors-0.1
 - lsp-test-0.10.3.0
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.3.0
+- opentelemetry-0.4.0
 - optics-core-0.2
 - optparse-applicative-0.15.1.0
 - ormolu-0.0.5.0
