@@ -1,0 +1,43 @@
+resolver: nightly-2020-05-12
+compiler: ghc-8.10.1
+
+packages:
+- .
+- ./ghcide/
+
+extra-deps:
+- Cabal-3.2.0.0
+- cabal-helper-1.1.0.0
+# See https://github.com/haskell-hvr/cabal-plan/pull/55 
+- github: peti/cabal-plan
+  commit: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
+- clock-0.7.2
+# - floskell-0.10.2
+# See https://github.com/ennocramer/floskell/pull/45
+- github: jneira/floskell
+  commit: 78f888f46dae96922d855af1e6a00ea6bb856987
+# - ghcide-0.1.0
+- ghc-exactprint-0.6.3
+- lens-4.19.1
+- monad-dijkstra-0.1.1.2
+- opentelemetry-0.3.2
+- optics-core-0.3
+- github: wz1000/shake
+  commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
+- semigroups-0.18.5
+- temporary-1.2.1.1
+
+flags:
+  haskell-language-server:
+    pedantic: true
+    # We want to let agpl be the default value in .cabal (True) 
+    # but brittany is not usable with ghc-8.10.1
+    # see https://github.com/lspitzner/brittany/issues/269
+    agpl: false
+
+# allow-newer: true
+
+nix:
+  packages: [ icu libcxx zlib ]
+
+concurrent-tests: false
