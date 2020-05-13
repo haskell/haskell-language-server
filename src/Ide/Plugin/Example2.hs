@@ -207,7 +207,7 @@ symbols _lf _ide (DocumentSymbolParams _doc _mt)
 -- ---------------------------------------------------------------------
 
 completion :: CompletionProvider
-completion _ide (CompletionParams _doc _pos _mctxt _mt)
+completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
     = pure $ Right $ Completions $ List [r]
     where
         r = CompletionItem label kind tags detail documentation deprecated preselect

@@ -512,7 +512,7 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
       case mprefix of
           Nothing -> return $ Right $ Completions $ List []
           Just _prefix -> do
-            mhs <- mapM (\(_,p) -> p ideState params) sps
+            mhs <- mapM (\(_,p) -> p lf ideState params) sps
             case rights mhs of
                 [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
                 hs -> return $ Right $ combine hs
