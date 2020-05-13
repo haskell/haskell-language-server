@@ -2,9 +2,10 @@ resolver: nightly-2020-02-13
 packages:
 - .
 extra-deps:
-- haskell-lsp-0.21.0.0
-- haskell-lsp-types-0.21.0.0
-- lsp-test-0.10.2.0
+- haskell-lsp-0.22.0.0
+- haskell-lsp-types-0.22.0.0
+- lsp-test-0.10.3.0
 - ghc-check-0.3.0.1
+
 nix:
   packages: [zlib]

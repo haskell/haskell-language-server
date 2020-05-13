@@ -135,7 +135,7 @@ initializeResponseTests = withResource acquire release tests where
 
 
   innerCaps :: InitializeResponse -> InitializeResponseCapabilitiesInner
-  innerCaps (ResponseMessage _ _ (Just (InitializeResponseCapabilities c)) _) = c
+  innerCaps (ResponseMessage _ _ (Right (InitializeResponseCapabilities c))) = c
   innerCaps  _ = error "this test only expects inner capabilities"
 
   acquire :: IO InitializeResponse
