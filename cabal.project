@@ -4,13 +4,23 @@ packages:
 
 source-repository-package
     type: git
-    location: https://github.com/DanielG/cabal-helper.git
-    tag: 5b85a4b9e1c6463c94ffa595893ad02c9a3d2ec3
-
-source-repository-package
-    type: git
     location: https://github.com/wz1000/shake
     tag: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
+
+-- See https://github.com/haskell-hvr/cabal-plan/pull/55 
+source-repository-package
+    type: git
+    location: https://github.com/peti/cabal-plan
+    tag: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
+
+-- See https://github.com/ennocramer/floskell/pull/45
+source-repository-package
+    type: git
+    location: https://github.com/jneira/floskell
+    tag: 78f888f46dae96922d855af1e6a00ea6bb856987
+
+-- TODO adapt code to last opentelemetry-0.4.0
+constraints: opentelemetry == 0.3.2
 
 tests: true
 documentation: true
