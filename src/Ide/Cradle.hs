@@ -32,6 +32,7 @@ import           System.Directory (getCurrentDirectory, canonicalizePath, findEx
 import           System.Exit
 import           System.FilePath
 import           System.Process (readCreateProcessWithExitCode, shell, CreateProcess(..))
+import Exception (tryIO)
 
 
 -- ---------------------------------------------------------------------
@@ -68,15 +69,17 @@ implicitCradle fp = do
       CradleAction
         { actionName
         , runCradle = \logF fp -> do
-            res <- chRunCradle logF fp
+            let fallback errMsg = do
+                  warningm $ "Error loading " ++ cradleDisplay crd ++ " using cabal-helper: " ++ errMsg
+                  warningm $ "Fallback to hie-bios implicit cradle"
+                  implCradle :: Cradle CabalHelper <- loadImplicitCradle fp
+                  implRes <- (runCradle (cradleOptsProg implCradle)) logF fp
+                  return implRes
+            res <- tryIO $ chRunCradle logF fp
             case res of
-              CradleFail (CradleError _ex stde) -> do
-                warningm $ "Error loading " ++ cradleDisplay crd ++ "using cabal-helper: " ++ unlines stde
-                warningm $ "Fallback to hie-bios implicit cradle"
-                implCradle :: Cradle CabalHelper <- loadImplicitCradle fp
-                implRes <- (runCradle (cradleOptsProg implCradle)) logF fp
-                return implRes
-              _ -> return res
+              Left x -> fallback (show x)
+              Right (CradleFail (CradleError _ex stde)) -> fallback (unlines stde)
+              Right chRes -> return chRes
         }
   }
 
