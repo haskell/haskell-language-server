@@ -62,7 +62,7 @@ library
     , binary
     , bytestring
     , Cabal
-    , cabal-helper >= 1.0
+    , cabal-helper >= 1.1
     , containers
     , data-default
     , deepseq
