@@ -71,8 +71,8 @@ implicitCradle fp = do
             res <- chRunCradle logF fp
             case res of
               CradleFail (CradleError _ex stde) -> do
-                debugm $ "Error loading " ++ cradleDisplay crd ++ ": " ++  unlines stde
-                debugm $ "Fallback to hie-bios implicit cradle"
+                warningm $ "Error loading " ++ cradleDisplay crd ++ "using cabal-helper: " ++ unlines stde
+                warningm $ "Fallback to hie-bios implicit cradle"
                 implCradle :: Cradle CabalHelper <- loadImplicitCradle fp
                 implRes <- (runCradle (cradleOptsProg implCradle)) logF fp
                 return implRes
