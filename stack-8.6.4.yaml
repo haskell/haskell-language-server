@@ -1,4 +1,4 @@
-resolver: lts-13.19 # GHC 8.6.4
+resolver: lts-13.19 # Last 8.6.4
 
 packages:
 - .
