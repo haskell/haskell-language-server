@@ -445,7 +445,7 @@ loadSession dir = do
                 -- throwing an async exception
                 void $ forkIO $ do
                   putStrLn $ "Consulting the cradle for " <> show file
-                  cradle <- maybe (cabalHelperCradle cfp) (fmap vacuous . loadCradle) hieYaml
+                  cradle <- maybe (implicitCradle cfp) (fmap vacuous . loadCradle) hieYaml
                   eopts <- cradleToSessionOpts cradle cfp
                   print eopts
                   case eopts of

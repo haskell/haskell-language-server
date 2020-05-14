@@ -58,6 +58,28 @@ findLocalCradle fp = do
   logm $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
 
+implicitCradle :: FilePath -> IO (Cradle CabalHelper)
+implicitCradle fp = do
+  crd@Cradle
+    { cradleOptsProg = CradleAction { actionName, runCradle = chRunCradle}
+    } <- cabalHelperCradle fp
+  return $ crd {
+    cradleOptsProg =
+      CradleAction
+        { actionName
+        , runCradle = \logF fp -> do
+            res <- chRunCradle logF fp
+            case res of
+              CradleFail (CradleError _ex stde) -> do
+                debugm $ "Error loading " ++ cradleDisplay crd ++ ": " ++  unlines stde
+                debugm $ "Fallback to hie-bios implicit cradle"
+                implCradle :: Cradle CabalHelper <- loadImplicitCradle fp
+                implRes <- (runCradle (cradleOptsProg implCradle)) logF fp
+                return implRes
+              _ -> return res
+        }
+  }
+
 -- | Check if the given cradle is a stack cradle.
 -- This might be used to determine the GHC version to use on the project.
 -- If it is a stack-cradle, we have to use @"stack path --compiler-exe"@
