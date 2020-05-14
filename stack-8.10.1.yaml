@@ -8,7 +8,7 @@ packages:
 extra-deps:
 - Cabal-3.2.0.0
 - cabal-helper-1.1.0.0
-# See https://github.com/haskell-hvr/cabal-plan/pull/55 
+# See https://github.com/haskell-hvr/cabal-plan/pull/55
 - github: peti/cabal-plan
   commit: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
 - clock-0.7.2
@@ -30,7 +30,7 @@ extra-deps:
 flags:
   haskell-language-server:
     pedantic: true
-    # We want to let agpl be the default value in .cabal (True) 
+    # We want to let agpl be the default value in .cabal (True)
     # but brittany is not usable with ghc-8.10.1
     # see https://github.com/lspitzner/brittany/issues/269
     agpl: false
