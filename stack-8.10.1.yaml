@@ -20,7 +20,6 @@ extra-deps:
 - ghc-exactprint-0.6.3
 - lens-4.19.1
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.3.2
 - optics-core-0.3
 - github: wz1000/shake
   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
