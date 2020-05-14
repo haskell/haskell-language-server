@@ -298,7 +298,7 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 -- components mapping to the same hie,yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 loadSession :: FilePath -> Action (FilePath -> Action (IdeResult HscEnvEq))
-loadSession dir = do
+loadSession _dir = do
   nc <- ideNc <$> getShakeExtras
   liftIO $ do
     -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
