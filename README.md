@@ -144,7 +144,7 @@ Note, that the targets `hls` and `data` depend on the found GHC versions.
 An example output is:
 
 ```bash
-> cabal-hls-install ghcs
+> ./cabal-hls-install ghcs
 ******************************************************************
 Found the following GHC paths:
 ghc-8.6.5: /opt/bin/ghc-8.6.5
@@ -156,8 +156,8 @@ ghc-8.8.3: /opt/bin/ghc-8.8.3
 If your desired ghc has been found, you use it to install haskell-language-server.
 
 ```bash
-cabal-hls-install hls-8.6.5
-cabal-hls-install data
+./cabal-hls-install hls-8.6.5
+./cabal-hls-install data
 ```
 
 ## Project Configuration
