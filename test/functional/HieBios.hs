@@ -7,7 +7,7 @@ import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Messages
 import System.FilePath ((</>))
-import Test.HIE.Util
+import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 

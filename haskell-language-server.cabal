@@ -256,7 +256,7 @@ test-suite func-test
 library hls-test-utils
   import: agpl
   hs-source-dirs:      test/utils
-  exposed-modules:     Test.HIE.Util
+  exposed-modules:     Test.Hls.Util
   build-depends:       base
                      , haskell-language-server
                      , haskell-lsp

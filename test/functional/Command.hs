@@ -8,7 +8,7 @@ import Data.Char
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types as LSP
 import Language.Haskell.LSP.Types.Lens as LSP
-import Test.HIE.Util
+import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations

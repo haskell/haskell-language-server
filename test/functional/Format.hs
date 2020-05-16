@@ -6,7 +6,7 @@ import Data.Aeson
 import qualified Data.Text as T
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
-import Test.HIE.Util
+import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations

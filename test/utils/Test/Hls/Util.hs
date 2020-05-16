@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns #-}
-module Test.HIE.Util
+module Test.Hls.Util
   (
       codeActionSupportCaps
     , dummyLspFuncs

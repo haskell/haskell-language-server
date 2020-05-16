@@ -2,7 +2,7 @@ module Main where
 
 import Control.Monad.IO.Class
 import Language.Haskell.LSP.Test
-import Test.HIE.Util
+import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.Ingredients.Rerun
 

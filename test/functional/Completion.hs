@@ -9,7 +9,7 @@ import Control.Lens hiding ((.=))
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens hiding (applyEdit)
-import Test.HIE.Util
+import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations
