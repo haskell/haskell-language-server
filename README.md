@@ -174,6 +174,10 @@ For that you need to know what *components* have your project and the path
 associated with each one. So you will need some knowledge about
 [stack](https://docs.haskellstack.org/en/stable/build_command/#components) or [cabal](https://cabal.readthedocs.io/en/latest/cabal-commands.html?#cabal-v2-build) components.
 
+You also can use [this utility](https://github.com/Avi-D-coder/implicit-hie
+) to generate automatically `hie.yaml` files for
+the most common stack and cabal configurations
+
 For example, to state that you want to use `stack` then the configuration file
 would look like:
 
@@ -231,12 +235,6 @@ cradle:
       component: "ghcide:lib:ghcide"
     - path: "./ghcide/exe"
       component: "ghcide:exe:ghcide"
-```
-
-You can get some help to extract what components have your project running
-
-```bash
-stack ide targets
 ```
 
 Or you can explicitly state the program which should be used to collect
