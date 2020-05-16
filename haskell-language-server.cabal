@@ -257,7 +257,6 @@ library hls-test-utils
   import: agpl
   hs-source-dirs:      test/utils
   exposed-modules:     Test.HIE.Util
-                     , Test.Tasty.Expectation
   build-depends:       base
                      , haskell-language-server
                      , haskell-lsp
