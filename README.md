@@ -267,6 +267,46 @@ dependencies:
   - someDep
 ```
 
+## Editor Integration
+
+Note to editor integrators: there is now a haskell-language-server-wrapper executable, which is installed alongside the haskell-language-server executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching hie executable.
+
+All of the editor integrations assume that you have already installed HLS (see above) and that stack put the hls binary in your path (usually ~/.local/bin on linux and macOS).
+
+### Using HLS with Emacs
+
+Install HLS along with the following emacs packages:
+
+[lsp-mode](https://github.com/emacs-lsp/lsp-mode)
+[lsp-ui](https://github.com/emacs-lsp/lsp-ui)
+[lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
+
+Make sure to follow the instructions in the README of each of these packages.
+
+``` lisp
+(setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
+```
+
+
+
+### Using HLS with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
+
+Install HLS, and then enable haskell lang module with lsp flag in `.doom.d/init.el`
+``` emacs-lisp
+:lang
+(haskell +lsp)
+```
+
+in your `.doom.d/config.el` file
+
+``` emacs-lisp
+(after! lsp-haskell
+  (setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
+)
+```
+
+then do `$HOME/.emacs.d/bin/doom refresh`
+
 ## Contributing
 
 ### It's time to join the project!
