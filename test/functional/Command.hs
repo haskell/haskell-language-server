@@ -13,11 +13,13 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations
 
+
+--TODO : Response Message no longer has 4 inputs
 tests :: TestTree
 tests = testGroup "commands" [
     testCase "are prefixed" $
         runSession hieCommand fullCaps "test/testdata/" $ do
-            ResponseMessage _ _ (Just res) Nothing <- initializeResponse
+            ResponseMessage _ _ (Right res) <- initializeResponse
             let List cmds = res ^. LSP.capabilities . executeCommandProvider . _Just . commands
                 f x = (T.length (T.takeWhile isNumber x) >= 1) && (T.count ":" x >= 2)
             liftIO $ do
@@ -25,7 +27,7 @@ tests = testGroup "commands" [
                 cmds `shouldNotSatisfy` null
     , testCase "get de-prefixed" $
         runSession hieCommand fullCaps "test/testdata/" $ do
-            ResponseMessage _ _ _ (Just err) <- request
+            ResponseMessage _ _ (Left err) <- request
                 WorkspaceExecuteCommand
                 (ExecuteCommandParams "1234:package:add" (Just (List [])) Nothing) :: Session ExecuteCommandResponse
             let ResponseError _ msg _ = err
