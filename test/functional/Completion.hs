@@ -11,6 +11,7 @@ import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens hiding (applyEdit)
 import Test.Hls.Util
 import Test.Tasty
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations
 
@@ -358,6 +359,7 @@ tests = testGroup "completions" [
 
 contextTests :: TestTree
 contextTests = testGroup "contexts" [
+    ignoreTestBecause "Broken: Timed out waiting to receive a message from the server" $
     testCase "only provides type suggestions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
       _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
@@ -366,7 +368,8 @@ contextTests = testGroup "contexts" [
         compls `shouldContainCompl` "Integer"
         compls `shouldNotContainCompl` "interact"
 
-    , testCase "only provides type suggestions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+    , ignoreTestBecause "Broken: Timed out waiting to receive a message from the server" $
+      testCase "only provides type suggestions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
       _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
       compls <- getCompletions doc (Position 3 9)

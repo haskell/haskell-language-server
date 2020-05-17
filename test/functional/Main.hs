@@ -28,14 +28,14 @@ main = do
     setupBuildToolFiles
 
     -- run a test session to warm up the cache to prevent timeouts in other tests
-    putStrLn "Warming up HIE cache..."
+    putStrLn "Warming up haskell-language-server cache..."
     runSessionWithConfig (defaultConfig { messageTimeout = 120 }) hieCommand fullCaps "test/testdata" $
-        liftIO $ putStrLn "HIE cache is warmed up"
+        liftIO $ putStrLn "haskell-language-server cache is warmed up"
 
     --TODO Test runner with config like HSpec??
 
     -- test tree
-    defaultMainWithRerun $ testGroup "HIE" [
+    defaultMainWithRerun $ testGroup "haskell-language-server" [
           Command.tests
         , Completion.tests
         , Deferred.tests

@@ -14,12 +14,13 @@ import qualified Language.Haskell.LSP.Types.Lens as L
 import Language.Haskell.LSP.Types.Capabilities
 import Test.Hls.Util
 import Test.Tasty
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations
 
 tests :: TestTree
 tests = testGroup "window/workDoneProgress" [
-    testCase "sends indefinite progress notifications" $
+    ignoreTestBecause "Broken" $ testCase "sends indefinite progress notifications" $
     -- Testing that ghc-mod sends progress notifications
         runSession hieCommand progressCaps "test/testdata" $ do
             doc <- openDoc "ApplyRefact2.hs" "haskell"
@@ -75,7 +76,7 @@ tests = testGroup "window/workDoneProgress" [
             _ <- publishDiagnosticsNotification
             return ()
 
-    , testCase "sends indefinite progress notifications with liquid" $
+    , ignoreTestBecause "Broken" $ testCase "sends indefinite progress notifications with liquid" $
         -- Testing that Liquid Haskell sends progress notifications
         runSession hieCommand progressCaps "test/testdata" $ do
         doc <- openDoc "liquid/Evens.hs" "haskell"

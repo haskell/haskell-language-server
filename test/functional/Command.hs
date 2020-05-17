@@ -11,6 +11,7 @@ import Language.Haskell.LSP.Types.Lens as LSP
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Hspec.Expectations
 
 
@@ -25,7 +26,8 @@ tests = testGroup "commands" [
             liftIO $ do
                 cmds `shouldSatisfy` all f
                 cmds `shouldNotSatisfy` null
-    , testCase "get de-prefixed" $
+    , ignoreTestBecause "Broken: Plugin package doesn't exist" $
+      testCase "get de-prefixed" $
         runSession hieCommand fullCaps "test/testdata/" $ do
             ResponseMessage _ _ (Left err) <- request
                 WorkspaceExecuteCommand

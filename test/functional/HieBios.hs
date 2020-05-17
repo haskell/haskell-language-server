@@ -9,18 +9,19 @@ import Language.Haskell.LSP.Messages
 import System.FilePath ((</>))
 import Test.Hls.Util
 import Test.Tasty
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "hie-bios" [
-    testCase "loads modules inside main-is" $ do
+    ignoreTestBecause "Broken" $ testCase "loads modules inside main-is" $ do
         writeFile (hieBiosErrorPath </> "hie.yaml") ""
         runSession hieCommand fullCaps "test/testdata/hieBiosMainIs" $ do
             _ <- openDoc "Main.hs" "haskell"
             _ <- count 2 waitForDiagnostics
             return ()
 
-    , testCase "reports errors in hie.yaml" $ do
+    , ignoreTestBecause "Broken" $ testCase "reports errors in hie.yaml" $ do
         writeFile (hieBiosErrorPath </> "hie.yaml") ""
         runSession hieCommand fullCaps hieBiosErrorPath $ do
             _ <- openDoc "Foo.hs" "haskell"

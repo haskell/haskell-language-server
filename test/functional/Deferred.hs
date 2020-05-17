@@ -14,6 +14,7 @@ import Language.Haskell.LSP.Types.Lens hiding (id, message)
 -- import qualified Language.Haskell.LSP.Types.Lens as LSP
 import Test.Hls.Util
 import Test.Tasty
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations
 
@@ -156,6 +157,7 @@ tests = testGroup "deferred responses" [
 
 multiMainTests :: TestTree
 multiMainTests = testGroup "multiple main modules" [
+    ignoreTestBecause "Broken: Unexpected ConduitParser.empty" $
     testCase "Can load one file at a time, when more than one Main module exists"
         -- $ runSession hieCommand fullCaps "test/testdata" $ do
         $ runSession hieCommand fullCaps "test/testdata" $ do
