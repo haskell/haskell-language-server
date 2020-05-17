@@ -263,7 +263,7 @@ test-suite ghcide-tests
         haskell-lsp-types,
         network-uri,
         lens,
-        lsp-test >= 0.8,
+        lsp-test >= 0.11.0.1 && < 0.12,
         parser-combinators,
         QuickCheck,
         quickcheck-instances,
