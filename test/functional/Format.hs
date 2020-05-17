@@ -72,14 +72,14 @@ brittanyTests = testGroup "brittany" [
     testCase "formats a document with LF endings" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "BrittanyLF.hs" "haskell"
         let opts = DocumentFormattingParams doc (FormattingOptions 4 True) Nothing
-        ResponseMessage _ _ (Just edits) _ <- request TextDocumentFormatting opts
+        ResponseMessage _ _ (Right edits) <- request TextDocumentFormatting opts
         liftIO $ edits `shouldBe` [TextEdit (Range (Position 0 0) (Position 3 0))
                                     "foo :: Int -> String -> IO ()\nfoo x y = do\n    print x\n    return 42\n"]
 
     , testCase "formats a document with CRLF endings" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "BrittanyCRLF.hs" "haskell"
         let opts = DocumentFormattingParams doc (FormattingOptions 4 True) Nothing
-        ResponseMessage _ _ (Just edits) _ <- request TextDocumentFormatting opts
+        ResponseMessage _ _ (Right edits) <- request TextDocumentFormatting opts
         liftIO $ edits `shouldBe` [TextEdit (Range (Position 0 0) (Position 3 0))
                                     "foo :: Int -> String -> IO ()\nfoo x y = do\n    print x\n    return 42\n"]
 
@@ -87,7 +87,7 @@ brittanyTests = testGroup "brittany" [
         doc <- openDoc "BrittanyLF.hs" "haskell"
         let range = Range (Position 1 0) (Position 2 22)
             opts = DocumentRangeFormattingParams doc range (FormattingOptions 4 True) Nothing
-        ResponseMessage _ _ (Just edits) _ <- request TextDocumentRangeFormatting opts
+        ResponseMessage _ _ (Right edits) <- request TextDocumentRangeFormatting opts
         liftIO $ edits `shouldBe` [TextEdit (Range (Position 1 0) (Position 3 0))
                                         "foo x y = do\n    print x\n    return 42\n"]
 
@@ -95,7 +95,7 @@ brittanyTests = testGroup "brittany" [
         doc <- openDoc "BrittanyCRLF.hs" "haskell"
         let range = Range (Position 1 0) (Position 2 22)
             opts = DocumentRangeFormattingParams doc range (FormattingOptions 4 True) Nothing
-        ResponseMessage _ _ (Just edits) _ <- request TextDocumentRangeFormatting opts
+        ResponseMessage _ _ (Right edits) <- request TextDocumentRangeFormatting opts
         liftIO $ edits `shouldBe` [TextEdit (Range (Position 1 0) (Position 3 0))
                                         "foo x y = do\n    print x\n    return 42\n"]
     ]

@@ -471,7 +471,7 @@ unusedTermTests = testGroup "unused term code actions" [
         diags <- getCurrentDiagnostics doc
         let params = CodeActionParams doc (Range (Position 2 10) (Position 4 0)) caContext Nothing
             caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactorInline]))
-        ResponseMessage _ _ (Just (List res)) _ <- request TextDocumentCodeAction params
+        ResponseMessage _ _ (Right (List res)) <- request TextDocumentCodeAction params
         let cas = map fromAction res
             kinds = map (^. L.kind) cas
         liftIO $ do

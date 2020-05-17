@@ -9,7 +9,7 @@ import           Data.Default
 import qualified Data.Text as T
 import           Language.Haskell.LSP.Test hiding (message)
 import           Language.Haskell.LSP.Types as LSP
-import           Language.Haskell.LSP.Types.Lens as LSP hiding (contents, error )
+import           Language.Haskell.LSP.Types.Lens as LSP hiding (contents)
 import           Ide.Plugin.Config
 import           Test.Hls.Util
 import           Test.Tasty
