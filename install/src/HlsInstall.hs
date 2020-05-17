@@ -53,7 +53,8 @@ defaultMain = do
       need ["show-options"]
       need ["submodules"]
       need ["check"]
-      if isRunFromStack then stackBuildData args else cabalBuildData args
+      liftIO $ putStrLn "Generation of hoogle data files is disabled for now."  
+      -- if isRunFromStack then stackBuildData args else cabalBuildData args
 
     forM_
       versions
