@@ -10,7 +10,7 @@ extra-deps:
 - cabal-helper-1.1.0.0
 - clock-0.7.2
 - constrained-dynamic-0.1.0.0
-- floskell-0.10.2
+- floskell-0.10.3
 # - ghcide-0.1.0
 - ghc-check-0.3.0.1
 - ghc-lib-parser-8.10.1.20200412
