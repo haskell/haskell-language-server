@@ -19,7 +19,7 @@ import Control.Monad.IO.Class
 import           Data.Foldable
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
-import Language.Haskell.LSP.Test hiding (message, openDoc')
+import Language.Haskell.LSP.Test hiding (message)
 import qualified Language.Haskell.LSP.Test as LspTest
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens as Lsp

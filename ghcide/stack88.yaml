@@ -4,7 +4,7 @@ packages:
 extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
-- lsp-test-0.10.3.0
+- lsp-test-0.11.0.1
 - ghc-check-0.3.0.1
 
 nix:
