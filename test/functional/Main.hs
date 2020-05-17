@@ -1,10 +1,9 @@
 module Main where
 
-import Control.Monad.IO.Class
-import Language.Haskell.LSP.Test
-import Test.Hls.Util
 import Test.Tasty
+import Test.Tasty.Runners (listingTests, consoleTestReporter)
 import Test.Tasty.Ingredients.Rerun
+import Test.Tasty.Runners.AntXML
 
 import Command
 import Completion
@@ -24,18 +23,14 @@ import Symbol
 import TypeDefinition
 
 main :: IO ()
-main = do
-    setupBuildToolFiles
-
-    -- run a test session to warm up the cache to prevent timeouts in other tests
-    putStrLn "Warming up haskell-language-server cache..."
-    runSessionWithConfig (defaultConfig { messageTimeout = 120 }) hieCommand fullCaps "test/testdata" $
-        liftIO $ putStrLn "haskell-language-server cache is warmed up"
-
-    --TODO Test runner with config like HSpec??
-
-    -- test tree
-    defaultMainWithRerun $ testGroup "haskell-language-server" [
+main =
+    -- ingredient: xml runner writes json file of test results (https://github.com/ocharles/tasty-ant-xml/blob/master/Test/Tasty/Runners/AntXML.hs)
+    --             rerunningTests allow rerun of failed tests (https://github.com/ocharles/tasty-rerun/blob/master/src/Test/Tasty/Ingredients/Rerun.hs)
+    defaultMainWithIngredients [
+          antXMLRunner
+        , rerunningTests [ listingTests, consoleTestReporter ]
+        ]
+    $ testGroup "haskell-language-server" [
           Command.tests
         , Completion.tests
         , Deferred.tests
