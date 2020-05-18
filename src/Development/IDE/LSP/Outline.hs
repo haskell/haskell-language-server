@@ -108,11 +108,23 @@ documentSymbolForDecl (L l (TyClD DataDecl { tcdLName = L _ name, tcdDataDefn = 
             { _name           = showRdrName n
             , _kind           = SkConstructor
             , _selectionRange = srcSpanToRange l'
+            , _children       = conArgRecordFields (getConArgs x)
             }
         | L l  x <- dd_cons
         , L l' n <- getConNames x
         ]
     }
+  where
+    -- | Extract the record fields of a constructor
+    conArgRecordFields (RecCon (L _ lcdfs)) = Just $ List
+      [ (defDocumentSymbol l :: DocumentSymbol)
+          { _name = showRdrName n
+          , _kind = SkField
+          }
+      | L _ cdf <- lcdfs
+      , L l n <- rdrNameFieldOcc . unLoc <$> cd_fld_names cdf
+      ]
+    conArgRecordFields _ = Nothing
 documentSymbolForDecl (L l (TyClD SynDecl { tcdLName = L l' n })) = Just
   (defDocumentSymbol l :: DocumentSymbol) { _name           = showRdrName n
                                           , _kind           = SkTypeParameter
