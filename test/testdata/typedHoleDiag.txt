@@ -1,0 +1,26 @@
+• Found hole: _ :: Maybe T.Text
+• In the expression: _
+  In an equation for ‘extractHoles’:
+      extractHoles diag
+        | "Found hole:" `T.isInfixOf` diag = _
+        | otherwise = Nothing
+• Relevant bindings include
+    diag :: T.Text
+      (bound at /private/var/folders/zh/fqwj2cq95b7gbzs49fsq5drw0000gn/T/ghc-mod48138/GhcMod48135-416.hs:482:14)
+    extractHoles :: T.Text -> Maybe T.Text
+      (bound at /private/var/folders/zh/fqwj2cq95b7gbzs49fsq5drw0000gn/T/ghc-mod48138/GhcMod48135-416.hs:482:1)
+  Valid substitutions include
+    Nothing :: forall a. Maybe a
+      (imported from ‘Data.Maybe’ at /private/var/folders/zh/fqwj2cq95b7gbzs49fsq5drw0000gn/T/ghc-mod48138/GhcMod48135-416.hs:24:1-27
+       (and originally defined in ‘GHC.Base’))
+    mempty :: forall a. Monoid a => a
+      (imported from ‘Prelude’ at /private/var/folders/zh/fqwj2cq95b7gbzs49fsq5drw0000gn/T/ghc-mod48138/GhcMod48135-416.hs:8:8-39
+       (and originally defined in ‘GHC.Base’))
+    undefined :: forall (a :: TYPE r).
+                 GHC.Stack.Types.HasCallStack =>
+                 a
+      (imported from ‘Prelude’ at /private/var/folders/zh/fqwj2cq95b7gbzs49fsq5drw0000gn/T/ghc-mod48138/GhcMod48135-416.hs:8:8-39
+       (and originally defined in ‘GHC.Err’))
+    GM.mzero :: forall (m :: * -> *). GM.MonadPlus m => forall a. m a
+      (imported qualified from ‘GhcMod.Error’ at /private/var/folders/zh/fqwj2cq95b7gbzs49fsq5drw0000gn/T/ghc-mod48138/GhcMod48135-416.hs:37:1-56
+       (and originally defined in ‘GHC.Base’))

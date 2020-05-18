@@ -1,0 +1,24 @@
+name:                gototest
+version:             0.1.0.0
+-- synopsis:
+-- description:
+license:             BSD3
+author:              Author name here
+maintainer:          example@example.com
+copyright:           2017 Author name here
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.10
+
+executable gototest-exec
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  other-modules:
+  build-depends:       base >= 4.7 && < 5, gototest
+  default-language:    Haskell2010
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Lib, Lib2
+  build-depends:       base >= 4.7 && < 5
+  default-language:    Haskell2010

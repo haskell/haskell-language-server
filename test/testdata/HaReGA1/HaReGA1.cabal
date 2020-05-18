@@ -1,0 +1,10 @@
+name:                HaReGA1
+version:             0.1.0.0
+cabal-version:       >=2.0
+build-type: Simple
+
+executable harega
+  build-depends:       base, parsec
+  main-is:             HaReGA1.hs
+  default-language:    Haskell2010
+

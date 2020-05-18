@@ -1,24 +1,27 @@
 {-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns #-}
-module TestUtils
+module Test.Hls.Util
   (
-    withFileLogging
-  , setupBuildToolFiles
-  -- , testCommand
-  -- , runSingle
-  -- , runSingle'
-  -- , runSingleReq
+      codeActionSupportCaps
+    , dummyLspFuncs
+    , flushStackEnvironment
+    , getHspecFormattedConfig
+    , ghcVersion, GhcVersion(..)
+    , hieCommand
+    , hieCommandExamplePlugin
+    , hieCommandVomit
+    , logConfig
+    , logFilePath
+    , noLogConfig
+    , setupBuildToolFiles
+    , withFileLogging
   -- , makeRequest
   -- , runIGM
   -- , runIGM'
-  , ghcVersion, GhcVersion(..)
-  , logFilePath
-  , hieCommand
-  , hieCommandVomit
-  , hieCommandExamplePlugin
-  , getHspecFormattedConfig
+  -- , runSingle
+  -- , runSingle'
+  -- , runSingleReq
+  -- , testCommand
   -- , testOptions
-  , flushStackEnvironment
-  , dummyLspFuncs
   )
 where
 
@@ -31,6 +34,8 @@ import           Data.List (intercalate)
 import           Data.Maybe
 import           Language.Haskell.LSP.Core
 import           Language.Haskell.LSP.Types
+import qualified Language.Haskell.LSP.Test as T
+import qualified Language.Haskell.LSP.Types.Capabilities as C
 -- import           Haskell.Ide.Engine.MonadTypes hiding (withProgress, withIndefiniteProgress)
 -- import qualified Ide.Cradle as Bios
 -- import qualified Ide.Engine.Config as Config
@@ -44,7 +49,6 @@ import           Test.Hspec.Core.Formatters
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal
 -- import qualified Haskell.Ide.Engine.PluginApi as HIE (BiosOptions, defaultOptions)
-
 -- import HIE.Bios.Types
 
 -- testOptions :: HIE.BiosOptions
@@ -90,6 +94,19 @@ import           Text.Blaze.Internal
 --       lspFuncs :: LspFuncs Config.Config
 --       lspFuncs = tmpFuncs { config = (fmap . fmap) modifyConfig (config tmpFuncs)}
 --   runIdeGhcM mlibdir testPlugins lspFuncs stateVar f
+
+noLogConfig :: T.SessionConfig
+noLogConfig = T.defaultConfig { T.logMessages = False }
+
+logConfig :: T.SessionConfig
+logConfig = T.defaultConfig { T.logMessages = True }
+
+codeActionSupportCaps :: C.ClientCapabilities
+codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
+  where
+    textDocumentCaps = def { C._codeAction = Just codeActionCaps }
+    codeActionCaps = C.CodeActionClientCapabilities (Just True) (Just literalSupport)
+    literalSupport = C.CodeActionLiteralSupport def
 
 withFileLogging :: FilePath -> IO a -> IO a
 withFileLogging logFile f = do
