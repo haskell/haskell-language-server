@@ -1853,6 +1853,18 @@ outlineTests = testGroup
                               (R 0 0 0 10)
                               [docSymbol "C" SkConstructor (R 0 9 0 10)]
       ]
+  , testSessionWait "record fields" $ do
+    let source = T.unlines ["data A = B {", "  x :: Int", "  , y :: Int}"]
+    docId   <- createDoc "A.hs" "haskell" source
+    symbols <- getDocumentSymbols docId
+    liftIO $ symbols @=? Left
+      [ docSymbolWithChildren "A" SkStruct (R 0 0 2 13)
+          [ docSymbolWithChildren' "B" SkConstructor (R 0 9 2 13) (R 0 9 0 10)
+            [ docSymbol "x" SkField (R 1 2 1 3)
+            , docSymbol "y" SkField (R 2 4 2 5)
+            ]
+          ]
+      ]
   , testSessionWait "import" $ do
     let source = T.unlines ["import Data.Maybe"]
     docId   <- createDoc "A.hs" "haskell" source
@@ -1902,6 +1914,8 @@ outlineTests = testGroup
     DocumentSymbol name (Just detail) kind Nothing loc loc Nothing
   docSymbolWithChildren name kind loc cc =
     DocumentSymbol name Nothing kind Nothing loc loc (Just $ List cc)
+  docSymbolWithChildren' name kind loc selectionLoc cc =
+    DocumentSymbol name Nothing kind Nothing loc selectionLoc (Just $ List cc)
   moduleSymbol name loc cc = DocumentSymbol name
                                             Nothing
                                             SkFile
