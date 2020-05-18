@@ -38,6 +38,7 @@ import qualified Language.Haskell.LSP.Types     as LSP
 import Data.Aeson (ToJSON(toJSON))
 import Development.IDE.Types.Logger (logDebug)
 import Util
+import System.IO (hPutStrLn, stderr)
 
 -- Prefix for the cache path
 cacheDir :: String
@@ -121,6 +122,8 @@ createSession (ComponentOptions theOpts _) = do
     libdir <- getLibdir
 
     cacheDir <- getCacheDir theOpts
+
+    hPutStrLn stderr $ "Interface files cache dir: " <> cacheDir
 
     runGhc (Just libdir) $ do
         dflags <- getSessionDynFlags
