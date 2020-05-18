@@ -25,6 +25,7 @@ This is *very* early stage software.
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
   - [Project Configuration](#project-configuration)
+  - [Editor Integration](#editor-integration)
   - [Contributing](#contributing)
     - [It's time to join the project!](#its-time-to-join-the-project)
 
@@ -269,11 +270,11 @@ dependencies:
 
 ## Editor Integration
 
-Note to editor integrators: there is now a haskell-language-server-wrapper executable, which is installed alongside the haskell-language-server executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching hie executable.
+Note to editor integrators: there is now a haskell-language-server-wrapper executable, which is installed alongside the haskell-language-server executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching haskell-language-server executable.
 
-All of the editor integrations assume that you have already installed HLS (see above) and that stack put the hls binary in your path (usually ~/.local/bin on linux and macOS).
+All of the editor integrations assume that you have already installed haskell-language-server (see above) and that the installation script put the haskell-language-server binary in your path (usually ~/.local/bin on linux and macOS).
 
-### Using HLS with Emacs
+### Using haskell-language-server with Emacs
 
 Install HLS along with the following emacs packages:
 
@@ -283,13 +284,19 @@ Install HLS along with the following emacs packages:
 
 Make sure to follow the instructions in the README of each of these packages.
 
-``` lisp
-(setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
+``` emacs-lisp
+(use-package lsp-haskell
+ :ensure t
+ :config
+ (setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
+ ;; Comment/uncomment this line to see interactions between lsp client/server.
+ ;;(setq lsp-log-io t)
+)
 ```
 
 
 
-### Using HLS with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
+### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
 Install HLS, and then enable haskell lang module with lsp flag in `.doom.d/init.el`
 ``` emacs-lisp
@@ -300,8 +307,12 @@ Install HLS, and then enable haskell lang module with lsp flag in `.doom.d/init.
 in your `.doom.d/config.el` file
 
 ``` emacs-lisp
-(after! lsp-haskell
-  (setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
+(use-package lsp-haskell
+ :ensure t
+ :config
+ (setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
+ ;; Comment/uncomment this line to see interactions between lsp client/server.
+ ;;(setq lsp-log-io t)
 )
 ```
 
