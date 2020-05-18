@@ -37,6 +37,7 @@ module Development.IDE.GHC.Compat(
     GHC.ModLocation,
     Module.addBootSuffix,
     pattern ModLocation,
+    getConArgs,
 
     module GHC
     ) where
@@ -48,7 +49,12 @@ import Fingerprint (Fingerprint)
 import qualified Module
 
 import qualified GHC
-import GHC hiding (ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, ModLocation)
+import GHC hiding (
+      ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, ModLocation
+#if MIN_GHC_API_VERSION(8,6,0)
+    , getConArgs
+#endif
+    )
 import qualified HeaderInfo as Hdr
 import Avail
 import ErrUtils (ErrorMessages)
@@ -288,4 +294,11 @@ getModuleHash :: ModIface -> Fingerprint
 getModuleHash = mi_mod_hash . mi_final_exts
 #else
 getModuleHash = mi_mod_hash
+#endif
+
+getConArgs :: ConDecl pass -> HsConDeclDetails pass
+#if MIN_GHC_API_VERSION(8,6,0)
+getConArgs = GHC.getConArgs
+#else
+getConArgs = GHC.getConDetails
 #endif
