@@ -60,22 +60,30 @@ findLocalCradle fp = do
   return crdl
 
 implicitCradle :: FilePath -> IO (Cradle CabalHelper)
-implicitCradle fp = do
+implicitCradle fp = cradleFallback main fallback
+  where main = loadImplicitCradle fp
+        fallback = cabalHelperCradle fp
+
+cradleFallback :: IO (Cradle CabalHelper) -> IO (Cradle CabalHelper) -> IO (Cradle CabalHelper)
+cradleFallback mainCradle fallbackCradle = do
   crd@Cradle
-    { cradleOptsProg = CradleAction { actionName, runCradle = chRunCradle}
-    } <- cabalHelperCradle fp
+    { cradleOptsProg = CradleAction { actionName = mActionName, runCradle = mRunCradle}
+    } <- mainCradle
+  Cradle
+    { cradleOptsProg = CradleAction { actionName = fbActionName, runCradle = fbRunCradle}
+    } <- fallbackCradle
   return $ crd {
     cradleOptsProg =
       CradleAction
-        { actionName
+        { actionName = mActionName
         , runCradle = \logF fp -> do
             let fallback errMsg = do
-                  warningm $ "Error loading " ++ cradleDisplay crd ++ " using cabal-helper: " ++ errMsg
-                  warningm $ "Fallback to hie-bios implicit cradle"
-                  implCradle :: Cradle CabalHelper <- loadImplicitCradle fp
-                  implRes <- (runCradle (cradleOptsProg implCradle)) logF fp
-                  return implRes
-            res <- tryIO $ chRunCradle logF fp
+                  warningm $ "Error loading " ++ cradleDisplay crd
+                          ++ " using cradle action " ++ show mActionName ++ ": " ++ errMsg
+                  warningm $ "Fallback to cradle action " ++ show fbActionName
+                  fbRes <- fbRunCradle logF fp
+                  return fbRes
+            res <- tryIO $ mRunCradle logF fp
             case res of
               Left x -> fallback (show x)
               Right (CradleFail (CradleError _ex stde)) -> fallback (unlines stde)
