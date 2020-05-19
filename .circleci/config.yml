@@ -96,21 +96,6 @@ defaults: &defaults
 
 version: 2
 jobs:
-  # ghc-8.4.2:
-  #   environment:
-  #     - STACK_FILE: "stack-8.4.2.yaml"
-  #   <<: *defaults
-
-  # ghc-8.4.3:
-  #   environment:
-  #     - STACK_FILE: "stack-8.4.3.yaml"
-  #   <<: *defaults
-
-  # ghc-8.4.4:
-  #   environment:
-  #     - STACK_FILE: "stack-8.4.4.yaml"
-  #   <<: *defaults
-
   ghc-8.6.4:
     environment:
       - STACK_FILE: "stack-8.6.4.yaml"
@@ -124,6 +109,16 @@ jobs:
   ghc-8.8.2:
     environment:
       - STACK_FILE: "stack-8.8.2.yaml"
+    <<: *defaults
+
+  ghc-8.8.3:
+    environment:
+      - STACK_FILE: "stack-8.8.3.yaml"
+    <<: *defaults
+
+  ghc-8.10.1:
+    environment:
+      - STACK_FILE: "stack-8.10.1.yaml"
     <<: *defaults
 
   # ghc-nightly:
@@ -174,12 +169,10 @@ workflows:
   version: 2
   multiple-ghcs:
     jobs:
-      # - ghc-8.4.2
-      # - ghc-8.4.3
-      # - ghc-8.4.4
       - ghc-8.6.4
       - ghc-8.6.5
-      # - ghc-8.8.1
       - ghc-8.8.2
+      - ghc-8.8.3
+      - ghc-8.10.1
       # - ghc-nightly
       - cabal
