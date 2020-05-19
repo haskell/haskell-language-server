@@ -13,6 +13,12 @@ source-repository-package
     location: https://github.com/peti/cabal-plan
     tag: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
 
+-- See https://github.com/DanielG/cabal-helper/pull/117
+source-repository-package
+    type: git
+    location: https://github.com/jneira/cabal-helper
+    tag: 27736afc4360ec8e2f2e5e7cddf34e2289d3a2cb
+
 tests: true
 documentation: true
 

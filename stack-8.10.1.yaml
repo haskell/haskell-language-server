@@ -7,7 +7,9 @@ packages:
 
 extra-deps:
 - Cabal-3.2.0.0
-- cabal-helper-1.1.0.0
+# - cabal-helper-1.1.0.0
+- github: jneira/cabal-helper
+  commit: 27736afc4360ec8e2f2e5e7cddf34e2289d3a2cb
 # See https://github.com/haskell-hvr/cabal-plan/pull/55
 - github: peti/cabal-plan
   commit: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
