@@ -16,7 +16,7 @@ extra-deps:
 - constrained-dynamic-0.1.0.0
 # - ghcide-0.1.0
 - extra-1.6.21
-- floskell-0.10.2
+- floskell-0.10.3
 - fuzzy-0.1.0.0
 - ghc-check-0.3.0.1
 - ghc-exactprint-0.6.2 # for HaRe

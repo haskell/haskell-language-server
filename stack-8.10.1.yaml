@@ -12,10 +12,7 @@ extra-deps:
 - github: peti/cabal-plan
   commit: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
 - clock-0.7.2
-# - floskell-0.10.2
-# See https://github.com/ennocramer/floskell/pull/45
-- github: jneira/floskell
-  commit: 78f888f46dae96922d855af1e6a00ea6bb856987
+- floskell-0.10.3
 # - ghcide-0.1.0
 - ghc-exactprint-0.6.3
 - lens-4.19.1

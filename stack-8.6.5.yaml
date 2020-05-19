@@ -14,7 +14,7 @@ extra-deps:
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - extra-1.7.1
-- floskell-0.10.2
+- floskell-0.10.3
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
 - ghc-check-0.3.0.1
