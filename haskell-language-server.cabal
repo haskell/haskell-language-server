@@ -224,7 +224,7 @@ test-suite func-test
                       , lens
                       , lsp-test >= 0.10.0.0
                       , tasty
-                      , tasty-ant-xml
+                      , tasty-ant-xml >= 1.1.6
                       , tasty-expected-failure
                       , tasty-hunit
                       , tasty-rerun
