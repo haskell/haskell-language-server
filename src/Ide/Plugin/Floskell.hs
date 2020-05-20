@@ -25,17 +25,9 @@ import           Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = PluginDescriptor
+descriptor plId = defaultPluginDescriptor
   { pluginId = plId
-  , pluginRules = mempty
-  , pluginCommands = []
-  , pluginCodeActionProvider = Nothing
-  , pluginCodeLensProvider   = Nothing
-  , pluginDiagnosticProvider = Nothing
-  , pluginHoverProvider      = Nothing
-  , pluginSymbolsProvider    = Nothing
   , pluginFormattingProvider = Just provider
-  , pluginCompletionProvider = Nothing
   }
 
 -- ---------------------------------------------------------------------

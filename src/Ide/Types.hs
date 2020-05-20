@@ -1,10 +1,12 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.Types
     (
       IdePlugins(..)
     , PluginDescriptor(..)
+    , defaultPluginDescriptor
     , PluginCommand(..)
     , PluginId(..)
     , CommandId(..)
@@ -59,6 +61,19 @@ data PluginDescriptor =
                    , pluginCompletionProvider :: !(Maybe CompletionProvider)
                    }
 
+defaultPluginDescriptor :: PluginDescriptor
+defaultPluginDescriptor =
+  PluginDescriptor
+    ""
+    mempty
+    mempty
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
 -- instance Show PluginCommand where
 --   show (PluginCommand i _ _) = "PluginCommand { name = " ++ show i ++ " }"
 

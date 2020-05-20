@@ -24,17 +24,10 @@ import           Language.Haskell.LSP.Types
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = PluginDescriptor
+descriptor plId = defaultPluginDescriptor
   { pluginId = plId
-  , pluginRules = mempty
   , pluginCommands = commands
   , pluginCodeActionProvider = Just codeActionProvider
-  , pluginCodeLensProvider   = Nothing
-  , pluginDiagnosticProvider = Nothing
-  , pluginHoverProvider = Nothing
-  , pluginSymbolsProvider = Nothing
-  , pluginFormattingProvider = Nothing
-  , pluginCompletionProvider = Nothing
   }
 
 -- ---------------------------------------------------------------------
