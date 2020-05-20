@@ -21,6 +21,7 @@ module Ide.Types
     , CommandFunction
     , ExecuteCommandProvider
     , CompletionProvider
+    , RenameProvider
     , WithSnippets(..)
     ) where
 
@@ -59,6 +60,7 @@ data PluginDescriptor =
                    , pluginSymbolsProvider    :: !(Maybe SymbolsProvider)
                    , pluginFormattingProvider :: !(Maybe (FormattingProvider IO))
                    , pluginCompletionProvider :: !(Maybe CompletionProvider)
+                   , pluginRenameProvider     :: !(Maybe RenameProvider)
                    }
 
 defaultPluginDescriptor :: PluginDescriptor
@@ -74,6 +76,8 @@ defaultPluginDescriptor =
     Nothing
     Nothing
     Nothing
+    Nothing
+
 -- instance Show PluginCommand where
 --   show (PluginCommand i _ _) = "PluginCommand { name = " ++ show i ++ " }"
 
@@ -126,6 +130,11 @@ type CodeLensProvider = LSP.LspFuncs Config
                       -> PluginId
                       -> CodeLensParams
                       -> IO (Either ResponseError (List CodeLens))
+
+type RenameProvider = LSP.LspFuncs Config
+                    -> IdeState
+                    -> RenameParams
+                    -> IO (Either ResponseError WorkspaceEdit)
 
 type DiagnosticProviderFuncSync
   = DiagnosticTrigger -> Uri
