@@ -69,6 +69,7 @@ import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.StylishHaskell          as StylishHaskell
+import Ide.Plugin.Retrie                  as Retrie
 #if AGPL
 import Ide.Plugin.Brittany                as Brittany
 #endif
@@ -105,6 +106,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       -- , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
       , StylishHaskell.descriptor "stylish-haskell"
+      , Retrie.descriptor "retrie"
 #if AGPL
       , Brittany.descriptor    "brittany"
 #endif
