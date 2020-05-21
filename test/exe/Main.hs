@@ -73,6 +73,7 @@ main = defaultMainWithRerun $ testGroup "HIE"
   , positionMappingTests
   , watchedFilesTests
   , cradleTests
+  , dependentFileTest
   ]
 
 initializeResponseTests :: TestTree
@@ -2044,6 +2045,42 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             _ <- createDoc "A.hs" "haskell" "module A where\nimport LoadCradleBar"
             msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message @PublishDiagnosticsNotification))
             liftIO $ length msgs @?= 0
+
+
+dependentFileTest :: TestTree
+dependentFileTest = testGroup "addDependentFile"
+    [testGroup "file-changed" [testSession' "test" test]
+    ]
+    where
+      test dir = do
+        -- If the file contains B then no type error
+        -- otherwise type error
+        liftIO $ writeFile (dir </> "dep-file.txt") "A"
+        let fooContent = T.unlines
+              [ "{-# LANGUAGE TemplateHaskell #-}"
+              , "module Foo where"
+              , "import Language.Haskell.TH.Syntax"
+              , "foo :: Int"
+              , "foo = 1 + $(do"
+              , "               qAddDependentFile \"dep-file.txt\""
+              , "               f <- qRunIO (readFile \"dep-file.txt\")"
+              , "               if f == \"B\" then [| 1 |] else lift f)"
+              ]
+        let bazContent = T.unlines ["module Baz where", "import Foo"]
+        _ <-createDoc "Foo.hs" "haskell" fooContent
+        doc <- createDoc "Baz.hs" "haskell" bazContent
+        expectDiagnostics
+          [("Foo.hs", [(DsError, (4, 6), "Couldn't match expected type")])]
+        -- Now modify the dependent file
+        liftIO $ writeFile (dir </> "dep-file.txt") "B"
+        let change = TextDocumentContentChangeEvent
+              { _range = Just (Range (Position 2 0) (Position 2 6))
+              , _rangeLength = Nothing
+              , _text = "f = ()"
+              }
+        -- Modifying Baz will now trigger Foo to be rebuilt as well
+        changeDoc doc [change]
+        expectDiagnostics [("Foo.hs", [])]
 
 
 cradleLoadedMessage :: Session FromServerMessage

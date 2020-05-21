@@ -426,7 +426,7 @@ typeCheckRuleDefinition file pm generateArtifacts = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
-  liftIO $ do
+  addUsageDependencies $ liftIO $ do
     res <- typecheckModule defer hsc (zipWith unpack mirs bytecodes) pm
     case res of
       (diags, Just (hsc,tcm)) | DoGenerateInterfaceFiles <- generateArtifacts -> do
@@ -439,6 +439,18 @@ typeCheckRuleDefinition file pm generateArtifacts = do
   unpack HiFileResult{..} bc = (hirModSummary, (hirModIface, bc))
   uses_th_qq dflags =
     xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
+
+  addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
+  addUsageDependencies a = do
+    r@(_, mtc) <- a
+    forM_ mtc $ \tc -> do
+      let used_files = mapMaybe udep (mi_usages (hm_iface (tmrModInfo tc)))
+          udep (UsageFile fp _h) = Just fp
+          udep _ = Nothing
+      -- Add a dependency on these files which are added by things like
+      -- qAddDependentFile
+      void $ uses_ GetModificationTime (map toNormalizedFilePath' used_files)
+    return r
 
 
 generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult (SafeHaskellMode, CgGuts, ModDetails))
