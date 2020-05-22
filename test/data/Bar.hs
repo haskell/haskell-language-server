@@ -1,3 +1,3 @@
-module Bar (Bar) where
+module Bar (Bar(..)) where
 
 data Bar = Bar
