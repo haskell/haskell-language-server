@@ -102,7 +102,6 @@ main = do
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = argsTesting
                     , optThreads        = argsThreads
-                    , optInterfaceLoadingDiagnostics = argsTesting
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (cradleRules >> mainRule >> pluginRules plugins >> action kick)
