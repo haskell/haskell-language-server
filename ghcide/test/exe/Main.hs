@@ -1369,7 +1369,8 @@ findDefinitionAndHoverTests = let
 
   mkFindTests tests = testGroup "get"
     [ testGroup "definition" $ mapMaybe fst tests
-    , testGroup "hover"      $ mapMaybe snd tests ]
+    , testGroup "hover"      $ mapMaybe snd tests
+    , checkFileCompiles sourceFilePath ]
 
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
@@ -1463,6 +1464,12 @@ findDefinitionAndHoverTests = let
         yes    = Just -- test should run and pass
         broken = Just . (`xfail` "known broken")
         no = const Nothing -- don't run this test at all
+
+checkFileCompiles :: FilePath -> TestTree
+checkFileCompiles fp =
+  testSessionWait ("Does " ++ fp ++ " compile") $
+    void (openTestDataDoc fp)
+
 
 pluginTests :: TestTree
 pluginTests = (`xfail8101` "known broken (#556)")
@@ -2026,8 +2033,8 @@ cradleTests = testGroup "cradle"
 
 loadCradleOnlyonce :: TestTree
 loadCradleOnlyonce = testGroup "load cradle only once"
-    [ testSession' "implicit" implicit
-    , testSession' "direct"   direct
+    [ testSessionTF "implicit" implicit
+    , testSessionTF "direct"   direct
     ]
     where
         direct dir = do
@@ -2136,7 +2143,10 @@ testSession :: String -> Session () -> TestTree
 testSession name = testCase name . run
 
 testSession' :: String -> (FilePath -> Session ()) -> TestTree
-testSession' name = testCase name . run'
+testSession' name = testCase name . run' NoTestFlag
+
+testSessionTF :: String -> (FilePath -> Session ()) -> TestTree
+testSessionTF name = testCase name . run' WithTestFlag
 
 testSessionWait :: String -> Session () -> TestTree
 testSessionWait name = testSession name .
@@ -2167,13 +2177,16 @@ mkRange :: Int -> Int -> Int -> Int -> Range
 mkRange a b c d = Range (Position a b) (Position c d)
 
 run :: Session a -> IO a
-run s = withTempDir $ \dir -> runInDir dir s
+run s = withTempDir $ \dir -> runInDir NoTestFlag dir s
 
-run' :: (FilePath -> Session a) -> IO a
-run' s = withTempDir $ \dir -> runInDir dir (s dir)
+run' :: WithTestFlag -> (FilePath -> Session a) -> IO a
+run' tf s = withTempDir $ \dir -> runInDir tf dir (s dir)
 
-runInDir :: FilePath -> Session a -> IO a
-runInDir dir s = do
+-- Do we run the LSP executable with --test or not
+data WithTestFlag = WithTestFlag | NoTestFlag deriving (Show, Eq)
+
+runInDir :: WithTestFlag -> FilePath -> Session a -> IO a
+runInDir withTestFlag dir s = do
   ghcideExe <- locateGhcideExecutable
 
   -- Temporarily hack around https://github.com/mpickering/hie-bios/pull/56
@@ -2186,7 +2199,8 @@ runInDir dir s = do
     createDirectoryIfMissing True $ dir </> takeDirectory f
     copyFile ("test/data" </> f) (dir </> f)
 
-  let cmd = unwords [ghcideExe, "--lsp", "--test", "--cwd", dir]
+  let cmd = unwords ([ghcideExe, "--lsp", "--cwd", dir]
+                    ++ [ "--test" | WithTestFlag == withTestFlag ])
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
