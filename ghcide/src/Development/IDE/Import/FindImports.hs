@@ -8,6 +8,7 @@ module Development.IDE.Import.FindImports
   ( locateModule
   , Import(..)
   , ArtifactsLocation(..)
+  , modSummaryToArtifactsLocation
   , isBootLocation
   ) where
 
@@ -29,6 +30,7 @@ import Control.DeepSeq
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
 import           System.FilePath
+import DriverPhases
 
 data Import
   = FileImport !ArtifactsLocation
@@ -51,6 +53,12 @@ isBootLocation = not . artifactIsSource
 instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf (PackageImport x) = rnf x
+
+modSummaryToArtifactsLocation :: NormalizedFilePath -> ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location ms) (isSource (ms_hsc_src ms))
+  where
+    isSource HsSrcFile = True
+    isSource _ = False
 
 
 -- | locate a module in the file system. Where we go from *daml to Haskell
