@@ -53,7 +53,7 @@ import qualified Data.ByteString.Char8 as BS
 import           Data.Dynamic
 import           Data.Maybe
 import Data.Map.Strict (Map)
-import           Data.List.Extra (foldl', partition, takeEnd)
+import           Data.List.Extra (partition, takeEnd)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Traversable (for)
@@ -97,9 +97,11 @@ data ShakeExtras = ShakeExtras
     ,publishedDiagnostics :: Var (HMap.HashMap NormalizedUri [Diagnostic])
     -- ^ This represents the set of diagnostics that we have published.
     -- Due to debouncing not every change might get published.
-    ,positionMapping :: Var (HMap.HashMap NormalizedUri (Map TextDocumentVersion PositionMapping))
+    ,positionMapping :: Var (HMap.HashMap NormalizedUri (Map TextDocumentVersion (PositionDelta, PositionMapping)))
     -- ^ Map from a text document version to a PositionMapping that describes how to map
     -- positions in a version of that document to positions in the latest version
+    -- First mapping is delta from previous version and second one is an
+    -- accumlation of all previous mappings.
     ,inProgress :: Var (HMap.HashMap NormalizedFilePath Int)
     -- ^ How many rules are running for each file
     }
@@ -201,12 +203,12 @@ valueVersion = \case
     Failed -> Nothing
 
 mappingForVersion
-    :: HMap.HashMap NormalizedUri (Map TextDocumentVersion PositionMapping)
+    :: HMap.HashMap NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
     -> NormalizedFilePath
     -> TextDocumentVersion
     -> PositionMapping
 mappingForVersion allMappings file ver =
-    fromMaybe idMapping $
+    maybe zeroMapping snd $
     Map.lookup ver =<<
     HMap.lookup (filePathToUri' file) allMappings
 
@@ -536,7 +538,10 @@ usesWithStale key files = do
 
 withProgress :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
 withProgress var file = actionBracket (f succ) (const $ f pred) . const
-    where f shift = modifyVar_ var $ return . HMap.alter (Just . shift . fromMaybe 0) file
+    -- This functions are deliberately eta-expanded to avoid space leaks.
+    -- Do not remove the eta-expansion without profiling a session with at
+    -- least 1000 modifications.
+    where f shift = modifyVar_ var $ \x -> return (HMap.alter (\x -> Just (shift (fromMaybe 0 x))) file x)
 
 
 defineEarlyCutoff
@@ -828,11 +833,17 @@ filterVersionMap =
     HMap.intersectionWith $ \versionsToKeep versionMap -> Map.restrictKeys versionMap versionsToKeep
 
 updatePositionMapping :: IdeState -> VersionedTextDocumentIdentifier -> List TextDocumentContentChangeEvent -> IO ()
-updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} changes = do
+updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} VersionedTextDocumentIdentifier{..} (List changes) = do
     modifyVar_ positionMapping $ \allMappings -> do
         let uri = toNormalizedUri _uri
         let mappingForUri = HMap.lookupDefault Map.empty uri allMappings
-        let updatedMapping =
-                Map.insert _version idMapping $
-                Map.map (\oldMapping -> foldl' applyChange oldMapping changes) mappingForUri
+        let (_, updatedMapping) =
+                -- Very important to use mapAccum here so that the tails of
+                -- each mapping can be shared, otherwise quadratic space is
+                -- used which is evident in long running sessions.
+                Map.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
+                  zeroMapping
+                  (Map.insert _version (shared_change, zeroMapping) mappingForUri)
         pure $! HMap.insert uri updatedMapping allMappings
+  where
+    shared_change = mkDelta changes
