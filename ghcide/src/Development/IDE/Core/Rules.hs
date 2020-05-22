@@ -550,36 +550,19 @@ getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
                 HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
                 _ -> ml_hi_file $ ms_location ms
 
-  IdeOptions{optInterfaceLoadingDiagnostics} <- getIdeOptions
-
-  let mkInterfaceFilesGenerationDiag f intro
-        | optInterfaceLoadingDiagnostics = mkDiag $ intro <> msg
-        | otherwise = []
-            where
-                msg =
-                    ": additional resource use while generating interface files in the background."
-                mkDiag = pure
-                       . ideErrorWithSource (Just "interface file loading") (Just DsInfo) f
-                       . T.pack
-
   case sequence depHis of
-    Nothing -> do
-          let d = mkInterfaceFilesGenerationDiag f "Missing interface file dependencies"
-          pure (Nothing, (d, Nothing))
+    Nothing -> pure (Nothing, ([], Nothing))
     Just deps -> do
       gotHiFile <- getFileExists hiFile
       if not gotHiFile
-        then do
-          let d = mkInterfaceFilesGenerationDiag f "Missing interface file"
-          pure (Nothing, (d, Nothing))
+        then pure (Nothing, ([], Nothing))
         else do
           hiVersion  <- use_ GetModificationTime hiFile
           modVersion <- use_ GetModificationTime f
           let sourceModified = modificationTime hiVersion < modificationTime modVersion
           if sourceModified
             then do
-              let d = mkInterfaceFilesGenerationDiag f "Stale interface file"
-              pure (Nothing, (d, Nothing))
+              pure (Nothing, ([], Nothing))
             else do
               session <- hscEnv <$> use_ GhcSession f
               r <- liftIO $ loadInterface session ms deps
