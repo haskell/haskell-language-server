@@ -2,10 +2,15 @@
 -- SPDX-License-Identifier: Apache-2.0
 module Development.IDE.Core.PositionMapping
   ( PositionMapping(..)
+  , fromCurrentPosition
+  , toCurrentPosition
+  , PositionDelta(..)
+  , addDelta
+  , mkDelta
   , toCurrentRange
   , fromCurrentRange
   , applyChange
-  , idMapping
+  , zeroMapping
   -- toCurrent and fromCurrent are mainly exposed for testing
   , toCurrent
   , fromCurrent
@@ -14,11 +19,24 @@ module Development.IDE.Core.PositionMapping
 import Control.Monad
 import qualified Data.Text as T
 import Language.Haskell.LSP.Types
+import Data.List
 
-data PositionMapping = PositionMapping
-  { toCurrentPosition :: !(Position -> Maybe Position)
-  , fromCurrentPosition :: !(Position -> Maybe Position)
+-- The position delta is the difference between two versions
+data PositionDelta = PositionDelta
+  { toDelta :: !(Position -> Maybe Position)
+  , fromDelta :: !(Position -> Maybe Position)
   }
+
+fromCurrentPosition :: PositionMapping -> Position -> Maybe Position
+fromCurrentPosition (PositionMapping pm) = fromDelta pm
+
+toCurrentPosition :: PositionMapping -> Position -> Maybe Position
+toCurrentPosition (PositionMapping pm) = toDelta pm
+
+-- A position mapping is the difference from the current version to
+-- a specific version
+newtype PositionMapping = PositionMapping PositionDelta
+
 
 toCurrentRange :: PositionMapping -> Range -> Maybe Range
 toCurrentRange mapping (Range a b) =
@@ -28,13 +46,33 @@ fromCurrentRange :: PositionMapping -> Range -> Maybe Range
 fromCurrentRange mapping (Range a b) =
     Range <$> fromCurrentPosition mapping a <*> fromCurrentPosition mapping b
 
-idMapping :: PositionMapping
-idMapping = PositionMapping Just Just
+zeroMapping :: PositionMapping
+zeroMapping = PositionMapping idDelta
 
-applyChange :: PositionMapping -> TextDocumentContentChangeEvent -> PositionMapping
-applyChange posMapping (TextDocumentContentChangeEvent (Just r) _ t) = PositionMapping
-    { toCurrentPosition = toCurrent r t <=< toCurrentPosition posMapping
-    , fromCurrentPosition = fromCurrentPosition posMapping <=< fromCurrent r t
+-- | Compose two position mappings. Composes in the same way as function
+-- composition (ie the second argument is applyed to the position first).
+composeDelta :: PositionDelta
+                -> PositionDelta
+                -> PositionDelta
+composeDelta (PositionDelta to1 from1) (PositionDelta to2 from2) =
+  PositionDelta (to1 <=< to2)
+                (from1 >=> from2)
+
+idDelta :: PositionDelta
+idDelta = PositionDelta Just Just
+
+-- | Convert a set of changes into a delta from k  to k + 1
+mkDelta :: [TextDocumentContentChangeEvent] -> PositionDelta
+mkDelta cs = foldl' applyChange idDelta cs
+
+-- | Add a new delta onto a Mapping k n to make a Mapping (k - 1) n
+addDelta :: PositionDelta -> PositionMapping -> PositionMapping
+addDelta delta (PositionMapping pm) = PositionMapping (composeDelta delta pm)
+
+applyChange :: PositionDelta -> TextDocumentContentChangeEvent -> PositionDelta
+applyChange PositionDelta{..} (TextDocumentContentChangeEvent (Just r) _ t) = PositionDelta
+    { toDelta = toCurrent r t <=< toDelta
+    , fromDelta = fromDelta <=< fromCurrent r t
     }
 applyChange posMapping _ = posMapping
 
