@@ -58,8 +58,6 @@ data IdeOptions = IdeOptions
     --   features such as diagnostics and go-to-definition, in
     --   situations in which they would become unavailable because of
     --   the presence of type errors, holes or unbound variables.
-  , optInterfaceLoadingDiagnostics :: Bool
-    -- ^ Generate Info-level diagnostics to report interface loading actions
   }
 
 data IdePreprocessedSource = IdePreprocessedSource
@@ -93,7 +91,6 @@ defaultIdeOptions session = IdeOptions
     ,optKeywords = haskellKeywords
     ,optDefer = IdeDefer True
     ,optTesting = False
-    ,optInterfaceLoadingDiagnostics = False
     }
 
 
