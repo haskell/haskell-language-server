@@ -28,8 +28,8 @@ module Development.IDE.Core.Rules(
 
 import Fingerprint
 
-import Data.Binary
-import Data.Bifunctor (second)
+import Data.Binary hiding (get, put)
+import Data.Bifunctor (first, second)
 import Control.Monad.Extra
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
@@ -46,13 +46,11 @@ import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule)
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.WithDynFlags
-import Data.Coerce
 import Data.Either.Extra
 import Data.Maybe
 import           Data.Foldable
 import qualified Data.IntMap.Strict as IntMap
 import Data.IntMap.Strict (IntMap)
-import qualified Data.IntSet as IntSet
 import Data.List
 import Data.Ord
 import qualified Data.Set                                 as Set
@@ -70,10 +68,12 @@ import GHC.Generics(Generic)
 import qualified Development.IDE.Spans.AtPoint as AtPoint
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
-import Development.Shake.Classes
+import Development.Shake.Classes hiding (get, put)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.ByteString (ByteString)
 import Control.Concurrent.Async (concurrently)
+
+import Control.Monad.State
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -251,53 +251,91 @@ getLocatedImportsRule =
             Nothing -> pure (concat diags, Nothing)
             Just pkgImports -> pure (concat diags, Just (moduleImports, Set.fromList $ concat pkgImports))
 
+type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action a
+
+execRawDepM :: Monad m => StateT (RawDependencyInformation, IntMap a1) m a2 -> m (RawDependencyInformation, IntMap a1)
+execRawDepM act =
+    execStateT act
+        ( RawDependencyInformation IntMap.empty emptyPathIdMap IntMap.empty
+        , IntMap.empty
+        )
+
 -- | Given a target file path, construct the raw dependency results by following
 -- imports recursively.
-rawDependencyInformation :: NormalizedFilePath -> Action RawDependencyInformation
-rawDependencyInformation f = do
-    let initialArtifact = ArtifactsLocation f (ModLocation (Just $ fromNormalizedFilePath f) "" "") False
-        (initialId, initialMap) = getPathId initialArtifact emptyPathIdMap
-    (rdi, ss) <- go (IntSet.singleton $ getFilePathId initialId)
-                    (RawDependencyInformation IntMap.empty initialMap IntMap.empty, IntMap.empty)
+rawDependencyInformation :: [NormalizedFilePath] -> Action RawDependencyInformation
+rawDependencyInformation fs = do
+    (rdi, ss) <- execRawDepM (mapM_ go fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
     return (rdi { rawBootMap = bm })
   where
-    go fs (rawDepInfo, ss) =
-        case IntSet.minView fs of
-            -- Queue is empty
-            Nothing -> pure (rawDepInfo, ss)
-            -- Pop f from the queue and process it
-            Just (f, fs) -> do
-                let fId = FilePathId f
-                importsOrErr <- use GetLocatedImports $ idToPath (rawPathIdMap rawDepInfo) fId
-                case importsOrErr of
-                  Nothing ->
-                    -- File doesn’t parse
-                    let rawDepInfo' = insertImport fId (Left ModuleParseError) rawDepInfo
-                    in go fs (rawDepInfo', ss)
-                  Just (modImports, pkgImports) -> do
-                    let f :: (PathIdMap, IntMap ArtifactsLocation)
-                          -> (a, Maybe ArtifactsLocation)
-                          -> ((PathIdMap, IntMap ArtifactsLocation), (a, Maybe FilePathId))
-                        f (pathMap, ss) (imp, mbPath) = case mbPath of
-                            Nothing -> ((pathMap, ss), (imp, Nothing))
-                            Just path ->
-                                let (pathId, pathMap') = getPathId path pathMap
-                                    ss' = if isBootLocation path
-                                            then IntMap.insert (getFilePathId pathId) path ss
-                                            else ss
-                                in ((pathMap', ss'), (imp, Just pathId))
-                    -- Convert paths in imports to ids and update the path map
-                    let ((pathIdMap, ss'), modImports') = mapAccumL f (rawPathIdMap rawDepInfo, ss) modImports
-                    -- Files that we haven’t seen before are added to the queue.
-                    let newFiles =
-                            IntSet.fromList (coerce $ mapMaybe snd modImports')
-                            IntSet.\\ IntMap.keysSet (rawImports rawDepInfo)
-                    let rawDepInfo' = insertImport fId (Right $ ModuleImports modImports' pkgImports) rawDepInfo
-                    go (newFiles `IntSet.union` fs)
-                       (rawDepInfo' { rawPathIdMap = pathIdMap }, ss')
+    go :: NormalizedFilePath -- ^ Current module being processed
+       -> StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action FilePathId
+    go f = do
+      -- First check to see if we have already processed the FilePath
+      -- If we have, just return its Id but don't update any of the state.
+      -- Otherwise, we need to process its imports.
+      checkAlreadyProcessed f $ do
+          al <- lift $ modSummaryToArtifactsLocation f <$> use_ GetModSummary f
+          -- Get a fresh FilePathId for the new file
+          fId <- getFreshFid al
+          -- Adding an edge to the bootmap so we can make sure to
+          -- insert boot nodes before the real files.
+          addBootMap al fId
+          -- Try to parse the imports of the file
+          importsOrErr <- lift $ use GetLocatedImports f
+          case importsOrErr of
+            Nothing -> do
+            -- File doesn't parse so add the module as a failure into the
+            -- dependency information, continue processing the other
+            -- elements in the queue
+              modifyRawDepInfo (insertImport fId (Left ModuleParseError))
+              return fId
+            Just (modImports, pkgImports) -> do
+              -- Get NFPs of the imports which have corresponding files
+              -- Imports either come locally from a file or from a package.
+              let (no_file, with_file) = splitImports modImports
+                  (mns, ls) = unzip with_file
+              -- Recursively process all the imports we just learnt about
+              -- and get back a list of their FilePathIds
+              fids <- mapM (go . artifactFilePath) ls
+              -- Associate together the ModuleName with the FilePathId
+              let moduleImports' = map (,Nothing) no_file ++ zip mns (map Just fids)
+              -- Insert into the map the information about this modules
+              -- imports.
+              modifyRawDepInfo $ insertImport fId (Right $ ModuleImports moduleImports' pkgImports)
+              return fId
 
 
+    checkAlreadyProcessed :: NormalizedFilePath -> RawDepM FilePathId -> RawDepM FilePathId
+    checkAlreadyProcessed nfp k = do
+      (rawDepInfo, _) <- get
+      maybe k return (lookupPathToId (rawPathIdMap rawDepInfo) nfp)
+
+    modifyRawDepInfo :: (RawDependencyInformation -> RawDependencyInformation) -> RawDepM ()
+    modifyRawDepInfo f = modify (first f)
+
+    addBootMap ::  ArtifactsLocation -> FilePathId -> RawDepM ()
+    addBootMap al fId =
+      modify (\(rd, ss) -> (rd, if isBootLocation al
+                                  then IntMap.insert (getFilePathId fId) al ss
+                                  else ss))
+
+    getFreshFid :: ArtifactsLocation -> RawDepM FilePathId
+    getFreshFid al = do
+      (rawDepInfo, ss) <- get
+      let (fId, path_map) = getPathId al (rawPathIdMap rawDepInfo)
+      -- Insert the File into the bootmap if it's a boot module
+      let rawDepInfo' = rawDepInfo { rawPathIdMap = path_map }
+      put (rawDepInfo', ss)
+      return fId
+
+    -- Split in (package imports, local imports)
+    splitImports :: [(Located ModuleName, Maybe ArtifactsLocation)]
+                 -> ([Located ModuleName], [(Located ModuleName, ArtifactsLocation)])
+    splitImports = foldr splitImportsLoop ([],[])
+
+    splitImportsLoop (imp, Nothing) (ns, ls) = (imp:ns, ls)
+    splitImportsLoop (imp, Just artifact) (ns, ls) = (ns, (imp,artifact) : ls)
 
     updateBootMap pm boot_mod_id ArtifactsLocation{..} bm =
       if not artifactIsSource
@@ -315,7 +353,7 @@ rawDependencyInformation f = do
 getDependencyInformationRule :: Rules ()
 getDependencyInformationRule =
     define $ \GetDependencyInformation file -> do
-       rawDepInfo <- rawDependencyInformation file
+       rawDepInfo <- rawDependencyInformation [file]
        pure ([], Just $ processDependencyInformation rawDepInfo)
 
 reportImportCyclesRule :: Rules ()
