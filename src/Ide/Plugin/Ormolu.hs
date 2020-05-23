@@ -29,9 +29,8 @@ import           Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = defaultPluginDescriptor
-  { pluginId = plId
-  , pluginFormattingProvider = Just provider
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginFormattingProvider = Just provider
   }
 
 -- ---------------------------------------------------------------------

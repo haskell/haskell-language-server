@@ -19,9 +19,8 @@ import           System.FilePath
 import           Data.Maybe (maybeToList)
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = defaultPluginDescriptor
-  { pluginId = plId
-  , pluginFormattingProvider = Just provider
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginFormattingProvider = Just provider
   }
 
 -- | Formatter provider of Brittany.

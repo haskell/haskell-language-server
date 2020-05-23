@@ -63,10 +63,10 @@ data PluginDescriptor =
                    , pluginRenameProvider     :: !(Maybe RenameProvider)
                    }
 
-defaultPluginDescriptor :: PluginDescriptor
-defaultPluginDescriptor =
+defaultPluginDescriptor :: PluginId -> PluginDescriptor
+defaultPluginDescriptor plId =
   PluginDescriptor
-    ""
+    plId
     mempty
     mempty
     Nothing

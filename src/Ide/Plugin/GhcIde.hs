@@ -20,9 +20,8 @@ import Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = defaultPluginDescriptor
-  { pluginId = plId
-  , pluginCommands = [PluginCommand (CommandId "typesignature.add") "adds a signature" commandAddSignature]
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginCommands = [PluginCommand (CommandId "typesignature.add") "adds a signature" commandAddSignature]
   , pluginCodeActionProvider = Just codeAction'
   , pluginCodeLensProvider   = Just codeLens'
   , pluginHoverProvider      = Just hover'

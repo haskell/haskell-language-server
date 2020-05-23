@@ -24,9 +24,8 @@ import           Language.Haskell.LSP.Types
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = defaultPluginDescriptor
-  { pluginId = plId
-  , pluginCommands = commands
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginCommands = commands
   , pluginCodeActionProvider = Just codeActionProvider
   }
 
