@@ -28,6 +28,7 @@ This is *very* early stage software.
   - [Editor Integration](#editor-integration)
     - [With emacs](#using-haskell-language-server-with-emacs)
     - [With doom emacs](#using-haskell-language-server-with-doom-emacs)
+    - [With Kakoune](#using-haskell-language-server-with-kakoune)
   - [Contributing](#contributing)
     - [It's time to join the project!](#its-time-to-join-the-project)
 
@@ -319,6 +320,20 @@ in your `.doom.d/config.el` file
 ```
 
 then do `$HOME/.emacs.d/bin/doom refresh`
+
+
+### Using haskell-language-server with [Kakoune](https://github.com/mawww/kakoune)
+
+1. Grab a copy of [kak-lsp](https://github.com/ul/kak-lsp), and follow the setup instructions.
+2. Point your `kak-lsp.toml` to `haskell-language-server-wrapper`.
+
+```toml
+[language.haskell]
+filetypes = ["haskell"]
+roots = ["Setup.hs", "stack.yaml", "*.cabal"]
+command = "haskell-language-server-wrapper"
+args = ["--lsp"]
+```
 
 ## Contributing
 
