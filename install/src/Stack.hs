@@ -22,8 +22,8 @@ stackInstallHls mbVersionNumber args = do
       Nothing -> do
         execStackWithCfgFile_ "stack.yaml" $ 
           ["install"
-          , "haskell-language-server-wrapper"
-          , "haskell-language-server"] ++ args
+          , ":haskell-language-server-wrapper"
+          , ":haskell-language-server"] ++ args
         getGhcVersionOfCfgFile "stack.yaml" args
       Just vn -> do
         execStackWithGhc_ vn $ ["install"] ++ args
