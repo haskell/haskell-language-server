@@ -11,7 +11,7 @@ extra-deps:
 - rope-utf16-splay-0.3.1.0
 - filepattern-0.1.1
 - js-dgtable-0.5.2
-- hie-bios-0.4.0
+- hie-bios-0.5.0
 - fuzzy-0.1.0.0
 - shake-0.18.5
 - time-compat-1.9.2.2
