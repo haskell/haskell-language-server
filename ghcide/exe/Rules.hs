@@ -26,7 +26,7 @@ import           GHC
 import           GHC.Check                      (VersionCheck(..), makeGhcVersionChecker)
 import           HIE.Bios
 import           HIE.Bios.Cradle
-import           HIE.Bios.Environment           (addCmdOpts)
+import           HIE.Bios.Environment           (addCmdOpts, makeDynFlagsAbsolute)
 import           HIE.Bios.Types
 import           Linker                         (initDynLinker)
 import           RuleTypes
@@ -55,8 +55,8 @@ loadGhcSession =
     -- This rule is for caching the GHC session. E.g., even when the cabal file
     -- changed, if the resulting flags did not change, we would continue to use
     -- the existing session.
-    defineNoFile $ \(GetHscEnv opts deps) ->
-        liftIO $ createSession $ ComponentOptions opts deps
+    defineNoFile $ \(GetHscEnv opts optRoot deps) ->
+        liftIO $ createSession $ ComponentOptions opts optRoot deps
 
 cradleToSession :: Rules ()
 cradleToSession = define $ \LoadCradle nfp -> do
@@ -79,13 +79,14 @@ cradleToSession = define $ \LoadCradle nfp -> do
     cmpOpts <- liftIO $ mask $ \_ -> getComponentOptions cradle
     let opts = componentOptions cmpOpts
         deps = componentDependencies cmpOpts
+        root = componentRoot cmpOpts
         deps' = case mbYaml of
                   -- For direct cradles, the hie.yaml file itself must be watched.
                   Just yaml | isDirectCradle cradle -> yaml : deps
                   _                                 -> deps
     existingDeps <- filterM doesFileExist deps'
     need existingDeps
-    ([],) . pure <$> useNoFile_ (GetHscEnv opts deps)
+    ([],) . pure <$> useNoFile_ (GetHscEnv opts root deps)
 
 cradleLoadedMethod :: Text
 cradleLoadedMethod = "ghcide/cradle/loaded"
@@ -118,7 +119,7 @@ checkGhcVersion = do
           return Nothing
 
 createSession :: ComponentOptions -> IO HscEnvEq
-createSession (ComponentOptions theOpts _) = do
+createSession (ComponentOptions theOpts compRoot _) = do
     libdir <- getLibdir
 
     cacheDir <- getCacheDir theOpts
@@ -127,7 +128,8 @@ createSession (ComponentOptions theOpts _) = do
 
     runGhc (Just libdir) $ do
         dflags <- getSessionDynFlags
-        (dflags', _targets) <- addCmdOpts theOpts dflags
+        (dflags_, _targets) <- addCmdOpts theOpts dflags
+        let dflags' = makeDynFlagsAbsolute compRoot dflags_
         setupDynFlags cacheDir dflags'
         versionMismatch <- liftIO checkGhcVersion
         case versionMismatch of
