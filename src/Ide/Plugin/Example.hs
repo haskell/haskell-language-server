@@ -41,16 +41,13 @@ import Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = PluginDescriptor
-  { pluginId = plId
-  , pluginRules = exampleRules
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginRules = exampleRules
   , pluginCommands = [PluginCommand "codelens.todo" "example adding" addTodoCmd]
   , pluginCodeActionProvider = Just codeAction
   , pluginCodeLensProvider   = Just codeLens
-  , pluginDiagnosticProvider = Nothing
   , pluginHoverProvider      = Just hover
   , pluginSymbolsProvider    = Just symbols
-  , pluginFormattingProvider = Nothing
   , pluginCompletionProvider = Just completion
   }
 

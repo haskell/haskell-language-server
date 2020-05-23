@@ -20,16 +20,12 @@ import Text.Regex.TDFA.Text()
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
-descriptor plId = PluginDescriptor
-  { pluginId = plId
-  , pluginRules = mempty
-  , pluginCommands = [PluginCommand (CommandId "typesignature.add") "adds a signature" commandAddSignature]
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginCommands = [PluginCommand (CommandId "typesignature.add") "adds a signature" commandAddSignature]
   , pluginCodeActionProvider = Just codeAction'
   , pluginCodeLensProvider   = Just codeLens'
-  , pluginDiagnosticProvider = Nothing
   , pluginHoverProvider      = Just hover'
   , pluginSymbolsProvider    = Just symbolsProvider
-  , pluginFormattingProvider = Nothing
   , pluginCompletionProvider = Just getCompletionsLSP
   }
 

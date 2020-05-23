@@ -62,7 +62,8 @@ asGhcIdePlugin mp =
     mkPlugin hoverPlugins          pluginHoverProvider <>
     mkPlugin symbolsPlugins        pluginSymbolsProvider <>
     mkPlugin formatterPlugins      pluginFormattingProvider <>
-    mkPlugin completionsPlugins    pluginCompletionProvider
+    mkPlugin completionsPlugins    pluginCompletionProvider <>
+    mkPlugin renamePlugins         pluginRenameProvider
     where
         justs (p, Just x)  = [(p, x)]
         justs (_, Nothing) = []
@@ -452,6 +453,29 @@ makeSymbols sps lf ideState params
       case rights mhs of
           [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
           hs -> return $ Right $ convertSymbols $ concat hs
+
+
+-- ---------------------------------------------------------------------
+-- ---------------------------------------------------------------------
+
+renamePlugins :: [(PluginId, RenameProvider)] -> Plugin Config
+renamePlugins providers = Plugin rules handlers
+  where
+    rules = mempty
+    handlers = PartialHandlers $ \WithMessage{..} x -> return x
+      { LSP.renameHandler = withResponse RspRename (renameWith providers)}
+
+renameWith ::
+  [(PluginId, RenameProvider)] ->
+  LSP.LspFuncs Config ->
+  IdeState ->
+  RenameParams ->
+  IO (Either ResponseError WorkspaceEdit)
+renameWith providers lspFuncs state params = do
+    results <- mapM (\(_,p) -> p lspFuncs state params) providers
+    case partitionEithers results of
+        (errors, []) -> return $ Left $ responseError $ T.pack $ show $ errors
+        (_, edits) -> return $ Right $ mconcat edits
 
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
