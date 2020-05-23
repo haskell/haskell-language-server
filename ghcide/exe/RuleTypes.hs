@@ -14,6 +14,7 @@ type instance RuleResult GetHscEnv = HscEnvEq
 
 data GetHscEnv = GetHscEnv
     { hscenvOptions :: [String]        -- componentOptions from hie-bios
+    , hscenvRoot :: FilePath           -- componentRoot from hie-bios
     , hscenvDependencies :: [FilePath] -- componentDependencies from hie-bios
     }
     deriving (Eq, Show, Typeable, Generic)

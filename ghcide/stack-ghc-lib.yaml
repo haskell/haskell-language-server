@@ -5,7 +5,7 @@ extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 - lsp-test-0.10.3.0
-- hie-bios-0.4.0
+- hie-bios-0.5.0
 - ghc-lib-parser-8.8.1
 - ghc-lib-8.8.1
 - fuzzy-0.1.0.0
