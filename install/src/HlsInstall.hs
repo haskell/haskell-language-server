@@ -75,7 +75,7 @@ defaultMain = do
     -- stack specific targets
     -- Default `stack.yaml` uses ghc-8.8.2 and we can't build hls in windows
     -- TODO: Enable for windows when it uses ghc-8.8.3
-    when (isRunFromStack && not isWindowsSystem) $
+    when isRunFromStack $
       phony "dev" $ do
         need ["show-options"]
         stackInstallHlsWithErrMsg Nothing args
