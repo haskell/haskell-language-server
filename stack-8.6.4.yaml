@@ -20,7 +20,7 @@ extra-deps:
 - fuzzy-0.1.0.0
 - ghc-check-0.3.0.1
 - ghc-exactprint-0.6.2 # for HaRe
-- ghc-lib-parser-8.10.1.20200412
+- ghc-lib-parser-8.10.1.20200523
 - ghc-lib-parser-ex-8.10.0.4
 - ghc-paths-0.1.0.12
 - haddock-api-2.22.0@rev:1

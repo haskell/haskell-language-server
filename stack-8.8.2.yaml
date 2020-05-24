@@ -13,7 +13,7 @@ extra-deps:
 - floskell-0.10.3
 # - ghcide-0.1.0
 - ghc-check-0.3.0.1
-- ghc-lib-parser-8.10.1.20200412
+- ghc-lib-parser-8.10.1.20200523
 - ghc-lib-parser-ex-8.10.0.4
 - haddock-library-1.8.0
 - haskell-lsp-0.22.0.0
