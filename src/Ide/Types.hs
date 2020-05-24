@@ -31,7 +31,6 @@ import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
-import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
 import           Development.Shake
 import           Ide.Plugin.Config
