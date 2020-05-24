@@ -15,6 +15,7 @@ extra-deps:
 - floskell-0.10.3
 # - ghcide-0.1.0
 - ghc-exactprint-0.6.3
+- ghc-lib-parser-8.10.1.20200523
 - lens-4.19.1
 - monad-dijkstra-0.1.1.2
 - optics-core-0.3
