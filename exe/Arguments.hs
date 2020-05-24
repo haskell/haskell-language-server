@@ -77,7 +77,7 @@ arguments exeName = Arguments
            (short 'j'
           <> help "Number of threads (0: automatic)"
           <> metavar "NUM"
-          <> value 1
+          <> value 0
           <> showDefault
            )
 
