@@ -769,7 +769,7 @@ instance Binary   GetModificationTime
 type instance RuleResult GetModificationTime = FileVersion
 
 data FileVersion
-    = VFSVersion Int
+    = VFSVersion !Int
     | ModificationTime
       !Int   -- ^ Large unit (platform dependent, do not make assumptions)
       !Int   -- ^ Small unit (platform dependent, do not make assumptions)
