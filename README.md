@@ -423,7 +423,7 @@ Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui
 $ apm install language-haskell atom-ide-ui ide-haskell-hie
 ```
 
-The plugin ide-haskell-ide is designed to work with haskell-ide-engine by default, so you will have to put the path to haskell-language-server-wrapper in the configuration option `Absolute path to hie executable`.
+The plugin ide-haskell-hie is designed to work with haskell-ide-engine by default, so you will have to put the path to haskell-language-server-wrapper in the configuration option `Absolute path to hie executable`.
 
 ### Using haskell-language-server with Emacs
 
