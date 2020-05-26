@@ -301,14 +301,14 @@ Choose `haskell-language-server` in the extension setting `languageServerHaskell
 
 ```json
 {
-"clients": {
-  "haskell-ide-engine": {
-    "command": ["haskell-language-server-wrapper", "--lsp"],
-    "scopes": ["source.haskell"],
-    "syntaxes": ["Packages/Haskell/Haskell.sublime-syntax"],
-    "languageId": "haskell",
+  "clients": {
+    "haskell-ide-engine": {
+      "command": ["haskell-language-server-wrapper", "--lsp"],
+      "scopes": ["source.haskell"],
+      "syntaxes": ["Packages/Haskell/Haskell.sublime-syntax"],
+      "languageId": "haskell",
+    },
   },
-},
 }
 ```
 
@@ -329,7 +329,7 @@ Coc is recommend since it is the only complete LSP implementation for Vim and Ne
 Follow Coc's [installation instructions](https://github.com/neoclide/coc.nvim).
 Then issue `:CocConfig` and add the following to your Coc config file.
 
-```jsonc
+```json
 "languageserver": {
   "haskell": {
     "command": "haskell-language-server-wrapper",
