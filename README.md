@@ -273,9 +273,9 @@ dependencies:
 
 ## Editor Integration
 
-Note to editor integrators: there is now a haskell-language-server-wrapper executable, which is installed alongside the haskell-language-server executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching haskell-language-server executable.
+Note to editor integrators: there is a haskell-language-server-wrapper executable, which is installed alongside the haskell-language-server executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching haskell-language-server executable.
 
-All of the editor integrations assume that you have already installed haskell-language-server (see above) and that the installation script put the haskell-language-server binary in your path (usually `~/.local/bin` or `~/.cabal/bin` on linux and macOS).
+All of the editor integrations assume that you have already installed haskell-language-server (see above) and that the installation script put the haskell-language-server binary in your path (usually `~/.local/bin` or `~/.cabal/bin` on linux and macOS and `%APPDATA%\cabal\bin` in windows).
 
 ### Using haskell-language-server with Emacs
 
@@ -297,11 +297,10 @@ Make sure to follow the instructions in the README of each of these packages.
 )
 ```
 
-
-
 ### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
 Install haskell-language-server, and then enable haskell lang module with lsp flag in `.doom.d/init.el`
+
 ``` emacs-lisp
 :lang
 (haskell +lsp)
@@ -321,7 +320,6 @@ in your `.doom.d/config.el` file
 
 then do `$HOME/.emacs.d/bin/doom refresh`
 
-
 ### Using haskell-language-server with [Kakoune](https://github.com/mawww/kakoune)
 
 1. Grab a copy of [kak-lsp](https://github.com/ul/kak-lsp), and follow the setup instructions.
@@ -337,7 +335,7 @@ args = ["--lsp"]
 
 ## Contributing
 
-### It's time to join the project!
+### It's time to join the project
 
 :heart: Haskell tooling dream is near, we need your help! :heart:
 
