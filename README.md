@@ -313,7 +313,7 @@ Choose `haskell-language-server` in the extension setting `languageServerHaskell
 }
 ```
 
-Now open a Haskell project with Sublime Text. You should have these features available to you:
+Now open a Haskell project with Sublime Text. You should have these features available:
 
 1. Errors are underlined in red
 2. LSP: Show Diagnostics will show a list of hints and errors
