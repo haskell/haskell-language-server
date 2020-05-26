@@ -511,12 +511,10 @@ instance Show k => Show (Q k) where
 
 -- | Invariant: the 'v' must be in normal form (fully evaluated).
 --   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
--- Note (MK) I am not sure why we need the ShakeValue here, maybe we
--- can just remove it?
-data A v = A (Value v) ShakeValue
+newtype A v = A (Value v)
     deriving Show
 
-instance NFData (A v) where rnf (A v x) = v `seq` rnf x
+instance NFData (A v) where rnf (A v) = v `seq` ()
 
 -- In the Shake database we only store one type of key/result pairs,
 -- namely Q (question) / A (answer).
@@ -526,13 +524,13 @@ type instance RuleResult (Q k) = A (RuleResult k)
 -- | Return up2date results. Stale results will be ignored.
 uses :: IdeRule k v
     => k -> [NormalizedFilePath] -> Action [Maybe v]
-uses key files = map (\(A value _) -> currentValue value) <$> apply (map (Q . (key,)) files)
+uses key files = map (\(A value) -> currentValue value) <$> apply (map (Q . (key,)) files)
 
 -- | Return the last computed result which might be stale.
 usesWithStale :: IdeRule k v
     => k -> [NormalizedFilePath] -> Action [Maybe (v, PositionMapping)]
 usesWithStale key files = do
-    values <- map (\(A value _) -> value) <$> apply (map (Q . (key,)) files)
+    values <- map (\(A value) -> value) <$> apply (map (Q . (key,)) files)
     zipWithM lastValue files values
 
 
@@ -558,7 +556,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing result.
-                    Just v -> return $ Just $ RunResult ChangedNothing old $ A v (decodeShakeValue old)
+                    Just v -> return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ -> return Nothing
         case val of
@@ -589,7 +587,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
-                    A res bs
+                    A res
 
 
 -- | Rule type, input file
