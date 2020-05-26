@@ -323,7 +323,7 @@ Now open a Haskell project with Sublime Text. You should have these features ava
 
 As above, make sure haskell-language-server and haskell-language-server-wrapper are installed.
 Then you can use [Coc](https://github.com/neoclide/coc.nvim), [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
-or any other vim Language server protocol client.
+or any other Vim Language server protocol client.
 Coc is recommend since it is the only complete LSP implementation for Vim and Neovim and offers snippets and floating documentation out of the box.
 
 #### Coc
