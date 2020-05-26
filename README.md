@@ -302,7 +302,7 @@ Choose `haskell-language-server` in the extension setting `languageServerHaskell
 ```json
 {
   "clients": {
-    "haskell-ide-engine": {
+    "haskell-language-server": {
       "command": ["haskell-language-server-wrapper", "--lsp"],
       "scopes": ["source.haskell"],
       "syntaxes": ["Packages/Haskell/Haskell.sublime-syntax"],
