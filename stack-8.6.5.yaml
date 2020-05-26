@@ -24,7 +24,6 @@ extra-deps:
 - haddock-library-1.8.0
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
-- hie-bios-0.5.0
 - indexed-profunctors-0.1
 - lens-4.18
 - lsp-test-0.10.3.0
@@ -40,6 +39,11 @@ extra-deps:
 - semialign-1.1
 - github: wz1000/shake
   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
+- github: Avi-D-coder/implicit-hie-cradle
+  commit: 7de3cca59975db0e8a4280785b38d542a4a35c7a
+- github: mpickering/hie-bios
+  commit: a852cffb0deb306cd1e1fe02aa50d50c77aeb15d
+- implicit-hie-0.1.0.0
 - tasty-rerun-1.1.17
 - temporary-1.2.1.1
 - type-equality-1

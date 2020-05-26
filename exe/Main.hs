@@ -60,6 +60,7 @@ import GHC.Check                                ( VersionCheck(..), makeGhcVersi
 import HIE.Bios.Cradle
 import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute)
 import HIE.Bios.Types
+import Hie.Implicit.Cradle
 import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
 import Ide.Logger
@@ -443,7 +444,7 @@ loadSession dir = do
                 -- throwing an async exception
                 void $ forkIO $ do
                   putStrLn $ "Consulting the cradle for " <> show file
-                  cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+                  cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
                   eopts <- cradleToSessionOpts cradle cfp
                   print eopts
                   case eopts of
