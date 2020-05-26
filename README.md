@@ -282,7 +282,7 @@ dependencies:
 
 ## Editor Integration
 
-Note to editor integrators: there is a haskell-language-server-wrapper executable, which is installed alongside the haskell-language-server executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching haskell-language-server executable.
+Note to editor integrators: there is a `haskell-language-server-wrapper` executable, which is installed alongside the `haskell-language-server` executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching `haskell-language-server` executable.
 
 All of the editor integrations assume that you have already installed haskell-language-server (see above) and that the installation script put the haskell-language-server and haskell-language-server-wrapper binaries in your path (usually `~/.local/bin` or `~/.cabal/bin` on linux and macOS, `%APPDATA%\local\bin` or `%APPDATA%\cabal\bin` in windows).
 
