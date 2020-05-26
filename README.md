@@ -328,7 +328,7 @@ Coc is recommend since it is the only complete LSP implementation for Vim and Ne
 
 #### Coc
 
-Follow Coc's [installation instructions](https://github.com/neoclide/coc.nvim),
+Follow Coc's [installation instructions](https://github.com/neoclide/coc.nvim).
 Then issue `:CocConfig` and add the following to your Coc config file.
 
 ```jsonc
