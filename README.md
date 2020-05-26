@@ -296,8 +296,8 @@ Choose `haskell-language-server` in the extension setting `languageServerHaskell
 ### Using Haskell Language Server with Sublime Text
 
 - Install [LSP](https://packagecontrol.io/packages/LSP) using [Package Control](https://packagecontrol.io/)
-- From Sublime Text, press Command+Shift+P and search for Preferences: LSP Settings
-- Paste in these settings. Make sure to change the command path to your `haskell-language-server`
+- From Sublime Text, go to Preferences and search for LSP Settings
+- Paste in these settings. Make sure to change the command path to your `haskell-language-server-wrapper`
 
 ```json
 {
