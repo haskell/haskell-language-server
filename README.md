@@ -26,9 +26,18 @@ This is *very* early stage software.
         - [Install specific GHC Version](#install-specific-ghc-version)
   - [Project Configuration](#project-configuration)
   - [Editor Integration](#editor-integration)
-    - [With emacs](#using-haskell-language-server-with-emacs)
-    - [With doom emacs](#using-haskell-language-server-with-doom-emacs)
-    - [With Kakoune](#using-haskell-language-server-with-kakoune)
+    - [VS Code](#using-haskell-language-server-with-vs-code)
+    - [Sublime Text](#using-haskell-language-server-with-sublime-text)
+    - [Vim or Neovim](#using-haskell-language-server-with-vim-or-neovim)
+      - [Coc](#coc)
+      - [LanguageClient-neovim](#languageclient-neovim)
+        - [vim-plug](#vim-plug)
+        - [Clone the LanguageClient-neovim repo](#clone-the-languageclient-neovim-repo)
+        - [Sample `~/.vimrc`](#sample-vimrc)
+    - [Atom](#using-haskell-language-server-with-atom)
+    - [Emacs](#using-haskell-language-server-with-emacs)
+    - [Doom emacs](#using-haskell-language-server-with-doom-emacs)
+    - [Kakoune](#using-haskell-language-server-with-kakoune)
   - [Contributing](#contributing)
     - [It's time to join the project!](#its-time-to-join-the-project)
 
@@ -275,7 +284,148 @@ dependencies:
 
 Note to editor integrators: there is a haskell-language-server-wrapper executable, which is installed alongside the haskell-language-server executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching haskell-language-server executable.
 
-All of the editor integrations assume that you have already installed haskell-language-server (see above) and that the installation script put the haskell-language-server binary in your path (usually `~/.local/bin` or `~/.cabal/bin` on linux and macOS and `%APPDATA%\cabal\bin` in windows).
+All of the editor integrations assume that you have already installed haskell-language-server (see above) and that the installation script put the haskell-language-server and haskell-language-server-wrapper binaries in your path (usually `~/.local/bin` or `~/.cabal/bin` on linux and macOS, `%APPDATA%\local\bin` or `%APPDATA%\cabal\bin` in windows).
+
+### Using Haskell Language Server with VS Code
+
+Install from
+[the VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=alanz.vscode-hie-server), or manually from the repository [vscode-hie-server](https://github.com/alanz/vscode-hie-server).
+
+Choose `haskell-language-server` in the extension setting `languageServerHaskell.hieVariant`.
+
+### Using Haskell Language Server with Sublime Text
+
+- Make sure haskell-language-server and haskell-language-server-wrapper are installed (see above) and they are in the global `$PATH`.
+- Install [LSP](https://packagecontrol.io/packages/LSP) using [Package Control](https://packagecontrol.io/)
+- From Sublime Text, press Command+Shift+P and search for Preferences: LSP Settings
+- Paste in these settings. Make sure to change the command path to your `hie`
+
+```json
+{
+"clients": {
+  "haskell-ide-engine": {
+    "command": ["haskell-language-server-wrapper", "--lsp"],
+    "scopes": ["source.haskell"],
+    "syntaxes": ["Packages/Haskell/Haskell.sublime-syntax"],
+    "languageId": "haskell",
+  },
+},
+}
+```
+
+Now open a Haskell project with Sublime Text. You should have these features available to you:
+
+1. Errors are underlined in red
+2. LSP: Show Diagnostics will show a list of hints and errors
+3. LSP: Format Document will prettify the file
+
+### Using Haskell Language Server with Vim or Neovim
+
+As above, make sure haskell-language-server and haskell-language-server-wrapper are installed.
+Then you can use [Coc](https://github.com/neoclide/coc.nvim), [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
+or any other vim Language server protocol client.
+Coc is recommend since it is the only complete LSP implementation for Vim and Neovim and offers snippets and floating documentation out of the box.
+
+#### Coc
+
+Follow Coc's [installation instructions](https://github.com/neoclide/coc.nvim),
+Then issue `:CocConfig` and add the following to your Coc config file.
+
+```jsonc
+"languageserver": {
+  "haskell": {
+    "command": "haskell-language-server-wrapper",
+    "args": ["--lsp"],
+    "rootPatterns": [
+      "*.cabal",
+      "stack.yaml",
+      "cabal.project",
+      "package.yaml"
+    ],
+    "filetypes": [
+      "hs",
+      "lhs",
+      "haskell"
+    ],
+    "initializationOptions": {
+      "languageServerHaskell": {
+      }
+    }
+  }
+}
+```
+
+#### LanguageClient-neovim
+
+##### vim-plug
+
+If you use [vim-plug](https://github.com/junegunn/vim-plug), then you can do this by e.g.,
+including the following line in the Plug section of your `init.vim` or `~/.vimrc`:
+
+```text
+Plug 'autozimu/LanguageClient-neovim', {
+    \ 'branch': 'next',
+    \ 'do': './install.sh'
+    \ }
+```
+
+and issuing a `:PlugInstall` command within Neovim or Vim.
+
+##### Clone the LanguageClient-neovim repo
+
+As an alternative to using [vim-plug](https://github.com/junegunn/vim-plug) shown above, clone [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
+into `~/.vim/pack/XXX/start/`, where `XXX` is just a name for your "plugin suite".
+
+##### Sample `~/.vimrc`
+
+```vim
+set rtp+=~/.vim/pack/XXX/start/LanguageClient-neovim
+let g:LanguageClient_serverCommands = { 'haskell': ['haskell-language-server-wrapper', '--lsp'] }
+```
+
+You'll probably want to add some mappings for common commands:
+
+```vim
+nnoremap <F5> :call LanguageClient_contextMenu()<CR>
+map <Leader>lk :call LanguageClient#textDocument_hover()<CR>
+map <Leader>lg :call LanguageClient#textDocument_definition()<CR>
+map <Leader>lr :call LanguageClient#textDocument_rename()<CR>
+map <Leader>lf :call LanguageClient#textDocument_formatting()<CR>
+map <Leader>lb :call LanguageClient#textDocument_references()<CR>
+map <Leader>la :call LanguageClient#textDocument_codeAction()<CR>
+map <Leader>ls :call LanguageClient#textDocument_documentSymbol()<CR>
+```
+
+Use <kbd>Ctrl+x</kbd><kbd>Ctrl+o</kbd> (`<C-x><C-o>`) to open up the auto-complete menu,
+or for asynchronous auto-completion, follow the setup instructions on
+[LanguageClient](https://github.com/autozimu/LanguageClient-neovim).
+
+If you'd like diagnostics to be highlighted, add a highlight group for `ALEError`/`ALEWarning`/`ALEInfo`,
+or customize `g:LanguageClient_diagnosticsDisplay`:
+
+```vim
+hi link ALEError Error
+hi Warning term=underline cterm=underline ctermfg=Yellow gui=undercurl guisp=Gold
+hi link ALEWarning Warning
+hi link ALEInfo SpellCap
+```
+
+If you're finding that the server isn't starting at the correct project root,
+it may also be helpful to also specify root markers:
+
+```vim
+let g:LanguageClient_rootMarkers = ['*.cabal', 'stack.yaml']
+```
+
+### Using Haskell Language Server with Atom
+
+Make sure haskell-language-server and haskell-language-server-wrapper are installed, then install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui) and [ide-haskell-hie](https://atom.io/packages/ide-haskell-hie),
+
+```bash
+$ apm install language-haskell atom-ide-ui ide-haskell-hie
+```
+
+The plugin ide-haskell-ide is designed to work with haskell-ide-engine by default, so you will have to put the path to haskell-language-server-wrapper in the configuration option `Absolute path to hie executable`.
 
 ### Using haskell-language-server with Emacs
 
