@@ -53,24 +53,27 @@ then it means you have the command in PATH.
 
 #### Linux-specific pre-requirements
 
-On Linux you will need install a couple of extra libraries (for Unicode ([ICU](http://site.icu-project.org/)) and [NCURSES](https://www.gnu.org/software/ncurses/)):
+On Linux you will need install a couple of extra libraries:
+- [Unicode (ICU)](http://site.icu-project.org/)
+- [NCURSES](https://www.gnu.org/software/ncurses/)
+- [Zlib](https://zlib.net/)
 
 **Debian 9/Ubuntu 18.04 or earlier**:
 
 ```bash
-sudo apt install libicu-dev libtinfo-dev libgmp-dev
+sudo apt install libicu-dev libtinfo-dev libgmp-dev zlib1g-dev
 ```
 
 **Debian 10/Ubuntu 18.10 or later**:
 
 ```bash
-sudo apt install libicu-dev libncurses-dev libgmp-dev
+sudo apt install libicu-dev libncurses-dev libgmp-dev zlib1g-dev
 ```
 
 **Fedora**:
 
 ```bash
-sudo dnf install libicu-devel ncurses-devel # also zlib-devel if not already installed
+sudo dnf install libicu-devel ncurses-devel zlib-devel
 ```
 
 #### Windows-specific pre-requirements
