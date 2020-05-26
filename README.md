@@ -365,7 +365,7 @@ including the following line in the Plug section of your `init.vim` or `~/.vimrc
 ```text
 Plug 'autozimu/LanguageClient-neovim', {
     \ 'branch': 'next',
-    \ 'do': './install.sh'
+    \ 'do': 'bash install.sh'
     \ }
 ```
 
