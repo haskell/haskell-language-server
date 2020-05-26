@@ -295,10 +295,9 @@ Choose `haskell-language-server` in the extension setting `languageServerHaskell
 
 ### Using Haskell Language Server with Sublime Text
 
-- Make sure haskell-language-server and haskell-language-server-wrapper are installed (see above) and they are in the global `$PATH`.
 - Install [LSP](https://packagecontrol.io/packages/LSP) using [Package Control](https://packagecontrol.io/)
 - From Sublime Text, press Command+Shift+P and search for Preferences: LSP Settings
-- Paste in these settings. Make sure to change the command path to your `hie`
+- Paste in these settings. Make sure to change the command path to your `haskell-language-server`
 
 ```json
 {
@@ -321,8 +320,7 @@ Now open a Haskell project with Sublime Text. You should have these features ava
 
 ### Using Haskell Language Server with Vim or Neovim
 
-As above, make sure haskell-language-server and haskell-language-server-wrapper are installed.
-Then you can use [Coc](https://github.com/neoclide/coc.nvim), [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
+You can use [Coc](https://github.com/neoclide/coc.nvim), [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
 or any other Vim Language server protocol client.
 Coc is recommend since it is the only complete LSP implementation for Vim and Neovim and offers snippets and floating documentation out of the box.
 
@@ -419,7 +417,7 @@ let g:LanguageClient_rootMarkers = ['*.cabal', 'stack.yaml']
 
 ### Using Haskell Language Server with Atom
 
-Make sure haskell-language-server and haskell-language-server-wrapper are installed, then install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui) and [ide-haskell-hie](https://atom.io/packages/ide-haskell-hie),
+Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui) and [ide-haskell-hie](https://atom.io/packages/ide-haskell-hie),
 
 ```bash
 $ apm install language-haskell atom-ide-ui ide-haskell-hie
