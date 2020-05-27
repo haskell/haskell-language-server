@@ -205,6 +205,9 @@ executable haskell-language-server-wrapper
     , process
   default-language:    Haskell2010
 
+-- This common stanza simulates a previous private lib
+-- We removed it due to issues with stack when loading the project using a stack based hie.yaml
+-- See https://github.com/haskell/haskell-language-server/issues/114
 common hls-test-utils
   import: agpl
   hs-source-dirs:      test/utils
