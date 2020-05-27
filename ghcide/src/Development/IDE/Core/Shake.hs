@@ -156,7 +156,7 @@ instance Eq Key where
                      | otherwise = False
 
 instance Hashable Key where
-    hashWithSalt salt (Key key) = hashWithSalt salt key
+    hashWithSalt salt (Key key) = hashWithSalt salt (typeOf key, key)
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
 --   and a value is in the Maybe. For operations that throw an error you
