@@ -7,8 +7,8 @@ cradle:
     - path: "./test/functional/"
       component: "haskell-language-server:func-test"
 
-    - path: "./test/utils/"
-      component: "haskell-language-server:hls-test-utils"
+    - path: "./test/util/"
+      component: "haskell-language-server:func-test"
 
     - path: "./exe/Main.hs"
       component: "haskell-language-server:exe:haskell-language-server"

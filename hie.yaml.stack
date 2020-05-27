@@ -6,9 +6,8 @@ cradle:
     - path: "./test/functional/"
       component: "haskell-language-server:func-test"
 
-    # This target does not currently work (stack 2.1.3)
-    # - path: "./test/utils"
-    #   component: "haskell-language-server:lib:hls-test-utils"
+    - path: "./test/utils/"
+      component: "haskell-language-server:func-test"
 
     - path: "./exe/Main.hs"
       component: "haskell-language-server:exe:haskell-language-server"
