@@ -55,7 +55,7 @@ import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
 import DynFlags                                 (PackageFlag(..), PackageArg(..))
 import GHC hiding                               (def)
-import GHC.Check                                ( VersionCheck(..), makeGhcVersionChecker )
+import GHC.Check                                (GhcVersionChecker, InstallationCheck(..), makeGhcVersionChecker)
 -- import GhcMonad
 import HIE.Bios.Cradle
 import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute)
@@ -664,17 +664,18 @@ getCacheDir prefix opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> prefix ++
 cacheDir :: String
 cacheDir = "ghcide"
 
-ghcVersionChecker :: IO VersionCheck
-ghcVersionChecker = $$(makeGhcVersionChecker (pure <$> getLibdir))
+ghcVersionChecker :: GhcVersionChecker
+ghcVersionChecker = $$(makeGhcVersionChecker getLibdir)
 
 checkGhcVersion :: IO (Maybe HscEnvEq)
 checkGhcVersion = do
-    res <- ghcVersionChecker
+    runtimeLibdir <- getLibdir
+    res <- ghcVersionChecker runtimeLibdir
     case res of
-        Failure err -> do
-          putStrLn $ "Error while checking GHC version: " ++ show err
+        InstallationNotFound libdir -> do
+          putStrLn $ "Error not found GHC while checking GHC version: " ++ libdir
           return Nothing
-        Mismatch {..} ->
+        InstallationMismatch {..} ->
           return $ Just GhcVersionMismatch {..}
-        _ ->
+        InstallationChecked {} ->
           return Nothing
