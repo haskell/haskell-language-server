@@ -59,9 +59,11 @@ import           Development.IDE.GHC.Error
 import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Spans.Type
+import qualified Data.ByteString.Char8 as BS
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes
+import PackageConfig
 import DynFlags (gopt_set, xopt)
 import GHC.Generics(Generic)
 
@@ -141,7 +143,6 @@ getHomeHieFile f = do
       hie_f = ml_hie_file $ ms_location ms
   mbHieTimestamp <- use GetModificationTime normal_hie_f
   srcTimestamp   <- use_ GetModificationTime f
-
   let isUpToDate
         | Just d <- mbHieTimestamp = comparing modificationTime d srcTimestamp == GT
         | otherwise = False
@@ -191,12 +192,16 @@ priorityFilesOfInterest = Priority (-2)
 
 getParsedModuleRule :: Rules ()
 getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
-    hsc <- hscEnv <$> use_ GhcSession file
+    sess <- use_ GhcSession file
+    let hsc = hscEnv sess
+        -- These packages are used when removing PackageImports from a
+        -- parsed module
+        comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
     opt <- getIdeOptions
     (_, contents) <- getFileContents file
 
     let dflags    = hsc_dflags hsc
-        mainParse = getParsedModuleDefinition hsc opt file contents
+        mainParse = getParsedModuleDefinition hsc opt comp_pkgs file contents
 
     -- Parse again (if necessary) to capture Haddock parse errors
     if gopt Opt_Haddock dflags
@@ -206,7 +211,7 @@ getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
             let hscHaddock = hsc{hsc_dflags = gopt_set dflags Opt_Haddock}
                 haddockParse = do
                     (_, (!diagsHaddock, _)) <-
-                        getParsedModuleDefinition hscHaddock opt file contents
+                        getParsedModuleDefinition hscHaddock opt comp_pkgs file contents
                     return diagsHaddock
 
             ((fingerPrint, (diags, res)), diagsHaddock) <-
@@ -217,9 +222,9 @@ getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
 
             return (fingerPrint, (mergeDiagnostics diags diagsHaddock, res))
 
-getParsedModuleDefinition :: HscEnv -> IdeOptions -> NormalizedFilePath -> Maybe T.Text -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
-getParsedModuleDefinition packageState opt file contents = do
-    (diag, res) <- parseModule opt packageState (fromNormalizedFilePath file) (fmap textToStringBuffer contents)
+getParsedModuleDefinition :: HscEnv -> IdeOptions -> [PackageName] -> NormalizedFilePath -> Maybe T.Text -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
+getParsedModuleDefinition packageState opt comp_pkgs file contents = do
+    (diag, res) <- parseModule opt packageState comp_pkgs (fromNormalizedFilePath file) (fmap textToStringBuffer contents)
     case res of
         Nothing -> pure (Nothing, (diag, Nothing))
         Just (contents, modu) -> do
@@ -233,11 +238,13 @@ getLocatedImportsRule =
     define $ \GetLocatedImports file -> do
         ms <- use_ GetModSummary file
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
-        env <- hscEnv <$> use_ GhcSession file
+        env_eq <- use_ GhcSession file
+        let env = hscEnv env_eq
+        let import_dirs = deps env_eq
         let dflags = addRelativeImport file (moduleName $ ms_mod ms) $ hsc_dflags env
         opt <- getIdeOptions
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule dflags (optExtensions opt) getFileExists modName mbPkgName isSource
+            diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getFileExists modName mbPkgName isSource
             case diagOrImp of
                 Left diags -> pure (diags, Left (modName, Nothing))
                 Right (FileImport path) -> pure ([], Left (modName, Just path))
@@ -522,7 +529,7 @@ instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
 instance Binary   GhcSessionIO
 
-newtype GhcSessionFun = GhcSessionFun (FilePath -> Action HscEnvEq)
+newtype GhcSessionFun = GhcSessionFun (FilePath -> Action (IdeResult HscEnvEq))
 instance Show GhcSessionFun where show _ = "GhcSessionFun"
 instance NFData GhcSessionFun where rnf !_ = ()
 
@@ -532,11 +539,26 @@ loadGhcSession = do
     defineNoFile $ \GhcSessionIO -> do
         opts <- getIdeOptions
         GhcSessionFun <$> optGhcSession opts
+    -- This function should always be rerun because it consults a cache to
+    -- see what HscEnv needs to be used for the file, which can change.
+    -- However, it should also cut-off early if it's the same HscEnv as
+    -- last time
     defineEarlyCutoff $ \GhcSession file -> do
         GhcSessionFun fun <- useNoFile_ GhcSessionIO
+        alwaysRerun
         val <- fun $ fromNormalizedFilePath file
+
+        -- TODO: What was this doing before?
         opts <- getIdeOptions
-        return ("" <$ optShakeFiles opts, ([], Just val))
+        let cutoffHash =
+              case optShakeFiles opts of
+                -- optShakeFiles is only set in the DAML case.
+                -- https://github.com/digital-asset/ghcide/pull/522#discussion_r428622915
+                Just {} -> ""
+                -- Hash the HscEnvEq returned so cutoff if it didn't change
+                -- from last time
+                Nothing -> BS.pack (show (hash (snd val)))
+        return (Just cutoffHash, val)
 
 getHiFileRule :: Rules ()
 getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
@@ -601,12 +623,16 @@ getModIfaceRule = define $ \GetModIface f -> do
             -- the interface file does not exist or is out of date.
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            hsc <- hscEnv <$> use_ GhcSession f
+            sess <- use_ GhcSession f
+            let hsc = hscEnv sess
+                -- After parsing the module remove all package imports referring to
+                -- these packages as we have already dealt with what they map to.
+                comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
             opt <- getIdeOptions
             (_, contents) <- getFileContents f
             -- Embed --haddocks in the interface file
             hsc <- pure hsc{hsc_dflags = gopt_set (hsc_dflags hsc) Opt_Haddock}
-            (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt f contents
+            (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt comp_pkgs f contents
             case mb_pm of
                 Nothing -> return (diags, Nothing)
                 Just pm -> do
