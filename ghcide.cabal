@@ -15,7 +15,13 @@ homepage:           https://github.com/digital-asset/ghcide#readme
 bug-reports:        https://github.com/digital-asset/ghcide/issues
 tested-with:        GHC==8.6.5
 extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
-                    test/data/GotoHover.hs
+                    test/data/hover/*.hs
+                    test/data/multi/cabal.project
+                    test/data/multi/hie.yaml
+                    test/data/multi/a/a.cabal
+                    test/data/multi/a/*.hs
+                    test/data/multi/b/b.cabal
+                    test/data/multi/b/*.hs
 
 source-repository head
     type:     git
@@ -184,6 +190,8 @@ executable ghcide
                 "-with-rtsopts=-I0 -qg -A128M"
     main-is: Main.hs
     build-depends:
+        time,
+        async,
         hslogger,
         aeson,
         base == 4.*,
@@ -211,11 +219,9 @@ executable ghcide
         text,
         unordered-containers
     other-modules:
+        Utils
         Arguments
         Paths_ghcide
-        Rules
-        RuleTypes
-        Util
 
     default-extensions:
         BangPatterns

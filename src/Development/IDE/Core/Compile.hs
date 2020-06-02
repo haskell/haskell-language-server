@@ -90,14 +90,15 @@ import Exception (ExceptionMonad)
 parseModule
     :: IdeOptions
     -> HscEnv
+    -> [PackageName]
     -> FilePath
     -> Maybe SB.StringBuffer
     -> IO (IdeResult (StringBuffer, ParsedModule))
-parseModule IdeOptions{..} env filename mbContents =
+parseModule IdeOptions{..} env comp_pkgs filename mbContents =
     fmap (either (, Nothing) id) $
     evalGhcEnv env $ runExceptT $ do
         (contents, dflags) <- preprocessor filename mbContents
-        (diag, modu) <- parseFileContents optPreprocessor dflags filename contents
+        (diag, modu) <- parseFileContents optPreprocessor dflags comp_pkgs filename contents
         return (diag, Just (contents, modu))
 
 
@@ -499,10 +500,11 @@ parseFileContents
        :: GhcMonad m
        => (GHC.ParsedSource -> IdePreprocessedSource)
        -> DynFlags -- ^ flags to use
+       -> [PackageName] -- ^ The package imports to ignore
        -> FilePath  -- ^ the filename (for source locations)
        -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
-parseFileContents customPreprocessor dflags filename contents = do
+parseFileContents customPreprocessor dflags comp_pkgs filename contents = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    case unP Parser.parseModule (mkPState dflags contents loc) of
 #if MIN_GHC_API_VERSION(8,10,0)
@@ -534,17 +536,33 @@ parseFileContents customPreprocessor dflags filename contents = do
                -- Ok, we got here. It's safe to continue.
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
                unless (null errs) $ throwE $ diagFromStrings "parser" DsError errs
+               let parsed' = removePackageImports comp_pkgs parsed
                let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               ms <- getModSummaryFromBuffer filename dflags parsed
+               ms <- getModSummaryFromBuffer filename dflags parsed'
                let pm =
                      ParsedModule {
                          pm_mod_summary = ms
-                       , pm_parsed_source = parsed
+                       , pm_parsed_source = parsed'
                        , pm_extra_src_files=[] -- src imports not allowed
                        , pm_annotations = hpm_annotations
                       }
                    warnings = diagFromErrMsgs "parser" dflags warns
                pure (warnings ++ preproc_warnings, pm)
+
+
+-- | After parsing the module remove all package imports referring to
+-- these packages as we have already dealt with what they map to.
+removePackageImports :: [PackageName] -> GHC.ParsedSource -> GHC.ParsedSource
+removePackageImports pkgs (L l h@HsModule {hsmodImports} ) = L l (h { hsmodImports = imports' })
+  where
+    imports' = map do_one_import hsmodImports
+    do_one_import (L l i@ImportDecl{ideclPkgQual}) =
+      case PackageName . sl_fs <$> ideclPkgQual of
+        Just pn | pn `elem` pkgs -> L l (i { ideclPkgQual = Nothing })
+        _ -> L l i
+#if MIN_GHC_API_VERSION(8,6,0)
+    do_one_import l = l
+#endif
 
 loadHieFile :: FilePath -> IO GHC.HieFile
 loadHieFile f = do

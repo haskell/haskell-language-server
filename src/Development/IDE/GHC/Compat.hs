@@ -26,6 +26,7 @@ module Development.IDE.GHC.Compat(
     includePathsQuote,
     addIncludePathsQuote,
     getModuleHash,
+    getPackageName,
     pattern DerivD,
     pattern ForD,
     pattern InstD,
@@ -47,6 +48,7 @@ import DynFlags
 import FieldLabel
 import Fingerprint (Fingerprint)
 import qualified Module
+import Packages
 
 import qualified GHC
 import GHC hiding (
@@ -302,3 +304,6 @@ getConArgs = GHC.getConArgs
 #else
 getConArgs = GHC.getConDetails
 #endif
+
+getPackageName :: DynFlags -> Module.InstalledUnitId -> Maybe PackageName
+getPackageName dfs i = packageName <$> lookupPackage dfs (Module.DefiniteUnitId (Module.DefUnitId i))
