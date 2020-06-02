@@ -1,5 +1,25 @@
 ### unreleased
 
+### 0.2.0 (2020-06-02)
+
+* Multi-component support (thanks @mpickering)
+* Support for GHC 8.10 (thanks @sheaf and @chshersh)
+* Fix some TH issues (thanks @mpickering)
+* Automatically pick up changes to cradle dependencies (e.g. cabal
+  files) (thanks @jinwoo)
+* Track dependencies when using `qAddDependentFile` (thanks @mpickering)
+* Add record fields to document symbols outline (thanks @bubba)
+* Fix some space leaks (thanks @mpickering)
+* Strip redundant path information from diagnostics (thanks @tek)
+* Fix import suggestions for operators (thanks @eddiemundo)
+* Significant reductions in memory usage by using interfaces and `.hie` files (thanks
+  @pepeiborra)
+* Minor improvements to completions
+* More comprehensive suggestions for missing imports (thanks @pepeiborra)
+* Group imports in document outline (thanks @fendor)
+* Upgrade to haskell-lsp-0.22 (thanks @bubba)
+* Upgrade to hie-bios 0.5 (thanks @fendor)
+
 ### 0.1.0 (2020-02-04)
 
 * Code action for inserting new definitions (see #309).
