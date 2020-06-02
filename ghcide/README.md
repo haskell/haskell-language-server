@@ -266,6 +266,20 @@ Add this to your coc-settings.json (which you can edit with :CocConfig):
 This example above describes a setup in which `ghcide` is installed
 using `stack install ghcide` within a project.
 
+### Using with Kakoune
+
+Install [kak-lsp](https://github.com/ul/kak-lsp).
+
+Change `kak-lsp.toml` to include this:
+
+```toml
+[language.haskell]
+filetypes = ["haskell"]
+roots = ["Setup.hs", "stack.yaml", "*.cabal", "cabal.project", "hie.yaml"]
+command = "ghcide"
+args = ["--lsp"]
+```
+
 ## Hacking on ghcide
 
 To build and work on `ghcide` itself, you can use Stack or cabal, e.g.,
