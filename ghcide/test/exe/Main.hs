@@ -10,7 +10,7 @@
 module Main (main) where
 
 import Control.Applicative.Combinators
-import Control.Exception (catch)
+import Control.Exception (bracket, catch)
 import qualified Control.Lens as Lens
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
@@ -35,7 +35,7 @@ import Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.Types.Lens as Lsp (diagnostics, params, message)
 import Language.Haskell.LSP.VFS (applyChange)
 import Network.URI
-import System.Environment.Blank (setEnv)
+import System.Environment.Blank (getEnv, setEnv, unsetEnv)
 import System.FilePath
 import System.IO.Extra
 import System.Directory
@@ -49,32 +49,35 @@ import Test.Tasty.QuickCheck
 import Data.Maybe
 
 main :: IO ()
-main = defaultMainWithRerun $ testGroup "HIE"
-  [ testSession "open close" $ do
-      doc <- createDoc "Testing.hs" "haskell" ""
-      void (skipManyTill anyMessage message :: Session WorkDoneProgressCreateRequest)
-      void (skipManyTill anyMessage message :: Session WorkDoneProgressBeginNotification)
-      closeDoc doc
-      void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
-  , initializeResponseTests
-  , completionTests
-  , cppTests
-  , diagnosticTests
-  , codeActionTests
-  , codeLensesTests
-  , outlineTests
-  , findDefinitionAndHoverTests
-  , pluginTests
-  , preprocessorTests
-  , thTests
-  , safeTests
-  , unitTests
-  , haddockTests
-  , positionMappingTests
-  , watchedFilesTests
-  , cradleTests
-  , dependentFileTest
-  ]
+main = do
+  -- We mess with env vars so run single-threaded.
+  setEnv "TASTY_NUM_THREADS" "1" True
+  defaultMainWithRerun $ testGroup "HIE"
+    [ testSession "open close" $ do
+        doc <- createDoc "Testing.hs" "haskell" ""
+        void (skipManyTill anyMessage message :: Session WorkDoneProgressCreateRequest)
+        void (skipManyTill anyMessage message :: Session WorkDoneProgressBeginNotification)
+        closeDoc doc
+        void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+    , initializeResponseTests
+    , completionTests
+    , cppTests
+    , diagnosticTests
+    , codeActionTests
+    , codeLensesTests
+    , outlineTests
+    , findDefinitionAndHoverTests
+    , pluginTests
+    , preprocessorTests
+    , thTests
+    , safeTests
+    , unitTests
+    , haddockTests
+    , positionMappingTests
+    , watchedFilesTests
+    , cradleTests
+    , dependentFileTest
+    ]
 
 initializeResponseTests :: TestTree
 initializeResponseTests = withResource acquire release tests where
@@ -1293,33 +1296,36 @@ addSigLensesTests = let
         ]
     ]
 
-findDefinitionAndHoverTests :: TestTree
-findDefinitionAndHoverTests = let
+checkDefs :: [Location] -> Session [Expect] -> Session ()
+checkDefs defs mkExpectations = traverse_ check =<< mkExpectations where
 
-  tst (get, check) pos targetRange title = testSession title $ do
-    doc <- openTestDataDoc sourceFilePath
-    found <- get doc pos
-    check found targetRange
-
-  checkDefs :: [Location] -> Session [Expect] -> Session ()
-  checkDefs defs mkExpectations = traverse_ check =<< mkExpectations where
-
-    check (ExpectRange expectedRange) = do
-      assertNDefinitionsFound 1 defs
-      assertRangeCorrect (head defs) expectedRange
-    check (ExpectLocation expectedLocation) = do
-      assertNDefinitionsFound 1 defs
-      liftIO $ head defs @?= expectedLocation
-    check ExpectNoDefinitions = do
-      assertNDefinitionsFound 0 defs
-    check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
-    check _ = pure () -- all other expectations not relevant to getDefinition
+  check (ExpectRange expectedRange) = do
+    assertNDefinitionsFound 1 defs
+    assertRangeCorrect (head defs) expectedRange
+  check (ExpectLocation expectedLocation) = do
+    assertNDefinitionsFound 1 defs
+    liftIO $ head defs @?= expectedLocation
+  check ExpectNoDefinitions = do
+    assertNDefinitionsFound 0 defs
+  check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
+  check _ = pure () -- all other expectations not relevant to getDefinition
 
   assertNDefinitionsFound :: Int -> [a] -> Session ()
   assertNDefinitionsFound n defs = liftIO $ assertEqual "number of definitions" n (length defs)
 
   assertRangeCorrect Location{_range = foundRange} expectedRange =
     liftIO $ expectedRange @=? foundRange
+
+
+findDefinitionAndHoverTests :: TestTree
+findDefinitionAndHoverTests = let
+
+  tst (get, check) pos targetRange title = testSessionWithExtraFiles "hover" title $ \dir -> do
+    doc <- openTestDataDoc (dir </> sourceFilePath)
+    found <- get doc pos
+    check found targetRange
+
+
 
   checkHover :: Maybe Hover -> Session [Expect] -> Session ()
   checkHover hover expectations = traverse_ check =<< expectations where
@@ -1463,8 +1469,10 @@ findDefinitionAndHoverTests = let
 
 checkFileCompiles :: FilePath -> TestTree
 checkFileCompiles fp =
-  testSessionWait ("Does " ++ fp ++ " compile") $
-    void (openTestDataDoc fp)
+  testSessionWithExtraFiles "hover" ("Does " ++ fp ++ " compile") $ \dir -> do
+    void (openTestDataDoc (dir </> fp))
+    expectNoMoreDiagnostics 0.5
+
 
 
 pluginTests :: TestTree
@@ -2025,6 +2033,7 @@ cradleTests :: TestTree
 cradleTests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "loading" [loadCradleOnlyonce]
+    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2]
     ]
 
 loadCradleOnlyonce :: TestTree
@@ -2094,6 +2103,56 @@ cradleLoadedMessage = satisfy $ \case
 cradleLoadedMethod :: T.Text
 cradleLoadedMethod = "ghcide/cradle/loaded"
 
+-- Stack sets this which trips up cabal in the multi-component tests.
+-- However, our plugin tests rely on those env vars so we unset it locally.
+withoutStackEnv :: IO a -> IO a
+withoutStackEnv s =
+  bracket
+    (mapM getEnv vars >>= \prevState -> mapM_ unsetEnv vars >> pure prevState)
+    (\prevState -> mapM_ (\(var, value) -> restore var value) (zip vars prevState))
+    (const s)
+  where vars =
+          [ "GHC_PACKAGE_PATH"
+          , "GHC_ENVIRONMENT"
+          , "HASKELL_DIST_DIR"
+          , "HASKELL_PACKAGE_SANDBOX"
+          , "HASKELL_PACKAGE_SANDBOXES"
+          ]
+        restore var Nothing = unsetEnv var
+        restore var (Just val) = setEnv var val True
+
+simpleMultiTest :: TestTree
+simpleMultiTest = testCase "simple-multi-test" $ withoutStackEnv $ runWithExtraFiles "multi" $ \dir -> do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+    aSource <- liftIO $ readFileUtf8 aPath
+    (TextDocumentIdentifier adoc) <- createDoc aPath "haskell" aSource
+    expectNoMoreDiagnostics 0.5
+    bSource <- liftIO $ readFileUtf8 bPath
+    bdoc <- createDoc bPath "haskell" bSource
+    expectNoMoreDiagnostics 0.5
+    locs <- getDefinitions bdoc (Position 2 7)
+    let fooL = mkL adoc 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
+-- Like simpleMultiTest but open the files in the other order
+simpleMultiTest2 :: TestTree
+simpleMultiTest2 = testCase "simple-multi-test2" $ withoutStackEnv $ runWithExtraFiles "multi" $ \dir -> do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+    bSource <- liftIO $ readFileUtf8 bPath
+    bdoc <- createDoc bPath "haskell" bSource
+    expectNoMoreDiagnostics 5
+    aSource <- liftIO $ readFileUtf8 aPath
+    (TextDocumentIdentifier adoc) <- createDoc aPath "haskell" aSource
+    -- Need to have some delay here or the test fails
+    expectNoMoreDiagnostics 5
+    locs <- getDefinitions bdoc (Position 2 7)
+    let fooL = mkL adoc 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
 sessionDepsArePickedUp :: TestTree
 sessionDepsArePickedUp = testSession'
   "session-deps-are-picked-up"
@@ -2138,6 +2197,9 @@ sessionDepsArePickedUp = testSession'
 testSession :: String -> Session () -> TestTree
 testSession name = testCase name . run
 
+testSessionWithExtraFiles :: FilePath -> String -> (FilePath -> Session ()) -> TestTree
+testSessionWithExtraFiles prefix name = testCase name . runWithExtraFiles prefix
+
 testSession' :: String -> (FilePath -> Session ()) -> TestTree
 testSession' name = testCase name . run'
 
@@ -2172,6 +2234,19 @@ mkRange a b c d = Range (Position a b) (Position c d)
 run :: Session a -> IO a
 run s = withTempDir $ \dir -> runInDir dir s
 
+runWithExtraFiles :: FilePath -> (FilePath -> Session a) -> IO a
+runWithExtraFiles prefix s = withTempDir $ \dir -> do
+  copyTestDataFiles dir prefix
+  runInDir dir (s dir)
+
+copyTestDataFiles :: FilePath -> FilePath -> IO ()
+copyTestDataFiles dir prefix = do
+  -- Copy all the test data files to the temporary workspace
+  testDataFiles <- getDirectoryFilesIO ("test/data" </> prefix) ["//*"]
+  for_ testDataFiles $ \f -> do
+    createDirectoryIfMissing True $ dir </> takeDirectory f
+    copyFile ("test/data" </> prefix </> f) (dir </> f)
+
 run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
@@ -2183,11 +2258,6 @@ runInDir dir s = do
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
   createDirectoryIfMissing True $ dir ++ "/Data"
 
-  -- Copy all the test data files to the temporary workspace
-  testDataFiles <- getDirectoryFilesIO "test/data" ["//*"]
-  for_ testDataFiles $ \f -> do
-    createDirectoryIfMissing True $ dir </> takeDirectory f
-    copyFile ("test/data" </> f) (dir </> f)
 
   let cmd = unwords [ghcideExe, "--lsp", "--test", "--cwd", dir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.

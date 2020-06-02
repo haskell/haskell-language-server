@@ -171,9 +171,6 @@ instance Hashable Key where
 --   get empty diagnostics and a Nothing, to indicate this phase throws no fresh
 --   errors but still failed.
 --
---   A rule on a file should only return diagnostics for that given file. It should
---   not propagate diagnostic errors through multiple phases.
-type IdeResult v = ([FileDiagnostic], Maybe v)
 
 data Value v
     = Succeeded TextDocumentVersion v

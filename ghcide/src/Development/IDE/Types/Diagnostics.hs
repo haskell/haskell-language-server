@@ -6,6 +6,7 @@ module Development.IDE.Types.Diagnostics (
   LSP.Diagnostic(..),
   ShowDiagnostic(..),
   FileDiagnostic,
+  IdeResult,
   LSP.DiagnosticSeverity(..),
   DiagnosticStore,
   List(..),
@@ -31,6 +32,9 @@ import Data.Text.Prettyprint.Doc.Render.Terminal (Color(..), color)
 
 import Development.IDE.Types.Location
 
+--   A rule on a file should only return diagnostics for that given file. It should
+--   not propagate diagnostic errors through multiple phases.
+type IdeResult v = ([FileDiagnostic], Maybe v)
 
 ideErrorText :: NormalizedFilePath -> T.Text -> FileDiagnostic
 ideErrorText = ideErrorWithSource (Just "compiler") (Just DsError)

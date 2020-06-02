@@ -25,6 +25,23 @@ There are more details about our approach [in this blog post](https://4ta.uk/p/s
 | Display type and source module of values | hover |
 | Remove redundant imports, replace suggested typos for values and module imports, fill type holes, insert missing type signatures, add suggested ghc extensions  | codeAction (quickfix) |
 
+
+## Limitations to Multi-Component support
+
+`ghcide` supports loading multiple components into the same session so that
+features such as go-to definition work across components. However, there are
+some limitations to this.
+
+1. You will get much better results currently manually specifying the hie.yaml file.
+Until tools like cabal and stack provide the right interface to support multi-component
+projects, it is always advised to specify explicitly how your project partitions.
+2. Cross-component features only work if you have loaded at least one file
+from each component.
+3. There is a known issue where if you have three components, such that A depends on B which depends on C
+then if you load A and C into the session but not B then under certain situations you
+can get strange errors about a type coming from two different places. See [this repo](https://github.com/fendor/ghcide-bad-interface-files) for
+a simple reproduction of the bug.
+
 ## Using it
 
 ### Install `ghcide`
@@ -308,7 +325,7 @@ Now opening a `.hs` file should work with `ghcide`.
 
 ## History and relationship to other Haskell IDE's
 
-The teams behind this project and the [`haskell-ide-engine`](https://github.com/haskell/haskell-ide-engine#readme) have agreed to join forces under the [`haskell-language-server` project](https://github.com/haskell/haskell-language-server), see the [original announcement](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html). The technical work is ongoing, with the likely model being that this project serves as the core, while plugins and integrations are kept in the [`haskell-language-server` project](https://github.com/haskell/haskell-language-server). 
+The teams behind this project and the [`haskell-ide-engine`](https://github.com/haskell/haskell-ide-engine#readme) have agreed to join forces under the [`haskell-language-server` project](https://github.com/haskell/haskell-language-server), see the [original announcement](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html). The technical work is ongoing, with the likely model being that this project serves as the core, while plugins and integrations are kept in the [`haskell-language-server` project](https://github.com/haskell/haskell-language-server).
 
 The code behind `ghcide` was originally developed by [Digital Asset](https://digitalasset.com/) as part of the [DAML programming language](https://github.com/digital-asset/daml). DAML is a smart contract language targeting distributed-ledger runtimes, based on [GHC](https://www.haskell.org/ghc/) with custom language extensions. The DAML programming language has [an IDE](https://webide.daml.com/), and work was done to separate off a reusable Haskell-only IDE (what is now `ghcide`) which the [DAML IDE then builds upon](https://github.com/digital-asset/daml/tree/master/compiler/damlc). Since that time, there have been various [non-Digital Asset contributors](https://github.com/digital-asset/ghcide/graphs/contributors), in addition to continued investment by Digital Asset. All contributions require a [Contributor License Agreement](https://cla.digitalasset.com/digital-asset/ghcide) that states you license the code under the [Apache License](LICENSE).
 
