@@ -2,12 +2,12 @@ cabal-version:      1.20
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            0.1.0
+version:            0.2.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset
 maintainer:         Digital Asset
-copyright:          Digital Asset 2018-2019
+copyright:          Digital Asset 2018-2020
 synopsis:           The core of an IDE
 description:
     A library for building Haskell IDE's on top of the GHC API.
