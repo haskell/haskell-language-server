@@ -69,7 +69,7 @@ import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
-import           Control.Exception
+import           Control.Exception.Extra
 import           Control.DeepSeq
 import           System.Time.Extra
 import           Data.Typeable
@@ -126,14 +126,19 @@ addIdeGlobal x = do
 addIdeGlobalExtras :: IsIdeGlobal a => ShakeExtras -> a -> IO ()
 addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
     liftIO $ modifyVar_ globals $ \mp -> case HMap.lookup ty mp of
-        Just _ -> error $ "Can't addIdeGlobal twice on the same type, got " ++ show ty
+        Just _ -> errorIO $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
         Nothing -> return $! HMap.insert ty (toDyn x) mp
 
 
 getIdeGlobalExtras :: forall a . IsIdeGlobal a => ShakeExtras -> IO a
 getIdeGlobalExtras ShakeExtras{globals} = do
-    Just x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readVar globals
-    return $ fromDyn x $ error "Serious error, corrupt globals"
+    let typ = typeRep (Proxy :: Proxy a)
+    x <- HMap.lookup (typeRep (Proxy :: Proxy a)) <$> readVar globals
+    case x of
+        Just x
+            | Just x <- fromDynamic x -> pure x
+            | otherwise -> errorIO $ "Internal error, getIdeGlobalExtras, wrong type for " ++ show typ ++ " (got " ++ show (dynTypeRep x) ++ ")"
+        Nothing -> errorIO $ "Internal error, getIdeGlobalExtras, no entry for " ++ show typ
 
 getIdeGlobalAction :: forall a . IsIdeGlobal a => Action a
 getIdeGlobalAction = liftIO . getIdeGlobalExtras =<< getShakeExtras
