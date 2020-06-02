@@ -91,20 +91,24 @@ getFileExists fp = use_ GetFileExists fp
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
 fileExistsRules :: IO LspId -> ClientCapabilities -> VFSHandle -> Rules ()
-fileExistsRules getLspId ClientCapabilities{_workspace} vfs
-  | Just WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
-  , Just DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
-  , Just True <- _dynamicRegistration
-  = fileExistsRulesFast getLspId vfs
-  | otherwise = do
-      logger <- logger <$> getShakeExtrasRules
-      liftIO $ logDebug logger "Warning: Client does not support watched files. Falling back to OS polling"
-      fileExistsRulesSlow vfs
+fileExistsRules getLspId ClientCapabilities{_workspace} vfs = do
+  -- Create the global always, although it should only be used if we have fast rules.
+  -- But there's a chance someone will send unexpected notifications anyway,
+  -- e.g. https://github.com/digital-asset/ghcide/issues/599
+  addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
+  case () of
+    _ | Just WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
+      , Just DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
+      , Just True <- _dynamicRegistration
+        -> fileExistsRulesFast getLspId vfs
+      | otherwise -> do
+        logger <- logger <$> getShakeExtrasRules
+        liftIO $ logDebug logger "Warning: Client does not support watched files. Falling back to OS polling"
+        fileExistsRulesSlow vfs
 
 --   Requires an lsp client that provides WatchedFiles notifications.
 fileExistsRulesFast :: IO LspId -> VFSHandle -> Rules ()
-fileExistsRulesFast getLspId vfs = do
-  addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
+fileExistsRulesFast getLspId vfs =
   defineEarlyCutoff $ \GetFileExists file -> do
     isWf <- isWorkspaceFile file
     if isWf
