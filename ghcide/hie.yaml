@@ -6,5 +6,7 @@ cradle:
       component: "ghcide:exe:ghcide"
     - path: "./test"
       component: "ghcide:test:ghcide-tests"
+    - path: "./bench"
+      component: "ghcide:benchmark:ghcide-bench"
     - path: "./test/preprocessor"
       component: "ghcide:exe:ghcide-test-preprocessor"

@@ -73,7 +73,6 @@
   - {name: ViewPatterns, within: []}
 
   # Shady extensions
-  - {name: ImplicitParams, within: []}
   - name: CPP
     within:
     - Development.IDE.Compat
