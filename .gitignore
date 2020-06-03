@@ -7,3 +7,4 @@ cabal.project.local
 /.tasty-rerun-log
 .vscode
 /.hlint-*
+bench/example
