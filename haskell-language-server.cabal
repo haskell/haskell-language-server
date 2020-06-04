@@ -49,6 +49,7 @@ library
       Ide.Plugin.Pragmas
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
+      Ide.Plugin.StylishHaskell
       Ide.PluginUtils
       Ide.Types
       Ide.Version
@@ -84,6 +85,7 @@ library
     , process
     , regex-tdfa >= 1.3.1.0
     , shake >= 0.17.5
+    , stylish-haskell == 0.11.*
     , text
     , transformers
     , unordered-containers

@@ -64,6 +64,7 @@ instance Default Config where
     -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
+    -- , formattingProvider          = "stylish-haskell"
     }
 
 -- TODO: Add API for plugins to expose their own LSP config options

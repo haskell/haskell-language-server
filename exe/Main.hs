@@ -94,6 +94,7 @@ import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
+import Ide.Plugin.StylishHaskell          as StylishHaskell
 #if AGPL
 import Ide.Plugin.Brittany                as Brittany
 #endif
@@ -129,6 +130,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       -- , genericDescriptor     "generic"
       -- , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
+      , StylishHaskell.descriptor "stylish-haskell"
 #if AGPL
       , Brittany.descriptor    "brittany"
 #endif
