@@ -1,0 +1,3 @@
+cradle: 
+  stack: 
+    component: "hls-install:lib"

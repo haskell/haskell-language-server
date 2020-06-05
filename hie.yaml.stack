@@ -6,9 +6,6 @@ cradle:
     - path: "./test/testdata/"
       config: { cradle: { none:  } }
 
-    - path: "./install/"
-      config: { cradle: { none:  } }
-
     - path: "./"
       config:
         cradle:
