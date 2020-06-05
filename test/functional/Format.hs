@@ -24,6 +24,7 @@ tests = testGroup "format document" [
         documentContents doc >>= liftIO . (`shouldBe` formattedDocTabSize5)
     , rangeTests
     , providerTests
+    , stylishHaskellTests
     , brittanyTests
     , ormoluTests
     ]
@@ -67,6 +68,38 @@ providerTests = testGroup "formatting provider" [
         formatDoc doc (FormattingOptions 2 True)
         documentContents doc >>= liftIO . (`shouldBe` formattedBrittanyPostFloskell)
     ]
+
+stylishHaskellTests :: TestTree
+stylishHaskellTests = testGroup "stylish-haskell" [
+  testCase "formats a file" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
+      doc <- openDoc "StylishHaskell.hs" "haskell"
+      formatDoc doc (FormattingOptions 2 True)
+      contents <- documentContents doc
+      liftIO $ contents `shouldBe`
+        "import           Data.Char\n\
+        \import qualified Data.List\n\
+        \import           Data.String\n\
+        \\n\
+        \bar :: Maybe (Either String Integer) -> Integer\n\
+        \bar Nothing          = 0\n\
+        \bar (Just (Left _))  = 0\n\
+        \bar (Just (Right x)) = x\n"
+  , testCase "formats a range" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
+      doc <- openDoc "StylishHaskell.hs" "haskell"
+      formatRange doc (FormattingOptions 2 True) (Range (Position 0 0) (Position 2 21))
+      contents <- documentContents doc
+      liftIO $ contents `shouldBe`
+        "import           Data.Char\n\
+        \import qualified Data.List\n\
+        \import           Data.String\n\
+        \\n\
+        \bar :: Maybe (Either String Integer) -> Integer\n\
+        \bar Nothing = 0\n\
+        \bar (Just (Left _)) = 0\n\
+        \bar (Just (Right x)) = x\n"
+  ]
 
 brittanyTests :: TestTree
 brittanyTests = testGroup "brittany" [
