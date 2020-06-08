@@ -25,6 +25,8 @@ extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 - hie-bios-0.5.0
+- HsYAML-0.2.1.0@rev:1
+- HsYAML-aeson-0.2.0.0@rev:1
 - indexed-profunctors-0.1
 - lens-4.18
 - lsp-test-0.10.3.0
@@ -40,6 +42,7 @@ extra-deps:
 - semialign-1.1
 - github: wz1000/shake
   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
+- stylish-haskell-0.11.0.0
 - tasty-rerun-1.1.17
 - temporary-1.2.1.1
 - type-equality-1
