@@ -9,6 +9,7 @@
 module Development.IDE.Core.OfInterest(
     ofInterestRules,
     getFilesOfInterest, setFilesOfInterest, modifyFilesOfInterest,
+    kick
     ) where
 
 import Control.Concurrent.Extra
@@ -28,6 +29,7 @@ import Development.Shake
 
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
+import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 
 
@@ -79,4 +81,11 @@ modifyFilesOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar var $ pure . dupe . f
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ HashSet.toList files)
-    void $ shakeRun state []
+    void $ shakeRestart state [kick]
+
+-- | Typecheck all the files of interest.
+--   Could be improved
+kick :: Action ()
+kick = do
+    files <- getFilesOfInterest
+    void $ uses TypeCheck $ HashSet.toList files

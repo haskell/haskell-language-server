@@ -58,7 +58,7 @@ import System.Time.Extra
 import HIE.Bios.Environment (addCmdOpts, makeDynFlagsAbsolute)
 import Paths_ghcide
 import Development.GitRev
-import Development.Shake (Action, action)
+import Development.Shake (Action)
 import qualified Data.HashSet as HashSet
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map.Strict as Map
@@ -124,11 +124,11 @@ main = do
             let options = (defaultIdeOptions $ loadSessionShake dir)
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
-                    , optTesting        = argsTesting
+                    , optTesting        = IdeTesting argsTesting
                     , optThreads        = argsThreads
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins >> action kick)
+            initialise caps (mainRule >> pluginRules plugins)
                 getLspId event (logger minBound) debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
@@ -156,14 +156,14 @@ main = do
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
-        results <- runActionSync ide $ uses TypeCheck (map toNormalizedFilePath' files)
+        results <- runAction ide $ uses TypeCheck (map toNormalizedFilePath' files)
         let (worked, failed) = partition fst $ zip (map isJust results) files
         when (failed /= []) $
             putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
 
         let files xs = let n = length xs in if n == 1 then "1 file" else show n ++ " files"
         putStrLn $ "\nCompleted (" ++ files worked ++ " worked, " ++ files failed ++ " failed)"
-        return ()
+        unless (null failed) (exitWith $ ExitFailure (length failed))
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do
@@ -176,12 +176,6 @@ expandFiles = concatMapM $ \x -> do
         when (null files) $
             fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
         return files
-
-
-kick :: Action ()
-kick = do
-    files <- getFilesOfInterest
-    void $ uses TypeCheck $ HashSet.toList files
 
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
@@ -230,15 +224,15 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 loadSessionShake :: FilePath -> Action (FilePath -> Action (IdeResult HscEnvEq))
 loadSessionShake fp = do
   se <- getShakeExtras
-  IdeOptions{optTesting} <- getIdeOptions
-  res <- liftIO $ loadSession optTesting se fp
+  IdeOptions{optTesting = IdeTesting ideTesting} <- getIdeOptions
+  res <- liftIO $ loadSession ideTesting se fp
   return (fmap liftIO res)
 
 -- | This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 loadSession :: Bool -> ShakeExtras -> FilePath -> IO (FilePath -> IO (IdeResult HscEnvEq))
-loadSession optTesting ShakeExtras{logger, eventer} dir = do
+loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession} dir = do
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
@@ -341,6 +335,9 @@ loadSession optTesting ShakeExtras{logger, eventer} dir = do
         cached_targets <- concatMapM (fmap fst . new_cache) old_deps
         modifyVar_ fileToFlags $ \var -> do
             pure $ Map.insert hieYaml (HM.fromList (cs ++ cached_targets)) var
+
+        -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
+        restartShakeSession [kick]
 
         return (fst res)
 

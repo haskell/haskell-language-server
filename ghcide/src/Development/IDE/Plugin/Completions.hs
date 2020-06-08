@@ -18,11 +18,14 @@ import Development.IDE.Plugin
 import Development.IDE.Core.Service
 import Development.IDE.Plugin.Completions.Logic
 import Development.IDE.Types.Location
+import Development.IDE.Types.Logger
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
+import System.Time.Extra (showDuration, duration)
+import Data.Text (pack)
 
 #if !MIN_GHC_API_VERSION(8,6,0) || defined(GHC_LIB)
 import Data.Maybe
@@ -76,7 +79,7 @@ getCompletionsLSP lsp ide
                   ,_context=completionContext} = do
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
-      (Just cnts, Just path) -> do
+      (Just cnts, Just path) -> logAndRunRequest ide path $ do
         let npath = toNormalizedFilePath' path
         (ideOpts, compls) <- runAction ide $ do
             opts <- getIdeOptions
@@ -96,6 +99,14 @@ getCompletionsLSP lsp ide
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
+
+logAndRunRequest :: IdeState -> FilePath -> IO a -> IO a
+logAndRunRequest ide filepath act = do
+    (t, res) <- duration act
+    logDebug (ideLogger ide) $
+        "completion request in file: " <> pack filepath <>
+        " took " <> pack (showDuration t)
+    return res
 
 setHandlersCompletion :: PartialHandlers c
 setHandlersCompletion = PartialHandlers $ \WithMessage{..} x -> return x{
