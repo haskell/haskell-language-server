@@ -22,6 +22,7 @@ import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
 
 import qualified Data.Text as T
+import System.Time.Extra (showDuration, duration)
 
 gotoDefinition :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError LocationResponseParams)
 hover          :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
@@ -56,7 +57,8 @@ request label getResults notFound found ide (TextDocumentPositionParams (TextDoc
 logAndRunRequest :: T.Text -> (NormalizedFilePath -> Position -> Action b) -> IdeState -> Position -> String -> IO b
 logAndRunRequest label getResults ide pos path = do
   let filePath = toNormalizedFilePath' path
-  logInfo (ideLogger ide) $
+  (t, res) <- duration $ runAction ide $ getResults filePath pos
+  logDebug (ideLogger ide) $
     label <> " request at position " <> T.pack (showPosition pos) <>
-    " in file: " <> T.pack path
-  runAction ide $ getResults filePath pos
+    " in file: " <> T.pack path <> " took " <> T.pack (showDuration t)
+  return res
