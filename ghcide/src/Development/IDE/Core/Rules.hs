@@ -52,7 +52,6 @@ import           Data.Foldable
 import qualified Data.IntMap.Strict as IntMap
 import Data.IntMap.Strict (IntMap)
 import Data.List
-import Data.Ord
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
 import           Development.IDE.GHC.Error
@@ -76,6 +75,8 @@ import Data.ByteString (ByteString)
 import Control.Concurrent.Async (concurrently)
 
 import Control.Monad.State
+import System.IO.Error (isDoesNotExistError)
+import Control.Exception.Safe (IOException, catch)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -136,22 +137,24 @@ getHieFile file mod = do
     _ -> getPackageHieFile mod file
 
 
-getHomeHieFile :: NormalizedFilePath -> Action ([a], Maybe HieFile)
+getHomeHieFile :: NormalizedFilePath -> Action ([IOException], Maybe HieFile)
 getHomeHieFile f = do
   ms <- use_ GetModSummary f
-  let normal_hie_f = toNormalizedFilePath' hie_f
-      hie_f = ml_hie_file $ ms_location ms
-  mbHieTimestamp <- use GetModificationTime normal_hie_f
-  srcTimestamp   <- use_ GetModificationTime f
-  let isUpToDate
-        | Just d <- mbHieTimestamp = comparing modificationTime d srcTimestamp == GT
-        | otherwise = False
 
-  unless isUpToDate $
-       void $ use_ TypeCheck f
+  -- .hi and .hie files are generated as a byproduct of typechecking.
+  -- To avoid duplicating staleness checking already performed for .hi files,
+  -- we overapproximate here by depending on the GetModIface rule.
+  hiFile  <- use GetModIface f
 
-  hf <- liftIO $ whenMaybe isUpToDate (loadHieFile hie_f)
-  return ([], hf)
+  case hiFile of
+    Nothing -> return ([], Nothing)
+    Just _ -> liftIO $ do
+        hf <- loadHieFile $ ml_hie_file $ ms_location ms
+        return ([], Just hf)
+      `catch` \e ->
+        if isDoesNotExistError e
+            then return ([], Nothing)
+            else return ([e], Nothing)
 
 getPackageHieFile :: Module             -- ^ Package Module to load .hie file for
                   -> NormalizedFilePath -- ^ Path of home module importing the package module
@@ -575,26 +578,24 @@ getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
   case sequence depHis of
     Nothing -> pure (Nothing, ([], Nothing))
     Just deps -> do
-      gotHiFile <- getFileExists hiFile
-      if not gotHiFile
-        then pure (Nothing, ([], Nothing))
-        else do
-          hiVersion  <- use_ GetModificationTime hiFile
-          modVersion <- use_ GetModificationTime f
-          let sourceModified = modificationTime hiVersion < modificationTime modVersion
-          if sourceModified
-            then do
+        mbHiVersion <- use  GetModificationTime hiFile
+        modVersion  <- use_ GetModificationTime f
+        case (mbHiVersion, modVersion) of
+            (Just hiVersion, ModificationTime{})
+              | modificationTime hiVersion >= modificationTime modVersion -> do
+                session <- hscEnv <$> use_ GhcSession f
+                r <- liftIO $ loadInterface session ms deps
+                case r of
+                  Right iface -> do
+                    let result = HiFileResult ms iface
+                    return (Just (fingerprintToBS (getModuleHash iface)), ([], Just result))
+                  Left err -> do
+                    let diag = ideErrorWithSource (Just "interface file loading") (Just DsError) f . T.pack $ err
+                    return (Nothing, (pure diag, Nothing))
+            (_, VFSVersion{}) ->
+                error "internal error - GetHiFile of file of interest"
+            _ ->
               pure (Nothing, ([], Nothing))
-            else do
-              session <- hscEnv <$> use_ GhcSession f
-              r <- liftIO $ loadInterface session ms deps
-              case r of
-                Right iface -> do
-                  let result = HiFileResult ms iface
-                  return (Just (fingerprintToBS (getModuleHash iface)), ([], Just result))
-                Left err -> do
-                  let diag = ideErrorWithSource (Just "interface file loading") (Just DsError) f . T.pack $ err
-                  return (Nothing, (pure diag, Nothing))
 
 getModSummaryRule :: Rules ()
 getModSummaryRule = define $ \GetModSummary f -> do
