@@ -438,7 +438,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "Foo.hs" "haskell" fooContent
       expectDiagnostics
         [ ( "Foo.hs"
-          , [(DsError, (2, 8), "Parse error on input")
+          , [(DsWarning, (2, 8), "Haddock parse error on input")
             ]
           )
         ]
