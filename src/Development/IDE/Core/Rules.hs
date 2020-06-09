@@ -21,6 +21,7 @@ module Development.IDE.Core.Rules(
     mainRule,
     getAtPoint,
     getDefinition,
+    getTypeDefinition,
     getDependencies,
     getParsedModule,
     generateCore,
@@ -122,6 +123,13 @@ getDefinition file pos = fmap join $ runMaybeT $ do
     opts <- lift getIdeOptions
     spans <- useE GetSpanInfo file
     lift $ AtPoint.gotoDefinition (getHieFile file) opts (spansExprs spans) pos
+
+getTypeDefinition :: NormalizedFilePath -> Position -> Action (Maybe [Location])
+getTypeDefinition file pos = runMaybeT $ do
+    opts <- lift getIdeOptions
+    spans <- useE GetSpanInfo file
+    lift $ AtPoint.gotoTypeDefinition (getHieFile file) opts (spansExprs spans) pos
+
 
 getHieFile
   :: NormalizedFilePath -- ^ file we're editing
