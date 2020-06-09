@@ -9,7 +9,6 @@ module Development.IDE.GHC.Error
   , diagFromStrings
   , diagFromGhcException
   , catchSrcErrors
-  , mergeDiagnostics
 
   -- * utilities working with spans
   , srcSpanToLocation
@@ -63,26 +62,6 @@ diagFromErrMsg diagSource dflags e =
 
 diagFromErrMsgs :: T.Text -> DynFlags -> Bag ErrMsg -> [FileDiagnostic]
 diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . bagToList
-
--- | Merges two sorted lists of diagnostics, removing duplicates.
---   Assumes all the diagnostics are for the same file.
-mergeDiagnostics :: [FileDiagnostic] -> [FileDiagnostic] -> [FileDiagnostic]
-mergeDiagnostics aa [] = aa
-mergeDiagnostics [] bb = bb
-mergeDiagnostics (a@(_,_,ad@Diagnostic{_range = ar}):aa) (b@(_,_,bd@Diagnostic{_range=br}):bb)
-  | ar < br
-  = a : mergeDiagnostics aa (b:bb)
-  | br < ar
-  = b : mergeDiagnostics (a:aa) bb
-  | _severity ad == _severity bd
-  && _source ad == _source bd
-  && _message ad == _message bd
-  && _code ad == _code bd
-  && _relatedInformation ad == _relatedInformation bd
-  && _tags ad == _tags bd
-  = a : mergeDiagnostics aa bb
-  | otherwise
-  = a : b : mergeDiagnostics aa bb
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
 srcSpanToRange :: SrcSpan -> Range
