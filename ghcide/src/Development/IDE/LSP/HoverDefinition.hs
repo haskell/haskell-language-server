@@ -6,9 +6,11 @@
 module Development.IDE.LSP.HoverDefinition
     ( setHandlersHover
     , setHandlersDefinition
+    , setHandlersTypeDefinition
     -- * For haskell-language-server
     , hover
     , gotoDefinition
+    , gotoTypeDefinition
     ) where
 
 import           Development.IDE.Core.Rules
@@ -26,16 +28,20 @@ import System.Time.Extra (showDuration, duration)
 
 gotoDefinition :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError LocationResponseParams)
 hover          :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
+gotoTypeDefinition :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError LocationResponseParams)
 gotoDefinition = request "Definition" getDefinition (MultiLoc []) SingleLoc
+gotoTypeDefinition = request "TypeDefinition" getTypeDefinition (MultiLoc []) MultiLoc
 hover          = request "Hover"      getAtPoint     Nothing      foundHover
 
 foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
 foundHover (mbRange, contents) =
   Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
 
-setHandlersDefinition, setHandlersHover :: PartialHandlers c
+setHandlersDefinition, setHandlersHover, setHandlersTypeDefinition :: PartialHandlers c
 setHandlersDefinition = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.definitionHandler = withResponse RspDefinition $ const gotoDefinition}
+setHandlersTypeDefinition = PartialHandlers $ \WithMessage{..} x ->
+  return x{LSP.typeDefinitionHandler = withResponse RspDefinition $ const gotoTypeDefinition}
 setHandlersHover      = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.hoverHandler      = withResponse RspHover      $ const hover}
 
