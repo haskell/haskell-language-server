@@ -3,12 +3,15 @@ module Format (tests) where
 
 import Control.Monad.IO.Class
 import Data.Aeson
+import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
+import Test.Tasty.Golden
 import Test.Tasty.HUnit
 import Test.Hspec.Expectations
 
@@ -71,34 +74,18 @@ providerTests = testGroup "formatting provider" [
 
 stylishHaskellTests :: TestTree
 stylishHaskellTests = testGroup "stylish-haskell" [
-  testCase "formats a file" $ runSession hieCommand fullCaps "test/testdata" $ do
+  goldenVsStringDiff "formats a document" goldenGitDiff "test/testdata/StylishHaksell.format_document.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
       doc <- openDoc "StylishHaskell.hs" "haskell"
       formatDoc doc (FormattingOptions 2 True)
       contents <- documentContents doc
-      liftIO $ contents `shouldBe`
-        "import           Data.Char\n\
-        \import qualified Data.List\n\
-        \import           Data.String\n\
-        \\n\
-        \bar :: Maybe (Either String Integer) -> Integer\n\
-        \bar Nothing          = 0\n\
-        \bar (Just (Left _))  = 0\n\
-        \bar (Just (Right x)) = x\n"
-  , testCase "formats a range" $ runSession hieCommand fullCaps "test/testdata" $ do
+      return $ BS.fromStrict $ T.encodeUtf8 contents
+  , goldenVsStringDiff "formats a range" goldenGitDiff "test/testdata/StylishHaksell.format_range.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
       doc <- openDoc "StylishHaskell.hs" "haskell"
       formatRange doc (FormattingOptions 2 True) (Range (Position 0 0) (Position 2 21))
       contents <- documentContents doc
-      liftIO $ contents `shouldBe`
-        "import           Data.Char\n\
-        \import qualified Data.List\n\
-        \import           Data.String\n\
-        \\n\
-        \bar :: Maybe (Either String Integer) -> Integer\n\
-        \bar Nothing = 0\n\
-        \bar (Just (Left _)) = 0\n\
-        \bar (Just (Right x)) = x\n"
+      return $ BS.fromStrict $ T.encodeUtf8 contents
   ]
 
 brittanyTests :: TestTree
@@ -156,6 +143,9 @@ formatLspConfig provider = object [ "languageServerHaskell" .= object ["formatti
 
 formatConfig :: Value -> SessionConfig
 formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }
+
+goldenGitDiff :: FilePath -> FilePath -> [String]
+goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
 
 
 formattedDocTabSize2 :: T.Text

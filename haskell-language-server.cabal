@@ -246,6 +246,7 @@ test-suite func-test
                       , ghcide:ghcide-test-preprocessor
   build-depends:        base >=4.7 && <5
                       , aeson
+                      , bytestring
                       , data-default
                       , directory
                       , filepath
@@ -258,6 +259,7 @@ test-suite func-test
                       , tasty
                       , tasty-ant-xml >= 1.1.6
                       , tasty-expected-failure
+                      , tasty-golden
                       , tasty-hunit
                       , tasty-rerun
                       , text
