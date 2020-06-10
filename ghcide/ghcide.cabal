@@ -205,7 +205,7 @@ executable ghcide
         directory,
         extra,
         filepath,
-        ghc-check >= 0.3.0.1 && < 0.4,
+        ghc-check >= 0.5.0.1 && < 0.6,
         ghc-paths,
         ghc,
         gitrev,
@@ -215,6 +215,7 @@ executable ghcide
         hie-bios >= 0.5.0 && < 0.6,
         ghcide,
         optparse-applicative,
+        safe-exceptions,
         shake,
         text,
         unordered-containers
