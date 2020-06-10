@@ -451,10 +451,10 @@ getSpanInfoRule =
 #if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
         let parsedDeps = []
 #else
-        parsedDeps <- uses_ GetParsedModule tdeps
+        parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule tdeps
 #endif
 
-        ifaces <- uses_ GetModIface tdeps
+        ifaces <- mapMaybe (fmap fst) <$> usesWithStale GetModIface tdeps
         (fileImports, _) <- use_ GetLocatedImports file
         let imports = second (fmap artifactFilePath) <$> fileImports
         x <- liftIO $ getSrcSpanInfos packageState imports tc parsedDeps (map hirModIface ifaces)
