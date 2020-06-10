@@ -4,7 +4,8 @@
 -- | General utility functions, mostly focused around GHC operations.
 module Development.IDE.GHC.Util(
     -- * HcsEnv and environment
-    HscEnvEq(GhcVersionMismatch, compileTime, runTime), hscEnv, newHscEnvEq,
+    HscEnvEq,
+    hscEnv, newHscEnvEq,
     modifyDynFlags,
     evalGhcEnv,
     runGhcEnv,
@@ -38,7 +39,6 @@ import Fingerprint
 import GhcMonad
 import Control.Exception
 import Data.IORef
-import Data.Version (showVersion, Version)
 import FileCleanup
 import Foreign.Ptr
 import Foreign.ForeignPtr
@@ -170,9 +170,6 @@ data HscEnvEq
                [(InstalledUnitId, DynFlags)] -- In memory components for this HscEnv
                -- This is only used at the moment for the import dirs in
                -- the DynFlags
-    | GhcVersionMismatch { compileTime :: !Version
-                         , runTime     :: !Version
-                         }
 
 -- | Unwrap an 'HsEnvEq'.
 hscEnv :: HscEnvEq -> HscEnv
@@ -180,18 +177,8 @@ hscEnv = either error id . hscEnv'
 
 hscEnv' :: HscEnvEq -> Either String HscEnv
 hscEnv' (HscEnvEq _ x _) = Right x
-hscEnv' GhcVersionMismatch{..} = Left $
-    unwords
-        ["ghcide compiled against GHC"
-        ,showVersion compileTime
-        ,"but currently using"
-        ,showVersion runTime
-        ,". This is unsupported, ghcide must be compiled with the same GHC version as the project."
-        ]
-
 deps :: HscEnvEq -> [(InstalledUnitId, DynFlags)]
 deps (HscEnvEq _ _ u) = u
-deps GhcVersionMismatch{} = []
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
@@ -199,20 +186,15 @@ newHscEnvEq e uids = do u <- newUnique; return $ HscEnvEq u e uids
 
 instance Show HscEnvEq where
   show (HscEnvEq a _ _) = "HscEnvEq " ++ show (hashUnique a)
-  show GhcVersionMismatch{..} = "GhcVersionMismatch " <> show (compileTime, runTime)
 
 instance Eq HscEnvEq where
   HscEnvEq a _ _ == HscEnvEq b _ _ = a == b
-  GhcVersionMismatch a b == GhcVersionMismatch c d = a == c && b == d
-  _ == _ = False
 
 instance NFData HscEnvEq where
   rnf (HscEnvEq a b c) = rnf (hashUnique a) `seq` b `seq` c `seq` ()
-  rnf GhcVersionMismatch{} = rnf runTime
 
 instance Hashable HscEnvEq where
   hashWithSalt s (HscEnvEq a _b _c) = hashWithSalt s a
-  hashWithSalt salt GhcVersionMismatch{..} = hashWithSalt salt (compileTime, runTime)
 
 -- Fake instance needed to persuade Shake to accept this type as a key.
 -- No harm done as ghcide never persists these keys currently
