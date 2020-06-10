@@ -86,7 +86,6 @@ import           Control.Monad.Extra
 import           Data.Time
 import           GHC.Generics
 import           System.IO.Unsafe
-import           Numeric.Extra
 import Language.Haskell.LSP.Types
 import Data.Foldable (traverse_)
 
@@ -177,15 +176,6 @@ instance Eq Key where
 instance Hashable Key where
     hashWithSalt salt (Key key) = hashWithSalt salt (typeOf key, key)
 
--- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
---   and a value is in the Maybe. For operations that throw an error you
---   expect a non-empty list of diagnostics, at least one of which is an error,
---   and a Nothing. For operations that succeed you expect perhaps some warnings
---   and a Just. For operations that depend on other failing operations you may
---   get empty diagnostics and a Nothing, to indicate this phase throws no fresh
---   errors but still failed.
---
-
 data Value v
     = Succeeded TextDocumentVersion v
     | Stale TextDocumentVersion v
@@ -260,15 +250,13 @@ data IdeState = IdeState
 
 
 -- This is debugging code that generates a series of profiles, if the Boolean is true
-shakeRunDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> [Action a] -> IO ([a], Maybe FilePath)
-shakeRunDatabaseProfile mbProfileDir shakeDb acts = do
-        (time, (res,_)) <- duration $ shakeRunDatabase shakeDb acts
-        proFile <- for mbProfileDir $ \dir -> do
+shakeDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> IO (Maybe FilePath)
+shakeDatabaseProfile mbProfileDir shakeDb =
+        for mbProfileDir $ \dir -> do
                 count <- modifyVar profileCounter $ \x -> let !y = x+1 in return (y,y)
-                let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) ++ "-" ++ showDP 2 time <.> "html"
+                let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) <.> "html"
                 shakeProfileDatabase shakeDb $ dir </> file
                 return (dir </> file)
-        return (res, proFile)
 
 {-# NOINLINE profileStartTime #-}
 profileStartTime :: String
@@ -429,7 +417,13 @@ shakeRestart it@IdeState{shakeExtras=ShakeExtras{logger}, ..} systemActs =
         shakeSession
         (\runner -> do
               (stopTime,queue) <- duration (cancelShakeSession runner)
-              logDebug logger $ T.pack $ "Restarting build session (aborting the previous one took " ++ showDuration stopTime ++ ")"
+              res <- shakeDatabaseProfile shakeProfileDir shakeDb
+              let profile = case res of
+                      Just fp -> ", profile saved at " <> fp
+                      _ -> ""
+              logDebug logger $ T.pack $
+                  "Restarting build session (aborting the previous one took " ++
+                  showDuration stopTime ++ profile ++ ")"
               return queue
         )
         -- It is crucial to be masked here, otherwise we can get killed
@@ -483,19 +477,13 @@ newSession IdeState{shakeExtras=ShakeExtras{..}, ..} systemActs userActs = do
                     <* liftIO (cancel progressThread)
                 ]
           res <- try @SomeException
-                 (restore $ shakeRunDatabaseProfile shakeProfileDir shakeDb systemActs')
+                 (restore $ shakeRunDatabase shakeDb systemActs')
           let res' = case res of
                       Left e -> "exception: " <> displayException e
                       Right _ -> "completed"
-              profile = case res of
-                      Right (_, Just fp) ->
-                          let link = case filePathToUri' $ toNormalizedFilePath' fp of
-                                          NormalizedUri _ x -> x
-                          in ", profile saved at " <> T.unpack link
-                      _ -> ""
               -- Wrap up in a thread to avoid calling interruptible
               -- operations inside the masked section
-          let wrapUp = logDebug logger $ T.pack $ "Finishing build session(" ++ res' ++ profile ++ ")"
+          let wrapUp = logDebug logger $ T.pack $ "Finishing build session(" ++ res' ++ ")"
           return wrapUp
 
     -- Do the work in a background thread
