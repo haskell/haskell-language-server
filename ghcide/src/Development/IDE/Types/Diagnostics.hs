@@ -32,6 +32,15 @@ import Data.Text.Prettyprint.Doc.Render.Terminal (Color(..), color)
 
 import Development.IDE.Types.Location
 
+
+-- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
+--   and a value is in the Maybe. For operations that throw an error you
+--   expect a non-empty list of diagnostics, at least one of which is an error,
+--   and a Nothing. For operations that succeed you expect perhaps some warnings
+--   and a Just. For operations that depend on other failing operations you may
+--   get empty diagnostics and a Nothing, to indicate this phase throws no fresh
+--   errors but still failed.
+--
 --   A rule on a file should only return diagnostics for that given file. It should
 --   not propagate diagnostic errors through multiple phases.
 type IdeResult v = ([FileDiagnostic], Maybe v)
