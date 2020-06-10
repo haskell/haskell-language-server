@@ -69,7 +69,7 @@ noFilePath = "<unknown>"
 
 -- A dummy range to use when range is unknown
 noRange :: Range
-noRange =  Range (Position 0 0) (Position 100000 0)
+noRange =  Range (Position 0 0) (Position 1 0)
 
 showPosition :: Position -> String
 showPosition Position{..} = show (_line + 1) ++ ":" ++ show (_character + 1)
