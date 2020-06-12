@@ -1,0 +1,78 @@
+name: Builds
+
+on:
+  push:
+    branch: "github-action-builds"
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1.1.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Test release
+        prerelease: true
+    - name: Output Release URL File
+      run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
+    - name: Save Release URL File for publish
+      uses: actions/upload-artifact@v1
+      with:
+        name: release_url
+        path: release_url.txt
+
+  build:
+    runs-on: ${{ matrix.os }}
+    needs: [release]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ['8.10.1', '8.8.3', '8.6.5'] # , '8.4.4']
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        exclude:
+          - os: windows-latest
+            ghc: '8.8.3' # fails due to segfault
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - name: Load Release URL File from release job
+      uses: actions/download-artifact@v1
+      with:
+        name: release_url
+    - name: Get Release File Name & Upload URL
+      id: get_release_info
+      run: |
+        VALUE=`cat release_url/release_url.txt`
+        echo ::set-output name=upload_url::$VALUE
+      env:
+        TAG_REF_NAME: ${{ github.ref }}
+        REPOSITORY_NAME: ${{ github.repository }}
+    - uses: actions/setup-haskell@v1.1.1
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: '3.2'
+    - run: cabal update
+
+    # - name: Cache Cabal
+    #   uses: actions/cache@v1.2.0
+    #   with:
+    #     path: ~/.cabal
+    #     key: ${{ runner.OS }}-${{ matrix.ghc }}-cabal-0
+
+    - name: Build
+      run: cabal build exe:haskell-language-server
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.get_release_info.outputs.upload_url }}
+        asset_path: ./dist-newstyle/build/*/*/haskell-language-server-*/haskell-language-server/build/haskell-language-server/haskell-language-server
+        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}
+        asset_content_type: application/octet-stream
