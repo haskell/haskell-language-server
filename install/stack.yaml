@@ -9,5 +9,9 @@ extra-deps:
   - binary-instances-1.0.0.1
   - lukko-0.1.1.2
 
+flags:
+  hls-install:
+    run-from-stack: true
+
 nix:
   packages: [ icu libcxx zlib ]
