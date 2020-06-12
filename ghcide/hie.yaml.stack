@@ -3,11 +3,11 @@ cradle:
     - path: "./test/data"
       config: { cradle: { none:  } }
     - path: "./"
-      config: 
+      config:
         cradle:
-          cabal:
+          stack:
             - path: "./src"
-              component: "ghcide:lib:ghcide"
+              component: "ghcide:lib"
             - path: "./exe"
               component: "ghcide:exe:ghcide"
             - path: "./test"

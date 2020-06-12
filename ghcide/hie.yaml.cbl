@@ -12,7 +12,5 @@ cradle:
               component: "ghcide:exe:ghcide"
             - path: "./test"
               component: "ghcide:test:ghcide-tests"
-            - path: "./bench"
-              component: "ghcide:bench:ghcide-bench"
             - path: "./test/preprocessor"
               component: "ghcide:exe:ghcide-test-preprocessor"
