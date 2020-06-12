@@ -1,27 +1,28 @@
 name: Builds
 
 on:
-  push: [tags]
-jobs:
   release:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1.1.0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Test release
-        prerelease: true
-    - name: Output Release URL File
-      run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
-    - name: Save Release URL File for publish
-      uses: actions/upload-artifact@v1
-      with:
-        name: release_url
-        path: release_url.txt
+    types: [created]
+jobs:
+  # release:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Create Release
+  #     id: create_release
+  #     uses: actions/create-release@v1.1.0
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       tag_name: ${{ github.ref }}
+  #       release_name: Test release
+  #       prerelease: true
+  #   - name: Output Release URL File
+  #     run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
+  #   - name: Save Release URL File for publish
+  #     uses: actions/upload-artifact@v1
+  #     with:
+  #       name: release_url
+  #       path: release_url.txt
 
   build:
     runs-on: ${{ matrix.os }}
@@ -81,7 +82,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.get_release_info.outputs.upload_url }}
+        # upload_url: ${{ steps.get_release_info.outputs.upload_url }}
+        upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.find_binary.outputs.hls_binary }}
         asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}
         asset_content_type: application/octet-stream
