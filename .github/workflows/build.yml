@@ -1,8 +1,7 @@
 name: Builds
 
 on:
-  push:
-    branch: "github-action-builds"
+  push: [tags]
 jobs:
   release:
     runs-on: ubuntu-latest
