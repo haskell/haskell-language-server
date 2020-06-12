@@ -588,11 +588,11 @@ loadGhcSession = do
                 Nothing -> BS.pack (show (hash (snd val)))
         return (Just cutoffHash, val)
 
-getHiFileRule :: Rules ()
-getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
+getModIfaceFromDiskRule :: Rules ()
+getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
   -- get all dependencies interface files, to check for freshness
   (deps,_) <- use_ GetLocatedImports f
-  depHis  <- traverse (use GetHiFile) (mapMaybe (fmap artifactFilePath . snd) deps)
+  depHis  <- traverse (use GetModIface) (mapMaybe (fmap artifactFilePath . snd) deps)
 
   ms <- use_ GetModSummary f
   let hiFile = toNormalizedFilePath'
@@ -618,7 +618,7 @@ getHiFileRule = defineEarlyCutoff $ \GetHiFile f -> do
                     let diag = ideErrorWithSource (Just "interface file loading") (Just DsError) f . T.pack $ err
                     return (Nothing, (pure diag, Nothing))
             (_, VFSVersion{}) ->
-                error "internal error - GetHiFile of file of interest"
+                error "internal error - GetModIfaceFromDisk of file of interest"
             _ ->
               pure (Nothing, ([], Nothing))
 
@@ -636,7 +636,7 @@ getModIfaceRule = define $ \GetModIface f -> do
     let useHiFile =
           -- Never load interface files for files of interest
           not fileOfInterest
-    mbHiFile <- if useHiFile then use GetHiFile f else return Nothing
+    mbHiFile <- if useHiFile then use GetModIfaceFromDisk f else return Nothing
     case mbHiFile of
         Just x ->
             return ([], Just x)
@@ -696,7 +696,7 @@ mainRule = do
     generateCoreRule
     generateByteCodeRule
     loadGhcSession
-    getHiFileRule
+    getModIfaceFromDiskRule
     getModIfaceRule
     isFileOfInterestRule
     getModSummaryRule
