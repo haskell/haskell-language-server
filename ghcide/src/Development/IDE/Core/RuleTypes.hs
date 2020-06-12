@@ -97,10 +97,11 @@ type instance RuleResult GetLocatedImports = ([(Located ModuleName, Maybe Artifa
 -- we can only report diagnostics for the current file.
 type instance RuleResult ReportImportCycles = ()
 
--- | Read the module interface file
-type instance RuleResult GetHiFile = HiFileResult
+-- | Read the module interface file from disk. Throws an error for VFS files.
+--   This is an internal rule, use 'GetModIface' instead.
+type instance RuleResult GetModIfaceFromDisk = HiFileResult
 
--- | Get a module interface, either from an interface file or a typechecked module
+-- | Get a module interface details, either from an interface file or a typechecked module
 type instance RuleResult GetModIface = HiFileResult
 
 type instance RuleResult IsFileOfInterest = Bool
@@ -169,11 +170,11 @@ instance Hashable GhcSession
 instance NFData   GhcSession
 instance Binary   GhcSession
 
-data GetHiFile = GetHiFile
+data GetModIfaceFromDisk = GetModIfaceFromDisk
     deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetHiFile
-instance NFData   GetHiFile
-instance Binary   GetHiFile
+instance Hashable GetModIfaceFromDisk
+instance NFData   GetModIfaceFromDisk
+instance Binary   GetModIfaceFromDisk
 
 data GetModIface = GetModIface
     deriving (Eq, Show, Typeable, Generic)
