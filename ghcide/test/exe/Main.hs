@@ -1309,7 +1309,10 @@ checkDefs defs mkExpectations = traverse_ check =<< mkExpectations where
     assertRangeCorrect (head defs) expectedRange
   check (ExpectLocation expectedLocation) = do
     assertNDefinitionsFound 1 defs
-    liftIO $ head defs @?= expectedLocation
+    liftIO $ do
+      canonActualLoc <- canonicalizeLocation (head defs)
+      canonExpectedLoc <- canonicalizeLocation expectedLocation
+      canonActualLoc @?= canonExpectedLoc
   check ExpectNoDefinitions = do
     assertNDefinitionsFound 0 defs
   check ExpectExternFail = liftIO $ assertFailure "Expecting to fail to find in external file"
@@ -1321,6 +1324,10 @@ checkDefs defs mkExpectations = traverse_ check =<< mkExpectations where
   assertRangeCorrect Location{_range = foundRange} expectedRange =
     liftIO $ expectedRange @=? foundRange
 
+canonicalizeLocation :: Location -> IO Location
+canonicalizeLocation (Location uri range) = Location <$> canonUri uri <*> pure range
+  where
+    canonUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePath uri))
 
 findDefinitionAndHoverTests :: TestTree
 findDefinitionAndHoverTests = let
