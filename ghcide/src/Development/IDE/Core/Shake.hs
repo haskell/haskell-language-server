@@ -440,7 +440,7 @@ shakeEnqueue :: IdeState -> Action a -> IO (IO a)
 shakeEnqueue IdeState{shakeSession} act =
     withMVar shakeSession $ \s -> runInShakeSession s act
 
--- Set up a new 'ShakeSession' with a set of initial system and user actions
+-- | Set up a new 'ShakeSession' with a set of initial system and user actions
 -- Will crash if there is an existing 'ShakeSession' running.
 -- Progress is reported only on the system actions.
 -- Only user actions will get re-enqueued

@@ -319,7 +319,7 @@ benchmark ghcide-bench
         extra,
         filepath,
         ghcide,
-        lsp-test < 0.12,
+        lsp-test >= 0.11.0.2 && < 0.12,
         optparse-applicative,
         parser-combinators,
         process,
