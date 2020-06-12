@@ -47,6 +47,7 @@ jobs:
         name: release_url
     - name: Get Release File Name & Upload URL
       id: get_release_info
+      shell: bash
       run: |
         VALUE=`cat release_url/release_url.txt`
         echo ::set-output name=upload_url::$VALUE
@@ -64,15 +65,24 @@ jobs:
     #   with:
     #     path: ~/.cabal
     #     key: ${{ runner.OS }}-${{ matrix.ghc }}-cabal-0
+  
 
     - name: Build
       run: cabal build exe:haskell-language-server
+          
+    - name: Find binary
+      id: find_binary
+      shell: bash
+      run: |
+        HLS=`find dist-newstyle -name 'haskell-language-server' -type f`
+        echo ::set-output name=hls_binary::$HLS
+
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.get_release_info.outputs.upload_url }}
-        asset_path: ./dist-newstyle/build/*/*/haskell-language-server-*/haskell-language-server/build/haskell-language-server/haskell-language-server
+        asset_path: ${{ steps.find_binary.outputs.hls_binary }}
         asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}
         asset_content_type: application/octet-stream
