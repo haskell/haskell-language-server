@@ -12,7 +12,7 @@ extra-deps:
 - constrained-dynamic-0.1.0.0
 - floskell-0.10.3
 # - ghcide-0.1.0
-- ghc-check-0.3.0.1
+- ghc-check-0.5.0.1
 - ghc-lib-parser-8.10.1.20200523
 - ghc-lib-parser-ex-8.10.0.4
 - haskell-lsp-0.22.0.0
@@ -23,13 +23,13 @@ extra-deps:
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
-- lsp-test-0.10.3.0
+- lsp-test-0.11.0.2
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.0
 - ormolu-0.0.5.0
 - semigroups-0.18.5
-- github: wz1000/shake
-  commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
+# - github: wz1000/shake
+#   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - stylish-haskell-0.11.0.0
 - temporary-1.2.1.1
 

@@ -2,17 +2,6 @@ packages:
          ./
          ghcide
 
-source-repository-package
-    type: git
-    location: https://github.com/wz1000/shake
-    tag: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
-
--- See https://github.com/haskell-hvr/cabal-plan/pull/55
-source-repository-package
-    type: git
-    location: https://github.com/peti/cabal-plan
-    tag: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
-
 tests: true
 documentation: true
 
@@ -23,4 +12,4 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-05-24T12:28:23Z
+index-state: 2020-06-13T11:31:46Z
