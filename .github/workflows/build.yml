@@ -57,11 +57,11 @@ jobs:
         asset_content_type: application/octet-stream
 
     - name: Build Wrapper
-      if: ${{ env.build_wrapper }}
+      if: env.build_wrapper
       run: cabal build exe:haskell-language-server-wrapper
 
     - name: Find Wrapper Binary
-      if: ${{ env.build_wrapper }}
+      if: env.build_wrapper
       id: find_wrapper_binary
       shell: bash
       run: |
@@ -69,7 +69,7 @@ jobs:
         echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER
 
     - name: Upload Wrapper
-      if: ${{ env.build_wrapper }}
+      if: env.build_wrapper
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
