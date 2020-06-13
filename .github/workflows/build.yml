@@ -11,11 +11,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.1', '8.8.3', '8.6.5'] # , '8.4.4']
+        ghc: ['8.10.1', '8.8.3', '8.6.5']
         os: [ubuntu-latest, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
+
+    env:
+      build_wrapper: ${{ matrix.ghc == '8.10.1' }}
 
     steps:
     - uses: actions/checkout@v2
@@ -25,7 +28,6 @@ jobs:
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
-    - run: cabal update
 
     # - name: Cache Cabal
     #   uses: actions/cache@v1.2.0
@@ -34,23 +36,45 @@ jobs:
     #     key: ${{ runner.OS }}-${{ matrix.ghc }}-cabal-0
   
 
-    - name: Build
+    - name: Build Server
       run: cabal build exe:haskell-language-server
           
-    - name: Find binary
-      id: find_binary
+    - name: Find Server Binary
+      id: find_server_binary
       shell: bash
       run: |
         HLS=$(find dist-newstyle \( -name 'haskell-language-server' -o -name 'haskell-language-server.exe' \) -type f)
         echo ::set-output name=hls_binary::$HLS
 
-    - name: Upload Release Asset
+    - name: Upload Server Binary
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        # upload_url: ${{ steps.get_release_info.outputs.upload_url }}
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.find_binary.outputs.hls_binary }}
+        asset_path: ${{ steps.find_server_binary.outputs.hls_binary }}
         asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}
+        asset_content_type: application/octet-stream
+
+    - name: Build Wrapper
+      if: ${{ env.build_wrapper }}
+      run: cabal build exe:haskell-language-server-wrapper
+
+    - name: Find Wrapper Binary
+      if: ${{ env.build_wrapper }}
+      id: find_wrapper_binary
+      shell: bash
+      run: |
+        HLS_WRAPPER=$(find dist-newstyle \( -name 'haskell-language-server-wrapper' -o -name 'haskell-language-server-wrapper.exe' \) -type f)
+        echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER
+
+    - name: Upload Wrapper
+      if: ${{ env.build_wrapper }}
+      uses: actions/upload-release-asset@v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ${{ steps.find_wrapper_binary.outputs.hls_wrapper_binary }}
+        asset_name: haskell-language-server-wrapper-${{ runner.OS }}
         asset_content_type: application/octet-stream

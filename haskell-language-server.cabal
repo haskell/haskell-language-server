@@ -154,7 +154,7 @@ executable haskell-language-server
     , ghc
      --------------------------------------------------------------
     , ghc-check >= 0.3.0.1 && < 0.4
-    -- , ghc-paths
+    , ghc-paths
     , ghcide
     , gitrev
     , hashable
@@ -199,7 +199,7 @@ executable haskell-language-server-wrapper
     , filepath
     , gitrev
     , ghc
-    -- , ghc-paths
+    , ghc-paths
     , hie-bios
     , haskell-language-server
     , optparse-applicative

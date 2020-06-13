@@ -11,7 +11,7 @@ module Arguments
   ( Arguments(..)
   , getArguments
   , ghcideVersion
-  , getLibdir
+  , getGhcLibDir
   ) where
 
 import Data.Char
@@ -19,7 +19,8 @@ import Data.List
 import Data.Maybe
 import Data.Version
 import Development.GitRev
--- import qualified GHC.Paths
+import qualified GHC.Paths
+import HIE.Bios.Types
 import Options.Applicative
 import Paths_haskell_language_server
 import System.Environment
@@ -40,6 +41,7 @@ data Arguments = Arguments
     , argsDebugOn       :: Bool
     , argsLogFile       :: Maybe String
     , argsThreads       :: Int
+    , argsProjectGhcVersion :: Bool
     } deriving Show
 
 getArguments :: String -> IO Arguments
@@ -83,17 +85,20 @@ arguments exeName = Arguments
           <> value 0
           <> showDefault
            )
+      <*> switch (long "project-ghc-version"
+                  <> help "Work out the project GHC version and print it")  
 
 -- ---------------------------------------------------------------------
 -- Set the GHC libdir to the nix libdir if it's present.
-getLibdir :: IO FilePath
--- getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
-getLibdir = fromJust <$> queryLibDir
-
-queryLibDir :: IO (Maybe FilePath)
-queryLibDir = Just . trim <$> readProcess ghcExe ["--print-libdir"] ""
-  where ghcExe = "ghc-" <> VERSION_ghc
-        trim = dropWhileEnd isSpace
+getGhcLibDir :: ComponentOptions -> IO FilePath
+getGhcLibDir opts = do
+  nixLibDir <- lookupEnv "NIX_GHC_LIBDIR"
+  -- We want to avoid using ghc-paths, as it is not portable
+  -- in the static binary sense - it just bakes in the path to the
+  -- libraries at compile time! This is ok if the user built from
+  -- source, but if they downloaoded a binary then this will return
+  -- some path that doesn't exist on their computer.
+  return $ fromMaybe GHC.Paths.libdir (nixLibDir <|> ghcLibDir opts)
 
 ghcideVersion :: IO String
 ghcideVersion = do

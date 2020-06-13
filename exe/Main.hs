@@ -268,10 +268,9 @@ cradleToSessionOpts cradle file = do
         CradleNone -> return (Left [])
     pure opts
 
-emptyHscEnv :: Maybe FilePath -> IORef NameCache -> IO HscEnv
-emptyHscEnv mld nc = do
-    libdir <- fromMaybe <$> getLibdir <*> pure mld
-    env <- runGhc (Just libdir) getSession
+emptyHscEnv :: FilePath -> IORef NameCache -> IO HscEnv
+emptyHscEnv libDir nc = do
+    env <- runGhc (Just libDir) getSession
     initDynLinker env
     pure $ setNameCache nc env
 
@@ -319,7 +318,8 @@ loadSession dir = do
     -- which contains both.
     packageSetup <- return $ \(hieYaml, cfp, opts) -> do
         -- Parse DynFlags for the newly discovered component
-        hscEnv <- emptyHscEnv (ghcLibDir opts) nc
+        libdir <- getGhcLibDir opts
+        hscEnv <- emptyHscEnv libdir nc
         (df, targets) <- evalGhcEnv hscEnv $ do
                           setOptions opts (hsc_dflags hscEnv)
         dep_info <- getDependencyInfo (componentDependencies opts)
@@ -355,7 +355,7 @@ loadSession dir = do
             -- It's important to keep the same NameCache though for reasons
             -- that I do not fully understand
             print ("Making new HscEnv" ++ (show inplace))
-            hscEnv <- emptyHscEnv (ghcLibDir opts) nc
+            hscEnv <- emptyHscEnv libdir nc
             newHscEnv <-
               -- Add the options for the current component to the HscEnv
               evalGhcEnv hscEnv $ do

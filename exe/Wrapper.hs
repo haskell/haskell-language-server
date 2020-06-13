@@ -37,6 +37,9 @@ main = do
   --          then the language server will not work
   Arguments{..} <- getArguments "haskell-language-server-wrapper"
 
+  when argsProjectGhcVersion $
+    getCurrentDirectory >>= loadImplicitCradle >>= getProjectGhcVersion >>= putStrLn >> exitSuccess
+
   if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
   else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
 
