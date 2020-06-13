@@ -17,9 +17,6 @@ jobs:
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
 
-    env:
-      build_wrapper: ${{ matrix.ghc == '8.10.1' }}
-
     steps:
     - uses: actions/checkout@v2
       with:
@@ -57,11 +54,11 @@ jobs:
         asset_content_type: application/octet-stream
 
     - name: Build Wrapper
-      if: env.build_wrapper == true
+      if: matrix.ghc == '8.10.1'
       run: cabal build exe:haskell-language-server-wrapper
 
     - name: Find Wrapper Binary
-      if: env.build_wrapper == true
+      if: matrix.ghc == '8.10.1'
       id: find_wrapper_binary
       shell: bash
       run: |
@@ -69,7 +66,7 @@ jobs:
         echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER
 
     - name: Upload Wrapper
-      if: env.build_wrapper == true
+      if: matrix.ghc == '8.10.1'
       uses: actions/upload-release-asset@v1.0.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
