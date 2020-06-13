@@ -65,7 +65,7 @@ main = do
   logm $ "args:" ++ show args
 
   -- Get the cabal directory from the cradle
-  cradle <- findLocalCradle (d </> "File.hs")
+  cradle <- findLocalCradle d
   let dir = cradleRootDir cradle
   logm $ "Cradle directory:" ++ dir
   setCurrentDirectory dir

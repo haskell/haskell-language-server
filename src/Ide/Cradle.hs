@@ -54,7 +54,7 @@ findLocalCradle fp = do
       debugm $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
       crdl <- Bios.loadCradle yaml
       return $ fmap (const CabalNone) crdl
-    Nothing -> cabalHelperCradle fp
+    Nothing -> Bios.loadImplicitCradle fp -- cabalHelperCradle fp
   logm $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
 
@@ -469,6 +469,7 @@ cabalHelperCradle file = do
                                           { componentOptions = [file, fixImportDirs cwd "-i."]
                                           , componentRoot = cwd
                                           , componentDependencies = []
+                                          , ghcLibDir = Nothing
                                           }
                                 }
                }
@@ -554,10 +555,12 @@ cabalHelperAction proj env package root fp = do
             ComponentOptions { componentOptions = ghcOptions
                              , componentRoot = root
                              , componentDependencies = []
+                             , ghcLibDir = Nothing
                              }
       Left err   -> return
         $ CradleFail
         $ CradleError
+          []
           (ExitFailure 2)
           err
 

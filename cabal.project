@@ -13,6 +13,11 @@ source-repository-package
     location: https://github.com/peti/cabal-plan
     tag: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
 
+source-repository-package
+    type: git
+    location: https://github.com/bubba/hie-bios.git
+    tag: 69d689a5a2f46d1ca5ceac2becda9d38613ff66a
+
 tests: true
 documentation: true
 

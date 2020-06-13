@@ -144,6 +144,7 @@ executable haskell-language-server
     , directory
     , extra
     , filepath
+    , process
      --------------------------------------------------------------
      -- The MIN_GHC_API_VERSION macro relies on MIN_VERSION pragmas
      -- which require depending on ghc. So the tests need to depend
@@ -153,7 +154,7 @@ executable haskell-language-server
     , ghc
      --------------------------------------------------------------
     , ghc-check >= 0.3.0.1 && < 0.4
-    , ghc-paths
+    -- , ghc-paths
     , ghcide
     , gitrev
     , hashable
@@ -198,7 +199,7 @@ executable haskell-language-server-wrapper
     , filepath
     , gitrev
     , ghc
-    , ghc-paths
+    -- , ghc-paths
     , hie-bios
     , haskell-language-server
     , optparse-applicative

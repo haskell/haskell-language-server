@@ -268,9 +268,9 @@ cradleToSessionOpts cradle file = do
         CradleNone -> return (Left [])
     pure opts
 
-emptyHscEnv :: IORef NameCache -> IO HscEnv
-emptyHscEnv nc = do
-    libdir <- getLibdir
+emptyHscEnv :: Maybe FilePath -> IORef NameCache -> IO HscEnv
+emptyHscEnv mld nc = do
+    libdir <- fromMaybe <$> getLibdir <*> pure mld
     env <- runGhc (Just libdir) getSession
     initDynLinker env
     pure $ setNameCache nc env
@@ -319,7 +319,7 @@ loadSession dir = do
     -- which contains both.
     packageSetup <- return $ \(hieYaml, cfp, opts) -> do
         -- Parse DynFlags for the newly discovered component
-        hscEnv <- emptyHscEnv nc
+        hscEnv <- emptyHscEnv (ghcLibDir opts) nc
         (df, targets) <- evalGhcEnv hscEnv $ do
                           setOptions opts (hsc_dflags hscEnv)
         dep_info <- getDependencyInfo (componentDependencies opts)
@@ -355,7 +355,7 @@ loadSession dir = do
             -- It's important to keep the same NameCache though for reasons
             -- that I do not fully understand
             print ("Making new HscEnv" ++ (show inplace))
-            hscEnv <- emptyHscEnv nc
+            hscEnv <- emptyHscEnv (ghcLibDir opts) nc
             newHscEnv <-
               -- Add the options for the current component to the HscEnv
               evalGhcEnv hscEnv $ do
@@ -388,10 +388,13 @@ loadSession dir = do
               let hscEnv' = hscEnv { hsc_dflags = df
                                    , hsc_IC = (hsc_IC hscEnv) { ic_dflags = df } }
 
-              versionMismatch <- checkGhcVersion
-              henv <- case versionMismatch of
-                        Just mismatch -> return mismatch
-                        Nothing -> newHscEnvEq hscEnv' uids
+              -- versionMismatch <- checkGhcVersion
+              -- henv <- case versionMismatch of
+              --           Just mismatch -> return mismatch
+              --           Nothing -> newHscEnvEq hscEnv' uids
+              
+              henv <- newHscEnvEq hscEnv' uids
+
               let res = (([], Just henv), di)
               print res
 
@@ -437,7 +440,7 @@ loadSession dir = do
             Just opts -> do
                 --putStrLn $ "Cached component of " <> show file
                 pure ([], fst opts)
-            Nothing-> do
+            Nothing -> do
                 finished_barrier <- newBarrier
                 -- fork a new thread here which won't be killed by shake
                 -- throwing an async exception
@@ -554,7 +557,7 @@ setCacheDir prefix hscComponents comps dflags = do
 
 
 renderCradleError :: NormalizedFilePath -> CradleError -> FileDiagnostic
-renderCradleError nfp (CradleError _ec t) =
+renderCradleError nfp (CradleError _deps _ec t) =
   ideErrorText nfp (T.unlines (map T.pack t))
 
 
@@ -611,8 +614,8 @@ memoIO op = do
                 return (Map.insert k res mp, res)
             Just res -> return (mp, res)
 
-setOptions :: GhcMonad m =>ComponentOptions -> DynFlags -> m (DynFlags, [Target])
-setOptions (ComponentOptions theOpts compRoot _) dflags = do
+setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target])
+setOptions (ComponentOptions theOpts compRoot _deps _mlibdir) dflags = do
     (dflags_, targets) <- addCmdOpts theOpts dflags
     let dflags' = makeDynFlagsAbsolute compRoot dflags_
     let dflags'' =
@@ -664,17 +667,17 @@ getCacheDir prefix opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> prefix ++
 cacheDir :: String
 cacheDir = "ghcide"
 
-ghcVersionChecker :: IO VersionCheck
-ghcVersionChecker = $$(makeGhcVersionChecker (pure <$> getLibdir))
+-- ghcVersionChecker :: IO VersionCheck
+-- ghcVersionChecker = $$(makeGhcVersionChecker (pure <$> getLibdir))
 
-checkGhcVersion :: IO (Maybe HscEnvEq)
-checkGhcVersion = do
-    res <- ghcVersionChecker
-    case res of
-        Failure err -> do
-          putStrLn $ "Error while checking GHC version: " ++ show err
-          return Nothing
-        Mismatch {..} ->
-          return $ Just GhcVersionMismatch {..}
-        _ ->
-          return Nothing
+-- checkGhcVersion :: IO (Maybe HscEnvEq)
+-- checkGhcVersion = do
+--     res <- ghcVersionChecker
+--     case res of
+--         Failure err -> do
+--           putStrLn $ "Error while checking GHC version: " ++ show err
+--           return Nothing
+--         Mismatch {..} ->
+--           return $ Just GhcVersionMismatch {..}
+--         _ ->
+--           return Nothing

@@ -14,13 +14,16 @@ module Arguments
   , getLibdir
   ) where
 
+import Data.Char
+import Data.List
 import Data.Maybe
 import Data.Version
 import Development.GitRev
-import qualified GHC.Paths
+-- import qualified GHC.Paths
 import Options.Applicative
 import Paths_haskell_language_server
 import System.Environment
+import System.Process
 
 -- ---------------------------------------------------------------------
 
@@ -84,7 +87,13 @@ arguments exeName = Arguments
 -- ---------------------------------------------------------------------
 -- Set the GHC libdir to the nix libdir if it's present.
 getLibdir :: IO FilePath
-getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
+-- getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
+getLibdir = fromJust <$> queryLibDir
+
+queryLibDir :: IO (Maybe FilePath)
+queryLibDir = Just . trim <$> readProcess ghcExe ["--print-libdir"] ""
+  where ghcExe = "ghc-" <> VERSION_ghc
+        trim = dropWhileEnd isSpace
 
 ghcideVersion :: IO String
 ghcideVersion = do
