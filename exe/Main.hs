@@ -106,7 +106,7 @@ import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Brittany                as Brittany
 #endif
 import Ide.Plugin.Pragmas                 as Pragmas
-import Data.Typeable (Typeable)
+-- import Data.Typeable (Typeable)
 
 
 -- ---------------------------------------------------------------------
