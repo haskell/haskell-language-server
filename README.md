@@ -106,7 +106,7 @@ cd haskell-language-server
 #### Building
 
 Note, on first invocation of the build script with stack, a GHC is being installed for execution.
-The GHC used for the `install.hs` can be adjusted in `./install/shake.yaml` by using a different resolver.
+The GHC used for the `install.hs` can be adjusted in `./install/stack.yaml` by using a different resolver.
 
 Available commands can be seen with:
 
@@ -500,7 +500,7 @@ args = ["--lsp"]
 Haskell-language-server can be used on itself. We provide
 preset samples of `hie.yaml` for Cabal and Stack.
 
-Note: the `./install/` folder is not directly tied to the project so it has dedicated `./install/hie.yaml.[cbl|stack]` 
+Note: the `./install/` folder is not directly tied to the project so it has dedicated `./install/hie.yaml.[cbl|stack]`
 templates.
 
 #### Using Cabal
