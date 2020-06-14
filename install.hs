@@ -1,7 +1,7 @@
 #!/usr/bin/env stack
 {- stack
   runghc
-  --stack-yaml=install/shake.yaml
+  --stack-yaml=install/stack.yaml
   --package hls-install
 -}
 {- cabal:
