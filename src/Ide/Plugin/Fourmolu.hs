@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Ide.Plugin.Ormolu
+module Ide.Plugin.Fourmolu
   (
     descriptor
   , provider
@@ -24,7 +24,7 @@ import           Ide.Types
 import           Ide.PluginUtils
 import           Ide.Plugin.Formatter
 import           Language.Haskell.LSP.Types
-import "ormolu"  Ormolu
+import "fourmolu" Ormolu
 import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
@@ -51,7 +51,7 @@ provider _lf ideState typ contents fp _ = do
       in
         return $ map DynOption $ pp <> pm <> ex
 
-  m_parsed <- runAction "Ormolu" ideState $ getParsedModule fp
+  m_parsed <- runAction "Fourmolu" ideState $ getParsedModule fp
   fileOpts <- case m_parsed of
           Nothing -> return []
           Just pm -> fromDyn pm
@@ -74,5 +74,5 @@ provider _lf ideState typ contents fp _ = do
  where
   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)
   ret (Left err) = Left
-    (responseError (T.pack $ "ormoluCmd: " ++ show err) )
+    (responseError (T.pack $ "fourmoluCmd: " ++ show err) )
   ret (Right new) = Right (makeDiffTextEdit contents new)
