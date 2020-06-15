@@ -29,6 +29,9 @@ extra-deps:
 - ansi-wl-pprint-0.6.9
 - tasty-1.2.3
 - tasty-rerun-1.1.17
+# For benchHist
+- Chart-1.9.3
+- Chart-diagrams-1.9.3
 
 
 nix:

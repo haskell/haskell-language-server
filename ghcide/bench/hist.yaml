@@ -1,0 +1,42 @@
+# The number of samples to run per experiment.
+# At least 100 is recommended in order to observe space leaks
+samples: 100
+
+# Path to the ghcide-bench binary to use for experiments
+ghcideBench: ghcide-bench
+
+# Output folder for the experiments
+outputFolder: bench-hist
+
+# The set of experiments to execute
+experiments:
+    - hover
+    - edit
+    - getDefinition
+    - "hover after edit"
+    - "completions after edit"
+    - "code actions"
+    - "code actions after edit"
+    - "documentSymbols after edit"
+
+# An ordered list of versions to analyze
+versions:
+# A version can be defined briefly:
+# - <tag>
+# - <branch>
+# - <commit hash>
+
+# Or in extended form, where all the fields are optional:
+# - <name>:
+#    git: <tag/branch/commithash>
+#    include: true                   # whether to include in comparison graphs
+#    parent: <tag/branch/commithash> # version to compare with in .diff graphs
+
+
+# - v0.0.5
+# - v0.0.6
+# - v0.1.0
+- v0.2.0
+- upstream: origin/master
+- HEAD
+
