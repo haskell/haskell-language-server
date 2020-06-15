@@ -1,11 +1,17 @@
 name: Builds
 
 on:
+  push:
+    branches:
+      - github-action-builds
   release:
     types: [created]
 jobs:
 
   build:
+    defaults:
+      run:
+        working-directory: h
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -18,9 +24,12 @@ jobs:
             ghc: '8.8.3' # fails due to segfault
 
     steps:
+    - shell: bash
+      run: echo $GITHUB_WORKSPACE
     - uses: actions/checkout@v2
       with:
         submodules: true
+        path: '../h'
     - uses: actions/setup-haskell@v1.1.1
       with:
         ghc-version: ${{ matrix.ghc }}
@@ -34,7 +43,7 @@ jobs:
   
 
     - name: Build Server
-      run: cabal build exe:haskell-language-server -O2 --ghc-options='-static'
+      run: cabal build exe:haskell-language-server -O2
           
     - name: Find Server Binary
       id: find_server_binary
@@ -55,7 +64,7 @@ jobs:
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:haskell-language-server-wrapper -O2 --ghc-options='-static'
+      run: cabal build exe:haskell-language-server-wrapper -O2
 
     - name: Find Wrapper Binary
       if: matrix.ghc == '8.10.1'
