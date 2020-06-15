@@ -24,7 +24,6 @@ import           Ide.Version
 import           System.Directory
 import           System.Environment
 import System.Exit
-import           System.FilePath
 import System.IO
 import           System.Info
 import           System.Process
@@ -36,9 +35,17 @@ main = do
   -- WARNING: If you write to stdout before runLanguageServer
   --          then the language server will not work
   Arguments{..} <- getArguments "haskell-language-server-wrapper"
+  
+  d <- getCurrentDirectory
 
-  when argsProjectGhcVersion $
-    getCurrentDirectory >>= loadImplicitCradle >>= getProjectGhcVersion >>= putStrLn >> exitSuccess
+  -- Get the cabal directory from the cradle
+  cradle <- findLocalCradle d
+  let dir = cradleRootDir cradle
+  setCurrentDirectory dir
+
+  ghcVersion <- getProjectGhcVersion cradle
+
+  when argsProjectGhcVersion $ putStrLn ghcVersion >> exitSuccess
 
   if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
   else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
@@ -61,19 +68,11 @@ main = do
   progName <- getProgName
   logm $  "run entered for haskell-language-server-wrapper(" ++ progName ++ ") "
             ++ hlsVersion
-  d <- getCurrentDirectory
   logm $ "Current directory:" ++ d
   logm $ "Operating system:" ++ os
   args <- getArgs
   logm $ "args:" ++ show args
-
-  -- Get the cabal directory from the cradle
-  cradle <- findLocalCradle d
-  let dir = cradleRootDir cradle
   logm $ "Cradle directory:" ++ dir
-  setCurrentDirectory dir
-
-  ghcVersion <- getProjectGhcVersion cradle
   logm $ "Project GHC version:" ++ ghcVersion
 
   let

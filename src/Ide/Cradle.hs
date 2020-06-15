@@ -54,7 +54,7 @@ findLocalCradle fp = do
       debugm $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
       crdl <- Bios.loadCradle yaml
       return $ fmap (const CabalNone) crdl
-    Nothing -> Bios.loadImplicitCradle fp -- cabalHelperCradle fp
+    Nothing -> Bios.loadImplicitCradle (fp </> "Foo.hs") -- cabalHelperCradle fp
   logm $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
 
@@ -100,7 +100,7 @@ data CabalHelper
 execProjectGhc :: Cradle CabalHelper -> [String] -> IO (Maybe String)
 execProjectGhc crdl args = do
   isStackInstalled <- isJust <$> findExecutable "stack"
-  -- isCabalInstalled <- isJust <$> findExecutable "cabal"
+  isCabalInstalled <- isJust <$> findExecutable "cabal"
   ghcOutput <- if isStackCradle crdl && isStackInstalled
     then do
       logm $ "Executing Stack GHC with args: " <> unwords args
@@ -112,11 +112,11 @@ execProjectGhc crdl args = do
     -- This command must work though before the project is build.
     -- Therefore, fallback to "ghc" on the path.
     --
-    -- else if isCabalCradle crdl && isCabalInstalled then do
-    --   let cmd = "cabal v2-exec -v0 ghc -- " ++ unwords args
-    --   catch (Just <$> tryCommand crdl cmd) $ \(_ ::IOException) -> do
-    --     errorm $ "Command `" ++ cmd ++ "` failed."
-    --     return Nothing
+    else if isCabalCradle crdl && isCabalInstalled then do
+      let cmd = "cabal v2-exec -v0 ghc -- " ++ unwords args
+      catch (Just <$> tryCommand crdl cmd) $ \(_ ::IOException) -> do
+        errorm $ "Command `" ++ cmd ++ "` failed."
+        return Nothing
     else do
       logm $ "Executing GHC on path with args: " <> unwords args
       execWithGhc
@@ -152,15 +152,6 @@ tryCommand crdl cmd = do
 
     ExitSuccess -> return $ T.unpack . T.strip . head . T.lines $ T.pack sout
 
-
--- | Get the directory of the libdir based on the project ghc.
-getProjectGhcLibDir :: Cradle CabalHelper -> IO (Maybe FilePath)
-getProjectGhcLibDir crdl =
-  execProjectGhc crdl ["--print-libdir"] >>= \case
-    Nothing -> do
-      errorm "Could not obtain the libdir."
-      return Nothing
-    mlibdir -> return mlibdir
 
   -- ---------------------------------------------------------------------
 
@@ -469,8 +460,8 @@ cabalHelperCradle file = do
                                           { componentOptions = [file, fixImportDirs cwd "-i."]
                                           , componentRoot = cwd
                                           , componentDependencies = []
-                                          , ghcLibDir = Nothing
                                           }
+                                , runGhcLibDir = pure Nothing
                                 }
                }
     Just (Ex proj) -> do
@@ -498,6 +489,7 @@ cabalHelperCradle file = do
                    , cradleOptsProg =
                        CradleAction { actionName = Bios.Other (projectNoneType proj)
                                     , runCradle = \_ _ -> return CradleNone
+                                    , runGhcLibDir = pure Nothing 
                                     }
                    }
         Just realPackage -> do
@@ -518,6 +510,7 @@ cabalHelperCradle file = do
                                         realPackage
                                         normalisedPackageLocation
                                         fp
+                                    , runGhcLibDir = pure Nothing
                                     }
                    }
 
@@ -555,7 +548,6 @@ cabalHelperAction proj env package root fp = do
             ComponentOptions { componentOptions = ghcOptions
                              , componentRoot = root
                              , componentDependencies = []
-                             , ghcLibDir = Nothing
                              }
       Left err   -> return
         $ CradleFail

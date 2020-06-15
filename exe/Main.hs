@@ -1,6 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP #-} -- To get precise GHC version
+{-# LANGUAGE CPP #-} -- To get precise GHC version and check if distributed binary
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE DeriveGeneric #-}
@@ -58,7 +58,7 @@ import GHC hiding                               (def)
 import GHC.Check                                ( VersionCheck(..), makeGhcVersionChecker )
 -- import GhcMonad
 import HIE.Bios.Cradle
-import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute)
+import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute, getRuntimeGhcLibDir)
 import HIE.Bios.Types
 import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
@@ -316,10 +316,9 @@ loadSession dir = do
     -- If the hieYaml file already has an HscEnv, the new component is
     -- combined with the components in the old HscEnv into a new HscEnv
     -- which contains both.
-    packageSetup <- return $ \(hieYaml, cfp, opts) -> do
+    packageSetup <- return $ \(hieYaml, cfp, opts, libDir) -> do
         -- Parse DynFlags for the newly discovered component
-        libdir <- getGhcLibDir opts
-        hscEnv <- emptyHscEnv libdir nc
+        hscEnv <- emptyHscEnv libDir nc
         (df, targets) <- evalGhcEnv hscEnv $ do
                           setOptions opts (hsc_dflags hscEnv)
         dep_info <- getDependencyInfo (componentDependencies opts)
@@ -355,7 +354,7 @@ loadSession dir = do
             -- It's important to keep the same NameCache though for reasons
             -- that I do not fully understand
             print ("Making new HscEnv" ++ (show inplace))
-            hscEnv <- emptyHscEnv libdir nc
+            hscEnv <- emptyHscEnv libDir nc
             newHscEnv <-
               -- Add the options for the current component to the HscEnv
               evalGhcEnv hscEnv $ do
@@ -372,8 +371,8 @@ loadSession dir = do
             pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 
 
-    session <- return $ \(hieYaml, cfp, opts) -> do
-        (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts)
+    session <- return $ \(hieYaml, cfp, opts, libDir) -> do
+        (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts, libDir)
         -- TODO Handle the case where there is no hie.yaml
         -- Make a map from unit-id to DynFlags, this is used when trying to
         -- resolve imports.
@@ -447,19 +446,34 @@ loadSession dir = do
                 void $ forkIO $ do
                   putStrLn $ "Consulting the cradle for " <> show file
                   cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+
+                  -- we don't want to use ghc-paths if this is a portable, distributed binary
+                  mLibDir <- getRuntimeGhcLibDir cradle
+                  #ifdef DIST_BINARY
+                               True
+                  #else
+                               False
+                  #endif
+
                   eopts <- cradleToSessionOpts cradle cfp
                   print eopts
-                  case eopts of
-                    Right opts -> do
-                      (cs, res) <- session (hieYaml, toNormalizedFilePath' cfp, opts)
+
+                  let ncfp = toNormalizedFilePath' cfp
+                      cradleMishap diags = do
+                        dep_info <- getDependencyInfo ([fp | Just fp <- [hieYaml]])
+                        let res = (diags, Nothing)
+                        modifyVar_ fileToFlags $ \var -> do
+                          pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
+                        signalBarrier finished_barrier ([(ncfp, (res, dep_info) )], res)
+
+                  case (eopts, mLibDir) of
+                    (Right opts, Just libDir) -> do
+                      (cs, res) <- session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
                       signalBarrier finished_barrier (cs, fst res)
-                    Left err -> do
-                      dep_info <- getDependencyInfo ([fp | Just fp <- [hieYaml]])
-                      let ncfp = toNormalizedFilePath' cfp
-                      let res = (map (renderCradleError ncfp) err, Nothing)
-                      modifyVar_ fileToFlags $ \var -> do
-                        pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
-                      signalBarrier finished_barrier ([(ncfp, (res, dep_info) )], res)
+
+                    (Left err, _) -> cradleMishap $ map (renderCradleError ncfp) err
+                    (_, Nothing) -> cradleMishap [ideErrorText ncfp "Couldn't get the GHC library directory"]
+
                 waitBarrier finished_barrier
 
     dummyAs <- async $ return (error "Uninitialised")
@@ -615,7 +629,7 @@ memoIO op = do
             Just res -> return (mp, res)
 
 setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target])
-setOptions (ComponentOptions theOpts compRoot _deps _mlibdir) dflags = do
+setOptions (ComponentOptions theOpts compRoot _deps) dflags = do
     (dflags_, targets) <- addCmdOpts theOpts dflags
     let dflags' = makeDynFlagsAbsolute compRoot dflags_
     let dflags'' =

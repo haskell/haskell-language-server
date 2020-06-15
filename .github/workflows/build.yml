@@ -34,13 +34,13 @@ jobs:
   
 
     - name: Build Server
-      run: cabal build exe:haskell-language-server -O2 --builddir=../b --disable-documentation
+      run: cabal build exe:haskell-language-server -O2 --disable-documentation
           
     - name: Find Server Binary
       id: find_server_binary
       shell: bash
       run: |
-        HLS=$(find ../b \( -name 'haskell-language-server' -o -name 'haskell-language-server.exe' \) -type f)
+        HLS=$(find dist-newstyle \( -name 'haskell-language-server' -o -name 'haskell-language-server.exe' \) -type f)
         echo ::set-output name=hls_binary::$HLS
 
     - name: Upload Server Binary
@@ -55,14 +55,14 @@ jobs:
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:haskell-language-server-wrapper -O2 --builddir=../b --disable-documentation -v
+      run: cabal build exe:hls-wrapper -O2 --disable-documentation
 
     - name: Find Wrapper Binary
       if: matrix.ghc == '8.10.1'
       id: find_wrapper_binary
       shell: bash
       run: |
-        HLS_WRAPPER=$(find ../b \( -name 'haskell-language-server-wrapper' -o -name 'haskell-language-server-wrapper.exe' \) -type f)
+        HLS_WRAPPER=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
         echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER
 
     - name: Upload Wrapper

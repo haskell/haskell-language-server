@@ -11,20 +11,13 @@ module Arguments
   ( Arguments(..)
   , getArguments
   , ghcideVersion
-  , getGhcLibDir
   ) where
 
-import Data.Char
-import Data.List
-import Data.Maybe
 import Data.Version
 import Development.GitRev
-import qualified GHC.Paths
-import HIE.Bios.Types
 import Options.Applicative
 import Paths_haskell_language_server
 import System.Environment
-import System.Process
 
 -- ---------------------------------------------------------------------
 
@@ -89,16 +82,6 @@ arguments exeName = Arguments
                   <> help "Work out the project GHC version and print it")  
 
 -- ---------------------------------------------------------------------
--- Set the GHC libdir to the nix libdir if it's present.
-getGhcLibDir :: ComponentOptions -> IO FilePath
-getGhcLibDir opts = do
-  nixLibDir <- lookupEnv "NIX_GHC_LIBDIR"
-  -- We want to avoid using ghc-paths, as it is not portable
-  -- in the static binary sense - it just bakes in the path to the
-  -- libraries at compile time! This is ok if the user built from
-  -- source, but if they downloaoded a binary then this will return
-  -- some path that doesn't exist on their computer.
-  return $ fromMaybe GHC.Paths.libdir (nixLibDir <|> ghcLibDir opts)
 
 ghcideVersion :: IO String
 ghcideVersion = do

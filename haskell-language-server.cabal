@@ -26,17 +26,25 @@ flag pedantic
   Default:     False
   Manual:      True
 
+flag dist-binary
+  Description: Build haskell-language-server ready for distributing binaries
+  Default:     False
+  Manual:      True
+
 source-repository head
   type: git
   location: https://github.com/haskell/haskell-language-server
 
-common agpl
+common cpp-flags
   if flag(agpl)
     cpp-options:
       -DAGPL
+  if flag(dist-binary)
+    cpp-options:
+      -DDIST_BINARY
 
 library
-  import: agpl
+  import: cpp-flags
   exposed-modules:
       Ide.Cradle
       Ide.Logger
@@ -107,7 +115,7 @@ library
   default-language: Haskell2010
 
 executable haskell-language-server
-  import: agpl
+  import: cpp-flags
   main-is: Main.hs
   hs-source-dirs:
       exe
@@ -169,8 +177,8 @@ executable haskell-language-server
     , unordered-containers
   default-language: Haskell2010
 
-executable haskell-language-server-wrapper
-  import: agpl
+executable hls-wrapper
+  import: cpp-flags
   main-is: Wrapper.hs
   hs-source-dirs:
       exe
@@ -210,7 +218,7 @@ executable haskell-language-server-wrapper
 -- We removed it due to issues with stack when loading the project using a stack based hie.yaml
 -- See https://github.com/haskell/haskell-language-server/issues/114
 common hls-test-utils
-  import: agpl
+  import: cpp-flags
   hs-source-dirs:      test/utils
   other-modules:       Test.Hls.Util
   build-depends:       base
@@ -238,7 +246,7 @@ common hls-test-utils
   default-language:    Haskell2010
 
 test-suite func-test
-  import:               agpl, hls-test-utils
+  import:               cpp-flags, hls-test-utils
   type:                 exitcode-stdio-1.0
   default-language:     Haskell2010
   build-tool-depends:   haskell-language-server:haskell-language-server
