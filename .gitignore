@@ -7,4 +7,9 @@ cabal.project.local
 /.tasty-rerun-log
 .vscode
 /.hlint-*
-bench/example
+bench/example/
+bench-hist/
+bench-temp/
+.shake/
+ghcide
+*.benchmark-gcStats
