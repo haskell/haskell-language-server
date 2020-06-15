@@ -502,7 +502,7 @@ setCacheDir logger prefix hscComponents comps dflags = do
     liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack cacheDir
     pure $ dflags
           & setHiDir cacheDir
-          & setDefaultHieDir cacheDir
+          & setHieDir cacheDir
 
 
 renderCradleError :: NormalizedFilePath -> CradleError -> FileDiagnostic

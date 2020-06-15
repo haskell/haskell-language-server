@@ -25,7 +25,7 @@ module Development.IDE.GHC.Util(
     -- * General utilities
     readFileUtf8,
     hDuplicateTo',
-    setDefaultHieDir,
+    setHieDir,
     dontWriteHieFiles
     ) where
 
