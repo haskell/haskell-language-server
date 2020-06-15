@@ -24,12 +24,12 @@ jobs:
             ghc: '8.8.3' # fails due to segfault
 
     steps:
-    - shell: bash
-      run: echo $GITHUB_WORKSPACE
     - uses: actions/checkout@v2
       with:
         submodules: true
         path: '../h'
+    - shell: bash
+      run: echo $GITHUB_WORKSPACE
     - uses: actions/setup-haskell@v1.1.1
       with:
         ghc-version: ${{ matrix.ghc }}
