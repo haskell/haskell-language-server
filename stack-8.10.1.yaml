@@ -1,4 +1,4 @@
-resolver: nightly-2020-05-12
+resolver: nightly-2020-06-15
 compiler: ghc-8.10.1
 
 packages:
@@ -7,20 +7,21 @@ packages:
 
 extra-deps:
 - Cabal-3.2.0.0
-- cabal-helper-1.1.0.0
-# See https://github.com/haskell-hvr/cabal-plan/pull/55
-- github: peti/cabal-plan
-  commit: 894b76c0b6bf8f7d2f881431df1f13959a8fce87
+# - cabal-helper-1.1.0.0
+- github: DanielG/cabal-helper
+  commit: 79a5608778493bf32e74b54bbf1ea2729941e50f
+- cabal-plan-0.7.0.0
 - clock-0.7.2
 - floskell-0.10.3
-- ghc-check-0.5.0.1
 - ghc-exactprint-0.6.3
-- ghc-lib-parser-8.10.1.20200523
 - lens-4.19.1
 - lsp-test-0.11.0.2
 - monad-dijkstra-0.1.1.2
+- optics-core-0.3
+- ormolu-0.0.5.0
 - semigroups-0.18.5
 - temporary-1.2.1.1
+- these-1.1
 
 flags:
   haskell-language-server:
