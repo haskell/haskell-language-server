@@ -34,7 +34,7 @@ jobs:
   
 
     - name: Build Server
-      run: cabal build exe:haskell-language-server -O2 --disable-documentation
+      run: cabal build exe:haskell-language-server -O2 --disable-documentation -fdist-binary
           
     - name: Find Server Binary
       id: find_server_binary
@@ -55,7 +55,7 @@ jobs:
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:hls-wrapper -O2 --disable-documentation
+      run: cabal build exe:hls-wrapper -O2 --disable-documentation -fdist-binary
 
     - name: Find Wrapper Binary
       if: matrix.ghc == '8.10.1'

@@ -448,12 +448,7 @@ loadSession dir = do
                   cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
 
                   -- we don't want to use ghc-paths if this is a portable, distributed binary
-                  mLibDir <- getRuntimeGhcLibDir cradle
-                  #ifdef DIST_BINARY
-                               True
-                  #else
-                               False
-                  #endif
+                  mLibDir <- getRuntimeGhcLibDir cradle isDistBinary
 
                   eopts <- cradleToSessionOpts cradle cfp
                   print eopts
@@ -695,3 +690,12 @@ cacheDir = "ghcide"
 --           return $ Just GhcVersionMismatch {..}
 --         _ ->
 --           return Nothing
+--
+
+
+isDistBinary :: Bool
+#ifdef DIST_BINARY
+isDistBinary = True
+#else
+isDistBinary = False
+#endif
