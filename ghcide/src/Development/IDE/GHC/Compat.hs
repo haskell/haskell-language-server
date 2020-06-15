@@ -16,7 +16,7 @@ module Development.IDE.GHC.Compat(
     writeHieFile,
     readHieFile,
     supportsHieFiles,
-    setDefaultHieDir,
+    setHieDir,
     dontWriteHieFiles,
 #if !MIN_GHC_API_VERSION(8,8,0)
     ml_hie_file,
@@ -67,7 +67,6 @@ import HscTypes (mi_mod_hash)
 #endif
 
 #if MIN_GHC_API_VERSION(8,8,0)
-import Control.Applicative ((<|>))
 import Development.IDE.GHC.HieAst (mkHieFile)
 import HieBin
 import HieTypes
@@ -191,10 +190,10 @@ pattern IEThingAll a <-
     GHC.IEThingAll a
 #endif
 
-setDefaultHieDir :: FilePath -> DynFlags -> DynFlags
-setDefaultHieDir _f d =
+setHieDir :: FilePath -> DynFlags -> DynFlags
+setHieDir _f d =
 #if MIN_GHC_API_VERSION(8,8,0)
-    d { hieDir     = hieDir d <|> Just _f}
+    d { hieDir     = Just _f}
 #else
     d
 #endif

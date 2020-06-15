@@ -373,6 +373,13 @@ setup = do
   writeFile
     (examplesPath </> examplePackage </> "hie.yaml")
     exampleCradle
+  -- Need this in case there is a parent cabal.project somewhere
+  writeFile
+    (examplesPath </> examplePackage </> "cabal.project")
+    "packages: ."
+  writeFile
+    (examplesPath </> examplePackage </> "cabal.project.local")
+    ""
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
