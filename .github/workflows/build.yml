@@ -32,6 +32,7 @@ jobs:
     #     path: ~/.cabal
     #     key: ${{ runner.OS }}-${{ matrix.ghc }}-cabal-0
   
+    - run: cabal build floskell -v2
 
     - name: Build Server
       run: cabal build exe:haskell-language-server -O2 --disable-documentation -fdist-binary
