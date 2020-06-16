@@ -21,7 +21,6 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-        path: h
     - uses: actions/setup-haskell@v1.1.1
       with:
         ghc-version: ${{ matrix.ghc }}
@@ -33,21 +32,25 @@ jobs:
     #     path: ~/.cabal
     #     key: ${{ runner.OS }}-${{ matrix.ghc }}-cabal-0
     
-    # - name: Shorten binary names
-    #   # if: ${{ runner.OS == Windows }}
-    #   shell: bash
-    #   run: sed -i -e 's/executable haskell-language-server/executable hls/' haskell-language-server.cabal
+    - name: Shorten binary names
+      shell: bash
+      run: |
+        sed -i '' -e 's/haskell-language-server/hls/g' \
+                  -e 's/haskell_language_server/hls/g' \
+                  haskell-language-server.cabal
+        sed -i '' -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                  src/**/*.hs exe/*.hs
   
     - run: cabal build floskell -v2
 
     - name: Build Server
-      run: cabal build exe:haskell-language-server -O2 --disable-documentation -fdist-binary --builddir=d
+      run: cabal build exe:hls -O2 --disable-documentation -fdist-binary
           
     - name: Find Server Binary
       id: find_server_binary
       shell: bash
       run: |
-        HLS=$(find dist-newstyle \( -name 'haskell-language-server' -o -name 'haskell-language-server.exe' \) -type f)
+        HLS=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
         echo ::set-output name=hls_binary::$HLS
 
     - name: Upload Server Binary
@@ -62,14 +65,14 @@ jobs:
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:haskell-language-server-wrapper -O2 --disable-documentation -fdist-binary --builddir=d
+      run: cabal build exe:hls-wrapper -O2 --disable-documentation -fdist-binary
 
     - name: Find Wrapper Binary
       if: matrix.ghc == '8.10.1'
       id: find_wrapper_binary
       shell: bash
       run: |
-        HLS_WRAPPER=$(find dist-newstyle \( -name 'haskell-language-server-wrapper' -o -name 'haskell-language-server-wrapper.exe' \) -type f)
+        HLS_WRAPPER=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
         echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER
 
     - name: Upload Wrapper
