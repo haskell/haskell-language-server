@@ -177,7 +177,7 @@ executable haskell-language-server
     , unordered-containers
   default-language: Haskell2010
 
-executable hls-wrapper
+executable haskell-language-server-wrapper
   import: cpp-flags
   main-is: Wrapper.hs
   hs-source-dirs:
