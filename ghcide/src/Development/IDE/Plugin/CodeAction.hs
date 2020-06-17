@@ -266,7 +266,11 @@ suggestAddExtension Diagnostic{_range=_range,..}
 
 -- | All the GHC extensions
 ghcExtensions :: Map.HashMap T.Text Extension
-ghcExtensions = Map.fromList . map ( ( T.pack . flagSpecName ) &&& flagSpecFlag ) $ xFlags
+ghcExtensions = Map.fromList . filter notStrictFlag . map ( ( T.pack . flagSpecName ) &&& flagSpecFlag ) $ xFlags
+  where
+    -- Strict often causes false positives, as in Data.Map.Strict imports.
+    -- See discussion at https://github.com/digital-asset/ghcide/pull/638
+    notStrictFlag (name, _) = name /= "Strict"
 
 suggestModuleTypo :: Diagnostic -> [(T.Text, [TextEdit])]
 suggestModuleTypo Diagnostic{_range=_range,..}

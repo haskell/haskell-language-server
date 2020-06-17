@@ -818,6 +818,28 @@ removeImportTests = testGroup "remove import actions"
             , "main = B"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
+  , testSession "import containing the identifier Strict" $ do
+      let contentA = T.unlines
+            [ "module Strict where"
+            ]
+      _docA <- createDoc "Strict.hs" "haskell" contentA
+      let contentB = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            , "import Strict"
+            ]
+      docB <- createDoc "ModuleB.hs" "haskell" contentB
+      _ <- waitForDiagnostics
+      [CACodeAction action@CodeAction { _title = actionTitle }]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove import" @=? actionTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docB
+      let expectedContentAfterAction = T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+            , "module ModuleB where"
+            ]
+      liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
 extendImportTests :: TestTree
