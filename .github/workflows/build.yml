@@ -51,7 +51,8 @@ jobs:
       shell: bash
       run: |
         HLS=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
-        echo ::set-output name=hls_binary::$HLS
+        gzip --best $HLS
+        echo ::set-output name=hls_binary::$HLS.gz
 
     - name: Upload Server Binary
       uses: actions/upload-release-asset@v1.0.2
@@ -60,8 +61,8 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.find_server_binary.outputs.hls_binary }}
-        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}
-        asset_content_type: application/octet-stream
+        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}.gz
+        asset_content_type: application/gzip
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
@@ -73,7 +74,8 @@ jobs:
       shell: bash
       run: |
         HLS_WRAPPER=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
-        echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER
+        gzip --best $HLS_WRAPPER
+        echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER.gz
 
     - name: Upload Wrapper
       if: matrix.ghc == '8.10.1'
@@ -83,6 +85,6 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.find_wrapper_binary.outputs.hls_wrapper_binary }}
-        asset_name: haskell-language-server-wrapper-${{ runner.OS }}
-        asset_content_type: application/octet-stream
+        asset_name: haskell-language-server-wrapper-${{ runner.OS }}.gz
+        asset_content_type: application/gzip
 
