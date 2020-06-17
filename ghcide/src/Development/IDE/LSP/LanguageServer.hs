@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE RankNTypes                 #-}
 
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
@@ -44,7 +45,8 @@ runLanguageServer
     -> PartialHandlers config
     -> (InitializeRequest -> Either T.Text config)
     -> (DidChangeConfigurationNotification -> Either T.Text config)
-    -> (IO LspId -> (FromServerMessage -> IO ()) -> VFSHandle -> ClientCapabilities -> IO IdeState)
+    -> (IO LspId -> (FromServerMessage -> IO ()) -> VFSHandle -> ClientCapabilities
+        -> WithProgressFunc -> WithIndefiniteProgressFunc -> IO IdeState)
     -> IO ()
 runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeState = do
     -- Move stdout to another file descriptor and duplicate stderr
@@ -131,6 +133,7 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan lspFuncs@LSP.LspFuncs{..} = do
 
             ide <- getIdeState getNextReqId sendFunc (makeLSPVFSHandle lspFuncs) clientCapabilities
+                               withProgress withIndefiniteProgress
 
             _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- readChan clientMsgChan
