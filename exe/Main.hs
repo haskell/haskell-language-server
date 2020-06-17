@@ -184,6 +184,7 @@ main = do
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
         hPutStrLn stderr $ "  with arguments: " <> show args
         hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins')
+        hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
         runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
             t <- t

@@ -1,32 +1,22 @@
-{-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
 -- | This module is based on the hie-wrapper.sh script in
 -- https://github.com/alanz/vscode-hie-server
 module Main where
 
-#if __GLASGOW_HASKELL__ < 804
-import           Data.Semigroup
-#endif
-
 import Arguments
--- import Control.Concurrent.Extra
 import Control.Monad.Extra
-import           Data.Foldable
-import           Data.List
--- import Data.List.Extra
--- import qualified Data.Text as T
--- import qualified Data.Text.IO as T
--- import Development.IDE.Types.Logger
+import Data.Foldable
+import Data.List
 import HIE.Bios
-import           Ide.Cradle (findLocalCradle)
-import           Ide.Logger (logm)
-import           Ide.Version
-import           System.Directory
-import           System.Environment
+import HIE.Bios.Types
+import Ide.Cradle (findLocalCradle)
+import Ide.Version
+import System.Directory
+import System.Environment
 import System.Exit
 import System.IO
-import           System.Info
-import           System.Process
+import System.Info
+import System.Process
 
 -- ---------------------------------------------------------------------
 
@@ -40,40 +30,25 @@ main = do
 
   -- Get the cabal directory from the cradle
   cradle <- findLocalCradle d
-  let dir = cradleRootDir cradle
-  setCurrentDirectory dir
+  setCurrentDirectory $ cradleRootDir cradle
 
-  ghcVersion <- getProjectGhcVersion cradle
-
-  when argsProjectGhcVersion $ putStrLn ghcVersion >> exitSuccess
-
-  if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
-  else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
-
-  -- lock to avoid overlapping output on stdout
-  -- lock <- newLock
-  -- let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
-  --         T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
+  when argsProjectGhcVersion $ getProjectGhcVersion cradle >>= putStrLn >> exitSuccess
+  when argsVersion $ ghcideVersion >>= putStrLn >> exitSuccess
 
   whenJust argsCwd setCurrentDirectory
 
-  -- let mLogFileName = optLogFile opts
-
-  --     logLevel = if optDebugOn opts
-  --                  then L.DEBUG
-  --                  else L.INFO
-
-  -- Core.setupLogger mLogFileName ["hie"] logLevel
-
   progName <- getProgName
-  logm $  "run entered for haskell-language-server-wrapper(" ++ progName ++ ") "
-            ++ hlsVersion
-  logm $ "Current directory:" ++ d
-  logm $ "Operating system:" ++ os
+  hPutStrLn stderr $ "Run entered for haskell-language-server-wrapper(" ++ progName ++ ") "
+                     ++ hlsVersion
+  hPutStrLn stderr $ "Current directory: " ++ d
+  hPutStrLn stderr $ "Operating system: " ++ os
   args <- getArgs
-  logm $ "args:" ++ show args
-  logm $ "Cradle directory:" ++ dir
-  logm $ "Project GHC version:" ++ ghcVersion
+  hPutStrLn stderr $ "Arguments: " ++ show args
+  hPutStrLn stderr $ "Cradle directory: " ++ cradleRootDir cradle
+  hPutStrLn stderr $ "Cradle type: " ++ show (actionName (cradleOptsProg cradle))
+  hPutStrLn stderr $ "Consulting the cradle to get project GHC version..."
+  ghcVersion <- getProjectGhcVersion cradle
+  hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
 
   let
     hlsBin = "haskell-language-server-" ++ ghcVersion
@@ -84,17 +59,14 @@ main = do
     candidates' = [hlsBin, backupHlsBin, "haskell-language-server"]
     candidates = map (++ exeExtension) candidates'
 
-  logm $ "haskell-language-server exe candidates :" ++ show candidates
+  hPutStrLn stderr $ "haskell-language-server exe candidates: " ++ show candidates
 
   mexes <- traverse findExecutable candidates
 
   case asum mexes of
-    Nothing -> logm $ "cannot find any haskell-language-server exe, looked for:" ++ intercalate ", " candidates
+    Nothing -> hPutStrLn stderr $ "Cannot find any haskell-language-server exe, looked for: " ++ intercalate ", " candidates
     Just e -> do
-      logm $ "found haskell-language-server exe at:" ++ e
-      logm $ "args:" ++ show args
-      logm "launching ....\n\n\n"
+      hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
       callProcess e args
-      logm "done"
 
 -- ---------------------------------------------------------------------
