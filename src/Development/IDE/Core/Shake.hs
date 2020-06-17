@@ -44,6 +44,7 @@ module Development.IDE.Core.Shake(
     updatePositionMapping,
     deleteValue,
     OnDiskRule(..),
+    WithProgressFunc, WithIndefiniteProgressFunc
     ) where
 
 import           Development.Shake hiding (ShakeValue, doesFileExist)
@@ -78,6 +79,7 @@ import           Control.DeepSeq
 import           Control.Exception.Extra
 import           System.Time.Extra
 import           Data.Typeable
+import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Types as LSP
 import           System.FilePath hiding (makeRelative)
@@ -117,7 +119,16 @@ data ShakeExtras = ShakeExtras
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession :: [Action ()] -> IO ()
     -- ^ Used in the GhcSession rule to forcefully restart the session after adding a new component
+    ,withProgress           :: WithProgressFunc
+    -- ^ Report progress about some long running operation (on top of the progress shown by 'lspShakeProgress')
+    ,withIndefiniteProgress :: WithIndefiniteProgressFunc
+    -- ^ Same as 'withProgress', but for processes that do not report the percentage complete
     }
+
+type WithProgressFunc = forall a.
+    T.Text -> LSP.ProgressCancellable -> ((LSP.Progress -> IO ()) -> IO a) -> IO a
+type WithIndefiniteProgressFunc = forall a.
+    T.Text -> LSP.ProgressCancellable -> IO a -> IO a
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
@@ -311,6 +322,8 @@ seqValue v b = case v of
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: IO LSP.LspId
           -> (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
+          -> WithProgressFunc
+          -> WithIndefiniteProgressFunc
           -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
@@ -319,7 +332,9 @@ shakeOpen :: IO LSP.LspId
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen getLspId eventer logger debouncer shakeProfileDir (IdeReportProgress reportProgress) ideTesting opts rules = mdo
+shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting opts rules = mdo
+
     inProgress <- newVar HMap.empty
     shakeExtras <- do
         globals <- newVar HMap.empty
@@ -624,14 +639,6 @@ usesWithStale key files = do
     zipWithM lastValue files values
 
 
-withProgress :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
-withProgress var file = actionBracket (f succ) (const $ f pred) . const
-    -- This functions are deliberately eta-expanded to avoid space leaks.
-    -- Do not remove the eta-expansion without profiling a session with at
-    -- least 1000 modifications.
-    where f shift = modifyVar_ var $ \x -> evaluate $ HMap.alter (\x -> Just $! shift (fromMaybe 0 x)) file x
-
-
 defineEarlyCutoff
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
@@ -639,7 +646,7 @@ defineEarlyCutoff
 defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> do
     extras@ShakeExtras{state, inProgress} <- getShakeExtras
     -- don't do progress for GetFileExists, as there are lots of non-nodes for just that one key
-    (if show key == "GetFileExists" then id else withProgress inProgress file) $ do
+    (if show key == "GetFileExists" then id else withProgressVar inProgress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
                 v <- liftIO $ getValues state key file
@@ -678,6 +685,15 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
+  where
+    withProgressVar :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
+    withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
+        -- This functions are deliberately eta-expanded to avoid space leaks.
+        -- Do not remove the eta-expansion without profiling a session with at
+        -- least 1000 modifications.
+        where f shift = modifyVar_ var $ \x -> evaluate $ HMap.alter (\x -> Just $! shift (fromMaybe 0 x)) file x
+
+
 
 
 -- | Rule type, input file

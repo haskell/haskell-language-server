@@ -3,6 +3,7 @@
 
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -45,15 +46,19 @@ initialise :: LSP.ClientCapabilities
            -> Rules ()
            -> IO LSP.LspId
            -> (LSP.FromServerMessage -> IO ())
+           -> WithProgressFunc
+           -> WithIndefiniteProgressFunc
            -> Logger
            -> Debouncer LSP.NormalizedUri
            -> IdeOptions
            -> VFSHandle
            -> IO IdeState
-initialise caps mainRule getLspId toDiags logger debouncer options vfs =
+initialise caps mainRule getLspId toDiags wProg wIndefProg logger debouncer options vfs =
     shakeOpen
         getLspId
         toDiags
+        wProg
+        wIndefProg
         logger
         debouncer
         (optShakeProfiling options)

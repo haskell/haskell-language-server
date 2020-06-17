@@ -119,7 +119,7 @@ main = do
         t <- offsetTime
         hPutStrLn stderr "Starting LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps -> do
+        runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps wProg wIndefProg -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             let options = (defaultIdeOptions $ loadSessionShake dir)
@@ -130,7 +130,7 @@ main = do
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins)
-                getLspId event (logger minBound) debouncer options vfs
+                getLspId event wProg wIndefProg (logger minBound) debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
         hSetEncoding stdout utf8
@@ -153,7 +153,8 @@ main = do
         putStrLn "\nStep 3/4: Initializing the IDE"
         vfs <- makeVFSHandle
         debouncer <- newAsyncDebouncer
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger minBound) debouncer (defaultIdeOptions $ loadSessionShake dir) vfs
+        let dummyWithProg _ _ f = f (const (pure ()))
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger minBound) debouncer (defaultIdeOptions $ loadSessionShake dir) vfs
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
@@ -233,7 +234,7 @@ loadSessionShake fp = do
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 loadSession :: Bool -> ShakeExtras -> FilePath -> IO (FilePath -> IO (IdeResult HscEnvEq))
-loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession} dir = do
+loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress} dir = do
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
@@ -357,8 +358,14 @@ loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession} dir = d
           consultCradle hieYaml cfp = do
              when optTesting $ eventer $ notifyCradleLoaded cfp
              logInfo logger $ T.pack ("Consulting the cradle for " <> show cfp)
+
              cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
-             eopts <- cradleToSessionOpts cradle cfp
+             -- Display a user friendly progress message here: They probably don't know what a
+             -- cradle is
+             let progMsg = "Setting up project " <> T.pack (takeBaseName (cradleRootDir cradle))
+             eopts <- withIndefiniteProgress progMsg LSP.NotCancellable $
+               cradleToSessionOpts cradle cfp
+
              logDebug logger $ T.pack ("Session loading result: " <> show eopts)
              case eopts of
                -- The cradle gave us some options so get to work turning them
