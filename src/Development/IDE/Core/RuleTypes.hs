@@ -88,6 +88,9 @@ type instance RuleResult GenerateByteCode = Linkable
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnvEq
 
+-- | A GHC session preloaded with all the dependencies
+type instance RuleResult GhcSessionDeps = HscEnvEq
+
 -- | Resolve the imports in a module to the file path of a module
 -- in the same package or the package id of another package.
 type instance RuleResult GetLocatedImports = ([(Located ModuleName, Maybe ArtifactsLocation)], S.Set InstalledUnitId)
@@ -169,6 +172,11 @@ data GhcSession = GhcSession
 instance Hashable GhcSession
 instance NFData   GhcSession
 instance Binary   GhcSession
+
+data GhcSessionDeps = GhcSessionDeps deriving (Eq, Show, Typeable, Generic)
+instance Hashable GhcSessionDeps
+instance NFData   GhcSessionDeps
+instance Binary   GhcSessionDeps
 
 data GetModIfaceFromDisk = GetModIfaceFromDisk
     deriving (Eq, Show, Typeable, Generic)

@@ -28,8 +28,10 @@ module Development.IDE.Core.Shake(
     shakeRestart,
     shakeEnqueue,
     shakeProfile,
-    use, useWithStale, useNoFile, uses, usesWithStale,
+    use, useNoFile, uses,
     use_, useNoFile_, uses_,
+    useWithStale, usesWithStale,
+    useWithStale_, usesWithStale_,
     define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks,
     getDiagnostics, unsafeClearDiagnostics,
     getHiddenDiagnostics,
@@ -577,6 +579,17 @@ use key file = head <$> uses key [file]
 useWithStale :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
 useWithStale key file = head <$> usesWithStale key [file]
+
+useWithStale_ :: IdeRule k v
+    => k -> NormalizedFilePath -> Action (v, PositionMapping)
+useWithStale_ key file = head <$> usesWithStale_ key [file]
+
+usesWithStale_ :: IdeRule k v => k -> [NormalizedFilePath] -> Action [(v, PositionMapping)]
+usesWithStale_ key files = do
+    res <- usesWithStale key files
+    case sequence res of
+        Nothing -> liftIO $ throwIO $ BadDependency (show key)
+        Just v -> return v
 
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
 useNoFile key = use key emptyFilePath

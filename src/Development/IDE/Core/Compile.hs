@@ -24,6 +24,7 @@ module Development.IDE.Core.Compile
   , loadInterface
   , loadDepModule
   , loadModuleHome
+  , setupFinderCache
   ) where
 
 import Development.IDE.Core.RuleTypes
@@ -116,24 +117,16 @@ computePackageDeps env pkg = do
 
 typecheckModule :: IdeDefer
                 -> HscEnv
-                -> [(ModSummary, (ModIface, Maybe Linkable))]
                 -> ParsedModule
                 -> IO (IdeResult (HscEnv, TcModuleResult))
-typecheckModule (IdeDefer defer) hsc depsIn pm = do
+typecheckModule (IdeDefer defer) hsc pm = do
     fmap (either (, Nothing) (second Just . sequence) . sequence) $
       runGhcEnv hsc $
       catchSrcErrors "typecheck" $ do
-        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
-        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
-        -- Long-term we might just want to change the order returned by GetDependencies
-        let deps = reverse depsIn
-
-        setupFinderCache (map fst deps)
 
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
 
-        mapM_ (uncurry loadDepModule . snd) deps
         modSummary' <- initPlugins modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
             GHC.typecheckModule $ enableTopLevelWarnings
@@ -481,7 +474,8 @@ getModSummaryFromImports fp contents = do
         -- To avoid silent issues where something is not processed because the date
         -- has not changed, we make sure that things blow up if they depend on the date.
                 , ms_hsc_src      = sourceType
-                , ms_hspp_buf     = Nothing
+                -- The contents are used by the GetModSummary rule
+                , ms_hspp_buf     = Just contents
                 , ms_hspp_file    = fp
                 , ms_hspp_opts    = dflags
                 , ms_iface_date   = Nothing
