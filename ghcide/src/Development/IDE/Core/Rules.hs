@@ -78,6 +78,8 @@ import Control.Concurrent.Async (concurrently)
 import Control.Monad.State
 import System.IO.Error (isDoesNotExistError)
 import Control.Exception.Safe (IOException, catch)
+import FastString (FastString(uniq))
+import qualified HeaderInfo as Hdr
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -443,30 +445,30 @@ getSpanInfoRule =
     define $ \GetSpanInfo file -> do
         tc <- use_ TypeCheck file
         packageState <- hscEnv <$> use_ GhcSession file
-        deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
-        let tdeps = transitiveModuleDeps deps
 
 -- When possible, rely on the haddocks embedded in our interface files
 -- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
 #if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
         let parsedDeps = []
 #else
+        deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
+        let tdeps = transitiveModuleDeps deps
         parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule tdeps
 #endif
 
-        ifaces <- mapMaybe (fmap fst) <$> usesWithStale GetModIface tdeps
         (fileImports, _) <- use_ GetLocatedImports file
         let imports = second (fmap artifactFilePath) <$> fileImports
-        x <- liftIO $ getSrcSpanInfos packageState imports tc parsedDeps (map hirModIface ifaces)
+        x <- liftIO $ getSrcSpanInfos packageState imports tc parsedDeps
         return ([], Just x)
 
 -- Typechecks a module.
 typeCheckRule :: Rules ()
 typeCheckRule = define $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
+    hsc  <- hscEnv <$> use_ GhcSessionDeps file
     -- do not generate interface files as this rule is called
     -- for files of interest on every keystroke
-    typeCheckRuleDefinition file pm SkipGenerationOfInterfaceFiles
+    typeCheckRuleDefinition hsc pm SkipGenerationOfInterfaceFiles
 
 data GenerateInterfaceFiles
     = DoGenerateInterfaceFiles
@@ -478,29 +480,16 @@ data GenerateInterfaceFiles
 -- garbage collect all the intermediate typechecked modules rather than
 -- retain the information forever in the shake graph.
 typeCheckRuleDefinition
-    :: NormalizedFilePath     -- ^ Path to source file
+    :: HscEnv
     -> ParsedModule
     -> GenerateInterfaceFiles -- ^ Should generate .hi and .hie files ?
     -> Action (IdeResult TcModuleResult)
-typeCheckRuleDefinition file pm generateArtifacts = do
-  deps <- use_ GetDependencies file
-  hsc  <- hscEnv <$> use_ GhcSession file
-  -- Figure out whether we need TemplateHaskell or QuasiQuotes support
-  let graph_needs_th_qq = needsTemplateHaskellOrQQ $ hsc_mod_graph hsc
-      file_uses_th_qq   = uses_th_qq $ ms_hspp_opts (pm_mod_summary pm)
-      any_uses_th_qq    = graph_needs_th_qq || file_uses_th_qq
-  mirs      <- uses_ GetModIface (transitiveModuleDeps deps)
-  bytecodes <- if any_uses_th_qq
-    then -- If we use TH or QQ, we must obtain the bytecode
-      fmap Just <$> uses_ GenerateByteCode (transitiveModuleDeps deps)
-    else
-      pure $ repeat Nothing
-
+typeCheckRuleDefinition hsc pm generateArtifacts = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
   addUsageDependencies $ liftIO $ do
-    res <- typecheckModule defer hsc (zipWith unpack mirs bytecodes) pm
+    res <- typecheckModule defer hsc pm
     case res of
       (diags, Just (hsc,tcm)) | DoGenerateInterfaceFiles <- generateArtifacts -> do
         diagsHie <- generateAndWriteHieFile hsc (tmrModule tcm)
@@ -509,10 +498,6 @@ typeCheckRuleDefinition file pm generateArtifacts = do
       (diags, res) ->
         return (diags, snd <$> res)
  where
-  unpack HiFileResult{..} bc = (hirModSummary, (hirModIface, bc))
-  uses_th_qq dflags =
-    xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
-
   addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
   addUsageDependencies a = do
     r@(_, mtc) <- a
@@ -588,6 +573,43 @@ loadGhcSession = do
                 Nothing -> BS.pack (show (hash (snd val)))
         return (Just cutoffHash, val)
 
+    define $ \GhcSessionDeps file -> ghcSessionDepsDefinition file
+
+ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
+ghcSessionDepsDefinition file = do
+        hsc <- hscEnv <$> use_ GhcSession file
+        (ms,_) <- useWithStale_ GetModSummary file
+        (deps,_) <- useWithStale_ GetDependencies file
+        let tdeps = transitiveModuleDeps deps
+        ifaces <- uses_ GetModIface tdeps
+
+        -- Figure out whether we need TemplateHaskell or QuasiQuotes support
+        let graph_needs_th_qq = needsTemplateHaskellOrQQ $ hsc_mod_graph hsc
+            file_uses_th_qq   = uses_th_qq $ ms_hspp_opts ms
+            any_uses_th_qq    = graph_needs_th_qq || file_uses_th_qq
+
+        bytecodes <- if any_uses_th_qq
+            then -- If we use TH or QQ, we must obtain the bytecode
+            fmap Just <$> uses_ GenerateByteCode (transitiveModuleDeps deps)
+            else
+            pure $ repeat Nothing
+
+        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
+        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
+        -- Long-term we might just want to change the order returned by GetDependencies
+        let inLoadOrder = reverse (zipWith unpack ifaces bytecodes)
+
+        (session',_) <- liftIO $ runGhcEnv hsc $ do
+            setupFinderCache (map hirModSummary ifaces)
+            mapM_ (uncurry loadDepModule) inLoadOrder
+
+        res <- liftIO $ newHscEnvEq session' []
+        return ([], Just res)
+ where
+  unpack HiFileResult{..} bc = (hirModIface, bc)
+  uses_th_qq dflags =
+    xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
+
 getModIfaceFromDiskRule :: Rules ()
 getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
   -- get all dependencies interface files, to check for freshness
@@ -623,12 +645,33 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
               pure (Nothing, ([], Nothing))
 
 getModSummaryRule :: Rules ()
-getModSummaryRule = define $ \GetModSummary f -> do
+getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
     dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
     (_, mFileContent) <- getFileContents f
     modS <- liftIO $ evalWithDynFlags dflags $ runExceptT $
         getModSummaryFromImports (fromNormalizedFilePath f) (textToStringBuffer <$> mFileContent)
-    return $ either (,Nothing) (([], ) . Just) modS
+    case modS of
+        Right ms -> do
+            -- Clear the contents as no longer needed
+            let !ms' = ms{ms_hspp_buf=Nothing}
+            return ( Just (computeFingerprint f dflags ms), ([], Just ms'))
+        Left diags -> return (Nothing, (diags, Nothing))
+    where
+        -- Compute a fingerprint from the contents of `ModSummary`,
+        -- eliding the timestamps and other non relevant fields.
+        computeFingerprint f dflags ModSummary{..} =
+            let fingerPrint =
+                    ( moduleNameString (moduleName ms_mod)
+                    , ms_hspp_file
+                    , map unLoc opts
+                    , ml_hs_file ms_location
+                    , fingerPrintImports ms_srcimps
+                    , fingerPrintImports ms_textual_imps
+                    )
+                fingerPrintImports = map (fmap uniq *** (moduleNameString . unLoc))
+                opts = Hdr.getOptions dflags (fromJust ms_hspp_buf) (fromNormalizedFilePath f)
+                fp = hash fingerPrint
+            in BS.pack (show fp)
 
 getModIfaceRule :: Rules ()
 getModIfaceRule = define $ \GetModIface f -> do
@@ -667,10 +710,16 @@ getModIfaceRule = define $ \GetModIface f -> do
             case mb_pm of
                 Nothing -> return (diags, Nothing)
                 Just pm -> do
-                    (diags', tmr) <- typeCheckRuleDefinition f pm DoGenerateInterfaceFiles
-                    -- Bang pattern is important to avoid leaking 'tmr'
-                    let !res = extract tmr
-                    return (diags <> diags', res)
+                    -- We want GhcSessionDeps cache objects only for files of interest
+                    -- As that's no the case here, call the implementation directly
+                    (diags, mb_hsc) <- ghcSessionDepsDefinition f
+                    case mb_hsc of
+                        Nothing -> return (diags, Nothing)
+                        Just hsc -> do
+                            (diags', tmr) <- typeCheckRuleDefinition (hscEnv hsc) pm DoGenerateInterfaceFiles
+                            -- Bang pattern is important to avoid leaking 'tmr'
+                            let !res = extract tmr
+                            return (diags <> diags', res)
     where
       extract Nothing = Nothing
       extract (Just tmr) =
