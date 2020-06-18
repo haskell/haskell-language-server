@@ -392,7 +392,7 @@ loadSession dir = do
               -- henv <- case versionMismatch of
               --           Just mismatch -> return mismatch
               --           Nothing -> newHscEnvEq hscEnv' uids
-              
+
               henv <- newHscEnvEq hscEnv' uids
 
               let res = (([], Just henv), di)
@@ -677,6 +677,7 @@ getCacheDir prefix opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> prefix ++
 cacheDir :: String
 cacheDir = "ghcide"
 
+-- TODO: pass cabal ghc version to this
 -- ghcVersionChecker :: IO VersionCheck
 -- ghcVersionChecker = $$(makeGhcVersionChecker (pure <$> getLibdir))
 

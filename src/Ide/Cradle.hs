@@ -33,7 +33,6 @@ import           System.Exit
 import           System.FilePath
 import           System.Process (readCreateProcessWithExitCode, shell, CreateProcess(..))
 
-
 -- ---------------------------------------------------------------------
 
 -- | Find the cradle that the given File belongs to.
@@ -54,7 +53,7 @@ findLocalCradle fp = do
       debugm $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
       crdl <- Bios.loadCradle yaml
       return $ fmap (const CabalNone) crdl
-    Nothing -> Bios.loadImplicitCradle (fp </> "Foo.hs") -- cabalHelperCradle fp
+    Nothing -> Bios.loadImplicitCradle fp -- cabalHelperCradle fp
   logm $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
 
@@ -489,7 +488,7 @@ cabalHelperCradle file = do
                    , cradleOptsProg =
                        CradleAction { actionName = Bios.Other (projectNoneType proj)
                                     , runCradle = \_ _ -> return CradleNone
-                                    , runGhcLibDir = pure Nothing 
+                                    , runGhcLibDir = pure Nothing
                                     }
                    }
         Just realPackage -> do

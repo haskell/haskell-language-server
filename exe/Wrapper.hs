@@ -8,12 +8,14 @@ import Control.Monad.Extra
 import Data.Foldable
 import Data.List
 import HIE.Bios
+import HIE.Bios.Environment
 import HIE.Bios.Types
 import Ide.Cradle (findLocalCradle)
 import Ide.Version
 import System.Directory
 import System.Environment
 import System.Exit
+import System.FilePath
 import System.IO
 import System.Info
 import System.Process
@@ -25,14 +27,14 @@ main = do
   -- WARNING: If you write to stdout before runLanguageServer
   --          then the language server will not work
   Arguments{..} <- getArguments "haskell-language-server-wrapper"
-  
+
   d <- getCurrentDirectory
 
   -- Get the cabal directory from the cradle
-  cradle <- findLocalCradle d
+  cradle <- findLocalCradle (d </> "a")
   setCurrentDirectory $ cradleRootDir cradle
 
-  when argsProjectGhcVersion $ getProjectGhcVersion cradle >>= putStrLn >> exitSuccess
+  when argsProjectGhcVersion $ getRuntimeGhcVersion cradle >>= putStrLn >> exitSuccess
   when argsVersion $ ghcideVersion >>= putStrLn >> exitSuccess
 
   whenJust argsCwd setCurrentDirectory
@@ -47,7 +49,7 @@ main = do
   hPutStrLn stderr $ "Cradle directory: " ++ cradleRootDir cradle
   hPutStrLn stderr $ "Cradle type: " ++ show (actionName (cradleOptsProg cradle))
   hPutStrLn stderr $ "Consulting the cradle to get project GHC version..."
-  ghcVersion <- getProjectGhcVersion cradle
+  ghcVersion <- getRuntimeGhcVersion cradle
   hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
 
   let

@@ -35,19 +35,5 @@ hlsVersion =
 hlsGhcDisplayVersion :: String
 hlsGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
 
-getProjectGhcVersion :: Bios.Cradle Bios.CabalHelper -> IO String
-getProjectGhcVersion crdl =
-  fmap
-    (fromMaybe "No System GHC Found.")
-    (execProjectGhc crdl ["--numeric-version"])
-
-
 hlsGhcVersion :: String
 hlsGhcVersion = VERSION_ghc
-
--- ---------------------------------------------------------------------
-
-checkCabalInstall :: IO Bool
-checkCabalInstall = isJust <$> findExecutable "cabal"
-
--- ---------------------------------------------------------------------
