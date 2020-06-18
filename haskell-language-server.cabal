@@ -101,8 +101,8 @@ library hls-ghc-lib
     , ghcide
     , hashable
     , haskell-lsp
-    , haskell-src-exts
     , hlint >= 3.0
+    , lens
     , regex-tdfa
     , shake
     , text
@@ -114,6 +114,8 @@ library hls-ghc-lib
   else
     build-depends:
       ghc-lib == 8.10.*
+    cpp-options:
+      -DGHC_LIB
 
   ghc-options:
          -Wall

@@ -1,4 +1,5 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts  #-}
@@ -15,31 +16,21 @@ module Ide.Plugin.Hlint
   --, provider 
   ) where
 
--- import DA.Daml.DocTest
--- import Development.IDE.Core.Service.Daml
--- import qualified DA.Daml.LF.Ast as LF
--- import qualified DA.Daml.LF.ScenarioServiceClient as SS
--- import Control.Exception.Safe
--- import Development.IDE.Core.RuleTypes.Daml
--- import Development.IDE.Core.Rules
--- import Development.IDE.Core.Service.Daml
--- import Development.IDE.Types.Location
--- import qualified DA.Daml.LF.Ast as LF
--- import qualified DA.Daml.Visual as Visual
--- import qualified Data.NameMap as NM
 import Control.DeepSeq
 import Control.Exception
+import Control.Lens ((^.))
 import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.Trans.Maybe
 import qualified Data.Aeson as Aeson
-import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
+import Data.Aeson.Types (ToJSON(..), FromJSON(..), Value(..), Result(..))
 import Data.Binary
 import qualified Data.ByteString as BS
 import Data.Either.Extra
 import Data.Foldable
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
+import qualified Data.HashSet as HashSet
 import Data.Hashable
 import Data.List
 import Data.Map.Strict (Map)
@@ -65,9 +56,10 @@ import Development.Shake
 import GHC
 import GHC.Generics
 import GHC.Generics (Generic)
+import SrcLoc
 import HscTypes (ModIface, ModSummary)
 import Ide.Types
-import qualified Language.Haskell.Exts.SrcLoc as HSE
+import Ide.Plugin
 import Language.Haskell.HLint
 import Language.Haskell.HLint as Hlint
 import qualified Language.Haskell.LSP.Core as LSP
@@ -82,8 +74,6 @@ import System.FilePath
 import System.IO.Error
 import Text.Regex.TDFA.Text()
 
-
--- import "ghc-lib-parser" Module (UnitId)
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
@@ -93,7 +83,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 --      [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
 --      , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
 --      ]
---  , pluginCodeActionProvider = Just codeActionProvider
+--    , pluginCodeActionProvider = Just codeActionProvider
   }
 
 data GetHlintDiagnostics = GetHlintDiagnostics
@@ -107,37 +97,71 @@ type instance RuleResult GetHlintDiagnostics = ()
 rules :: Rules ()
 rules = do
   define $ \GetHlintDiagnostics file -> do
-    pm <- use_ GetParsedModule file
-    let anns = pm_annotations pm
-    let modu = pm_parsed_source pm
     (classify, hint) <- useNoFile_ GetHlintSettings
-    let ideas = applyHints classify hint [createModuleEx anns modu]
-    return ([diagnostic file i | i <- ideas, ideaSeverity i /= Ignore], Just ())
+    eModuleEx <- getModuleEx file
+    let getIdeas moduleEx = applyHints classify hint [moduleEx]
+    return $ (diagnostics file (fmap getIdeas eModuleEx), Just ())
+
+  hlintDataDir <- liftIO getExecutablePath
+
+  getHlintSettingsRule (HlintEnabled hlintDataDir True)
 
   action $ do
     files <- getFilesOfInterest
-    void $ uses GetHlintDiagnostics $ Set.toList files
+    void $ uses GetHlintDiagnostics $ HashSet.toList files
 
   where
-      srcSpanToRange :: HSE.SrcSpan -> LSP.Range
-      srcSpanToRange span = Range {
-          _start = LSP.Position {
-                _line = HSE.srcSpanStartLine span - 1
-              , _character  = HSE.srcSpanStartColumn span - 1}
-        , _end   = LSP.Position {
-                _line = HSE.srcSpanEndLine span - 1
-             , _character = HSE.srcSpanEndColumn span - 1}
+
+      getModuleEx :: NormalizedFilePath -> Action (Either ParseError ModuleEx)
+      getModuleEx fp = do
+#ifndef GHC_LIB
+        pm <- use_ GetParsedModule fp
+        let anns = pm_annotations pm
+        let modu = pm_parsed_source pm
+        return $ Right (createModuleEx anns modu)
+#else
+        liftIO $ parseModuleEx defaultParseFlags (fromNormalizedFilePath fp) Nothing
+#endif
+
+      diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
+      diagnostics file (Right ideas) = 
+        [(file, ShowDiag, ideaToDiagnostic i) | i <- ideas, ideaSeverity i /= Ignore]
+      diagnostics file (Left parseErr) = 
+        [(file, ShowDiag, parseErrorToDiagnostic parseErr)]
+
+      ideaToDiagnostic :: Idea -> Diagnostic
+      ideaToDiagnostic idea =
+        LSP.Diagnostic {
+            _range    = srcSpanToRange $ ideaSpan idea
+          , _severity = Just LSP.DsInfo
+          , _code     = Just (LSP.StringValue $ T.pack $ ideaHint idea)
+          , _source   = Just "hlint"
+          , _message  = T.pack $ show idea
+          , _relatedInformation = Nothing
         }
-      diagnostic :: NormalizedFilePath -> Idea -> FileDiagnostic
-      diagnostic file i =
-        (file, ShowDiag, LSP.Diagnostic {
-              _range = srcSpanToRange $ ideaSpan i
-            , _severity = Just LSP.DsInfo
-            , _code = Nothing
-            , _source = Just "hlint"
-            , _message = T.pack $ show i
-            , _relatedInformation = Nothing
-      })
+      
+      parseErrorToDiagnostic :: ParseError -> Diagnostic
+      parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
+        LSP.Diagnostic { 
+            _range    = srcSpanToRange l
+          , _severity = Just LSP.DsInfo
+          , _code     = Just (LSP.StringValue "parser")
+          , _source   = Just "hlint"
+          , _message  = T.unlines [T.pack msg,T.pack contents]
+          , _relatedInformation = Nothing
+        }
+      -- This one is defined in Development.IDE.GHC.Error but here
+      -- the types could come from ghc-lib or ghc
+      srcSpanToRange :: SrcSpan -> LSP.Range
+      srcSpanToRange (RealSrcSpan span) = Range {
+          _start = LSP.Position {
+                _line = srcSpanStartLine span - 1
+              , _character  = srcSpanStartCol span - 1}
+        , _end   = LSP.Position {
+                _line = srcSpanEndLine span - 1
+             , _character = srcSpanEndCol span - 1}
+        }
+      srcSpanToRange (UnhelpfulSpan _) = noRange
 
 -- ---------------------------------------------------------------------
 
@@ -189,7 +213,8 @@ hlintSettings hlintDataDir enableOverrides = do
       foldMapM f = foldlM (\acc a -> do w <- f a; return $! mappend acc w) mempty
 
 -- ---------------------------------------------------------------------
--- ---------------------------------------------------------------------
+
+
 -- ---------------------------------------------------------------------
 {-
 {-# LANGUAGE CPP #-}
