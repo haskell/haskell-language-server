@@ -196,7 +196,7 @@ main = do
         hPutStrLn stderr $ "  with arguments: " <> show args
         hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins')
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
+        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             let options = (defaultIdeOptions $ loadSessionShake dir)
@@ -207,7 +207,7 @@ main = do
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins)
-                getLspId event hlsLogger debouncer options vfs
+                getLspId event wProg wIndefProg hlsLogger debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
         hSetEncoding stdout utf8
@@ -230,7 +230,8 @@ main = do
         putStrLn "\nStep 3/4: Initializing the IDE"
         vfs <- makeVFSHandle
         debouncer <- newAsyncDebouncer
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSessionShake dir) vfs
+        let dummyWithProg _ _ f = f (const (pure ()))
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions $ loadSessionShake dir) vfs
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
@@ -304,13 +305,13 @@ loadSessionShake fp = do
   se <- getShakeExtras
   IdeOptions{optTesting = IdeTesting ideTesting} <- getIdeOptions
   res <- liftIO $ loadSession ideTesting se fp
-  return (fmap liftIO res)
+  return res
 
 -- | This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
-loadSession :: Bool -> ShakeExtras -> FilePath -> IO (FilePath -> IO (IdeResult HscEnvEq))
-loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession, ideNc} dir = do
+loadSession :: Bool -> ShakeExtras -> FilePath -> IO (FilePath -> Action (IdeResult HscEnvEq))
+loadSession optTesting ShakeExtras{logger, eventer, withIndefiniteProgress, ideNc} dir = do
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
@@ -403,7 +404,7 @@ loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession, ideNc} 
                 --   existing packages
                 pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 
-      let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions) -> IO (IdeResult HscEnvEq)
+      let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions) -> IO ([NormalizedFilePath],IdeResult HscEnvEq)
           session (hieYaml, cfp, opts) = do
             (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts)
             -- Make a map from unit-id to DynFlags, this is used when trying to
@@ -424,16 +425,22 @@ loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession, ideNc} 
                 pure $ Map.insert hieYaml (HM.fromList (cs ++ cached_targets)) var
 
             -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
-            restartShakeSession [kick]
+            -- restartShakeSession [kick]
 
-            return (fst res)
+            return (map fst cs, fst res)
 
-      let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq)
+      let consultCradle :: Maybe FilePath -> FilePath -> IO ([NormalizedFilePath], IdeResult HscEnvEq)
           consultCradle hieYaml cfp = do
              when optTesting $ eventer $ notifyCradleLoaded cfp
              logInfo logger $ T.pack ("Consulting the cradle for " <> show cfp)
+
              cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
-             eopts <- cradleToSessionOpts cradle cfp
+             -- Display a user friendly progress message here: They probably don't know what a
+             -- cradle is
+             let progMsg = "Setting up project " <> T.pack (takeBaseName (cradleRootDir cradle))
+             eopts <- withIndefiniteProgress progMsg LSP.NotCancellable $
+               cradleToSessionOpts cradle cfp
+
              logDebug logger $ T.pack ("Session loading result: " <> show eopts)
              case eopts of
                -- The cradle gave us some options so get to work turning them
@@ -447,10 +454,10 @@ loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession, ideNc} 
                  let res = (map (renderCradleError ncfp) err, Nothing)
                  modifyVar_ fileToFlags $ \var -> do
                    pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
-                 return res
+                 return ([ncfp],res)
 
       -- This caches the mapping from hie.yaml + Mod.hs -> [String]
-      let sessionOpts :: (Maybe FilePath, FilePath) -> IO (IdeResult HscEnvEq)
+      let sessionOpts :: (Maybe FilePath, FilePath) -> IO ([NormalizedFilePath],IdeResult HscEnvEq)
           sessionOpts (hieYaml, file) = do
             v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
             cfp <- canonicalizePath file
@@ -465,7 +472,7 @@ loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession, ideNc} 
                     -- Keep the same name cache
                     modifyVar_ hscEnvs (return . Map.adjust (\(h, _) -> (h, [])) hieYaml )
                     consultCradle hieYaml cfp
-                  else return opts
+                  else return ([], opts)
               Nothing -> consultCradle hieYaml cfp
 
       dummyAs <- async $ return (error "Uninitialised")
@@ -474,18 +481,26 @@ loadSession optTesting ShakeExtras{logger, eventer, restartShakeSession, ideNc} 
       -- at a time. Therefore the IORef contains the currently running cradle, if we try
       -- to get some more options then we wait for the currently running action to finish
       -- before attempting to do so.
-      let getOptions :: FilePath -> IO (IdeResult HscEnvEq)
+      let getOptions :: FilePath -> IO ([NormalizedFilePath],IdeResult HscEnvEq)
           getOptions file = do
               hieYaml <- cradleLoc file
-              sessionOpts (hieYaml, file) `catch` \e ->
-                  return ([renderPackageSetupException compileTime file e], Nothing)
+              sessionOpts (hieYaml, file) `catch` \e -> do
+                  return ([],([renderPackageSetupException compileTime file e], Nothing))
 
       return $ \file -> do
-        join $ mask_ $ modifyVar runningCradle $ \as -> do
+        (cs, opts) <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
           -- If the cradle is not finished, then wait for it to finish.
           void $ wait as
           as <- async $ getOptions file
-          return (as, wait as)
+          return $ (fmap snd as, wait as)
+        let cfps = cs
+        unless (null cs) $
+          delay "InitialLoad" $ void $ do
+            cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cfps
+            mmt <- uses GetModificationTime cfps'
+            let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+            uses GetModIface cs_exist
+        pure opts
 
 
 
@@ -577,7 +592,7 @@ setCacheDir logger prefix hscComponents comps dflags = do
     liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack cacheDir
     pure $ dflags
           & setHiDir cacheDir
-          & setDefaultHieDir cacheDir
+          & setHieDir cacheDir
 
 
 renderCradleError :: NormalizedFilePath -> CradleError -> FileDiagnostic
