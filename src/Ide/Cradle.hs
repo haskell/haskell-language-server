@@ -89,47 +89,6 @@ data CabalHelper
   | CabalNone
   deriving (Show, Eq, Ord)
 
--- | Execute @ghc@ that is based on the given cradle.
--- Output must be a single line. If an error is raised, e.g. the command
--- failed, a 'Nothing' is returned.
--- The exact error is written to logs.
---
--- E.g. for a stack cradle, we use @stack ghc@ and for a cabal cradle
--- we are taking the @ghc@ that is on the path.
-execProjectGhc :: Cradle CabalHelper -> [String] -> IO (Maybe String)
-execProjectGhc crdl args = do
-  isStackInstalled <- isJust <$> findExecutable "stack"
-  isCabalInstalled <- isJust <$> findExecutable "cabal"
-  ghcOutput <- if isStackCradle crdl && isStackInstalled
-    then do
-      logm $ "Executing Stack GHC with args: " <> unwords args
-      catch (Just <$> tryCommand crdl stackCmd) $ \(_ :: IOException) -> do
-        errorm $ "Command `" ++ stackCmd ++"` failed."
-        execWithGhc
-    -- The command `cabal v2-exec -v0 ghc` only works if the project has been
-    -- built already.
-    -- This command must work though before the project is build.
-    -- Therefore, fallback to "ghc" on the path.
-    --
-    else if isCabalCradle crdl && isCabalInstalled then do
-      let cmd = "cabal v2-exec -v0 ghc -- " ++ unwords args
-      catch (Just <$> tryCommand crdl cmd) $ \(_ ::IOException) -> do
-        errorm $ "Command `" ++ cmd ++ "` failed."
-        return Nothing
-    else do
-      logm $ "Executing GHC on path with args: " <> unwords args
-      execWithGhc
-  debugm $ "GHC Output: \"" ++ show ghcOutput ++ "\""
-  return ghcOutput
-  where
-    stackCmd = "stack ghc -- " ++ unwords args
-    plainCmd = "ghc " ++ unwords args
-
-    execWithGhc =
-      catch (Just <$> tryCommand crdl plainCmd) $ \(_ :: IOException) -> do
-        errorm $ "Command `" ++ plainCmd ++"` failed."
-        return Nothing
-
 tryCommand :: Cradle CabalHelper -> String -> IO String
 tryCommand crdl cmd = do
   let p = (shell cmd) { cwd = Just (cradleRootDir crdl) }

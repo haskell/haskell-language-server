@@ -5,16 +5,11 @@
 -- and the current project's version
 module Ide.Version where
 
-import           Data.Maybe
 import           Development.GitRev              (gitCommitCount)
 import           Distribution.System             (buildArch)
 import           Distribution.Text               (display)
 import           Options.Applicative.Simple      (simpleVersion)
-import           Ide.Cradle                      (execProjectGhc)
-import qualified HIE.Bios.Types as Bios
-import qualified Ide.Cradle     as Bios
 import qualified Paths_haskell_language_server as Meta
-import           System.Directory
 import           System.Info
 
 hlsVersion :: String
@@ -29,11 +24,5 @@ hlsVersion =
     , [" ", display buildArch]
     , [" ", hlsGhcDisplayVersion]
     ]
-
--- ---------------------------------------------------------------------
-
-hlsGhcDisplayVersion :: String
-hlsGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
-
-hlsGhcVersion :: String
-hlsGhcVersion = VERSION_ghc
+  where
+    hlsGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
