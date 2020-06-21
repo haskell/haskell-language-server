@@ -15,7 +15,7 @@ module Ide.Plugin.Hlint
     descriptor
   --, provider 
   ) where
-
+import Refact.Apply
 import Control.DeepSeq
 import Control.Exception
 import Control.Lens ((^.))
@@ -79,11 +79,11 @@ import Text.Regex.TDFA.Text()
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = rules
---  , pluginCommands =
---      [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
+  , pluginCommands =
+      [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
 --      , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
---      ]
---    , pluginCodeActionProvider = Just codeActionProvider
+      ]
+    , pluginCodeActionProvider = Just codeActionProvider
   }
 
 data GetHlintDiagnostics = GetHlintDiagnostics
@@ -115,7 +115,7 @@ rules = do
       getModuleEx :: NormalizedFilePath -> Action (Either ParseError ModuleEx)
       getModuleEx fp = do
 #ifndef GHC_LIB
-        pm <- use_ GetParsedModule fp
+        pm <- getParsedModule fp
         let anns = pm_annotations pm
         let modu = pm_parsed_source pm
         return $ Right (createModuleEx anns modu)
@@ -214,6 +214,92 @@ hlintSettings hlintDataDir enableOverrides = do
 
 -- ---------------------------------------------------------------------
 
+codeActionProvider :: CodeActionProvider
+codeActionProvider _ _ plId docId _ context = (Right . LSP.List . map CACodeAction) <$> hlintActions
+  where
+
+    hlintActions :: IO [LSP.CodeAction]
+    hlintActions = catMaybes <$> mapM mkHlintAction (filter validCommand diags)
+
+    -- |Some hints do not have an associated refactoring
+    validCommand (LSP.Diagnostic _ _ (Just (LSP.StringValue code)) (Just "hlint") _ _ _) =
+      case code of
+        "Eta reduce" -> False
+        _            -> True
+    validCommand _ = False
+
+    LSP.List diags = context ^. LSP.diagnostics
+
+    mkHlintAction :: LSP.Diagnostic -> IO (Maybe LSP.CodeAction)
+    mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (LSP.StringValue code)) (Just "hlint") m _ _) =
+      Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
+     where
+       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing (Just cmd)
+       title = "Apply hint:" <> head (T.lines m)
+       -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
+       args = [toJSON (AOP (docId ^. LSP.uri) start code)]
+    mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = return Nothing
+
+-- ---------------------------------------------------------------------
+
+data ApplyOneParams = AOP
+  { file      :: Uri
+  , start_pos :: Position
+  -- | There can be more than one hint suggested at the same position, so HintTitle is used to distinguish between them.
+  , hintTitle :: HintTitle
+  } deriving (Eq,Show,Generic,FromJSON,ToJSON)
+
+type HintTitle = T.Text
+
+data OneHint = OneHint
+  { oneHintPos :: Position
+  , oneHintTitle :: HintTitle
+  } deriving (Eq, Show)
+
+applyOneCmd :: CommandFunction ApplyOneParams
+applyOneCmd _lf ide (AOP uri pos title) =  do
+  let oneHint = OneHint pos title
+  let file = uriToFilePath' uri
+  applyHint file (Just oneHint)
+  logm $ "applyOneCmd:file=" ++ show file
+  logm $ "applyOneCmd:res=" ++ show res
+  case res of
+    Left err -> return $ IdeResultFail
+      (IdeError PluginError (T.pack $ "applyOne: " ++ show err) Null)
+    Right fs -> return (IdeResultOk fs)
+
+applyHint :: FilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
+applyHint fp mhint fileMap = do
+  runExceptT $ do
+    ideas <- getIdeas fp mhint
+    let commands = map (show &&& ideaRefactoring) ideas
+    liftIO $ logm $ "applyHint:apply=" ++ show commands
+    -- set Nothing as "position" for "applyRefactorings" because
+    -- applyRefactorings expects the provided position to be _within_ the scope
+    -- of each refactoring it will apply.
+    -- But "Idea"s returned by HLint pont to starting position of the expressions
+    -- that contain refactorings, so they are often outside the refactorings' boundaries.
+    -- Example:
+    -- Given an expression "hlintTest = reid $ (myid ())"
+    -- Hlint returns an idea at the position (1,13)
+    -- That contains "Redundant brackets" refactoring at position (1,20):
+    --
+    -- [("src/App/Test.hs:5:13: Warning: Redundant bracket\nFound:\n  reid $ (myid ())\nWhy not:\n  reid $ myid ()\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 5, startCol = 20, endLine = 5, endCol = 29}, subts = [("x",SrcSpan {startLine = 5, startCol = 21, endLine = 5, endCol = 28})], orig = "x"}])]
+    --
+    -- If we provide "applyRefactorings" with "Just (1,13)" then
+    -- the "Redundant bracket" hint will never be executed
+    -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
+    res <- liftIO $ (Right <$> applyRefactorings Nothing commands fp) `catches`
+              [ Handler $ \e -> return (Left (show (e :: IOException)))
+              , Handler $ \e -> return (Left (show (e :: ErrorCall)))
+              ]
+    case res of
+      Right appliedFile -> do
+        diff <- ExceptT $ Right <$> makeDiffResult fp (T.pack appliedFile) fileMap
+        liftIO $ logm $ "applyHint:diff=" ++ show diff
+        return diff
+      Left err ->
+        throwE (show err)
 
 -- ---------------------------------------------------------------------
 {-
