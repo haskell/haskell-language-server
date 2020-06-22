@@ -310,6 +310,15 @@ If you are chasing down test failures, you can use the tasty-rerun feature by ru
 This writes a log file called `.tasty-rerun-log` of the failures, and only runs those.
 See the [tasty-rerun](https://hackage.haskell.org/package/tasty-rerun-1.1.17/docs/Test-Tasty-Ingredients-Rerun.html) documentation for other options.
 
+If you are touching performance sensitive code, take the time to run a differential
+benchmark between HEAD and upstream using the benchHist script. The configuration in
+`bench/hist.yaml` is setup to do this by default with the command:
+
+    stack build ghcide:benchHist && stack exec benchHist
+
+It should take around 15 minutes and the results will be stored in the `bench-hist` folder.
+To interpret the results, see the comments in the `bench/Hist/Main.hs` module.
+
 ### Building the extension
 
 For development, you can also the VSCode extension from this repository (see
