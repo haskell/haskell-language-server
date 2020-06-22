@@ -494,11 +494,12 @@ watchedFilesTests = testGroup "watched files"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
       -- Expect 4 subscriptions (A does not get any because it's VFS):
+      --  - /path-to-workspace/hie.yaml
       --  - /path-to-workspace/WatchedFilesMissingModule.hs
       --  - /path-to-workspace/WatchedFilesMissingModule.lhs
       --  - /path-to-workspace/src/WatchedFilesMissingModule.hs
       --  - /path-to-workspace/src/WatchedFilesMissingModule.lhs
-      liftIO $ length watchedFileRegs @?= 4
+      liftIO $ length watchedFileRegs @?= 5
 
   , testSession' "non workspace file" $ \sessionDir -> do
       liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-i/tmp\"]}}"
@@ -506,9 +507,10 @@ watchedFilesTests = testGroup "watched files"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
       -- Expect 2 subscriptions (/tmp does not get any as it is out of the workspace):
+      --  - /path-to-workspace/hie.yaml
       --  - /path-to-workspace/WatchedFilesMissingModule.hs
       --  - /path-to-workspace/WatchedFilesMissingModule.lhs
-      liftIO $ length watchedFileRegs @?= 2
+      liftIO $ length watchedFileRegs @?= 3
 
   -- TODO add a test for didChangeWorkspaceFolder
   ]

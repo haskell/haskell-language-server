@@ -14,6 +14,7 @@ module Development.IDE.Types.Options
   , IdePkgLocationOptions(..)
   , defaultIdeOptions
   , IdeResult
+  , IdeGhcSession(..)
   ) where
 
 import Development.Shake
@@ -23,12 +24,23 @@ import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified Language.Haskell.LSP.Types.Capabilities as LSP
 import qualified Data.Text as T
 import Development.IDE.Types.Diagnostics
+import Control.DeepSeq (NFData(..))
+
+data IdeGhcSession = IdeGhcSession
+  { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
+  -- ^ Returns the Ghc session and the cradle dependencies
+  , sessionVersion :: !Int
+  -- ^ Used as Shake key, versions must be unique and not reused
+  }
+
+instance Show IdeGhcSession where show _ = "IdeGhcSession"
+instance NFData IdeGhcSession where rnf !_ = ()
 
 data IdeOptions = IdeOptions
   { optPreprocessor :: GHC.ParsedSource -> IdePreprocessedSource
     -- ^ Preprocessor to run over all parsed source trees, generating a list of warnings
     --   and a list of errors, along with a new parse tree.
-  , optGhcSession :: Action (FilePath -> Action (IdeResult HscEnvEq))
+  , optGhcSession :: Action IdeGhcSession
     -- ^ Setup a GHC session for a given file, e.g. @Foo.hs@.
     --   For the same 'ComponentOptions' from hie-bios, the resulting function will be applied once per file.
     --   It is desirable that many files get the same 'HscEnvEq', so that more IDE features work.
@@ -80,7 +92,7 @@ clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress
 clientSupportsProgress caps = IdeReportProgress $ Just True ==
     (LSP._workDoneProgress =<< LSP._window (caps :: LSP.ClientCapabilities))
 
-defaultIdeOptions :: Action (FilePath -> Action (IdeResult HscEnvEq)) -> IdeOptions
+defaultIdeOptions :: Action IdeGhcSession -> IdeOptions
 defaultIdeOptions session = IdeOptions
     {optPreprocessor = IdePreprocessedSource [] []
     ,optGhcSession = session
