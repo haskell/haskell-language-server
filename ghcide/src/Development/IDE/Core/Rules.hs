@@ -675,6 +675,7 @@ getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
 
 getModIfaceRule :: Rules ()
 getModIfaceRule = define $ \GetModIface f -> do
+#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
     fileOfInterest <- use_ IsFileOfInterest f
     let useHiFile =
           -- Never load interface files for files of interest
@@ -725,6 +726,13 @@ getModIfaceRule = define $ \GetModIface f -> do
       extract (Just tmr) =
         -- Bang patterns are important to force the inner fields
         Just $! HiFileResult (tmrModSummary tmr) (hm_iface $ tmrModInfo tmr)
+#else
+    tm <- use TypeCheck f
+    let modIface = hm_iface . tmrModInfo <$> tm
+        modSummary = tmrModSummary <$> tm
+    return ([], HiFileResult <$> modSummary <*> modIface)
+#endif
+
 
 isFileOfInterestRule :: Rules ()
 isFileOfInterestRule = defineEarlyCutoff $ \IsFileOfInterest f -> do
