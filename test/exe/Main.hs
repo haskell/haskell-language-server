@@ -3,6 +3,7 @@
 
 {-# LANGUAGE AllowAmbiguousTypes   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE ImplicitParams  #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
@@ -17,6 +18,7 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON, Value)
 import Data.Foldable
 import Data.List.Extra
+import Data.Maybe
 import Data.Rope.UTF16 (Rope)
 import qualified Data.Rope.UTF16 as Rope
 import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent)
@@ -28,6 +30,7 @@ import Development.IDE.Test
 import Development.IDE.Test.Runfiles
 import Development.IDE.Types.Location
 import Development.Shake (getDirectoryFilesIO)
+import qualified Experiments as Bench
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
@@ -48,7 +51,6 @@ import Test.Tasty.ExpectedFailure
 import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
-import Data.Maybe
 
 main :: IO ()
 main = do
@@ -80,6 +82,7 @@ main = do
     , cradleTests
     , dependentFileTest
     , nonLspCommandLine
+    , benchmarkTests
     ]
 
 initializeResponseTests :: TestTree
@@ -2240,6 +2243,20 @@ nonLspCommandLine = testGroup "ghcide command line"
 
         ec @=? ExitSuccess
   ]
+
+benchmarkTests :: TestTree
+benchmarkTests =
+    let ?config = Bench.defConfig
+            { Bench.verbosity = Bench.Quiet
+            , Bench.repetitions = Just 3
+            , Bench.buildTool = Bench.Stack
+            } in
+    withResource Bench.setup id $ \_ -> testGroup "benchmark experiments"
+    [ testCase (Bench.name e) $ do
+        res <- Bench.runBench runInDir e
+        assertBool "did not successfully complete 5 repetitions" $ Bench.success res
+        | e <- Bench.experiments
+    ]
 
 ----------------------------------------------------------------------
 -- Utils

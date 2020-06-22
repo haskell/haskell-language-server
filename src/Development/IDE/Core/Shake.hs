@@ -46,7 +46,8 @@ module Development.IDE.Core.Shake(
     updatePositionMapping,
     deleteValue,
     OnDiskRule(..),
-    WithProgressFunc, WithIndefiniteProgressFunc
+    WithProgressFunc, WithIndefiniteProgressFunc,
+    ProgressEvent(..)
     ) where
 
 import           Development.Shake hiding (ShakeValue, doesFileExist)
@@ -92,6 +93,7 @@ import           GHC.Generics
 import           System.IO.Unsafe
 import Language.Haskell.LSP.Types
 import Data.Foldable (traverse_)
+import qualified Control.Monad.STM as STM
 
 
 -- information we stash inside the shakeExtra field
@@ -113,12 +115,8 @@ data ShakeExtras = ShakeExtras
     -- accumlation of all previous mappings.
     ,inProgress :: Var (HMap.HashMap NormalizedFilePath Int)
     -- ^ How many rules are running for each file
-    ,getLspId :: IO LspId
+    ,progressUpdate :: ProgressEvent -> IO ()
     -- ^ The generator for unique Lsp identifiers
-    ,reportProgress :: Bool
-    -- ^ Whether to send Progress messages to the client
-    ,ideTesting :: IdeTesting
-    -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
     ,restartShakeSession :: [Action ()] -> IO ()
     -- ^ Used in the GhcSession rule to forcefully restart the session after adding a new component
     ,withProgress           :: WithProgressFunc
@@ -131,6 +129,10 @@ type WithProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> ((LSP.Progress -> IO ()) -> IO a) -> IO a
 type WithIndefiniteProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> IO a -> IO a
+
+data ProgressEvent
+    = KickStarted
+    | KickCompleted
 
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
@@ -259,6 +261,7 @@ data IdeState = IdeState
     ,shakeClose      :: IO ()
     ,shakeExtras     :: ShakeExtras
     ,shakeProfileDir :: Maybe FilePath
+    ,stopProgressReporting :: IO ()
     }
 
 
@@ -335,10 +338,10 @@ shakeOpen :: IO LSP.LspId
           -> Rules ()
           -> IO IdeState
 shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting opts rules = mdo
+  shakeProfileDir (IdeReportProgress reportProgress) (IdeTesting ideTesting) opts rules = mdo
 
     inProgress <- newVar HMap.empty
-    shakeExtras <- do
+    (shakeExtras, stopProgressReporting) <- do
         globals <- newVar HMap.empty
         state <- newVar HMap.empty
         diagnostics <- newVar mempty
@@ -346,7 +349,13 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
         publishedDiagnostics <- newVar mempty
         positionMapping <- newVar HMap.empty
         let restartShakeSession = shakeRestart ideState
-        pure ShakeExtras{..}
+        mostRecentProgressEvent <- newTVarIO KickCompleted
+        let progressUpdate = atomically . writeTVar mostRecentProgressEvent
+        progressAsync <- async $
+            when reportProgress $
+                progressThread mostRecentProgressEvent inProgress
+
+        pure (ShakeExtras{..}, cancel progressAsync)
     (shakeDbM, shakeClose) <-
         shakeOpenDatabase
             opts { shakeExtra = addShakeExtra shakeExtras $ shakeExtra opts }
@@ -355,54 +364,81 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
     shakeDb <- shakeDbM
     let ideState = IdeState{..}
     return ideState
-
-lspShakeProgress :: Hashable a => IdeTesting -> IO LSP.LspId -> (LSP.FromServerMessage -> IO ()) -> Var (HMap.HashMap a Int) -> IO ()
-lspShakeProgress (IdeTesting ideTesting) getLspId sendMsg inProgress = do
-    -- first sleep a bit, so we only show progress messages if it's going to take
-    -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
-    unless ideTesting $ sleep 0.1
-    lspId <- getLspId
-    u <- ProgressTextToken . T.pack . show . hashUnique <$> newUnique
-    sendMsg $ LSP.ReqWorkDoneProgressCreate $ LSP.fmServerWorkDoneProgressCreateRequest
-      lspId $ LSP.WorkDoneProgressCreateParams
-      { _token = u }
-    bracket_ (start u) (stop u) (loop u Nothing)
     where
-        start id = sendMsg $ LSP.NotWorkDoneProgressBegin $ LSP.fmServerWorkDoneProgressBeginNotification
-            LSP.ProgressParams
-                { _token = id
-                , _value = WorkDoneProgressBeginParams
-                  { _title = "Processing"
-                  , _cancellable = Nothing
-                  , _message = Nothing
-                  , _percentage = Nothing
-                  }
-                }
-        stop id = sendMsg $ LSP.NotWorkDoneProgressEnd $ LSP.fmServerWorkDoneProgressEndNotification
-            LSP.ProgressParams
-                { _token = id
-                , _value = WorkDoneProgressEndParams
-                  { _message = Nothing
-                  }
-                }
-        sample = 0.1
-        loop id prev = do
-            sleep sample
-            current <- readVar inProgress
-            let done = length $ filter (== 0) $ HMap.elems current
-            let todo = HMap.size current
-            let next = Just $ T.pack $ show done <> "/" <> show todo
-            when (next /= prev) $
-                sendMsg $ LSP.NotWorkDoneProgressReport $ LSP.fmServerWorkDoneProgressReportNotification
-                    LSP.ProgressParams
-                        { _token = id
-                        , _value = LSP.WorkDoneProgressReportParams
-                        { _cancellable = Nothing
-                        , _message = next
-                        , _percentage = Nothing
-                        }
-                        }
-            loop id next
+        -- The progress thread is a state machine with two states:
+        --   1. Idle
+        --   2. Reporting a kick event
+        -- And two transitions, modelled by 'ProgressEvent':
+        --   1. KickCompleted - transitions from Reporting into Idle
+        --   2. KickStarted - transitions from Idle into Reporting
+        progressThread mostRecentProgressEvent inProgress = progressLoopIdle
+          where
+            progressLoopIdle = do
+                atomically $ do
+                    v <- readTVar mostRecentProgressEvent
+                    case v of
+                        KickCompleted -> STM.retry
+                        KickStarted -> return ()
+                asyncReporter <- async lspShakeProgress
+                progressLoopReporting asyncReporter
+            progressLoopReporting asyncReporter = do
+                atomically $ do
+                    v <- readTVar mostRecentProgressEvent
+                    case v of
+                        KickStarted -> STM.retry
+                        KickCompleted -> return ()
+                cancel asyncReporter
+                progressLoopIdle
+
+            lspShakeProgress = do
+                -- first sleep a bit, so we only show progress messages if it's going to take
+                -- a "noticable amount of time" (we often expect a thread kill to arrive before the sleep finishes)
+                unless ideTesting $ sleep 0.1
+                lspId <- getLspId
+                u <- ProgressTextToken . T.pack . show . hashUnique <$> newUnique
+                eventer $ LSP.ReqWorkDoneProgressCreate $
+                  LSP.fmServerWorkDoneProgressCreateRequest lspId $
+                    LSP.WorkDoneProgressCreateParams { _token = u }
+                bracket_ (start u) (stop u) (loop u Nothing)
+                where
+                    start id = eventer $ LSP.NotWorkDoneProgressBegin $
+                      LSP.fmServerWorkDoneProgressBeginNotification
+                        LSP.ProgressParams
+                            { _token = id
+                            , _value = WorkDoneProgressBeginParams
+                              { _title = "Processing"
+                              , _cancellable = Nothing
+                              , _message = Nothing
+                              , _percentage = Nothing
+                              }
+                            }
+                    stop id = eventer $ LSP.NotWorkDoneProgressEnd $
+                      LSP.fmServerWorkDoneProgressEndNotification
+                        LSP.ProgressParams
+                            { _token = id
+                            , _value = WorkDoneProgressEndParams
+                              { _message = Nothing
+                              }
+                            }
+                    sample = 0.1
+                    loop id prev = do
+                        sleep sample
+                        current <- readVar inProgress
+                        let done = length $ filter (== 0) $ HMap.elems current
+                        let todo = HMap.size current
+                        let next = Just $ T.pack $ show done <> "/" <> show todo
+                        when (next /= prev) $
+                            eventer $ LSP.NotWorkDoneProgressReport $
+                              LSP.fmServerWorkDoneProgressReportNotification
+                                LSP.ProgressParams
+                                    { _token = id
+                                    , _value = LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = next
+                                    , _percentage = Nothing
+                                    }
+                                    }
+                        loop id next
 
 shakeProfile :: IdeState -> FilePath -> IO ()
 shakeProfile IdeState{..} = shakeProfileDatabase shakeDb
@@ -413,6 +449,7 @@ shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
     -- request so we first abort that.
     void $ cancelShakeSession runner
     shakeClose
+    stopProgressReporting
 
 -- | This is a variant of withMVar where the first argument is run unmasked and if it throws
 -- an exception, the previous value is restored while the second argument is executed masked.
@@ -481,18 +518,8 @@ newSession IdeState{shakeExtras=ShakeExtras{..}, ..} systemActs userActs = do
                     return act
                 liftIO $ atomically $ writeTVar actionInProgress Nothing
 
-        progressRun
-          | reportProgress = lspShakeProgress ideTesting getLspId eventer inProgress
-          | otherwise = return ()
-
-        workRun restore = withAsync progressRun $ \progressThread -> do
-          let systemActs' =
-                [ [] <$ pumpAction
-                , parallel systemActs
-                    -- Only system actions are considered for progress reporting
-                    -- When done, cancel the progressThread to indicate completion
-                    <* liftIO (cancel progressThread)
-                ]
+        workRun restore = do
+          let systemActs' = pumpAction : systemActs
           res <- try @SomeException
                  (restore $ shakeRunDatabase shakeDb systemActs')
           let res' = case res of

@@ -88,4 +88,7 @@ modifyFilesOfInterest state f = do
 kick :: Action ()
 kick = do
     files <- getFilesOfInterest
+    ShakeExtras{progressUpdate} <- getShakeExtras
+    liftIO $ progressUpdate KickStarted
     void $ uses TypeCheck $ HashSet.toList files
+    liftIO $ progressUpdate KickCompleted

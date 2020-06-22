@@ -177,7 +177,7 @@ executable benchHist
     default-language: Haskell2010
     buildable: True
     ghc-options: -Wall -Wno-name-shadowing -threaded
-    main-is: bench/Hist/Main.hs
+    main-is: bench/hist/Main.hs
     default-extensions:
         BangPatterns
         DeriveFunctor
@@ -305,10 +305,13 @@ test-suite ghcide-tests
         network-uri,
         lens,
         lsp-test >= 0.11.0.1 && < 0.12,
+        optparse-applicative,
         parser-combinators,
+        process,
         QuickCheck,
         quickcheck-instances,
         rope-utf16-splay,
+        safe-exceptions,
         shake,
         tasty,
         tasty-expected-failure,
@@ -316,13 +319,14 @@ test-suite ghcide-tests
         tasty-quickcheck,
         tasty-rerun,
         text
-    hs-source-dirs: test/cabal test/exe test/src
+    hs-source-dirs: test/cabal test/exe test/src bench/lib
     include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing
     main-is: Main.hs
     other-modules:
         Development.IDE.Test
         Development.IDE.Test.Runfiles
+        Experiments
     default-extensions:
         BangPatterns
         DeriveFunctor
@@ -358,11 +362,12 @@ benchmark ghcide-bench
         parser-combinators,
         process,
         safe-exceptions
-    hs-source-dirs: bench
+    hs-source-dirs: bench/lib bench/exe
     include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing
     main-is: Main.hs
     other-modules:
+        Experiments
     default-extensions:
         BangPatterns
         DeriveFunctor
