@@ -83,6 +83,8 @@ hieExportNames = nameListFromAvails . hie_exports
 import BinIface
 import Data.IORef
 import IfaceEnv
+#else
+import System.IO.Error
 #endif
 
 import Binary
@@ -263,7 +265,7 @@ supportsHieFiles = False
 
 writeHieFile _ _ = return ()
 
-readHieFile _ _ = return undefined
+readHieFile _ fp = ioError $ mkIOError doesNotExistErrorType "" Nothing (Just fp)
 
 #endif
 

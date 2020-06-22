@@ -2,45 +2,26 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ImplicitParams #-}
 
-{- An automated benchmark built around the simple experiment described in:
-
-  > https://neilmitchell.blogspot.com/2020/05/fixing-space-leaks-in-ghcide.html
-
-  As an example project, it unpacks Cabal-3.2.0.0 in the local filesystem and
-  loads the module 'Distribution.Simple'. The rationale for this choice is:
-
-    - It's convenient to download with `cabal unpack Cabal-3.2.0.0`
-    - It has very few dependencies, and all are already needed to build ghcide
-    - Distribution.Simple has 235 transitive module dependencies, so non trivial
-
-  The experiments are sequences of lsp commands scripted using lsp-test.
-  A more refined approach would be to record and replay real IDE interactions,
-  once the replay functionality is available in lsp-test.
-  A more declarative approach would be to reuse ide-debug-driver:
-
-  > https://github.com/digital-asset/daml/blob/master/compiler/damlc/ide-debug-driver/README.md
-
-  The result of an experiment is a total duration in seconds after a preset
-  number of iterations. There is ample room for improvement:
-     - Statistical analysis to detect outliers and auto infer the number of iterations needed
-     - GC stats analysis (currently -S is printed as part of the experiment)
-     - Analyisis of performance over the commit history of the project
-
-  How to run:
-     1. `cabal bench`
-     2. `cabal exec cabal run ghcide-bench -- -- ghcide-bench-options`
-
-  Note that the package database influences the response times of certain actions,
-  e.g. code actions, and therefore the two methods above do not necessarily
-  produce the same results.
-
- -}
-
+module Experiments
+( Bench(..)
+, BenchRun(..)
+, Config(..)
+, Verbosity(..)
+, CabalStack(..)
+, experiments
+, configP
+, defConfig
+, output
+, setup
+, runBench
+, runBenchmarks
+) where
 import Control.Applicative.Combinators (skipManyTill)
 import Control.Concurrent
 import Control.Exception.Safe
 import Control.Monad.Extra
 import Control.Monad.IO.Class
+import Data.Char (isDigit)
 import Data.List
 import Data.Maybe
 import Data.Version
@@ -54,7 +35,7 @@ import System.FilePath ((</>))
 import System.Process
 import System.Time.Extra
 import Text.ParserCombinators.ReadP (readP_to_S)
-import Data.Char (isDigit)
+import System.Environment.Blank (getEnv)
 
 -- Points to a string in the target file,
 -- convenient for hygienic edits
@@ -82,16 +63,8 @@ breakingEdit =
 identifierP :: Position
 identifierP = Position 853 12
 
-main :: IO ()
-main = do
-  config <- execParser $ info (configP <**> helper) fullDesc
-  let ?config = config
-
-  output "starting test"
-
-  cleanUp <- setup
-
-  runBenchmarks
+experiments :: [Bench]
+experiments =
     [ ---------------------------------------------------------------------------------------
       bench "hover" 10 $ \doc ->
         isJust <$> getHover doc identifierP,
@@ -131,12 +104,19 @@ main = do
             not . null <$> getCodeActions doc (Range p p)
         ),
       ---------------------------------------------------------------------------------------
-      bench "code actions after edit" 10 $ \doc -> do
-        changeDoc doc [breakingEdit]
-        void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
-        not . null <$> getCodeActions doc (Range identifierP identifierP)
+      benchWithSetup
+        "code actions after edit"
+        10
+        ( \doc -> do
+            changeDoc doc [breakingEdit]
+            return identifierP
+        )
+        ( \p doc -> do
+            changeDoc doc [hygienicEdit]
+            whileM (null <$> waitForDiagnostics)
+            not . null <$> getCodeActions doc (Range p p)
+        )
     ]
-    `finally` cleanUp
 
 ---------------------------------------------------------------------------------------------
 
@@ -165,7 +145,7 @@ data Config = Config
     -- For some reason, the Shake profile files are truncated and won't load
     shakeProfiling :: !(Maybe FilePath),
     outputCSV :: !FilePath,
-    cradle :: !Cradle,
+    buildTool :: !CabalStack,
     rtsOptions :: ![String],
     matches :: ![String],
     repetitions :: Maybe Natural,
@@ -175,11 +155,14 @@ data Config = Config
   }
   deriving (Eq, Show)
 
+defConfig :: Config
+Success defConfig = execParserPure defaultPrefs (info configP fullDesc) []
+
 quiet, verbose :: Config -> Bool
 verbose = (== All) . verbosity
 quiet   = (== Quiet) . verbosity
 
-data Cradle = Cabal | Stack
+data CabalStack = Cabal | Stack
   deriving (Eq, Show)
 
 type HasConfig = (?config :: Config)
@@ -193,7 +176,7 @@ configP =
         )
     <*> optional (strOption (long "shake-profiling" <> metavar "PATH"))
     <*> strOption (long "csv" <> metavar "PATH" <> value "results.csv" <> showDefault)
-    <*> flag Cabal Stack (long "stack" <> help "Use a stack cradle")
+    <*> flag Cabal Stack (long "stack" <> help "Use stack (by default cabal is used)")
     <*> many (strOption (long "rts" <> help "additional RTS options for ghcide"))
     <*> many (strOption (short 's' <> long "select" <> help "select which benchmarks to run"))
     <*> optional (option auto (long "samples" <> metavar "NAT" <> help "override sampling count"))
@@ -231,26 +214,29 @@ select Bench {name, enabled} =
     mm = matches ?config
 
 benchWithSetup ::
-  HasConfig =>
   String ->
   Natural ->
   (TextDocumentIdentifier -> Session p) ->
   (p -> Experiment) ->
   Bench
-benchWithSetup name defSamples benchSetup experiment = Bench {..}
+benchWithSetup name samples benchSetup experiment = Bench {..}
   where
     enabled = True
-    samples = fromMaybe defSamples (repetitions ?config)
 
-bench :: HasConfig => String -> Natural -> Experiment -> Bench
+bench :: String -> Natural -> Experiment -> Bench
 bench name defSamples userExperiment =
   benchWithSetup name defSamples (const $ pure ()) experiment
   where
     experiment () = userExperiment
 
 runBenchmarks :: HasConfig => [Bench] -> IO ()
-runBenchmarks (filter select -> benchmarks) = do
-  results <- forM benchmarks $ \b -> (b,) <$> runBench b
+runBenchmarks allBenchmarks = do
+  let benchmarks = [ b{samples = fromMaybe (samples b) (repetitions ?config) }
+                   | b <- allBenchmarks
+                   , select b ]
+  results <- forM benchmarks $ \b@Bench{name} ->
+                let run dir = runSessionWithConfig conf (cmd name dir) lspTestCaps dir
+                in (b,) <$> runBench run b
 
   -- output raw data as CSV
   let headers = ["name", "success", "samples", "startup", "setup", "experiment", "maxResidency"]
@@ -288,6 +274,33 @@ runBenchmarks (filter select -> benchmarks) = do
   outputRow paddedHeaders
   outputRow $ (map . map) (const '-') paddedHeaders
   forM_ rowsHuman $ \row -> outputRow $ zipWith pad pads row
+  where
+    gcStats name = escapeSpaces (name <> ".benchmark-gcStats")
+    cmd name dir =
+      unwords $
+        [ ghcide ?config,
+          "--lsp",
+          "--cwd",
+          dir,
+          "+RTS",
+          "-S" <> gcStats name
+        ]
+          ++ rtsOptions ?config
+          ++ [ "-RTS"
+             ]
+          ++ concat
+            [ ["--shake-profiling", path]
+              | Just path <- [shakeProfiling ?config]
+            ]
+    lspTestCaps =
+      fullCaps {_window = Just $ WindowClientCapabilities $ Just True}
+    conf =
+      defaultConfig
+        { logStdErr = verbose ?config,
+          logMessages = verbose ?config,
+          logColor = False,
+          messageTimeout = timeoutLsp ?config
+        }
 
 data BenchRun = BenchRun
   { startup :: !Seconds,
@@ -304,9 +317,9 @@ waitForProgressDone :: Session ()
 waitForProgressDone =
       void(skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
 
-runBench :: HasConfig => Bench -> IO BenchRun
-runBench Bench {..} = handleAny (\e -> print e >> return badRun)
-  $ runSessionWithConfig conf cmd lspTestCaps dir
+runBench :: (?config::Config) => (String -> Session BenchRun -> IO BenchRun) -> Bench -> IO BenchRun
+runBench runSess Bench {..} = handleAny (\e -> print e >> return badRun)
+  $ runSess dir
   $ do
     doc <- openDoc exampleModulePath "haskell"
     (startup, _) <- duration $ do
@@ -333,53 +346,54 @@ runBench Bench {..} = handleAny (\e -> print e >> return badRun)
     -- sleep to give ghcide a chance to GC
     liftIO $ threadDelay 1100000
 
-    maxResidency <- liftIO $ parseMaxResidency <$> readFile gcStats
+    maxResidency <- liftIO $
+        ifM (doesFileExist gcStats)
+            (parseMaxResidency <$> readFile gcStats)
+            (pure 0)
 
     return BenchRun {..}
   where
-    gcStats = escapeSpaces (name <> ".benchmark-gcStats")
-    cmd =
-      unwords $
-        [ ghcide ?config,
-          "--lsp",
-          "--cwd",
-          dir,
-          "+RTS",
-          "-S" <> gcStats
-        ]
-          ++ rtsOptions ?config
-          ++ [ "-RTS"
-             ]
-          ++ concat
-            [ ["--shake-profiling", path]
-              | Just path <- [shakeProfiling ?config]
-            ]
     dir = "bench/example/" <> examplePackage
-    lspTestCaps =
-      fullCaps {_window = Just $ WindowClientCapabilities $ Just True}
-    conf =
-      defaultConfig
-        { logStdErr = verbose ?config,
-          logMessages = verbose ?config,
-          logColor = False,
-          messageTimeout = timeoutLsp ?config
-        }
+    gcStats = escapeSpaces (name <> ".benchmark-gcStats")
 
 setup :: HasConfig => IO (IO ())
 setup = do
   alreadyExists <- doesDirectoryExist examplesPath
   when alreadyExists $ removeDirectoryRecursive examplesPath
-  callCommand $ "cabal get -v0 " <> examplePackage <> " -d " <> examplesPath
-  writeFile
-    (examplesPath </> examplePackage </> "hie.yaml")
-    exampleCradle
-  -- Need this in case there is a parent cabal.project somewhere
-  writeFile
-    (examplesPath </> examplePackage </> "cabal.project")
-    "packages: ."
-  writeFile
-    (examplesPath </> examplePackage </> "cabal.project.local")
-    ""
+  let path = examplesPath </> examplePackage
+  case buildTool ?config of
+      Cabal -> do
+        callCommand $ "cabal get -v0 " <> examplePackage <> " -d " <> examplesPath
+        writeFile
+            (path </> "hie.yaml")
+            ("cradle: {cabal: {component: " <> show examplePackageName <> "}}")
+        -- Need this in case there is a parent cabal.project somewhere
+        writeFile
+            (path </> "cabal.project")
+            "packages: ."
+        writeFile
+            (path </> "cabal.project.local")
+            ""
+      Stack -> do
+        callCommand $ "stack --silent unpack " <> examplePackage <> " --to " <> examplesPath
+        -- Generate the stack descriptor to match the one used to build ghcide
+        stack_yaml <- fromMaybe "stack.yaml" <$> getEnv "STACK_YAML"
+        stack_yaml_lines <- lines <$> readFile stack_yaml
+        writeFile (path </> stack_yaml)
+                  (unlines $
+                   "packages: [.]" :
+                    [ l
+                    | l <- stack_yaml_lines
+                    , any (`isPrefixOf` l)
+                        ["resolver"
+                        ,"allow-newer"
+                        ,"compiler"]
+                    ]
+                  )
+
+        writeFile
+            (path </> "hie.yaml")
+            ("cradle: {stack: {component: " <> show (examplePackageName <> ":lib") <> "}}")
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
 
@@ -400,11 +414,6 @@ escapeSpaces = map f
   where
     f ' ' = '_'
     f x = x
-
-exampleCradle :: HasConfig => String
-exampleCradle = case cradle ?config of
-  Cabal -> "cradle: {cabal: {component: " <> show examplePackageName <> "}}"
-  Stack -> "cradle: {stack: {component: " <> show (examplePackageName <> ":lib") <> "}}"
 
 pad :: Int -> String -> String
 pad n [] = replicate n ' '
