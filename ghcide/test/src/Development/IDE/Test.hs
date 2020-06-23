@@ -10,6 +10,7 @@ module Development.IDE.Test
   , diagnostic
   , expectDiagnostics
   , expectNoMoreDiagnostics
+  , canonicalizeUri
   ) where
 
 import Control.Applicative.Combinators
@@ -24,6 +25,8 @@ import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Lens as Lsp
 import System.Time.Extra
 import Test.Tasty.HUnit
+import System.Directory (canonicalizePath)
+import Data.Maybe (fromJust)
 
 
 -- | (0-based line number, 0-based column number)
@@ -74,7 +77,8 @@ expectNoMoreDiagnostics timeout = do
 
 expectDiagnostics :: [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])] -> Session ()
 expectDiagnostics expected = do
-    expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) (fmap toNormalizedUri . getDocUri) expected
+    let f = getDocUri >=> liftIO . canonicalizeUri >=> pure . toNormalizedUri
+    expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) f expected
     go expected'
     where
         go m
@@ -82,7 +86,8 @@ expectDiagnostics expected = do
             | otherwise = do
                   diagsNot <- skipManyTill anyMessage diagnostic
                   let fileUri = diagsNot ^. params . uri
-                  case Map.lookup (diagsNot ^. params . uri . to toNormalizedUri) m of
+                  canonUri <- liftIO $ toNormalizedUri <$> canonicalizeUri fileUri
+                  case Map.lookup canonUri m of
                       Nothing -> do
                           let actual = diagsNot ^. params . diagnostics
                           liftIO $ assertFailure $
@@ -97,7 +102,10 @@ expectDiagnostics expected = do
                               "Incorrect number of diagnostics for " <> show fileUri <>
                               ", expected " <> show expected <>
                               " but got " <> show actual
-                          go $ Map.delete (diagsNot ^. params . uri . to toNormalizedUri) m
+                          go $ Map.delete canonUri m
+
+canonicalizeUri :: Uri -> IO Uri
+canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePath uri))
 
 diagnostic :: Session PublishDiagnosticsNotification
 diagnostic = LspTest.message
