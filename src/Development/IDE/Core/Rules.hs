@@ -622,37 +622,27 @@ ghcSessionDepsDefinition file = do
 
 getModIfaceFromDiskRule :: Rules ()
 getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
-  -- get all dependencies interface files, to check for freshness
-  (deps,_) <- use_ GetLocatedImports f
-  depHis  <- traverse (use GetModIface) (mapMaybe (fmap artifactFilePath . snd) deps)
-
   ms <- use_ GetModSummary f
-  let hiFile = toNormalizedFilePath'
-             $ case ms_hsc_src ms of
-                HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
-                _ -> ml_hi_file $ ms_location ms
-
-  case sequence depHis of
-    Nothing -> pure (Nothing, ([], Nothing))
-    Just deps -> do
-        mbHiVersion <- use  GetModificationTime hiFile
+  (diags_session, mb_session) <- ghcSessionDepsDefinition f
+  case mb_session of
+      Nothing -> return (Nothing, (diags_session, Nothing))
+      Just session -> do
+        let hiFile = toNormalizedFilePath'
+                    $ case ms_hsc_src ms of
+                        HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
+                        _ -> ml_hi_file $ ms_location ms
+        mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
         modVersion  <- use_ GetModificationTime f
-        case (mbHiVersion, modVersion) of
-            (Just hiVersion, ModificationTime{})
-              | modificationTime hiVersion >= modificationTime modVersion -> do
-                session <- hscEnv <$> use_ GhcSession f
-                r <- liftIO $ loadInterface session ms deps
-                case r of
-                  Right iface -> do
-                    let result = HiFileResult ms iface
-                    return (Just (fingerprintToBS (getModuleHash iface)), ([], Just result))
-                  Left err -> do
-                    let diag = ideErrorWithSource (Just "interface file loading") (Just DsError) f . T.pack $ err
-                    return (Nothing, (pure diag, Nothing))
-            (_, VFSVersion{}) ->
-                error "internal error - GetModIfaceFromDisk of file of interest"
-            _ ->
-              pure (Nothing, ([], Nothing))
+        let sourceModified = case mbHiVersion of
+                Nothing -> SourceModified
+                Just x -> if modificationTime x >= modificationTime modVersion
+                            then SourceUnmodified else SourceModified
+        r <- loadInterface (hscEnv session) ms sourceModified (regenerateHiFile session f)
+        case r of
+            (diags, Just x) -> do
+                let fp = fingerprintToBS (getModuleHash (hirModIface x))
+                return (Just fp, (diags <> diags_session, Just x))
+            (diags, Nothing) -> return (Nothing, (diags ++ diags_session, Nothing))
 
 getModSummaryRule :: Rules ()
 getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
@@ -687,55 +677,13 @@ getModIfaceRule :: Rules ()
 getModIfaceRule = define $ \GetModIface f -> do
 #if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
     fileOfInterest <- use_ IsFileOfInterest f
-    let useHiFile =
-          -- Never load interface files for files of interest
-          not fileOfInterest
-    mbHiFile <- if useHiFile then use GetModIfaceFromDisk f else return Nothing
-    case mbHiFile of
-        Just x ->
-            return ([], Just x)
-        Nothing
-          | fileOfInterest -> do
-            -- For files of interest only, create a Shake dependency on typecheck
+    if fileOfInterest
+        then do
+            -- Never load from disk for files of interest
             tmr <- use TypeCheck f
-            return ([], extract tmr)
-          | otherwise -> do
-            -- the interface file does not exist or is out of date.
-            -- Invoke typechecking directly to update it without incurring a dependency
-            -- on the parsed module and the typecheck rules
-            sess <- use_ GhcSession f
-            let hsc = hscEnv sess
-                -- After parsing the module remove all package imports referring to
-                -- these packages as we have already dealt with what they map to.
-                comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
-            opt <- getIdeOptions
-            (_, contents) <- getFileContents f
-            -- Embed --haddocks in the interface file
-            (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs f contents
-            (diags, mb_pm) <- case mb_pm of
-                Just _ -> return (diags, mb_pm)
-                Nothing -> do
-                    -- if parsing fails, try parsing again with Haddock turned off
-                    (_, (diagsNoHaddock, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt comp_pkgs f contents
-                    return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
-            case mb_pm of
-                Nothing -> return (diags, Nothing)
-                Just pm -> do
-                    -- We want GhcSessionDeps cache objects only for files of interest
-                    -- As that's no the case here, call the implementation directly
-                    (diags, mb_hsc) <- ghcSessionDepsDefinition f
-                    case mb_hsc of
-                        Nothing -> return (diags, Nothing)
-                        Just hsc -> do
-                            (diags', tmr) <- typeCheckRuleDefinition (hscEnv hsc) pm DoGenerateInterfaceFiles
-                            -- Bang pattern is important to avoid leaking 'tmr'
-                            let !res = extract tmr
-                            return (diags <> diags', res)
-    where
-      extract Nothing = Nothing
-      extract (Just tmr) =
-        -- Bang patterns are important to force the inner fields
-        Just $! HiFileResult (tmrModSummary tmr) (hm_iface $ tmrModInfo tmr)
+            return ([], extractHiFileResult tmr)
+        else
+            ([],) <$> use GetModIfaceFromDisk f
 #else
     tm <- use TypeCheck f
     let modIface = hm_iface . tmrModInfo <$> tm
@@ -743,6 +691,37 @@ getModIfaceRule = define $ \GetModIface f -> do
     return ([], HiFileResult <$> modSummary <*> modIface)
 #endif
 
+regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> Action ([FileDiagnostic], Maybe HiFileResult)
+regenerateHiFile sess f = do
+    let hsc = hscEnv sess
+        -- After parsing the module remove all package imports referring to
+        -- these packages as we have already dealt with what they map to.
+        comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
+    opt <- getIdeOptions
+    (_, contents) <- getFileContents f
+    -- Embed --haddocks in the interface file
+    (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs f contents
+    (diags, mb_pm) <- case mb_pm of
+        Just _ -> return (diags, mb_pm)
+        Nothing -> do
+            -- if parsing fails, try parsing again with Haddock turned off
+            (_, (diagsNoHaddock, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt comp_pkgs f contents
+            return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
+    case mb_pm of
+        Nothing -> return (diags, Nothing)
+        Just pm -> do
+            -- Invoke typechecking directly to update it without incurring a dependency
+            -- on the parsed module and the typecheck rules
+            (diags', tmr) <- typeCheckRuleDefinition hsc pm DoGenerateInterfaceFiles
+            -- Bang pattern is important to avoid leaking 'tmr'
+            let !res = extractHiFileResult tmr
+            return (diags <> diags', res)
+
+extractHiFileResult :: Maybe TcModuleResult -> Maybe HiFileResult
+extractHiFileResult Nothing = Nothing
+extractHiFileResult (Just tmr) =
+    -- Bang patterns are important to force the inner fields
+    Just $! HiFileResult (tmrModSummary tmr) (hm_iface $ tmrModInfo tmr)
 
 isFileOfInterestRule :: Rules ()
 isFileOfInterestRule = defineEarlyCutoff $ \IsFileOfInterest f -> do

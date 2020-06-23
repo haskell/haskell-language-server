@@ -38,7 +38,6 @@ import Development.IDE.GHC.Util
 import qualified GHC.LanguageExtensions.Type as GHC
 import Development.IDE.Types.Options
 import Development.IDE.Types.Location
-import Outputable
 
 #if MIN_GHC_API_VERSION(8,6,0)
 import           DynamicLoading (initializePlugins)
@@ -59,8 +58,6 @@ import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
 import           HscMain                        (hscInteractive, hscSimplify)
-import           LoadIface                      (readIface)
-import qualified Maybes
 import           MkIface
 import           NameCache
 import           StringBuffer                   as SB
@@ -81,7 +78,6 @@ import qualified Data.Map.Strict                          as Map
 import           System.FilePath
 import           System.Directory
 import           System.IO.Extra
-import Data.Either.Extra (maybeToEither)
 import Control.DeepSeq (rnf)
 import Control.Exception (evaluate)
 import Exception (ExceptionMonad)
@@ -564,29 +560,36 @@ loadHieFile f = do
         let nameCache = initNameCache u []
         fmap (GHC.hie_file_result . fst) $ GHC.readHieFile nameCache f
 
--- | Retuns an up-to-date module interface if available.
+-- | Retuns an up-to-date module interface, regenerating if needed.
 --   Assumes file exists.
 --   Requires the 'HscEnv' to be set up with dependencies
 loadInterface
-  :: HscEnv
+  :: MonadIO m => HscEnv
   -> ModSummary
-  -> [HiFileResult]
-  -> IO (Either String ModIface)
-loadInterface session ms deps = do
-  let hiFile = case ms_hsc_src ms of
-                HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
-                _ -> ml_hi_file $ ms_location ms
-  r <- initIfaceLoad session $ readIface (ms_mod ms) hiFile
-  case r of
-    Maybes.Succeeded iface -> do
-      session' <- foldM (\e d -> loadDepModuleIO (hirModIface d) Nothing e) session deps
-      (reason, iface') <- checkOldIface session' ms SourceUnmodified (Just iface)
-      return $ maybeToEither (showReason reason) iface'
-    Maybes.Failed err -> do
-      let errMsg = showSDoc (hsc_dflags session) err
-      return $ Left errMsg
-
-showReason :: RecompileRequired -> String
-showReason MustCompile = "Stale"
-showReason (RecompBecause reason) = "Stale (" ++ reason ++ ")"
-showReason UpToDate = "Up to date"
+  -> SourceModified
+  -> m ([FileDiagnostic], Maybe HiFileResult) -- ^ Action to regenerate an interface
+  -> m ([FileDiagnostic], Maybe HiFileResult)
+loadInterface session ms sourceMod regen = do
+    res <- liftIO $ checkOldIface session ms sourceMod Nothing
+    case res of
+          (UpToDate, Just x)
+            -- If the module used TH splices when it was last
+            -- compiled, then the recompilation check is not
+            -- accurate enough (https://gitlab.haskell.org/ghc/ghc/-/issues/481)
+            -- and we must ignore
+            -- it.  However, if the module is stable (none of
+            -- the modules it depends on, directly or
+            -- indirectly, changed), then we *can* skip
+            -- recompilation. This is why the SourceModified
+            -- type contains SourceUnmodifiedAndStable, and
+            -- it's pretty important: otherwise ghc --make
+            -- would always recompile TH modules, even if
+            -- nothing at all has changed. Stability is just
+            -- the same check that make is doing for us in
+            -- one-shot mode.
+            | not (mi_used_th x) || stable
+            -> return ([], Just $ HiFileResult ms x)
+          (_reason, _) -> regen
+    where
+        -- TODO support stability
+        stable = False
