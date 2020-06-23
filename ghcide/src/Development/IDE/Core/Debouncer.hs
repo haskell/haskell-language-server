@@ -39,6 +39,11 @@ newAsyncDebouncer = Debouncer . asyncRegisterEvent <$> newVar Map.empty
 -- Events are run unmasked so it is up to the user of `registerEvent`
 -- to mask if required.
 asyncRegisterEvent :: (Eq k, Hashable k) => Var (HashMap k (Async ())) -> Seconds -> k -> IO () -> IO ()
+asyncRegisterEvent d 0 k fire = do
+    modifyVar_ d $ \m -> mask_ $ do
+        whenJust (Map.lookup k m) cancel
+        pure $ Map.delete k m
+    fire
 asyncRegisterEvent d delay k fire = modifyVar_ d $ \m -> mask_ $ do
     whenJust (Map.lookup k m) cancel
     a <- asyncWithUnmask $ \unmask -> unmask $ do
