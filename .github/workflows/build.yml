@@ -40,9 +40,12 @@ jobs:
                    haskell-language-server.cabal
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
+    
+    - name: Set exe extension if on Windows
+      if: matrix.os == 'windows-latest'
+      shell: bash
+      run: echo '::set-env name=EXE_EXT::.exe'
   
-    - run: cabal build floskell -v2
-
     - name: Build Server
       run: cabal build exe:hls -O2 --disable-documentation -fdist-binary
           
@@ -61,7 +64,7 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.find_server_binary.outputs.hls_binary }}
-        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}.gz
+        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.gz
         asset_content_type: application/gzip
 
     - name: Build Wrapper
@@ -85,6 +88,6 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.find_wrapper_binary.outputs.hls_wrapper_binary }}
-        asset_name: haskell-language-server-wrapper-${{ runner.OS }}.gz
+        asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.gz
         asset_content_type: application/gzip
 
