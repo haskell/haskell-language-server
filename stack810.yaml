@@ -1,5 +1,4 @@
-resolver: nightly-2020-02-13
-compiler: ghc-8.10.1
+resolver: nightly-2020-06-19
 allow-newer: true
 packages:
 - .
@@ -10,10 +9,21 @@ extra-deps:
 - ghc-check-0.5.0.1
 - hie-bios-0.5.0
 
-# for ghc-8.10
-- Cabal-3.2.0.0
-- lens-4.19.1
-- extra-1.7.2
+# not yet in stackage
+- Chart-diagrams-1.9.3
+- SVGFonts-1.7.0.1
+- diagrams-1.4
+- diagrams-svg-1.4.3
+- diagrams-contrib-1.4.4
+- diagrams-core-1.4.2
+- diagrams-lib-1.4.3
+- diagrams-postscript-1.5
+- monoid-extras-0.5.1
+- svg-builder-0.1.1
+- active-0.2.0.14
+- dual-tree-0.2.2.1
+- force-layout-0.4.0.6
+- statestack-0.3
 
 nix:
   packages: [zlib]
