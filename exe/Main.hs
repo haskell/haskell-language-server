@@ -24,6 +24,7 @@ import Control.Monad.Extra
 import Control.Monad.IO.Class
 import qualified Crypto.Hash.SHA1               as H
 import Data.Aeson (ToJSON(toJSON))
+import Data.Bifunctor (Bifunctor(second))
 import           Data.ByteString.Base16         (encode)
 import qualified Data.ByteString.Char8          as B
 import Data.Default
@@ -199,7 +200,8 @@ main = do
         runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
-            let options = (defaultIdeOptions $ loadSessionShake dir)
+            sessionLoader <- loadSession dir
+            let options = (defaultIdeOptions sessionLoader)
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = IdeTesting argsTesting
@@ -231,7 +233,8 @@ main = do
         vfs <- makeVFSHandle
         debouncer <- newAsyncDebouncer
         let dummyWithProg _ _ f = f (const (pure ()))
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions $ loadSessionShake dir) vfs
+        sessionLoader <- loadSession dir
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions sessionLoader) vfs
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
@@ -300,40 +303,43 @@ targetToFile _ (TargetFile f _) = do
 setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
-loadSessionShake :: FilePath -> Action (FilePath -> Action (IdeResult HscEnvEq))
-loadSessionShake fp = do
-  se <- getShakeExtras
-  IdeOptions{optTesting = IdeTesting ideTesting} <- getIdeOptions
-  res <- liftIO $ loadSession ideTesting se fp
-  return res
-
 -- | This is the key function which implements multi-component support. All
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
-loadSession :: Bool -> ShakeExtras -> FilePath -> IO (FilePath -> Action (IdeResult HscEnvEq))
-loadSession optTesting ShakeExtras{logger, eventer, withIndefiniteProgress, ideNc} dir = do
+loadSession :: FilePath -> IO (Action IdeGhcSession)
+loadSession dir = do
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
   fileToFlags <- newVar Map.empty :: IO (Var FlagsMap)
+  -- Version of the mappings above
+  version <- newVar 0
+  let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
+  let invalidateShakeCache = do
+        modifyVar_ version (return . succ)
+  -- This caches the mapping from Mod.hs -> hie.yaml
+  cradleLoc <- liftIO $ memoIO $ \v -> do
+      res <- findCradle v
+      -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
+      -- try and normalise that
+      -- e.g. see https://github.com/digital-asset/ghcide/issues/126
+      res' <- traverse IO.makeAbsolute res
+      return $ normalise <$> res'
 
   libdir <- getLibdir
   installationCheck <- ghcVersionChecker libdir
+
+  dummyAs <- async $ return (error "Uninitialised")
+  runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   case installationCheck of
     InstallationNotFound{..} ->
         error $ "GHC installation not found in libdir: " <> libdir
     InstallationMismatch{..} ->
-        return $ \fp -> return ([renderPackageSetupException compileTime fp GhcVersionMismatch{..}], Nothing)
-    InstallationChecked compileTime ghcLibCheck -> do
-      -- This caches the mapping from Mod.hs -> hie.yaml
-      cradleLoc <- memoIO $ \v -> do
-          res <- findCradle v
-          -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
-          -- try and normalise that
-          -- e.g. see https://github.com/digital-asset/ghcide/issues/126
-          res' <- traverse IO.makeAbsolute res
-          return $ normalise <$> res'
+        return $ returnWithVersion $ \fp -> return (([renderPackageSetupException compileTime fp GhcVersionMismatch{..}], Nothing),[])
+    InstallationChecked compileTime ghcLibCheck -> return $ do
+      ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress, ideNc, session=ideSession} <- getShakeExtras
+      IdeOptions{optTesting = IdeTesting optTesting} <- getIdeOptions
 
       -- Create a new HscEnv from a hieYaml root and a set of options
       -- If the hieYaml file already has an HscEnv, the new component is
@@ -346,7 +352,8 @@ loadSession optTesting ShakeExtras{logger, eventer, withIndefiniteProgress, ideN
             hscEnv <- emptyHscEnv ideNc
             (df, targets) <- evalGhcEnv hscEnv $
                 setOptions opts (hsc_dflags hscEnv)
-            dep_info <- getDependencyInfo (componentDependencies opts ++ maybeToList hieYaml)
+            let deps = componentDependencies opts ++ maybeToList hieYaml
+            dep_info <- getDependencyInfo deps
             -- Now lookup to see whether we are combining with an existing HscEnv
             -- or making a new one. The lookup returns the HscEnv and a list of
             -- information about other components loaded into the HscEnv
@@ -404,7 +411,7 @@ loadSession optTesting ShakeExtras{logger, eventer, withIndefiniteProgress, ideN
                 --   existing packages
                 pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 
-      let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions) -> IO ([NormalizedFilePath],IdeResult HscEnvEq)
+      let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions) -> IO ([NormalizedFilePath],(IdeResult HscEnvEq,[FilePath]))
           session (hieYaml, cfp, opts) = do
             (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts)
             -- Make a map from unit-id to DynFlags, this is used when trying to
@@ -425,11 +432,12 @@ loadSession optTesting ShakeExtras{logger, eventer, withIndefiniteProgress, ideN
                 pure $ Map.insert hieYaml (HM.fromList (cs ++ cached_targets)) var
 
             -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
-            -- restartShakeSession [kick]
+            invalidateShakeCache
+            restartShakeSession [kick]
 
-            return (map fst cs, fst res)
+            return (map fst cs, second Map.keys res)
 
-      let consultCradle :: Maybe FilePath -> FilePath -> IO ([NormalizedFilePath], IdeResult HscEnvEq)
+      let consultCradle :: Maybe FilePath -> FilePath -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
           consultCradle hieYaml cfp = do
              when optTesting $ eventer $ notifyCradleLoaded cfp
              logInfo logger $ T.pack ("Consulting the cradle for " <> show cfp)
@@ -454,10 +462,11 @@ loadSession optTesting ShakeExtras{logger, eventer, withIndefiniteProgress, ideN
                  let res = (map (renderCradleError ncfp) err, Nothing)
                  modifyVar_ fileToFlags $ \var -> do
                    pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
-                 return ([ncfp],res)
+                 return ([ncfp],(res,[]))
 
       -- This caches the mapping from hie.yaml + Mod.hs -> [String]
-      let sessionOpts :: (Maybe FilePath, FilePath) -> IO ([NormalizedFilePath],IdeResult HscEnvEq)
+      -- Returns the Ghc session and the cradle dependencies
+      let sessionOpts :: (Maybe FilePath, FilePath) -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
           sessionOpts (hieYaml, file) = do
             v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
             cfp <- canonicalizePath file
@@ -472,37 +481,32 @@ loadSession optTesting ShakeExtras{logger, eventer, withIndefiniteProgress, ideN
                     -- Keep the same name cache
                     modifyVar_ hscEnvs (return . Map.adjust (\(h, _) -> (h, [])) hieYaml )
                     consultCradle hieYaml cfp
-                  else return ([], opts)
+                  else return ([], (opts, Map.keys old_di))
               Nothing -> consultCradle hieYaml cfp
 
-      dummyAs <- async $ return (error "Uninitialised")
-      runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq)))
       -- The main function which gets options for a file. We only want one of these running
       -- at a time. Therefore the IORef contains the currently running cradle, if we try
       -- to get some more options then we wait for the currently running action to finish
       -- before attempting to do so.
-      let getOptions :: FilePath -> IO ([NormalizedFilePath],IdeResult HscEnvEq)
+      let getOptions :: FilePath -> IO ([NormalizedFilePath],(IdeResult HscEnvEq, [FilePath]))
           getOptions file = do
               hieYaml <- cradleLoc file
-              sessionOpts (hieYaml, file) `catch` \e -> do
-                  return ([],([renderPackageSetupException compileTime file e], Nothing))
+              sessionOpts (hieYaml, file) `catch` \e ->
+                  return ([],(([renderPackageSetupException compileTime file e], Nothing),[]))
 
-      return $ \file -> do
+      returnWithVersion $ \file -> do
         (cs, opts) <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
           -- If the cradle is not finished, then wait for it to finish.
           void $ wait as
           as <- async $ getOptions file
           return $ (fmap snd as, wait as)
-        let cfps = cs
         unless (null cs) $
-          delay "InitialLoad" $ void $ do
-            cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cfps
+          void $ shakeEnqueueSession ideSession $ mkDelayedAction "InitialLoad" Info $ void $ do
+            cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cs
             mmt <- uses GetModificationTime cfps'
             let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
             uses GetModIface cs_exist
         pure opts
-
-
 
 -- | Create a mapping from FilePaths to HscEnvEqs
 newComponentCache
