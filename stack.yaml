@@ -13,7 +13,7 @@ extra-deps:
 - cabal-helper-1.1.0.0
 - cabal-plan-0.6.2.0
 - clock-0.7.2
-- extra-1.7.1
+- extra-1.7.3
 - floskell-0.10.3
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
@@ -31,7 +31,7 @@ extra-deps:
 - lens-4.18
 - lsp-test-0.11.0.2
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.4.0
+- opentelemetry-0.4.2
 - optics-core-0.2
 - optparse-applicative-0.15.1.0
 - ormolu-0.0.5.0
