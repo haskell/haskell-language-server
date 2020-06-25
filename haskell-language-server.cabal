@@ -238,6 +238,7 @@ common hls-test-utils
                      , stm
                      , tasty-hunit
                      , text
+                     , transformers
                      , unordered-containers
                      , yaml
   ghc-options:         -Wall -Wredundant-constraints
@@ -292,3 +293,18 @@ test-suite func-test
                         -threaded -rtsopts -with-rtsopts=-N
   if flag(pedantic)
      ghc-options: -Werror -Wredundant-constraints
+
+test-suite wrapper-test
+  import:               cpp-flags, hls-test-utils
+  type:                 exitcode-stdio-1.0
+  build-tool-depends:   haskell-language-server:haskell-language-server-wrapper
+  default-language:     Haskell2010
+  build-depends:        base == 4.*
+                      , directory
+                      , process
+                      , tasty
+                      , tasty-hunit
+                      , tasty-ant-xml >= 1.1.6
+  hs-source-dirs:       test/wrapper
+  main-is:              Main.hs
+  ghc-options:          -Wall

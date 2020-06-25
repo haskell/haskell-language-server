@@ -55,7 +55,7 @@ import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
 import DynFlags                                 (PackageFlag(..), PackageArg(..))
 import GHC hiding                               (def)
-import GHC.Check                                ( VersionCheck(..), makeGhcVersionChecker )
+-- import GHC.Check                                ( VersionCheck(..), makeGhcVersionChecker )
 -- import GhcMonad
 import HIE.Bios.Cradle
 import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute, getRuntimeGhcLibDir)

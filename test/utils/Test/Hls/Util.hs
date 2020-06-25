@@ -14,6 +14,7 @@ module Test.Hls.Util
     , noLogConfig
     , setupBuildToolFiles
     , withFileLogging
+    , findExe
   -- , makeRequest
   -- , runIGM
   -- , runIGM'
@@ -25,8 +26,10 @@ module Test.Hls.Util
   )
 where
 
+import Control.Applicative
 -- import           Control.Concurrent.STM
 import           Control.Monad
+import           Control.Monad.Trans.Maybe
 import           Data.Default
 import           Data.List (intercalate)
 -- import           Data.Typeable
@@ -310,3 +313,25 @@ dummyLspFuncs = LspFuncs { clientCapabilities = def
                          , withProgress = \_ _ f -> f (const (return ()))
                          , withIndefiniteProgress = \_ _ f -> f
                          }
+
+findExeRecursive :: FilePath -> FilePath -> IO (Maybe FilePath)
+findExeRecursive exe dir = do
+  me <- listToMaybe <$> findExecutablesInDirectories [dir] exe
+  case me of
+    Just e -> return (Just e)
+    Nothing -> do
+      subdirs <- (fmap (dir </>)) <$> listDirectory dir >>= filterM doesDirectoryExist
+      foldM (\acc subdir -> case acc of
+                              Just y -> pure $ Just y
+                              Nothing -> findExeRecursive exe subdir)
+            Nothing
+            subdirs
+
+-- | So we can find an executable with cabal run
+-- since it doesnt put build tools on the path (only cabal test)
+findExe :: String -> IO FilePath
+findExe name = do
+  fp <- fmap fromJust $ runMaybeT $
+    MaybeT (findExecutable name) <|> 
+    MaybeT (findExeRecursive name "dist-newstyle")
+  makeAbsolute fp
