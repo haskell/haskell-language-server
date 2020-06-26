@@ -2,24 +2,37 @@
 # in hie, using stack as the build system.  To use is, copy it to a
 # file called 'hie.yaml'
 cradle:
-  stack:
-    - path: "./test/functional/"
-      component: "haskell-language-server:func-test"
+  multi:
+    - path: "./test/testdata/"
+      config: { cradle: { none:  } }
 
-    - path: "./test/utils/"
-      component: "haskell-language-server:func-test"
+    - path: "./"
+      config:
+        cradle:
+          stack:
+            - path: "./test/functional/"
+              component: "haskell-language-server:func-test"
 
-    - path: "./exe/Main.hs"
-      component: "haskell-language-server:exe:haskell-language-server"
+            - path: "./test/utils/"
+              component: "haskell-language-server:func-test"
 
-    - path: "./exe/Wrapper.hs"
-      component: "haskell-language-server:exe:haskell-language-server-wrapper"
+            - path: "./exe/Main.hs"
+              component: "haskell-language-server:exe:haskell-language-server"
+        
+            - path: "./exe/Arguments.hs"
+              component: "haskell-language-server:exe:haskell-language-server"
 
-    - path: "./src"
-      component: "haskell-language-server:lib"
+            - path: "./exe/Wrapper.hs"
+              component: "haskell-language-server:exe:haskell-language-server-wrapper"
+        
+            - path: "./src"
+              component: "haskell-language-server:lib"
 
-    - path: "./ghcide/src"
-      component: "ghcide:lib:ghcide"
-
-    - path: "./ghcide/exe"
-      component: "ghcide:exe:ghcide"
+            - path: "./.stack-work/"
+              component: "haskell-language-server:lib"
+        
+            - path: "./ghcide/src"
+              component: "ghcide:lib:ghcide"
+        
+            - path: "./ghcide/exe"
+              component: "ghcide:exe:ghcide"

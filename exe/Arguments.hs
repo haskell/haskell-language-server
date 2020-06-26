@@ -11,13 +11,16 @@ module Arguments
   ( Arguments(..)
   , getArguments
   , ghcideVersion
+  , getGhcideLibdir
   ) where
 
+import Data.Maybe
 import Data.Version
 import Development.GitRev
 import Options.Applicative
 import Paths_haskell_language_server
 import System.Environment
+import qualified GHC.Paths
 
 -- ---------------------------------------------------------------------
 
@@ -79,7 +82,7 @@ arguments exeName = Arguments
           <> showDefault
            )
       <*> switch (long "project-ghc-version"
-                  <> help "Work out the project GHC version and print it")  
+                  <> help "Work out the project GHC version and print it")
 
 -- ---------------------------------------------------------------------
 
@@ -95,3 +98,7 @@ ghcideVersion = do
              <> gitHashSection
 
 -- ---------------------------------------------------------------------
+
+-- Defined here
+getGhcideLibdir :: IO FilePath
+getGhcideLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"

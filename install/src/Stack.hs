@@ -20,7 +20,7 @@ stackInstallHls mbVersionNumber args = do
   versionNumber <-
     case mbVersionNumber of
       Nothing -> do
-        execStackWithCfgFile_ "stack.yaml" $ 
+        execStackWithCfgFile_ "stack.yaml" $
           ["install"
           , ":haskell-language-server-wrapper"
           , ":haskell-language-server"] ++ args
@@ -84,7 +84,7 @@ execStackWithCfgFile stackFile args =
 
 -- | Execute a stack command with the same resolver as the build script
 execStackShake :: CmdResult r => [String] -> Action r
-execStackShake args = command [] "stack" ("--stack-yaml=install/shake.yaml" : args)
+execStackShake args = command [] "stack" ("--stack-yaml=install/stack.yaml" : args)
 
 -- | Execute a stack command with the same resolver as the build script, discarding the output
 execStackShake_ :: [String] -> Action ()

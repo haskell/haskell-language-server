@@ -4,8 +4,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -15,14 +18,19 @@ module Main(main) where
 import Arguments
 import Control.Concurrent.Async
 import Control.Concurrent.Extra
-import Control.Exception
+-- import Control.Exception
+import Control.Exception.Safe
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import qualified Crypto.Hash.SHA1               as H
+import Data.Aeson (ToJSON(toJSON))
+import Data.Bifunctor (Bifunctor(second))
 import           Data.ByteString.Base16         (encode)
 import qualified Data.ByteString.Char8          as B
 import Data.Default
 import Data.Either
+import Data.Either.Extra
+import Data.Foldable
 import Data.Function
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HashSet
@@ -33,7 +41,7 @@ import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time.Clock (UTCTime)
--- import Data.Version
+import Data.Version
 -- import Development.GitRev
 import Development.IDE.Core.Debouncer
 import Development.IDE.Core.FileStore
@@ -55,7 +63,7 @@ import DynFlags                                 (gopt_set, gopt_unset,
                                                  updOptLevel)
 import DynFlags                                 (PackageFlag(..), PackageArg(..))
 import GHC hiding                               (def)
--- import GHC.Check                                ( VersionCheck(..), makeGhcVersionChecker )
+import GHC.Check
 -- import GhcMonad
 import HIE.Bios.Cradle
 import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute, getRuntimeGhcLibDir)
@@ -67,19 +75,18 @@ import Ide.Plugin
 import Ide.Plugin.Config
 import Ide.Types                                (IdePlugins, ipMap)
 import Language.Haskell.LSP.Messages
-import Language.Haskell.LSP.Types               (LspId(IdInt))
+import Language.Haskell.LSP.Types
 import Linker                                   (initDynLinker)
 import Module
 import NameCache
 import Packages
--- import Paths_ghcide
 import System.Directory
 import qualified System.Directory.Extra as IO
 -- import System.Environment
 import System.Exit
 import System.FilePath
 import System.IO
-import System.Log.Logger as L
+import qualified System.Log.Logger as L
 import System.Time.Extra
 
 -- ---------------------------------------------------------------------
@@ -94,10 +101,12 @@ import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
+import Ide.Plugin.StylishHaskell          as StylishHaskell
 #if AGPL
 import Ide.Plugin.Brittany                as Brittany
 #endif
 import Ide.Plugin.Pragmas                 as Pragmas
+-- import Data.Typeable (Typeable)
 
 
 -- ---------------------------------------------------------------------
@@ -129,6 +138,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       -- , genericDescriptor     "generic"
       -- , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
+      , StylishHaskell.descriptor "stylish-haskell"
 #if AGPL
       , Brittany.descriptor    "brittany"
 #endif
@@ -143,10 +153,6 @@ ghcIdePlugins :: T.Text -> IdePlugins -> (Plugin Config, [T.Text])
 ghcIdePlugins pid ps = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
 
 -- ---------------------------------------------------------------------
-
--- -- Set the GHC libdir to the nix libdir if it's present.
--- getLibdir :: IO FilePath
--- getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
 
 main :: IO ()
 main = do
@@ -179,6 +185,7 @@ main = do
         options = def { LSP.executeCommandCommands = Just commandIds
                       , LSP.completionTriggerCharacters = Just "."
                       }
+
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
@@ -186,19 +193,19 @@ main = do
         hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins')
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps -> do
+        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
-            let options = (defaultIdeOptions $ loadSession dir)
+            sessionLoader <- loadSession dir
+            let options = (defaultIdeOptions sessionLoader)
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
-                    , optTesting        = argsTesting
+                    , optTesting        = IdeTesting argsTesting
                     , optThreads        = argsThreads
-                    , optInterfaceLoadingDiagnostics = argsTesting
                     }
             debouncer <- newAsyncDebouncer
-            fst <$> initialise caps (mainRule >> pluginRules plugins)
-                getLspId event hlsLogger debouncer options vfs
+            initialise caps (mainRule >> pluginRules plugins)
+                getLspId event wProg wIndefProg hlsLogger debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
         hSetEncoding stdout utf8
@@ -207,27 +214,34 @@ main = do
         putStrLn $ "(haskell-language-server)Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
 
-        putStrLn $ "\nStep 1/6: Finding files to test in " ++ dir
+        putStrLn $ "\nStep 1/4: Finding files to test in " ++ dir
         files <- expandFiles (argFiles ++ ["." | null argFiles])
         -- LSP works with absolute file paths, so try and behave similarly
         files <- nubOrd <$> mapM IO.canonicalizePath files
         putStrLn $ "Found " ++ show (length files) ++ " files"
 
-        putStrLn "\nStep 2/6: Looking for hie.yaml files that control setup"
+        putStrLn "\nStep 2/4: Looking for hie.yaml files that control setup"
         cradles <- mapM findCradle files
         let ucradles = nubOrd cradles
         let n = length ucradles
         putStrLn $ "Found " ++ show n ++ " cradle" ++ ['s' | n /= 1]
-        putStrLn "\nStep 3/6: Initializing the IDE"
+        putStrLn "\nStep 3/4: Initializing the IDE"
         vfs <- makeVFSHandle
         debouncer <- newAsyncDebouncer
-        (ide, worker) <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) (logger Info) debouncer (defaultIdeOptions $ loadSession dir) vfs
+        let dummyWithProg _ _ f = f (const (pure ()))
+        sessionLoader <- loadSession dir
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions sessionLoader) vfs
 
-        putStrLn "\nStep 4/6: Type checking the files"
+        putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
-        _ <- runActionSync "TypecheckTest" ide $ uses TypeCheck (map toNormalizedFilePath' files)
-        cancel worker
-        return ()
+        results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' files)
+        let (worked, failed) = partition fst $ zip (map isJust results) files
+        when (failed /= []) $
+            putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
+
+        let files xs = let n = length xs in if n == 1 then "1 file" else show n ++ " files"
+        putStrLn $ "\nCompleted (" ++ files worked ++ " worked, " ++ files failed ++ " failed)"
+        unless (null failed) (exitWith $ ExitFailure (length failed))
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do
@@ -241,14 +255,6 @@ expandFiles = concatMapM $ \x -> do
             fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
         return files
 
--- Running this every hover is too expensive, 0.2s on GHC for example
-{-
-kick :: Action ()
-kick = do
-    files <- getFilesOfInterest
-    void $ uses TypeCheck $ HashSet.toList files
-    -}
-
 -- | Print an LSP event.
 showEvent :: Lock -> FromServerMessage -> IO ()
 showEvent _ (EventFileDiagnostics _ []) = return ()
@@ -257,17 +263,17 @@ showEvent lock (EventFileDiagnostics (toNormalizedFilePath' -> file) diags) =
 showEvent lock e = withLock lock $ print e
 
 
+-- | Run the specific cradle on a specific FilePath via hie-bios.
 cradleToSessionOpts :: Cradle a -> FilePath -> IO (Either [CradleError] ComponentOptions)
 cradleToSessionOpts cradle file = do
     let showLine s = putStrLn ("> " ++ s)
     cradleRes <- runCradle (cradleOptsProg cradle) showLine file
-    opts <- case cradleRes of
+    case cradleRes of
         CradleSuccess r -> pure (Right r)
         CradleFail err -> return (Left [err])
         -- For the None cradle perhaps we still want to report an Info
         -- message about the fact that the file is being ignored.
         CradleNone -> return (Left [])
-    pure opts
 
 emptyHscEnv :: FilePath -> IORef NameCache -> IO HscEnv
 emptyHscEnv libDir nc = do
@@ -275,235 +281,263 @@ emptyHscEnv libDir nc = do
     initDynLinker env
     pure $ setNameCache nc env
 
--- Convert a target to a list of potential absolute paths.
+-- | Convert a target to a list of potential absolute paths.
 -- A TargetModule can be anywhere listed by the supplied include
 -- directories
 -- A target file is a relative path but with a specific prefix so just need
 -- to canonicalise it.
 targetToFile :: [FilePath] -> TargetId -> IO [NormalizedFilePath]
 targetToFile is (TargetModule mod) = do
-    let fps = [i </> (moduleNameSlashes mod) -<.> ext | ext <- exts, i <- is ]
+    let fps = [i </> moduleNameSlashes mod -<.> ext | ext <- exts, i <- is ]
         exts = ["hs", "hs-boot", "lhs"]
     mapM (fmap toNormalizedFilePath' . canonicalizePath) fps
 targetToFile _ (TargetFile f _) = do
   f' <- canonicalizePath f
-  return [(toNormalizedFilePath' f')]
+  return [toNormalizedFilePath' f']
 
 setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
--- This is the key function which implements multi-component support. All
--- components mapping to the same hie,yaml file are mapped to the same
+-- | This is the key function which implements multi-component support. All
+-- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
-loadSession :: FilePath -> Action (FilePath -> Action (IdeResult HscEnvEq))
+loadSession :: FilePath -> IO (Action IdeGhcSession)
 loadSession dir = do
-  nc <- ideNc <$> getShakeExtras
-  liftIO $ do
-    -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
-    hscEnvs <- newVar Map.empty
-    -- Mapping from a filepath to HscEnv
-    fileToFlags <- newVar Map.empty
+  -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
+  hscEnvs <- newVar Map.empty :: IO (Var HieMap)
+  -- Mapping from a Filepath to HscEnv
+  fileToFlags <- newVar Map.empty :: IO (Var FlagsMap)
+  -- Version of the mappings above
+  version <- newVar 0
+  let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
+  let invalidateShakeCache = do
+        modifyVar_ version (return . succ)
+  -- This caches the mapping from Mod.hs -> hie.yaml
+  cradleLoc <- liftIO $ memoIO $ \v -> do
+      res <- findCradle v
+      -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
+      -- try and normalise that
+      -- e.g. see https://github.com/digital-asset/ghcide/issues/126
+      res' <- traverse IO.makeAbsolute res
+      return $ normalise <$> res'
 
-    -- This caches the mapping from Mod.hs -> hie.yaml
-    cradleLoc <- memoIO $ \v -> do
-        res <- findCradle v
-        -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
-        -- try and normalise that
-        -- e.g. see https://github.com/digital-asset/ghcide/issues/126
-        res' <- traverse IO.makeAbsolute res
-        return $ normalise <$> res'
+  libdir <- getGhcideLibdir
+  installationCheck <- ghcVersionChecker libdir
 
-    -- Create a new HscEnv from a hieYaml root and a set of options
-    -- If the hieYaml file already has an HscEnv, the new component is
-    -- combined with the components in the old HscEnv into a new HscEnv
-    -- which contains both.
-    packageSetup <- return $ \(hieYaml, cfp, opts, libDir) -> do
-        -- Parse DynFlags for the newly discovered component
-        hscEnv <- emptyHscEnv libDir nc
-        (df, targets) <- evalGhcEnv hscEnv $ do
-                          setOptions opts (hsc_dflags hscEnv)
-        dep_info <- getDependencyInfo (componentDependencies opts)
-        -- Now lookup to see whether we are combining with an exisiting HscEnv
-        -- or making a new one. The lookup returns the HscEnv and a list of
-        -- information about other components loaded into the HscEnv
-        -- (unitId, DynFlag, Targets)
-        modifyVar hscEnvs $ \m -> do
-            -- Just deps if there's already an HscEnv
-            -- Nothing is it's the first time we are making an HscEnv
-            let oldDeps = Map.lookup hieYaml m
-            let -- Add the raw information about this component to the list
-                -- We will modify the unitId and DynFlags used for
-                -- compilation but these are the true source of
-                -- information.
-                new_deps = (thisInstalledUnitId df, df, targets, cfp, opts, dep_info) : maybe [] snd oldDeps
-                -- Get all the unit-ids for things in this component
-                inplace = map (\(a, _, _, _, _, _) -> a) new_deps
+  dummyAs <- async $ return (error "Uninitialised")
+  runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
-            -- Note [Avoiding bad interface files]
-            new_deps' <- forM new_deps $ \(uid, df1, ts, cfp, opts, di) -> do
-                -- let (uid, (df1, _target, ts, cfp, opts, di)) = do_one componentInfo
-                -- Remove all inplace dependencies from package flags for
-                -- components in this HscEnv
-                let (df2, uids) = removeInplacePackages inplace df1
-                let prefix = show $ thisInstalledUnitId df1
-                df <- setCacheDir prefix (sort $ map show uids) opts df2
-                -- All deps, but without any packages which are also loaded
-                -- into memory
-                pure $ (uid, (df, uids, ts, cfp, opts, di))
-            -- Make a new HscEnv, we have to recompile everything from
-            -- scratch again (for now)
-            -- It's important to keep the same NameCache though for reasons
-            -- that I do not fully understand
-            print ("Making new HscEnv" ++ (show inplace))
-            hscEnv <- emptyHscEnv libDir nc
-            newHscEnv <-
-              -- Add the options for the current component to the HscEnv
-              evalGhcEnv hscEnv $ do
-                _ <- setSessionDynFlags df
-                getSession
-            -- Modify the map so the hieYaml now maps to the newly created
-            -- HscEnv
-            -- Returns
-            --  * the new HscEnv so it can be used to modify the
-            --   FilePath -> HscEnv map
-            --  * The information for the new component which caused this cache miss
-            --  * The modified information (without -inplace flags) for
-            --   existing packages
-            pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
+  case installationCheck of
+    InstallationNotFound{..} ->
+        error $ "GHC installation not found in libdir: " <> libdir
+    InstallationMismatch{..} ->
+        return $ returnWithVersion $ \fp -> return (([renderPackageSetupException compileTime fp GhcVersionMismatch{..}], Nothing),[])
+    InstallationChecked compileTime ghcLibCheck -> return $ do
+      ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress, ideNc, session=ideSession} <- getShakeExtras
+      IdeOptions{optTesting = IdeTesting optTesting} <- getIdeOptions
 
+      -- Create a new HscEnv from a hieYaml root and a set of options
+      -- If the hieYaml file already has an HscEnv, the new component is
+      -- combined with the components in the old HscEnv into a new HscEnv
+      -- which contains the union.
+      let packageSetup :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
+                        -> IO (HscEnv, ComponentInfo, [ComponentInfo])
+          packageSetup (hieYaml, cfp, opts, libDir) = do
+            -- Parse DynFlags for the newly discovered component
+            hscEnv <- emptyHscEnv libDir ideNc
+            (df, targets) <- evalGhcEnv hscEnv $
+                setOptions opts (hsc_dflags hscEnv)
+            let deps = componentDependencies opts ++ maybeToList hieYaml
+            dep_info <- getDependencyInfo deps
+            -- Now lookup to see whether we are combining with an existing HscEnv
+            -- or making a new one. The lookup returns the HscEnv and a list of
+            -- information about other components loaded into the HscEnv
+            -- (unitId, DynFlag, Targets)
+            modifyVar hscEnvs $ \m -> do
+                -- Just deps if there's already an HscEnv
+                -- Nothing is it's the first time we are making an HscEnv
+                let oldDeps = Map.lookup hieYaml m
+                let -- Add the raw information about this component to the list
+                    -- We will modify the unitId and DynFlags used for
+                    -- compilation but these are the true source of
+                    -- information.
+                    new_deps = RawComponentInfo (thisInstalledUnitId df) df targets cfp opts dep_info
+                                  : maybe [] snd oldDeps
+                    -- Get all the unit-ids for things in this component
+                    inplace = map rawComponentUnitId new_deps
 
-    session <- return $ \(hieYaml, cfp, opts, libDir) -> do
-        (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts, libDir)
-        -- TODO Handle the case where there is no hie.yaml
-        -- Make a map from unit-id to DynFlags, this is used when trying to
-        -- resolve imports.
-        let uids = map (\(iuid, (df, _uis, _targets, _cfp, _opts, _di)) -> (iuid, df)) (new : old_deps)
+                new_deps' <- forM new_deps $ \RawComponentInfo{..} -> do
+                    -- Remove all inplace dependencies from package flags for
+                    -- components in this HscEnv
+                    let (df2, uids) = removeInplacePackages inplace rawComponentDynFlags
+                    let prefix = show rawComponentUnitId
+                    -- See Note [Avoiding bad interface files]
+                    processed_df <- setCacheDir logger prefix (sort $ map show uids) opts df2
+                    -- The final component information, mostly the same but the DynFlags don't
+                    -- contain any packages which are also loaded
+                    -- into the same component.
+                    pure $ ComponentInfo rawComponentUnitId
+                                          processed_df
+                                          uids
+                                          rawComponentTargets
+                                          rawComponentFP
+                                          rawComponentCOptions
+                                          rawComponentDependencyInfo
+                -- Make a new HscEnv, we have to recompile everything from
+                -- scratch again (for now)
+                -- It's important to keep the same NameCache though for reasons
+                -- that I do not fully understand
+                logInfo logger (T.pack ("Making new HscEnv" ++ show inplace))
+                hscEnv <- emptyHscEnv libDir ideNc
+                newHscEnv <-
+                  -- Add the options for the current component to the HscEnv
+                  evalGhcEnv hscEnv $ do
+                    _ <- setSessionDynFlags df
+                    checkSession logger ghcLibCheck
+                    getSession
 
-        -- For each component, now make a new HscEnvEq which contains the
-        -- HscEnv for the hie.yaml file but the DynFlags for that component
-        --
-        -- Then look at the targets for each component and create a map
-        -- from FilePath to the HscEnv
-        let new_cache (_iuid, (df, _uis, targets, cfp, _opts, di)) =  do
-              let hscEnv' = hscEnv { hsc_dflags = df
-                                   , hsc_IC = (hsc_IC hscEnv) { ic_dflags = df } }
+                -- Modify the map so the hieYaml now maps to the newly created
+                -- HscEnv
+                -- Returns
+                -- . the new HscEnv so it can be used to modify the
+                --   FilePath -> HscEnv map (fileToFlags)
+                -- . The information for the new component which caused this cache miss
+                -- . The modified information (without -inplace flags) for
+                --   existing packages
+                pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 
-              -- versionMismatch <- checkGhcVersion
-              -- henv <- case versionMismatch of
-              --           Just mismatch -> return mismatch
-              --           Nothing -> newHscEnvEq hscEnv' uids
+      let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath) -> IO ([NormalizedFilePath],(IdeResult HscEnvEq,[FilePath]))
+          session (hieYaml, cfp, opts, libDir) = do
+            (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts, libDir)
+            -- Make a map from unit-id to DynFlags, this is used when trying to
+            -- resolve imports. (especially PackageImports)
+            let uids = map (\ci -> (componentUnitId ci, componentDynFlags ci)) (new : old_deps)
 
-              henv <- newHscEnvEq hscEnv' uids
+            -- For each component, now make a new HscEnvEq which contains the
+            -- HscEnv for the hie.yaml file but the DynFlags for that component
 
-              let res = (([], Just henv), di)
-              print res
+            -- New HscEnv for the component in question, returns the new HscEnvEq and
+            -- a mapping from FilePath to the newly created HscEnvEq.
+            let new_cache = newComponentCache logger hscEnv uids
+            (cs, res) <- new_cache new
+            -- Modified cache targets for everything else in the hie.yaml file
+            -- which now uses the same EPS and so on
+            cached_targets <- concatMapM (fmap fst . new_cache) old_deps
+            modifyVar_ fileToFlags $ \var -> do
+                pure $ Map.insert hieYaml (HM.fromList (cs ++ cached_targets)) var
 
-              let is = importPaths df
-              ctargets <- concatMapM (targetToFile is  . targetId) targets
-              -- A special target for the file which caused this wonderful
-              -- component to be created.
-              let special_target = (cfp, res)
-              --pprTraceM "TARGETS" (ppr (map (text . show) ctargets))
-              let xs = map (,res) ctargets
-              return (special_target:xs, res)
+            -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
+            invalidateShakeCache
+            restartShakeSession [kick]
 
-        -- New HscEnv for the component in question
-        (cs, res) <- new_cache new
-        -- Modified cache targets for everything else in the hie.yaml file
-        -- which now uses the same EPS and so on
-        cached_targets <- concatMapM (fmap fst . new_cache) old_deps
-        modifyVar_ fileToFlags $ \var -> do
-            pure $ Map.insert hieYaml (HM.fromList (cs ++ cached_targets)) var
+            return (map fst cs, second Map.keys res)
 
-        return (cs, res)
+      let consultCradle :: Maybe FilePath -> FilePath -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
+          consultCradle hieYaml cfp = do
+              when optTesting $ eventer $ notifyCradleLoaded cfp
+              logInfo logger $ T.pack ("Consulting the cradle for " <> show cfp)
 
-    lock <- newLock
+              cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+              -- Display a user friendly progress message here: They probably don't know what a
+              -- cradle is
+              let progMsg = "Setting up project " <> T.pack (takeBaseName (cradleRootDir cradle))
+              (eopts, mLibDir) <- withIndefiniteProgress progMsg LSP.NotCancellable $ do
+                -- we don't want to use ghc-paths if this is a portable, distributed binary
+                -- also note that getting the runtime ghc lib dir can end up configuring
+                -- and building dependencies through the build tool, so include it in this
+                -- progress section.
+                libDir <- getRuntimeGhcLibDir cradle isDistBinary
+                opts <- cradleToSessionOpts cradle cfp
+                return (opts, libDir)
 
-    -- This caches the mapping from hie.yaml + Mod.hs -> [String]
-    sessionOpts <- return $ \(hieYaml, file) -> do
+              let ncfp = toNormalizedFilePath' cfp
+                  cradleMishap diags = do
+                    dep_info <- getDependencyInfo (maybeToList hieYaml)
+                    let res = (diags, Nothing)
+                    modifyVar_ fileToFlags $ \var -> do
+                      pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
+                    return ([ncfp],(res,[]))
 
+              logDebug logger $ T.pack ("Session loading result: " <> show eopts)
+              case (eopts, mLibDir) of
+                -- The cradle gave us some options so get to work turning them
+                -- into and HscEnv.
+                (Right opts, Just libDir) -> do
+                  session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
+                -- Failure case, either a cradle error or the none cradle
+                (Left err, _) -> cradleMishap $ map (renderCradleError ncfp) err
+                (_, Nothing) -> cradleMishap [ideErrorText ncfp "Couldn't get the GHC library directory"]
 
-        fm <- readVar fileToFlags
-        let mv = Map.lookup hieYaml fm
-        let v = fromMaybe HM.empty mv
-        cfp <- liftIO $ canonicalizePath file
-        case HM.lookup (toNormalizedFilePath' cfp) v of
-          Just (_, old_di) -> do
-            deps_ok <- checkDependencyInfo old_di
-            unless deps_ok $ do
-              modifyVar_ fileToFlags (const (return Map.empty))
-              -- Keep the same name cache
-              modifyVar_ hscEnvs (return . Map.adjust (\(h, _) -> (h, [])) hieYaml )
-          Nothing -> return ()
-        -- We sort so exact matches come first.
-        case HM.lookup (toNormalizedFilePath' cfp) v of
-            Just opts -> do
-                --putStrLn $ "Cached component of " <> show file
-                pure ([], fst opts)
-            Nothing -> do
-                finished_barrier <- newBarrier
-                -- fork a new thread here which won't be killed by shake
-                -- throwing an async exception
-                void $ forkIO $ do
-                  putStrLn $ "Consulting the cradle for " <> show file
-                  cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+      -- This caches the mapping from hie.yaml + Mod.hs -> [String]
+      -- Returns the Ghc session and the cradle dependencies
+      let sessionOpts :: (Maybe FilePath, FilePath) -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
+          sessionOpts (hieYaml, file) = do
+            v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
+            cfp <- canonicalizePath file
+            case HM.lookup (toNormalizedFilePath' cfp) v of
+              Just (opts, old_di) -> do
+                deps_ok <- checkDependencyInfo old_di
+                if not deps_ok
+                  then do
+                    -- If the dependencies are out of date then clear both caches and start
+                    -- again.
+                    modifyVar_ fileToFlags (const (return Map.empty))
+                    -- Keep the same name cache
+                    modifyVar_ hscEnvs (return . Map.adjust (\(h, _) -> (h, [])) hieYaml )
+                    consultCradle hieYaml cfp
+                  else return ([], (opts, Map.keys old_di))
+              Nothing -> consultCradle hieYaml cfp
 
-                  -- we don't want to use ghc-paths if this is a portable, distributed binary
-                  mLibDir <- getRuntimeGhcLibDir cradle isDistBinary
+      -- The main function which gets options for a file. We only want one of these running
+      -- at a time. Therefore the IORef contains the currently running cradle, if we try
+      -- to get some more options then we wait for the currently running action to finish
+      -- before attempting to do so.
+      let getOptions :: FilePath -> IO ([NormalizedFilePath],(IdeResult HscEnvEq, [FilePath]))
+          getOptions file = do
+              hieYaml <- cradleLoc file
+              sessionOpts (hieYaml, file) `catch` \e ->
+                  return ([],(([renderPackageSetupException compileTime file e], Nothing),[]))
 
-                  eopts <- cradleToSessionOpts cradle cfp
-                  print eopts
+      returnWithVersion $ \file -> do
+        (cs, opts) <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
+          -- If the cradle is not finished, then wait for it to finish.
+          void $ wait as
+          as <- async $ getOptions file
+          return $ (fmap snd as, wait as)
+        unless (null cs) $
+          void $ shakeEnqueueSession ideSession $ mkDelayedAction "InitialLoad" Info $ void $ do
+            cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cs
+            mmt <- uses GetModificationTime cfps'
+            let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+            uses GetModIface cs_exist
+        pure opts
 
-                  let ncfp = toNormalizedFilePath' cfp
-                      cradleMishap diags = do
-                        dep_info <- getDependencyInfo ([fp | Just fp <- [hieYaml]])
-                        let res = (diags, Nothing)
-                        modifyVar_ fileToFlags $ \var -> do
-                          pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
-                        signalBarrier finished_barrier ([(ncfp, (res, dep_info) )], res)
+-- | Create a mapping from FilePaths to HscEnvEqs
+newComponentCache
+         :: Logger
+         -> HscEnv
+         -> [(InstalledUnitId, DynFlags)]
+         -> ComponentInfo
+         -> IO ([(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))], (IdeResult HscEnvEq, DependencyInfo))
+newComponentCache logger hsc_env uids ci = do
+    let df = componentDynFlags ci
+    let hscEnv' = hsc_env { hsc_dflags = df
+                          , hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
 
-                  case (eopts, mLibDir) of
-                    (Right opts, Just libDir) -> do
-                      (cs, res) <- session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
-                      signalBarrier finished_barrier (cs, fst res)
+    henv <- newHscEnvEq hscEnv' uids
+    let res = (([], Just henv), componentDependencyInfo ci)
+    logDebug logger ("New Component Cache HscEnvEq: " <> T.pack (show res))
 
-                    (Left err, _) -> cradleMishap $ map (renderCradleError ncfp) err
-                    (_, Nothing) -> cradleMishap [ideErrorText ncfp "Couldn't get the GHC library directory"]
-
-                waitBarrier finished_barrier
-
-    dummyAs <- async $ return (error "Uninitialised")
-    runningCradle <- newIORef dummyAs
-    -- The main function which gets options for a file. We only want one of these running
-    -- at a time.
-    let getOptions file = do
-            hieYaml <- cradleLoc file
-            sessionOpts (hieYaml, file)
-    -- The lock is on the `runningCradle` resource
-    return $ \file -> do
-      (cs, opts) <-
-        liftIO $ withLock lock $ do
-          as <- readIORef runningCradle
-          finished <- poll as
-          case finished of
-              Just {} -> do
-                  as <- async $ getOptions file
-                  writeIORef runningCradle as
-                  wait as
-              -- If it's not finished then wait and then get options, this could of course be killed still
-              Nothing -> do
-                  _ <- wait as
-                  getOptions file
-      let cfps = map fst cs
-      -- Delayed to avoid recursion and only run if something changed.
-      unless (null cs) (
-        delay "InitialLoad" ("InitialLoad" :: String, cfps) (void $ do
-          cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cfps
-          mmt <- uses GetModificationTime cfps'
-          let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
-          uses GetModIface cs_exist))
-      return opts
-
+    let is = importPaths df
+    ctargets <- concatMapM (targetToFile is  . targetId) (componentTargets ci)
+    -- A special target for the file which caused this wonderful
+    -- component to be created. In case the cradle doesn't list all the targets for
+    -- the component, in which case things will be horribly broken anyway.
+    -- Otherwise, we will immediately attempt to reload this module which
+    -- causes an infinite loop and high CPU usage.
+    let special_target = (componentFP ci, res)
+    let xs = map (,res) ctargets
+    return (special_target:xs, res)
 
 {- Note [Avoiding bad interface files]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -557,40 +591,92 @@ E.g. when you load two executables, they can not depend on each other. They
 should be filtered out, such that we dont have to re-compile everything.
 -}
 
-
-setCacheDir :: MonadIO m => String -> [String] -> ComponentOptions -> DynFlags -> m DynFlags
-setCacheDir prefix hscComponents comps dflags = do
+-- | Set the cache-directory based on the ComponentOptions and a list of
+-- internal packages.
+-- For the exact reason, see Note [Avoiding bad interface files].
+setCacheDir :: MonadIO m => Logger -> String -> [String] -> ComponentOptions -> DynFlags -> m DynFlags
+setCacheDir logger prefix hscComponents comps dflags = do
     cacheDir <- liftIO $ getCacheDir prefix (hscComponents ++ componentOptions comps)
+    liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack cacheDir
     pure $ dflags
           & setHiDir cacheDir
-          & setDefaultHieDir cacheDir
+          & setHieDir cacheDir
 
 
 renderCradleError :: NormalizedFilePath -> CradleError -> FileDiagnostic
 renderCradleError nfp (CradleError _deps _ec t) =
-  ideErrorText nfp (T.unlines (map T.pack t))
+  ideErrorWithSource (Just "cradle") (Just DsError) nfp (T.unlines (map T.pack t))
 
+-- See Note [Multi Cradle Dependency Info]
+type DependencyInfo = Map.Map FilePath (Maybe UTCTime)
+type HieMap = Map.Map (Maybe FilePath) (HscEnv, [RawComponentInfo])
+type FlagsMap = Map.Map (Maybe FilePath) (HM.HashMap NormalizedFilePath (IdeResult HscEnvEq, DependencyInfo))
 
-checkDependencyInfo :: Map.Map FilePath (Maybe UTCTime) -> IO Bool
+-- This is pristine information about a component
+data RawComponentInfo = RawComponentInfo
+  { rawComponentUnitId :: InstalledUnitId
+  -- | Unprocessed DynFlags. Contains inplace packages such as libraries.
+  -- We do not want to use them unprocessed.
+  , rawComponentDynFlags :: DynFlags
+  -- | All targets of this components.
+  , rawComponentTargets :: [Target]
+  -- | Filepath which caused the creation of this component
+  , rawComponentFP :: NormalizedFilePath
+  -- | Component Options used to load the component.
+  , rawComponentCOptions :: ComponentOptions
+  -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
+  -- to last modification time. See Note [Multi Cradle Dependency Info].
+  , rawComponentDependencyInfo :: DependencyInfo
+  }
+
+-- This is processed information about the component, in particular the dynflags will be modified.
+data ComponentInfo = ComponentInfo
+  { componentUnitId :: InstalledUnitId
+  -- | Processed DynFlags. Does not contain inplace packages such as local
+  -- libraries. Can be used to actually load this Component.
+  , componentDynFlags :: DynFlags
+  -- | Internal units, such as local libraries, that this component
+  -- is loaded with. These have been extracted from the original
+  -- ComponentOptions.
+  , componentInternalUnits :: [InstalledUnitId]
+  -- | All targets of this components.
+  , componentTargets :: [Target]
+  -- | Filepath which caused the creation of this component
+  , componentFP :: NormalizedFilePath
+  -- | Component Options used to load the component.
+  , componentCOptions :: ComponentOptions
+  -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
+  -- to last modification time. See Note [Multi Cradle Dependency Info]
+  , componentDependencyInfo :: DependencyInfo
+  }
+
+-- | Check if any dependency has been modified lately.
+checkDependencyInfo :: DependencyInfo -> IO Bool
 checkDependencyInfo old_di = do
   di <- getDependencyInfo (Map.keys old_di)
   return (di == old_di)
 
+-- Note [Multi Cradle Dependency Info]
+-- ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Why do we implement our own file modification tracking here?
+-- The primary reason is that the custom caching logic is quite complicated and going into shake
+-- adds even more complexity and more indirection. I did try for about 5 hours to work out how to
+-- use shake rules rather than IO but eventually gave up.
 
-
-getDependencyInfo :: [FilePath] -> IO (Map.Map FilePath (Maybe UTCTime))
+-- | Computes a mapping from a filepath to its latest modification date.
+-- See Note [Multi Cradle Dependency Info] why we do this ourselves instead
+-- of letting shake take care of it.
+getDependencyInfo :: [FilePath] -> IO DependencyInfo
 getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 
   where
-    do_one fp = do
-      exists <- IO.doesFileExist fp
-      if exists
-        then do
-          mtime <- getModificationTime fp
-          return (fp, Just mtime)
-        else return (fp, Nothing)
+    tryIO :: IO a -> IO (Either IOException a)
+    tryIO = try
 
--- This function removes all the -package flags which refer to packages we
+    do_one :: FilePath -> IO (FilePath, Maybe UTCTime)
+    do_one fp = (fp,) . eitherToMaybe <$> tryIO (getModificationTime fp)
+
+-- | This function removes all the -package flags which refer to packages we
 -- are going to deal with ourselves. For example, if a executable depends
 -- on a library component, then this function will remove the library flag
 -- from the package flags for the executable
@@ -604,7 +690,9 @@ removeInplacePackages us df = (df { packageFlags = ps
   where
     (uids, ps) = partitionEithers (map go (packageFlags df))
     fake_uid = toInstalledUnitId (stringToUnitId "fake_uid")
-    go p@(ExposePackage _ (UnitIdArg u) _) = if (toInstalledUnitId u `elem` us) then Left (toInstalledUnitId u) else Right p
+    go p@(ExposePackage _ (UnitIdArg u) _) = if toInstalledUnitId u `elem` us
+                                                  then Left (toInstalledUnitId u)
+                                                  else Right p
     go p = Right p
 
 -- | Memoize an IO function, with the characteristics:
@@ -624,10 +712,10 @@ memoIO op = do
                 return (Map.insert k res mp, res)
             Just res -> return (mp, res)
 
+-- | Throws if package flags are unsatisfiable
 setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target])
 setOptions (ComponentOptions theOpts compRoot _deps) dflags = do
-    (dflags_, targets) <- addCmdOpts theOpts dflags
-    let dflags' = makeDynFlagsAbsolute compRoot dflags_
+    (dflags', targets) <- addCmdOpts theOpts dflags
     let dflags'' =
           -- disabled, generated directly by ghcide instead
           flip gopt_unset Opt_WriteInterface $
@@ -636,11 +724,12 @@ setOptions (ComponentOptions theOpts compRoot _deps) dflags = do
           dontWriteHieFiles $
           setIgnoreInterfacePragmas $
           setLinkerOptions $
-          disableOptimisation dflags'
+          disableOptimisation $
+          makeDynFlagsAbsolute compRoot dflags'
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
-    (final_df, _) <- liftIO $ initPackages dflags''
---    let df'' = gopt_unset df' Opt_WarnIsError
+    -- Throws if a -package flag cannot be satisfied.
+    (final_df, _) <- liftIO $ wrapPackageSetupException $ initPackages dflags''
     return (final_df, targets)
 
 
@@ -671,29 +760,82 @@ getCacheDir prefix opts = IO.getXdgDirectory IO.XdgCache (cacheDir </> prefix ++
     where
         -- Create a unique folder per set of different GHC options, assuming that each different set of
         -- GHC options will create incompatible interface files.
-        opts_hash = B.unpack $ encode $ H.finalize $ H.updates H.init $ (map B.pack opts)
+        opts_hash = B.unpack $ encode $ H.finalize $ H.updates H.init (map B.pack opts)
 
--- Prefix for the cache path
+-- | Sub directory for the cache path
 cacheDir :: String
 cacheDir = "ghcide"
 
--- TODO: pass cabal ghc version to this
--- ghcVersionChecker :: IO VersionCheck
--- ghcVersionChecker = $$(makeGhcVersionChecker (pure <$> getLibdir))
+notifyCradleLoaded :: FilePath -> FromServerMessage
+notifyCradleLoaded fp =
+    NotCustomServer $
+    NotificationMessage "2.0" (CustomServerMethod cradleLoadedMethod) $
+    toJSON fp
 
--- checkGhcVersion :: IO (Maybe HscEnvEq)
--- checkGhcVersion = do
---     res <- ghcVersionChecker
---     case res of
---         Failure err -> do
---           putStrLn $ "Error while checking GHC version: " ++ show err
---           return Nothing
---         Mismatch {..} ->
---           return $ Just GhcVersionMismatch {..}
---         _ ->
---           return Nothing
---
+cradleLoadedMethod :: T.Text
+cradleLoadedMethod = "ghcide/cradle/loaded"
 
+----------------------------------------------------------------------------------------------------
+
+ghcVersionChecker :: GhcVersionChecker
+ghcVersionChecker = $$(makeGhcVersionChecker getGhcideLibdir)
+
+-- | Throws a 'PackageSetupException' if the 'Session' cannot be used by ghcide
+checkSession :: Logger -> Ghc PackageCheckResult -> Ghc ()
+checkSession logger ghcLibCheck =
+    ghcLibCheck >>= \res -> case guessCompatibility res of
+        ProbablyCompatible mbWarning ->
+            for_ mbWarning $ liftIO . logInfo logger . T.pack
+        NotCompatible err ->
+            liftIO $ throwIO $ PackageCheckFailed err
+
+data PackageSetupException
+    = PackageSetupException
+        { message     :: !String
+        }
+    | GhcVersionMismatch
+        { compileTime :: !Version
+        , runTime     :: !Version
+        }
+    | PackageCheckFailed !NotCompatibleReason
+    deriving (Eq, Show, Typeable)
+
+instance Exception PackageSetupException
+
+-- | Wrap any exception as a 'PackageSetupException'
+wrapPackageSetupException :: IO a -> IO a
+wrapPackageSetupException = handleAny $ \case
+  e | Just (pkgE :: PackageSetupException) <- fromException e -> throwIO pkgE
+  e -> (throwIO . PackageSetupException . show) e
+
+showPackageSetupException :: Version -> PackageSetupException -> String
+showPackageSetupException _ GhcVersionMismatch{..} = unwords
+    ["ghcide compiled against GHC"
+    ,showVersion compileTime
+    ,"but currently using"
+    ,showVersion runTime
+    ,"\nThis is unsupported, ghcide must be compiled with the same GHC version as the project."
+    ]
+showPackageSetupException compileTime PackageSetupException{..} = unwords
+    [ "ghcide compiled by GHC", showVersion compileTime
+    , "failed to load packages:", message <> "."
+    , "\nPlease ensure that ghcide is compiled with the same GHC installation as the project."]
+showPackageSetupException _ (PackageCheckFailed PackageVersionMismatch{..}) = unwords
+    ["ghcide compiled with package "
+    , packageName <> "-" <> showVersion compileTime
+    ,"but project uses package"
+    , packageName <> "-" <> showVersion runTime
+    ,"\nThis is unsupported, ghcide must be compiled with the same GHC installation as the project."
+    ]
+showPackageSetupException _ (PackageCheckFailed BasePackageAbiMismatch{..}) = unwords
+    ["ghcide compiled with base-" <> showVersion compileTime <> "-" <> compileTimeAbi
+    ,"but project uses base-" <> showVersion compileTime <> "-" <> runTimeAbi
+    ,"\nThis is unsupported, ghcide must be compiled with the same GHC installation as the project."
+    ]
+
+renderPackageSetupException :: Version -> FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
+renderPackageSetupException compileTime fp e =
+    ideErrorWithSource (Just "cradle") (Just DsError) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException compileTime e)
 
 isDistBinary :: Bool
 #ifdef DIST_BINARY

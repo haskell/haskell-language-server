@@ -57,6 +57,7 @@ library
       Ide.Plugin.Pragmas
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
+      Ide.Plugin.StylishHaskell
       Ide.PluginUtils
       Ide.Types
       Ide.Version
@@ -92,6 +93,7 @@ library
     , process
     , regex-tdfa >= 1.3.1.0
     , shake >= 0.17.5
+    , stylish-haskell == 0.11.*
     , text
     , transformers
     , unordered-containers
@@ -161,7 +163,7 @@ executable haskell-language-server
      -- which works for now.
     , ghc
      --------------------------------------------------------------
-    , ghc-check >= 0.3.0.1 && < 0.4
+    , ghc-check >= 0.5.0.1 && < 0.6
     , ghc-paths
     , ghcide
     , gitrev
@@ -171,6 +173,7 @@ executable haskell-language-server
     , haskell-language-server
     , hslogger
     , optparse-applicative
+    , safe-exceptions
     , shake >= 0.17.5
     , text
     , time
@@ -254,6 +257,7 @@ test-suite func-test
                       , ghcide:ghcide-test-preprocessor
   build-depends:        base >=4.7 && <5
                       , aeson
+                      , bytestring
                       , data-default
                       , directory
                       , filepath
@@ -266,6 +270,7 @@ test-suite func-test
                       , tasty
                       , tasty-ant-xml >= 1.1.6
                       , tasty-expected-failure
+                      , tasty-golden
                       , tasty-hunit
                       , tasty-rerun
                       , text

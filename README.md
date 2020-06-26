@@ -106,7 +106,7 @@ cd haskell-language-server
 #### Building
 
 Note, on first invocation of the build script with stack, a GHC is being installed for execution.
-The GHC used for the `install.hs` can be adjusted in `./install/shake.yaml` by using a different resolver.
+The GHC used for the `install.hs` can be adjusted in `./install/stack.yaml` by using a different resolver.
 
 Available commands can be seen with:
 
@@ -497,15 +497,27 @@ args = ["--lsp"]
 
 ### Hacking on haskell-language-server
 
-Haskell-language-server can be used on its own project.  We have supplied
-preset samples of `hie.yaml` files for stack and cabal, simply copy
-the appropriate template to `hie.yaml` and it should work.
+Haskell-language-server can be used on itself. We provide
+preset samples of `hie.yaml` for Cabal and Stack.
 
-- `hie.yaml.cbl` for cabal
-- `hie.yaml.stack` for stack
+Note: the `./install/` folder is not directly tied to the project so it has dedicated `./install/hie.yaml.[cbl|stack]`
+templates.
 
-Two sample `hie.yaml` files are provided, `hie.yaml.stack` for stack
-usage, `hie.yaml.cbl` for cabal. Simply copy the relevant one to be
-`hie.yaml` and it should work.
+#### Using Cabal
 
-The developers tend to hang out at [our IRC channel](https://webchat.freenode.net/?channels=haskell-ide-engine) at `#haskell-ide-engine` on `freenode`.
+```shell
+$ cp hie.yaml.cbl hie.yaml
+$ cp install/hie.yaml.cbl install/hie.yaml
+```
+
+#### Using Stack
+
+Note: Stack project must also be built once until [this issue](https://github.com/commercialhaskell/stack/issues/5213) is fixed.
+
+```shell
+$ cp hie.yaml.stack hie.yaml
+$ cp install/hie.yaml.stack install/hie.yaml
+$ stack build --test --no-run-tests
+$ cd install
+$ stack build
+```
