@@ -6,6 +6,14 @@ cradle:
     - path: "./test/testdata/"
       config: { cradle: { none:  } }
 
+    - path: ./Setup.hs
+      config:
+        cradle:
+          direct:
+            arguments:
+              - "-package Cabal"
+              - "-package base"
+
     - path: "./"
       config:
         cradle:
