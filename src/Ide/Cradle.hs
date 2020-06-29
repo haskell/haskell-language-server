@@ -419,7 +419,7 @@ cabalHelperCradle file = do
                                           , componentRoot = cwd
                                           , componentDependencies = []
                                           }
-                                , runGhc = \_ -> pure Nothing
+                                , runGhcCmd = \_ -> pure Nothing
                                 }
                }
     Just (Ex proj) -> do
@@ -447,7 +447,7 @@ cabalHelperCradle file = do
                    , cradleOptsProg =
                        CradleAction { actionName = Bios.Other (projectNoneType proj)
                                     , runCradle = \_ _ -> return CradleNone
-                                    , runGhc = \_ -> pure Nothing
+                                    , runGhcCmd = \_ -> pure Nothing
                                     }
                    }
         Just realPackage -> do
@@ -468,7 +468,7 @@ cabalHelperCradle file = do
                                         realPackage
                                         normalisedPackageLocation
                                         fp
-                                    , runGhc = \_ -> pure Nothing
+                                    , runGhcCmd = \_ -> pure Nothing
                                     }
                    }
 

@@ -446,7 +446,7 @@ loadSession dir = do
                 -- also note that getting the runtime ghc lib dir can end up configuring
                 -- and building dependencies through the build tool, so include it in this
                 -- progress section.
-                libDir <- getRuntimeGhcLibDir cradle isDistBinary
+                libDir <- getRuntimeGhcLibDir cradle
                 opts <- cradleToSessionOpts cradle cfp
                 return (opts, libDir)
 

@@ -11,7 +11,7 @@ source-repository-package
 source-repository-package
     type: git
     location: https://github.com/bubba/hie-bios.git
-    tag: a18740914beb76bacfd7f866cdb7228433a5b5cc
+    tag: a013b2a372ab618bc885ba8f2c11eef3c9ab824b
 
 tests: true
 documentation: true
