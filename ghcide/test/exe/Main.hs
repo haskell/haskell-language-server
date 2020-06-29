@@ -481,6 +481,8 @@ codeActionTests = testGroup "code actions"
   , addSigActionTests
   , insertNewDefinitionTests
   , deleteUnusedDefinitionTests
+  , addInstanceConstraintTests
+  , addFunctionConstraintTests
   ]
 
 codeLensesTests :: TestTree
@@ -1326,6 +1328,130 @@ fillTypedHoleTests = let
           "_a" "_b" "_c"
           "_a" "_b"  "parameterInt"
 #endif
+  ]
+
+addInstanceConstraintTests :: TestTree
+addInstanceConstraintTests = let
+  missingConstraintSourceCode :: Maybe T.Text -> T.Text
+  missingConstraintSourceCode mConstraint =
+    let constraint = maybe "" (<> " => ") mConstraint
+     in T.unlines
+    [ "module Testing where"
+    , ""
+    , "data Wrap a = Wrap a"
+    , ""
+    , "instance " <> constraint <> "Eq (Wrap a) where"
+    , "  (Wrap x) == (Wrap y) = x == y"
+    ]
+
+  incompleteConstraintSourceCode :: Maybe T.Text -> T.Text
+  incompleteConstraintSourceCode mConstraint =
+    let constraint = maybe "Eq a" (\c -> "(Eq a, " <> c <> ")")  mConstraint
+     in T.unlines
+    [ "module Testing where"
+    , ""
+    , "data Pair a b = Pair a b"
+    , ""
+    , "instance " <> constraint <> " => Eq (Pair a b) where"
+    , "  (Pair x y) == (Pair x' y') = x == x' && y == y'"
+    ]
+
+  incompleteConstraintSourceCode2 :: Maybe T.Text -> T.Text
+  incompleteConstraintSourceCode2 mConstraint =
+    let constraint = maybe "(Eq a, Eq b)" (\c -> "(Eq a, Eq b, " <> c <> ")")  mConstraint
+     in T.unlines
+    [ "module Testing where"
+    , ""
+    , "data Three a b c = Three a b c"
+    , ""
+    , "instance " <> constraint <> " => Eq (Three a b c) where"
+    , "  (Three x y z) == (Three x' y' z') = x == x' && y == y' && z == z'"
+    ]
+
+  check :: T.Text -> T.Text -> T.Text -> TestTree
+  check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
+    doc <- createDoc "Testing.hs" "haskell" originalCode
+    _ <- waitForDiagnostics
+    actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 68))
+    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+    executeCodeAction chosenAction
+    modifiedCode <- documentContents doc
+    liftIO $ expectedCode @=? modifiedCode
+
+  in testGroup "add instance constraint"
+  [ check
+    "Add `Eq a` to the context of the instance declaration"
+    (missingConstraintSourceCode Nothing)
+    (missingConstraintSourceCode $ Just "Eq a")
+  , check
+    "Add `Eq b` to the context of the instance declaration"
+    (incompleteConstraintSourceCode Nothing)
+    (incompleteConstraintSourceCode $ Just "Eq b")
+  , check
+    "Add `Eq c` to the context of the instance declaration"
+    (incompleteConstraintSourceCode2 Nothing)
+    (incompleteConstraintSourceCode2 $ Just "Eq c")
+  ]
+
+addFunctionConstraintTests :: TestTree
+addFunctionConstraintTests = let
+  missingConstraintSourceCode :: Maybe T.Text -> T.Text
+  missingConstraintSourceCode mConstraint =
+    let constraint = maybe "" (<> " => ") mConstraint
+     in T.unlines
+    [ "module Testing where"
+    , ""
+    , "eq :: " <> constraint <> "a -> a -> Bool"
+    , "eq x y = x == y"
+    ]
+
+  incompleteConstraintSourceCode :: Maybe T.Text -> T.Text
+  incompleteConstraintSourceCode mConstraint =
+    let constraint = maybe "Eq a" (\c -> "(Eq a, " <> c <> ")") mConstraint
+     in T.unlines
+    [ "module Testing where"
+    , ""
+    , "data Pair a b = Pair a b"
+    , ""
+    , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
+    , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
+    ]
+
+  incompleteConstraintSourceCode2 :: Maybe T.Text -> T.Text
+  incompleteConstraintSourceCode2 mConstraint =
+    let constraint = maybe "(Eq a, Eq b)" (\c -> "(Eq a, Eq b, " <> c <> ")") mConstraint
+     in T.unlines
+    [ "module Testing where"
+    , ""
+    , "data Three a b c = Three a b c"
+    , ""
+    , "eq :: " <> constraint <> " => Three a b c -> Three a b c -> Bool"
+    , "eq (Three x y z) (Three x' y' z') = x == x' && y == y' && z == z'"
+    ]
+
+  check :: T.Text -> T.Text -> T.Text -> TestTree
+  check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
+    doc <- createDoc "Testing.hs" "haskell" originalCode
+    _ <- waitForDiagnostics
+    actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
+    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+    executeCodeAction chosenAction
+    modifiedCode <- documentContents doc
+    liftIO $ expectedCode @=? modifiedCode
+
+  in testGroup "add function constraint"
+  [ check
+    "Add `Eq a` to the context of the type signature for `eq`"
+    (missingConstraintSourceCode Nothing)
+    (missingConstraintSourceCode $ Just "Eq a")
+  , check
+    "Add `Eq b` to the context of the type signature for `eq`"
+    (incompleteConstraintSourceCode Nothing)
+    (incompleteConstraintSourceCode $ Just "Eq b")
+  , check
+    "Add `Eq c` to the context of the type signature for `eq`"
+    (incompleteConstraintSourceCode2 Nothing)
+    (incompleteConstraintSourceCode2 $ Just "Eq c")
   ]
 
 addSigActionTests :: TestTree
