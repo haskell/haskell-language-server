@@ -56,6 +56,9 @@ import Outputable (ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
 import System.Time.Extra (showDuration, duration)
+import Data.Function
+import Control.Arrow ((>>>))
+import Data.Functor
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
@@ -155,6 +158,7 @@ suggestAction dflags packageExports ideOptions parsedModule text diag = concat
     , suggestModuleTypo diag
     , suggestReplaceIdentifier text diag
     , suggestSignature True diag
+    , suggestConstraint text diag
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestRemoveRedundantImport pm text diag
@@ -403,6 +407,140 @@ suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
             = 0
 
 suggestSignature _ _ = []
+
+-- | Suggests a constraint for a declaration for which a constraint is missing.
+suggestConstraint :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestConstraint mContents diag@Diagnostic {..}
+  | Just contents <- mContents
+  , Just missingConstraint <- findMissingConstraint _message
+  = let codeAction = if _message =~ ("the type signature for:" :: String)
+                        then suggestFunctionConstraint
+                        else suggestInstanceConstraint
+     in codeAction contents diag missingConstraint
+  | otherwise = []
+    where
+      findMissingConstraint :: T.Text -> Maybe T.Text
+      findMissingConstraint t =
+        let regex = "(No instance for|Could not deduce) \\((.+)\\) arising from a use of"
+         in matchRegex t regex <&> last
+
+normalizeConstraints :: T.Text -> T.Text -> T.Text
+normalizeConstraints existingConstraints constraint =
+  let constraintsInit = if "(" `T.isPrefixOf` existingConstraints
+                           then T.dropEnd 1 existingConstraints
+                           else "(" <> existingConstraints
+   in constraintsInit <> ", " <> constraint <> ")"
+
+-- | Suggests a constraint for an instance declaration for which a constraint is missing.
+suggestInstanceConstraint :: T.Text -> Diagnostic -> T.Text -> [(T.Text, [TextEdit])]
+suggestInstanceConstraint contents Diagnostic {..} missingConstraint
+-- Suggests a constraint for an instance declaration with no existing constraints.
+-- • No instance for (Eq a) arising from a use of ‘==’
+--   Possible fix: add (Eq a) to the context of the instance declaration
+-- • In the expression: x == y
+--   In an equation for ‘==’: (Wrap x) == (Wrap y) = x == y
+--   In the instance declaration for ‘Eq (Wrap a)’
+  | Just [instanceDeclaration] <- matchRegex _message "In the instance declaration for ‘([^`]*)’"
+  = let instanceLine = contents
+          & T.splitOn ("instance " <> instanceDeclaration)
+          & head & T.lines & length
+        startOfConstraint = Position instanceLine (length ("instance " :: String))
+        range = Range startOfConstraint startOfConstraint
+        newConstraint = missingConstraint <> " => "
+     in [(actionTitle missingConstraint, [TextEdit range newConstraint])]
+
+-- Suggests a constraint for an instance declaration with one or more existing constraints.
+-- • Could not deduce (Eq b) arising from a use of ‘==’
+--   from the context: Eq a
+--     bound by the instance declaration at /path/to/Main.hs:7:10-32
+--   Possible fix: add (Eq b) to the context of the instance declaration
+-- • In the second argument of ‘(&&)’, namely ‘x' == y'’
+--   In the expression: x == y && x' == y'
+--   In an equation for ‘==’:
+--       (Pair x x') == (Pair y y') = x == y && x' == y'
+  | Just [instanceLineStr, constraintFirstCharStr]
+    <- matchRegex _message "bound by the instance declaration at .+:([0-9]+):([0-9]+)"
+  = let existingConstraints = findExistingConstraints _message
+        newConstraints = normalizeConstraints existingConstraints missingConstraint
+        instanceLine = readPositionNumber instanceLineStr
+        constraintFirstChar = readPositionNumber constraintFirstCharStr
+        startOfConstraint = Position instanceLine constraintFirstChar
+        endOfConstraint = Position instanceLine $
+          constraintFirstChar + T.length existingConstraints
+        range = Range startOfConstraint endOfConstraint
+     in [(actionTitle missingConstraint, [TextEdit range newConstraints])]
+  | otherwise = []
+    where
+      findExistingConstraints :: T.Text -> T.Text
+      findExistingConstraints t =
+        T.replace "from the context: " "" . T.strip $ T.lines t !! 1
+
+      readPositionNumber :: T.Text -> Int
+      readPositionNumber = T.unpack >>> read >>> pred
+
+      actionTitle :: T.Text -> T.Text
+      actionTitle constraint = "Add `" <> constraint
+        <> "` to the context of the instance declaration"
+
+findTypeSignatureName :: T.Text -> Maybe T.Text
+findTypeSignatureName t = matchRegex t "([^ ]+) :: " <&> head
+
+findTypeSignatureLine :: T.Text -> T.Text -> Int
+findTypeSignatureLine contents typeSignatureName =
+  T.splitOn (typeSignatureName <> " :: ") contents & head & T.lines & length
+
+-- | Suggests a constraint for a type signature for which a constraint is missing.
+suggestFunctionConstraint :: T.Text -> Diagnostic -> T.Text -> [(T.Text, [TextEdit])]
+suggestFunctionConstraint contents Diagnostic{..} missingConstraint
+-- Suggests a constraint for a type signature with any number of existing constraints.
+-- • No instance for (Eq a) arising from a use of ‘==’
+--   Possible fix:
+--     add (Eq a) to the context of
+--       the type signature for:
+--         eq :: forall a. a -> a -> Bool
+-- • In the expression: x == y
+--   In an equation for ‘eq’: eq x y = x == y
+
+-- • Could not deduce (Eq b) arising from a use of ‘==’
+--   from the context: Eq a
+--     bound by the type signature for:
+--                eq :: forall a b. Eq a => Pair a b -> Pair a b -> Bool
+--     at Main.hs:5:1-42
+--   Possible fix:
+--     add (Eq b) to the context of
+--       the type signature for:
+--         eq :: forall a b. Eq a => Pair a b -> Pair a b -> Bool
+-- • In the second argument of ‘(&&)’, namely ‘y == y'’
+--   In the expression: x == x' && y == y'
+--   In an equation for ‘eq’:
+--       eq (Pair x y) (Pair x' y') = x == x' && y == y'
+  | Just typeSignatureName <- findTypeSignatureName _message
+  = let mExistingConstraints = findExistingConstraints _message
+        newConstraint = buildNewConstraints missingConstraint mExistingConstraints
+        typeSignatureLine = findTypeSignatureLine contents typeSignatureName
+        typeSignatureFirstChar = T.length $ typeSignatureName <> " :: "
+        startOfConstraint = Position typeSignatureLine typeSignatureFirstChar
+        endOfConstraint = Position typeSignatureLine $
+          typeSignatureFirstChar + maybe 0 T.length mExistingConstraints
+        range = Range startOfConstraint endOfConstraint
+     in [(actionTitle missingConstraint typeSignatureName, [TextEdit range newConstraint])]
+  | otherwise = []
+    where
+      findExistingConstraints :: T.Text -> Maybe T.Text
+      findExistingConstraints message =
+        if message =~ ("from the context:" :: String)
+           then fmap (T.strip . head) $ matchRegex message "\\. ([^=]+)"
+           else Nothing
+
+      buildNewConstraints :: T.Text -> Maybe T.Text -> T.Text
+      buildNewConstraints constraint mExistingConstraints =
+        case mExistingConstraints of
+          Just existingConstraints -> normalizeConstraints existingConstraints constraint
+          Nothing -> constraint <> " => "
+
+      actionTitle :: T.Text -> T.Text -> T.Text
+      actionTitle constraint typeSignatureName = "Add `" <> constraint
+        <> "` to the context of the type signature for `" <> typeSignatureName <> "`"
 
 -------------------------------------------------------------------------------------------------
 
