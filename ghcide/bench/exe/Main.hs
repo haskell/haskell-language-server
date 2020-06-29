@@ -23,8 +23,8 @@
      - Analyisis of performance over the commit history of the project
 
   How to run:
-     1. `cabal bench`
-     2. `cabal exec cabal run ghcide-bench -- -- ghcide-bench-options`
+     1. `cabal exec cabal run ghcide-bench -- -- ghcide-bench-options`
+     1. `stack build ghcide:ghcide-bench && stack exec ghcide-bench -- -- ghcide-bench-options`
 
   Note that the package database influences the response times of certain actions,
   e.g. code actions, and therefore the two methods above do not necessarily

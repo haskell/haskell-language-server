@@ -36,7 +36,7 @@ versions:
 # - v0.0.5
 # - v0.0.6
 # - v0.1.0
-- v0.2.0
-- upstream: origin/master
+# - v0.2.0
+- upstream: upstream/master
 - HEAD
 
