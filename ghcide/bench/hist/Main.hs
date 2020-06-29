@@ -29,11 +29,11 @@
 
    To execute the script:
 
-   > stack build ghcide:exe:benchHist && stack exec benchHist all
+   > stack bench
 
    To build a specific analysis, enumerate the desired file artifacts
 
-   > stack exec benchHist bench-hist/HEAD/results.csv bench-hist/HEAD/edit.diff.svg
+   > stack bench --ba "bench-hist/HEAD/results.csv bench-hist/HEAD/edit.diff.svg"
 
  -}
 {-# LANGUAGE DeriveAnyClass    #-}
@@ -124,6 +124,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
            ]
 
   build -/- "*/commitid" %> \out -> do
+      alwaysRerun
 
       let [_,ver,_] = splitDirectories out
       mbEntry <- find ((== T.pack ver) . humanName) <$> readVersions
@@ -178,9 +179,10 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
 
   priority 0 $
     [ build -/- "*/*.csv",
-      build -/- "*/*.benchmark-gcStats"
+      build -/- "*/*.benchmark-gcStats",
+      build -/- "*/*.log"
     ]
-      &%> \[outcsv, _outGc] -> do
+      &%> \[outcsv, _outGc, outLog] -> do
         let [_, _, exp] = splitDirectories outcsv
         samples <- readSamples
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
@@ -188,27 +190,25 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
             ghcpath = dropFileName outcsv </> "ghc.path"
         need [ghcide, ghcpath]
         ghcPath <- readFile' ghcpath
-        verb <- getVerbosity
         withResource ghcideBenchResource 1 $ do
-          Stdout res <-
-            command
-              [ EchoStdout True,
+          command_
+              [ EchoStdout False,
+                FileStdout outLog,
                 RemEnv "NIX_GHC_LIBDIR",
                 RemEnv "GHC_PACKAGE_PATH",
                 AddPath [takeDirectory ghcPath, "."] []
               ]
               ghcideBenchPath
               [ "--timeout=3000",
+                "-v",
                 "--samples=" <> show samples,
                 "--csv=" <> outcsv,
                 "--example-package-version=3.0.0.0",
                 "--rts=-I0.5",
                 "--ghcide=" <> ghcide,
                 "--select",
-                unescaped (unescapeExperiment (Escaped $ dropExtension exp)),
-                if verb > Normal then "-v" else "-q"
+                unescaped (unescapeExperiment (Escaped $ dropExtension exp))
               ]
-          writeFile' (replaceExtension outcsv "log") res
           cmd_ Shell $ "mv *.benchmark-gcStats " <> dropFileName outcsv
 
   build -/- "results.csv" %> \out -> do

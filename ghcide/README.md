@@ -312,12 +312,14 @@ See the [tasty-rerun](https://hackage.haskell.org/package/tasty-rerun-1.1.17/doc
 
 If you are touching performance sensitive code, take the time to run a differential
 benchmark between HEAD and upstream using the benchHist script. The configuration in
-`bench/hist.yaml` is setup to do this by default with the command:
+`bench/hist.yaml` is setup to do this by default assuming upstream is
+`origin/master`. Run the benchmarks with `stack`:
 
-    stack build ghcide:benchHist && stack exec benchHist
+    export STACK_YAML=...
+    stack bench
 
 It should take around 15 minutes and the results will be stored in the `bench-hist` folder.
-To interpret the results, see the comments in the `bench/Hist/Main.hs` module.
+To interpret the results, see the comments in the `bench/hist/Main.hs` module.
 
 ### Building the extension
 
