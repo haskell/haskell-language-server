@@ -48,6 +48,7 @@ import Data.List.Extra
 import qualified Data.Text as T
 import Data.Tuple.Extra ((&&&))
 import HscTypes
+import SrcLoc
 import Parser
 import Text.Regex.TDFA ((=~), (=~~))
 import Text.Regex.TDFA.Text()
@@ -158,6 +159,7 @@ suggestAction dflags packageExports ideOptions parsedModule text diag = concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestRemoveRedundantImport pm text diag
     ++ suggestNewImport packageExports pm diag
+    ++ suggestDeleteTopBinding pm diag
     | Just pm <- [parsedModule]]
 
 
@@ -179,6 +181,33 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | _message =~ ("The( qualified)? import of [^ ]* is redundant" :: String)
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
+
+suggestDeleteTopBinding :: ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestDeleteTopBinding ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} Diagnostic{_range=_range,..}
+-- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
+    | Just [name] <- matchRegex _message ".*Defined but not used: ‘([^ ]+)’"
+    , let allTopLevel = filter (isTopLevel . fst)
+                        . map (\(L l b) -> (srcSpanToRange l, b))
+                        . sortLocated
+                        $ hsmodDecls
+          sameName = filter (matchesBindingName (T.unpack name) . snd) allTopLevel
+    , not (null sameName)
+            = [("Delete ‘" <> name <> "’", flip TextEdit "" . toNextBinding allTopLevel . fst <$> sameName )]
+    | otherwise = []
+    where
+      isTopLevel l = (_character . _start) l == 0
+
+      forwardLines lines r = r {_end = (_end r) {_line = (_line . _end $ r) + lines, _character = 0}}
+
+      toNextBinding bindings r@Range { _end = Position {_line = l} }
+        | Just (Range { _start = Position {_line = l'}}, _) <- find ((> l) . _line . _start . fst) bindings
+        = forwardLines (l' - l) r
+      toNextBinding _ r  = r
+
+      matchesBindingName :: String -> HsDecl GhcPs -> Bool
+      matchesBindingName b (ValD FunBind {fun_id=L _ x}) = showSDocUnsafe (ppr x) == b
+      matchesBindingName b (SigD (TypeSig (L _ x:_) _)) = showSDocUnsafe (ppr x) == b
+      matchesBindingName _ _ = False
 
 suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestReplaceIdentifier contents Diagnostic{_range=_range,..}

@@ -32,6 +32,8 @@ module Development.IDE.GHC.Compat(
     pattern InstD,
     pattern TyClD,
     pattern ValD,
+    pattern SigD,
+    pattern TypeSig,
     pattern ClassOpSig,
     pattern IEThingAll,
     pattern IEThingWith,
@@ -52,7 +54,7 @@ import Packages
 
 import qualified GHC
 import GHC hiding (
-      ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, ModLocation
+      ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, SigD, TypeSig, ModLocation
 #if MIN_GHC_API_VERSION(8,6,0)
     , getConArgs
 #endif
@@ -158,6 +160,22 @@ pattern TyClD x <-
     GHC.TyClD _ x
 #else
     GHC.TyClD x
+#endif
+
+pattern SigD :: Sig p -> HsDecl p
+pattern SigD x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.SigD _ x
+#else
+    GHC.SigD x
+#endif
+
+pattern TypeSig :: [Located (IdP p)] -> LHsSigWcType p -> Sig p
+pattern TypeSig x y <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.TypeSig _ x y
+#else
+    GHC.TypeSig x y
 #endif
 
 pattern ClassOpSig :: Bool -> [Located (IdP pass)] -> LHsSigType pass -> Sig pass
