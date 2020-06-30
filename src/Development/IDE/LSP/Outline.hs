@@ -40,7 +40,7 @@ moduleOutline
 moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentIdentifier uri }
   = case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
-      mb_decls <- runAction ideState $ use GetParsedModule fp
+      mb_decls <- fmap fst <$> runIdeAction "Outline" (shakeExtras ideState) (useWithStaleFast GetParsedModule fp)
       pure $ Right $ case mb_decls of
         Nothing -> DSDocumentSymbols (List [])
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }

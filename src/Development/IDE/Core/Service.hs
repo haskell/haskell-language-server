@@ -9,7 +9,7 @@
 --   using the "Shaker" abstraction layer for in-memory use.
 --
 module Development.IDE.Core.Service(
-    getIdeOptions,
+    getIdeOptions, getIdeOptionsIO,
     IdeState, initialise, shutdown,
     runAction,
     writeProfile,
@@ -20,23 +20,20 @@ module Development.IDE.Core.Service(
 
 import Data.Maybe
 import Development.IDE.Types.Options (IdeOptions(..))
-import Control.Monad
 import Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileStore  (VFSHandle, fileStoreRules)
 import           Development.IDE.Core.FileExists (fileExistsRules)
 import           Development.IDE.Core.OfInterest
-import Development.IDE.Types.Logger
+import Development.IDE.Types.Logger as Logger
 import           Development.Shake
 import qualified Language.Haskell.LSP.Messages as LSP
 import qualified Language.Haskell.LSP.Types as LSP
 import qualified Language.Haskell.LSP.Types.Capabilities as LSP
 
 import           Development.IDE.Core.Shake
+import Control.Monad
 
 
-
-newtype GlobalIdeOptions = GlobalIdeOptions IdeOptions
-instance IsIdeGlobal GlobalIdeOptions
 
 ------------------------------------------------------------
 -- Exposed API
@@ -84,10 +81,6 @@ shutdown = shakeShut
 -- This will return as soon as the result of the action is
 -- available.  There might still be other rules running at this point,
 -- e.g., the ofInterestRule.
-runAction :: IdeState -> Action a -> IO a
-runAction ide action = join $ shakeEnqueue ide action
-
-getIdeOptions :: Action IdeOptions
-getIdeOptions = do
-    GlobalIdeOptions x <- getIdeGlobalAction
-    return x
+runAction :: String -> IdeState -> Action a -> IO a
+runAction herald ide act =
+  join $ shakeEnqueue ide (mkDelayedAction herald Logger.Info act)

@@ -32,7 +32,6 @@ import Development.IDE.Plugin.CodeAction.PositionIndexed
 import Development.IDE.Plugin.CodeAction.RuleTypes
 import Development.IDE.Plugin.CodeAction.Rules
 import Development.IDE.Types.Location
-import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
 import Development.Shake (Rules)
 import qualified Data.HashMap.Strict as Map
@@ -41,7 +40,6 @@ import Language.Haskell.LSP.VFS
 import Language.Haskell.LSP.Messages
 import qualified Data.Rope.UTF16 as Rope
 import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
-import Control.Monad.Trans.Maybe
 import Data.Char
 import Data.Maybe
 import Data.List.Extra
@@ -55,7 +53,6 @@ import Text.Regex.TDFA.Text()
 import Outputable (ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
-import System.Time.Extra (showDuration, duration)
 import Data.Function
 import Control.Arrow ((>>>))
 import Data.Functor
@@ -76,30 +73,20 @@ codeAction
     -> IO (Either ResponseError [CAResult])
 codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
-    let fp = uriToFilePath uri
-        text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
-        mbFile = toNormalizedFilePath' <$> fp
-    logAndRunRequest state fp $ do
-      (ideOptions, parsedModule, join -> env) <- runAction state $
-        (,,) <$> getIdeOptions
-              <*> getParsedModule `traverse` mbFile
-              <*> use GhcSession `traverse` mbFile
-      pkgExports <- runAction state $ (useNoFile_ . PackageExports) `traverse` env
-      let dflags = hsc_dflags . hscEnv <$> env
-      pure $ Right
-          [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-          | x <- xs, (title, tedit) <- suggestAction dflags (fromMaybe mempty pkgExports) ideOptions ( join parsedModule ) text x
-          , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-          ]
-
-logAndRunRequest :: IdeState -> Maybe FilePath -> IO a -> IO a
-logAndRunRequest _de Nothing act = act
-logAndRunRequest ide (Just filepath) act = do
-    (t, res) <- duration act
-    logDebug (ideLogger ide) $
-        "code action request in file: " <> T.pack filepath <>
-        " took " <> T.pack (showDuration t)
-    return res
+    let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
+        mbFile = toNormalizedFilePath' <$> uriToFilePath uri
+    (ideOptions, parsedModule, join -> env) <- runAction "CodeAction" state $
+      (,,) <$> getIdeOptions
+            <*> getParsedModule `traverse` mbFile
+            <*> use GhcSession `traverse` mbFile
+    -- This is quite expensive 0.6-0.7s on GHC
+    pkgExports <- runAction "CodeAction:PackageExports" state $ (useNoFile_ . PackageExports) `traverse` env
+    let dflags = hsc_dflags . hscEnv <$> env
+    pure $ Right
+        [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
+        | x <- xs, (title, tedit) <- suggestAction dflags (fromMaybe mempty pkgExports) ideOptions ( join parsedModule ) text x
+        , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+        ]
 
 -- | Generate code lenses.
 codeLens
@@ -111,7 +98,7 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
     commandId <- makeLspCommandId "typesignature.add"
     fmap (Right . List) $ case uriToFilePath' uri of
       Just (toNormalizedFilePath' -> filePath) -> do
-        _ <- runAction ideState $ runMaybeT $ useE TypeCheck filePath
+        _ <- runAction "codeLens" ideState (use TypeCheck filePath)
         diag <- getDiagnostics ideState
         hDiag <- getHiddenDiagnostics ideState
         pure

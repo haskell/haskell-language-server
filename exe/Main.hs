@@ -130,9 +130,10 @@ main = do
                     , optTesting        = IdeTesting argsTesting
                     , optThreads        = argsThreads
                     }
+                logLevel = if argsVerbose then minBound else Info
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins)
-                getLspId event wProg wIndefProg (logger minBound) debouncer options vfs
+                getLspId event wProg wIndefProg (logger logLevel) debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
         hSetEncoding stdout utf8
@@ -161,7 +162,7 @@ main = do
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
-        results <- runAction ide $ uses TypeCheck (map toNormalizedFilePath' files)
+        results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' files)
         let (worked, failed) = partition fst $ zip (map isJust results) files
         when (failed /= []) $
             putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
