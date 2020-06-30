@@ -50,6 +50,7 @@ import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule)
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.WithDynFlags
 import Data.Either.Extra
+import qualified Development.IDE.Types.Logger as L
 import Data.Maybe
 import           Data.Foldable
 import qualified Data.IntMap.Strict as IntMap
@@ -62,6 +63,7 @@ import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Spans.Type
 import qualified Data.ByteString.Char8 as BS
+import Development.IDE.Core.PositionMapping
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes
@@ -76,10 +78,12 @@ import Development.Shake.Classes hiding (get, put)
 import Control.Monad.Trans.Except (runExceptT)
 import Data.ByteString (ByteString)
 import Control.Concurrent.Async (concurrently)
+import System.Time.Extra
+import Control.Monad.Reader
+import System.Directory ( getModificationTime )
+import Control.Exception
 
 import Control.Monad.State
-import System.IO.Error (isDoesNotExistError)
-import Control.Exception.Safe (IOException, catch)
 import FastString (FastString(uniq))
 import qualified HeaderInfo as Hdr
 
@@ -91,14 +95,14 @@ toIdeResult = either (, Nothing) (([],) . Just)
 
 -- | useE is useful to implement functions that aren’t rules but need shortcircuiting
 -- e.g. getDefinition.
-useE :: IdeRule k v => k -> NormalizedFilePath -> MaybeT Action v
-useE k = MaybeT . use k
+useE :: IdeRule k v => k -> NormalizedFilePath -> MaybeT IdeAction (v, PositionMapping)
+useE k = MaybeT . useWithStaleFast k
 
-useNoFileE :: IdeRule k v => k -> MaybeT Action v
-useNoFileE k = useE k emptyFilePath
+useNoFileE :: IdeRule k v => IdeState -> k -> MaybeT IdeAction v
+useNoFileE _ide k = fst <$> useE k emptyFilePath
 
-usesE :: IdeRule k v => k -> [NormalizedFilePath] -> MaybeT Action [v]
-usesE k = MaybeT . fmap sequence . uses k
+usesE :: IdeRule k v => k -> [NormalizedFilePath] -> MaybeT IdeAction [(v,PositionMapping)]
+usesE k = MaybeT . fmap sequence . mapM (useWithStaleFast k)
 
 defineNoFile :: IdeRule k v => (k -> Action v) -> Rules ()
 defineNoFile f = define $ \k file -> do
@@ -120,65 +124,78 @@ getDependencies :: NormalizedFilePath -> Action (Maybe [NormalizedFilePath])
 getDependencies file = fmap transitiveModuleDeps <$> use GetDependencies file
 
 -- | Try to get hover text for the name under point.
-getAtPoint :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
+getAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [T.Text]))
 getAtPoint file pos = fmap join $ runMaybeT $ do
-  opts <- lift getIdeOptions
-  spans <- useE GetSpanInfo file
-  return $ AtPoint.atPoint opts spans pos
+  ide <- ask
+  opts <- liftIO $ getIdeOptionsIO ide
+  (spans, mapping) <- useE  GetSpanInfo file
+  !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
+  return $ AtPoint.atPoint opts spans pos'
 
 -- | Goto Definition.
-getDefinition :: NormalizedFilePath -> Position -> Action (Maybe Location)
-getDefinition file pos = fmap join $ runMaybeT $ do
-    opts <- lift getIdeOptions
-    spans <- useE GetSpanInfo file
-    lift $ AtPoint.gotoDefinition (getHieFile file) opts (spansExprs spans) pos
+getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe Location)
+getDefinition file pos = runMaybeT $ do
+    ide <- ask
+    opts <- liftIO $ getIdeOptionsIO ide
+    (spans,mapping) <- useE GetSpanInfo file
+    !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
+    AtPoint.gotoDefinition (getHieFile ide file) opts (spansExprs spans) pos'
 
-getTypeDefinition :: NormalizedFilePath -> Position -> Action (Maybe [Location])
+getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
 getTypeDefinition file pos = runMaybeT $ do
-    opts <- lift getIdeOptions
-    spans <- useE GetSpanInfo file
-    lift $ AtPoint.gotoTypeDefinition (getHieFile file) opts (spansExprs spans) pos
-
+    ide <- ask
+    opts <- liftIO $ getIdeOptionsIO ide
+    (spans,mapping) <- useE GetSpanInfo file
+    !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
+    AtPoint.gotoTypeDefinition (getHieFile ide file) opts (spansExprs spans) pos'
 
 getHieFile
-  :: NormalizedFilePath -- ^ file we're editing
+  :: ShakeExtras
+  -> NormalizedFilePath -- ^ file we're editing
   -> Module -- ^ module dep we want info for
-  -> Action (Maybe (HieFile, FilePath)) -- ^ hie stuff for the module
-getHieFile file mod = do
-  TransitiveDependencies {transitiveNamedModuleDeps} <- use_ GetDependencies file
+  -> MaybeT IdeAction (HieFile, FilePath) -- ^ hie stuff for the module
+getHieFile ide file mod = do
+  TransitiveDependencies {transitiveNamedModuleDeps} <- fst <$> useE GetDependencies file
   case find (\x -> nmdModuleName x == moduleName mod) transitiveNamedModuleDeps of
     Just NamedModuleDep{nmdFilePath=nfp} -> do
         let modPath = fromNormalizedFilePath nfp
-        (_diags, hieFile) <- getHomeHieFile nfp
-        return $ (, modPath) <$> hieFile
-    _ -> getPackageHieFile mod file
+        hieFile <- getHomeHieFile nfp
+        return (hieFile, modPath)
+    _ -> getPackageHieFile ide mod file
 
-
-getHomeHieFile :: NormalizedFilePath -> Action ([IOException], Maybe HieFile)
+getHomeHieFile :: NormalizedFilePath -> MaybeT IdeAction HieFile
 getHomeHieFile f = do
-  ms <- use_ GetModSummary f
+  ms <- fst <$> useE GetModSummary f
+  let normal_hie_f = toNormalizedFilePath' hie_f
+      hie_f = ml_hie_file $ ms_location ms
 
-  -- .hi and .hie files are generated as a byproduct of typechecking.
-  -- To avoid duplicating staleness checking already performed for .hi files,
-  -- we overapproximate here by depending on the GetModIface rule.
-  hiFile  <- use GetModIface f
+  mbHieTimestamp <- either (\(_ :: IOException) -> Nothing) Just <$> (liftIO $ try $ getModificationTime hie_f)
+  srcTimestamp   <- MaybeT (either (\(_ :: IOException) -> Nothing) Just <$> (liftIO $ try $ getModificationTime $ fromNormalizedFilePath f))
+  liftIO $ print (mbHieTimestamp, srcTimestamp, hie_f, normal_hie_f)
+  let isUpToDate
+        | Just d <- mbHieTimestamp = d > srcTimestamp
+        | otherwise = False
 
-  case hiFile of
-    Nothing -> return ([], Nothing)
-    Just _ -> liftIO $ do
-        hf <- loadHieFile $ ml_hie_file $ ms_location ms
-        return ([], Just hf)
-      `catch` \e ->
-        if isDoesNotExistError e
-            then return ([], Nothing)
-            else return ([e], Nothing)
+  if isUpToDate
+    then do
+      hf <- liftIO $ whenMaybe isUpToDate (loadHieFile hie_f)
+      MaybeT $ return hf
+    else do
+      wait <- lift $ delayedAction $ mkDelayedAction "OutOfDateHie" L.Info $ do
+        hsc <- hscEnv <$> use_ GhcSession f
+        pm <- use_ GetParsedModule f
+        typeCheckRuleDefinition hsc pm DoGenerateInterfaceFiles
+      _ <- MaybeT $ liftIO $ timeout 1 wait
+      liftIO $ loadHieFile hie_f
 
-getPackageHieFile :: Module             -- ^ Package Module to load .hie file for
+
+getPackageHieFile :: ShakeExtras
+                  -> Module             -- ^ Package Module to load .hie file for
                   -> NormalizedFilePath -- ^ Path of home module importing the package module
-                  -> Action (Maybe (HieFile, FilePath))
-getPackageHieFile mod file = do
-    pkgState  <- hscEnv <$> use_ GhcSession file
-    IdeOptions {..} <- getIdeOptions
+                  -> MaybeT IdeAction (HieFile, FilePath)
+getPackageHieFile ide mod file = do
+    pkgState  <- hscEnv . fst <$> useE GhcSession file
+    IdeOptions {..} <- liftIO $ getIdeOptionsIO ide
     let unitId = moduleUnitId mod
     case lookupPackageConfig unitId pkgState of
         Just pkgConfig -> do
@@ -186,12 +203,12 @@ getPackageHieFile mod file = do
             hieFile <- liftIO $ optLocateHieFile optPkgLocationOpts pkgConfig mod
             path    <- liftIO $ optLocateSrcFile optPkgLocationOpts pkgConfig mod
             case (hieFile, path) of
-                (Just hiePath, Just modPath) ->
+                (Just hiePath, Just modPath) -> MaybeT $
                     -- deliberately loaded outside the Shake graph
                     -- to avoid dependencies on non-workspace files
                         liftIO $ Just . (, modPath) <$> loadHieFile hiePath
-                _ -> return Nothing
-        _ -> return Nothing
+                _ -> MaybeT $ return Nothing
+        _ -> MaybeT $ return Nothing
 
 -- | Parse the contents of a daml file.
 getParsedModule :: NormalizedFilePath -> Action (Maybe ParsedModule)
