@@ -14,6 +14,7 @@ data Arguments = Arguments
     ,argsShakeProfiling :: Maybe FilePath
     ,argsTesting :: Bool
     ,argsThreads :: Int
+    ,argsVerbose :: Bool
     }
 
 getArguments :: IO Arguments
@@ -33,3 +34,4 @@ arguments = Arguments
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory")
       <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")
       <*> option auto (short 'j' <> help "Number of threads (0: automatic)" <> metavar "NUM" <> value 0 <> showDefault)
+      <*> switch (long "verbose" <> help "Include internal events in logging output")

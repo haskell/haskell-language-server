@@ -24,7 +24,7 @@ import           Data.Maybe
 import qualified Data.HashSet                     as S
 import qualified Data.Text                        as Text
 
-import           Development.IDE.Core.FileStore   (setSomethingModified)
+import           Development.IDE.Core.FileStore   (setSomethingModified, setFileModified)
 import           Development.IDE.Core.FileExists  (modifyFileExists)
 import           Development.IDE.Core.OfInterest
 
@@ -39,17 +39,18 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
             whenUriFile _uri $ \file -> do
                 modifyFilesOfInterest ide (S.insert file)
+                setFileModified ide file
                 logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
     ,LSP.didChangeTextDocumentNotificationHandler = withNotification (LSP.didChangeTextDocumentNotificationHandler x) $
         \_ ide (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> do
             updatePositionMapping ide identifier changes
-            setSomethingModified ide
+            whenUriFile _uri $ \file -> setFileModified ide file
             logInfo (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
     ,LSP.didSaveTextDocumentNotificationHandler = withNotification (LSP.didSaveTextDocumentNotificationHandler x) $
         \_ ide (DidSaveTextDocumentParams TextDocumentIdentifier{_uri}) -> do
-            setSomethingModified ide
+            whenUriFile _uri $ \file -> setFileModified ide file
             logInfo (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
     ,LSP.didCloseTextDocumentNotificationHandler = withNotification (LSP.didCloseTextDocumentNotificationHandler x) $

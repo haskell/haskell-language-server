@@ -30,6 +30,7 @@ import VarSet
 
 import Control.Monad.Extra
 import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
 import           Data.Maybe
 import           Data.List
@@ -37,24 +38,24 @@ import qualified Data.Text as T
 
 gotoTypeDefinition
   :: MonadIO m
-  => (Module -> m (Maybe (HieFile, FilePath)))
+  => (Module -> MaybeT m (HieFile, FilePath))
   -> IdeOptions
   -> [SpanInfo]
   -> Position
-  -> m [Location]
+  -> MaybeT m [Location]
 gotoTypeDefinition getHieFile ideOpts srcSpans pos
   = typeLocationsAtPoint getHieFile ideOpts pos srcSpans
 
 -- | Locate the definition of the name at a given position.
 gotoDefinition
   :: MonadIO m
-  => (Module -> m (Maybe (HieFile, FilePath)))
+  => (Module -> MaybeT m (HieFile, FilePath))
   -> IdeOptions
   -> [SpanInfo]
   -> Position
-  -> m (Maybe Location)
+  -> MaybeT m Location
 gotoDefinition getHieFile ideOpts srcSpans pos =
-  listToMaybe <$> locationsAtPoint getHieFile ideOpts pos srcSpans
+  MaybeT . pure . listToMaybe =<< locationsAtPoint getHieFile ideOpts pos srcSpans
 
 -- | Synopsis for the name at a given position.
 atPoint
@@ -128,15 +129,14 @@ atPoint IdeOptions{..} (SpansInfo srcSpans cntsSpans) pos = do
 
 
 
-
 typeLocationsAtPoint
   :: forall m
    . MonadIO m
-  => (Module -> m (Maybe (HieFile, FilePath)))
+  => (Module -> MaybeT m (HieFile, FilePath))
   -> IdeOptions
   -> Position
   -> [SpanInfo]
-  -> m [Location]
+  -> MaybeT m [Location]
 typeLocationsAtPoint getHieFile = querySpanInfoAt getTypeSpan
   where getTypeSpan :: SpanInfo -> m (Maybe SrcSpan)
         getTypeSpan SpanInfo { spaninfoType = Just t } =
@@ -149,11 +149,11 @@ typeLocationsAtPoint getHieFile = querySpanInfoAt getTypeSpan
 locationsAtPoint
   :: forall m
    . MonadIO m
-  => (Module -> m (Maybe (HieFile, FilePath)))
+  => (Module -> MaybeT m (HieFile, FilePath))
   -> IdeOptions
   -> Position
   -> [SpanInfo]
-  -> m [Location]
+  -> MaybeT m [Location]
 locationsAtPoint getHieFile = querySpanInfoAt (getSpan . spaninfoSource)
   where getSpan :: SpanSource -> m (Maybe SrcSpan)
         getSpan NoSource = pure Nothing
@@ -167,12 +167,12 @@ querySpanInfoAt :: forall m
   -> IdeOptions
   -> Position
   -> [SpanInfo]
-  -> m [Location]
+  -> MaybeT m [Location]
 querySpanInfoAt getSpan _ideOptions pos =
-    fmap (map srcSpanToLocation) . mapMaybeM getSpan . spansAtPoint pos
+    lift . fmap (map srcSpanToLocation) . mapMaybeM getSpan . spansAtPoint pos
 
 -- | Given a 'Name' attempt to find the location where it is defined.
-nameToLocation :: Monad f => (Module -> f (Maybe (HieFile, String))) -> Name -> f (Maybe SrcSpan)
+nameToLocation :: Monad f => (Module -> MaybeT f (HieFile, String)) -> Name -> f (Maybe SrcSpan)
 nameToLocation getHieFile name =
   case nameSrcSpan name of
     sp@(RealSrcSpan _) -> pure $ Just sp
@@ -182,7 +182,7 @@ nameToLocation getHieFile name =
       -- In this case the interface files contain garbage source spans
       -- so we instead read the .hie files to get useful source spans.
       mod <- MaybeT $ return $ nameModule_maybe name
-      (hieFile, srcPath) <- MaybeT $ getHieFile mod
+      (hieFile, srcPath) <- getHieFile mod
       avail <- MaybeT $ pure $ find (eqName name . snd) $ hieExportNames hieFile
       -- The location will point to the source file used during compilation.
       -- This file might no longer exists and even if it does the path will be relative
