@@ -16,6 +16,8 @@ jobs:
         exclude:
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
+          - os: windows-latest
+            ghc: '8.8.2' # fails due to error with Cabal
 
     steps:
     - uses: actions/checkout@v2
