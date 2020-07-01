@@ -33,6 +33,9 @@ cradle:
 
             - path: "./src"
               component: "lib:haskell-language-server"
+            
+            - path: "./src/Ide/Plugin/Hlint.hs"
+              component: "lib:hls-ghc-lib"
 
             - path: "./.stack-work/"
               component: "lib:haskell-language-server"
