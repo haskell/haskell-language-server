@@ -468,7 +468,7 @@ getSpanInfoRule :: Rules ()
 getSpanInfoRule =
     define $ \GetSpanInfo file -> do
         tc <- use_ TypeCheck file
-        packageState <- hscEnv <$> use_ GhcSession file
+        packageState <- hscEnv <$> use_ GhcSessionDeps file
 
 -- When possible, rely on the haddocks embedded in our interface files
 -- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
