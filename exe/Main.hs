@@ -433,7 +433,7 @@ loadSession dir = do
 
             -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
             invalidateShakeCache
-            restartShakeSession [kick]
+            -- restartShakeSession [kick]
 
             return (map fst cs, second Map.keys res)
 
