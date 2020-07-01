@@ -72,6 +72,11 @@ jobs:
         asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.gz
         asset_content_type: application/gzip
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.gz
+        path: ${{ steps.find_server_binary.outputs.hls_binary }}
+
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
       run: cabal build exe:hls-wrapper -O2 --disable-documentation
@@ -95,4 +100,9 @@ jobs:
         asset_path: ${{ steps.find_wrapper_binary.outputs.hls_wrapper_binary }}
         asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.gz
         asset_content_type: application/gzip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.gz
+        path: ${{ steps.find_wrapper_binary.outputs.hls_wrapper_binary }}
 
