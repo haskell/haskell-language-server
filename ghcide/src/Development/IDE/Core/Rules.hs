@@ -644,22 +644,36 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
   case mb_session of
       Nothing -> return (Nothing, (diags_session, Nothing))
       Just session -> do
-        let hiFile = toNormalizedFilePath'
-                    $ case ms_hsc_src ms of
-                        HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
-                        _ -> ml_hi_file $ ms_location ms
-        mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
-        modVersion  <- use_ GetModificationTime f
-        let sourceModified = case mbHiVersion of
-                Nothing -> SourceModified
-                Just x -> if modificationTime x >= modificationTime modVersion
-                            then SourceUnmodified else SourceModified
+        sourceModified <- use_ IsHiFileStable f
         r <- loadInterface (hscEnv session) ms sourceModified (regenerateHiFile session f)
         case r of
             (diags, Just x) -> do
-                let fp = fingerprintToBS (getModuleHash (hirModIface x))
-                return (Just fp, (diags <> diags_session, Just x))
+                let fp = Just (hiFileFingerPrint x)
+                return (fp, (diags <> diags_session, Just x))
             (diags, Nothing) -> return (Nothing, (diags ++ diags_session, Nothing))
+
+isHiFileStableRule :: Rules ()
+isHiFileStableRule = define $ \IsHiFileStable f -> do
+    ms <- use_ GetModSummary f
+    let hiFile = toNormalizedFilePath'
+                $ case ms_hsc_src ms of
+                    HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
+                    _ -> ml_hi_file $ ms_location ms
+    mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
+    modVersion  <- use_ GetModificationTime f
+    sourceModified <- case mbHiVersion of
+        Nothing -> pure SourceModified
+        Just x ->
+            if modificationTime x < modificationTime modVersion
+                then pure SourceModified
+                else do
+                    (fileImports, _) <- use_ GetLocatedImports f
+                    let imports = fmap artifactFilePath . snd <$> fileImports
+                    deps <- uses_ IsHiFileStable (catMaybes imports)
+                    pure $ if all (== SourceUnmodifiedAndStable) deps
+                        then SourceUnmodifiedAndStable
+                        else SourceUnmodified
+    return ([], Just sourceModified)
 
 getModSummaryRule :: Rules ()
 getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
@@ -691,21 +705,25 @@ getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
             in BS.pack (show fp)
 
 getModIfaceRule :: Rules ()
-getModIfaceRule = define $ \GetModIface f -> do
+getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
 #if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
     fileOfInterest <- use_ IsFileOfInterest f
     if fileOfInterest
         then do
             -- Never load from disk for files of interest
             tmr <- use TypeCheck f
-            return ([], extractHiFileResult tmr)
-        else
-            ([],) <$> use GetModIfaceFromDisk f
+            let !hiFile = extractHiFileResult tmr
+            let fp = hiFileFingerPrint <$> hiFile
+            return (fp, ([], hiFile))
+        else do
+            hiFile <- use GetModIfaceFromDisk f
+            let fp = hiFileFingerPrint <$> hiFile
+            return (fp, ([], hiFile))
 #else
     tm <- use TypeCheck f
-    let modIface = hm_iface . tmrModInfo <$> tm
-        modSummary = tmrModSummary <$> tm
-    return ([], HiFileResult <$> modSummary <*> modIface)
+    let !hiFile = extractHiFileResult tm
+    let fp = hiFileFingerPrint <$> hiFile
+    return (fp, ([], tmr_hiFileResult <$> tm))
 #endif
 
 regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> Action ([FileDiagnostic], Maybe HiFileResult)
@@ -738,7 +756,7 @@ extractHiFileResult :: Maybe TcModuleResult -> Maybe HiFileResult
 extractHiFileResult Nothing = Nothing
 extractHiFileResult (Just tmr) =
     -- Bang patterns are important to force the inner fields
-    Just $! HiFileResult (tmrModSummary tmr) (hm_iface $ tmrModInfo tmr)
+    Just $! tmr_hiFileResult tmr
 
 isFileOfInterestRule :: Rules ()
 isFileOfInterestRule = defineEarlyCutoff $ \IsFileOfInterest f -> do
@@ -763,3 +781,15 @@ mainRule = do
     getModIfaceRule
     isFileOfInterestRule
     getModSummaryRule
+    isHiFileStableRule
+
+-- | Given the path to a module src file, this rule returns True if the
+-- corresponding `.hi` file is stable, that is, if it is newer
+--   than the src file, and all its dependencies are stable too.
+data IsHiFileStable = IsHiFileStable
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable IsHiFileStable
+instance NFData   IsHiFileStable
+instance Binary   IsHiFileStable
+
+type instance RuleResult IsHiFileStable = SourceModified

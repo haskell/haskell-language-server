@@ -70,3 +70,8 @@ instance Show HieFile where
 
 instance NFData HieFile where
     rnf = rwhnf
+
+deriving instance Eq SourceModified
+deriving instance Show SourceModified
+instance NFData SourceModified where
+    rnf = rwhnf
