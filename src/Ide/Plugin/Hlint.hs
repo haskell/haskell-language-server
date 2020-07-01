@@ -16,12 +16,15 @@ module Ide.Plugin.Hlint
   --, provider 
   ) where
 import Refact.Apply
+import Control.Arrow ((&&&))
 import Control.DeepSeq
 import Control.Exception
 import Control.Lens ((^.))
 import Control.Monad
 import Control.Monad.Extra
 import Control.Monad.Trans.Maybe
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Except
 import qualified Data.Aeson as Aeson
 import Data.Aeson.Types (ToJSON(..), FromJSON(..), Value(..), Result(..))
 import Data.Binary
@@ -39,6 +42,7 @@ import Data.Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Typeable
 import Data.Typeable (Typeable)
 import Development.IDE.Core.OfInterest
@@ -58,8 +62,10 @@ import GHC.Generics
 import GHC.Generics (Generic)
 import SrcLoc
 import HscTypes (ModIface, ModSummary)
+import Ide.Logger
 import Ide.Types
 import Ide.Plugin
+import Ide.PluginUtils
 import Language.Haskell.HLint
 import Language.Haskell.HLint as Hlint
 import qualified Language.Haskell.LSP.Core as LSP
@@ -97,10 +103,8 @@ type instance RuleResult GetHlintDiagnostics = ()
 rules :: Rules ()
 rules = do
   define $ \GetHlintDiagnostics file -> do
-    (classify, hint) <- useNoFile_ GetHlintSettings
-    eModuleEx <- getModuleEx file
-    let getIdeas moduleEx = applyHints classify hint [moduleEx]
-    return $ (diagnostics file (fmap getIdeas eModuleEx), Just ())
+    ideas <- getIdeas file
+    return $ (diagnostics file ideas, Just ())
 
   hlintDataDir <- liftIO getExecutablePath
 
@@ -111,17 +115,6 @@ rules = do
     void $ uses GetHlintDiagnostics $ HashSet.toList files
 
   where
-
-      getModuleEx :: NormalizedFilePath -> Action (Either ParseError ModuleEx)
-      getModuleEx fp = do
-#ifndef GHC_LIB
-        pm <- getParsedModule fp
-        let anns = pm_annotations pm
-        let modu = pm_parsed_source pm
-        return $ Right (createModuleEx anns modu)
-#else
-        liftIO $ parseModuleEx defaultParseFlags (fromNormalizedFilePath fp) Nothing
-#endif
 
       diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
       diagnostics file (Right ideas) = 
@@ -162,6 +155,22 @@ rules = do
              , _character = srcSpanEndCol span - 1}
         }
       srcSpanToRange (UnhelpfulSpan _) = noRange
+
+getIdeas :: NormalizedFilePath -> Action (Either ParseError [Idea])
+getIdeas nfp = do
+  (classify, hint) <- useNoFile_ GetHlintSettings
+  let applyHints' modEx = applyHints classify hint [modEx]
+  fmap (fmap applyHints') moduleEx
+  where moduleEx :: Action (Either ParseError ModuleEx)
+        moduleEx = do
+#ifndef GHC_LIB
+          pm <- getParsedModule fnp
+          let anns = pm_annotations pm
+          let modu = pm_parsed_source pm
+          return $ Right (createModuleEx anns modu)
+#else
+          liftIO $ parseModuleEx defaultParseFlags (fromNormalizedFilePath nfp) Nothing
+#endif
 
 -- ---------------------------------------------------------------------
 
@@ -257,22 +266,24 @@ data OneHint = OneHint
   } deriving (Eq, Show)
 
 applyOneCmd :: CommandFunction ApplyOneParams
-applyOneCmd _lf ide (AOP uri pos title) =  do
+applyOneCmd _lf ide (AOP uri pos title) = do
   let oneHint = OneHint pos title
-  let file = uriToFilePath' uri
-  applyHint file (Just oneHint)
+  let file = maybe (error $ show uri ++ " is not a file") toNormalizedFilePath' 
+                   (uriToFilePath' uri)
+  res <- applyHint ide file (Just oneHint)
   logm $ "applyOneCmd:file=" ++ show file
   logm $ "applyOneCmd:res=" ++ show res
-  case res of
-    Left err -> return $ IdeResultFail
-      (IdeError PluginError (T.pack $ "applyOne: " ++ show err) Null)
-    Right fs -> return (IdeResultOk fs)
+  return $ 
+    case res of
+      Left err -> (Left (responseError (T.pack $ "applyOne: " ++ show err)), Nothing)
+      Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
-applyHint :: FilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
-applyHint fp mhint fileMap = do
+applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
+applyHint ide nfp mhint =
   runExceptT $ do
-    ideas <- getIdeas fp mhint
-    let commands = map (show &&& ideaRefactoring) ideas
+    ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas nfp
+    let ideas' = maybe ideas (`filterIdeas` ideas) mhint 
+    let commands = map (show &&& ideaRefactoring) ideas'
     liftIO $ logm $ "applyHint:apply=" ++ show commands
     -- set Nothing as "position" for "applyRefactorings" because
     -- applyRefactorings expects the provided position to be _within_ the scope
@@ -289,18 +300,42 @@ applyHint fp mhint fileMap = do
     -- If we provide "applyRefactorings" with "Just (1,13)" then
     -- the "Redundant bracket" hint will never be executed
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
+    let fp = fromNormalizedFilePath nfp
     res <- liftIO $ (Right <$> applyRefactorings Nothing commands fp) `catches`
               [ Handler $ \e -> return (Left (show (e :: IOException)))
               , Handler $ \e -> return (Left (show (e :: ErrorCall)))
               ]
     case res of
       Right appliedFile -> do
-        diff <- ExceptT $ Right <$> makeDiffResult fp (T.pack appliedFile) fileMap
-        liftIO $ logm $ "applyHint:diff=" ++ show diff
-        return diff
+        let uri = fromNormalizedUri (filePathToUri' nfp)
+        oldContent <- liftIO $ T.readFile fp
+        let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
+        liftIO $ logm $ "applyHint:diff=" ++ show wsEdit
+        ExceptT $ Right <$> (return wsEdit)
       Left err ->
-        throwE (show err)
+        throwE (show err)    
+    where 
+          -- | If we are only interested in applying a particular hint then
+          -- let's filter out all the irrelevant ideas
+          filterIdeas :: OneHint -> [Idea] -> [Idea]
+          filterIdeas (OneHint (Position l c) title) ideas =
+            let title' = T.unpack title
+                ideaPos = (srcSpanStartLine &&& srcSpanStartCol) . toRealSrcSpan . ideaSpan
+            in filter (\i -> ideaHint i == title' && ideaPos i == (l+1, c+1)) ideas
 
+          toRealSrcSpan (RealSrcSpan real) = real
+          toRealSrcSpan (UnhelpfulSpan _) = error "No real souce span"
+
+          showParseError :: Hlint.ParseError -> String
+          showParseError (Hlint.ParseError location message content) =
+            unlines [show location, message, content]
+
+-- | Map over both failure and success.
+bimapExceptT :: Functor m => (e -> f) -> (a -> b) -> ExceptT e m a -> ExceptT f m b
+bimapExceptT f g (ExceptT m) = ExceptT (fmap h m) where
+  h (Left e)  = Left (f e)
+  h (Right a) = Right (g a)
+{-# INLINE bimapExceptT #-}   
 -- ---------------------------------------------------------------------
 {-
 {-# LANGUAGE CPP #-}
