@@ -96,13 +96,16 @@ library hls-ghc-lib
     , containers
     , data-default
     , deepseq
+    , Diff
     , directory
     , extra
     , filepath
     , ghcide
     , hashable
+    , haskell-language-server
     , haskell-lsp
     , hlint >= 3.0
+    , hslogger
     , lens
     , regex-tdfa
     , shake
