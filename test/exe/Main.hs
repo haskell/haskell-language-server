@@ -56,7 +56,7 @@ main :: IO ()
 main = do
   -- We mess with env vars so run single-threaded.
   setEnv "TASTY_NUM_THREADS" "1" True
-  defaultMainWithRerun $ testGroup "HIE"
+  defaultMainWithRerun $ testGroup "ghcide"
     [ testSession "open close" $ do
         doc <- createDoc "Testing.hs" "haskell" ""
         void (skipManyTill anyMessage message :: Session WorkDoneProgressCreateRequest)
@@ -1864,7 +1864,42 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
+    , thReloadingTest `xfail` "expect broken (#672)"
     ]
+
+-- | test that TH is reevaluated on typecheck
+thReloadingTest :: TestTree
+thReloadingTest = testCase "reloading-th-test" $ withoutStackEnv $ runWithExtraFiles "TH" $ \dir -> do
+    let aPath = dir </> "THA.hs"
+        bPath = dir </> "THB.hs"
+        cPath = dir </> "THC.hs"
+
+    aSource <- liftIO $ readFileUtf8 aPath --  th = [d|a :: ()|]
+    bSource <- liftIO $ readFileUtf8 bPath --  $th
+    cSource <- liftIO $ readFileUtf8 cPath --  c = a :: ()
+
+    adoc <- createDoc aPath "haskell" aSource
+    bdoc <- createDoc bPath "haskell" bSource
+    cdoc <- createDoc cPath "haskell" cSource
+
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+
+    -- Change th from () to Bool
+    let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
+    changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing aSource']
+    -- generate an artificial warning to avoid timing out if the TH change does not propagate
+    changeDoc cdoc [TextDocumentContentChangeEvent Nothing Nothing $ cSource <> "\nfoo=()"]
+
+    -- Check that the change propagates to C
+    expectDiagnostics
+        [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
+        ,("THC.hs", [(DsWarning, (6,0), "Top-level binding")])
+        ]
+
+    closeDoc adoc
+    closeDoc bdoc
+    closeDoc cdoc
+
 
 completionTests :: TestTree
 completionTests
@@ -2389,7 +2424,31 @@ ifaceTests = testGroup "Interface loading tests"
       ifaceErrorTest
     , ifaceErrorTest2
     , ifaceErrorTest3
+    , ifaceTHTest
     ]
+
+-- | test that TH reevaluates across interfaces
+ifaceTHTest :: TestTree
+ifaceTHTest = testCase "iface-th-test" $ withoutStackEnv $ runWithExtraFiles "TH" $ \dir -> do
+    let aPath = dir </> "THA.hs"
+        bPath = dir </> "THB.hs"
+        cPath = dir </> "THC.hs"
+
+    aSource <- liftIO $ readFileUtf8 aPath -- [TH] a :: ()
+    _bSource <- liftIO $ readFileUtf8 bPath -- a :: ()
+    cSource <- liftIO $ readFileUtf8 cPath -- c = a :: ()
+
+    cdoc <- createDoc cPath "haskell" cSource
+
+    -- Change [TH]a from () to Bool
+    liftIO $ writeFileUTF8 aPath (unlines $ init (lines $ T.unpack aSource) ++ ["th_a = [d| a = False|]"])
+
+    -- Check that the change propogates to C
+    changeDoc cdoc [TextDocumentContentChangeEvent Nothing Nothing cSource]
+    expectDiagnostics
+      [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
+      ,("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+    closeDoc cdoc
 
 ifaceErrorTest :: TestTree
 ifaceErrorTest = testCase "iface-error-test-1" $ withoutStackEnv $ runWithExtraFiles "recomp" $ \dir -> do
@@ -2629,9 +2688,9 @@ runInDir dir s = do
     conf = defaultConfig
       -- If you uncomment this you can see all logging
       -- which can be quite useful for debugging.
-      -- { logStdErr = True, logColor = False }
+    --   { logStdErr = True, logColor = False }
       -- If you really want to, you can also see all messages
-      -- { logMessages = True, logColor = False }
+    --   { logMessages = True, logColor = False }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do

@@ -14,6 +14,7 @@ module Development.IDE.Core.RuleTypes(
 import           Control.DeepSeq
 import Data.Binary
 import           Development.IDE.Import.DependencyInformation
+import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Util
 import           Data.Hashable
 import           Data.Typeable
@@ -21,12 +22,12 @@ import qualified Data.Set as S
 import           Development.Shake
 import           GHC.Generics                             (Generic)
 
-import           GHC
 import Module (InstalledUnitId)
-import HscTypes (CgGuts, Linkable, HomeModInfo, ModDetails)
+import HscTypes (hm_iface, CgGuts, Linkable, HomeModInfo, ModDetails)
 
 import           Development.IDE.Spans.Type
 import           Development.IDE.Import.FindImports (ArtifactsLocation)
+import Data.ByteString (ByteString)
 
 
 -- NOTATION
@@ -66,6 +67,15 @@ data HiFileResult = HiFileResult
     -- a reference to a typechecked module
     , hirModIface :: !ModIface
     }
+
+tmr_hiFileResult :: TcModuleResult -> HiFileResult
+tmr_hiFileResult tmr = HiFileResult modSummary modIface
+  where
+    modIface = hm_iface . tmrModInfo $ tmr
+    modSummary = tmrModSummary tmr
+
+hiFileFingerPrint :: HiFileResult -> ByteString
+hiFileFingerPrint = fingerprintToBS . getModuleHash . hirModIface
 
 instance NFData HiFileResult where
     rnf = rwhnf

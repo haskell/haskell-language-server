@@ -587,9 +587,6 @@ loadInterface session ms sourceMod regen = do
             -- nothing at all has changed. Stability is just
             -- the same check that make is doing for us in
             -- one-shot mode.
-            | not (mi_used_th x) || stable
+            | not (mi_used_th x) || SourceUnmodifiedAndStable == sourceMod
             -> return ([], Just $ HiFileResult ms x)
           (_reason, _) -> regen
-    where
-        -- TODO support stability
-        stable = False
