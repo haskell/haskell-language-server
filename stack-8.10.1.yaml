@@ -5,7 +5,6 @@ packages:
 - ./ghcide/
 
 extra-deps:
-# - Cabal-3.2.0.0
 - Cabal-3.0.2.0
 # - cabal-helper-1.1.0.0
 - github: DanielG/cabal-helper
