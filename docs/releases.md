@@ -45,10 +45,6 @@ will most almost certainly not exist on the end user's machine.
 Therefore, hie-bios provides `getGhcRuntimeLibDir` to obtain this path on the fly
 by consulting the cradle.
 
-In order to facilitate better error messages, when we build the distributable
-binaries on CI we pass Cabal the `-fdist-binary` flag, which prevents hie-bios
-from falling back to the hardcoded ghc-paths libdir.
-
 ## The GitHub Actions workflow
 It just kicks off a matrix of jobs varying across GHC versions and OSs, building
 the binaries with Cabal and extracting them from the dist-newstyle directory.

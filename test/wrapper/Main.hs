@@ -10,6 +10,7 @@ main :: IO ()
 main = defaultMain $
   testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
 
+--TODO: WAIT ON HIE-BIOS STOP FILES
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"
   [ testCase "stack with ghc 8.10.1" $

@@ -26,11 +26,6 @@ flag pedantic
   Default:     False
   Manual:      True
 
-flag dist-binary
-  Description: Build haskell-language-server ready for distributing binaries
-  Default:     False
-  Manual:      True
-
 source-repository head
   type: git
   location: https://github.com/haskell/haskell-language-server
@@ -39,9 +34,6 @@ common cpp-flags
   if flag(agpl)
     cpp-options:
       -DAGPL
-  if flag(dist-binary)
-    cpp-options:
-      -DDIST_BINARY
 
 library
   import: cpp-flags

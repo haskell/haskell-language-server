@@ -33,7 +33,7 @@ jobs:
     #   with:
     #     path: ~/.cabal
     #     key: ${{ runner.OS }}-${{ matrix.ghc }}-cabal-0
-    
+
     - name: Shorten binary names
       shell: bash
       run: |
@@ -42,18 +42,18 @@ jobs:
                    haskell-language-server.cabal
         sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                    src/**/*.hs exe/*.hs
-    
+
     - name: Set some window specific things
       if: matrix.os == 'windows-latest'
       shell: bash
       run: |
         echo '::set-env name=EXE_EXT::.exe'
         echo '::set-env name=WIN_CABAL_ARGS::-j1'
-  
+
     - name: Build Server
       shell: bash
-      run: cabal build exe:hls -O2 --disable-documentation -fdist-binary $WIN_CABAL_ARGS
-          
+      run: cabal build exe:hls -O2 --disable-documentation $WIN_CABAL_ARGS
+
     - name: Find Server Binary
       id: find_server_binary
       shell: bash
@@ -74,7 +74,7 @@ jobs:
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:hls-wrapper -O2 --disable-documentation -fdist-binary
+      run: cabal build exe:hls-wrapper -O2 --disable-documentation
 
     - name: Find Wrapper Binary
       if: matrix.ghc == '8.10.1'

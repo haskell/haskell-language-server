@@ -85,6 +85,7 @@ import qualified System.Directory.Extra as IO
 -- import System.Environment
 import System.Exit
 import System.FilePath
+import System.Info
 import System.IO
 import qualified System.Log.Logger as L
 import System.Time.Extra
@@ -321,18 +322,9 @@ loadSession dir = do
       res' <- traverse IO.makeAbsolute res
       return $ normalise <$> res'
 
-  libdir <- getGhcideLibdir
-  installationCheck <- ghcVersionChecker libdir
-
   dummyAs <- async $ return (error "Uninitialised")
   runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
-
-  case installationCheck of
-    InstallationNotFound{..} ->
-        error $ "GHC installation not found in libdir: " <> libdir
-    InstallationMismatch{..} ->
-        return $ returnWithVersion $ \fp -> return (([renderPackageSetupException compileTime fp GhcVersionMismatch{..}], Nothing),[])
-    InstallationChecked compileTime ghcLibCheck -> return $ do
+  return $ do
       ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress, ideNc, session=ideSession} <- getShakeExtras
       IdeOptions{optTesting = IdeTesting optTesting} <- getIdeOptions
 
@@ -340,9 +332,9 @@ loadSession dir = do
       -- If the hieYaml file already has an HscEnv, the new component is
       -- combined with the components in the old HscEnv into a new HscEnv
       -- which contains the union.
-      let packageSetup :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
+      let packageSetup :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath, Ghc PackageCheckResult)
                         -> IO (HscEnv, ComponentInfo, [ComponentInfo])
-          packageSetup (hieYaml, cfp, opts, libDir) = do
+          packageSetup (hieYaml, cfp, opts, libDir, ghcLibCheck) = do
             -- Parse DynFlags for the newly discovered component
             hscEnv <- emptyHscEnv libDir ideNc
             (df, targets) <- evalGhcEnv hscEnv $
@@ -406,9 +398,9 @@ loadSession dir = do
                 --   existing packages
                 pure (Map.insert hieYaml (newHscEnv, new_deps) m, (newHscEnv, head new_deps', tail new_deps'))
 
-      let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath) -> IO ([NormalizedFilePath],(IdeResult HscEnvEq,[FilePath]))
-          session (hieYaml, cfp, opts, libDir) = do
-            (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts, libDir)
+      let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath, Ghc PackageCheckResult) -> IO ([NormalizedFilePath],(IdeResult HscEnvEq,[FilePath]))
+          session (hieYaml, cfp, opts, libDir, ghcLibCheck) = do
+            (hscEnv, new, old_deps) <- packageSetup (hieYaml, cfp, opts, libDir, ghcLibCheck)
             -- Make a map from unit-id to DynFlags, this is used when trying to
             -- resolve imports. (especially PackageImports)
             let uids = map (\ci -> (componentUnitId ci, componentDynFlags ci)) (new : old_deps)
@@ -442,8 +434,7 @@ loadSession dir = do
               -- cradle is
               let progMsg = "Setting up project " <> T.pack (takeBaseName (cradleRootDir cradle))
               (eopts, mLibDir) <- withIndefiniteProgress progMsg LSP.NotCancellable $ do
-                -- we don't want to use ghc-paths if this is a portable, distributed binary
-                -- also note that getting the runtime ghc lib dir can end up configuring
+                -- Note that getting the runtime ghc lib dir can end up configuring
                 -- and building dependencies through the build tool, so include it in this
                 -- progress section.
                 libDir <- getRuntimeGhcLibDir cradle
@@ -460,13 +451,22 @@ loadSession dir = do
 
               logDebug logger $ T.pack ("Session loading result: " <> show eopts)
               case (eopts, mLibDir) of
-                -- The cradle gave us some options so get to work turning them
-                -- into and HscEnv.
-                (Right opts, Just libDir) -> do
-                  session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
-                -- Failure case, either a cradle error or the none cradle
-                (Left err, _) -> cradleMishap $ map (renderCradleError ncfp) err
-                (_, Nothing) -> cradleMishap [ideErrorText ncfp "Couldn't get the GHC library directory"]
+                  -- The cradle gave us some options so get to work turning them
+                  -- into and HscEnv.
+                  (Right opts, Just libDir) -> do
+                      installationCheck <- ghcVersionChecker libDir
+                      case installationCheck of
+                          InstallationNotFound{..} ->
+                              error $ "GHC installation not found in libdir: " <> libdir
+                          InstallationMismatch{..} ->
+                              return ([],(([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[]))
+                          InstallationChecked _ ghcLibCheck ->
+                              session (hieYaml, toNormalizedFilePath' cfp, opts, libDir, ghcLibCheck)
+                  -- Failure case, either a cradle error or the none cradle
+                  (Left err, _) ->
+                      cradleMishap $ map (renderCradleError ncfp) err
+                  (_, Nothing) ->
+                      cradleMishap [ideErrorText ncfp "Couldn't get the GHC library directory"]
 
       -- This caches the mapping from hie.yaml + Mod.hs -> [String]
       -- Returns the Ghc session and the cradle dependencies
@@ -496,7 +496,7 @@ loadSession dir = do
           getOptions file = do
               hieYaml <- cradleLoc file
               sessionOpts (hieYaml, file) `catch` \e ->
-                  return ([],(([renderPackageSetupException compileTime file e], Nothing),[]))
+                  return ([],(([renderPackageSetupException file e], Nothing),[]))
 
       returnWithVersion $ \file -> do
         (cs, opts) <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
@@ -833,13 +833,7 @@ showPackageSetupException _ (PackageCheckFailed BasePackageAbiMismatch{..}) = un
     ,"\nThis is unsupported, ghcide must be compiled with the same GHC installation as the project."
     ]
 
-renderPackageSetupException :: Version -> FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
-renderPackageSetupException compileTime fp e =
-    ideErrorWithSource (Just "cradle") (Just DsError) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException compileTime e)
+renderPackageSetupException :: FilePath -> PackageSetupException -> (NormalizedFilePath, ShowDiagnostic, Diagnostic)
+renderPackageSetupException fp e =
+    ideErrorWithSource (Just "cradle") (Just DsError) (toNormalizedFilePath' fp) (T.pack $ showPackageSetupException compilerVersion e)
 
-isDistBinary :: Bool
-#ifdef DIST_BINARY
-isDistBinary = True
-#else
-isDistBinary = False
-#endif
