@@ -87,7 +87,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = rules
   , pluginCommands =
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
---      , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
+      , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
       ]
     , pluginCodeActionProvider = Just codeActionProvider
   }
@@ -251,6 +251,21 @@ codeActionProvider _ _ plId docId _ context = (Right . LSP.List . map CACodeActi
 
 -- ---------------------------------------------------------------------
 
+applyAllCmd :: CommandFunction Uri
+applyAllCmd _lf ide uri = do
+  let file = maybe (error $ show uri ++ " is not a file") 
+                    toNormalizedFilePath' 
+                   (uriToFilePath' uri)
+  logm $ "applyAllCmd:file=" ++ show file
+  res <- applyHint ide file Nothing
+  logm $ "applyAllCmd:res=" ++ show res
+  return $
+    case res of
+      Left err -> (Left (responseError (T.pack $ "applyAll: " ++ show err)), Nothing)
+      Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+
+-- ---------------------------------------------------------------------
+
 data ApplyOneParams = AOP
   { file      :: Uri
   , start_pos :: Position
@@ -288,7 +303,7 @@ applyHint ide nfp mhint =
     -- set Nothing as "position" for "applyRefactorings" because
     -- applyRefactorings expects the provided position to be _within_ the scope
     -- of each refactoring it will apply.
-    -- But "Idea"s returned by HLint pont to starting position of the expressions
+    -- But "Idea"s returned by HLint point to starting position of the expressions
     -- that contain refactorings, so they are often outside the refactorings' boundaries.
     -- Example:
     -- Given an expression "hlintTest = reid $ (myid ())"
