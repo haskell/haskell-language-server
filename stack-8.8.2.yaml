@@ -28,6 +28,8 @@ extra-deps:
 - hsimport-0.11.0
 - HsYAML-0.2.1.0@rev:1
 - HsYAML-aeson-0.2.0.0@rev:1
+- implicit-hie-0.1.1.0
+- implicit-hie-cradle-0.1.0.0
 - ilist-0.3.1.0
 - lsp-test-0.11.0.2
 - monad-dijkstra-0.1.1.2

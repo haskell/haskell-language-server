@@ -23,6 +23,8 @@ extra-deps:
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
+- implicit-hie-0.1.1.0
+- implicit-hie-cradle-0.1.0.0
 - ilist-0.3.1.0
 - lsp-test-0.11.0.2
 - monad-dijkstra-0.1.1.2

@@ -14,6 +14,8 @@ extra-deps:
 - clock-0.7.2
 - floskell-0.10.3
 - ghc-exactprint-0.6.3
+- implicit-hie-0.1.1.0
+- implicit-hie-cradle-0.1.0.0
 - lens-4.19.1
 - lsp-test-0.11.0.2
 - monad-dijkstra-0.1.1.2
