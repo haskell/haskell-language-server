@@ -71,7 +71,7 @@ library
     , extra
     , filepath
     , floskell == 0.10.*
-    , fourmolu ^>= 0.0.6.0
+    , fourmolu ^>= 0.1.0.0
     , ghc
     , ghcide >= 0.1
     , gitrev

@@ -13,7 +13,7 @@ extra-deps:
 - cabal-plan-0.7.0.0
 - clock-0.7.2
 - floskell-0.10.3
-- fourmolu-0.0.6.0
+- fourmolu-0.1.0.0
 - ghc-exactprint-0.6.3
 - lens-4.19.1
 - lsp-test-0.11.0.3
