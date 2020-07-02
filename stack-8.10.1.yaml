@@ -1,4 +1,4 @@
-resolver: nightly-2020-06-15
+resolver: nightly-2020-06-29
 compiler: ghc-8.10.1
 
 packages:
