@@ -18,6 +18,7 @@ import           Data.List
 -- import qualified Data.Text.IO as T
 -- import Development.IDE.Types.Logger
 import HIE.Bios
+import Hie.Implicit.Cradle
 import           Ide.Cradle (findLocalCradle)
 import           Ide.Logger (logm)
 import           Ide.Version
@@ -65,7 +66,7 @@ main = do
   logm $ "args:" ++ show args
 
   -- Get the cabal directory from the cradle
-  cradle <- findLocalCradle (d </> "File.hs")
+  cradle <- loadImplicitHieCradle (d </> "File.hs")
   let dir = cradleRootDir cradle
   logm $ "Cradle directory:" ++ dir
   setCurrentDirectory dir
