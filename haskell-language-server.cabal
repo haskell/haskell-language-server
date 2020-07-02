@@ -163,6 +163,7 @@ executable haskell-language-server
     , hie-bios >= 0.4
     , haskell-language-server
     , hslogger
+    , implicit-hie-cradle
     , optparse-applicative
     , safe-exceptions
     , shake >= 0.17.5

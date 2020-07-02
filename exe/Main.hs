@@ -68,6 +68,7 @@ import GHC.Check
 import HIE.Bios.Cradle
 import HIE.Bios.Environment                     (addCmdOpts, makeDynFlagsAbsolute)
 import HIE.Bios.Types
+import Hie.Implicit.Cradle
 import HscTypes                                 (HscEnv(..), ic_dflags)
 import qualified Language.Haskell.LSP.Core as LSP
 import Ide.Logger
@@ -442,7 +443,7 @@ loadSession dir = do
              when optTesting $ eventer $ notifyCradleLoaded cfp
              logInfo logger $ T.pack ("Consulting the cradle for " <> show cfp)
 
-             cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+             cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
              -- Display a user friendly progress message here: They probably don't know what a
              -- cradle is
              let progMsg = "Setting up project " <> T.pack (takeBaseName (cradleRootDir cradle))
