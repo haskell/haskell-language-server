@@ -66,7 +66,8 @@ main = do
   logm $ "args:" ++ show args
 
   -- Get the cabal directory from the cradle
-  cradle <- loadImplicitHieCradle (d </> "File.hs")
+  hieYaml <- findCradle (d </> "File.hs")
+  cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator d) loadCradle hieYaml 
   let dir = cradleRootDir cradle
   logm $ "Cradle directory:" ++ dir
   setCurrentDirectory dir
