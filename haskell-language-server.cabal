@@ -82,11 +82,11 @@ flag ghc-lib
   manual: True
   description: Force dependency on ghc-lib-parser even if GHC API in the ghc package is supported
 
-library hls-ghc-lib
+library hlint-plugin
   exposed-modules:
     Ide.Plugin.Hlint
   hs-source-dirs:
-    src
+    hlint-plugin/src
   build-depends:
       base
     , aeson
