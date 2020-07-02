@@ -47,7 +47,10 @@ provider _lf ideState typ contents fp _ = do
           let p = D.sPgm_F $ D.settings df
           in  if null p then [] else ["-pgmF=" <> p]
         pm = map (("-fplugin=" <>) . moduleNameString) $ D.pluginModNames df
-        ex = map (("-X" <>) . show) $ S.toList $ D.extensionFlags df
+        ex = map (("-X" <>) . show') $ S.toList $ D.extensionFlags df
+        show' x = case show x of
+          "Cpp" -> "CPP"
+          s -> s
       in
         return $ map DynOption $ pp <> pm <> ex
 
