@@ -59,18 +59,26 @@ provider _lf ideState typ contents fp _ = do
   let
     fullRegion = RegionIndices Nothing Nothing
     rangeRegion s e = RegionIndices (Just s) (Just e)
-    mkConf o region = defaultConfig { cfgDynOptions = o,  cfgRegion = region }
+    mkConf o region = do
+      printerOpts <- loadConfigFile True (Just fp') defaultPrinterOpts
+      return $ defaultConfig
+        { cfgDynOptions = o
+        , cfgRegion = region
+        , cfgDebug = True
+        , cfgPrinterOpts = printerOpts
+        }
     fmt :: T.Text -> Config RegionIndices -> IO (Either OrmoluException T.Text)
     fmt cont conf =
-      try @OrmoluException (ormolu conf (fromNormalizedFilePath fp) $ T.unpack cont)
+      try @OrmoluException (ormolu conf fp' $ T.unpack cont)
+    fp' = fromNormalizedFilePath fp
 
   case typ of
-    FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
+    FormatText -> ret <$> (fmt contents =<< mkConf fileOpts fullRegion)
     FormatRange r ->
       let
         Range (Position sl _) (Position el _) = normalize r
       in
-        ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
+        ret <$> (fmt contents =<< mkConf fileOpts (rangeRegion sl el))
  where
   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)
   ret (Left err) = Left
