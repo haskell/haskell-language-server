@@ -86,7 +86,7 @@ library hlint-plugin
   exposed-modules:
     Ide.Plugin.Hlint
   hs-source-dirs:
-    hlint-plugin/src
+    plugins/hlint-hls-plugin/src
   build-depends:
       base
     , aeson

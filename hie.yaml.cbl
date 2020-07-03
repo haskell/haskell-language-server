@@ -33,8 +33,8 @@ cradle:
 
             - path: "./src"
               component: "lib:haskell-language-server"
-            
-            - path: "./hlint-plugin/src/Ide/Plugin/Hlint.hs"
+
+            - path: "./plugins/hlint-hls-plugin/src/Ide/Plugin/Hlint.hs"
               component: "lib:hlint-plugin"
 
             - path: "./dist-newstyle/"
