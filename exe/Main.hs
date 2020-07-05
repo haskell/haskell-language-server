@@ -338,7 +338,7 @@ loadSession dir = do
     InstallationMismatch{..} ->
         return $ returnWithVersion $ \fp -> return (([renderPackageSetupException compileTime fp GhcVersionMismatch{..}], Nothing),[])
     InstallationChecked compileTime ghcLibCheck -> return $ do
-      ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress, ideNc, session=ideSession} <- getShakeExtras
+      ShakeExtras{logger, eventer, withIndefiniteProgress, ideNc, session=ideSession} <- getShakeExtras
       IdeOptions{optTesting = IdeTesting optTesting} <- getIdeOptions
 
       -- Create a new HscEnv from a hieYaml root and a set of options
@@ -433,7 +433,7 @@ loadSession dir = do
 
             -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
             invalidateShakeCache
-            restartShakeSession [kick]
+            -- restartShakeSession [kick]
 
             return (map fst cs, second Map.keys res)
 
