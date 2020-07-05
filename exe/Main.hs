@@ -338,7 +338,7 @@ loadSession dir = do
     InstallationMismatch{..} ->
         return $ returnWithVersion $ \fp -> return (([renderPackageSetupException compileTime fp GhcVersionMismatch{..}], Nothing),[])
     InstallationChecked compileTime ghcLibCheck -> return $ do
-      ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress, ideNc, session=ideSession} <- getShakeExtras
+      ShakeExtras{logger, eventer, withIndefiniteProgress, ideNc, session=ideSession} <- getShakeExtras
       IdeOptions{optTesting = IdeTesting optTesting} <- getIdeOptions
 
       -- Create a new HscEnv from a hieYaml root and a set of options
