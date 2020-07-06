@@ -146,7 +146,7 @@ data Config = Config
     shakeProfiling :: !(Maybe FilePath),
     outputCSV :: !FilePath,
     buildTool :: !CabalStack,
-    rtsOptions :: ![String],
+    ghcideOptions :: ![String],
     matches :: ![String],
     repetitions :: Maybe Natural,
     ghcide :: FilePath,
@@ -177,7 +177,7 @@ configP =
     <*> optional (strOption (long "shake-profiling" <> metavar "PATH"))
     <*> strOption (long "csv" <> metavar "PATH" <> value "results.csv" <> showDefault)
     <*> flag Cabal Stack (long "stack" <> help "Use stack (by default cabal is used)")
-    <*> many (strOption (long "rts" <> help "additional RTS options for ghcide"))
+    <*> many (strOption (long "ghcide-options" <> help "additional options for ghcide"))
     <*> many (strOption (short 's' <> long "select" <> help "select which benchmarks to run"))
     <*> optional (option auto (long "samples" <> metavar "NAT" <> help "override sampling count"))
     <*> strOption (long "ghcide" <> metavar "PATH" <> help "path to ghcide" <> value "ghcide")
@@ -283,11 +283,10 @@ runBenchmarks allBenchmarks = do
           "--cwd",
           dir,
           "+RTS",
-          "-S" <> gcStats name
+          "-S" <> gcStats name,
+          "-RTS"
         ]
-          ++ rtsOptions ?config
-          ++ [ "-RTS"
-             ]
+          ++ ghcideOptions ?config
           ++ concat
             [ ["--shake-profiling", path]
               | Just path <- [shakeProfiling ?config]

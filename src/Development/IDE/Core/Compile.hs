@@ -12,6 +12,7 @@ module Development.IDE.Core.Compile
   , RunSimplifier(..)
   , compileModule
   , parseModule
+  , parseHeader
   , typecheckModule
   , computePackageDeps
   , addRelativeImport
@@ -483,6 +484,39 @@ getModSummaryFromImports fp contents = do
                 }
     return summary
 
+-- | Parse only the module header
+parseHeader
+       :: GhcMonad m
+       => DynFlags -- ^ flags to use
+       -> FilePath  -- ^ the filename (for source locations)
+       -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
+       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
+parseHeader dflags filename contents = do
+   let loc  = mkRealSrcLoc (mkFastString filename) 1 1
+   case unP Parser.parseHeader (mkPState dflags contents loc) of
+#if MIN_GHC_API_VERSION(8,10,0)
+     PFailed pst ->
+        throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
+#else
+     PFailed _ locErr msgErr ->
+        throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
+#endif
+     POk pst rdr_module -> do
+        let (warns, errs) = getMessages pst dflags
+        -- Just because we got a `POk`, it doesn't mean there
+        -- weren't errors! To clarify, the GHC parser
+        -- distinguishes between fatal and non-fatal
+        -- errors. Non-fatal errors are the sort that don't
+        -- prevent parsing from continuing (that is, a parse
+        -- tree can still be produced despite the error so that
+        -- further errors/warnings can be collected). Fatal
+        -- errors are those from which a parse tree just can't
+        -- be produced.
+        unless (null errs) $
+            throwE $ diagFromErrMsgs "parser" dflags errs
+
+        let warnings = diagFromErrMsgs "parser" dflags warns
+        return (warnings, rdr_module)
 
 -- | Given a buffer, flags, and file path, produce a
 -- parsed module (or errors) and any parse warnings. Does not run any preprocessors
@@ -521,7 +555,7 @@ parseFileContents customPreprocessor dflags comp_pkgs filename contents = do
                -- errors are those from which a parse tree just can't
                -- be produced.
                unless (null errs) $
-                 throwE $ diagFromErrMsgs "parser" dflags $ snd $ getMessages pst dflags
+                 throwE $ diagFromErrMsgs "parser" dflags errs
 
                -- Ok, we got here. It's safe to continue.
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module

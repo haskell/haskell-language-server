@@ -204,7 +204,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
                 "--samples=" <> show samples,
                 "--csv=" <> outcsv,
                 "--example-package-version=3.0.0.0",
-                "--rts=-I0.5",
+                "--ghcide-options= +RTS -I0.5 -RTS",
                 "--ghcide=" <> ghcide,
                 "--select",
                 unescaped (unescapeExperiment (Escaped $ dropExtension exp))

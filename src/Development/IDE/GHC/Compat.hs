@@ -2,7 +2,10 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS -Wno-dodgy-imports #-}
 #include "ghc-api-version.h"
 
 -- | Attempt at hiding the GHC version differences we can.
@@ -37,10 +40,14 @@ module Development.IDE.GHC.Compat(
     pattern ClassOpSig,
     pattern IEThingAll,
     pattern IEThingWith,
+    pattern VarPat,
     GHC.ModLocation,
     Module.addBootSuffix,
     pattern ModLocation,
     getConArgs,
+
+    HasSrcSpan,
+    getLoc,
 
     module GHC
     ) where
@@ -54,7 +61,20 @@ import Packages
 
 import qualified GHC
 import GHC hiding (
-      ClassOpSig, DerivD, ForD, IEThingAll, IEThingWith, InstD, TyClD, ValD, SigD, TypeSig, ModLocation
+      ClassOpSig,
+      DerivD,
+      ForD,
+      IEThingAll,
+      IEThingWith,
+      InstD,
+      TyClD,
+      ValD,
+      SigD,
+      TypeSig,
+      VarPat,
+      ModLocation,
+      HasSrcSpan,
+      getLoc
 #if MIN_GHC_API_VERSION(8,6,0)
     , getConArgs
 #endif
@@ -92,7 +112,7 @@ import System.IO.Error
 import Binary
 import Control.Exception (catch)
 import Data.ByteString (ByteString)
-import GhcPlugins hiding (ModLocation)
+import GhcPlugins (Hsc, srcErrorMessages)
 import NameCache
 import TcRnTypes
 import System.IO
@@ -210,6 +230,15 @@ pattern IEThingAll a <-
     GHC.IEThingAll a
 #endif
 
+pattern VarPat :: Located (IdP p) -> Pat p
+pattern VarPat x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.VarPat _ x
+#else
+    GHC.VarPat x
+#endif
+
+
 setHieDir :: FilePath -> DynFlags -> DynFlags
 setHieDir _f d =
 #if MIN_GHC_API_VERSION(8,8,0)
@@ -304,7 +333,20 @@ getHeaderImports
        )
 #if MIN_GHC_API_VERSION(8,8,0)
 getHeaderImports = Hdr.getImports
+
+type HasSrcSpan = GHC.HasSrcSpan
+getLoc :: HasSrcSpan a => a -> SrcSpan
+getLoc = GHC.getLoc
+
 #else
+
+class HasSrcSpan a where
+    getLoc :: a -> SrcSpan
+instance HasSrcSpan Name where
+    getLoc = nameSrcSpan
+instance HasSrcSpan (GenLocated SrcSpan a) where
+    getLoc = GHC.getLoc
+
 getHeaderImports a b c d =
     catch (Right <$> Hdr.getImports a b c d)
           (return . Left . srcErrorMessages)

@@ -5,34 +5,27 @@ module Development.IDE.Plugin.Completions.Types (
 import           Control.DeepSeq
 import qualified Data.Map  as Map
 import qualified Data.Text as T
-import           GHC
 
 import Development.IDE.Spans.Common
+import Language.Haskell.LSP.Types (CompletionItemKind)
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
 
-data Backtick = Surrounded | LeftSide deriving Show
+data Backtick = Surrounded | LeftSide
+  deriving (Eq, Ord, Show)
+
 data CompItem = CI
-  { origName     :: Name           -- ^ Original name, such as Maybe, //, or find.
+  { compKind     :: CompletionItemKind
+  , insertText   :: T.Text         -- ^ Snippet for the completion
   , importedFrom :: T.Text         -- ^ From where this item is imported from.
-  , thingType    :: Maybe Type     -- ^ Available type information.
+  , typeText     :: Maybe T.Text   -- ^ Available type information.
   , label        :: T.Text         -- ^ Label to display to the user.
   , isInfix      :: Maybe Backtick -- ^ Did the completion happen
                                    -- in the context of an infix notation.
   , docs         :: SpanDoc        -- ^ Available documentation.
+  , isTypeCompl  :: Bool
   }
-instance Show CompItem where
-  show CI { .. } = "CompItem { origName = \"" ++ showGhc origName ++ "\""
-                   ++ ", importedFrom = " ++ show importedFrom
-                   ++ ", thingType = " ++ show (fmap showGhc thingType)
-                   ++ ", label = " ++ show label
-                   ++ ", isInfix = " ++ show isInfix 
-                   ++ ", docs = " ++ show docs
-                   ++ " } "
-instance Eq CompItem where
-  ci1 == ci2 = origName ci1 == origName ci2
-instance Ord CompItem where
-  compare ci1 ci2 = origName ci1 `compare` origName ci2
+  deriving (Eq, Show)
 
 -- Associates a module's qualifier with its members
 newtype QualCompls
@@ -56,3 +49,10 @@ data CachedCompletions = CC
 
 instance NFData CachedCompletions where
     rnf = rwhnf
+
+instance Monoid CachedCompletions where
+    mempty = CC mempty mempty mempty mempty
+
+instance Semigroup CachedCompletions where
+    CC a b c d <> CC a' b' c' d' =
+        CC (a<>a') (b<>b') (c<>c') (d<>d')
