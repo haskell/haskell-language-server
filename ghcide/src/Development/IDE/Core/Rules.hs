@@ -683,9 +683,7 @@ getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
         getModSummaryFromImports (fromNormalizedFilePath f) (textToStringBuffer <$> mFileContent)
     case modS of
         Right ms -> do
-            -- Clear the contents as no longer needed
-            let !ms' = ms{ms_hspp_buf=Nothing}
-            return ( Just (computeFingerprint f dflags ms), ([], Just ms'))
+            return ( Just (computeFingerprint f dflags ms), ([], Just ms))
         Left diags -> return (Nothing, (diags, Nothing))
     where
         -- Compute a fingerprint from the contents of `ModSummary`,

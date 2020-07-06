@@ -17,6 +17,7 @@ module Development.IDE.GHC.Util(
     ParseResult(..), runParser,
     lookupPackageConfig,
     textToStringBuffer,
+    bytestringToStringBuffer,
     stringBufferToByteString,
     moduleImportPath,
     cgGutsToCoreModule,
@@ -112,6 +113,9 @@ runParser flags str parser = unP parser parseState
 
 stringBufferToByteString :: StringBuffer -> ByteString
 stringBufferToByteString StringBuffer{..} = PS buf cur len
+
+bytestringToStringBuffer :: ByteString -> StringBuffer
+bytestringToStringBuffer (PS buf cur len) = StringBuffer{..}
 
 -- | Pretty print a GHC value using 'unsafeGlobalDynFlags '.
 prettyPrint :: Outputable a => a -> String
