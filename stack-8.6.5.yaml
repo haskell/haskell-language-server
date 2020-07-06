@@ -34,7 +34,7 @@ extra-deps:
 - opentelemetry-0.4.2
 - optics-core-0.2
 - optparse-applicative-0.15.1.0
-- ormolu-0.0.5.0
+- ormolu-0.1.2.0
 - parser-combinators-1.2.1
 - regex-base-0.94.0.0
 - regex-pcre-builtin-0.95.1.1.8.43
