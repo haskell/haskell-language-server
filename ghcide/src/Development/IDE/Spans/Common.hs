@@ -65,7 +65,7 @@ safeTyThingId _                           = Nothing
 data SpanDoc
   = SpanDocString HsDocString
   | SpanDocText   [T.Text]
-  deriving Show
+  deriving (Eq, Show)
 
 emptySpanDoc :: SpanDoc
 emptySpanDoc = SpanDocText []

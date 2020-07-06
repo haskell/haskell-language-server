@@ -18,7 +18,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
 import           FastString
-import SrcLoc
+import           SrcLoc (RealLocated)
 
 
 getDocumentationTryGhc
@@ -40,8 +40,9 @@ getDocumentationTryGhc sources name = do
 #endif
 
 getDocumentation
- :: [ParsedModule] -- ^ All of the possible modules it could be defined in.
- ->  Name -- ^ The name you want documentation for.
+ :: HasSrcSpan name
+ => [ParsedModule] -- ^ All of the possible modules it could be defined in.
+ ->  name -- ^ The name you want documentation for.
  -> [T.Text]
 -- This finds any documentation between the name you want
 -- documentation for and the one before it. This is only an
@@ -52,7 +53,7 @@ getDocumentation
 -- more accurately.
 getDocumentation sources targetName = fromMaybe [] $ do
   -- Find the module the target is defined in.
-  targetNameSpan <- realSpan $ nameSrcSpan targetName
+  targetNameSpan <- realSpan $ getLoc targetName
   tc <-
     find ((==) (Just $ srcSpanFile targetNameSpan) . annotationFileName)
       $ reverse sources -- TODO : Is reversing the list here really neccessary?

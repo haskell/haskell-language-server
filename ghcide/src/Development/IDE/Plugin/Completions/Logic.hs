@@ -4,8 +4,9 @@
 module Development.IDE.Plugin.Completions.Logic (
   CachedCompletions
 , cacheDataProducer
+, localCompletionsForParsedModule
 , WithSnippets(..)
-,getCompletions
+, getCompletions
 ) where
 
 import Control.Applicative
@@ -17,7 +18,6 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import qualified Data.Text as T
 import qualified Text.Fuzzy as Fuzzy
 
-import GHC
 import HscTypes
 import Name
 import RdrName
@@ -38,10 +38,13 @@ import Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.VFS as VFS
 import Development.IDE.Plugin.Completions.Types
 import Development.IDE.Spans.Documentation
+import Development.IDE.GHC.Compat as GHC
 import Development.IDE.GHC.Error
 import Development.IDE.Types.Options
 import Development.IDE.Spans.Common
 import Development.IDE.GHC.Util
+import Outputable (Outputable)
+import qualified Data.Set as Set
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -130,59 +133,72 @@ occNameToComKind ty oc
   | isDataOcc oc = CiConstructor
   | otherwise    = CiVariable
 
+
+showModName :: ModuleName -> T.Text
+showModName = T.pack . moduleNameString
+
 mkCompl :: IdeOptions -> CompItem -> CompletionItem
-mkCompl IdeOptions{..} CI{origName,importedFrom,thingType,label,isInfix,docs} =
+mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs} =
   CompletionItem label kind (List []) ((colon <>) <$> typeText)
     (Just $ CompletionDocMarkup $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator docs')
     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
-  where kind = Just $ occNameToComKind typeText $ occName origName
-        insertText = case isInfix of
+  where kind = Just compKind
+        docs' = ("*Defined in '" <> importedFrom <> "'*\n") : spanDocToMarkdown docs
+        colon = if optNewColonConvention then ": " else ":: "
+
+mkNameCompItem :: Name -> ModuleName -> Maybe Type -> Maybe Backtick -> SpanDoc -> CompItem
+mkNameCompItem origName origMod thingType isInfix docs = CI{..}
+  where
+    compKind = occNameToComKind typeText $ occName origName
+    importedFrom = showModName origMod
+    isTypeCompl = isTcOcc $ occName origName
+    label = T.pack $ showGhc origName
+    insertText = case isInfix of
             Nothing -> case getArgText <$> thingType of
                             Nothing -> label
                             Just argText -> label <> " " <> argText
             Just LeftSide -> label <> "`"
 
             Just Surrounded -> label
-        typeText
+    typeText
           | Just t <- thingType = Just . stripForall $ T.pack (showGhc t)
           | otherwise = Nothing
-        docs' = ("*Defined in '" <> importedFrom <> "'*\n") : spanDocToMarkdown docs
-        colon = if optNewColonConvention then ": " else ":: "
 
-stripForall :: T.Text -> T.Text
-stripForall t
-  | T.isPrefixOf "forall" t =
-    -- We drop 2 to remove the '.' and the space after it
-    T.drop 2 (T.dropWhile (/= '.') t)
-  | otherwise               = t
 
-getArgText :: Type -> T.Text
-getArgText typ = argText
-  where
-    argTypes = getArgs typ
-    argText :: T.Text
-    argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
-    snippet :: Int -> Type -> T.Text
-    snippet i t = T.pack $ "${" <> show i <> ":" <> showGhc t <> "}"
-    getArgs :: Type -> [Type]
-    getArgs t
-      | isPredTy t = []
-      | isDictTy t = []
-      | isForAllTy t = getArgs $ snd (splitForAllTys t)
-      | isFunTy t =
-        let (args, ret) = splitFunTys t
-          in if isForAllTy ret
-              then getArgs ret
-              else Prelude.filter (not . isDictTy) args
-      | isPiTy t = getArgs $ snd (splitPiTys t)
+    stripForall :: T.Text -> T.Text
+    stripForall t
+      | T.isPrefixOf "forall" t =
+        -- We drop 2 to remove the '.' and the space after it
+        T.drop 2 (T.dropWhile (/= '.') t)
+      | otherwise               = t
+
+    getArgText :: Type -> T.Text
+    getArgText typ = argText
+      where
+        argTypes = getArgs typ
+        argText :: T.Text
+        argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
+        snippet :: Int -> Type -> T.Text
+        snippet i t = T.pack $ "${" <> show i <> ":" <> showGhc t <> "}"
+        getArgs :: Type -> [Type]
+        getArgs t
+          | isPredTy t = []
+          | isDictTy t = []
+          | isForAllTy t = getArgs $ snd (splitForAllTys t)
+          | isFunTy t =
+            let (args, ret) = splitFunTys t
+              in if isForAllTy ret
+                  then getArgs ret
+                  else Prelude.filter (not . isDictTy) args
+          | isPiTy t = getArgs $ snd (splitPiTys t)
 #if MIN_GHC_API_VERSION(8,10,0)
-      | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
-      = getArgs t
+          | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
+          = getArgs t
 #else
-      | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
+          | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
 #endif
-      | otherwise = []
+          | otherwise = []
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
@@ -219,9 +235,6 @@ cacheDataProducer packageState tm deps = do
 
       iDeclToModName :: ImportDecl name -> ModuleName
       iDeclToModName = unLoc . ideclName
-
-      showModName :: ModuleName -> T.Text
-      showModName = T.pack . moduleNameString
 
       asNamespace :: ImportDecl name -> ModuleName
       asNamespace imp = maybe (iDeclToModName imp) GHC.unLoc (ideclAs imp)
@@ -269,9 +282,8 @@ cacheDataProducer packageState tm deps = do
       varToCompl var = do
         let typ = Just $ varType var
             name = Var.varName var
-            label = T.pack $ showGhc name
         docs <- evalGhcEnv packageState $ getDocumentationTryGhc (tm_parsed_module tm : deps) name
-        return $ CI name (showModName curMod) typ label Nothing docs
+        return $ mkNameCompItem name curMod typ Nothing docs
 
       toCompItem :: ModuleName -> Name -> IO CompItem
       toCompItem mn n = do
@@ -285,7 +297,7 @@ cacheDataProducer packageState tm deps = do
                 name' <- lookupName n
                 return $ name' >>= safeTyThingType
 #endif
-        return $ CI n (showModName mn) (either (const Nothing) id ty) (T.pack $ showGhc n) Nothing docs
+        return $ mkNameCompItem n mn (either (const Nothing) id ty) Nothing docs
 
   (unquals,quals) <- getCompls rdrElts
 
@@ -295,6 +307,61 @@ cacheDataProducer packageState tm deps = do
     , qualCompls = quals
     , importableModules = moduleNames
     }
+
+-- | Produces completions from the top level declarations of a module.
+localCompletionsForParsedModule :: ParsedModule -> CachedCompletions
+localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls, hsmodName}} =
+    CC { allModNamesAsNS = mempty
+       , unqualCompls = compls
+       , qualCompls = mempty
+       , importableModules = mempty
+        }
+  where
+    typeSigIds = Set.fromList
+        [ id
+            | L _ (SigD (TypeSig ids _)) <- hsmodDecls
+            , L _ id <- ids
+            ]
+    hasTypeSig = (`Set.member` typeSigIds) . unLoc
+
+    compls = concat
+        [ case decl of
+            SigD (TypeSig ids typ) ->
+                [mkComp id CiFunction (Just $ ppr typ) | id <- ids]
+            ValD FunBind{fun_id} ->
+                [ mkComp fun_id CiFunction Nothing
+                | not (hasTypeSig fun_id)
+                ]
+            ValD PatBind{pat_lhs} ->
+                [mkComp id CiVariable Nothing
+                | VarPat id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
+            TyClD ClassDecl{tcdLName, tcdSigs} ->
+                mkComp tcdLName CiClass Nothing :
+                [ mkComp id CiFunction (Just $ ppr typ)
+                | L _ (TypeSig ids typ) <- tcdSigs
+                , id <- ids]
+            TyClD x ->
+                [mkComp id cl Nothing
+                | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
+                , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
+            ForD ForeignImport{fd_name,fd_sig_ty} ->
+                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+            ForD ForeignExport{fd_name,fd_sig_ty} ->
+                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+            _ -> []
+            | L _ decl <- hsmodDecls
+        ]
+
+    mkComp n ctyp ty =
+        CI ctyp pn thisModName ty pn Nothing doc (ctyp `elem` [CiStruct, CiClass])
+      where
+        pn = ppr n
+        doc = SpanDocText $ getDocumentation [pm] n
+
+    thisModName = ppr hsmodName
+
+    ppr :: Outputable a => a -> T.Text
+    ppr = T.pack . prettyPrint
 
 newtype WithSnippets = WithSnippets Bool
 
@@ -340,7 +407,6 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
 
       filtCompls = map Fuzzy.original $ Fuzzy.filter prefixText ctxCompls "" "" label False
         where
-          isTypeCompl = isTcOcc . occName . origName
           -- completions specific to the current context
           ctxCompls' = case getCContext pos pm of
                         Nothing -> compls
