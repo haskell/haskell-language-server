@@ -42,7 +42,7 @@ extra-deps:
 - monad-dijkstra-0.1.1.2
 - monad-memo-0.4.1
 - multistate-0.8.0.1
-- ormolu-0.0.5.0
+- ormolu-0.1.2.0
 - opentelemetry-0.4.2
 - parser-combinators-1.2.1
 - regex-base-0.94.0.0
