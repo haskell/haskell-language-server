@@ -13,7 +13,7 @@
 module Ide.Plugin.Hlint
   (
     descriptor
-  --, provider 
+  --, provider
   ) where
 import Refact.Apply
 import Control.Arrow ((&&&))
@@ -50,6 +50,7 @@ import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Rules
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
+import Development.IDE.GHC.Util (hscEnv)
 import Development.IDE.LSP.Server
 import Development.IDE.Plugin
 import Development.IDE.Types.Diagnostics as D
@@ -57,11 +58,22 @@ import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.Shake
 -- import Development.Shake hiding ( Diagnostic )
-import GHC
+import GHC hiding (DynFlags(..))
 import GHC.Generics
 import GHC.Generics (Generic)
 import SrcLoc
 import HscTypes (ModIface, ModSummary)
+
+#ifndef GHC_LIB
+import GHC (DynFlags(..))
+import HscTypes (hsc_dflags)
+#else
+import RealGHC (DynFlags(..))
+import RealGHC.HscTypes (hsc_dflags)
+import qualified RealGHC.EnumSet as EnumSet
+import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
+#endif
+
 import Ide.Logger
 import Ide.Types
 import Ide.Plugin
@@ -106,9 +118,7 @@ rules = do
     ideas <- getIdeas file
     return $ (diagnostics file ideas, Just ())
 
-  hlintDataDir <- liftIO getExecutablePath
-
-  getHlintSettingsRule (HlintEnabled hlintDataDir True)
+  getHlintSettingsRule (HlintEnabled [])
 
   action $ do
     files <- getFilesOfInterest
@@ -117,9 +127,9 @@ rules = do
   where
 
       diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
-      diagnostics file (Right ideas) = 
+      diagnostics file (Right ideas) =
         [(file, ShowDiag, ideaToDiagnostic i) | i <- ideas, ideaSeverity i /= Ignore]
-      diagnostics file (Left parseErr) = 
+      diagnostics file (Left parseErr) =
         [(file, ShowDiag, parseErrorToDiagnostic parseErr)]
 
       ideaToDiagnostic :: Idea -> Diagnostic
@@ -131,17 +141,19 @@ rules = do
           , _source   = Just "hlint"
           , _message  = T.pack $ show idea
           , _relatedInformation = Nothing
+          , _tags     = Nothing
         }
-      
+
       parseErrorToDiagnostic :: ParseError -> Diagnostic
       parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
-        LSP.Diagnostic { 
+        LSP.Diagnostic {
             _range    = srcSpanToRange l
           , _severity = Just LSP.DsInfo
           , _code     = Just (LSP.StringValue "parser")
           , _source   = Just "hlint"
           , _message  = T.unlines [T.pack msg,T.pack contents]
           , _relatedInformation = Nothing
+          , _tags     = Nothing
         }
       -- This one is defined in Development.IDE.GHC.Error but here
       -- the types could come from ghc-lib or ghc
@@ -158,24 +170,35 @@ rules = do
 
 getIdeas :: NormalizedFilePath -> Action (Either ParseError [Idea])
 getIdeas nfp = do
-  (classify, hint) <- useNoFile_ GetHlintSettings
+  logm $ "getIdeas:file:" ++ show nfp
+  (flags, classify, hint) <- useNoFile_ GetHlintSettings
   let applyHints' modEx = applyHints classify hint [modEx]
-  fmap (fmap applyHints') moduleEx
-  where moduleEx :: Action (Either ParseError ModuleEx)
-        moduleEx = do
+  fmap (fmap applyHints') (moduleEx flags)
+  where moduleEx :: ParseFlags -> Action (Either ParseError ModuleEx)
+        moduleEx flags = do
 #ifndef GHC_LIB
-          pm <- getParsedModule fnp
+          pm <- getParsedModule nfp
           let anns = pm_annotations pm
           let modu = pm_parsed_source pm
           return $ Right (createModuleEx anns modu)
 #else
-          liftIO $ parseModuleEx defaultParseFlags (fromNormalizedFilePath nfp) Nothing
+          flags' <- setExtensions flags
+          liftIO $ parseModuleEx flags' (fromNormalizedFilePath nfp) Nothing
+
+        setExtensions flags = do
+          hsc <- hscEnv <$> use_ GhcSession nfp
+          let dflags = hsc_dflags hsc
+          let hscExts = EnumSet.toList (extensionFlags dflags)
+          logm $ "getIdeas:setExtensions:hscExtensions:" ++ show hscExts
+          let hlintExts = mapMaybe (GhclibParserEx.readExtension . show) hscExts
+          logm $ "getIdeas:setExtensions:hlintExtensions:" ++ show hlintExts
+          return $ flags { enabledExtensions = hlintExts }
 #endif
 
 -- ---------------------------------------------------------------------
 
 data HlintUsage
-  = HlintEnabled { hlintUseDataDir :: FilePath, hlintAllowOverrides :: Bool }
+  = HlintEnabled { cmdArgs :: [String] }
   | HlintDisabled
   deriving Show
 
@@ -185,41 +208,19 @@ instance Hashable GetHlintSettings
 instance NFData   GetHlintSettings
 instance NFData Hint where rnf = rwhnf
 instance NFData Classify where rnf = rwhnf
+instance NFData ParseFlags where rnf = rwhnf
 instance Show Hint where show = const "<hint>"
+instance Show ParseFlags where show = const "<parseFlags>"
 instance Binary GetHlintSettings
 
-type instance RuleResult GetHlintSettings = ([Classify], Hint)
+type instance RuleResult GetHlintSettings = (ParseFlags, [Classify], Hint)
 
 getHlintSettingsRule :: HlintUsage -> Rules ()
 getHlintSettingsRule usage =
     defineNoFile $ \GetHlintSettings ->
       liftIO $ case usage of
-          HlintEnabled dir enableOverrides -> hlintSettings dir enableOverrides
+          HlintEnabled cmdArgs -> argsSettings cmdArgs
           HlintDisabled -> fail "hlint configuration unspecified"
-
-hlintSettings :: FilePath -> Bool -> IO ([Classify], Hint)
-hlintSettings hlintDataDir enableOverrides = do
-    curdir <- getCurrentDirectory
-    home <- ((:[]) <$> getHomeDirectory) `catchIOError` (const $ return [])
-    hlintYaml <- if enableOverrides
-        then
-          findM Dir.doesFileExist $
-          map (</> ".hlint.yaml") (ancestors curdir ++ home)
-      else
-        return Nothing
-    (_, cs, hs) <- foldMapM parseSettings $
-      (hlintDataDir </> "hlint.yaml") : maybeToList hlintYaml
-    return (cs, hs)
-    where
-      ancestors = init . map joinPath . reverse . inits . splitPath
-      -- `findSettings` calls `readFilesConfig` which in turn calls
-      -- `readFileConfigYaml` which finally calls `decodeFileEither` from
-      -- the `yaml` library.  Annoyingly that function catches async
-      -- exceptions and in particular, it ends up catching
-      -- `ThreadKilled`. So, we have to mask to stop it from doing that.
-      parseSettings f = mask $ \unmask ->
-           findSettings (unmask . const (return (f, Nothing))) (Just f)
-      foldMapM f = foldlM (\acc a -> do w <- f a; return $! mappend acc w) mempty
 
 -- ---------------------------------------------------------------------
 
@@ -253,8 +254,8 @@ codeActionProvider _ _ plId docId _ context = (Right . LSP.List . map CACodeActi
 
 applyAllCmd :: CommandFunction Uri
 applyAllCmd _lf ide uri = do
-  let file = maybe (error $ show uri ++ " is not a file") 
-                    toNormalizedFilePath' 
+  let file = maybe (error $ show uri ++ " is not a file.")
+                    toNormalizedFilePath'
                    (uriToFilePath' uri)
   logm $ "applyAllCmd:file=" ++ show file
   res <- applyHint ide file Nothing
@@ -283,12 +284,12 @@ data OneHint = OneHint
 applyOneCmd :: CommandFunction ApplyOneParams
 applyOneCmd _lf ide (AOP uri pos title) = do
   let oneHint = OneHint pos title
-  let file = maybe (error $ show uri ++ " is not a file") toNormalizedFilePath' 
+  let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
   res <- applyHint ide file (Just oneHint)
   logm $ "applyOneCmd:file=" ++ show file
   logm $ "applyOneCmd:res=" ++ show res
-  return $ 
+  return $
     case res of
       Left err -> (Left (responseError (T.pack $ "applyOne: " ++ show err)), Nothing)
       Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
@@ -297,7 +298,7 @@ applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either Strin
 applyHint ide nfp mhint =
   runExceptT $ do
     ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas nfp
-    let ideas' = maybe ideas (`filterIdeas` ideas) mhint 
+    let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map (show &&& ideaRefactoring) ideas'
     liftIO $ logm $ "applyHint:apply=" ++ show commands
     -- set Nothing as "position" for "applyRefactorings" because
@@ -328,8 +329,8 @@ applyHint ide nfp mhint =
         liftIO $ logm $ "applyHint:diff=" ++ show wsEdit
         ExceptT $ Right <$> (return wsEdit)
       Left err ->
-        throwE (show err)    
-    where 
+        throwE (show err)
+    where
           -- | If we are only interested in applying a particular hint then
           -- let's filter out all the irrelevant ideas
           filterIdeas :: OneHint -> [Idea] -> [Idea]
@@ -339,7 +340,7 @@ applyHint ide nfp mhint =
             in filter (\i -> ideaHint i == title' && ideaPos i == (l+1, c+1)) ideas
 
           toRealSrcSpan (RealSrcSpan real) = real
-          toRealSrcSpan (UnhelpfulSpan _) = error "No real souce span"
+          toRealSrcSpan (UnhelpfulSpan x) = error $ "No real source span: " ++ show x
 
           showParseError :: Hlint.ParseError -> String
           showParseError (Hlint.ParseError location message content) =
@@ -350,7 +351,7 @@ bimapExceptT :: Functor m => (e -> f) -> (a -> b) -> ExceptT e m a -> ExceptT f 
 bimapExceptT f g (ExceptT m) = ExceptT (fmap h m) where
   h (Left e)  = Left (f e)
   h (Right a) = Right (g a)
-{-# INLINE bimapExceptT #-}   
+{-# INLINE bimapExceptT #-}
 -- ---------------------------------------------------------------------
 {-
 {-# LANGUAGE CPP #-}
