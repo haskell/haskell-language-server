@@ -203,12 +203,12 @@ cradleToSessionOpts cradle file = do
         -- message about the fact that the file is being ignored.
         CradleNone -> return (Left [])
 
-emptyHscEnv :: IO HscEnv
-emptyHscEnv = do
+emptyHscEnv :: IORef NameCache -> IO HscEnv
+emptyHscEnv nc = do
     libdir <- getLibdir
     env <- runGhc (Just libdir) getSession
     initDynLinker env
-    pure env
+    pure $ setNameCache nc env
 
 -- | Convert a target to a list of potential absolute paths.
 -- A TargetModule can be anywhere listed by the supplied include
@@ -262,7 +262,7 @@ loadSession dir = do
     InstallationMismatch{..} ->
         return $ returnWithVersion $ \fp -> return (([renderPackageSetupException compileTime fp GhcVersionMismatch{..}], Nothing),[])
     InstallationChecked compileTime ghcLibCheck -> return $ do
-      ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress} <- getShakeExtras
+      ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress, ideNc} <- getShakeExtras
       IdeOptions{optTesting = IdeTesting optTesting} <- getIdeOptions
 
       -- Create a new HscEnv from a hieYaml root and a set of options
@@ -273,7 +273,7 @@ loadSession dir = do
                        -> IO (HscEnv, ComponentInfo, [ComponentInfo])
           packageSetup (hieYaml, cfp, opts) = do
             -- Parse DynFlags for the newly discovered component
-            hscEnv <- emptyHscEnv
+            hscEnv <- emptyHscEnv ideNc
             (df, targets) <- evalGhcEnv hscEnv $
                 setOptions opts (hsc_dflags hscEnv)
             let deps = componentDependencies opts ++ maybeToList hieYaml
@@ -317,9 +317,7 @@ loadSession dir = do
                 -- It's important to keep the same NameCache though for reasons
                 -- that I do not fully understand
                 logInfo logger (T.pack ("Making new HscEnv" ++ show inplace))
-                hscEnv <- case oldDeps of
-                            Nothing -> emptyHscEnv
-                            Just (old_hsc, _) -> setNameCache (hsc_NC old_hsc) <$> emptyHscEnv
+                hscEnv <- emptyHscEnv ideNc
                 newHscEnv <-
                   -- Add the options for the current component to the HscEnv
                   evalGhcEnv hscEnv $ do

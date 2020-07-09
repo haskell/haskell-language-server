@@ -178,7 +178,8 @@ getHomeHieFile f = do
 
   if isUpToDate
     then do
-      hf <- liftIO $ whenMaybe isUpToDate (loadHieFile hie_f)
+      ncu <- mkUpdater
+      hf <- liftIO $ whenMaybe isUpToDate (loadHieFile ncu hie_f)
       MaybeT $ return hf
     else do
       wait <- lift $ delayedAction $ mkDelayedAction "OutOfDateHie" L.Info $ do
@@ -186,7 +187,8 @@ getHomeHieFile f = do
         pm <- use_ GetParsedModule f
         typeCheckRuleDefinition hsc pm DoGenerateInterfaceFiles
       _ <- MaybeT $ liftIO $ timeout 1 wait
-      liftIO $ loadHieFile hie_f
+      ncu <- mkUpdater
+      liftIO $ loadHieFile ncu hie_f
 
 
 getPackageHieFile :: ShakeExtras
@@ -203,10 +205,11 @@ getPackageHieFile ide mod file = do
             hieFile <- liftIO $ optLocateHieFile optPkgLocationOpts pkgConfig mod
             path    <- liftIO $ optLocateSrcFile optPkgLocationOpts pkgConfig mod
             case (hieFile, path) of
-                (Just hiePath, Just modPath) -> MaybeT $
+                (Just hiePath, Just modPath) -> do
                     -- deliberately loaded outside the Shake graph
                     -- to avoid dependencies on non-workspace files
-                        liftIO $ Just . (, modPath) <$> loadHieFile hiePath
+                        ncu <- mkUpdater
+                        MaybeT $ liftIO $ Just . (, modPath) <$> loadHieFile ncu hiePath
                 _ -> MaybeT $ return Nothing
         _ -> MaybeT $ return Nothing
 

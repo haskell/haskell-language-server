@@ -60,7 +60,6 @@ import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified HeaderInfo                     as Hdr
 import           HscMain                        (hscInteractive, hscSimplify)
 import           MkIface
-import           NameCache
 import           StringBuffer                   as SB
 import           TcRnMonad (initIfaceLoad, tcg_th_coreplugins)
 import           TcIface                        (typecheckIface)
@@ -588,11 +587,9 @@ removePackageImports pkgs (L l h@HsModule {hsmodImports} ) = L l (h { hsmodImpor
     do_one_import l = l
 #endif
 
-loadHieFile :: FilePath -> IO GHC.HieFile
-loadHieFile f = do
-        u <- mkSplitUniqSupply 'a'
-        let nameCache = initNameCache u []
-        fmap (GHC.hie_file_result . fst) $ GHC.readHieFile nameCache f
+loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
+loadHieFile ncu f = do
+  GHC.hie_file_result <$> GHC.readHieFile ncu f
 
 -- | Retuns an up-to-date module interface, regenerating if needed.
 --   Assumes file exists.
