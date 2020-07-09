@@ -159,10 +159,12 @@ library
       hs-source-dirs: src-ghc88
       other-modules:
         Development.IDE.GHC.HieAst
+        Development.IDE.GHC.HieBin
     if (impl(ghc > 8.9))
       hs-source-dirs: src-ghc810
       other-modules:
         Development.IDE.GHC.HieAst
+        Development.IDE.GHC.HieBin
     ghc-options: -Wall -Wno-name-shadowing
 
 executable ghcide-test-preprocessor
