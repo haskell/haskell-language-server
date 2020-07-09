@@ -172,18 +172,27 @@ getIdeas :: NormalizedFilePath -> Action (Either ParseError [Idea])
 getIdeas nfp = do
   logm $ "getIdeas:file:" ++ show nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
-  let applyHints' modEx = applyHints classify hint [modEx]
-  fmap (fmap applyHints') (moduleEx flags)
-  where moduleEx :: ParseFlags -> Action (Either ParseError ModuleEx)
-        moduleEx flags = do
+
+  let applyHints' (Just (Right modEx)) = Right $ applyHints classify hint [modEx]
+      applyHints' (Just (Left err)) = Left err
+      applyHints' Nothing = Right []
+
+  fmap applyHints' (moduleEx flags)
+
+  where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
 #ifndef GHC_LIB
-          pm <- getParsedModule nfp
-          let anns = pm_annotations pm
-          let modu = pm_parsed_source pm
-          return $ Right (createModuleEx anns modu)
+        moduleEx _flags = do
+          mbpm <- getParsedModule nfp
+          case mbpm of
+            Nothing -> return Nothing
+            Just pm -> do
+              let anns = pm_annotations pm
+              let modu = pm_parsed_source pm
+              return $ Just $ Right (createModuleEx anns modu)
 #else
+        moduleEx flags = do
           flags' <- setExtensions flags
-          liftIO $ parseModuleEx flags' (fromNormalizedFilePath nfp) Nothing
+          Just <$> (liftIO $ parseModuleEx flags' (fromNormalizedFilePath nfp) Nothing)
 
         setExtensions flags = do
           hsc <- hscEnv <$> use_ GhcSession nfp
@@ -233,9 +242,7 @@ codeActionProvider _ _ plId docId _ context = (Right . LSP.List . map CACodeActi
 
     -- |Some hints do not have an associated refactoring
     validCommand (LSP.Diagnostic _ _ (Just (LSP.StringValue code)) (Just "hlint") _ _ _) =
-      case code of
-        "Eta reduce" -> False
-        _            -> True
+      code /= "Eta reduce"
     validCommand _ = False
 
     LSP.List diags = context ^. LSP.diagnostics
