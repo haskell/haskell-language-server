@@ -12,9 +12,9 @@
 module Development.IDE.GHC.Compat(
     getHeaderImports,
     HieFileResult(..),
-    HieFile,
+    HieFile(..),
+    NameCacheUpdater(..),
     hieExportNames,
-    hie_module,
     mkHieFile,
     writeHieFile,
     readHieFile,
@@ -49,7 +49,13 @@ module Development.IDE.GHC.Compat(
     HasSrcSpan,
     getLoc,
 
-    module GHC
+    upNameCache,
+
+    module GHC,
+#if MIN_GHC_API_VERSION(8,8,0)
+    module HieTypes,
+    module HieUtils,
+#endif
     ) where
 
 import StringBuffer
@@ -58,6 +64,9 @@ import FieldLabel
 import Fingerprint (Fingerprint)
 import qualified Module
 import Packages
+import Data.IORef
+import HscTypes
+import NameCache
 
 import qualified GHC
 import GHC hiding (
@@ -84,13 +93,10 @@ import Avail
 import ErrUtils (ErrorMessages)
 import FastString (FastString)
 
-#if MIN_GHC_API_VERSION(8,10,0)
-import HscTypes (mi_mod_hash)
-#endif
-
 #if MIN_GHC_API_VERSION(8,8,0)
 import Development.IDE.GHC.HieAst (mkHieFile)
-import HieBin
+import Development.IDE.GHC.HieBin
+import HieUtils
 import HieTypes
 
 supportsHieFiles :: Bool
@@ -101,10 +107,9 @@ hieExportNames = nameListFromAvails . hie_exports
 
 #else
 
+import IfaceEnv
 #if MIN_GHC_API_VERSION(8,6,0)
 import BinIface
-import Data.IORef
-import IfaceEnv
 #else
 import System.IO.Error
 #endif
@@ -113,7 +118,6 @@ import Binary
 import Control.Exception (catch)
 import Data.ByteString (ByteString)
 import GhcPlugins (Hsc, srcErrorMessages)
-import NameCache
 import TcRnTypes
 import System.IO
 import Foreign.ForeignPtr
@@ -127,6 +131,13 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
 
 #endif
 
+upNameCache :: IORef NameCache -> (NameCache -> (NameCache, c)) -> IO c
+#if !MIN_GHC_API_VERSION(8,8,0)
+upNameCache ref upd_fn
+  = atomicModifyIORef' ref upd_fn
+#else
+upNameCache = updNameCache
+#endif
 #if !MIN_GHC_API_VERSION(8,6,0)
 includePathsGlobal, includePathsQuote :: [String] -> [String]
 includePathsGlobal = id
@@ -288,7 +299,7 @@ instance Binary HieFile where
 data HieFileResult = HieFileResult { hie_file_result :: HieFile }
 
 writeHieFile :: FilePath -> HieFile -> IO ()
-readHieFile :: NameCache -> FilePath -> IO (HieFileResult, ())
+readHieFile :: NameCacheUpdater -> FilePath -> IO HieFileResult
 supportsHieFiles :: Bool
 
 #if MIN_GHC_API_VERSION(8,6,0)
@@ -300,9 +311,8 @@ writeHieFile fp hie = do
 
 readHieFile nc fp = do
   bh <- readBinMem fp
-  nc' <- newIORef nc
-  hie_file <- getWithUserData (NCU (atomicModifyIORef' nc')) bh
-  return (HieFileResult hie_file, ())
+  hie_file <- getWithUserData nc bh
+  return (HieFileResult hie_file)
 
 supportsHieFiles = True
 
