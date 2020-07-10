@@ -483,6 +483,7 @@ codeActionTests = testGroup "code actions"
   , deleteUnusedDefinitionTests
   , addInstanceConstraintTests
   , addFunctionConstraintTests
+  , addTypeAnnotationsToLiteralsTest
   ]
 
 codeLensesTests :: TestTree
@@ -1209,9 +1210,104 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       liftIO $ contentAfterAction @?= expectedResult
 
     extractCodeAction docId actionPrefix = do
-      Just (CACodeAction action@CodeAction { _title = actionTitle })
-                  <- find (\(CACodeAction CodeAction{_title=x}) -> actionPrefix `T.isPrefixOf` x)
-                     <$> getCodeActions docId (R 0 0 0 0)
+      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R 0 0 0 0) [actionPrefix]
+      return (action, actionTitle)
+
+addTypeAnnotationsToLiteralsTest :: TestTree
+addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals to satisfy contraints"
+  [
+    testSession "add default type to satisfy one contraint" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A () where"
+               , ""
+               , "f = 1"
+               ])
+    [ (DsWarning, (3, 4), "Defaulting the following constraint") ]
+    "Add type annotation ‘Integer’ to ‘1’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A () where"
+               , ""
+               , "f = (1 :: Integer)"
+               ])
+
+  , testSession "add default type to satisfy one contraint with duplicate literals" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "{-# LANGUAGE OverloadedStrings #-}"
+               , "module A () where"
+               , ""
+               , "import Debug.Trace"
+               , ""
+               , "f = seq \"debug\" traceShow \"debug\""
+               ])
+    [ (DsWarning, (6, 8), "Defaulting the following constraint")
+    , (DsWarning, (6, 16), "Defaulting the following constraint")
+    ]
+    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "{-# LANGUAGE OverloadedStrings #-}"
+               , "module A () where"
+               , ""
+               , "import Debug.Trace"
+               , ""
+               , "f = seq (\"debug\" :: [Char]) traceShow \"debug\""
+               ])
+  , testSession "add default type to satisfy two contraints" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "{-# LANGUAGE OverloadedStrings #-}"
+               , "module A () where"
+               , ""
+               , "import Debug.Trace"
+               , ""
+               , "f a = traceShow \"debug\" a" 
+               ])
+    [ (DsWarning, (6, 6), "Defaulting the following constraint") ]
+    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "{-# LANGUAGE OverloadedStrings #-}"
+               , "module A () where"
+               , ""
+               , "import Debug.Trace"
+               , ""
+               , "f a = traceShow (\"debug\" :: [Char]) a"
+               ])
+  , testSession "add default type to satisfy two contraints with duplicate literals" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "{-# LANGUAGE OverloadedStrings #-}"
+               , "module A () where"
+               , ""
+               , "import Debug.Trace"
+               , ""
+               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
+               ])
+    [ (DsWarning, (6, 54), "Defaulting the following constraint") ]
+    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "{-# LANGUAGE OverloadedStrings #-}"
+               , "module A () where"
+               , ""
+               , "import Debug.Trace"
+               , ""
+               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: [Char])))"
+               ])
+  ]
+  where
+    testFor source diag expectedTitle expectedResult = do
+      docId <- createDoc "A.hs" "haskell" source
+      expectDiagnostics [ ("A.hs", diag) ]
+
+      (action, title) <- extractCodeAction docId "Add type annotation"
+
+      liftIO $ title @?= expectedTitle
+      executeCodeAction action
+      contentAfterAction <- documentContents docId
+      liftIO $ contentAfterAction @?= expectedResult
+
+    extractCodeAction docId actionPrefix = do
+      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R 0 0 0 0) [actionPrefix]
       return (action, actionTitle)
 
 
@@ -2684,19 +2780,25 @@ openTestDataDoc path = do
   createDoc path "haskell" source
 
 findCodeActions :: TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
-findCodeActions doc range expectedTitles = do
+findCodeActions = findCodeActions' (==) "is not a superset of"
+
+findCodeActionsByPrefix :: TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
+findCodeActionsByPrefix = findCodeActions' T.isPrefixOf "is not prefix of"
+
+findCodeActions' :: (T.Text -> T.Text -> Bool) -> String -> TextDocumentIdentifier -> Range -> [T.Text] -> Session [CodeAction]
+findCodeActions' op errMsg doc range expectedTitles = do
   actions <- getCodeActions doc range
   let matches = sequence
         [ listToMaybe
           [ action
           | CACodeAction action@CodeAction { _title = actionTitle } <- actions
-          , actionTitle == expectedTitle ]
+          , expectedTitle `op` actionTitle]
         | expectedTitle <- expectedTitles]
   let msg = show
             [ actionTitle
             | CACodeAction CodeAction { _title = actionTitle } <- actions
             ]
-            ++ " is not a superset of "
+            ++ " " <> errMsg <> " "
             ++ show expectedTitles
   liftIO $ case matches of
     Nothing -> assertFailure msg
