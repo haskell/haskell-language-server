@@ -56,6 +56,7 @@ import GHC.LanguageExtensions.Type (Extension)
 import Data.Function
 import Control.Arrow ((>>>))
 import Data.Functor
+import Control.Applicative ((<|>))
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
@@ -146,6 +147,7 @@ suggestAction dflags packageExports ideOptions parsedModule text diag = concat
     , suggestReplaceIdentifier text diag
     , suggestSignature True diag
     , suggestConstraint text diag
+    , suggestAddTypeAnnotationToSatisfyContraints text diag
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestRemoveRedundantImport pm text diag
@@ -199,6 +201,61 @@ suggestDeleteTopBinding ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}
       matchesBindingName b (ValD FunBind {fun_id=L _ x}) = showSDocUnsafe (ppr x) == b
       matchesBindingName b (SigD (TypeSig (L _ x:_) _)) = showSDocUnsafe (ppr x) == b
       matchesBindingName _ _ = False
+
+
+suggestAddTypeAnnotationToSatisfyContraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,..}
+-- File.hs:52:41: warning:
+--     * Defaulting the following constraint to type ‘Integer’
+--        Num p0 arising from the literal ‘1’
+--     * In the expression: 1
+--       In an equation for ‘f’: f = 1
+-- File.hs:52:41: warning:
+--     * Defaulting the following constraints to type ‘[Char]’
+--        (Show a0)
+--          arising from a use of ‘traceShow’
+--          at A.hs:228:7-25
+--        (IsString a0)
+--          arising from the literal ‘"debug"’
+--          at A.hs:228:17-23
+--     * In the expression: traceShow "debug" a
+--       In an equation for ‘f’: f a = traceShow "debug" a
+-- File.hs:52:41: warning:
+--     * Defaulting the following constraints to type ‘[Char]’
+--         (Show a0)
+--          arising from a use of ‘traceShow’
+--          at A.hs:255:28-43
+--        (IsString a0)
+--          arising from the literal ‘"test"’
+--          at /Users/serhiip/workspace/ghcide/src/Development/IDE/Plugin/CodeAction.hs:255:38-43
+--     * In the fourth argument of ‘seq’, namely ‘(traceShow "test")’
+--       In the expression: seq "test" seq "test" (traceShow "test")
+--       In an equation for ‘f’:
+--          f = seq "test" seq "test" (traceShow "test")
+    | Just [ty, lit] <- matchRegex _message (pat False False True)
+                        <|> matchRegex _message (pat False False False)
+            = codeEdit ty lit (makeAnnotatedLit ty lit)
+    | Just source <- sourceOpt
+    , Just [ty, lit] <- matchRegex _message (pat True True False)
+            = let lit' = makeAnnotatedLit ty lit;
+                  tir = textInRange _range source
+              in codeEdit ty lit (T.replace lit lit' tir)
+    | otherwise = []
+    where
+      makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
+      pat multiple at inThe = T.concat [ ".*Defaulting the following constraint"
+                                       , if multiple then "s" else ""
+                                       , " to type ‘([^ ]+)’ "
+                                       , ".*arising from the literal ‘(.+)’"
+                                       , if inThe then ".+In the.+argument" else ""
+                                       , if at then ".+at" else ""
+                                       , ".+In the expression"
+                                       ]
+      codeEdit ty lit replacement =
+        let title = "Add type annotation ‘" <> ty <> "’ to ‘" <> lit <> "’"
+            edits = [TextEdit _range replacement]
+        in  [( title, edits )]
+
 
 suggestReplaceIdentifier :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestReplaceIdentifier contents Diagnostic{_range=_range,..}
