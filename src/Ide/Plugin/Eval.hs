@@ -44,7 +44,28 @@ import           Development.IDE.GHC.Util       (evalGhcEnv, hscEnv,
 import           Development.IDE.Types.Location (toNormalizedFilePath',
                                                  uriToFilePath')
 import           DynamicLoading                 (initializePlugins)
-import           GHC
+import           DynFlags                       (targetPlatform)
+import           GHC                            (DynFlags, ExecResult (..),
+                                                 GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+                                                 GhcLink (LinkInMemory),
+                                                 GhcMode (CompManager),
+                                                 HscTarget (HscInterpreted),
+                                                 LoadHowMuch (LoadAllTargets),
+                                                 SuccessFlag (..),
+                                                 execLineNumber, execOptions,
+                                                 execSourceFile, execStmt,
+                                                 getContext,
+                                                 getInteractiveDynFlags,
+                                                 getSession, getSessionDynFlags,
+                                                 ghcLink, ghcMode, hscTarget,
+                                                 isImport, isStmt, load,
+                                                 moduleName, packageFlags,
+                                                 parseImportDecl, pkgDatabase,
+                                                 pkgState, runDecls, setContext,
+                                                 setInteractiveDynFlags,
+                                                 setLogAction,
+                                                 setSessionDynFlags, setTargets,
+                                                 simpleImportDecl, ways)
 import           GHC.Generics                   (Generic)
 import           GhcMonad                       (modifySession)
 import           GhcPlugins                     (defaultLogActionHPutStrDoc,
@@ -59,7 +80,8 @@ import           Language.Haskell.LSP.Core      (LspFuncs (getVirtualFileFunc))
 import           Language.Haskell.LSP.Types
 import           Language.Haskell.LSP.VFS       (virtualFileText)
 import           PrelNames                      (pRELUDE)
-import           System.IO                      (Handle, IOMode (WriteMode), hClose, openFile)
+import           System.IO                      (Handle, IOMode (WriteMode),
+                                                 hClose, openFile)
 import           System.IO.Extra                (newTempFile)
 
 descriptor :: PluginId -> PluginDescriptor
