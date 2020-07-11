@@ -1,6 +1,6 @@
 dist-newstyle
 .stack-work
-hie.yaml
+/hie.yaml
 cabal.project.local
 *~
 *.lock
@@ -18,9 +18,6 @@ shake.yaml.lock
 # stack 2.1 stack.yaml lock files
 stack*.yaml.lock
 shake.yaml.lock
-
-# ignore hie.yaml's for testdata
-test/**/*.yaml
 
 # metadata files on macOS
 .DS_Store
