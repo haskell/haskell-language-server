@@ -22,7 +22,7 @@
 module Ide.Plugin.Eval where
 
 import           Control.Monad                  (void)
-import           Control.Monad.Catch            (finally)
+import           Control.Monad.Catch            (MonadMask, bracket)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Class      (MonadTrans (lift))
 import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
@@ -31,7 +31,6 @@ import           Data.Aeson                     (FromJSON, ToJSON, Value (Null),
                                                  toJSON)
 import           Data.Bifunctor                 (Bifunctor (first))
 import qualified Data.HashMap.Strict            as Map
-import qualified Data.Rope.UTF16                as Rope
 import           Data.String                    (IsString (fromString))
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -58,9 +57,9 @@ import           Ide.Plugin
 import           Ide.Types
 import           Language.Haskell.LSP.Core      (LspFuncs (getVirtualFileFunc))
 import           Language.Haskell.LSP.Types
-import           Language.Haskell.LSP.VFS       (VirtualFile (..))
+import           Language.Haskell.LSP.VFS       (virtualFileText)
 import           PrelNames                      (pRELUDE)
-import           System.IO                      (IOMode (WriteMode), hClose, openFile)
+import           System.IO                      (Handle, IOMode (WriteMode), hClose, openFile)
 import           System.IO.Extra                (newTempFile)
 
 descriptor :: PluginId -> PluginDescriptor
@@ -104,7 +103,7 @@ provider :: CodeLensProvider
 provider lsp _state plId CodeLensParams {_textDocument} = response $ do
   let TextDocumentIdentifier uri = _textDocument
   contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri uri
-  let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
+  let text = virtualFileText <$> contents
   let matches = extractMatches text
 
   cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate..." (Just [])
@@ -147,7 +146,7 @@ runEvalCmd lsp state EvalParams {..} = response' $ do
   let TextDocumentIdentifier {_uri} = module_
   fp <- handleMaybe "uri" $ uriToFilePath' _uri
   contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri _uri
-  text <- handleMaybe "contents" $ Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
+  text <- handleMaybe "contents" $ virtualFileText <$> contents
 
   session <-
     liftIO
@@ -165,10 +164,7 @@ runEvalCmd lsp state EvalParams {..} = response' $ do
 
   now <- liftIO getCurrentTime
 
-  (temp, clean) <- liftIO newTempFile
-  (tempLog, cleanLog) <- liftIO newTempFile
-  hLog <- liftIO $ openFile tempLog WriteMode
-  flip finally (liftIO $ hClose hLog >> cleanLog >> clean) $ do
+  withTempFile $ \temp -> withTempFile $ \tempLog -> withFile tempLog WriteMode $ \hLog -> do
     let modName = moduleName $ ms_mod ms
         thisModuleTarget = Target (TargetFile fp Nothing) False (Just (textToStringBuffer text, now))
 
@@ -297,3 +293,16 @@ setupDynFlagsForGHCiLike env dflags = do
           `gopt_set` Opt_IgnoreOptimChanges
           `gopt_set` Opt_IgnoreHpcChanges
   initializePlugins env dflags4
+
+
+withTempFile :: (MonadIO m, MonadMask m) => (FilePath -> m a) -> m a
+withTempFile k = bracket alloc release (k . fst)
+  where
+      alloc = liftIO newTempFile
+      release = liftIO . snd
+
+withFile :: (MonadMask m, MonadIO m) => FilePath -> IOMode -> (Handle -> m b) -> m b
+withFile f mode = bracket alloc release
+    where
+        alloc = liftIO $ openFile f mode
+        release = liftIO . hClose
