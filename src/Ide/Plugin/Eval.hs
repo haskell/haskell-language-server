@@ -22,7 +22,6 @@
 module Ide.Plugin.Eval where
 
 import           Control.Monad                  (void)
-import           Control.Monad.Catch            (MonadMask, bracket)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Class      (MonadTrans (lift))
 import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
@@ -45,8 +44,7 @@ import           Development.IDE.Types.Location (toNormalizedFilePath',
                                                  uriToFilePath')
 import           DynamicLoading                 (initializePlugins)
 import           DynFlags                       (targetPlatform)
-import           GHC                            (DynFlags, ExecResult (..),
-                                                 GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+import           GHC                            (DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
                                                  GhcLink (LinkInMemory),
                                                  GhcMode (CompManager),
                                                  HscTarget (HscInterpreted),
@@ -80,9 +78,9 @@ import           Language.Haskell.LSP.Core      (LspFuncs (getVirtualFileFunc))
 import           Language.Haskell.LSP.Types
 import           Language.Haskell.LSP.VFS       (virtualFileText)
 import           PrelNames                      (pRELUDE)
-import           System.IO                      (Handle, IOMode (WriteMode),
-                                                 hClose, openFile)
-import           System.IO.Extra                (newTempFile)
+import           System.FilePath
+import           System.IO                      (hClose)
+import           System.IO.Temp
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -97,10 +95,10 @@ extractMatches = goSearch 0 . maybe [] T.lines
   where
     checkMatch = T.stripPrefix "-- >>> "
     looksLikeSplice l
-      | Just l' <- T.stripPrefix "--" l
-      = not (" >>>" `T.isPrefixOf` l')
-      | otherwise
-      = False
+      | Just l' <- T.stripPrefix "--" l =
+        not (" >>>" `T.isPrefixOf` l')
+      | otherwise =
+        False
 
     goSearch _ [] = []
     goSearch line (l : ll)
@@ -109,17 +107,17 @@ extractMatches = goSearch 0 . maybe [] T.lines
       | otherwise =
         goSearch (line + 1) ll
 
-    goAcc line acc [] = [(reverse acc,Range p p)] where p = Position line 0
-    goAcc line acc (l:ll)
+    goAcc line acc [] = [(reverse acc, Range p p)] where p = Position line 0
+    goAcc line acc (l : ll)
       | Just match <- checkMatch l =
         goAcc (line + 1) ([(match, line)] <> acc) ll
       | otherwise =
-        (reverse acc,r) : goSearch (line + 1) ll
+        (reverse acc, r) : goSearch (line + 1) ll
       where
         r = Range p p'
         p = Position line 0
         p' = Position (line + spliceLength) 0
-        spliceLength = length (takeWhile looksLikeSplice (l:ll))
+        spliceLength = length (takeWhile looksLikeSplice (l : ll))
 
 provider :: CodeLensProvider
 provider lsp _state plId CodeLensParams {_textDocument} = response $ do
@@ -134,20 +132,21 @@ provider lsp _state plId CodeLensParams {_textDocument} = response $ do
         [ CodeLens range (Just cmd') Nothing
           | (m, r) <- matches,
             let (_, startLine) = head m
-                (_, endLine) = last m
+                (endLineContents, endLine) = last m
                 range = Range start end
                 start = Position startLine 0
-                end = Position endLine 1000
+                end = Position endLine (T.length endLineContents)
                 args = EvalParams m r _textDocument,
-            let cmd' = (cmd :: Command)
-                    {_arguments = Just (List [toJSON args])
-                    ,_title = if trivial r then "Evaluate..." else "Refresh..."
+            let cmd' =
+                  (cmd :: Command)
+                    { _arguments = Just (List [toJSON args]),
+                      _title = if trivial r then "Evaluate..." else "Refresh..."
                     }
         ]
 
   return $ List lenses
   where
-      trivial (Range p p') = p == p'
+    trivial (Range p p') = p == p'
 
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"
@@ -171,93 +170,98 @@ runEvalCmd lsp state EvalParams {..} = response' $ do
   text <- handleMaybe "contents" $ virtualFileText <$> contents
 
   session <-
-    liftIO
-      $ runAction "runEvalCmd.ghcSession" state
-      $ use_ GhcSessionDeps
-      $ toNormalizedFilePath'
-      $ fp
+    liftIO $
+      runAction "runEvalCmd.ghcSession" state $
+        use_ GhcSessionDeps $
+          toNormalizedFilePath' $
+            fp
 
   ms <-
-    liftIO
-      $ runAction "runEvalCmd.getModSummary" state
-      $ use_ GetModSummary
-      $ toNormalizedFilePath'
-      $ fp
+    liftIO $
+      runAction "runEvalCmd.getModSummary" state $
+        use_ GetModSummary $
+          toNormalizedFilePath' $
+            fp
 
   now <- liftIO getCurrentTime
 
-  withTempFile $ \temp -> withTempFile $ \tempLog -> withFile tempLog WriteMode $ \hLog -> do
+  let tmp = withSystemTempFile (takeFileName fp)
+
+  tmp $ \temp _h -> tmp $ \tempLog hLog -> do
+    liftIO $ hClose _h
     let modName = moduleName $ ms_mod ms
         thisModuleTarget = Target (TargetFile fp Nothing) False (Just (textToStringBuffer text, now))
 
-    hscEnv' <- ExceptT $ evalGhcEnv (hscEnv session) $ do
-      df <- getSessionDynFlags
-      env <- getSession
-      df <- liftIO $ setupDynFlagsForGHCiLike env df
-      _lp <- setSessionDynFlags df
+    hscEnv' <- ExceptT $
+      evalGhcEnv (hscEnv session) $ do
+        df <- getSessionDynFlags
+        env <- getSession
+        df <- liftIO $ setupDynFlagsForGHCiLike env df
+        _lp <- setSessionDynFlags df
 
-      -- copy the package state to the interactive DynFlags
-      idflags <- getInteractiveDynFlags
-      df <- getSessionDynFlags
-      setInteractiveDynFlags
-        idflags
-          { pkgState = pkgState df,
-            pkgDatabase = pkgDatabase df,
-            packageFlags = packageFlags df
-          }
+        -- copy the package state to the interactive DynFlags
+        idflags <- getInteractiveDynFlags
+        df <- getSessionDynFlags
+        setInteractiveDynFlags
+          idflags
+            { pkgState = pkgState df,
+              pkgDatabase = pkgDatabase df,
+              packageFlags = packageFlags df
+            }
 
-      -- set up a custom log action
-      setLogAction $ \_df _wr _sev _span _style _doc ->
-        defaultLogActionHPutStrDoc _df hLog _doc _style
+        -- set up a custom log action
+        setLogAction $ \_df _wr _sev _span _style _doc ->
+          defaultLogActionHPutStrDoc _df hLog _doc _style
 
-      -- load the module in the interactive environment
-      setTargets [thisModuleTarget]
-      loadResult <- load LoadAllTargets
-      case loadResult of
-        Failed    -> liftIO $ do
+        -- load the module in the interactive environment
+        setTargets [thisModuleTarget]
+        loadResult <- load LoadAllTargets
+        case loadResult of
+          Failed -> liftIO $ do
             hClose hLog
             Left <$> readFile tempLog
-        Succeeded -> do
+          Succeeded -> do
             setContext [IIDecl (simpleImportDecl $ moduleName pRELUDE), IIModule modName]
             Right <$> getSession
 
     df <- liftIO $ evalGhcEnv hscEnv' getSessionDynFlags
     let eval (stmt, l)
           | isStmt df stmt = do
-
             -- set up a custom interactive print function
             ctxt <- getContext
             setContext [IIDecl (simpleImportDecl $ moduleName pRELUDE)]
             let printFun = "let ghcideCustomShow x = Prelude.writeFile " <> show temp <> " (Prelude.show x)"
-            interactivePrint <- execStmt printFun execOptions >>= \case
+            interactivePrint <-
+              execStmt printFun execOptions >>= \case
                 ExecComplete (Right [interactivePrint]) _ -> pure interactivePrint
                 _ -> error "internal error binding print function"
             modifySession $ \hsc -> hsc {hsc_IC = setInteractivePrintName (hsc_IC hsc) interactivePrint}
             setContext ctxt
 
             let opts =
-                    execOptions
+                  execOptions
                     { execSourceFile = fp,
-                        execLineNumber = l
+                      execLineNumber = l
                     }
             res <- execStmt stmt opts
             str <- case res of
-                ExecComplete (Left err) _ -> pure $ pad $ show err
-                ExecComplete (Right _) _ -> liftIO $ pad <$> readFile temp
-                ExecBreak {} -> pure $ pad "breakpoints are not supported"
+              ExecComplete (Left err) _ -> pure $ pad $ show err
+              ExecComplete (Right _) _ -> do
+                  out <- liftIO $ pad <$> readFile temp
+                  let forceIt = length out
+                  return $! forceIt `seq` out
+              ExecBreak {} -> pure $ pad "breakpoints are not supported"
 
             let changes = [TextEdit editTarget $ T.pack str]
             return changes
-
           | isImport df stmt = do
-              ctxt <- getContext
-              idecl <- parseImportDecl stmt
-              setContext $ IIDecl idecl : ctxt
-              return []
-
+            ctxt <- getContext
+            idecl <- parseImportDecl stmt
+            setContext $ IIDecl idecl : ctxt
+            return []
           | otherwise = do
-              void $ runDecls stmt
-              return []
+            void $ runDecls stmt
+            return []
 
     edits <- liftIO $ evalGhcEnv hscEnv' $ traverse (eval . first T.unpack) statements
 
@@ -315,16 +319,3 @@ setupDynFlagsForGHCiLike env dflags = do
           `gopt_set` Opt_IgnoreOptimChanges
           `gopt_set` Opt_IgnoreHpcChanges
   initializePlugins env dflags4
-
-
-withTempFile :: (MonadIO m, MonadMask m) => (FilePath -> m a) -> m a
-withTempFile k = bracket alloc release (k . fst)
-  where
-      alloc = liftIO newTempFile
-      release = liftIO . snd
-
-withFile :: (MonadMask m, MonadIO m) => FilePath -> IOMode -> (Handle -> m b) -> m b
-withFile f mode = bracket alloc release
-    where
-        alloc = liftIO $ openFile f mode
-        release = liftIO . hClose
