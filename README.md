@@ -15,6 +15,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
 This is *very* early stage software.
 
 - [Haskell Language Server (HLS)](#haskell-language-server)
+  - [Features](#features)
   - [Installation](#installation)
     - [Installation from source](#installation-from-source)
       - [Common pre-requirements](#common-pre-requirements)
@@ -42,6 +43,14 @@ This is *very* early stage software.
     - [Preprocessor](#preprocessor)
   - [Contributing](#contributing)
     - [It's time to join the project!](#its-time-to-join-the-project)
+
+## Features
+
+ - Code evaluation (inspired by [Dante](https://github.com/jyp/dante#-reploid))
+
+   ![Eval](https://imgur.com/PDuZ6z8)
+
+ - Many more (TBD)
 
 ## Installation
 
@@ -490,7 +499,7 @@ args = ["--lsp"]
 ## Known limitations
 
 ### Preprocessor
-HLS is not yet able to find project preprocessors, which may result in `could not execute: <preprocessor>` errors. This problem is 
+HLS is not yet able to find project preprocessors, which may result in `could not execute: <preprocessor>` errors. This problem is
 tracked in https://github.com/haskell/haskell-language-server/issues/176 and originally comes from https://github.com/mpickering/hie-bios/issues/125
 
 As a workaround, you need to ensure the preprocessor is available in the path (install globally with Stack or Cabal, provide in `shell.nix`, etc.).
