@@ -48,7 +48,7 @@ This is *very* early stage software.
 
  - Code evaluation (inspired by [Dante](https://github.com/jyp/dante#-reploid))
 
-   ![Eval](https://imgur.com/PDuZ6z8)
+   ![Eval](https://i.imgur.com/bh992sT.gif)
 
  - Many more (TBD)
 
