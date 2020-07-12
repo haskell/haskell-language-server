@@ -21,7 +21,8 @@ import           Distribution.Helper (Package, projectPackages, pUnits,
                                       unChModuleName, Ex(..), ProjLoc(..),
                                       QueryEnv, mkQueryEnv, runQuery,
                                       Unit, unitInfo, uiComponents,
-                                      ChEntrypoint(..), UnitInfo(..))
+                                      ChEntrypoint(..), UnitInfo(..),
+                                      qePrograms, ghcProgram)
 import           Distribution.Helper.Discover (findProjects, getDefaultDistDir)
 import           Ide.Logger
 import           HIE.Bios as Bios
@@ -470,6 +471,7 @@ cabalHelperCradle file = do
                                           , componentRoot = cwd
                                           , componentDependencies = []
                                           }
+                                , runGhcCmd = \args -> Bios.readProcessWithCwd cwd "ghc" args ""
                                 }
                }
     Just (Ex proj) -> do
@@ -497,6 +499,7 @@ cabalHelperCradle file = do
                    , cradleOptsProg =
                        CradleAction { actionName = Bios.Other (projectNoneType proj)
                                     , runCradle = \_ _ -> return CradleNone
+                                    , runGhcCmd = \_ -> pure CradleNone
                                     }
                    }
         Just realPackage -> do
@@ -517,6 +520,9 @@ cabalHelperCradle file = do
                                         realPackage
                                         normalisedPackageLocation
                                         fp
+                                    , runGhcCmd = \args -> do
+                                        let programs = qePrograms env
+                                        Bios.readProcessWithCwd normalisedPackageLocation (ghcProgram programs) args ""
                                     }
                    }
 
@@ -558,6 +564,7 @@ cabalHelperAction proj env package root fp = do
       Left err   -> return
         $ CradleFail
         $ CradleError
+          []
           (ExitFailure 2)
           err
 
