@@ -36,7 +36,7 @@ import qualified Data.Text                      as T
 import           Data.Time                      (getCurrentTime)
 import           Development.IDE.Core.Rules     (runAction)
 import           Development.IDE.Core.RuleTypes (GetModSummary (..),
-                                                 GhcSessionDeps (..))
+                                                 GhcSession (..))
 import           Development.IDE.Core.Shake     (use_)
 import           Development.IDE.GHC.Util       (evalGhcEnv, hscEnv,
                                                  textToStringBuffer)
@@ -169,10 +169,22 @@ runEvalCmd lsp state EvalParams {..} = response' $ do
   contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri _uri
   text <- handleMaybe "contents" $ virtualFileText <$> contents
 
+{- Note: GhcSessionDeps
+
+Depending on GhcSession means we do need to reload all the module
+dependencies in the GHC session(from interface files, hopefully).
+
+The GhcSessionDeps dependency would allow us to reuse a GHC session preloaded
+with all the dependencies. Unfortunately, the ModSummary objects that
+GhcSessionDeps puts in the GHC session are not suitable for reuse since they
+clear out the timestamps; this is done to avoid internal ghcide bugs and
+can probably be relaxed so that plugins like Eval can reuse them. Once that's
+done, we want to switch back to GhcSessionDeps
+ -}
   session <-
     liftIO $
       runAction "runEvalCmd.ghcSession" state $
-        use_ GhcSessionDeps $
+        use_ GhcSession $ -- See the note on GhcSessionDeps
           toNormalizedFilePath' $
             fp
 
