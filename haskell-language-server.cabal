@@ -62,7 +62,6 @@ library
     , aeson
     , binary
     , bytestring
-    , Cabal
     , cabal-helper >= 1.1
     , containers
     , data-default
