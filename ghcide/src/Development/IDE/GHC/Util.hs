@@ -27,7 +27,7 @@ module Development.IDE.GHC.Util(
     readFileUtf8,
     hDuplicateTo',
     setHieDir,
-    dontWriteHieFiles
+    dontWriteHieFiles,
     ) where
 
 import Control.Concurrent
