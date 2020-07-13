@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
@@ -7,6 +8,7 @@
 module Development.IDE.Spans.Documentation (
     getDocumentation
   , getDocumentationTryGhc
+  , getDocumentationsTryGhc
   ) where
 
 import           Control.Monad
@@ -14,30 +16,36 @@ import           Data.List.Extra
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Text as T
+#if MIN_GHC_API_VERSION(8,6,0)
+import           Development.IDE.Core.Compile
+#endif
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
 import           FastString
 import           SrcLoc (RealLocated)
 
+getDocumentationTryGhc :: GhcMonad m => Module -> [ParsedModule] -> Name -> m SpanDoc
+getDocumentationTryGhc mod deps n = head <$> getDocumentationsTryGhc mod deps [n]
 
-getDocumentationTryGhc
-  :: GhcMonad m
-  => [ParsedModule]
-  -> Name
-  -> m SpanDoc
--- getDocs goes through the GHCi codepaths which cause problems on ghc-lib.
--- See https://github.com/digital-asset/daml/issues/4152 for more details.
-#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
-getDocumentationTryGhc sources name = do
-  res <- catchSrcErrors "docs" $ getDocs name
+getDocumentationsTryGhc :: GhcMonad m => Module -> [ParsedModule] -> [Name] -> m [SpanDoc]
+
+-- Interfaces are only generated for GHC >= 8.6.
+-- In older versions, interface files do not embed Haddocks anyway
+#if MIN_GHC_API_VERSION(8,6,0)
+getDocumentationsTryGhc mod sources names = do
+  res <- catchSrcErrors "docs" $ getDocsBatch mod names
   case res of
-    Right (Right (Just docs, _)) -> return $ SpanDocString docs
-    _ -> return $ SpanDocText $ getDocumentation sources name
+      Left _ -> return $ map (SpanDocText . getDocumentation sources) names
+      Right res -> return $ zipWith unwrap res names
+  where
+    unwrap (Right (Just docs, _))  _= SpanDocString docs
+    unwrap _ n = SpanDocText $ getDocumentation sources n
 #else
-getDocumentationTryGhc sources name = do
-  return $ SpanDocText $ getDocumentation sources name
+getDocumentationsTryGhc _ sources names = do
+  return $ map (SpanDocText . getDocumentation sources) names
 #endif
+
 
 getDocumentation
  :: HasSrcSpan name
