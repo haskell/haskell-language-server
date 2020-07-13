@@ -7,8 +7,6 @@ module Ide.Version where
 
 import           Data.Maybe
 import           Development.GitRev              (gitCommitCount)
-import           Distribution.System             (buildArch)
-import           Distribution.Text               (display)
 import           Options.Applicative.Simple      (simpleVersion)
 import           Ide.Cradle                      (execProjectGhc)
 import qualified HIE.Bios.Types as Bios
@@ -26,7 +24,7 @@ hlsVersion =
       -- See https://github.com/commercialhaskell/stack/issues/792
     , [" (" ++ commitCount ++ " commits)" | commitCount /= ("1"::String) &&
                                             commitCount /= ("UNKNOWN" :: String)]
-    , [" ", display buildArch]
+    , [" ", arch]
     , [" ", hlsGhcDisplayVersion]
     ]
 
