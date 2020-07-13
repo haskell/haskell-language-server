@@ -26,6 +26,8 @@ module Development.IDE.Core.Compile
   , loadDepModule
   , loadModuleHome
   , setupFinderCache
+  , getDocsBatch
+  , lookupName
   ) where
 
 import Development.IDE.Core.RuleTypes
@@ -41,10 +43,10 @@ import Development.IDE.Types.Options
 import Development.IDE.Types.Location
 
 #if MIN_GHC_API_VERSION(8,6,0)
-import           DynamicLoading (initializePlugins)
+import DynamicLoading (initializePlugins)
+import LoadIface (loadModuleInterface)
 #endif
 
-import           GHC hiding (parseModule, typecheckModule)
 import qualified Parser
 import           Lexer
 #if MIN_GHC_API_VERSION(8,10,0)
@@ -53,6 +55,7 @@ import ErrUtils
 #endif
 
 import           Finder
+import           Development.IDE.GHC.Compat hiding (parseModule, typecheckModule)
 import qualified Development.IDE.GHC.Compat     as GHC
 import qualified Development.IDE.GHC.Compat     as Compat
 import           GhcMonad
@@ -61,7 +64,7 @@ import qualified HeaderInfo                     as Hdr
 import           HscMain                        (hscInteractive, hscSimplify)
 import           MkIface
 import           StringBuffer                   as SB
-import           TcRnMonad (initIfaceLoad, tcg_th_coreplugins)
+import           TcRnMonad (tct_id, TcTyThing(AGlobal, ATcId), initTc, initIfaceLoad, tcg_th_coreplugins)
 import           TcIface                        (typecheckIface)
 import           TidyPgm
 
@@ -81,6 +84,7 @@ import           System.IO.Extra
 import Control.DeepSeq (rnf)
 import Control.Exception (evaluate)
 import Exception (ExceptionMonad)
+import TcEnv (tcLookup)
 
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
@@ -621,3 +625,58 @@ loadInterface session ms sourceMod regen = do
             | not (mi_used_th x) || SourceUnmodifiedAndStable == sourceMod
             -> return ([], Just $ HiFileResult ms x)
           (_reason, _) -> regen
+
+-- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
+--   The interactive paths create problems in ghc-lib builds
+--- and leads to fun errors like "Cannot continue after interface file error".
+getDocsBatch :: GhcMonad m
+        => Module  -- ^ a moudle where the names are in scope
+        -> [Name]
+        -> m [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
+getDocsBatch _mod _names =
+#if MIN_GHC_API_VERSION(8,6,0)
+  withSession $ \hsc_env -> liftIO $ do
+    ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
+        case nameModule_maybe name of
+            Nothing -> return (Left $ NameHasNoModule name)
+            Just mod -> do
+             ModIface { mi_doc_hdr = mb_doc_hdr
+                      , mi_decl_docs = DeclDocMap dmap
+                      , mi_arg_docs = ArgDocMap amap
+                      } <- loadModuleInterface "getModuleInterface" mod
+             if isNothing mb_doc_hdr && Map.null dmap && Map.null amap
+               then pure (Left (NoDocsInIface mod $ compiled name))
+               else pure (Right ( Map.lookup name dmap
+                                , Map.findWithDefault Map.empty name amap))
+    case res of
+        Just x -> return $ map (first prettyPrint) x
+        Nothing -> throwErrors errs
+  where
+    throwErrors = liftIO . throwIO . mkSrcErr
+    compiled n =
+      -- TODO: Find a more direct indicator.
+      case nameSrcLoc n of
+        RealSrcLoc {} -> False
+        UnhelpfulLoc {} -> True
+#else
+    return []
+#endif
+
+fakeSpan :: RealSrcSpan
+fakeSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<ghcide>") 1 1
+
+-- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
+--   The interactive paths create problems in ghc-lib builds
+--- and leads to fun errors like "Cannot continue after interface file error".
+lookupName :: GhcMonad m
+           => Module -- ^ A module where the Names are in scope
+           -> Name
+           -> m (Maybe TyThing)
+lookupName mod name = withSession $ \hsc_env -> liftIO $ do
+    (_messages, res) <- initTc hsc_env HsSrcFile False mod fakeSpan $ do
+        tcthing <- tcLookup name
+        case tcthing of
+            AGlobal thing    -> return thing
+            ATcId{tct_id=id} -> return (AnId id)
+            _ -> panic "tcRnLookupName'"
+    return res

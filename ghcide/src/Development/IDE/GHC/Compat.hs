@@ -83,6 +83,7 @@ import GHC hiding (
       VarPat,
       ModLocation,
       HasSrcSpan,
+      lookupName,
       getLoc
 #if MIN_GHC_API_VERSION(8,6,0)
     , getConArgs

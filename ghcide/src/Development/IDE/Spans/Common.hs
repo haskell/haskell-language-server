@@ -6,9 +6,7 @@ module Development.IDE.Spans.Common (
 , listifyAllSpans
 , listifyAllSpans'
 , safeTyThingId
-#ifndef GHC_LIB
 , safeTyThingType
-#endif
 , SpanDoc(..)
 , emptySpanDoc
 , spanDocToMarkdown
@@ -25,9 +23,7 @@ import Outputable
 import DynFlags
 import ConLike
 import DataCon
-#ifndef GHC_LIB
 import Var
-#endif
 
 import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types as H
@@ -47,14 +43,12 @@ listifyAllSpans' :: Typeable a
                    => TypecheckedSource -> [Pat a]
 listifyAllSpans' tcs = Data.Generics.listify (const True) tcs
 
-#ifndef GHC_LIB
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
 safeTyThingType :: TyThing -> Maybe Type
 safeTyThingType thing
   | Just i <- safeTyThingId thing = Just (varType i)
 safeTyThingType (ATyCon tycon)    = Just (tyConKind tycon)
 safeTyThingType _                 = Nothing
-#endif
 
 safeTyThingId :: TyThing -> Maybe Id
 safeTyThingId (AnId i)                    = Just i
