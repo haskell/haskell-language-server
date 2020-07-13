@@ -49,8 +49,10 @@ tests =
       testCase "Evaluation of expressions" $ goldenTest "T1.hs",
       testCase "Reevaluation of expressions" $ goldenTest "T2.hs",
       testCase "Evaluation of expressions w/ imports" $ goldenTest "T3.hs",
-      testCase "Refresh an evaluation" $ goldenTest "T5.hs"
       testCase "Evaluation of expressions w/ lets" $ goldenTest "T4.hs",
+      testCase "Refresh an evaluation" $ goldenTest "T5.hs",
+      testCase "Refresh an evaluation w/ lets" $ goldenTest "T6.hs",
+      testCase "Refresh a multiline evaluation" $ goldenTest "T7.hs"
     ]
 
 goldenTest :: FilePath -> IO ()

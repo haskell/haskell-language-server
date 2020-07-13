@@ -81,6 +81,7 @@ import           PrelNames                      (pRELUDE)
 import           System.FilePath
 import           System.IO                      (hClose)
 import           System.IO.Temp
+import Data.Maybe (catMaybes)
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -179,7 +180,10 @@ with all the dependencies. Unfortunately, the ModSummary objects that
 GhcSessionDeps puts in the GHC session are not suitable for reuse since they
 clear out the timestamps; this is done to avoid internal ghcide bugs and
 can probably be relaxed so that plugins like Eval can reuse them. Once that's
-done, we want to switch back to GhcSessionDeps
+done, we want to switch back to GhcSessionDeps:
+
+-- https://github.com/digital-asset/ghcide/pull/694
+
  -}
   session <-
     liftIO $
@@ -240,6 +244,7 @@ done, we want to switch back to GhcSessionDeps
     let eval (stmt, l)
           | isStmt df stmt = do
             -- set up a custom interactive print function
+            liftIO $ writeFile temp ""
             ctxt <- getContext
             setContext [IIDecl (simpleImportDecl $ moduleName pRELUDE)]
             let printFun = "let ghcideCustomShow x = Prelude.writeFile " <> show temp <> " (Prelude.show x)"
@@ -256,29 +261,29 @@ done, we want to switch back to GhcSessionDeps
                       execLineNumber = l
                     }
             res <- execStmt stmt opts
-            str <- case res of
-              ExecComplete (Left err) _ -> pure $ pad $ show err
+            case res of
+              ExecComplete (Left err) _ -> return $ Just $ T.pack $ pad $ show err
               ExecComplete (Right _) _ -> do
                   out <- liftIO $ pad <$> readFile temp
-                  let forceIt = length out
-                  return $! forceIt `seq` out
-              ExecBreak {} -> pure $ pad "breakpoints are not supported"
+                  -- Important to take the length in order to read the file eagerly
+                  return $! if length out == 0 then Nothing else Just (T.pack out)
+              ExecBreak {} -> return $ Just $ T.pack $ pad "breakpoints are not supported"
 
-            let changes = [TextEdit editTarget $ T.pack str]
-            return changes
           | isImport df stmt = do
             ctxt <- getContext
             idecl <- parseImportDecl stmt
             setContext $ IIDecl idecl : ctxt
-            return []
+            return Nothing
           | otherwise = do
             void $ runDecls stmt
-            return []
+            return Nothing
 
     edits <- liftIO $ evalGhcEnv hscEnv' $ traverse (eval . first T.unpack) statements
 
-    let workspaceEditsMap = Map.fromList [(_uri, List $ concat edits)]
-    let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
+
+    let workspaceEditsMap = Map.fromList [(_uri, List [evalEdit])]
+        workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
+        evalEdit = TextEdit editTarget (T.intercalate "\n" $ catMaybes edits)
 
     return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
 
