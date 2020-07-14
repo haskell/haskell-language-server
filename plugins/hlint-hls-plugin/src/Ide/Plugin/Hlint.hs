@@ -21,53 +21,28 @@ import Control.DeepSeq
 import Control.Exception
 import Control.Lens ((^.))
 import Control.Monad
-import Control.Monad.Extra
-import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
-import qualified Data.Aeson as Aeson
-import Data.Aeson.Types (ToJSON(..), FromJSON(..), Value(..), Result(..))
+import Data.Aeson.Types (ToJSON(..), FromJSON(..), Value(..))
 import Data.Binary
-import qualified Data.ByteString as BS
-import Data.Either.Extra
-import Data.Foldable
-import Data.Functor
-import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as HashSet
 import Data.Hashable
-import Data.List
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import Data.Maybe
-import qualified Data.Set as Set
-import Data.Set (Set)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Typeable
-import Data.Typeable (Typeable)
 import Development.IDE.Core.OfInterest
-import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Rules
-import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
-import Development.IDE.GHC.Util (hscEnv)
-import Development.IDE.LSP.Server
-import Development.IDE.Plugin
 import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
-import Development.IDE.Types.Logger
 import Development.Shake
 -- import Development.Shake hiding ( Diagnostic )
 import GHC hiding (DynFlags(..))
-import GHC.Generics
-import GHC.Generics (Generic)
-import SrcLoc
-import HscTypes (ModIface, ModSummary)
 
-#ifndef GHC_LIB
-import GHC (DynFlags(..))
-import HscTypes (hsc_dflags)
-#else
+#ifdef GHC_LIB
+import Development.IDE.Core.RuleTypes (GhcSession(..))
+import Development.IDE.GHC.Util (hscEnv)
 import RealGHC (DynFlags(..))
 import RealGHC.HscTypes (hsc_dflags)
 import qualified RealGHC.EnumSet as EnumSet
@@ -78,19 +53,12 @@ import Ide.Logger
 import Ide.Types
 import Ide.Plugin
 import Ide.PluginUtils
-import Language.Haskell.HLint
 import Language.Haskell.HLint as Hlint
-import qualified Language.Haskell.LSP.Core as LSP
-import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as LSP
 import qualified Language.Haskell.LSP.Types.Lens as LSP
-import System.Directory
-import System.Directory.Extra as Dir
-import System.Environment.Blank
-import System.FilePath
-import System.IO.Error
 import Text.Regex.TDFA.Text()
+import GHC.Generics (Generic)
 
 -- ---------------------------------------------------------------------
 
@@ -180,16 +148,7 @@ getIdeas nfp = do
   fmap applyHints' (moduleEx flags)
 
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
-#ifndef GHC_LIB
-        moduleEx _flags = do
-          mbpm <- getParsedModule nfp
-          case mbpm of
-            Nothing -> return Nothing
-            Just pm -> do
-              let anns = pm_annotations pm
-              let modu = pm_parsed_source pm
-              return $ Just $ Right (createModuleEx anns modu)
-#else
+#ifdef GHC_LIB
         moduleEx flags = do
           flags' <- setExtensions flags
           Just <$> (liftIO $ parseModuleEx flags' (fromNormalizedFilePath nfp) Nothing)
@@ -202,6 +161,15 @@ getIdeas nfp = do
           let hlintExts = mapMaybe (GhclibParserEx.readExtension . show) hscExts
           logm $ "getIdeas:setExtensions:hlintExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
+#else
+        moduleEx _flags = do
+          mbpm <- getParsedModule nfp
+          case mbpm of
+            Nothing -> return Nothing
+            Just pm -> do
+              let anns = pm_annotations pm
+              let modu = pm_parsed_source pm
+              return $ Just $ Right (createModuleEx anns modu)
 #endif
 
 -- ---------------------------------------------------------------------
