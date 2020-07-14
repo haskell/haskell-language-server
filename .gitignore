@@ -22,5 +22,5 @@ shake.yaml.lock
 # ignore hie.yaml's for testdata
 test/**/*.yaml
 
-# macOS folder metadata
+# metadata files on macOS
 .DS_Store

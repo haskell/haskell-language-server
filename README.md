@@ -38,6 +38,8 @@ This is *very* early stage software.
     - [Emacs](#using-haskell-language-server-with-emacs)
     - [Doom emacs](#using-haskell-language-server-with-doom-emacs)
     - [Kakoune](#using-haskell-language-server-with-kakoune)
+  - [Known limitations](#known-limitations)
+    - [Preprocessor](#preprocessor)
   - [Contributing](#contributing)
     - [It's time to join the project!](#its-time-to-join-the-project)
 
@@ -484,6 +486,21 @@ roots = ["Setup.hs", "stack.yaml", "*.cabal"]
 command = "haskell-language-server-wrapper"
 args = ["--lsp"]
 ```
+
+## Known limitations
+
+### Preprocessor
+HLS is not yet able to find project preprocessors, which may result in `could not execute: <preprocessor>` errors. This problem is 
+tracked in https://github.com/haskell/haskell-language-server/issues/176 and originally comes from https://github.com/mpickering/hie-bios/issues/125
+
+As a workaround, you need to ensure the preprocessor is available in the path (install globally with Stack or Cabal, provide in `shell.nix`, etc.).
+
+Example with `tasty-discover`:
+```haskell
+{-# OPTIONS_GHC -F -pgmF tasty-discover #-}
+```
+This returns an error in HLS if 'tasty-discover' is not in the path: `could not execute: tasty-discover`.
+
 
 ## Contributing
 

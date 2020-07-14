@@ -6,8 +6,6 @@
 module Ide.Version where
 
 import           Development.GitRev              (gitCommitCount)
-import           Distribution.System             (buildArch)
-import           Distribution.Text               (display)
 import           Options.Applicative.Simple      (simpleVersion)
 import qualified Paths_haskell_language_server as Meta
 import           System.Info
@@ -21,7 +19,7 @@ hlsVersion =
       -- See https://github.com/commercialhaskell/stack/issues/792
     , [" (" ++ commitCount ++ " commits)" | commitCount /= ("1"::String) &&
                                             commitCount /= ("UNKNOWN" :: String)]
-    , [" ", display buildArch]
+    , [" ", arch]
     , [" ", hlsGhcDisplayVersion]
     ]
   where
