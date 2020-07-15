@@ -133,34 +133,20 @@ executable haskell-language-server
 
   build-depends:
       base >=4.7 && <5
-    , aeson
-    , async
-    , base16-bytestring
     , binary
-    , bytestring
-    , cryptohash-sha1
     , containers
     , data-default
-    , deepseq
     , directory
     , extra
     , filepath
     , process
-     --------------------------------------------------------------
-     -- The MIN_GHC_API_VERSION macro relies on MIN_VERSION pragmas
-     -- which require depending on ghc. So the tests need to depend
-     -- on ghc if they need to use MIN_GHC_API_VERSION. Maybe a
-     -- better solution can be found, but this is a quick solution
-     -- which works for now.
     , ghc
      --------------------------------------------------------------
-    , ghc-check >= 0.5.0.1 && < 0.6
-    , ghc-paths
     , ghcide
     , gitrev
     , hashable
     , haskell-lsp
-    , hie-bios >= 0.4
+    , hie-bios
     , haskell-language-server
     , hslogger
     , optparse-applicative

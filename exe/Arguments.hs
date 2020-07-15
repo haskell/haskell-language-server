@@ -10,17 +10,14 @@
 module Arguments
   ( Arguments(..)
   , getArguments
-  , ghcideVersion
-  , getGhcideLibdir
+  , haskellLanguageServerVersion
   ) where
 
-import Data.Maybe
 import Data.Version
 import Development.GitRev
 import Options.Applicative
 import Paths_haskell_language_server
 import System.Environment
-import qualified GHC.Paths
 
 -- ---------------------------------------------------------------------
 
@@ -86,19 +83,14 @@ arguments exeName = Arguments
 
 -- ---------------------------------------------------------------------
 
-ghcideVersion :: IO String
-ghcideVersion = do
+haskellLanguageServerVersion :: IO String
+haskellLanguageServerVersion = do
   path <- getExecutablePath
   let gitHashSection = case $(gitHash) of
         x | x == "UNKNOWN" -> ""
         x -> " (GIT hash: " <> x <> ")"
-  return $ "ghcide version: " <> showVersion version
+  return $ "haskell-language-server version: " <> showVersion version
              <> " (GHC: " <> VERSION_ghc
              <> ") (PATH: " <> path <> ")"
              <> gitHashSection
 
--- ---------------------------------------------------------------------
-
--- Defined here
-getGhcideLibdir :: IO FilePath
-getGhcideLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"

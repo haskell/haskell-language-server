@@ -34,8 +34,8 @@ main = do
   cradle <- findLocalCradle (d </> "a")
   setCurrentDirectory $ cradleRootDir cradle
 
-  when argsProjectGhcVersion $ getRuntimeGhcVersion cradle >>= putStrLn >> exitSuccess
-  when argsVersion $ ghcideVersion >>= putStrLn >> exitSuccess
+  when argsProjectGhcVersion $ getRuntimeGhcVersion' cradle >>= putStrLn >> exitSuccess
+  when argsVersion $ haskellLanguageServerVersion >>= putStrLn >> exitSuccess
 
   whenJust argsCwd setCurrentDirectory
 
@@ -48,8 +48,10 @@ main = do
   hPutStrLn stderr $ "Arguments: " ++ show args
   hPutStrLn stderr $ "Cradle directory: " ++ cradleRootDir cradle
   hPutStrLn stderr $ "Cradle type: " ++ show (actionName (cradleOptsProg cradle))
+
+  -- Get the ghc version -- this might fail!
   hPutStrLn stderr $ "Consulting the cradle to get project GHC version..."
-  ghcVersion <- getRuntimeGhcVersion cradle
+  ghcVersion <- getRuntimeGhcVersion' cradle
   hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
 
   let
@@ -71,4 +73,12 @@ main = do
       hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
       callProcess e args
 
--- ---------------------------------------------------------------------
+-- | Version of 'getRuntimeGhcVersion' that dies if we can't get it
+getRuntimeGhcVersion' :: Cradle a -> IO String
+getRuntimeGhcVersion' cradle = do
+  ghcVersionRes <- getRuntimeGhcVersion cradle
+  case ghcVersionRes of
+    CradleSuccess ver -> do
+      return ver
+    CradleFail error -> die $ "Failed to get project GHC version:" ++ show error
+    CradleNone -> die "Failed get project GHC version, since we have a none cradle"

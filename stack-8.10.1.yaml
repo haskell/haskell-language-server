@@ -22,8 +22,6 @@ extra-deps:
 - stylish-haskell-0.11.0.0
 - semigroups-0.18.5
 - temporary-1.2.1.1
-- github: bubba/hie-bios
-  commit: 64b02c974b753160f20e9d14fc8de3ed008f2bcc
 - these-1.1
 
 flags:
