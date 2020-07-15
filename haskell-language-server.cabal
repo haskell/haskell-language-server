@@ -123,8 +123,8 @@ library hlint-plugin
     cpp-options:
         -DGHC_LIB
     mixins:
-        ghc (GHC as RealGHC, HscTypes as RealGHC.HscTypes, EnumSet as RealGHC.EnumSet) 
-        
+        ghc (GHC as RealGHC, HscTypes as RealGHC.HscTypes, EnumSet as RealGHC.EnumSet)
+
   ghc-options:
          -Wall
          -Wredundant-constraints
