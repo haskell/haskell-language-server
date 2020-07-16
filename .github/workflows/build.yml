@@ -52,7 +52,7 @@ jobs:
     - name: Set some linux specific things
       if: matrix.os == 'ubuntu-latest'
       run: |
-        echo '::set-env name=LINUX_CABAL_ARGS::--enable-executable-static'
+        echo '::set-env name=LINUX_CABAL_ARGS::--enable-executable-static --ghc-options=-split-sections'
 
     - name: Build Server
       shell: bash
