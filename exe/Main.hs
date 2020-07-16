@@ -518,7 +518,7 @@ setCacheDir logger prefix hscComponents comps dflags = do
 
 
 renderCradleError :: NormalizedFilePath -> CradleError -> FileDiagnostic
-renderCradleError nfp (CradleError _ec t) =
+renderCradleError nfp (CradleError _ _ec t) =
   ideErrorWithSource (Just "cradle") (Just DsError) nfp (T.unlines (map T.pack t))
 
 -- See Note [Multi Cradle Dependency Info]
