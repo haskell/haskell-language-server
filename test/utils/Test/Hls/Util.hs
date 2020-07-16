@@ -15,6 +15,7 @@ module Test.Hls.Util
     , setupBuildToolFiles
     , withFileLogging
     , findExe
+    , withCurrentDirectoryInTmp
   -- , makeRequest
   -- , runIGM
   -- , runIGM'
@@ -46,6 +47,7 @@ import           System.Directory
 import           System.Environment
 import           System.FilePath
 import qualified System.Log.Logger as L
+import           System.IO.Temp
 -- import           Test.Hspec
 import           Test.Hspec.Runner
 import           Test.Hspec.Core.Formatters
@@ -332,6 +334,33 @@ findExeRecursive exe dir = do
 findExe :: String -> IO FilePath
 findExe name = do
   fp <- fmap fromJust $ runMaybeT $
-    MaybeT (findExecutable name) <|> 
+    MaybeT (findExecutable name) <|>
     MaybeT (findExeRecursive name "dist-newstyle")
   makeAbsolute fp
+
+-- | Like 'withCurrentDirectory', but will copy the directory over to the system
+-- temporary directory first to avoid haskell-language-server's source tree from
+-- interfering with the cradle
+withCurrentDirectoryInTmp :: FilePath -> IO a -> IO a
+withCurrentDirectoryInTmp dir f =
+  withTempCopy dir $ \newDir ->
+    withCurrentDirectory newDir f
+
+withTempCopy :: FilePath -> (FilePath -> IO a) -> IO a
+withTempCopy srcDir f = do
+  withSystemTempDirectory "hls-test" $ \newDir -> do
+    copyDir srcDir newDir
+    f newDir
+
+copyDir :: FilePath -> FilePath -> IO ()
+copyDir src dst = do
+  cnts <- listDirectory src
+  forM_ cnts $ \file -> do
+    unless (file `elem` ignored) $ do
+      let srcFp = src </> file
+          dstFp = dst </> file
+      isDir <- doesDirectoryExist srcFp
+      if isDir
+        then createDirectory dstFp >> copyDir srcFp dstFp
+        else copyFile srcFp dstFp
+  where ignored = ["dist", "dist-newstyle", ".stack-work"]

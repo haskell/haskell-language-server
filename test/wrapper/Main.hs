@@ -3,14 +3,14 @@ import Data.Char
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import System.Directory
 import System.Process
 
 main :: IO ()
-main = defaultMain $
-  testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
+main = do
+  flushStackEnvironment
+  defaultMain $
+    testGroup "haskell-language-server-wrapper" [projectGhcVersionTests]
 
---TODO: WAIT ON HIE-BIOS STOP FILES
 projectGhcVersionTests :: TestTree
 projectGhcVersionTests = testGroup "--project-ghc-version"
   [ testCase "stack with ghc 8.10.1" $
@@ -25,10 +25,9 @@ projectGhcVersionTests = testGroup "--project-ghc-version"
 testDir :: FilePath -> String -> Assertion
 testDir dir expectedVer = do
   wrapper <- findExe "haskell-language-server-wrapper"
-  withCurrentDirectory dir $ do
+  withCurrentDirectoryInTmp dir $ do
     actualVer <- trim <$> readProcess wrapper ["--project-ghc-version"] ""
     actualVer @?= expectedVer
 
 trim :: String -> String
 trim = dropWhileEnd isSpace
-

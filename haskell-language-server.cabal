@@ -217,6 +217,7 @@ common hls-test-utils
                      , lsp-test
                      , stm
                      , tasty-hunit
+                     , temporary
                      , text
                      , transformers
                      , unordered-containers
