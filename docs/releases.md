@@ -45,6 +45,22 @@ will most almost certainly not exist on the end user's machine.
 Therefore, hie-bios provides `getGhcRuntimeLibDir` to obtain this path on the fly
 by consulting the cradle.
 
+### Static binaries
+We use the word "distributable" here because technically only the Linux builds
+are static. They are built by passing `--enable-executable-static` to cabal.
+Static binaries don't really exist on macOS, and there are issues with
+proprietary code being linked in on Windows. However, the `.dylib`s linked on
+macOS are all already provided by the system:
+
+```
+$ objdump -macho --dylibs-used  haskell-language-server
+haskell-language-server:
+	/usr/lib/libncurses.5.4.dylib (compatibility version 5.4.0, current version 5.4.0)
+	/usr/lib/libiconv.2.dylib (compatibility version 7.0.0, current version 7.0.0)
+	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1281.100.1)
+	/usr/lib/libcharset.1.dylib (compatibility version 2.0.0, current version 2.0.0)
+```
+
 ## The GitHub Actions workflow
 It just kicks off a matrix of jobs varying across GHC versions and OSs, building
 the binaries with Cabal and extracting them from the dist-newstyle directory.

@@ -48,7 +48,6 @@ jobs:
       shell: bash
       run: |
         echo '::set-env name=EXE_EXT::.exe'
-        echo '::set-env name=WIN_CABAL_ARGS::-j1'
 
     - name: Set some linux specific things
       if: matrix.os == 'ubuntu-latest'
@@ -59,8 +58,8 @@ jobs:
       shell: bash
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build exe:hls -O2 --disable-documentation $WIN_CABAL_ARGS $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 --disable-documentation $WIN_CABAL_ARGS $LINUX_CABAL_ARGS
+        cabal build exe:hls -O2 --disable-documentation $LINUX_CABAL_ARGS || \
+        cabal build exe:hls -O2 --disable-documentation $LINUX_CABAL_ARGS
 
     - name: Find Server Binary
       id: find_server_binary

@@ -1,6 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP #-} -- To get precise GHC version and check if distributed binary
+{-# LANGUAGE CPP #-} -- To get precise GHC version
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 {-# LANGUAGE DeriveGeneric #-}
@@ -72,7 +72,6 @@ import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Brittany                as Brittany
 #endif
 import Ide.Plugin.Pragmas                 as Pragmas
--- import Data.Typeable (Typeable)
 
 
 -- ---------------------------------------------------------------------

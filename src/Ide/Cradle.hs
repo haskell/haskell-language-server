@@ -54,7 +54,7 @@ findLocalCradle fp = do
       debugm $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
       crdl <- Bios.loadCradle yaml
       return $ fmap (const CabalNone) crdl
-    Nothing -> Bios.loadImplicitCradle fp -- cabalHelperCradle fp
+    Nothing -> cabalHelperCradle fp
   logm $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
 
