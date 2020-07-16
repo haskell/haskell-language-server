@@ -52,9 +52,16 @@ module Development.IDE.GHC.Compat(
     upNameCache,
 
     module GHC,
+#if MIN_GHC_API_VERSION(8,6,0)
+
 #if MIN_GHC_API_VERSION(8,8,0)
     module HieTypes,
     module HieUtils,
+#else
+    module Development.IDE.GHC.HieTypes,
+    module Development.IDE.GHC.HieUtils,
+#endif
+
 #endif
     ) where
 
@@ -94,41 +101,58 @@ import Avail
 import ErrUtils (ErrorMessages)
 import FastString (FastString)
 
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_GHC_API_VERSION(8,6,0)
 import Development.IDE.GHC.HieAst (mkHieFile)
 import Development.IDE.GHC.HieBin
+
+#if MIN_GHC_API_VERSION(8,8,0)
 import HieUtils
 import HieTypes
-
-supportsHieFiles :: Bool
-supportsHieFiles = True
-
-hieExportNames :: HieFile -> [(SrcSpan, Name)]
-hieExportNames = nameListFromAvails . hie_exports
-
 #else
-
-import IfaceEnv
-#if MIN_GHC_API_VERSION(8,6,0)
-import BinIface
-#else
-import System.IO.Error
+import Development.IDE.GHC.HieUtils
+import Development.IDE.GHC.HieTypes
+import System.FilePath ((-<.>))
 #endif
 
+#endif
+
+#if !MIN_GHC_API_VERSION(8,8,0)
+
+#if MIN_GHC_API_VERSION(8,6,0)
+import GhcPlugins (srcErrorMessages)
+#else
+import System.IO.Error
+import IfaceEnv
 import Binary
-import Control.Exception (catch)
 import Data.ByteString (ByteString)
 import GhcPlugins (Hsc, srcErrorMessages)
 import TcRnTypes
+import MkIface
+#endif
+
+import Control.Exception (catch)
 import System.IO
 import Foreign.ForeignPtr
-import MkIface
 
 
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
 hPutStringBuffer hdl (StringBuffer buf len cur)
     = withForeignPtr (plusForeignPtr buf cur) $ \ptr ->
              hPutBuf hdl ptr len
+
+#endif
+
+#if MIN_GHC_API_VERSION(8,6,0)
+supportsHieFiles :: Bool
+supportsHieFiles = True
+
+hieExportNames :: HieFile -> [(SrcSpan, Name)]
+hieExportNames = nameListFromAvails . hie_exports
+
+#if !MIN_GHC_API_VERSION(8,8,0)
+ml_hie_file :: GHC.ModLocation -> FilePath
+ml_hie_file ml = ml_hi_file ml -<.> ".hie"
+#endif
 
 #endif
 
@@ -271,7 +295,7 @@ nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
 nameListFromAvails as =
   map (\n -> (nameSrcSpan n, n)) (concatMap availNames as)
 
-#if !MIN_GHC_API_VERSION(8,8,0)
+#if !MIN_GHC_API_VERSION(8,6,0)
 -- Reimplementations of functions for HIE files for GHC 8.6
 
 mkHieFile :: ModSummary -> TcGblEnv -> RenamedSource -> ByteString -> Hsc HieFile
@@ -303,21 +327,7 @@ writeHieFile :: FilePath -> HieFile -> IO ()
 readHieFile :: NameCacheUpdater -> FilePath -> IO HieFileResult
 supportsHieFiles :: Bool
 
-#if MIN_GHC_API_VERSION(8,6,0)
-
-writeHieFile fp hie = do
-  bh <- openBinMem (1024 * 1024)
-  putWithUserData (const $ return ()) bh hie
-  writeBinMem bh fp
-
-readHieFile nc fp = do
-  bh <- readBinMem fp
-  hie_file <- getWithUserData nc bh
-  return (HieFileResult hie_file)
-
-supportsHieFiles = True
-
-#else
+#if MIN_GHC_API_VERSION(8,4,0)
 
 supportsHieFiles = False
 
