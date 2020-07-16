@@ -155,6 +155,14 @@ library
         Development.IDE.Plugin.CodeAction.RuleTypes
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Plugin.Completions.Types
+    if (impl(ghc > 8.5) && impl(ghc < 8.7)) && !flag(ghc-lib)
+      hs-source-dirs: src-ghc86
+      other-modules:
+        Development.IDE.GHC.HieAst
+        Development.IDE.GHC.HieBin
+        Development.IDE.GHC.HieTypes
+        Development.IDE.GHC.HieDebug
+        Development.IDE.GHC.HieUtils
     if (impl(ghc > 8.7) && impl(ghc < 8.10)) || flag(ghc-lib)
       hs-source-dirs: src-ghc88
       other-modules:
