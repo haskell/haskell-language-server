@@ -28,11 +28,11 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
 
-    # - name: Cache Cabal
-    #   uses: actions/cache@v1.2.0
-    #   with:
-    #     path: ~/.cabal
-    #     key: ${{ runner.OS }}-${{ matrix.ghc }}-cabal-0
+    - name: Cache Cabal
+      uses: actions/cache@v1.2.0
+      with:
+        path: ~/.cabal
+        key: ${{ runner.OS }}-${{ matrix.ghc }}-${{ hashFiles('**/*.cabal') }}
 
     - name: Shorten binary names
       shell: bash
@@ -51,13 +51,16 @@ jobs:
         echo '::set-env name=WIN_CABAL_ARGS::-j1'
 
     - name: Set some linux specific things
-      if: matrix.os == 'ubuntu-latest' 
+      if: matrix.os == 'ubuntu-latest'
       run: |
         echo '::set-env name=LINUX_CABAL_ARGS::--enable-executable-static'
 
     - name: Build Server
       shell: bash
-      run: cabal build exe:hls -O2 --disable-documentation $WIN_CABAL_ARGS $LINUX_CABAL_ARGS
+      # Try building it twice in case of flakey builds on Windows
+      run: |
+        cabal build exe:hls -O2 --disable-documentation $WIN_CABAL_ARGS $LINUX_CABAL_ARGS || \
+        cabal build exe:hls -O2 --disable-documentation $WIN_CABAL_ARGS $LINUX_CABAL_ARGS
 
     - name: Find Server Binary
       id: find_server_binary
