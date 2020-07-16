@@ -73,12 +73,30 @@ main = do
       hPutStrLn stderr $ "Launching haskell-language-server exe at:" ++ e
       callProcess e args
 
--- | Version of 'getRuntimeGhcVersion' that dies if we can't get it
-getRuntimeGhcVersion' :: Cradle a -> IO String
+-- | Version of 'getRuntimeGhcVersion' that dies if we can't get it, and also
+-- checks to see if the tool is missing if it is one of
+getRuntimeGhcVersion' :: Show a => Cradle a -> IO String
 getRuntimeGhcVersion' cradle = do
+
+  -- See if the tool is installed
+  case actionName (cradleOptsProg cradle) of
+    Stack   -> checkToolExists "stack"
+    Cabal   -> checkToolExists "cabal"
+    Default -> checkToolExists "ghc"
+    Direct  -> checkToolExists "ghc"
+    _       -> pure ()
+
   ghcVersionRes <- getRuntimeGhcVersion cradle
   case ghcVersionRes of
     CradleSuccess ver -> do
       return ver
     CradleFail error -> die $ "Failed to get project GHC version:" ++ show error
     CradleNone -> die "Failed get project GHC version, since we have a none cradle"
+  where
+    checkToolExists exe = do
+      exists <- findExecutable exe
+      case exists of
+        Just _ -> pure ()
+        Nothing ->
+          die $ "Cradle requires " ++ exe ++ " but couldn't find it" ++ "\n"
+           ++ show cradle
