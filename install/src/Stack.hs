@@ -17,16 +17,17 @@ stackInstallHlsWithErrMsg mbVersionNumber args =
 -- | copy the built binaries into the localBinDir
 stackInstallHls :: Maybe VersionNumber -> [String] -> Action ()
 stackInstallHls mbVersionNumber args = do
+  let args' = [ "install"
+              , ":haskell-language-server-wrapper"
+              , ":haskell-language-server"
+              ] ++ args
   versionNumber <-
     case mbVersionNumber of
       Nothing -> do
-        execStackWithCfgFile_ "stack.yaml" $
-          ["install"
-          , ":haskell-language-server-wrapper"
-          , ":haskell-language-server"] ++ args
+        execStackWithCfgFile_ "stack.yaml" args'
         getGhcVersionOfCfgFile "stack.yaml" args
       Just vn -> do
-        execStackWithGhc_ vn $ ["install"] ++ args
+        execStackWithGhc_ vn args'
         return vn
 
   localBinDir <- getLocalBin args
