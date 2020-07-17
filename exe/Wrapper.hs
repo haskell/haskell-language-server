@@ -7,10 +7,10 @@ import Arguments
 import Control.Monad.Extra
 import Data.Foldable
 import Data.List
+import Data.Void
 import HIE.Bios
 import HIE.Bios.Environment
 import HIE.Bios.Types
-import Ide.Cradle (findLocalCradle)
 import Ide.Version
 import System.Directory
 import System.Environment
@@ -100,3 +100,25 @@ getRuntimeGhcVersion' cradle = do
         Nothing ->
           die $ "Cradle requires " ++ exe ++ " but couldn't find it" ++ "\n"
            ++ show cradle
+
+-- | Find the cradle that the given File belongs to.
+--
+-- First looks for a "hie.yaml" file in the directory of the file
+-- or one of its parents. If this file is found, the cradle
+-- is read from the config. If this config does not comply to the "hie.yaml"
+-- specification, an error is raised.
+--
+-- If no "hie.yaml" can be found, the implicit config is used.
+-- The implicit config uses different heuristics to determine the type
+-- of the project that may or may not be accurate.
+findLocalCradle :: FilePath -> IO (Cradle Void)
+findLocalCradle fp = do
+  cradleConf <- findCradle fp
+  crdl       <- case cradleConf of
+    Just yaml -> do
+      hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
+      loadCradle yaml
+    Nothing -> loadImplicitCradle fp
+  hPutStrLn stderr $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
+  return crdl
+

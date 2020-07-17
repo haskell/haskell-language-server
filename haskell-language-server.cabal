@@ -38,7 +38,6 @@ common cpp-flags
 library
   import: cpp-flags
   exposed-modules:
-      Ide.Cradle
       Ide.Logger
       Ide.Plugin
       Ide.Plugin.Config
@@ -62,7 +61,6 @@ library
     , aeson
     , binary
     , bytestring
-    , cabal-helper >= 1.1
     , containers
     , data-default
     , deepseq

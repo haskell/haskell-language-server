@@ -11,7 +11,6 @@ extra-deps:
 - bytestring-trie-0.2.5.0
 - Cabal-3.0.2.0
 - cabal-doctest-1.0.8
-- cabal-helper-1.1.0.0
 - cabal-plan-0.5.0.0
 - constrained-dynamic-0.1.0.0
 - deque-0.4.3
