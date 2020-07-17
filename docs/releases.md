@@ -1,6 +1,6 @@
 # Releases and distributable binaries
 
-Starting with 0.X.0.0 haskell-language-server provides pre-built binaries on
+Starting with 0.3.0.0 haskell-language-server provides pre-built binaries on
 each [GitHub
 release](https://github.com/haskell/haskell-language-server/releases). These
 binaries are used by the [vscode-hie-server
