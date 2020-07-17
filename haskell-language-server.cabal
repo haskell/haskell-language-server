@@ -42,6 +42,7 @@ library
       Ide.Logger
       Ide.Plugin
       Ide.Plugin.Config
+      Ide.Plugin.Eval
       Ide.Plugin.Example
       Ide.Plugin.Example2
       Ide.Plugin.GhcIde
@@ -85,7 +86,9 @@ library
     , regex-tdfa >= 1.3.1.0
     , shake >= 0.17.5
     , stylish-haskell == 0.11.*
+    , temporary
     , text
+    , time
     , transformers
     , unordered-containers
   if os(windows)
@@ -271,6 +274,7 @@ test-suite func-test
                       , Deferred
                       , Definition
                       , Diagnostic
+                      , Eval
                       , Format
                       , FunctionalBadProject
                       , FunctionalCodeAction

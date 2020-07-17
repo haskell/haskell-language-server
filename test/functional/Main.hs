@@ -10,6 +10,7 @@ import Completion
 import Deferred
 import Definition
 import Diagnostic
+import Eval
 import Format
 import FunctionalBadProject
 import FunctionalCodeAction
@@ -36,6 +37,7 @@ main =
         , Deferred.tests
         , Definition.tests
         , Diagnostic.tests
+        , Eval.tests
         , Format.tests
         , FunctionalBadProject.tests
         , FunctionalCodeAction.tests
