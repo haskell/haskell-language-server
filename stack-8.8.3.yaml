@@ -1,4 +1,4 @@
-resolver: lts-16.3
+resolver: lts-16.5
 
 packages:
 - .
@@ -14,11 +14,6 @@ extra-deps:
 - extra-1.7.3
 - floskell-0.10.3
 # - ghcide-0.1.0
-- ghc-check-0.5.0.1
-- ghc-lib-parser-8.10.1.20200523
-- ghc-lib-parser-ex-8.10.0.4
-- haskell-lsp-0.22.0.0
-- haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
 - hie-bios-0.6.1
 - hlint-2.2.8
@@ -27,12 +22,9 @@ extra-deps:
 - ilist-0.3.1.0
 - lsp-test-0.11.0.2
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.4.2
-- ormolu-0.1.2.0
 - semigroups-0.18.5
 # - github: wz1000/shake
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
-- stylish-haskell-0.11.0.0
 - temporary-1.2.1.1
 
 flags:
