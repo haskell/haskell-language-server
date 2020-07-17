@@ -30,13 +30,13 @@ source-repository head
   type: git
   location: https://github.com/haskell/haskell-language-server
 
-common cpp-flags
+common agpl
   if flag(agpl)
     cpp-options:
       -DAGPL
 
 library
-  import: cpp-flags
+  import: agpl
   exposed-modules:
       Ide.Logger
       Ide.Plugin
@@ -106,7 +106,7 @@ library
   default-language: Haskell2010
 
 executable haskell-language-server
-  import: cpp-flags
+  import: agpl
   main-is: Main.hs
   hs-source-dirs:
       exe
@@ -156,7 +156,7 @@ executable haskell-language-server
   default-language: Haskell2010
 
 executable haskell-language-server-wrapper
-  import: cpp-flags
+  import: agpl
   main-is: Wrapper.hs
   hs-source-dirs:
       exe
@@ -196,7 +196,7 @@ executable haskell-language-server-wrapper
 -- We removed it due to issues with stack when loading the project using a stack based hie.yaml
 -- See https://github.com/haskell/haskell-language-server/issues/114
 common hls-test-utils
-  import: cpp-flags
+  import: agpl
   hs-source-dirs:      test/utils
   other-modules:       Test.Hls.Util
   build-depends:       base
@@ -226,7 +226,7 @@ common hls-test-utils
   default-language:    Haskell2010
 
 test-suite func-test
-  import:               cpp-flags, hls-test-utils
+  import:               agpl, hls-test-utils
   type:                 exitcode-stdio-1.0
   default-language:     Haskell2010
   build-tool-depends:   haskell-language-server:haskell-language-server
@@ -276,7 +276,7 @@ test-suite func-test
      ghc-options: -Werror -Wredundant-constraints
 
 test-suite wrapper-test
-  import:               cpp-flags, hls-test-utils
+  import:               agpl, hls-test-utils
   type:                 exitcode-stdio-1.0
   build-tool-depends:   haskell-language-server:haskell-language-server-wrapper
   default-language:     Haskell2010
