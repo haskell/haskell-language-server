@@ -50,6 +50,8 @@ This is *very* early stage software.
 
    ![Eval](https://i.imgur.com/bh992sT.gif)
 
+ - Type information and documentation on hover. Note that currently, in order for docs to be displayed for dependencies, they must have been built with GHC's `-haddock` flag. This can be achieved in a number of ways, such as `cabal configure --ghc-options=-haddock`.
+
  - Many more (TBD)
 
 ## Installation
