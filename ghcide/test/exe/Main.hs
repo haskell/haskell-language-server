@@ -40,7 +40,8 @@ import Language.Haskell.LSP.VFS (applyChange)
 import Network.URI
 import System.Environment.Blank (getEnv, setEnv, unsetEnv)
 import System.FilePath
-import System.IO.Extra
+import System.IO.Extra hiding (withTempDir)
+import qualified System.IO.Extra
 import System.Directory
 import System.Exit (ExitCode(ExitSuccess))
 import System.Process.Extra (readCreateProcessWithExitCode, CreateProcess(cwd), proc)
@@ -3010,3 +3011,11 @@ getWatchedFilesSubscriptionsUntil = do
             | Just RequestMessage{_params = RegistrationParams (List regs)} <- msgs
             , Registration _id WorkspaceDidChangeWatchedFiles args <- regs
             ]
+
+-- | Version of 'System.IO.Extra.withTempDir' that canonicalizes the path
+-- Which we need to do on macOS since the $TMPDIR can be in @/private/var@ or
+-- @/var@
+withTempDir :: (FilePath -> IO a) -> IO a
+withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
+  dir' <- canonicalizePath dir
+  f dir'
