@@ -24,3 +24,4 @@ flags:
 ghc-options:
   ghc-lib-parser: -O0
   ghc-lib: -O0
+  ghcide: -DSTACK

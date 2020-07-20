@@ -27,3 +27,6 @@ extra-deps:
 
 nix:
   packages: [zlib]
+
+ghc-options:
+  ghcide: -DSTACK

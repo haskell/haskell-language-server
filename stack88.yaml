@@ -10,3 +10,6 @@ extra-deps:
 - extra-1.7.2
 nix:
   packages: [zlib]
+
+ghc-options:
+  ghcide: -DSTACK
