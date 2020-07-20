@@ -10,14 +10,11 @@
 module Arguments
   ( Arguments(..)
   , getArguments
-  , ghcideVersion
-  , getLibdir
+  , haskellLanguageServerVersion
   ) where
 
-import Data.Maybe
 import Data.Version
 import Development.GitRev
-import qualified GHC.Paths
 import Options.Applicative
 import Paths_haskell_language_server
 import System.Environment
@@ -37,6 +34,7 @@ data Arguments = Arguments
     , argsDebugOn       :: Bool
     , argsLogFile       :: Maybe String
     , argsThreads       :: Int
+    , argsProjectGhcVersion :: Bool
     } deriving Show
 
 getArguments :: String -> IO Arguments
@@ -80,21 +78,19 @@ arguments exeName = Arguments
           <> value 0
           <> showDefault
            )
+      <*> switch (long "project-ghc-version"
+                  <> help "Work out the project GHC version and print it")
 
 -- ---------------------------------------------------------------------
--- Set the GHC libdir to the nix libdir if it's present.
-getLibdir :: IO FilePath
-getLibdir = fromMaybe GHC.Paths.libdir <$> lookupEnv "NIX_GHC_LIBDIR"
 
-ghcideVersion :: IO String
-ghcideVersion = do
+haskellLanguageServerVersion :: IO String
+haskellLanguageServerVersion = do
   path <- getExecutablePath
   let gitHashSection = case $(gitHash) of
         x | x == "UNKNOWN" -> ""
         x -> " (GIT hash: " <> x <> ")"
-  return $ "ghcide version: " <> showVersion version
+  return $ "haskell-language-server version: " <> showVersion version
              <> " (GHC: " <> VERSION_ghc
              <> ") (PATH: " <> path <> ")"
              <> gitHashSection
 
--- ---------------------------------------------------------------------

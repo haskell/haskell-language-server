@@ -14,6 +14,8 @@ module Test.Hls.Util
     , noLogConfig
     , setupBuildToolFiles
     , withFileLogging
+    , findExe
+    , withCurrentDirectoryInTmp
   -- , makeRequest
   -- , runIGM
   -- , runIGM'
@@ -25,8 +27,10 @@ module Test.Hls.Util
   )
 where
 
+import Control.Applicative
 -- import           Control.Concurrent.STM
 import           Control.Monad
+import           Control.Monad.Trans.Maybe
 import           Data.Default
 import           Data.List (intercalate)
 -- import           Data.Typeable
@@ -43,6 +47,7 @@ import           System.Directory
 import           System.Environment
 import           System.FilePath
 import qualified System.Log.Logger as L
+import           System.IO.Temp
 -- import           Test.Hspec
 import           Test.Hspec.Runner
 import           Test.Hspec.Core.Formatters
@@ -310,3 +315,52 @@ dummyLspFuncs = LspFuncs { clientCapabilities = def
                          , withProgress = \_ _ f -> f (const (return ()))
                          , withIndefiniteProgress = \_ _ f -> f
                          }
+
+findExeRecursive :: FilePath -> FilePath -> IO (Maybe FilePath)
+findExeRecursive exe dir = do
+  me <- listToMaybe <$> findExecutablesInDirectories [dir] exe
+  case me of
+    Just e -> return (Just e)
+    Nothing -> do
+      subdirs <- (fmap (dir </>)) <$> listDirectory dir >>= filterM doesDirectoryExist
+      foldM (\acc subdir -> case acc of
+                              Just y -> pure $ Just y
+                              Nothing -> findExeRecursive exe subdir)
+            Nothing
+            subdirs
+
+-- | So we can find an executable with cabal run
+-- since it doesnt put build tools on the path (only cabal test)
+findExe :: String -> IO FilePath
+findExe name = do
+  fp <- fmap fromJust $ runMaybeT $
+    MaybeT (findExecutable name) <|>
+    MaybeT (findExeRecursive name "dist-newstyle")
+  makeAbsolute fp
+
+-- | Like 'withCurrentDirectory', but will copy the directory over to the system
+-- temporary directory first to avoid haskell-language-server's source tree from
+-- interfering with the cradle
+withCurrentDirectoryInTmp :: FilePath -> IO a -> IO a
+withCurrentDirectoryInTmp dir f =
+  withTempCopy dir $ \newDir ->
+    withCurrentDirectory newDir f
+
+withTempCopy :: FilePath -> (FilePath -> IO a) -> IO a
+withTempCopy srcDir f = do
+  withSystemTempDirectory "hls-test" $ \newDir -> do
+    copyDir srcDir newDir
+    f newDir
+
+copyDir :: FilePath -> FilePath -> IO ()
+copyDir src dst = do
+  cnts <- listDirectory src
+  forM_ cnts $ \file -> do
+    unless (file `elem` ignored) $ do
+      let srcFp = src </> file
+          dstFp = dst </> file
+      isDir <- doesDirectoryExist srcFp
+      if isDir
+        then createDirectory dstFp >> copyDir srcFp dstFp
+        else copyFile srcFp dstFp
+  where ignored = ["dist", "dist-newstyle", ".stack-work"]

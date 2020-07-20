@@ -5,14 +5,9 @@
 -- and the current project's version
 module Ide.Version where
 
-import           Data.Maybe
 import           Development.GitRev              (gitCommitCount)
 import           Options.Applicative.Simple      (simpleVersion)
-import           Ide.Cradle                      (execProjectGhc)
-import qualified HIE.Bios.Types as Bios
-import qualified Ide.Cradle     as Bios
 import qualified Paths_haskell_language_server as Meta
-import           System.Directory
 import           System.Info
 
 hlsVersion :: String
@@ -27,25 +22,5 @@ hlsVersion =
     , [" ", arch]
     , [" ", hlsGhcDisplayVersion]
     ]
-
--- ---------------------------------------------------------------------
-
-hlsGhcDisplayVersion :: String
-hlsGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
-
-getProjectGhcVersion :: Bios.Cradle Bios.CabalHelper -> IO String
-getProjectGhcVersion crdl =
-  fmap
-    (fromMaybe "No System GHC Found.")
-    (execProjectGhc crdl ["--numeric-version"])
-
-
-hlsGhcVersion :: String
-hlsGhcVersion = VERSION_ghc
-
--- ---------------------------------------------------------------------
-
-checkCabalInstall :: IO Bool
-checkCabalInstall = isJust <$> findExecutable "cabal"
-
--- ---------------------------------------------------------------------
+  where
+    hlsGhcDisplayVersion = compilerName ++ "-" ++ VERSION_ghc
