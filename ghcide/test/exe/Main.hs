@@ -1261,7 +1261,7 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , ""
                , "import Debug.Trace"
                , ""
-               , "f a = traceShow \"debug\" a" 
+               , "f a = traceShow \"debug\" a"
                ])
     [ (DsWarning, (6, 6), "Defaulting the following constraint") ]
     "Add type annotation ‘[Char]’ to ‘\"debug\"’"
@@ -2303,6 +2303,13 @@ xfail8101 = flip expectFailBecause
 xfail8101 t _ = t
 #endif
 
+expectFailCabal :: String -> TestTree -> TestTree
+#ifdef STACK
+expectFailCabal _ = id
+#else
+expectFailCabal = expectFailBecause
+#endif
+
 data Expect
   = ExpectRange Range -- Both gotoDef and hover should report this range
   | ExpectLocation Location
@@ -2678,6 +2685,7 @@ nonLspCommandLine = testGroup "ghcide command line"
   ]
 
 benchmarkTests :: TestTree
+-- These tests require stack and will fail with cabal test
 benchmarkTests =
     let ?config = Bench.defConfig
             { Bench.verbosity = Bench.Quiet
@@ -2685,10 +2693,11 @@ benchmarkTests =
             , Bench.buildTool = Bench.Stack
             } in
     withResource Bench.setup id $ \_ -> testGroup "benchmark experiments"
-    [ testCase (Bench.name e) $ do
+    [ expectFailCabal "Requires stack" $ testCase (Bench.name e) $ do
         res <- Bench.runBench runInDir e
         assertBool "did not successfully complete 5 repetitions" $ Bench.success res
         | e <- Bench.experiments
+        , Bench.name e /= "edit" -- the edit experiment does not ever fail
     ]
 
 ----------------------------------------------------------------------
