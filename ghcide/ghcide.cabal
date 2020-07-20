@@ -267,7 +267,6 @@ executable ghcide
         text,
         unordered-containers
     other-modules:
-        Utils
         Arguments
         Paths_ghcide
 
