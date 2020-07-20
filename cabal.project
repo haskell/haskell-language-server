@@ -1,9 +1,14 @@
-packages:
+packages: 
          ./
          ghcide
 
 tests: true
-documentation: true
+
+program-options
+  ghc-options: -haddock
+
+package *
+  ghc-options: -haddock
 
 package haskell-language-server
   test-show-details: direct

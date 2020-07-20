@@ -4,6 +4,9 @@ packages:
 - .
 - ./ghcide/
 
+ ghc-options:
+  "$everything": -haddock
+
 extra-deps:
 - apply-refact-0.7.0.0
 - brittany-0.12.1.1
