@@ -13,3 +13,4 @@ bench-temp/
 .shake/
 ghcide
 *.benchmark-gcStats
+tags
