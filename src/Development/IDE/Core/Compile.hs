@@ -411,8 +411,9 @@ getModSummaryFromBuffer
     => FilePath
     -> DynFlags
     -> GHC.ParsedSource
+    -> StringBuffer
     -> ExceptT [FileDiagnostic] m ModSummary
-getModSummaryFromBuffer fp dflags parsed = do
+getModSummaryFromBuffer fp dflags parsed contents = do
   (modName, imports) <- liftEither $ getImportsParsed dflags parsed
 
   modLoc <- liftIO $ mkHomeModLocation dflags modName fp
@@ -428,7 +429,13 @@ getModSummaryFromBuffer fp dflags parsed = do
     , ms_textual_imps = [imp | (False, imp) <- imports]
     , ms_hspp_file    = fp
     , ms_hspp_opts    = dflags
-    , ms_hspp_buf     = Nothing
+        -- NOTE: It's /vital/ we set the 'StringBuffer' here, to give any
+        -- registered GHC plugins access to the /updated/ in-memory content
+        -- of a module being edited. Without this line, any plugin wishing to
+        -- parse an input module and perform operations on the /current/ state
+        -- of a file wouldn't work properly, as it would \"see\" a stale view of
+        -- the file (i.e., the on-disk content of the latter).
+    , ms_hspp_buf     = Just contents
 
     -- defaults:
     , ms_hsc_src      = sourceType
@@ -565,7 +572,7 @@ parseFileContents customPreprocessor dflags comp_pkgs filename contents = do
                unless (null errs) $ throwE $ diagFromStrings "parser" DsError errs
                let parsed' = removePackageImports comp_pkgs parsed
                let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               ms <- getModSummaryFromBuffer filename dflags parsed'
+               ms <- getModSummaryFromBuffer filename dflags parsed' contents
                let pm =
                      ParsedModule {
                          pm_mod_summary = ms
