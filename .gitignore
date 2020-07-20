@@ -1,6 +1,6 @@
 dist-newstyle
 .stack-work
-hie.yaml
+/hie.yaml
 cabal.project.local
 *~
 *.lock

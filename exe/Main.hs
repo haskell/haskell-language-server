@@ -62,6 +62,7 @@ import Development.IDE.Plugin.Completions as Completions
 import Development.IDE.LSP.HoverDefinition as HoverDefinition
 
  -- haskell-language-server plugins
+import Ide.Plugin.Eval                    as Eval
 import Ide.Plugin.Example                 as Example
 import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
@@ -107,6 +108,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if AGPL
       , Brittany.descriptor    "brittany"
 #endif
+      , Eval.descriptor "eval"
       ]
     examplePlugins =
       [Example.descriptor  "eg"
