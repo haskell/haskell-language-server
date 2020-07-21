@@ -1,11 +1,8 @@
-packages: 
+packages:
          ./
          ghcide
 
 tests: true
-
-program-options
-  ghc-options: -haddock
 
 package *
   ghc-options: -haddock
