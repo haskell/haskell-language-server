@@ -5,7 +5,7 @@ packages:
 - .
 - ./ghcide/
 
- ghc-options:
+ghc-options:
   "$everything": -haddock
 
 extra-deps:
