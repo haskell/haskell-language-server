@@ -123,6 +123,10 @@ type instance RuleResult IsFileOfInterest = Bool
 -- without needing to parse the entire source
 type instance RuleResult GetModSummary = ModSummary
 
+-- | Generate a ModSummary with the timestamps elided,
+--   for more successful early cutoff
+type instance RuleResult GetModSummaryWithoutTimestamps = ModSummary
+
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetParsedModule
@@ -205,6 +209,12 @@ data IsFileOfInterest = IsFileOfInterest
 instance Hashable IsFileOfInterest
 instance NFData   IsFileOfInterest
 instance Binary   IsFileOfInterest
+
+data GetModSummaryWithoutTimestamps = GetModSummaryWithoutTimestamps
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetModSummaryWithoutTimestamps
+instance NFData   GetModSummaryWithoutTimestamps
+instance Binary   GetModSummaryWithoutTimestamps
 
 data GetModSummary = GetModSummary
     deriving (Eq, Show, Typeable, Generic)
