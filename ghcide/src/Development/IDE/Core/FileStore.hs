@@ -10,6 +10,7 @@ module Development.IDE.Core.FileStore(
     setFileModified,
     setSomethingModified,
     fileStoreRules,
+    modificationTime,
     VFSHandle,
     makeVFSHandle,
     makeLSPVFSHandle
@@ -27,6 +28,8 @@ import           Development.Shake.Classes
 import           Control.Exception
 import           GHC.Generics
 import Data.Either.Extra
+import Data.Int (Int64)
+import Data.Time
 import System.IO.Error
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Diagnostics
@@ -36,9 +39,9 @@ import Development.IDE.Core.RuleTypes
 import qualified Data.Rope.UTF16 as Rope
 
 #ifdef mingw32_HOST_OS
-import Data.Time
 import qualified System.Directory as Dir
 #else
+import Data.Time.Clock.System (systemToUTCTime, SystemTime(MkSystemTime))
 import Foreign.Ptr
 import Foreign.C.String
 import Foreign.C.Types
@@ -124,7 +127,7 @@ getModificationTimeRule vfs =
     -- We might also want to try speeding this up on Windows at some point.
     -- TODO leverage DidChangeWatchedFile lsp notifications on clients that
     -- support them, as done for GetFileExists
-    getModTime :: FilePath -> IO (Int,Int)
+    getModTime :: FilePath -> IO (Int64, Int64)
     getModTime f =
 #ifdef mingw32_HOST_OS
         do time <- Dir.getModificationTime f
@@ -136,13 +139,22 @@ getModificationTimeRule vfs =
         alloca $ \secPtr ->
         alloca $ \nsecPtr -> do
             Posix.throwErrnoPathIfMinus1Retry_ "getmodtime" f $ c_getModTime f' secPtr nsecPtr
-            sec <- peek secPtr
-            nsec <- peek nsecPtr
-            pure (fromEnum sec, fromIntegral nsec)
+            CTime sec <- peek secPtr
+            CLong nsec <- peek nsecPtr
+            pure (sec, nsec)
 
 -- Sadly even unix’s getFileStatus + modificationTimeHiRes is still about twice as slow
 -- as doing the FFI call ourselves :(.
 foreign import ccall "getmodtime" c_getModTime :: CString -> Ptr CTime -> Ptr CLong -> IO Int
+#endif
+
+modificationTime :: FileVersion -> Maybe UTCTime
+modificationTime VFSVersion{} = Nothing
+modificationTime (ModificationTime large small) =
+#ifdef mingw32_HOST_OS
+    Just (UTCTime (ModifiedJulianDay $ fromIntegral large) (picosecondsToDiffTime $ fromIntegral small))
+#else
+    Just (systemToUTCTime $ MkSystemTime large (fromIntegral small))
 #endif
 
 getFileContentsRule :: VFSHandle -> Rules ()
@@ -163,9 +175,13 @@ ideTryIOException fp act =
       (\(e :: IOException) -> ideErrorText fp $ T.pack $ show e)
       <$> try act
 
-
-getFileContents :: NormalizedFilePath -> Action (FileVersion, Maybe T.Text)
-getFileContents = use_ GetFileContents
+-- | Returns the modification time and the contents.
+--   For VFS paths, the modification time is the current time.
+getFileContents :: NormalizedFilePath -> Action (UTCTime, Maybe T.Text)
+getFileContents f = do
+    (fv, txt) <- use_ GetFileContents f
+    modTime <- maybe (liftIO getCurrentTime) return $ modificationTime fv
+    return (modTime, txt)
 
 fileStoreRules :: VFSHandle -> Rules ()
 fileStoreRules vfs = do

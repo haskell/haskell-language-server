@@ -48,7 +48,7 @@ module Development.IDE.Core.Shake(
     sendEvent,
     ideLogger,
     actionLogger,
-    FileVersion(..), modificationTime,
+    FileVersion(..),
     Priority(..),
     updatePositionMapping,
     deleteValue,
@@ -114,6 +114,7 @@ import Data.IORef
 import NameCache
 import UniqSupply
 import PrelInfo
+import Data.Int (Int64)
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -632,7 +633,7 @@ newSession ShakeExtras{..} shakeDb systemActs userActs = do
 instantiateDelayedAction :: DelayedAction a -> IO (Barrier (Either SomeException a), DelayedActionInternal)
 instantiateDelayedAction (DelayedAction s p a) = do
   b <- newBarrier
-  let a' = do 
+  let a' = do
         -- work gets reenqueued when the Shake session is restarted
         -- it can happen that a work item finished just as it was reenqueud
         -- in that case, skipping the work is fine
@@ -1074,8 +1075,8 @@ type instance RuleResult GetModificationTime = FileVersion
 data FileVersion
     = VFSVersion !Int
     | ModificationTime
-      !Int   -- ^ Large unit (platform dependent, do not make assumptions)
-      !Int   -- ^ Small unit (platform dependent, do not make assumptions)
+      !Int64   -- ^ Large unit (platform dependent, do not make assumptions)
+      !Int64   -- ^ Small unit (platform dependent, do not make assumptions)
     deriving (Show, Generic)
 
 instance NFData FileVersion
@@ -1083,10 +1084,6 @@ instance NFData FileVersion
 vfsVersion :: FileVersion -> Maybe Int
 vfsVersion (VFSVersion i) = Just i
 vfsVersion ModificationTime{} = Nothing
-
-modificationTime :: FileVersion -> Maybe (Int, Int)
-modificationTime VFSVersion{} = Nothing
-modificationTime (ModificationTime large small) = Just (large, small)
 
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags

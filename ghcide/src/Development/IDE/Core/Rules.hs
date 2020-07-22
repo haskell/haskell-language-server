@@ -43,7 +43,7 @@ import Development.IDE.Spans.Calculate
 import Development.IDE.Import.DependencyInformation
 import Development.IDE.Import.FindImports
 import           Development.IDE.Core.FileExists
-import           Development.IDE.Core.FileStore        (getFileContents)
+import           Development.IDE.Core.FileStore        (modificationTime, getFileContents)
 import           Development.IDE.Types.Diagnostics as Diag
 import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule)
@@ -86,6 +86,7 @@ import Control.Exception
 import Control.Monad.State
 import FastString (FastString(uniq))
 import qualified HeaderInfo as Hdr
+import Data.Time (UTCTime(..))
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -165,7 +166,7 @@ getHieFile ide file mod = do
 
 getHomeHieFile :: NormalizedFilePath -> MaybeT IdeAction HieFile
 getHomeHieFile f = do
-  ms <- fst <$> useE GetModSummary f
+  ms <- fst <$> useE GetModSummaryWithoutTimestamps f
   let normal_hie_f = toNormalizedFilePath' hie_f
       hie_f = ml_hie_file $ ms_location ms
 
@@ -238,10 +239,10 @@ getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
         -- parsed module
         comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
     opt <- getIdeOptions
-    (_, contents) <- getFileContents file
+    (modTime, contents) <- getFileContents file
 
     let dflags    = hsc_dflags hsc
-        mainParse = getParsedModuleDefinition hsc opt comp_pkgs file contents
+        mainParse = getParsedModuleDefinition hsc opt comp_pkgs file modTime contents
 
     -- Parse again (if necessary) to capture Haddock parse errors
     if gopt Opt_Haddock dflags
@@ -250,7 +251,7 @@ getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
         else do
             let haddockParse = do
                     (_, (!diagsHaddock, _)) <-
-                        getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs file contents
+                        getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs file modTime contents
                     return diagsHaddock
 
             ((fingerPrint, (diags, res)), diagsHaddock) <-
@@ -279,9 +280,11 @@ mergeParseErrorsHaddock normal haddock = normal ++
                  | otherwise = "Haddock: " <> x
 
 
-getParsedModuleDefinition :: HscEnv -> IdeOptions -> [PackageName] -> NormalizedFilePath -> Maybe T.Text -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
-getParsedModuleDefinition packageState opt comp_pkgs file contents = do
-    (diag, res) <- parseModule opt packageState comp_pkgs (fromNormalizedFilePath file) (fmap textToStringBuffer contents)
+getParsedModuleDefinition :: HscEnv -> IdeOptions -> [PackageName] -> NormalizedFilePath -> UTCTime -> Maybe T.Text -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
+getParsedModuleDefinition packageState opt comp_pkgs file modTime contents = do
+    let fp = fromNormalizedFilePath file
+        buffer = textToStringBuffer <$> contents
+    (diag, res) <- parseModule opt packageState comp_pkgs fp modTime buffer
     case res of
         Nothing -> pure (Nothing, (diag, Nothing))
         Just (contents, modu) -> do
@@ -293,7 +296,7 @@ getParsedModuleDefinition packageState opt comp_pkgs file contents = do
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
     define $ \GetLocatedImports file -> do
-        ms <- use_ GetModSummary file
+        ms <- use_ GetModSummaryWithoutTimestamps file
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
         let env = hscEnv env_eq
@@ -339,7 +342,7 @@ rawDependencyInformation fs = do
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          al <- lift $ modSummaryToArtifactsLocation f <$> use_ GetModSummary f
+          al <- lift $ modSummaryToArtifactsLocation f <$> use_ GetModSummaryWithoutTimestamps f
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Adding an edge to the bootmap so we can make sure to
@@ -450,7 +453,7 @@ reportImportCyclesRule =
             where loc = srcSpanToLocation (getLoc imp)
                   fp = toNormalizedFilePath' $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
-           ms <- use_ GetModSummary file
+           ms <- use_ GetModSummaryWithoutTimestamps file
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
@@ -608,7 +611,7 @@ loadGhcSession = do
 ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
 ghcSessionDepsDefinition file = do
         hsc <- hscEnv <$> use_ GhcSession file
-        (ms,_) <- useWithStale_ GetModSummary file
+        (ms,_) <- useWithStale_ GetModSummaryWithoutTimestamps file
         (deps,_) <- useWithStale_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
         ifaces <- uses_ GetModIface tdeps
@@ -657,7 +660,7 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
 
 isHiFileStableRule :: Rules ()
 isHiFileStableRule = define $ \IsHiFileStable f -> do
-    ms <- use_ GetModSummary f
+    ms <- use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
                 $ case ms_hsc_src ms of
                     HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
@@ -679,15 +682,29 @@ isHiFileStableRule = define $ \IsHiFileStable f -> do
     return ([], Just sourceModified)
 
 getModSummaryRule :: Rules ()
-getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
-    dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
-    (_, mFileContent) <- getFileContents f
-    modS <- liftIO $ evalWithDynFlags dflags $ runExceptT $
-        getModSummaryFromImports (fromNormalizedFilePath f) (textToStringBuffer <$> mFileContent)
-    case modS of
-        Right ms -> do
-            return ( Just (computeFingerprint f dflags ms), ([], Just ms))
-        Left diags -> return (Nothing, (diags, Nothing))
+getModSummaryRule = do
+    defineEarlyCutoff $ \GetModSummary f -> do
+        dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
+        (modTime, mFileContent) <- getFileContents f
+        let fp = fromNormalizedFilePath f
+        modS <- liftIO $ evalWithDynFlags dflags $ runExceptT $
+                getModSummaryFromImports fp modTime (textToStringBuffer <$> mFileContent)
+        case modS of
+            Right ms -> do
+                let fingerPrint = hash (computeFingerprint f dflags ms, hashUTC modTime)
+                return ( Just (BS.pack $ show fingerPrint) , ([], Just ms))
+            Left diags -> return (Nothing, (diags, Nothing))
+
+    defineEarlyCutoff $ \GetModSummaryWithoutTimestamps f -> do
+        ms <- use GetModSummary f
+        case ms of
+            Just msWithTimestamps -> do
+                let ms = msWithTimestamps { ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps" }
+                dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
+                -- include the mod time in the fingerprint
+                let fp = BS.pack $ show $ hash (computeFingerprint f dflags ms)
+                return (Just fp, ([], Just ms))
+            Nothing -> return (Nothing, ([], Nothing))
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
         -- eliding the timestamps and other non relevant fields.
@@ -702,8 +719,9 @@ getModSummaryRule = defineEarlyCutoff $ \GetModSummary f -> do
                     )
                 fingerPrintImports = map (fmap uniq *** (moduleNameString . unLoc))
                 opts = Hdr.getOptions dflags (fromJust ms_hspp_buf) (fromNormalizedFilePath f)
-                fp = hash fingerPrint
-            in BS.pack (show fp)
+            in fingerPrint
+
+        hashUTC UTCTime{..} = (fromEnum utctDay, fromEnum utctDayTime)
 
 getModIfaceRule :: Rules ()
 getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
@@ -734,14 +752,15 @@ regenerateHiFile sess f = do
         -- these packages as we have already dealt with what they map to.
         comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
     opt <- getIdeOptions
-    (_, contents) <- getFileContents f
-    -- Embed --haddocks in the interface file
-    (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs f contents
+    (modTime, contents) <- getFileContents f
+
+    -- Embed haddocks in the interface file
+    (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs f modTime contents
     (diags, mb_pm) <- case mb_pm of
         Just _ -> return (diags, mb_pm)
         Nothing -> do
             -- if parsing fails, try parsing again with Haddock turned off
-            (_, (diagsNoHaddock, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt comp_pkgs f contents
+            (_, (diagsNoHaddock, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt comp_pkgs f modTime contents
             return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
     case mb_pm of
         Nothing -> return (diags, Nothing)

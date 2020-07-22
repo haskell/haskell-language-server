@@ -85,6 +85,7 @@ import Control.DeepSeq (rnf)
 import Control.Exception (evaluate)
 import Exception (ExceptionMonad)
 import TcEnv (tcLookup)
+import Data.Time (UTCTime)
 
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
@@ -93,13 +94,14 @@ parseModule
     -> HscEnv
     -> [PackageName]
     -> FilePath
+    -> UTCTime
     -> Maybe SB.StringBuffer
     -> IO (IdeResult (StringBuffer, ParsedModule))
-parseModule IdeOptions{..} env comp_pkgs filename mbContents =
+parseModule IdeOptions{..} env comp_pkgs filename modTime mbContents =
     fmap (either (, Nothing) id) $
     evalGhcEnv env $ runExceptT $ do
         (contents, dflags) <- preprocessor filename mbContents
-        (diag, modu) <- parseFileContents optPreprocessor dflags comp_pkgs filename contents
+        (diag, modu) <- parseFileContents optPreprocessor dflags comp_pkgs filename modTime contents
         return (diag, Just (contents, modu))
 
 
@@ -409,11 +411,12 @@ getImportsParsed dflags (L loc parsed) = do
 getModSummaryFromBuffer
     :: GhcMonad m
     => FilePath
+    -> UTCTime
     -> DynFlags
     -> GHC.ParsedSource
     -> StringBuffer
     -> ExceptT [FileDiagnostic] m ModSummary
-getModSummaryFromBuffer fp dflags parsed contents = do
+getModSummaryFromBuffer fp modTime dflags parsed contents = do
   (modName, imports) <- liftEither $ getImportsParsed dflags parsed
 
   modLoc <- liftIO $ mkHomeModLocation dflags modName fp
@@ -421,11 +424,7 @@ getModSummaryFromBuffer fp dflags parsed contents = do
   return $ ModSummary
     { ms_mod          = mkModule (fsToUnitId unitId) modName
     , ms_location     = modLoc
-    , ms_hs_date      = error "Rules should not depend on ms_hs_date"
-        -- When we are working with a virtual file we do not have a file date.
-        -- To avoid silent issues where something is not processed because the date
-        -- has not changed, we make sure that things blow up if they depend on the
-        -- date.
+    , ms_hs_date      = modTime
     , ms_textual_imps = [imp | (False, imp) <- imports]
     , ms_hspp_file    = fp
     , ms_hspp_opts    = dflags
@@ -455,9 +454,10 @@ getModSummaryFromBuffer fp dflags parsed contents = do
 getModSummaryFromImports
   :: (HasDynFlags m, ExceptionMonad m, MonadIO m)
   => FilePath
+  -> UTCTime
   -> Maybe SB.StringBuffer
   -> ExceptT [FileDiagnostic] m ModSummary
-getModSummaryFromImports fp contents = do
+getModSummaryFromImports fp modTime contents = do
     (contents, dflags) <- preprocessor fp contents
     (srcImports, textualImports, L _ moduleName) <-
         ExceptT $ liftIO $ first (diagFromErrMsgs "parser" dflags) <$> GHC.getHeaderImports dflags contents fp fp
@@ -476,10 +476,7 @@ getModSummaryFromImports fp contents = do
 #if MIN_GHC_API_VERSION(8,8,0)
                 , ms_hie_date     = Nothing
 #endif
-                , ms_hs_date      = error "Rules should not depend on ms_hs_date"
-        -- When we are working with a virtual file we do not have a file date.
-        -- To avoid silent issues where something is not processed because the date
-        -- has not changed, we make sure that things blow up if they depend on the date.
+                , ms_hs_date      = modTime
                 , ms_hsc_src      = sourceType
                 -- The contents are used by the GetModSummary rule
                 , ms_hspp_buf     = Just contents
@@ -536,9 +533,10 @@ parseFileContents
        -> DynFlags -- ^ flags to use
        -> [PackageName] -- ^ The package imports to ignore
        -> FilePath  -- ^ the filename (for source locations)
+       -> UTCTime   -- ^ the modification timestamp
        -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
-parseFileContents customPreprocessor dflags comp_pkgs filename contents = do
+parseFileContents customPreprocessor dflags comp_pkgs filename modTime contents = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    case unP Parser.parseModule (mkPState dflags contents loc) of
 #if MIN_GHC_API_VERSION(8,10,0)
@@ -572,7 +570,7 @@ parseFileContents customPreprocessor dflags comp_pkgs filename contents = do
                unless (null errs) $ throwE $ diagFromStrings "parser" DsError errs
                let parsed' = removePackageImports comp_pkgs parsed
                let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               ms <- getModSummaryFromBuffer filename dflags parsed' contents
+               ms <- getModSummaryFromBuffer filename modTime dflags parsed' contents
                let pm =
                      ParsedModule {
                          pm_mod_summary = ms
