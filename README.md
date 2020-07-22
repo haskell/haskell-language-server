@@ -17,6 +17,9 @@ This is *very* early stage software.
 - [Haskell Language Server (HLS)](#haskell-language-server)
   - [Features](#features)
   - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Visual Studio Code](#visual-studio-code)
+    - [Pre-built binaries](#pre-built-binaries)
     - [Installation from source](#installation-from-source)
       - [Common pre-requirements](#common-pre-requirements)
       - [Linux-specific pre-requirements](#linux-specific-pre-requirements)
@@ -54,7 +57,20 @@ This is *very* early stage software.
 
 ## Installation
 
-For now only installation from source is supported.
+### Prerequisites
+
+- For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
+- For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the PATH. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
+- For Stack based projects, [stack](http://haskellstack.org) must be installed and on the PATH.
+
+### Visual Studio Code
+
+If you are using Visual Studio Code, the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=alanz.vscode-hie-server) will automatically download and install `haskell-language-server` for you.
+
+### Pre-built binaries
+
+There are pre-built binaries available from the [releases page](https://github.com/haskell/haskell-language-server/releases) for Linux, Windows and macOS.
+To install, download the `haskell-language-server-wrapper` executable for your platform as well as any `haskell-language-server` executables for the GHC versions you plan on working with, and either put them on your PATH or point your client to them.
 
 ### Installation from source
 
@@ -304,8 +320,7 @@ All of the editor integrations assume that you have already installed `haskell-l
 
 Install from
 [the VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=alanz.vscode-hie-server), or manually from the repository [vscode-hie-server](https://github.com/alanz/vscode-hie-server).
-
-Choose `haskell-language-server` in the extension setting `languageServerHaskell.hieVariant`.
+The `haskell-language-server` and `haskell-language-server-wrapper` binaries will be automatically downloaded on an ad-hoc basis, but if you have them already installed on your PATH then it will just use them instead.
 
 ### Using Haskell Language Server with Sublime Text
 
