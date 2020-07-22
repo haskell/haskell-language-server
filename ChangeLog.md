@@ -1,5 +1,44 @@
 # Changelog for haskell-language-server
 
+## 0.2.1
+
+This release includes a new eval plugin that allows Haddock code examples to be
+evaluated through a code lens. For example, the code below will now offer to
+evaluate `intercalate " " example`, and will insert the output in the line
+below.
+
+```haskell
+example :: [String]
+example = ["This is an example", "of", "interactive", "evaluation"]
+
+-- >>> intercalate " " example
+-- "This is an example of interactive evaluation"
+--
+```
+
+This is also the first release to have binaries distributed alongside it. Some
+behind the scene changes include the GHC library directory now being obtained on
+the fly, so either `ghc`, `cabal` or `stack` will need to be present on your
+PATH depending on your project. See `docs/releases.md` for more information. If
+you find any issues with this, please let us know!
+
+### Pull requests merged
+
+- Bump ormolu to 0.1.2.0
+([#189](https://github.com/haskell/haskell-language-server/pull/189) by @AlistairB)
+- Remove dependency on Cabal
+([#195](https://github.com/haskell/haskell-language-server/pull/195) by @bubba)
+- Fix extraneous extra-dep in stack-8.6.4.yaml
+([#199](https://github.com/haskell/haskell-language-server/pull/199) by @bubba)
+- Fix install script stack targets
+([#203](https://github.com/haskell/haskell-language-server/pull/203) by @jneira)
+- Add support for ghc-8.8.4
+([#206](https://github.com/haskell/haskell-language-server/pull/206) by @jneira)
+- Simple Eval plugin
+([#191](https://github.com/haskell/haskell-language-server/pull/191) by @pepeiborra)
+- Distributable binaries
+([#165](https://github.com/haskell/haskell-language-server/pull/165) by @bubba)
+
 ## 0.2
 
 - Use cabal-plan from Hackage
