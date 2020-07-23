@@ -75,21 +75,22 @@ tests = testGroup "type definitions" [
                                         (Range (toPos (18, 1)) (toPos (18, 26)))
                             ]
 
-    -- TODO Implement
-    -- , ignoreTestBecause "Broken" $ testCase "find type-definition of type def in component"
-    --     $ pendingWith "Finding symbols cross module is currently not supported"
-        -- $ runSession hieCommand fullCaps "test/testdata/gototest"
-        -- $ do
-        --     doc      <- openDoc "src/Lib2.hs" "haskell"
-        --     otherDoc <- openDoc "src/Lib.hs" "haskell"
-        --     closeDoc otherDoc
-        --     defs <- getTypeDefinitions doc (toPos (13, 20))
-        --     liftIO $ do
-        --       fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-        --       defs
-        --         `shouldBe` [ Location (filePathToUri fp)
-        --                               (Range (toPos (8, 1)) (toPos (8, 29)))
-        --                    ]
+    {--  TODO Implement
+     , ignoreTestBecause "Broken" $ testCase "find type-definition of type def in component"
+         $ pendingWith "Finding symbols cross module is currently not supported"
+         $ runSession hieCommand fullCaps "test/testdata/gototest"
+         $ do
+             doc      <- openDoc "src/Lib2.hs" "haskell"
+             otherDoc <- openDoc "src/Lib.hs" "haskell"
+             closeDoc otherDoc
+             defs <- getTypeDefinitions doc (toPos (13, 20))
+             liftIO $ do
+               fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
+               defs
+                 `shouldBe` [ Location (filePathToUri fp)
+                                       (Range (toPos (8, 1)) (toPos (8, 29)))
+                            ]
+    --}
     , ignoreTestBecause "Broken" $ testCase "find definition of parameterized data type"
         $ runSession hieCommand fullCaps "test/testdata/gototest"
         $ do
