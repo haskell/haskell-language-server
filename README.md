@@ -53,6 +53,24 @@ This is *very* early stage software.
 
    ![Eval](https://i.imgur.com/bh992sT.gif)
 
+- Type information and documentation on hover. Note that currently, in order for docs to be displayed for dependencies, they must have been built with GHC's `-haddock` flag:
+
+  - For cabal:
+      - Add to your global config file (e.g. `~/.cabal/config`):
+        ```
+        program-default-options
+          ghc-options: -haddock
+        ```
+      - Or, for a single project, run `cabal configure --ghc-options=-haddock`
+
+  - For stack, add to global `$STACK_ROOT\config.yaml`, or project's `stack.yaml`:
+    ```
+    ghc-options:
+      "$everything": -haddock
+    ```
+
+  This will cause compilation errors if a dependency contains invalid Haddock markup, though in a future version of GHC (hopefully 8.12), [these will be demoted to warnings](https://gitlab.haskell.org/ghc/ghc/-/merge_requests/2377).
+
  - Many more (TBD)
 
 ## Installation
