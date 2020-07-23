@@ -1,5 +1,38 @@
 # Changelog for haskell-language-server
 
+## 0.2.2
+
+This changes the configuration section from "languageServerHaskell" to "haskell"
+to align it with vscode-hie-server 0.1. You will need to update your LSP
+configurations (which vary per client) from
+
+```json
+{
+  "languageServerHaskell": {
+    "formattingProvider": "stylish-haskell"
+  }
+}
+```
+
+to
+
+```json
+{
+  "haskell": {
+    "formattingProvider": "stylish-haskell"
+  }
+}
+```
+
+### Pull requests merged
+
+- Mention docs on hover feature in README
+([#209](https://github.com/haskell/haskell-language-server/pull/209) by @georgefst)
+- Add static binaries for ghc-8.8.4
+([#224](https://github.com/haskell/haskell-language-server/pull/224) by @bubba)
+- Rename the configuration section from languageServerHaskell => haskell
+([#227](https://github.com/haskell/haskell-language-server/pull/227) by @bubba)
+
 ## 0.2.1
 
 This release includes a new eval plugin that allows Haddock code examples to be
