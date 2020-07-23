@@ -159,7 +159,6 @@ multiMainTests :: TestTree
 multiMainTests = testGroup "multiple main modules" [
     ignoreTestBecause "Broken: Unexpected ConduitParser.empty" $
     testCase "Can load one file at a time, when more than one Main module exists"
-        -- $ runSession hieCommand fullCaps "test/testdata" $ do
         $ runSession hieCommand fullCaps "test/testdata" $ do
             _doc <- openDoc "ApplyRefact2.hs" "haskell"
             _diagsRspHlint <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
