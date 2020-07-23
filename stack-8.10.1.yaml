@@ -4,6 +4,9 @@ packages:
 - .
 - ./ghcide/
 
+ghc-options:
+  "$everything": -haddock
+
 extra-deps:
 - Cabal-3.0.2.0
 - hie-bios-0.6.1

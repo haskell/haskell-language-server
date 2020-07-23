@@ -4,6 +4,9 @@ packages:
 - .
 - ./ghcide/
 
+ghc-options:
+  "$everything": -haddock
+
 extra-deps:
 - ansi-terminal-0.10.2
 - base-compat-0.11.0

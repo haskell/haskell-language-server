@@ -4,6 +4,9 @@ packages:
 - .
 - ./ghcide/
 
+ghc-options:
+  "$everything": -haddock
+
 extra-deps:
 - aeson-1.4.3.0
 - brittany-0.12.1.1
