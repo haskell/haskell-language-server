@@ -394,7 +394,7 @@ Then issue `:CocConfig` and add the following to your Coc config file.
       "haskell"
     ],
     "initializationOptions": {
-      "languageServerHaskell": {
+      "haskell": {
       }
     }
   }

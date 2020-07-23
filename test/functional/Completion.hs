@@ -311,7 +311,7 @@ tests = testGroup "completions" [
     --     doc <- openDoc "Completion.hs" "haskell"
     --     _   <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
-    --     let config = object [ "languageServerHaskell" .= (object ["completionSnippetsOn" .= False])]
+    --     let config = object [ "haskell" .= (object ["completionSnippetsOn" .= False])]
 
     --     sendNotification WorkspaceDidChangeConfiguration
     --                     (DidChangeConfigurationParams config)
