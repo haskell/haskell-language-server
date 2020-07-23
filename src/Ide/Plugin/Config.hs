@@ -70,7 +70,7 @@ instance Default Config where
 -- TODO: Add API for plugins to expose their own LSP config options
 instance A.FromJSON Config where
   parseJSON = A.withObject "Config" $ \v -> do
-    s <- v .: "languageServerHaskell"
+    s <- v .: "haskell"
     flip (A.withObject "Config.settings") s $ \o -> Config
       <$> o .:? "hlintOn"                     .!= hlintOn def
       <*> o .:? "diagnosticsOnChange"         .!= diagnosticsOnChange def
@@ -81,17 +81,17 @@ instance A.FromJSON Config where
       <*> o .:? "formatOnImportOn"            .!= formatOnImportOn def
       <*> o .:? "formattingProvider"          .!= formattingProvider def
 
--- 2017-10-09 23:22:00.710515298 [ThreadId 11] - ---> {"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"languageServerHaskell":{"maxNumberOfProblems":100,"hlintOn":true}}}}
+-- 2017-10-09 23:22:00.710515298 [ThreadId 11] - ---> {"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"haskell":{"maxNumberOfProblems":100,"hlintOn":true}}}}
 -- 2017-10-09 23:22:00.710667381 [ThreadId 15] - reactor:got didChangeConfiguration notification:
 -- NotificationMessage
 --   {_jsonrpc = "2.0"
 --   , _method = WorkspaceDidChangeConfiguration
 --   , _params = DidChangeConfigurationParams
---                 {_settings = Object (fromList [("languageServerHaskell",Object (fromList [("hlintOn",Bool True)
---                                                                                          ,("maxNumberOfProblems",Number 100.0)]))])}}
+--                 {_settings = Object (fromList [("haskell",Object (fromList [("hlintOn",Bool True)
+--                                                                            ,("maxNumberOfProblems",Number 100.0)]))])}}
 
 instance A.ToJSON Config where
-  toJSON (Config h diag m d l c f fp) = object [ "languageServerHaskell" .= r ]
+  toJSON (Config h diag m d l c f fp) = object [ "haskell" .= r ]
     where
       r = object [ "hlintOn"                     .= h
                  , "diagnosticsOnChange"         .= diag

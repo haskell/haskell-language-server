@@ -115,7 +115,7 @@ ormoluTests :: TestTree
 ormoluTests = testGroup "ormolu" [
     goldenVsStringDiff "formats correctly" goldenGitDiff ("test/testdata/Format.ormolu." ++ ormoluGoldenSuffix ++ ".hs") $ runSession hieCommand fullCaps "test/testdata" $ do
         let formatLspConfig provider =
-                object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
+                object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
         doc <- openDoc "Format.hs" "haskell"
         formatDoc doc (FormattingOptions 2 True)
@@ -129,7 +129,7 @@ ormoluTests = testGroup "ormolu" [
 
 
 formatLspConfig :: Value -> Value
-formatLspConfig provider = object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
+formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
 
 formatConfig :: Value -> SessionConfig
 formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }
