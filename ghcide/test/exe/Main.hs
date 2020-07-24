@@ -16,12 +16,14 @@ import qualified Control.Lens as Lens
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON, Value)
+import qualified Data.Binary as Binary
 import Data.Foldable
 import Data.List.Extra
 import Data.Maybe
 import Data.Rope.UTF16 (Rope)
 import qualified Data.Rope.UTF16 as Rope
 import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent)
+import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
 import Data.Typeable
@@ -2832,6 +2834,8 @@ unitTests = do
      , testCase "from empty path URI" $ do
          let uri = Uri "file://"
          uriToFilePath' uri @?= Just ""
+     , testCase "Key with empty file path roundtrips via Binary"  $
+         Binary.decode (Binary.encode (Q ((), emptyFilePath))) @?= Q ((), emptyFilePath)
      ]
 
 positionMappingTests :: TestTree
