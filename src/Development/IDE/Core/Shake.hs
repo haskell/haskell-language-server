@@ -57,7 +57,9 @@ module Development.IDE.Core.Shake(
     ProgressEvent(..),
     DelayedAction, mkDelayedAction,
     IdeAction(..), runIdeAction,
-    mkUpdater
+    mkUpdater,
+    -- Exposed for testing.
+    Q(..),
     ) where
 
 import           Development.Shake hiding (ShakeValue, doesFileExist, Info)
@@ -792,7 +794,14 @@ isBadDependency x
 newtype Q k = Q (k, NormalizedFilePath)
     deriving (Eq,Hashable,NFData, Generic)
 
-instance Binary k => Binary (Q k)
+instance Binary k => Binary (Q k) where
+    put (Q (k, fp)) = put (k, fp)
+    get = do
+        (k, fp) <- get
+        -- The `get` implementation of NormalizedFilePath
+        -- does not handle empty file paths so we
+        -- need to handle this ourselves here.
+        pure (Q (k, toNormalizedFilePath' fp))
 
 instance Show k => Show (Q k) where
     show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file

@@ -296,6 +296,7 @@ test-suite ghcide-tests
     build-depends:
         aeson,
         base,
+        binary,
         bytestring,
         containers,
         directory,
