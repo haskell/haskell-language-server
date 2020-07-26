@@ -1,9 +1,8 @@
 # This shell.nix file is designed for use with cabal build
 # It aims to leverage the nix cache in as much as possible
-# It does not aim to replace Cabal/Stack with Nix
+# while reducing Nix maintenance costs.
+# It does **not** aim to replace Cabal/Stack with Nix
 
-# Before making changes, ensure that the Nix expression works
-# for all the GHC versions supported by the project (8.6.x - 8.10.x)
 
 { sources ? import nix/sources.nix,
   nixpkgs ? import sources.nixpkgs {},
@@ -11,62 +10,56 @@
  }:
 with nixpkgs;
 
-let haskellPackagesForProject = if compiler == "default"
-    then haskellPackages.ghcWithPackages
-    else haskell.packages.${compiler}.ghcWithPackages;
-
-    extraPackages = p: with p;
-    if compiler == "ghc8101" then 
-          [conduit-extra
-           conduit-parse
-           hie-bios
-           yaml
-          ]
-        else if compiler == "ghc865" then [] else
-         # compiler = ghc88
-          [ haskell-lsp 
-            lsp-test
-            brittany
-            ormolu
-            stylish-haskell
-           ];
+let haskellPackagesForProject = p:
+        if compiler == "default" || compiler == "ghc883"
+            then haskellPackages.ghcWithPackages p
+            # for all other compilers there is no Nix cache so dont bother building deps with NIx
+            else haskell.packages.${compiler}.ghcWithPackages [];
 
    compilerWithPackages = haskellPackagesForProject(p:
         with p;
-        [ aeson
+        [
+          Diff
+          Glob
+          HsYAML-aeson
+          QuickCheck
+          aeson
           alex
           async
           base16-bytestring
           blaze-builder
           blaze-markup
+          brittany
+          conduit-extra
+          conduit-parse
           cryptohash-sha1
           data-default
           data-default-class
           data-default-instances-containers
           data-default-instances-dlist
           data-default-instances-old-locale
-          Diff
           extra
           floskell
           fuzzy
           generic-deriving
           ghc-check
           gitrev
-          Glob
           haddock-library
           happy
+          haskell-lsp
           haskell-src-exts
+          hie-bios
           hslogger
           hspec
-          HsYAML-aeson
           lens
+          lsp-test
           megaparsec
           network
           opentelemetry
           optparse-simple
-          QuickCheck
-          parsers
+          ormolu
           parser-combinators
+          parsers
           prettyprinter
           prettyprinter-ansi-terminal
           primes
@@ -77,6 +70,7 @@ let haskellPackagesForProject = if compiler == "default"
           shake
           sorted-list
           strict
+          stylish-haskell
           tasty
           tasty-ant-xml
           tasty-expected-failure
@@ -89,8 +83,9 @@ let haskellPackagesForProject = if compiler == "default"
           unix-compat
           unordered-containers
           xml
+          yaml
           zlib
-         ] ++ extraPackages p);
+         ]);
 in
 stdenv.mkDerivation {
   name = "haskell-language-server";
