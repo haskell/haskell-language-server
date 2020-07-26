@@ -125,12 +125,23 @@ main :: IO ()
 main = do
     -- WARNING: If you write to stdout before runLanguageServer
     --          then the language server will not work
-    args@Arguments{..} <- getArguments "haskell-language-server"
+    args <- getArguments "haskell-language-server"
 
     hlsVer <- haskellLanguageServerVersion
-    if argsVersion then putStrLn hlsVer
-    else hPutStrLn stderr hlsVer {- see WARNING above -}
+    case args of
+        VersionMode PrintVersion ->
+            putStrLn hlsVer
 
+        VersionMode PrintNumericVersion ->
+            putStrLn haskellLanguageServerNumericVersion
+
+        LspMode lspArgs -> do
+            {- see WARNING above -}
+            hPutStrLn stderr hlsVer
+            runLspMode lspArgs
+
+runLspMode :: LspArguments -> IO ()
+runLspMode lspArgs@LspArguments {..} = do
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 
@@ -157,7 +168,7 @@ main = do
     if argLSP then do
         t <- offsetTime
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
-        hPutStrLn stderr $ "  with arguments: " <> show args
+        hPutStrLn stderr $ "  with arguments: " <> show lspArgs
         hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins')
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
