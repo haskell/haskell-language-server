@@ -26,8 +26,21 @@ main :: IO ()
 main = do
   -- WARNING: If you write to stdout before runLanguageServer
   --          then the language server will not work
-  Arguments{..} <- getArguments "haskell-language-server-wrapper"
+  args <- getArguments "haskell-language-server-wrapper"
 
+  hlsVer <- haskellLanguageServerVersion
+  case args of
+      VersionMode PrintVersion ->
+          putStrLn hlsVer
+
+      VersionMode PrintNumericVersion ->
+          putStrLn haskellLanguageServerNumericVersion
+
+      LspMode lspArgs ->
+          launchHaskellLanguageServer lspArgs
+
+launchHaskellLanguageServer :: LspArguments -> IO ()
+launchHaskellLanguageServer LspArguments{..} = do
   d <- getCurrentDirectory
 
   -- Get the cabal directory from the cradle
@@ -35,7 +48,6 @@ main = do
   setCurrentDirectory $ cradleRootDir cradle
 
   when argsProjectGhcVersion $ getRuntimeGhcVersion' cradle >>= putStrLn >> exitSuccess
-  when argsVersion $ haskellLanguageServerVersion >>= putStrLn >> exitSuccess
 
   whenJust argsCwd setCurrentDirectory
 

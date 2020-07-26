@@ -9,8 +9,11 @@
 
 module Arguments
   ( Arguments(..)
+  , LspArguments(..)
+  , PrintVersion(..)
   , getArguments
   , haskellLanguageServerVersion
+  , haskellLanguageServerNumericVersion
   ) where
 
 import Data.Version
@@ -21,11 +24,15 @@ import System.Environment
 
 -- ---------------------------------------------------------------------
 
-data Arguments = Arguments
+data Arguments
+  = VersionMode PrintVersion
+  | LspMode LspArguments
+  deriving Show
+
+data LspArguments = LspArguments
     {argLSP :: Bool
     ,argsCwd :: Maybe FilePath
     ,argFiles :: [FilePath]
-    ,argsVersion :: Bool
     ,argsShakeProfiling :: Maybe FilePath
     ,argsTesting :: Bool
     ,argsExamplePlugin :: Bool
@@ -37,22 +44,36 @@ data Arguments = Arguments
     , argsProjectGhcVersion :: Bool
     } deriving Show
 
+data PrintVersion
+  = PrintVersion
+  | PrintNumericVersion
+  deriving (Show, Eq, Ord)
+
 getArguments :: String -> IO Arguments
 getArguments exeName = execParser opts
   where
-    opts = info (arguments exeName <**> helper)
+    opts = info ((
+      VersionMode <$> printVersionParser exeName
+      <|> LspMode <$> arguments)
+      <**> helper)
       ( fullDesc
      <> progDesc "Used as a test bed to check your IDE Client will work"
      <> header (exeName ++ " - GHC Haskell LSP server"))
 
-arguments :: String -> Parser Arguments
-arguments exeName = Arguments
+printVersionParser :: String -> Parser PrintVersion
+printVersionParser exeName =
+  flag' PrintVersion
+    (long "version" <> help ("Show " ++ exeName  ++ " and GHC versions"))
+  <|>
+  flag' PrintNumericVersion
+    (long "numeric-version" <> help ("Show numeric version of " ++ exeName))
+
+arguments :: Parser LspArguments
+arguments = LspArguments
       <$> switch (long "lsp" <> help "Start talking to an LSP server")
       <*> optional (strOption $ long "cwd" <> metavar "DIR"
                   <> help "Change to this directory")
       <*> many (argument str (metavar "FILES/DIRS..."))
-      <*> switch (long "version"
-                  <> help ("Show " ++ exeName  ++ " and GHC versions"))
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR"
                   <> help "Dump profiling reports to this directory")
       <*> switch (long "test"
@@ -83,13 +104,16 @@ arguments exeName = Arguments
 
 -- ---------------------------------------------------------------------
 
+haskellLanguageServerNumericVersion :: String
+haskellLanguageServerNumericVersion = showVersion version
+
 haskellLanguageServerVersion :: IO String
 haskellLanguageServerVersion = do
   path <- getExecutablePath
   let gitHashSection = case $(gitHash) of
         x | x == "UNKNOWN" -> ""
         x -> " (GIT hash: " <> x <> ")"
-  return $ "haskell-language-server version: " <> showVersion version
+  return $ "haskell-language-server version: " <> haskellLanguageServerNumericVersion
              <> " (GHC: " <> VERSION_ghc
              <> ") (PATH: " <> path <> ")"
              <> gitHashSection
