@@ -10,8 +10,9 @@
  }:
 with nixpkgs;
 
-let haskellPackagesForProject = p:
-        if compiler == "default" || compiler == "ghc883"
+let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.version;
+    haskellPackagesForProject = p:
+        if compiler == "default" || compiler == defaultCompiler
             then haskellPackages.ghcWithPackages p
             # for all other compilers there is no Nix cache so dont bother building deps with NIx
             else haskell.packages.${compiler}.ghcWithPackages [];
