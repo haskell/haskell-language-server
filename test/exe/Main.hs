@@ -488,6 +488,7 @@ codeActionTests = testGroup "code actions"
   , addFunctionConstraintTests
   , removeRedundantConstraintsTests
   , addTypeAnnotationsToLiteralsTest
+  , exportUnusedTests
   ]
 
 codeLensesTests :: TestTree
@@ -1657,6 +1658,204 @@ addSigActionTests = let
     , "pattern Some a = Just a" >:: "pattern Some :: a -> Maybe a"
     ]
 
+exportUnusedTests :: TestTree
+exportUnusedTests = testGroup "export unused actions"
+  [ testGroup "don't want suggestion"
+    [ testSession "implicit exports" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# OPTIONS_GHC -Wmissing-signatures #-}"
+              , "module A where"
+              , "foo = id"])
+        (R 3 0 3 3)
+        "Export ‘foo’"
+        Nothing -- codeaction should not be available
+    , testSession "not top-level" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "{-# OPTIONS_GHC -Wunused-binds #-}" 
+              , "module A (foo,bar) where"
+              , "foo = ()"
+              , "  where bar = ()"
+              , "bar = ()"])
+        (R 2 0 2 11)
+        "Export ‘bar’"
+        Nothing
+    , testSession "type is exported but not the constructor of same name" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A (Foo) where"
+              , "data Foo = Foo"])
+        (R 2 0 2 8)
+        "Export ‘Foo’"
+        Nothing -- codeaction should not be available
+    , testSession "unused data field" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A (Foo(Foo)) where"
+              , "data Foo = Foo {foo :: ()}"])
+        (R 2 0 2 20)
+        "Export ‘foo’"
+        Nothing -- codeaction should not be available
+    ]
+  , testGroup "want suggestion"
+    [ testSession "empty exports" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A ("
+              , ") where"
+              , "foo = id"])
+        (R 3 0 3 3)
+        "Export ‘foo’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A ("
+              , "foo) where"
+              , "foo = id"])
+    , testSession "single line explicit exports" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A (foo) where"
+              , "foo = id"
+              , "bar = foo"])
+        (R 3 0 3 3)
+        "Export ‘bar’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A (foo,bar) where"
+              , "foo = id"
+              , "bar = foo"])
+    , testSession "multi line explicit exports" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A"
+              , "  ("
+              , "    foo) where"
+              , "foo = id"
+              , "bar = foo"])
+        (R 5 0 5 3)
+        "Export ‘bar’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A"
+              , "  ("
+              , "    foo,bar) where"
+              , "foo = id"
+              , "bar = foo"])
+    , testSession "export list ends in comma" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A"
+              , "  (foo,"
+              , "  ) where"
+              , "foo = id"
+              , "bar = foo"])
+        (R 4 0 4 3)
+        "Export ‘bar’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A"
+              , "  (foo,"
+              , "  bar) where"
+              , "foo = id"
+              , "bar = foo"])
+    , testSession "unused pattern synonym" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "{-# LANGUAGE PatternSynonyms #-}" 
+              , "module A () where"
+              , "pattern Foo a <- (a, _)"])
+        (R 3 0 3 10)
+        "Export ‘Foo’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "{-# LANGUAGE PatternSynonyms #-}" 
+              , "module A (pattern Foo) where"
+              , "pattern Foo a <- (a, _)"])
+    , testSession "unused data type" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A () where"
+              , "data Foo = Foo"])
+        (R 2 0 2 7)
+        "Export ‘Foo’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A (Foo(..)) where"
+              , "data Foo = Foo"])
+    , testSession "unused newtype" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A () where"
+              , "newtype Foo = Foo ()"])
+        (R 2 0 2 10)
+        "Export ‘Foo’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A (Foo(..)) where"
+              , "newtype Foo = Foo ()"])
+    , testSession "unused type synonym" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A () where"
+              , "type Foo = ()"])
+        (R 2 0 2 7)
+        "Export ‘Foo’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A (Foo) where"
+              , "type Foo = ()"])
+    , testSession "unused type family" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "{-# LANGUAGE TypeFamilies #-}" 
+              , "module A () where"
+              , "type family Foo p"])
+        (R 3 0 3 15)
+        "Export ‘Foo’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "{-# LANGUAGE TypeFamilies #-}" 
+              , "module A (Foo(..)) where"
+              , "type family Foo p"])
+    , testSession "unused typeclass" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A () where"
+              , "class Foo a"])
+        (R 2 0 2 8)
+        "Export ‘Foo’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A (Foo(..)) where"
+              , "class Foo a"])
+    , testSession "infix" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A () where"
+              , "a `f` b = ()"])
+        (R 2 0 2 11)
+        "Export ‘f’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}" 
+              , "module A (f) where"
+              , "a `f` b = ()"])
+    ]
+  ]
+    where
+      template initialContent range expectedAction expectedContents = do
+        doc <- createDoc "A.hs" "haskell" initialContent
+        _ <- waitForDiagnostics
+        actions <- getCodeActions doc range
+        case expectedContents of
+          Just content -> do
+            action <- liftIO $ pickActionWithTitle expectedAction actions
+            executeCodeAction action
+            contentAfterAction <- documentContents doc
+            liftIO $ content @=? contentAfterAction
+          Nothing ->
+            liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == expectedAction ] @?= []
+
 addSigLensesTests :: TestTree
 addSigLensesTests = let
   missing = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures -Wunused-matches #-}"
@@ -2806,7 +3005,7 @@ testSessionWait name = testSession name .
 
 pickActionWithTitle :: T.Text -> [CAResult] -> IO CodeAction
 pickActionWithTitle title actions = do
-  assertBool ("Found no matching actions: " <> show titles) (not $ null matches)
+  assertBool ("Found no matching actions for " <> show title <> " in " <> show titles) (not $ null matches)
   return $ head matches
   where
     titles =
