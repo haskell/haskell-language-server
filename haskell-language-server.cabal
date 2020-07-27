@@ -245,7 +245,7 @@ test-suite func-test
                       , haskell-lsp-types
                       , hspec-expectations
                       , lens
-                      , lsp-test >= 0.10.0.3
+                      , lsp-test >= 0.11.0.3
                       , tasty
                       , tasty-ant-xml >= 1.1.6
                       , tasty-expected-failure
