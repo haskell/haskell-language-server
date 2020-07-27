@@ -19,6 +19,7 @@ import           Development.IDE.Types.Location
 import qualified DynFlags as D
 import qualified EnumSet  as S
 import           GHC
+import           GHC.LanguageExtensions.Type
 import           Ide.Types
 import           Ide.PluginUtils
 import           Ide.Plugin.Formatter
@@ -46,7 +47,7 @@ provider _lf ideState typ contents fp _ = do
           let p = D.sPgm_F $ D.settings df
           in  if null p then [] else ["-pgmF=" <> p]
         pm = map (("-fplugin=" <>) . moduleNameString) $ D.pluginModNames df
-        ex = map (("-X" <>) . show) $ S.toList $ D.extensionFlags df
+        ex = map showExtension $ S.toList $ D.extensionFlags df
       in
         return $ map DynOption $ pp <> pm <> ex
 
@@ -75,3 +76,7 @@ provider _lf ideState typ contents fp _ = do
   ret (Left err) = Left
     (responseError (T.pack $ "ormoluCmd: " ++ show err) )
   ret (Right new) = Right (makeDiffTextEdit contents new)
+
+showExtension :: Extension -> String
+showExtension Cpp = "-XCPP"
+showExtension other = "-X" ++ show other
