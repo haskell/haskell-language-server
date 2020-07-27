@@ -127,6 +127,7 @@ library
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
         Development.IDE.Core.Shake
+        Development.IDE.GHC.Compat
         Development.IDE.GHC.Error
         Development.IDE.GHC.Util
         Development.IDE.Import.DependencyInformation
@@ -161,7 +162,6 @@ library
         Development.IDE.Core.Compile
         Development.IDE.Core.Preprocessor
         Development.IDE.Core.FileExists
-        Development.IDE.GHC.Compat
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Orphans
         Development.IDE.GHC.Warnings
