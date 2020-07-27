@@ -23,10 +23,9 @@ projectGhcVersionTests = testGroup "--project-ghc-version"
   ]
 
 testDir :: FilePath -> String -> Assertion
-testDir dir expectedVer = do
-  wrapper <- findExe "haskell-language-server-wrapper"
+testDir dir expectedVer =
   withCurrentDirectoryInTmp dir $ do
-    actualVer <- trim <$> readProcess wrapper ["--project-ghc-version"] ""
+    actualVer <- trim <$> readProcess "haskell-language-server-wrapper" ["--project-ghc-version"] ""
     actualVer @?= expectedVer
 
 trim :: String -> String

@@ -31,7 +31,7 @@ extra-deps:
 - HsYAML-aeson-0.2.0.0@rev:1
 - indexed-profunctors-0.1
 - lens-4.18
-- lsp-test-0.11.0.2
+- lsp-test-0.11.0.3
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
 - optics-core-0.2

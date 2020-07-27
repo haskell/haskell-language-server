@@ -1,19 +1,21 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, CPP #-}
 module Format (tests) where
 
 import Control.Monad.IO.Class
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
-import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Test.Hls.Util
 import Test.Tasty
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
+
+#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
+#else
+import qualified Data.Text.IO as T
+#endif
 
 tests :: TestTree
 tests = testGroup "format document" [
@@ -28,7 +30,11 @@ tests = testGroup "format document" [
     , rangeTests
     , providerTests
     , stylishHaskellTests
+-- There's no Brittany formatter on the 8.10.1 builds (yet)
+#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
+#else
     , brittanyTests
+#endif
     , ormoluTests
     ]
 
@@ -51,25 +57,46 @@ providerTests = testGroup "formatting provider" [
         orig <- documentContents doc
 
         formatDoc doc (FormattingOptions 2 True)
-        documentContents doc >>= liftIO . (`shouldBe` orig)
+        documentContents doc >>= liftIO . (@?= orig)
 
         formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
-        documentContents doc >>= liftIO . (`shouldBe` orig)
+        documentContents doc >>= liftIO . (@?= orig)
 
-    , ignoreTestBecause "Broken" $ testCase "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
+-- There's no Brittany formatter on the 8.10.1 builds (yet)
+#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
+#else
+    , testCase "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
+        formattedBrittany <- liftIO $ T.readFile "test/testdata/Format.brittany.formatted.hs"
+        formattedFloskell <- liftIO $ T.readFile "test/testdata/Format.floskell.formatted.hs"
+        formattedBrittanyPostFloskell <- liftIO $ T.readFile "test/testdata/Format.brittany_post_floskell.formatted.hs"
+
         doc <- openDoc "Format.hs" "haskell"
 
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         formatDoc doc (FormattingOptions 2 True)
-        documentContents doc >>= liftIO . (`shouldBe` formattedBrittany)
+        documentContents doc >>= liftIO . (@?= formattedBrittany)
 
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "floskell"))
         formatDoc doc (FormattingOptions 2 True)
-        documentContents doc >>= liftIO . (`shouldBe` formattedFloskell)
+        documentContents doc >>= liftIO . (@?= formattedFloskell)
 
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         formatDoc doc (FormattingOptions 2 True)
-        documentContents doc >>= liftIO . (`shouldBe` formattedBrittanyPostFloskell)
+        documentContents doc >>= liftIO . (@?= formattedBrittanyPostFloskell)
+    , testCase "supports both new and old configuration sections" $ runSession hieCommand fullCaps "test/testdata" $ do
+       formattedBrittany <- liftIO $ T.readFile "test/testdata/Format.brittany.formatted.hs"
+       formattedFloskell <- liftIO $ T.readFile "test/testdata/Format.floskell.formatted.hs"
+
+       doc <- openDoc "Format.hs" "haskell"
+
+       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "brittany"))
+       formatDoc doc (FormattingOptions 2 True)
+       documentContents doc >>= liftIO . (@?= formattedBrittany)
+
+       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "floskell"))
+       formatDoc doc (FormattingOptions 2 True)
+       documentContents doc >>= liftIO . (@?= formattedFloskell)
+#endif
     ]
 
 stylishHaskellTests :: TestTree
@@ -89,22 +116,26 @@ stylishHaskellTests = testGroup "stylish-haskell" [
 brittanyTests :: TestTree
 brittanyTests = testGroup "brittany" [
     goldenVsStringDiff "formats a document with LF endings" goldenGitDiff "test/testdata/BrittanyLF.formatted_document.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyLF.hs" "haskell"
         formatDoc doc (FormattingOptions 4 True)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
 
     , goldenVsStringDiff "formats a document with CRLF endings" goldenGitDiff "test/testdata/BrittanyCRLF.formatted_document.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyCRLF.hs" "haskell"
         formatDoc doc (FormattingOptions 4 True)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
 
     , goldenVsStringDiff "formats a range with LF endings" goldenGitDiff "test/testdata/BrittanyLF.formatted_range.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyLF.hs" "haskell"
         let range = Range (Position 1 0) (Position 2 22)
         formatRange doc (FormattingOptions 4 True) range
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
 
     , goldenVsStringDiff "formats a range with CRLF endings" goldenGitDiff "test/testdata/BrittanyCRLF.formatted_range.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyCRLF.hs" "haskell"
         let range = Range (Position 1 0) (Position 2 22)
         formatRange doc (FormattingOptions 4 True) range
@@ -114,8 +145,6 @@ brittanyTests = testGroup "brittany" [
 ormoluTests :: TestTree
 ormoluTests = testGroup "ormolu" [
     goldenVsStringDiff "formats correctly" goldenGitDiff ("test/testdata/Format.ormolu." ++ ormoluGoldenSuffix ++ ".hs") $ runSession hieCommand fullCaps "test/testdata" $ do
-        let formatLspConfig provider =
-                object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
         doc <- openDoc "Format.hs" "haskell"
         formatDoc doc (FormattingOptions 2 True)
@@ -131,49 +160,12 @@ ormoluTests = testGroup "ormolu" [
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
 
+-- | The same as 'formatLspConfig' but using the legacy section name
+formatLspConfigOld :: Value -> Value
+formatLspConfigOld provider = object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
+
 formatConfig :: Value -> SessionConfig
 formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }
 
 goldenGitDiff :: FilePath -> FilePath -> [String]
 goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
-
-
-formattedBrittany :: T.Text
-formattedBrittany =
-  "module Format where\n\
-  \foo :: Int -> Int\n\
-  \foo 3 = 2\n\
-  \foo x = x\n\
-  \bar :: String -> IO String\n\
-  \bar s = do\n\
-  \  x <- return \"hello\"\n\
-  \  return \"asdf\"\n\n\
-  \data Baz = Baz { a :: Int, b :: String }\n\n"
-
-formattedFloskell :: T.Text
-formattedFloskell =
-  "module Format where\n\
-  \\n\
-  \foo :: Int -> Int\n\
-  \foo 3 = 2\n\
-  \foo x = x\n\
-  \\n\
-  \bar :: String -> IO String\n\
-  \bar s = do\n\
-  \  x <- return \"hello\"\n\
-  \  return \"asdf\"\n\n\
-  \data Baz = Baz { a :: Int, b :: String }\n\n"
-
-formattedBrittanyPostFloskell :: T.Text
-formattedBrittanyPostFloskell =
-  "module Format where\n\
-  \\n\
-  \foo :: Int -> Int\n\
-  \foo 3 = 2\n\
-  \foo x = x\n\
-  \\n\
-  \bar :: String -> IO String\n\
-  \bar s = do\n\
-  \  x <- return \"hello\"\n\
-  \  return \"asdf\"\n\n\
-  \data Baz = Baz { a :: Int, b :: String }\n\n"

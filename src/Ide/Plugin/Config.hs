@@ -10,6 +10,7 @@ module Ide.Plugin.Config
     , Config(..)
     ) where
 
+import           Control.Applicative
 import qualified Data.Aeson                    as A
 import           Data.Aeson              hiding ( Error )
 import           Data.Default
@@ -70,7 +71,9 @@ instance Default Config where
 -- TODO: Add API for plugins to expose their own LSP config options
 instance A.FromJSON Config where
   parseJSON = A.withObject "Config" $ \v -> do
-    s <- v .: "haskell"
+    -- Officially, we use "haskell" as the section name but for
+    -- backwards compatibility we also accept "languageServerHaskell"
+    s <- v .: "haskell" <|> v .: "languageServerHaskell"
     flip (A.withObject "Config.settings") s $ \o -> Config
       <$> o .:? "hlintOn"                     .!= hlintOn def
       <*> o .:? "diagnosticsOnChange"         .!= diagnosticsOnChange def
