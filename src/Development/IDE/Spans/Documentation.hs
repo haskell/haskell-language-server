@@ -12,6 +12,7 @@ module Development.IDE.Spans.Documentation (
   ) where
 
 import           Control.Monad
+import           Data.Foldable
 import           Data.List.Extra
 import qualified Data.Map as M
 import           Data.Maybe
@@ -22,8 +23,14 @@ import           Development.IDE.Core.Compile
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
+import           System.Directory
+import           System.FilePath
+
 import           FastString
 import           SrcLoc (RealLocated)
+import           GhcMonad
+import           Packages
+import           Name
 
 getDocumentationTryGhc :: GhcMonad m => Module -> [ParsedModule] -> Name -> m SpanDoc
 getDocumentationTryGhc mod deps n = head <$> getDocumentationsTryGhc mod deps [n]
@@ -36,15 +43,35 @@ getDocumentationsTryGhc :: GhcMonad m => Module -> [ParsedModule] -> [Name] -> m
 getDocumentationsTryGhc mod sources names = do
   res <- catchSrcErrors "docs" $ getDocsBatch mod names
   case res of
-      Left _ -> return $ map (SpanDocText . getDocumentation sources) names
-      Right res -> return $ zipWith unwrap res names
+      Left _ -> mapM mkSpanDocText names
+      Right res -> zipWithM unwrap res names
   where
-    unwrap (Right (Just docs, _))  _= SpanDocString docs
-    unwrap _ n = SpanDocText $ getDocumentation sources n
+    unwrap (Right (Just docs, _)) n = SpanDocString <$> pure docs <*> getUris n
+    unwrap _ n = mkSpanDocText n
+
 #else
-getDocumentationsTryGhc _ sources names = do
-  return $ map (SpanDocText . getDocumentation sources) names
+getDocumentationsTryGhc _ sources names = mapM mkSpanDocText names
+  where
 #endif
+    mkSpanDocText name =
+      pure (SpanDocText (getDocumentation sources name)) <*> getUris name
+
+    -- Get the uris to the documentation and source html pages if they exist
+    getUris name = do
+      df <- getSessionDynFlags
+      (docFp, srcFp) <-
+        case nameModule_maybe name of
+          Just mod -> liftIO $ do
+            doc <- fmap (fmap T.pack) $ lookupDocHtmlForModule df mod
+            src <- fmap (fmap T.pack) $ lookupSrcHtmlForModule df mod
+            return (doc, src)
+          Nothing -> pure (Nothing, Nothing)
+      let docUri = docFp >>= \fp -> pure $ "file://" <> fp <> "#" <> selector <> showName name
+          srcUri = srcFp >>= \fp -> pure $ "file://" <> fp <> "#" <> showName name
+          selector
+            | isValName name = "v:"
+            | otherwise = "t:"
+      return $ SpanDocUris docUri srcUri
 
 
 getDocumentation
@@ -122,3 +149,34 @@ docHeaders = mapMaybe (\(L _ x) -> wrk x)
                             then Just $ T.pack s
                             else Nothing
     _ -> Nothing
+
+-- These are taken from haskell-ide-engine's Haddock plugin
+
+-- | Given a module finds the local @doc/html/Foo-Bar-Baz.html@ page.
+-- An example for a cabal installed module:
+-- @~/.cabal/store/ghc-8.10.1/vctr-0.12.1.2-98e2e861/share/doc/html/Data-Vector-Primitive.html@
+lookupDocHtmlForModule :: DynFlags -> Module -> IO (Maybe FilePath)
+lookupDocHtmlForModule =
+  lookupHtmlForModule (\pkgDocDir modDocName -> pkgDocDir </> modDocName <.> "html")
+
+-- | Given a module finds the hyperlinked source @doc/html/src/Foo.Bar.Baz.html@ page.
+-- An example for a cabal installed module:
+-- @~/.cabal/store/ghc-8.10.1/vctr-0.12.1.2-98e2e861/share/doc/html/src/Data.Vector.Primitive.html@
+lookupSrcHtmlForModule :: DynFlags -> Module -> IO (Maybe FilePath)
+lookupSrcHtmlForModule =
+  lookupHtmlForModule (\pkgDocDir modDocName -> pkgDocDir </> "src" </> modDocName <.> "html")
+
+lookupHtmlForModule :: (FilePath -> FilePath -> FilePath) -> DynFlags -> Module -> IO (Maybe FilePath)
+lookupHtmlForModule mkDocPath df m = do
+  let mfs = go <$> (listToMaybe =<< lookupHtmls df ui)
+  htmls <- filterM doesFileExist (concat . maybeToList $ mfs)
+  return $ listToMaybe htmls
+  where
+    -- The file might use "." or "-" as separator
+    go pkgDocDir = [mkDocPath pkgDocDir mn | mn <- [mndot,mndash]]
+    ui = moduleUnitId m
+    mndash = map (\x -> if x == '.' then '-' else x) mndot
+    mndot = moduleNameString $ moduleName m
+
+lookupHtmls :: DynFlags -> UnitId -> Maybe [FilePath]
+lookupHtmls df ui = haddockHTMLs <$> lookupPackage df ui

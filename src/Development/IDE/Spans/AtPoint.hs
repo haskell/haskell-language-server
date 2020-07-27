@@ -17,10 +17,9 @@ import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat
 import Development.IDE.Types.Options
 import Development.IDE.Spans.Type as SpanInfo
-import Development.IDE.Spans.Common (spanDocToMarkdown)
+import Development.IDE.Spans.Common (showName, spanDocToMarkdown)
 
 -- GHC API imports
-import DynFlags
 import FastString
 import Name
 import Outputable hiding ((<>))
@@ -66,7 +65,10 @@ atPoint
 atPoint IdeOptions{..} (SpansInfo srcSpans cntsSpans) pos = do
     firstSpan <- listToMaybe $ deEmpasizeGeneratedEqShow $ spansAtPoint pos srcSpans
     let constraintsAtPoint = mapMaybe spaninfoType (spansAtPoint pos cntsSpans)
-    return (Just (range firstSpan), hoverInfo firstSpan constraintsAtPoint)
+        -- Filter out the empty lines so we don't end up with a bunch of
+        -- horizontal separators with nothing inside of them
+        text = filter (not . T.null) $ hoverInfo firstSpan constraintsAtPoint
+    return (Just (range firstSpan), text)
   where
     -- Hover info for types, classes, type variables
     hoverInfo SpanInfo{spaninfoType = Nothing , spaninfoDocs = docs ,  ..} _ =
@@ -212,11 +214,6 @@ spansAtPoint pos = filter atp where
                                               -- last character so we use > instead of >=
       endsAfterPosition = endLineCmp == GT || (endLineCmp == EQ && spaninfoEndCol > cha)
 
-showName :: Outputable a => a -> T.Text
-showName = T.pack . prettyprint
-  where
-    prettyprint x = renderWithStyle unsafeGlobalDynFlags (ppr x) style
-    style = mkUserStyle unsafeGlobalDynFlags neverQualify AllTheWay
 
 getModuleNameAsText :: Name -> Maybe T.Text
 getModuleNameAsText n = do

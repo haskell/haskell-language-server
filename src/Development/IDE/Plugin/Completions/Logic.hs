@@ -352,7 +352,7 @@ localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{
         CI ctyp pn thisModName ty pn Nothing doc (ctyp `elem` [CiStruct, CiClass])
       where
         pn = ppr n
-        doc = SpanDocText $ getDocumentation [pm] n
+        doc = SpanDocText (getDocumentation [pm] n) (SpanDocUris Nothing Nothing)
 
     thisModName = ppr hsmodName
 

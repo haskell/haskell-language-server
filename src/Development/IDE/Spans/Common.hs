@@ -3,11 +3,13 @@
 
 module Development.IDE.Spans.Common (
   showGhc
+, showName
 , listifyAllSpans
 , listifyAllSpans'
 , safeTyThingId
 , safeTyThingType
 , SpanDoc(..)
+, SpanDocUris(..)
 , emptySpanDoc
 , spanDocToMarkdown
 , spanDocToMarkdownForTest
@@ -15,11 +17,12 @@ module Development.IDE.Spans.Common (
 
 import Data.Data
 import qualified Data.Generics
+import Data.Maybe
 import qualified Data.Text as T
 import Data.List.Extra
 
 import GHC
-import Outputable
+import Outputable hiding ((<>))
 import DynFlags
 import ConLike
 import DataCon
@@ -30,6 +33,12 @@ import qualified Documentation.Haddock.Types as H
 
 showGhc :: Outputable a => a -> String
 showGhc = showPpr unsafeGlobalDynFlags
+
+showName :: Outputable a => a -> T.Text
+showName = T.pack . prettyprint
+  where
+    prettyprint x = renderWithStyle unsafeGlobalDynFlags (ppr x) style
+    style = mkUserStyle unsafeGlobalDynFlags neverQualify AllTheWay
 
 -- | Get ALL source spans in the source.
 listifyAllSpans :: (Typeable a, Data m) => m -> [Located a]
@@ -57,22 +66,38 @@ safeTyThingId _                           = Nothing
 
 -- Possible documentation for an element in the code
 data SpanDoc
-  = SpanDocString HsDocString
-  | SpanDocText   [T.Text]
+  = SpanDocString HsDocString SpanDocUris
+  | SpanDocText   [T.Text] SpanDocUris
   deriving (Eq, Show)
 
+data SpanDocUris =
+  SpanDocUris
+  { spanDocUriDoc :: Maybe T.Text -- ^ The haddock html page
+  , spanDocUriSrc :: Maybe T.Text -- ^ The hyperlinked source html page
+  } deriving (Eq, Show)
+
 emptySpanDoc :: SpanDoc
-emptySpanDoc = SpanDocText []
+emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 
 spanDocToMarkdown :: SpanDoc -> [T.Text]
 #if MIN_GHC_API_VERSION(8,6,0)
-spanDocToMarkdown (SpanDocString docs)
+spanDocToMarkdown (SpanDocString docs uris)
   = [T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs]
+    <> ["\n"] <> spanDocUrisToMarkdown uris
+  -- Append the extra newlines since this is markdown --- to get a visible newline,
+  -- you need to have two newlines
 #else
-spanDocToMarkdown (SpanDocString _)
-  = []
+spanDocToMarkdown (SpanDocString _ uris)
+  = spanDocUrisToMarkdown uris
 #endif
-spanDocToMarkdown (SpanDocText txt) = txt
+spanDocToMarkdown (SpanDocText txt uris) = txt <> ["\n"] <> spanDocUrisToMarkdown uris
+
+spanDocUrisToMarkdown :: SpanDocUris -> [T.Text]
+spanDocUrisToMarkdown (SpanDocUris mdoc msrc) = catMaybes
+  [ linkify "Documentation" <$> mdoc
+  , linkify "Source" <$> msrc
+  ]
+  where linkify title uri = "[" <> title <> "](" <> uri <> ")"
 
 spanDocToMarkdownForTest :: String -> String
 spanDocToMarkdownForTest
