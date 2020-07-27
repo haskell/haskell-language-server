@@ -39,7 +39,7 @@ extra-deps:
 - HsYAML-0.2.1.0@rev:1
 - HsYAML-aeson-0.2.0.0@rev:1
 - lens-4.18
-- lsp-test-0.11.0.2
+- lsp-test-0.11.0.3
 - microlens-th-0.4.2.3@rev:1
 - monad-dijkstra-0.1.1.2
 - monad-memo-0.4.1

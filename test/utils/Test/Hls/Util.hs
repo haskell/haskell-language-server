@@ -14,91 +14,28 @@ module Test.Hls.Util
     , noLogConfig
     , setupBuildToolFiles
     , withFileLogging
-    , findExe
     , withCurrentDirectoryInTmp
-  -- , makeRequest
-  -- , runIGM
-  -- , runIGM'
-  -- , runSingle
-  -- , runSingle'
-  -- , runSingleReq
-  -- , testCommand
-  -- , testOptions
   )
 where
 
-import Control.Applicative
--- import           Control.Concurrent.STM
 import           Control.Monad
-import           Control.Monad.Trans.Maybe
 import           Data.Default
 import           Data.List (intercalate)
--- import           Data.Typeable
--- import qualified Data.Map as Map
 import           Data.Maybe
 import           Language.Haskell.LSP.Core
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Test as T
 import qualified Language.Haskell.LSP.Types.Capabilities as C
--- import           Haskell.Ide.Engine.MonadTypes hiding (withProgress, withIndefiniteProgress)
--- import qualified Ide.Cradle as Bios
--- import qualified Ide.Engine.Config as Config
 import           System.Directory
 import           System.Environment
 import           System.FilePath
 import qualified System.Log.Logger as L
 import           System.IO.Temp
--- import           Test.Hspec
 import           Test.Hspec.Runner
 import           Test.Hspec.Core.Formatters
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal
--- import qualified Haskell.Ide.Engine.PluginApi as HIE (BiosOptions, defaultOptions)
--- import HIE.Bios.Types
 
--- testOptions :: HIE.BiosOptions
--- testOptions = HIE.defaultOptions { cradleOptsVerbosity = Verbose }
-
--- ---------------------------------------------------------------------
-
-
--- testCommand :: (ToJSON a, Typeable b, ToJSON b, Show b, Eq b)
---             => IdePlugins -> FilePath -> IdeGhcM (IdeResult b) -> PluginId -> CommandId -> a -> IdeResult b -> IO ()
--- testCommand testPlugins fp act plugin cmd arg res = do
---   flushStackEnvironment
---   (newApiRes, oldApiRes) <- runIGM testPlugins fp $ do
---     new <- act
---     old <- makeRequest plugin cmd arg
---     return (new, old)
---   newApiRes `shouldBe` res
---   fmap fromDynJSON oldApiRes `shouldBe` fmap Just res
-
--- runSingle :: IdePlugins -> FilePath -> IdeGhcM (IdeResult b) -> IO (IdeResult b)
--- runSingle = runSingle' id
-
--- runSingle' :: (Config.Config -> Config.Config) -> IdePlugins -> FilePath -> IdeGhcM (IdeResult b) -> IO (IdeResult b)
--- runSingle' modifyConfig testPlugins fp act = runIGM' modifyConfig testPlugins fp act
-
--- runSingleReq :: ToJSON a
---              => IdePlugins -> FilePath -> PluginId -> CommandId -> a -> IO (IdeResult DynamicJSON)
--- runSingleReq testPlugins fp plugin com arg = runIGM testPlugins fp (makeRequest plugin com arg)
-
--- makeRequest :: ToJSON a => PluginId -> CommandId -> a -> IdeGhcM (IdeResult DynamicJSON)
--- makeRequest plugin com arg = runPluginCommand plugin com (toJSON arg)
-
--- runIGM :: IdePlugins -> FilePath -> IdeGhcM a -> IO a
--- runIGM = runIGM' id
-
--- runIGM' :: (Config.Config -> Config.Config) -> IdePlugins -> FilePath -> IdeGhcM a -> IO a
--- runIGM' modifyConfig testPlugins fp f = do
---   stateVar <- newTVarIO $ IdeState emptyModuleCache Map.empty Map.empty Nothing
---   crdl <- Bios.findLocalCradle fp
---   mlibdir <- Bios.getProjectGhcLibDir crdl
---   let tmpFuncs :: LspFuncs Config.Config
---       tmpFuncs = dummyLspFuncs
---       lspFuncs :: LspFuncs Config.Config
---       lspFuncs = tmpFuncs { config = (fmap . fmap) modifyConfig (config tmpFuncs)}
---   runIdeGhcM mlibdir testPlugins lspFuncs stateVar f
 
 noLogConfig :: T.SessionConfig
 noLogConfig = T.defaultConfig { T.logMessages = False }
@@ -315,28 +252,6 @@ dummyLspFuncs = LspFuncs { clientCapabilities = def
                          , withProgress = \_ _ f -> f (const (return ()))
                          , withIndefiniteProgress = \_ _ f -> f
                          }
-
-findExeRecursive :: FilePath -> FilePath -> IO (Maybe FilePath)
-findExeRecursive exe dir = do
-  me <- listToMaybe <$> findExecutablesInDirectories [dir] exe
-  case me of
-    Just e -> return (Just e)
-    Nothing -> do
-      subdirs <- (fmap (dir </>)) <$> listDirectory dir >>= filterM doesDirectoryExist
-      foldM (\acc subdir -> case acc of
-                              Just y -> pure $ Just y
-                              Nothing -> findExeRecursive exe subdir)
-            Nothing
-            subdirs
-
--- | So we can find an executable with cabal run
--- since it doesnt put build tools on the path (only cabal test)
-findExe :: String -> IO FilePath
-findExe name = do
-  fp <- fmap fromJust $ runMaybeT $
-    MaybeT (findExecutable name) <|>
-    MaybeT (findExeRecursive name "dist-newstyle")
-  makeAbsolute fp
 
 -- | Like 'withCurrentDirectory', but will copy the directory over to the system
 -- temporary directory first to avoid haskell-language-server's source tree from
