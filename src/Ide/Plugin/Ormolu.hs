@@ -26,8 +26,11 @@ import           GhcPlugins                        (HscEnv (hsc_dflags))
 import           Ide.Plugin.Formatter
 import           Ide.PluginUtils
 import           Ide.Types
+import           Language.Haskell.LSP.Core         (LspFuncs (withIndefiniteProgress),
+                                                    ProgressCancellable (Cancellable))
 import           Language.Haskell.LSP.Types
 import           Ormolu
+import           System.FilePath                   (takeFileName)
 import           Text.Regex.TDFA.Text              ()
 
 -- ---------------------------------------------------------------------
@@ -40,7 +43,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- ---------------------------------------------------------------------
 
 provider :: FormattingProvider IO
-provider _lf ideState typ contents fp _ = do
+provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancellable $ do
   let
     fromDyn :: DynFlags -> IO [DynOption]
     fromDyn df =
@@ -75,6 +78,7 @@ provider _lf ideState typ contents fp _ = do
       in
         ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
  where
+  title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)
   ret (Left err) = Left
     (responseError (T.pack $ "ormoluCmd: " ++ show err) )
