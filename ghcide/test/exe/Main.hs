@@ -1833,6 +1833,7 @@ findDefinitionAndHoverTests = let
   lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
+  cccL17 = Position 17 11  ;  docLink = [ExpectHoverText ["[Documentation](file://"]]
 #if MIN_GHC_API_VERSION(8,6,0)
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
@@ -1842,7 +1843,7 @@ findDefinitionAndHoverTests = let
 #endif
   in
   mkFindTests
-  --     def    hover  look       expect
+  --      def    hover  look       expect
   [ test  yes    yes    fffL4      fff           "field in record definition"
   , test  broken broken fffL8      fff           "field in record construction     #71"
   , test  yes    yes    fffL14     fff           "field name used as accessor"          -- 120 in Calculate.hs
@@ -1878,6 +1879,7 @@ findDefinitionAndHoverTests = let
   , test  no     yes    docL41     constr        "type constraint in hover info   #283"
   , test  broken broken outL45     outSig        "top-level signature             #310"
   , test  broken broken innL48     innSig        "inner     signature             #310"
+  , test  no     yes    cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
   ]
