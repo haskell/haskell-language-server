@@ -1,0 +1,4 @@
+module T8 where
+
+-- >>> noFunctionWithThisName
+-- Variable not in scope: noFunctionWithThisName
