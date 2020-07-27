@@ -1,8 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TypeApplications    #-}
 
 module Ide.Plugin.Ormolu
   (
@@ -12,20 +11,24 @@ module Ide.Plugin.Ormolu
 where
 
 import           Control.Exception
-import qualified Data.Text as T
+import qualified Data.Text                         as T
 import           Development.IDE.Core.Rules
+import           Development.IDE.Core.RuleTypes    (GhcSession (GhcSession))
+import           Development.IDE.Core.Shake        (use)
+import           Development.IDE.GHC.Util          (hscEnv)
 import           Development.IDE.Types.Diagnostics as D
 import           Development.IDE.Types.Location
-import qualified DynFlags as D
-import qualified EnumSet  as S
+import qualified DynFlags                          as D
+import qualified EnumSet                           as S
 import           GHC
 import           GHC.LanguageExtensions.Type
-import           Ide.Types
-import           Ide.PluginUtils
+import           GhcPlugins                        (HscEnv (hsc_dflags))
 import           Ide.Plugin.Formatter
+import           Ide.PluginUtils
+import           Ide.Types
 import           Language.Haskell.LSP.Types
 import           Ormolu
-import           Text.Regex.TDFA.Text()
+import           Text.Regex.TDFA.Text              ()
 
 -- ---------------------------------------------------------------------
 
@@ -39,10 +42,9 @@ descriptor plId = (defaultPluginDescriptor plId)
 provider :: FormattingProvider IO
 provider _lf ideState typ contents fp _ = do
   let
-    fromDyn :: ParsedModule -> IO [DynOption]
-    fromDyn pmod =
+    fromDyn :: DynFlags -> IO [DynOption]
+    fromDyn df =
       let
-        df = ms_hspp_opts $ pm_mod_summary pmod
         pp =
           let p = D.sPgm_F $ D.settings df
           in  if null p then [] else ["-pgmF=" <> p]
@@ -51,10 +53,11 @@ provider _lf ideState typ contents fp _ = do
       in
         return $ map DynOption $ pp <> pm <> ex
 
-  m_parsed <- runAction "Ormolu" ideState $ getParsedModule fp
-  fileOpts <- case m_parsed of
+  ghc <- runAction "Ormolu" ideState $ use GhcSession fp
+  let df = hsc_dflags . hscEnv <$> ghc
+  fileOpts <- case df of
           Nothing -> return []
-          Just pm -> fromDyn pm
+          Just df -> fromDyn df
 
   let
     fullRegion = RegionIndices Nothing Nothing
@@ -78,5 +81,5 @@ provider _lf ideState typ contents fp _ = do
   ret (Right new) = Right (makeDiffTextEdit contents new)
 
 showExtension :: Extension -> String
-showExtension Cpp = "-XCPP"
+showExtension Cpp   = "-XCPP"
 showExtension other = "-X" ++ show other
