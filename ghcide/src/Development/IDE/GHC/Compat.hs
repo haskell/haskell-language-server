@@ -41,6 +41,7 @@ module Development.IDE.GHC.Compat(
     pattern IEThingAll,
     pattern IEThingWith,
     pattern VarPat,
+    pattern PatSynBind,
     GHC.ModLocation,
     Module.addBootSuffix,
     pattern ModLocation,
@@ -90,6 +91,7 @@ import GHC hiding (
       VarPat,
       ModLocation,
       HasSrcSpan,
+      PatSynBind,
       lookupName,
       getLoc
 #if MIN_GHC_API_VERSION(8,6,0)
@@ -274,6 +276,13 @@ pattern VarPat x <-
     GHC.VarPat x
 #endif
 
+pattern PatSynBind :: GHC.PatSynBind p p -> HsBind p
+pattern PatSynBind x <-
+#if MIN_GHC_API_VERSION(8,6,0)
+    GHC.PatSynBind _ x
+#else
+    GHC.PatSynBind x
+#endif
 
 setHieDir :: FilePath -> DynFlags -> DynFlags
 setHieDir _f d =
