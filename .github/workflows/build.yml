@@ -1,5 +1,9 @@
 name: Builds
 
+defaults:
+  run:
+    shell: bash
+
 on:
   release:
     types: [created]
@@ -15,6 +19,8 @@ jobs:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
+            ghc: '8.8.4' # also fails due to segfault :(
+          - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
           - os: windows-latest
             ghc: '8.8.2' # fails due to error with Cabal
@@ -28,14 +34,7 @@ jobs:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
 
-    - name: Cache Cabal
-      uses: actions/cache@v1.2.0
-      with:
-        path: ~/.cabal
-        key: ${{ runner.OS }}-${{ matrix.ghc }}-${{ hashFiles('**/*.cabal') }}
-
     - name: Shorten binary names
-      shell: bash
       run: |
         sed -i.bak -e 's/haskell-language-server/hls/g' \
                    -e 's/haskell_language_server/hls/g' \
@@ -45,7 +44,6 @@ jobs:
 
     - name: Set some window specific things
       if: matrix.os == 'windows-latest'
-      shell: bash
       run: |
         echo '::set-env name=EXE_EXT::.exe'
 
@@ -55,19 +53,30 @@ jobs:
         echo '::set-env name=LINUX_CABAL_ARGS::--enable-executable-static --ghc-options=-split-sections'
 
     - name: Build Server
-      shell: bash
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build exe:hls -O2 --disable-documentation $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 --disable-documentation $LINUX_CABAL_ARGS
+        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || \
+        cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
-    - name: Find Server Binary
-      id: find_server_binary
-      shell: bash
+    - name: Compress Server Binary
+      id: compress_server_binary
+      env:
+        GHC_VER: ${{ matrix.ghc }}
       run: |
-        HLS=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
-        gzip --best $HLS
-        echo ::set-output name=hls_binary::$HLS.gz
+        HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
+        HLS=haskell-language-server-$GHC_VER
+        mv $HLS_BUILD $HLS
+        if [[ "$OSTYPE" == "msys" ]]; then
+          7z a $HLS.zip $HLS
+          echo ::set-output name=path::$HLS.zip
+          echo ::set-output name=content_type::application/zip
+          echo ::set-output name=extension::zip
+        else
+          gzip --best $HLS
+          echo ::set-output name=path::$HLS.gz
+          echo ::set-output name=content_type::application/gzip
+          echo ::set-output name=extension::gz
+        fi
 
     - name: Upload Server Binary
       uses: actions/upload-release-asset@v1.0.2
@@ -75,27 +84,37 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.find_server_binary.outputs.hls_binary }}
-        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.gz
-        asset_content_type: application/gzip
+        asset_path: ${{ steps.compress_server_binary.outputs.path }}
+        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
+        asset_content_type: ${{ steps.compress_server_binary.outputs.content_type }}
 
     - uses: actions/upload-artifact@v2
       with:
         name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.gz
-        path: ${{ steps.find_server_binary.outputs.hls_binary }}
+        path: ${{ steps.compress_server_binary.outputs.path }}
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:hls-wrapper -O2 --disable-documentation $WIN_CABAL_ARGS $LINUX_CABAL_ARGS
+      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
-    - name: Find Wrapper Binary
+    - name: Compress Wrapper Binary
       if: matrix.ghc == '8.10.1'
-      id: find_wrapper_binary
-      shell: bash
+      id: compress_wrapper_binary
       run: |
-        HLS_WRAPPER=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
-        gzip --best $HLS_WRAPPER
-        echo ::set-output name=hls_wrapper_binary::$HLS_WRAPPER.gz
+        HLS_WRAPPER_BUILD=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
+        HLS_WRAPPER=haskell-language-server-wrapper
+        mv $HLS_WRAPPER_BUILD $HLS_WRAPPER
+        if [[ "$OSTYPE" == "msys" ]]; then
+          7z a $HLS_WRAPPER.zip $HLS_WRAPPER
+          echo ::set-output name=path::$HLS_WRAPPER.zip
+          echo ::set-output name=content_type::application/zip
+          echo ::set-output name=extension::zip
+        else
+          gzip --best $HLS_WRAPPER
+          echo ::set-output name=path::$HLS_WRAPPER.gz
+          echo ::set-output name=content_type::application/gzip
+          echo ::set-output name=extension::gz
+        fi
 
     - name: Upload Wrapper
       if: matrix.ghc == '8.10.1'
@@ -104,13 +123,13 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ${{ steps.find_wrapper_binary.outputs.hls_wrapper_binary }}
-        asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.gz
-        asset_content_type: application/gzip
+        asset_path: ${{ steps.compress_wrapper_binary.outputs.path }}
+        asset_name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
+        asset_content_type: ${{ steps.compress_wrapper_binary.outputs.content_type}}
 
     - uses: actions/upload-artifact@v2
       if: matrix.ghc == '8.10.1'
       with:
         name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.gz
-        path: ${{ steps.find_wrapper_binary.outputs.hls_wrapper_binary }}
+        path: ${{ steps.compress_wrapper_binary.outputs.path }}
 
