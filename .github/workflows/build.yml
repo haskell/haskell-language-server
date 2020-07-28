@@ -19,6 +19,8 @@ jobs:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
+            ghc: '8.8.4' # also fails due to segfault :(
+          - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
           - os: windows-latest
             ghc: '8.8.2' # fails due to error with Cabal
@@ -53,8 +55,8 @@ jobs:
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build exe:hls -O2 --disable-documentation $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 --disable-documentation $LINUX_CABAL_ARGS -j1
+        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || \
+        cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
 
     - name: Compress Server Binary
       id: compress_server_binary
@@ -93,7 +95,7 @@ jobs:
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:hls-wrapper -O2 --disable-documentation $WIN_CABAL_ARGS $LINUX_CABAL_ARGS
+      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
 
     - name: Compress Wrapper Binary
       if: matrix.ghc == '8.10.1'
