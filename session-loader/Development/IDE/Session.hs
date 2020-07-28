@@ -206,8 +206,6 @@ loadSession dir = do
            -- cradle is
            let progMsg = "Setting up project " <> T.pack (takeBaseName (cradleRootDir cradle))
 
-
-
            eopts <- withIndefiniteProgress progMsg NotCancellable $
              cradleToOptsAndLibDir cradle cfp
 
