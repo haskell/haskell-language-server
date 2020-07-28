@@ -82,6 +82,10 @@ import           System.FilePath
 import           System.IO                      (hClose)
 import           System.IO.Temp
 import Data.Maybe (catMaybes)
+import qualified Control.Exception             as E
+import           Control.DeepSeq                ( NFData
+                                                , deepseq
+                                                )
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -278,7 +282,12 @@ done, we want to switch back to GhcSessionDeps:
             void $ runDecls stmt
             return Nothing
 
-    edits <- liftIO $ evalGhcEnv hscEnv' $ traverse (eval . first T.unpack) statements
+    edits <-
+      liftIO
+      $ (either (\e -> [Just . T.pack . pad $ e]) id <$>)
+      $ strictTry
+      $ evalGhcEnv hscEnv'
+      $ traverse (eval . first T.unpack) statements
 
 
     let workspaceEditsMap = Map.fromList [(_uri, List [evalEdit])]
@@ -286,6 +295,11 @@ done, we want to switch back to GhcSessionDeps:
         evalEdit = TextEdit editTarget (T.intercalate "\n" $ catMaybes edits)
 
     return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
+
+strictTry :: NFData b => IO b -> IO (Either String b)
+strictTry op = E.catch
+  (op >>= \v -> return $! Right $! deepseq v v)
+  (\(err :: E.SomeException) -> return $! Left $ show err)
 
 pad :: String -> String
 pad = unlines . map ("-- " <>) . lines
