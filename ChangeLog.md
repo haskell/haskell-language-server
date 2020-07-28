@@ -3,8 +3,9 @@
 ## 0.2.2
 
 This changes the configuration section from "languageServerHaskell" to "haskell"
-to align it with vscode-hie-server 0.1. You will need to update your LSP
-configurations (which vary per client) from
+to align it with vscode-haskell-1.0.0. Whilst the old section is still
+supported for now, you should update your LSP configuration (which varies per
+client) from
 
 ```json
 {
@@ -32,6 +33,20 @@ to
 ([#224](https://github.com/haskell/haskell-language-server/pull/224) by @bubba)
 - Rename the configuration section from languageServerHaskell => haskell
 ([#227](https://github.com/haskell/haskell-language-server/pull/227) by @bubba)
+- Use -haddock for cabal and stack
+([#214](https://github.com/haskell/haskell-language-server/pull/214) by @jneira)
+- slightly better shell.nix for local development
+([#235](https://github.com/haskell/haskell-language-server/pull/235) by @pepeiborra)
+- Shell nix further steps
+([#240](https://github.com/haskell/haskell-language-server/pull/240) by @pepeiborra)
+- Add numeric-version option for wrapper and server
+([#241](https://github.com/haskell/haskell-language-server/pull/241) by @fendor)
+- Accept the legacy "languageServerHaskell" config name
+([#243](https://github.com/haskell/haskell-language-server/pull/243) by @bubba)
+- Fix for Eval plugin: Error from tests not reported
+([#244](https://github.com/haskell/haskell-language-server/pull/244) by @tittoassini)
+- Rename binaries before uploading
+([#248](https://github.com/haskell/haskell-language-server/pull/248) by @bubba)
 
 ## 0.2.1
 
