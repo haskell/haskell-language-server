@@ -83,7 +83,7 @@ This is *very* early stage software.
 
 ### Visual Studio Code
 
-If you are using Visual Studio Code, the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=alanz.vscode-hie-server) will automatically download and install `haskell-language-server` for you.
+If you are using Visual Studio Code, the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) will automatically download and install `haskell-language-server` for you.
 
 ### Pre-built binaries
 
