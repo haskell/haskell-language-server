@@ -15,7 +15,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
         if compiler == "default" || compiler == defaultCompiler
             then haskellPackages.ghcWithPackages p
             # for all other compilers there is no Nix cache so dont bother building deps with NIx
-            else haskell.packages.${compiler}.ghcWithPackages [];
+            else haskell.packages.${compiler}.ghcWithPackages (_: []);
 
    compilerWithPackages = haskellPackagesForProject(p:
         with p;
