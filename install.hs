@@ -10,8 +10,8 @@ build-depends:
   , hls-install
 -}
 -- call as:
--- * `cabal v2-run install.hs --project-file install/shake.project <target>`
--- * `stack install.hs <target>`
+--  * `cabal v2-run install.hs --project-file install/shake.project <target>`
+--  * `stack install.hs <target>`
 
 -- TODO: set `shake.project` in cabal-config above, when supported
 -- (see https://github.com/haskell/cabal/issues/6353)
