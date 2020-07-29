@@ -19,7 +19,7 @@ extra-source-files:
 flag agpl
   Description: Enable AGPL dependencies
   Default:     True
-  Manual:      False
+  Manual:      True
 
 flag pedantic
   Description: Enable -Werror
