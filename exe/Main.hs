@@ -106,7 +106,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , Ormolu.descriptor   "ormolu"
       , StylishHaskell.descriptor "stylish-haskell"
 #if AGPL
+#if !MIN_VERSION_ghc(8,10,1)
       , Brittany.descriptor    "brittany"
+#endif
 #endif
       , Eval.descriptor "eval"
       ]
