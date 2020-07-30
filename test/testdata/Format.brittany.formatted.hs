@@ -1,4 +1,8 @@
 module Format where
+import           Data.List
+
+import           Prelude
+import           Data.Int
 foo :: Int -> Int
 foo 3 = 2
 foo x = x

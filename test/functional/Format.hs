@@ -42,11 +42,11 @@ rangeTests :: TestTree
 rangeTests = testGroup "format range" [
     goldenVsStringDiff "works" goldenGitDiff "test/testdata/Format.formatted_range.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
+        formatRange doc (FormattingOptions 2 True) (Range (Position 5 0) (Position 7 10))
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     , goldenVsStringDiff "works with custom tab size" goldenGitDiff "test/testdata/Format.formatted_range_with_tabsize.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 5 True) (Range (Position 4 0) (Position 7 19))
+        formatRange doc (FormattingOptions 5 True) (Range (Position 8 0) (Position 11 19))
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     ]
 
