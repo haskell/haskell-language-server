@@ -143,13 +143,18 @@ brittanyTests = testGroup "brittany" [
     ]
 
 ormoluTests :: TestTree
-ormoluTests = testGroup "ormolu" [
-    goldenVsStringDiff "formats correctly" goldenGitDiff ("test/testdata/Format.ormolu." ++ ormoluGoldenSuffix ++ ".hs") $ runSession hieCommand fullCaps "test/testdata" $ do
+ormoluTests = testGroup "ormolu"
+  [ goldenVsStringDiff "formats correctly" goldenGitDiff ("test/testdata/Format.ormolu." ++ ormoluGoldenSuffix ++ ".hs") $ runSession hieCommand fullCaps "test/testdata" $ do
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
         doc <- openDoc "Format.hs" "haskell"
         formatDoc doc (FormattingOptions 2 True)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-    ]
+  , goldenVsStringDiff "sorts imports correctly" goldenGitDiff ("test/testdata/Format2.ormolu." ++ ormoluGoldenSuffix ++ ".hs") $ runSession hieCommand fullCaps "test/testdata" $ do
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+        doc <- openDoc "Format2.hs" "haskell"
+        formatDoc doc (FormattingOptions 2 True)
+        BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+  ]
   where
     ormoluGoldenSuffix = case ghcVersion of
       GHC88 -> "formatted"
