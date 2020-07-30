@@ -57,7 +57,7 @@ provider _lf ideState typ contents fp _ = do
 
   let
     fullRegion = RegionIndices Nothing Nothing
-    rangeRegion s e = RegionIndices (Just s) (Just e)
+    rangeRegion s e = RegionIndices (Just $ s + 1) (Just $ e + 1)
     mkConf o region = defaultConfig { cfgDynOptions = o,  cfgRegion = region }
     fmt :: T.Text -> Config RegionIndices -> IO (Either OrmoluException T.Text)
     fmt cont conf =
