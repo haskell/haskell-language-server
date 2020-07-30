@@ -65,11 +65,8 @@ provider _lf ideState typ contents fp _ = do
 
   case typ of
     FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
-    FormatRange r ->
-      let
-        Range (Position sl _) (Position el _) = normalize r
-      in
-        ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
+    FormatRange (Range (Position sl _) (Position el _)) ->
+      ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
  where
   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)
   ret (Left err) = Left
