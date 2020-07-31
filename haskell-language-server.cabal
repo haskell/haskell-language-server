@@ -71,6 +71,7 @@ library
     , filepath
     , floskell == 0.10.*
     , ghc
+    , ghc-boot-th
     , ghcide >= 0.1
     , gitrev
     , hashable
