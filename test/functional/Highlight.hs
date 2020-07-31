@@ -9,7 +9,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
 
 tests :: TestTree
 tests = testGroup "highlight" [
@@ -23,7 +22,7 @@ tests = testGroup "highlight" [
                     , DocumentHighlight (mkRange 4 22 4 25) (Just HkRead)
                     , DocumentHighlight (mkRange 3 6 3 9) (Just HkRead)
                     , DocumentHighlight (mkRange 1 0 1 3) (Just HkRead)]
-            mapM_ (\x -> highlights `shouldContain` [x]) hls
+            mapM_ (\x -> x `elem` highlights @? "Contains highlight") hls
     ]
     where
         mkRange sl sc el ec = Range (Position sl sc) (Position el ec)

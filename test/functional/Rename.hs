@@ -7,11 +7,10 @@ module Rename (tests) where
 -- import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
 
 tests :: TestTree
 tests = testGroup "rename" [
-  testCase "works" $ True `shouldBe` True
+  testCase "works" $ True @?= True
   --  pendingWith "removed because of HaRe"
   -- runSession hieCommand fullCaps "test/testdata" $ do
   --   doc <- openDoc "Rename.hs" "haskell"
