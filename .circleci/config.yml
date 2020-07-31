@@ -35,14 +35,6 @@ defaults: &defaults
         command: stack -j 2 --stack-yaml=${STACK_FILE} setup
 
     - run:
-        name: Install happy
-        command: stack --stack-yaml=${STACK_FILE} install happy
-
-    - run:
-        name: Install Hoogle
-        command: stack -j 1 --stack-yaml=${STACK_FILE} install hoogle
-
-    - run:
         name: Build (we need the exe for tests)
         command: stack -j 1 --stack-yaml=${STACK_FILE} install
                        # need j1, else ghc-lib-parser triggers OOM
@@ -57,20 +49,10 @@ defaults: &defaults
         path: ~/.local/bin
         destination: bin
 
-    - run:
-        name: Generate Hoogle database
-        command: if [ ! -d ~/.hoogle ]; then stack --stack-yaml=${STACK_FILE} exec hoogle generate; fi
-
-    - run:
-        name: Clear cabal-helper cache
-        command: rm -fr ~/.cache/cabal-helper
-
     - save_cache:
         key: stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "resolver.txt" }}
         paths: &cache_paths
           - ~/.stack
-          - ~/.cache
-          - ~/.hoogle
           - ~/build/.stack-work
           - ~/build/ghcide/.stack-work
 
