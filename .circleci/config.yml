@@ -79,10 +79,6 @@ defaults: &defaults
         path: test-logs
 
     - save_cache:
-        key: stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}
-        paths: *cache_paths
-
-    - save_cache:
         key: stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}-{{ checksum "all-cabal.txt" }}
         paths: *cache_paths
 
