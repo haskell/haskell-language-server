@@ -10,6 +10,7 @@ import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Default
 import qualified Data.HashMap.Strict as HM
+import           Data.List
 import           Data.Maybe
 #if __GLASGOW_HASKELL__ < 808
 import           Data.Monoid ((<>))
@@ -24,7 +25,6 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import           Test.Tasty.HUnit
-import           Test.Hspec.Expectations
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -49,21 +49,21 @@ hlintTests = testGroup "hlint suggestions" [
         diags@(reduceDiag:_) <- waitForDiagnostics
 
         liftIO $ do
-            length diags `shouldBe` 2
-            reduceDiag ^. L.range `shouldBe` Range (Position 1 0) (Position 1 12)
-            reduceDiag ^. L.severity `shouldBe` Just DsInfo
-            reduceDiag ^. L.code `shouldBe` Just (StringValue "Eta reduce")
-            reduceDiag ^. L.source `shouldBe` Just "hlint"
+            length diags @?= 2
+            reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
+            reduceDiag ^. L.severity @?= Just DsInfo
+            reduceDiag ^. L.code @?= Just (StringValue "Eta reduce")
+            reduceDiag ^. L.source @?= Just "hlint"
 
         (CACodeAction ca:_) <- getAllCodeActions doc
 
         -- Evaluate became redundant id in later hlint versions
-        liftIO $ ["Apply hint:Redundant id", "Apply hint:Evaluate"] `shouldContain` [ca ^. L.title]
+        liftIO $ (ca ^. L.title) `elem` ["Apply hint:Redundant id", "Apply hint:Evaluate"] @? "Title contains evaluate"
 
         executeCodeAction ca
 
         contents <- getDocumentEdit doc
-        liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
+        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
         noDiagnostics
 
@@ -75,12 +75,12 @@ hlintTests = testGroup "hlint suggestions" [
         (CACommand cmd:_) <- getAllCodeActions doc
 
         -- Evaluate became redundant id in later hlint versions
-        liftIO $ ["Apply hint:Redundant id", "Apply hint:Evaluate"] `shouldContain` [cmd ^. L.title ]
+        liftIO $ (cmd ^. L.title) `elem` ["Apply hint:Redundant id", "Apply hint:Evaluate"] @? "Title contains evaluate"
 
         executeCommand cmd
 
         contents <- skipManyTill publishDiagnosticsNotification $ getDocumentEdit doc
-        liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
+        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
         noDiagnostics
 
@@ -92,21 +92,21 @@ hlintTests = testGroup "hlint suggestions" [
         diags@(reduceDiag:_) <- waitForDiagnostics
 
         liftIO $ do
-            length diags `shouldBe` 2
-            reduceDiag ^. L.range `shouldBe` Range (Position 1 0) (Position 1 12)
-            reduceDiag ^. L.severity `shouldBe` Just DsInfo
-            reduceDiag ^. L.code `shouldBe` Just (StringValue "Eta reduce")
-            reduceDiag ^. L.source `shouldBe` Just "hlint"
+            length diags @?= 2
+            reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
+            reduceDiag ^. L.severity @?= Just DsInfo
+            reduceDiag ^. L.code @?= Just (StringValue "Eta reduce")
+            reduceDiag ^. L.source @?= Just "hlint"
 
         (CACodeAction ca:_) <- getAllCodeActions doc
 
         -- Evaluate became redundant id in later hlint versions
-        liftIO $ ["Apply hint:Redundant id", "Apply hint:Evaluate"] `shouldContain` [ca ^. L.title]
+        liftIO $ (ca ^. L.title) `elem` ["Apply hint:Redundant id", "Apply hint:Evaluate"] @? "Title contains evaluate"
 
         executeCodeAction ca
 
         contents <- getDocumentEdit doc
-        liftIO $ contents `shouldBe` "main = undefined\nfoo x = x\n"
+        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
         sendNotification TextDocumentDidSave (DidSaveTextDocumentParams doc)
 
         noDiagnostics
@@ -123,7 +123,7 @@ renameTests = testGroup "rename suggestions" [
         executeCommand cmd
 
         x:_ <- T.lines <$> documentContents doc
-        liftIO $ x `shouldBe` "main = putStrLn \"hello\""
+        liftIO $ x @?= "main = putStrLn \"hello\""
 
     , ignoreTestBecause "Broken" $ testCase "doesn't give both documentChanges and changes"
         $ runSession hieCommand noLiteralCaps "test/testdata" $ do
@@ -135,13 +135,13 @@ renameTests = testGroup "rename suggestions" [
             let Just (List [Object args]) = cmd ^. L.arguments
                 Object editParams = args HM.! "fallbackWorkspaceEdit"
             liftIO $ do
-                editParams `shouldSatisfy` HM.member "changes"
-                editParams `shouldNotSatisfy` HM.member "documentChanges"
+                "changes" `HM.member` editParams @? "Contains changes"
+                not ("documentChanges" `HM.member` editParams) @? "Doesn't contain documentChanges"
 
             executeCommand cmd
 
             _:x:_ <- T.lines <$> documentContents doc
-            liftIO $ x `shouldBe` "foo = putStrLn \"world\""
+            liftIO $ x @?= "foo = putStrLn \"world\""
     ]
 
 importTests :: TestTree
@@ -154,27 +154,27 @@ importTests = testGroup "import suggestions" [
 
         -- ignore the first empty hlint diagnostic publish
         [_,diag:_] <- count 2 waitForDiagnostics
-        liftIO $ diag ^. L.message `shouldBe` "Variable not in scope: when :: Bool -> IO () -> IO ()"
+        liftIO $ diag ^. L.message @?= "Variable not in scope: when :: Bool -> IO () -> IO ()"
 
         actionsOrCommands <- getAllCodeActions doc
         let actns = map fromAction actionsOrCommands
 
         liftIO $ do
-            head actns        ^. L.title `shouldBe` "Import module Control.Monad"
-            head (tail actns) ^. L.title `shouldBe` "Import module Control.Monad (when)"
+            head actns        ^. L.title @?= "Import module Control.Monad"
+            head (tail actns) ^. L.title @?= "Import module Control.Monad (when)"
             forM_ actns $ \a -> do
-                a ^. L.kind `shouldBe` Just CodeActionQuickFix
-                a ^. L.command `shouldSatisfy` isJust
-                a ^. L.edit `shouldBe` Nothing
+                a ^. L.kind @?= Just CodeActionQuickFix
+                isJust (a ^. L.command) @? "Contains command"
+                a ^. L.edit @?= Nothing
                 let hasOneDiag (Just (List [_])) = True
                     hasOneDiag _ = False
-                a ^. L.diagnostics `shouldSatisfy` hasOneDiag
-            length actns `shouldBe` 10
+                hasOneDiag (a ^. L.diagnostics) @? "Has one diagnostic"
+            length actns @?= 10
 
         executeCodeAction (head actns)
 
         contents <- getDocumentEdit doc
-        liftIO $ contents `shouldBe` "import Control.Monad\nmain :: IO ()\nmain = when True $ putStrLn \"hello\""
+        liftIO $ contents @?= "import Control.Monad\nmain :: IO ()\nmain = when True $ putStrLn \"hello\""
     ]
 
 packageTests :: TestTree
@@ -192,22 +192,21 @@ packageTests = testGroup "add package suggestions" [
                         , "Could not load module ‘Data.Text’" -- GHC >= 8.6
                         , "Could not find module ‘Data.Text’"
                         ]
-                in liftIO $ diag ^. L.message `shouldSatisfy` \m -> any (`T.isPrefixOf` m) prefixes
+                in liftIO $ any (`T.isPrefixOf` (diag ^. L.message)) prefixes @? "Contains prefix"
 
             acts <- getAllCodeActions doc
             let (CACodeAction action:_) = acts
 
             liftIO $ do
-                action ^. L.title `shouldBe` "Add text as a dependency"
-                action ^. L.kind `shouldBe` Just CodeActionQuickFix
-                action ^. L.command . _Just . L.command `shouldSatisfy` T.isSuffixOf "package:add"
+                action ^. L.title @?= "Add text as a dependency"
+                action ^. L.kind @?= Just CodeActionQuickFix
+                "package:add" `T.isSuffixOf` (action ^. L.command . _Just . L.command) @? "Command contains package:add"
 
             executeCodeAction action
 
             contents <- getDocumentEdit . TextDocumentIdentifier =<< getDocUri "add-package-test.cabal"
             liftIO $
-                T.lines contents `shouldSatisfy` \x ->
-                any (\l -> "text -any" `T.isSuffixOf` l || "text : {} -any" `T.isSuffixOf` l) x
+                any (\l -> "text -any" `T.isSuffixOf` l || "text : {} -any" `T.isSuffixOf` l) (T.lines contents) @? "Contains text package"
 
     , ignoreTestBecause "Broken" $ testCase "adds to hpack package.yaml files" $
         runSession hieCommand fullCaps "test/testdata/addPackageTest/hpack-exe" $ do
@@ -221,23 +220,23 @@ packageTests = testGroup "add package suggestions" [
                         , "Could not load module ‘Codec.Compression.GZip’" -- GHC >= 8.6
                         , "Could not find module ‘Codec.Compression.GZip’"
                         ]
-                in liftIO $ diag ^. L.message `shouldSatisfy` \m -> any (`T.isPrefixOf` m) prefixes
+                in liftIO $ any (`T.isPrefixOf` (diag ^. L.message)) prefixes @? "Diagnostic contains message"
 
             mActions <- getAllCodeActions doc
             let allActions = map fromAction mActions
                 action = head allActions
 
             liftIO $ do
-                action ^. L.title `shouldBe` "Add zlib as a dependency"
-                forM_ allActions $ \a -> a ^. L.kind `shouldBe` Just CodeActionQuickFix
-                forM_ allActions $ \a -> a ^. L.command . _Just . L.command `shouldSatisfy` T.isSuffixOf "package:add"
+                action ^. L.title @?= "Add zlib as a dependency"
+                forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
+                forM_ allActions $ \a -> "package:add" `T.isSuffixOf` (a ^. L.command . _Just . L.command) @? "Command contains package:add"
 
             executeCodeAction action
 
             contents <- getDocumentEdit . TextDocumentIdentifier =<< getDocUri "package.yaml"
             liftIO $ do
-                T.lines contents !! 3 `shouldSatisfy` T.isSuffixOf "zlib"
-                T.lines contents !! 21 `shouldNotSatisfy` T.isSuffixOf "zlib"
+                "zlib" `T.isSuffixOf` (T.lines contents !! 3) @? "Contains zlib"
+                "zlib" `T.isSuffixOf` (T.lines contents !! 21) @? "Does not contain zlib in unrelated component"
     ]
 
 redundantImportTests :: TestTree
@@ -252,18 +251,18 @@ redundantImportTests = testGroup "redundant import code actions" [
             let prefixes = [ "The import of `Data.List' is redundant" -- Windows
                         , "The import of ‘Data.List’ is redundant"
                         ]
-                in liftIO $ diag ^. L.message `shouldSatisfy` \m -> any (`T.isPrefixOf` m) prefixes
+                in liftIO $ any (`T.isPrefixOf` (diag ^. L.message)) prefixes @? "Contains message"
 
             mActions <- getAllCodeActions doc
 
             let allActions@[removeAction, changeAction] = map fromAction mActions
 
             liftIO $ do
-                removeAction ^. L.title `shouldBe` "Remove redundant import"
-                changeAction ^. L.title `shouldBe` "Import instances"
-                forM_ allActions $ \a -> a ^. L.kind `shouldBe` Just CodeActionQuickFix
-                forM_ allActions $ \a -> a ^. L.command `shouldBe` Nothing
-                forM_ allActions $ \a -> a ^. L.edit `shouldSatisfy` isJust
+                removeAction ^. L.title @?= "Remove redundant import"
+                changeAction ^. L.title @?= "Import instances"
+                forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
+                forM_ allActions $ \a -> a ^. L.command @?= Nothing
+                forM_ allActions $ \a -> isJust (a ^. L.edit) @? "Has edit"
 
             executeCodeAction removeAction
 
@@ -271,7 +270,7 @@ redundantImportTests = testGroup "redundant import code actions" [
             -- provides workspace edit property which skips round trip to
             -- the server
             contents <- documentContents doc
-            liftIO $ contents `shouldBe` "module CodeActionRedundant where\nmain :: IO ()\nmain = putStrLn \"hello\""
+            liftIO $ contents @?= "module CodeActionRedundant where\nmain :: IO ()\nmain = putStrLn \"hello\""
 
     , ignoreTestBecause "Broken" $ testCase "doesn't touch other imports" $ runSession hieCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
@@ -279,7 +278,7 @@ redundantImportTests = testGroup "redundant import code actions" [
         [CACommand cmd, _] <- getAllCodeActions doc
         executeCommand cmd
         contents <- documentContents doc
-        liftIO $ (T.lines contents) `shouldBe`
+        liftIO $ (T.lines contents) @?=
                 [ "module MultipleImports where"
                 , "import Data.Maybe"
                 , "foo :: Int"
@@ -298,34 +297,34 @@ typedHoleTests = testGroup "typed hole code actions" [
             suggestion <-
                 case ghcVersion of
                 GHC88 -> do
-                    liftIO $ map (^. L.title) cas `shouldMatchList`
+                    liftIO $ map (^. L.title) cas `matchList`
                         [ "Substitute hole (Int) with x ([Int])"
                         , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
                         , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
                         , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
-                        ]
+                        ] @? "Contains substitutions"
                     return "x"
                 GHC86 -> do
-                    liftIO $ map (^. L.title) cas `shouldMatchList`
+                    liftIO $ map (^. L.title) cas `matchList`
                         [ "Substitute hole (Int) with x ([Int])"
                         , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
                         , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
                         , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
-                        ]
+                        ] @? "Contains substitutions"
                     return "x"
                 GHC84 -> do
-                    liftIO $ map (^. L.title) cas `shouldMatchList`
+                    liftIO $ map (^. L.title) cas `matchList`
                         [ "Substitute hole (Int) with maxBound (forall a. Bounded a => a)"
                         , "Substitute hole (Int) with minBound (forall a. Bounded a => a)"
                         , "Substitute hole (Int) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
-                        ]
+                        ] @? "Contains substitutions"
                     return "maxBound"
 
             executeCodeAction $ head cas
 
             contents <- documentContents doc
 
-            liftIO $ contents `shouldBe` T.concat
+            liftIO $ contents @?= T.concat
                     [ "module TypedHoles where\n"
                     , "foo :: [Int] -> Int\n"
                     , "foo x = " <> suggestion
@@ -340,33 +339,33 @@ typedHoleTests = testGroup "typed hole code actions" [
                 suggestion <-
                     case ghcVersion of
                     GHC88 -> do
-                        liftIO $ map (^. L.title) cas `shouldMatchList`
+                        liftIO $ map (^. L.title) cas `matchList`
                             [ "Substitute hole (A) with stuff (A -> A)"
                             , "Substitute hole (A) with x ([A])"
                             , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ]
+                            ] @? "Contains substitutions"
                         return "stuff"
                     GHC86 -> do
-                        liftIO $ map (^. L.title) cas `shouldMatchList`
+                        liftIO $ map (^. L.title) cas `matchList`
                             [ "Substitute hole (A) with stuff (A -> A)"
                             , "Substitute hole (A) with x ([A])"
                             , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ]
+                            ] @? "Contains substituions"
                         return "stuff"
                     GHC84 -> do
-                        liftIO $ map (^. L.title) cas `shouldMatchList`
+                        liftIO $ map (^. L.title) cas `matchList`
                             [ "Substitute hole (A) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
                             , "Substitute hole (A) with stuff (A -> A)"
                             , "Substitute hole (A) with x ([A])"
                             , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ]
+                            ] @? "Contains substitutions"
                         return "undefined"
 
                 executeCodeAction $ head cas
 
                 contents <- documentContents doc
 
-                liftIO $ (T.lines contents) `shouldBe`
+                liftIO $ (T.lines contents) @?=
                         [ "module TypedHoles2 (foo2) where"
                         , "newtype A = A Int"
                         , "foo2 :: [A] -> A"
@@ -375,6 +374,15 @@ typedHoleTests = testGroup "typed hole code actions" [
                         , "    stuff (A a) = A (a + 1)"
                         ]
     ]
+    where
+        -- | 'True' if @xs@ contains all of @ys@, possibly in a different order.
+        matchList :: (Eq a) => [a] -> [a] -> Bool
+        xs `matchList` ys
+          | null extra && null missing = True
+          | otherwise = False
+          where
+            extra   = xs \\ ys
+            missing = ys \\ xs
 
 signatureTests :: TestTree
 signatureTests = testGroup "missing top level signature code actions" [
@@ -385,7 +393,7 @@ signatureTests = testGroup "missing top level signature code actions" [
         _ <- waitForDiagnosticsSource "bios"
         cas <- map fromAction <$> getAllCodeActions doc
 
-        liftIO $ map (^. L.title) cas `shouldContain` [ "Add signature: main :: IO ()"]
+        liftIO $ "Add signature: main :: IO ()" `elem` (map (^. L.title) cas) @? "Contains code action"
 
         executeCodeAction $ head cas
 
@@ -399,7 +407,7 @@ signatureTests = testGroup "missing top level signature code actions" [
                        , "  return ()"
                        ]
 
-        liftIO $ (T.lines contents) `shouldBe` expected
+        liftIO $ (T.lines contents) @?= expected
     ]
 
 missingPragmaTests :: TestTree
@@ -411,8 +419,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             _ <- waitForDiagnosticsSource "bios"
             cas <- map fromAction <$> getAllCodeActions doc
 
-            liftIO $ map (^. L.title) cas `shouldContain` [ "Add \"TypeSynonymInstances\""]
-            liftIO $ map (^. L.title) cas `shouldContain` [ "Add \"FlexibleInstances\""]
+            liftIO $ "Add \"TypeSynonymInstances\"" `elem` map (^. L.title) cas @? "Contains TypeSynonymInstances code action"
+            liftIO $ "Add \"FlexibleInstances\"" `elem` map (^. L.title) cas @? "Contains FlexibleInstances code action"
 
             executeCodeAction $ head cas
 
@@ -436,7 +444,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                         , "           deriving (Generic,Functor,Traversable)"
                         ]
 
-            liftIO $ (T.lines contents) `shouldBe` expected
+            liftIO $ (T.lines contents) @?= expected
     ]
 
 unusedTermTests :: TestTree
@@ -462,7 +470,7 @@ unusedTermTests = testGroup "unused term code actions" [
     --                      , "_imUnused _ = 3"
     --                      ]
     --
-    --       liftIO $ edit `shouldBe` T.unlines expected
+    --       liftIO $ edit @?= T.unlines expected
 
     -- See https://microsoft.github.io/language-server-protocol/specifications/specification-3-15/#textDocument_codeAction
     -- `CodeActionContext`
@@ -478,8 +486,8 @@ unusedTermTests = testGroup "unused term code actions" [
         liftIO $ do
             -- TODO: When HaRe is back this should be uncommented
             -- kinds `shouldNotSatisfy` null
-            kinds `shouldNotSatisfy` any (Just CodeActionRefactorInline /=)
-            kinds `shouldSatisfy` all (Just CodeActionRefactorInline ==)
+            not (any (Just CodeActionRefactorInline /=) kinds) @? "None not CodeActionRefactorInline"
+            all (Just CodeActionRefactorInline ==) kinds @? "All CodeActionRefactorInline"
     ]
 
 fromAction :: CAResult -> CodeAction

@@ -12,7 +12,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import Test.Hspec.Expectations
 
 
 --TODO : Response Message no longer has 4 inputs
@@ -24,8 +23,8 @@ tests = testGroup "commands" [
             let List cmds = res ^. LSP.capabilities . executeCommandProvider . _Just . commands
                 f x = (T.length (T.takeWhile isNumber x) >= 1) && (T.count ":" x >= 2)
             liftIO $ do
-                cmds `shouldSatisfy` all f
-                cmds `shouldNotSatisfy` null
+                all f cmds @? "All prefixed"
+                not (null cmds) @? "Commands aren't empty"
     , ignoreTestBecause "Broken: Plugin package doesn't exist" $
       testCase "get de-prefixed" $
         runSession hieCommand fullCaps "test/testdata/" $ do
@@ -34,5 +33,5 @@ tests = testGroup "commands" [
                 (ExecuteCommandParams "1234:package:add" (Just (List [])) Nothing) :: Session ExecuteCommandResponse
             let ResponseError _ msg _ = err
             -- We expect an error message about the dud arguments, but should pickup "add" and "package"
-            liftIO $ msg `shouldSatisfy` T.isInfixOf "while parsing args for add in plugin package"
+            liftIO $ (msg `T.isInfixOf` "while parsing args for add in plugin package") @? "Has error message"
     ]

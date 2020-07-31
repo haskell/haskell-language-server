@@ -243,7 +243,6 @@ test-suite func-test
                       , haskell-language-server
                       , haskell-lsp
                       , haskell-lsp-types
-                      , hspec-expectations
                       , lens
                       , lsp-test >= 0.11.0.3
                       , tasty

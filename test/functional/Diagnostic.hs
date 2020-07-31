@@ -17,7 +17,6 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import           Test.Tasty.HUnit
-import           Test.Hspec.Expectations
 
 -- ---------------------------------------------------------------------
 
@@ -41,26 +40,26 @@ triggerTests = testGroup "diagnostics triggers" [
             diags@(reduceDiag:_) <- waitForDiagnostics
 
             liftIO $ do
-                length diags `shouldBe` 2
-                reduceDiag ^. LSP.range `shouldBe` Range (Position 1 0) (Position 1 12)
-                reduceDiag ^. LSP.severity `shouldBe` Just DsInfo
-                reduceDiag ^. LSP.code `shouldBe` Just (StringValue "Eta reduce")
-                reduceDiag ^. LSP.source `shouldBe` Just "hlint"
+                length diags @?= 2
+                reduceDiag ^. LSP.range @?= Range (Position 1 0) (Position 1 12)
+                reduceDiag ^. LSP.severity @?= Just DsInfo
+                reduceDiag ^. LSP.code @?= Just (StringValue "Eta reduce")
+                reduceDiag ^. LSP.source @?= Just "hlint"
 
             diags2a <- waitForDiagnostics
 
-            liftIO $ length diags2a `shouldBe` 2
+            liftIO $ length diags2a @?= 2
 
             sendNotification TextDocumentDidSave (DidSaveTextDocumentParams doc)
 
             diags3@(d:_) <- waitForDiagnosticsSource "eg2"
 
             liftIO $ do
-                length diags3 `shouldBe` 1
-                d ^. LSP.range `shouldBe` Range (Position 0 0) (Position 1 0)
-                d ^. LSP.severity `shouldBe` Nothing
-                d ^. LSP.code `shouldBe` Nothing
-                d ^. LSP.message `shouldBe` T.pack "Example plugin diagnostic, triggered byDiagnosticOnSave"
+                length diags3 @?= 1
+                d ^. LSP.range @?= Range (Position 0 0) (Position 1 0)
+                d ^. LSP.severity @?= Nothing
+                d ^. LSP.code @?= Nothing
+                d ^. LSP.message @?= T.pack "Example plugin diagnostic, triggered byDiagnosticOnSave"
     ]
 
 errorTests :: TestTree
@@ -69,7 +68,7 @@ errorTests = testGroup  "typed hole errors" [
         runSession hieCommand fullCaps "test/testdata" $ do
             _ <- openDoc "TypedHoles.hs" "haskell"
             [diag] <- waitForDiagnosticsSource "bios"
-            liftIO $ diag ^. LSP.severity `shouldBe` Just DsWarning
+            liftIO $ diag ^. LSP.severity @?= Just DsWarning
     ]
 
 warningTests :: TestTree
@@ -78,7 +77,7 @@ warningTests = testGroup  "Warnings are warnings" [
         runSession hieCommand fullCaps "test/testdata/wErrorTest" $ do
             _ <- openDoc "src/WError.hs" "haskell"
             [diag] <- waitForDiagnosticsSource "bios"
-            liftIO $ diag ^. LSP.severity `shouldBe` Just DsWarning
+            liftIO $ diag ^. LSP.severity @?= Just DsWarning
     ]
 
 saveTests :: TestTree
@@ -91,7 +90,7 @@ saveTests = testGroup  "only diagnostics on save" [
             diags <- waitForDiagnostics
 
             liftIO $ do
-                length diags `shouldBe` 0
+                length diags @?= 0
 
             let te = TextEdit (Range (Position 0 0) (Position 0 13)) ""
             _ <- applyEdit doc te
@@ -100,5 +99,5 @@ saveTests = testGroup  "only diagnostics on save" [
             sendNotification TextDocumentDidSave (DidSaveTextDocumentParams doc)
             diags2 <- waitForDiagnostics
             liftIO $
-                length diags2 `shouldBe` 1
+                length diags2 @?= 1
     ]

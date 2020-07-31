@@ -2,6 +2,7 @@
 module Symbol (tests) where
 
 import Control.Monad.IO.Class
+import Data.List
 import Language.Haskell.LSP.Test as Test
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
@@ -9,7 +10,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
 
 tests :: TestTree
 tests = testGroup "document symbols" [
@@ -27,7 +27,7 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
             a = DocumentSymbol "A" (Just "") SkConstructor Nothing aR aSR (Just mempty)
             b = DocumentSymbol "B" (Just "") SkConstructor Nothing bR bSR (Just mempty)
 
-        liftIO $ symbs `shouldContain` [myData]
+        liftIO $ myData `elem` symbs @? "Contains symbol"
 
     ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
@@ -38,7 +38,7 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
             dog = DocumentSymbol "dog" (Just "") SkVariable Nothing dogR dogSR (Just mempty)
             cat = DocumentSymbol "cat" (Just "") SkVariable Nothing catR catSR (Just mempty)
 
-        liftIO $ symbs `shouldContain` [foo]
+        liftIO $ foo `elem` symbs @? "Contains symbol"
 
     , ignoreTestBecause "Broken" $ testCase "provides pattern synonyms" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
@@ -47,7 +47,7 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
         let testPattern = DocumentSymbol "TestPattern"
                 (Just "") SkFunction Nothing testPatternR testPatternSR (Just mempty)
 
-        liftIO $ symbs `shouldContain` [testPattern]
+        liftIO $ testPattern `elem` symbs @? "Contains symbol"
     ]
 
 -- TODO: Test module, imports
@@ -62,7 +62,7 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
             a = SymbolInformation "A" SkConstructor Nothing (Location testUri aR) (Just "MyData")
             b = SymbolInformation "B" SkConstructor Nothing (Location testUri bR) (Just "MyData")
 
-        liftIO $ symbs `shouldContain` [myData, a, b]
+        liftIO $ [myData, a, b] `isInfixOf` symbs @? "Contains symbols"
 
     ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hieCommand oldCaps "test/testdata" $ do
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
@@ -74,7 +74,7 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
             cat = SymbolInformation "cat" SkVariable Nothing (Location testUri catR) (Just "bar")
 
         -- Order is important!
-        liftIO $ symbs `shouldContain` [foo, bar, dog, cat]
+        liftIO $ [foo, bar, dog, cat] `isInfixOf` symbs @? "Contains symbols"
     ]
 
 oldCaps :: ClientCapabilities

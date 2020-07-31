@@ -16,7 +16,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
 
 
 tests :: TestTree
@@ -30,16 +29,16 @@ tests = testGroup "deferred responses" [
 
     --   skipMany anyNotification
     --   hoverRsp <- message :: Session HoverResponse
-    --   liftIO $ hoverRsp ^? result . _Just . _Just . contents `shouldBe` Nothing
-    --   liftIO $ hoverRsp ^. LSP.id `shouldBe` responseId id1
+    --   liftIO $ hoverRsp ^? result . _Just . _Just . contents @?= Nothing
+    --   liftIO $ hoverRsp ^. LSP.id @?= responseId id1
 
     --   id2 <- sendRequest TextDocumentDocumentSymbol (DocumentSymbolParams doc Nothing)
     --   symbolsRsp <- skipManyTill anyNotification message :: Session DocumentSymbolsResponse
-    --   liftIO $ symbolsRsp ^. LSP.id `shouldBe` responseId id2
+    --   liftIO $ symbolsRsp ^. LSP.id @?= responseId id2
 
     --   id3 <- sendRequest TextDocumentHover (TextDocumentPositionParams doc (Position 4 2) Nothing)
     --   hoverRsp2 <- skipManyTill anyNotification message :: Session HoverResponse
-    --   liftIO $ hoverRsp2 ^. LSP.id `shouldBe` responseId id3
+    --   liftIO $ hoverRsp2 ^. LSP.id @?= responseId id3
 
     --   let contents2 = hoverRsp2 ^? result . _Just . _Just . contents
     --   liftIO $ contents2 `shouldNotSatisfy` null
@@ -48,7 +47,7 @@ tests = testGroup "deferred responses" [
     --   let highlightParams = TextDocumentPositionParams doc (Position 7 0) Nothing
     --   highlightRsp <- request TextDocumentDocumentHighlight highlightParams
     --   let (Just (List locations)) = highlightRsp ^. result
-    --   liftIO $ locations `shouldBe` [ DocumentHighlight
+    --   liftIO $ locations @?= [ DocumentHighlight
     --                  { _range = Range
     --                    { _start = Position {_line = 7, _character = 0}
     --                    , _end   = Position {_line = 7, _character = 2}
@@ -95,7 +94,7 @@ tests = testGroup "deferred responses" [
      testCase "instantly respond to failed modules with no cache" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "FuncTestFail.hs" "haskell"
         defs <- getDefinitions doc (Position 1 11)
-        liftIO $ defs `shouldBe` []
+        liftIO $ defs @?= []
 
     -- TODO: the benefits of caching parsed modules is doubted.
     -- TODO: add issue link
@@ -103,7 +102,7 @@ tests = testGroup "deferred responses" [
     --   runSession hieCommand fullCaps "test/testdata" $ do
     --     doc <- openDoc "FuncTestFail.hs" "haskell"
     --     (Left (sym:_)) <- getDocumentSymbols doc
-    --     liftIO $ sym ^. name `shouldBe` "main"
+    --     liftIO $ sym ^. name @?= "main"
 
     -- TODO does not compile
     -- , testCase "returns hints as diagnostics" $ runSession hieCommand fullCaps "test/testdata" $ do
@@ -113,7 +112,7 @@ tests = testGroup "deferred responses" [
     --     let testUri = filePathToUri $ cwd </> "test/testdata/FuncTest.hs"
 
     --     diags <- skipManyTill loggingNotification publishDiagnosticsNotification
-    --     liftIO $ diags ^? params `shouldBe` (Just $ PublishDiagnosticsParams
+    --     liftIO $ diags ^? params @?= (Just $ PublishDiagnosticsParams
     --                 { _uri         = testUri
     --                 , _diagnostics = List
     --                     [ Diagnostic
@@ -130,12 +129,12 @@ tests = testGroup "deferred responses" [
         --     args = List [Object args']
         --
         -- executeRsp <- request WorkspaceExecuteCommand (ExecuteCommandParams "hare:demote" (Just args) Nothing)
-        -- liftIO $ executeRsp ^. result `shouldBe` Just (Object H.empty)
+        -- liftIO $ executeRsp ^. result @?= Just (Object H.empty)
 
         -- editReq <- message :: Session ApplyWorkspaceEditRequest
         -- let expectedTextEdits = List [TextEdit (Range (Position 6 0) (Position 7 6)) "  where\n    bb = 5"]
         --     expectedTextDocEdits = List [TextDocumentEdit (VersionedTextDocumentIdentifier testUri (Just 0)) expectedTextEdits]
-        -- liftIO $ editReq ^. params . edit `shouldBe` WorkspaceEdit
+        -- liftIO $ editReq ^. params . edit @?= WorkspaceEdit
         --       Nothing
         --       (Just expectedTextDocEdits)
     -- , multiServerTests
@@ -165,7 +164,7 @@ multiMainTests = testGroup "multiple main modules" [
             diagsRspGhc    <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
             let (List diags) = diagsRspGhc ^. params . diagnostics
 
-            liftIO $ length diags `shouldBe` 2
+            liftIO $ length diags @?= 2
 
             _doc2 <- openDoc "HaReRename.hs" "haskell"
             _diagsRspHlint2 <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
@@ -173,5 +172,5 @@ multiMainTests = testGroup "multiple main modules" [
             diagsRsp2 <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
             let (List diags2) = diagsRsp2 ^. params . diagnostics
 
-            liftIO $ show diags2 `shouldBe` "[]"
+            liftIO $ show diags2 @?= "[]"
     ]

@@ -113,6 +113,8 @@ stylishHaskellTests = testGroup "stylish-haskell" [
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
+#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
+#else
 brittanyTests :: TestTree
 brittanyTests = testGroup "brittany" [
     goldenVsStringDiff "formats a document with LF endings" goldenGitDiff "test/testdata/BrittanyLF.formatted_document.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
@@ -141,6 +143,7 @@ brittanyTests = testGroup "brittany" [
         formatRange doc (FormattingOptions 4 True) range
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     ]
+#endif
 
 ormoluTests :: TestTree
 ormoluTests = testGroup "ormolu" [
@@ -160,9 +163,12 @@ ormoluTests = testGroup "ormolu" [
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
 
+#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
+#else
 -- | The same as 'formatLspConfig' but using the legacy section name
 formatLspConfigOld :: Value -> Value
 formatLspConfigOld provider = object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
+#endif
 
 formatConfig :: Value -> SessionConfig
 formatConfig provider = defaultConfig { lspConfig = Just (formatLspConfig provider) }

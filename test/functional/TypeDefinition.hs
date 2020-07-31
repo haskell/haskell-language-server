@@ -8,7 +8,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
 
 tests :: TestTree
 tests = testGroup "type definitions" [
@@ -19,10 +18,9 @@ tests = testGroup "type definitions" [
             defs <- getTypeDefinitions doc (toPos (11, 23))
             liftIO $ do
                 fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs
-                    `shouldBe` [ Location (filePathToUri fp)
-                                        (Range (toPos (8, 1)) (toPos (8, 29)))
-                            ]
+                defs @?= [ Location (filePathToUri fp)
+                                    (Range (toPos (8, 1)) (toPos (8, 29)))
+                         ]
     , ignoreTestBecause "Broken" $ testCase "finds local definition of newtype variable"
         $ runSession hieCommand fullCaps "test/testdata/gototest"
         $ do
@@ -30,10 +28,9 @@ tests = testGroup "type definitions" [
             defs <- getTypeDefinitions doc (toPos (16, 21))
             liftIO $ do
                 fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs
-                    `shouldBe` [ Location (filePathToUri fp)
-                                        (Range (toPos (13, 1)) (toPos (13, 30)))
-                            ]
+                defs @?= [ Location (filePathToUri fp)
+                                    (Range (toPos (13, 1)) (toPos (13, 30)))
+                         ]
     , ignoreTestBecause "Broken" $ testCase "finds local definition of sum type variable"
         $ runSession hieCommand fullCaps "test/testdata/gototest"
         $ do
@@ -41,10 +38,9 @@ tests = testGroup "type definitions" [
             defs <- getTypeDefinitions doc (toPos (21, 13))
             liftIO $ do
                 fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs
-                    `shouldBe` [ Location (filePathToUri fp)
-                                        (Range (toPos (18, 1)) (toPos (18, 26)))
-                            ]
+                defs @?= [ Location (filePathToUri fp)
+                                    (Range (toPos (18, 1)) (toPos (18, 26)))
+                         ]
     , ignoreTestBecause "Broken" $ testCase "finds local definition of sum type contructor"
             $ runSession hieCommand fullCaps "test/testdata/gototest"
             $ do
@@ -53,15 +49,15 @@ tests = testGroup "type definitions" [
                 liftIO $ do
                     fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
                     defs
-                        `shouldBe` [ Location (filePathToUri fp)
-                                            (Range (toPos (18, 1)) (toPos (18, 26)))
-                                ]
+                        @?= [ Location (filePathToUri fp)
+                                       (Range (toPos (18, 1)) (toPos (18, 26)))
+                            ]
     , ignoreTestBecause "Broken" $ testCase "can not find non-local definition of type def"
         $ runSession hieCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (30, 17))
-            liftIO $ defs `shouldBe` []
+            liftIO $ defs @?= []
 
     , ignoreTestBecause "Broken" $ testCase "find local definition of type def"
         $ runSession hieCommand fullCaps "test/testdata/gototest"
@@ -70,10 +66,9 @@ tests = testGroup "type definitions" [
             defs <- getTypeDefinitions doc (toPos (35, 16))
             liftIO $ do
                 fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs
-                    `shouldBe` [ Location (filePathToUri fp)
-                                        (Range (toPos (18, 1)) (toPos (18, 26)))
-                            ]
+                defs @?= [ Location (filePathToUri fp)
+                                    (Range (toPos (18, 1)) (toPos (18, 26)))
+                         ]
 
     {--  TODO Implement
      , ignoreTestBecause "Broken" $ testCase "find type-definition of type def in component"
@@ -87,7 +82,7 @@ tests = testGroup "type definitions" [
              liftIO $ do
                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
                defs
-                 `shouldBe` [ Location (filePathToUri fp)
+                 @?= [ Location (filePathToUri fp)
                                        (Range (toPos (8, 1)) (toPos (8, 29)))
                             ]
     --}
@@ -98,10 +93,9 @@ tests = testGroup "type definitions" [
             defs <- getTypeDefinitions doc (toPos (40, 19))
             liftIO $ do
                 fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs
-                    `shouldBe` [ Location (filePathToUri fp)
-                                        (Range (toPos (37, 1)) (toPos (37, 31)))
-                            ]
+                defs @?= [ Location (filePathToUri fp)
+                                    (Range (toPos (37, 1)) (toPos (37, 31)))
+                         ]
     ]
 
 --NOTE: copied from Haskell.Ide.Engine.ArtifactMap

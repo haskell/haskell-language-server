@@ -16,7 +16,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
 
 tests :: TestTree
 tests = testGroup "window/workDoneProgress" [
@@ -29,25 +28,25 @@ tests = testGroup "window/workDoneProgress" [
 
             createRequest <- message :: Session WorkDoneProgressCreateRequest
             liftIO $ do
-                    createRequest ^. L.params `shouldBe` WorkDoneProgressCreateParams (ProgressNumericToken 0)
+                    createRequest ^. L.params @?= WorkDoneProgressCreateParams (ProgressNumericToken 0)
 
             startNotification <- message :: Session WorkDoneProgressBeginNotification
             liftIO $ do
                     -- Expect a stack cradle, since the given `hie.yaml` is expected
                     -- to contain a multi-stack cradle.
-                    startNotification ^. L.params . L.value . L.title `shouldBe` "Initializing Stack project"
-                    startNotification ^. L.params . L.token `shouldBe` (ProgressNumericToken 0)
+                    startNotification ^. L.params . L.value . L.title @?= "Initializing Stack project"
+                    startNotification ^. L.params . L.token @?= (ProgressNumericToken 0)
 
             reportNotification <- message :: Session WorkDoneProgressReportNotification
             liftIO $ do
-                    reportNotification ^. L.params . L.value . L.message `shouldBe` Just "Main"
-                    reportNotification ^. L.params . L.token `shouldBe` (ProgressNumericToken 0)
+                    reportNotification ^. L.params . L.value . L.message @?= Just "Main"
+                    reportNotification ^. L.params . L.token @?= (ProgressNumericToken 0)
 
             -- may produce diagnostics
             skipMany publishDiagnosticsNotification
 
             doneNotification <- message :: Session WorkDoneProgressEndNotification
-            liftIO $ doneNotification ^. L.params . L.token `shouldBe` (ProgressNumericToken 0)
+            liftIO $ doneNotification ^. L.params . L.token @?= (ProgressNumericToken 0)
 
             -- Initial hlint notifications
             _ <- publishDiagnosticsNotification
@@ -57,20 +56,20 @@ tests = testGroup "window/workDoneProgress" [
 
             createRequest' <- skipManyTill loggingNotification (message :: Session WorkDoneProgressCreateRequest)
             liftIO $ do
-                    createRequest' ^. L.params `shouldBe` WorkDoneProgressCreateParams (ProgressNumericToken 1)
+                    createRequest' ^. L.params @?= WorkDoneProgressCreateParams (ProgressNumericToken 1)
 
             startNotification' <- message :: Session WorkDoneProgressBeginNotification
             liftIO $ do
-                    startNotification' ^. L.params . L.value . L.title `shouldBe` "loading"
-                    startNotification' ^. L.params . L.token `shouldBe` (ProgressNumericToken 1)
+                    startNotification' ^. L.params . L.value . L.title @?= "loading"
+                    startNotification' ^. L.params . L.token @?= (ProgressNumericToken 1)
 
             reportNotification' <- message :: Session WorkDoneProgressReportNotification
             liftIO $ do
-                    reportNotification' ^. L.params . L.value . L.message `shouldBe` Just "Main"
-                    reportNotification' ^. L.params . L.token `shouldBe` (ProgressNumericToken 1)
+                    reportNotification' ^. L.params . L.value . L.message @?= Just "Main"
+                    reportNotification' ^. L.params . L.token @?= (ProgressNumericToken 1)
 
             doneNotification' <- message :: Session WorkDoneProgressEndNotification
-            liftIO $ doneNotification' ^. L.params . L.token `shouldBe` (ProgressNumericToken 1)
+            liftIO $ doneNotification' ^. L.params . L.token @?= (ProgressNumericToken 1)
 
             -- Initial hlint notifications
             _ <- publishDiagnosticsNotification

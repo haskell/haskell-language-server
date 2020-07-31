@@ -11,7 +11,6 @@ module FunctionalBadProject (tests) where
 -- import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Hspec.Expectations
 
 -- ---------------------------------------------------------------------
 -- TODO: Currently this can not succeed, since such an error is thrown in "runActionWithContext" which
@@ -20,7 +19,7 @@ import Test.Hspec.Expectations
 --
 tests :: TestTree
 tests = testGroup "behaviour on malformed projects" [
-    testCase "no test executed" $ True `shouldBe` True
+    testCase "no test executed" $ True @?= True
     ]
 
     -- testCase "deals with cabal file with unsatisfiable dependency" $
@@ -29,14 +28,14 @@ tests = testGroup "behaviour on malformed projects" [
     --         _doc <- openDoc "Foo.hs" "haskell"
 
     --         diags@(d:_) <- waitForDiagnosticsSource "bios"
-    --         -- liftIO $ show diags `shouldBe` ""
+    --         -- liftIO $ show diags @?= ""
     --         -- liftIO $ putStrLn $ show diags
     --         -- liftIO $ putStrLn "a"
     --         liftIO $ do
-    --             length diags `shouldBe` 1
-    --             d ^. range `shouldBe` Range (Position 0 0) (Position 1 0)
-    --             d ^. severity `shouldBe` (Just DsError)
-    --             d ^. code `shouldBe` Nothing
-    --             d ^. source `shouldBe` Just "bios"
-    --             d ^. message `shouldBe`
+    --             length diags @?= 1
+    --             d ^. range @?= Range (Position 0 0) (Position 1 0)
+    --             d ^. severity @?= (Just DsError)
+    --             d ^. code @?= Nothing
+    --             d ^. source @?= Just "bios"
+    --             d ^. message @?=
     --                 (T.pack "readCreateProcess: stack \"build\" \"--only-configure\" \".\" (exit 1): failed\n")
