@@ -90,7 +90,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.gz
+        name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
         path: ${{ steps.compress_server_binary.outputs.path }}
 
     - name: Build Wrapper
@@ -130,6 +130,6 @@ jobs:
     - uses: actions/upload-artifact@v2
       if: matrix.ghc == '8.10.1'
       with:
-        name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.gz
+        name: haskell-language-server-wrapper-${{ runner.OS }}${{env.EXE_EXT}}.${{ steps.compress_wrapper_binary.outputs.extension }}
         path: ${{ steps.compress_wrapper_binary.outputs.path }}
 
