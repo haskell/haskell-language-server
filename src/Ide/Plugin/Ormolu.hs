@@ -64,7 +64,7 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
 
   let
     fullRegion = RegionIndices Nothing Nothing
-    rangeRegion s e = RegionIndices (Just s) (Just e)
+    rangeRegion s e = RegionIndices (Just $ s + 1) (Just $ e + 1)
     mkConf o region = defaultConfig { cfgDynOptions = o,  cfgRegion = region }
     fmt :: T.Text -> Config RegionIndices -> IO (Either OrmoluException T.Text)
     fmt cont conf =
@@ -72,11 +72,8 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
 
   case typ of
     FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
-    FormatRange r ->
-      let
-        Range (Position sl _) (Position el _) = normalize r
-      in
-        ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
+    FormatRange (Range (Position sl _) (Position el _)) ->
+      ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
  where
   title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)

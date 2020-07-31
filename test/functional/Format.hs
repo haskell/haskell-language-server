@@ -42,11 +42,11 @@ rangeTests :: TestTree
 rangeTests = testGroup "format range" [
     goldenVsStringDiff "works" goldenGitDiff "test/testdata/Format.formatted_range.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
+        formatRange doc (FormattingOptions 2 True) (Range (Position 5 0) (Position 7 10))
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     , goldenVsStringDiff "works with custom tab size" goldenGitDiff "test/testdata/Format.formatted_range_with_tabsize.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 5 True) (Range (Position 4 0) (Position 7 19))
+        formatRange doc (FormattingOptions 5 True) (Range (Position 8 0) (Position 11 19))
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     ]
 
@@ -143,19 +143,18 @@ brittanyTests = testGroup "brittany" [
     ]
 
 ormoluTests :: TestTree
-ormoluTests = testGroup "ormolu" [
-    goldenVsStringDiff "formats correctly" goldenGitDiff ("test/testdata/Format.ormolu." ++ ormoluGoldenSuffix ++ ".hs") $ runSession hieCommand fullCaps "test/testdata" $ do
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
-        doc <- openDoc "Format.hs" "haskell"
-        formatDoc doc (FormattingOptions 2 True)
-        BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-    ]
-  where
-    ormoluGoldenSuffix = case ghcVersion of
-      GHC88 -> "formatted"
-      GHC86 -> "formatted"
-      _ -> "unchanged"
-
+ormoluTests = testGroup "ormolu"
+  [ goldenVsStringDiff "formats correctly" goldenGitDiff "test/testdata/Format.ormolu.formatted.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+      doc <- openDoc "Format.hs" "haskell"
+      formatDoc doc (FormattingOptions 2 True)
+      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+  , goldenVsStringDiff "formats imports correctly" goldenGitDiff "test/testdata/Format2.ormolu.formatted.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+      doc <- openDoc "Format2.hs" "haskell"
+      formatDoc doc (FormattingOptions 2 True)
+      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+  ]
 
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]

@@ -67,13 +67,11 @@ diffTextEdit fText f2Text withDeletions = J.List r
                         (J.Position el 0)
 
     diffOperationToTextEdit (Addition fm l) = J.TextEdit range nt
-    -- fm has a range wrt to the changed file, which starts in the current file at l
-    -- So the range has to be shifted to start at l
+    -- fm has a range wrt to the changed file, which starts in the current file at l + 1
+    -- So the range has to be shifted to start at l + 1
       where
-        range = J.Range (J.Position (l' - 1) 0)
-                        (J.Position (l' - 1) 0)
-        l' = max l sl -- Needed to add at the end of the file
-        sl = fst $ lrNumbers fm
+        range = J.Range (J.Position l 0)
+                        (J.Position l 0)
         nt = T.pack $ unlines $ lrContents fm
 
 
