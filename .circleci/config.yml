@@ -42,7 +42,7 @@ defaults: &defaults
 
     - run:
         name: Build Testsuite without running it
-        command: stack -j 2 --stack-yaml=${STACK_FILE}  build --test --no-run-tests
+        command: stack --stack-yaml=${STACK_FILE}  build --test --no-run-tests
         no_output_timeout: 30m
 
     - store_artifacts:
@@ -65,8 +65,11 @@ defaults: &defaults
 
     - run:
         name: Test haskell-language-server
-        # Tests MUST run with -j1, since multiple ghc-mod sessions are not allowed
-        command: stack -j 1 --stack-yaml=${STACK_FILE} test haskell-language-server --dump-logs
+        # Tasty by default will run all the tests in parallel. Which should
+        # work ok, but given that these CircleCI runners aren't the beefiest
+        # machine can cause some flakiness. So pass -j1 to Tasty (NOT Stack) to
+        # tell it to go slow and steady.
+        command: stack --stack-yaml=${STACK_FILE} test haskell-language-server --dump-logs --test-arguments="-j1"
         no_output_timeout: 120m
 
     - store_test_results:
