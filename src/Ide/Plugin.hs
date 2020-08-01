@@ -332,9 +332,6 @@ makeExecuteCommands ecs lf ide = wrapUnhandledExceptions $ do
 -}
 
 -- -----------------------------------------------------------
-
--- | Runs a plugin command given a PluginId, CommandId and
--- arguments in the form of a JSON object.
 wrapUnhandledExceptions ::
     (a -> IO (Either ResponseError J.Value, Maybe b)) ->
        a -> IO (Either ResponseError J.Value, Maybe b)
@@ -343,6 +340,9 @@ wrapUnhandledExceptions action input =
         let resp = ResponseError InternalError (T.pack $ show e) Nothing
         return (Left resp, Nothing)
 
+
+-- | Runs a plugin command given a PluginId, CommandId and
+-- arguments in the form of a JSON object.
 runPluginCommand :: Map.Map PluginId [PluginCommand]
                  -> LSP.LspFuncs Config
                  -> IdeState
