@@ -44,6 +44,7 @@ library
       Ide.Plugin.Eval
       Ide.Plugin.Example
       Ide.Plugin.Example2
+      Ide.Plugin.Fourmolu
       Ide.Plugin.GhcIde
       Ide.Plugin.Ormolu
       Ide.Plugin.Pragmas
@@ -70,6 +71,7 @@ library
     , extra
     , filepath
     , floskell == 0.10.*
+    , fourmolu ^>= 0.1
     , ghc
     , ghc-boot-th
     , ghcide >= 0.1

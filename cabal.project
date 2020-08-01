@@ -15,3 +15,7 @@ package ghcide
 write-ghc-environment-files: never
 
 index-state: 2020-07-27T12:40:45Z
+
+allow-newer:
+  floskell:aeson
+  stylish-haskell:aeson

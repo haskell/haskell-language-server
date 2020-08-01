@@ -20,6 +20,7 @@ extra-deps:
 # - ghcide-0.1.0
 - extra-1.7.3
 - floskell-0.10.3
+- fourmolu-0.1.0.0
 - fuzzy-0.1.0.0
 - ghc-check-0.5.0.1
 - ghc-exactprint-0.6.2 # for HaRe
