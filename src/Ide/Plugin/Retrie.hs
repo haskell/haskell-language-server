@@ -268,8 +268,7 @@ suggestRuleRewrites ::
   GHC.Module ->
   LRuleDecls pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestRuleRewrites originatingFile pos ms_mod (L l (HsRules {rds_rules}))
-  | pos `isInsideSrcSpan` l =
+suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
     concat
       [ [ let rewrites =
                 [Right $ RuleForward (qualify ms_mod ruleName)]
@@ -286,7 +285,13 @@ suggestRuleRewrites originatingFile pos ms_mod (L l (HsRules {rds_rules}))
                 RunRetrieParams {..}
               )
         ]
-        | L _ (HsRule {rd_name = (L _ (_, rn))}) <- rds_rules,
+        | L l r  <- rds_rules,
+          pos `isInsideSrcSpan` l,
+#if MIN_GHC_API_VERSION(8,8,0)
+          let HsRule {rd_name = L _ (_, rn)} = r,
+#else
+          let HsRule _ (L _ (_,rn)) _ _ _ _ = r,
+#endif
           let ruleName = unpackFS rn
       ]
 suggestRuleRewrites _ _ _ _ = []
@@ -510,9 +515,7 @@ toImportDecl AddImport {..} = GHC.ImportDecl {..}
     ideclSourceSrc = NoSourceText
     ideclExt = GHC.noExtField
     ideclAs = toMod <$> ideclAsString
-
 #if MIN_GHC_API_VERSION(8,10,0)
-
     ideclQualified = if ideclQualifiedBool then GHC.QualifiedPre else GHC.NotQualified
 #else
     ideclQualified = ideclQualifiedBool
