@@ -383,6 +383,7 @@ Then issue `:CocConfig` and add the following to your Coc config file.
     "command": "haskell-language-server-wrapper",
     "args": ["--lsp"],
     "rootPatterns": [
+      "hie.yaml",
       "*.cabal",
       "stack.yaml",
       "cabal.project",
