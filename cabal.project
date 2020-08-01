@@ -14,7 +14,7 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-07-27T12:40:45Z
+index-state: 2020-08-01T17:01:19Z
 
 allow-newer:
   floskell:aeson
