@@ -83,8 +83,7 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core      (LspFuncs (..), ProgressCancellable (Cancellable))
 import           Language.Haskell.LSP.Messages  (FromServerMessage (NotShowMessage))
 import           Language.Haskell.LSP.Types     as J
-import           Retrie.CPP                     (CPP (NoCPP), parseCPP,
-                                                 printCPP)
+import           Retrie.CPP                     (CPP (NoCPP), parseCPP)
 import           Retrie.ExactPrint              (fix, relativiseApiAnns,
                                                  transformA, unsafeMkA)
 import           Retrie.Fixity                  (mkFixityEnv)
@@ -384,19 +383,12 @@ callRetrie state session rewrites origin = do
 
   results <- forM targets $ \t -> runExceptT $ do
     (fixityEnv, cpp) <- ExceptT $ try $ getCPPmodule t
-    (_user, ast, change@(Change replacements _imports)) <-
+    -- TODO add the imports to the resulting edits
+    (_user, ast, change@(Change _replacements _imports)) <-
       lift $ runRetrie fixityEnv retrie cpp
     case ast of
       _ ->
-        -- NoCPP {} ->
         return $ asTextEdits change
-      _ -> do
-        -- DEBUG CODE bypass replacements and use the rewritten ast instead
-        -- we would want to do this to capture import edits
-        let new = T.pack $ printCPP replacements ast
-            uri = Uri $ T.pack t
-            change' = [(uri, TextEdit wholeDocument new)]
-        return change'
 
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit
@@ -430,17 +422,12 @@ callRetrie state session rewrites origin = do
       let ranns = relativiseApiAnns pm_parsed_source pm_annotations
        in unsafeMkA pm_parsed_source ranns 0
 
-wholeDocument :: Range
-wholeDocument = Range (Position 0 0) (Position maxBound 0)
-
 asEditMap :: [[(Uri, TextEdit)]] -> WorkspaceEditMap
 asEditMap = coerce . HM.fromListWith (++) . concatMap (map (second pure))
 
 asTextEdits :: Change -> [(Uri, TextEdit)]
 asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
-  -- TODO retrie does not include import edits in the 'reps' list
-  --      fix this in retrie or work around it here
   [ (Uri spanLoc, edit)
     | Replacement {..} <- nubOrdOn replLocation reps,
       s@(RealSrcSpan rspan) <- [replLocation],
