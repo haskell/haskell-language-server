@@ -67,3 +67,5 @@ nix:
   packages: [ icu libcxx zlib ]
 
 concurrent-tests: false
+
+allow-newer: true
