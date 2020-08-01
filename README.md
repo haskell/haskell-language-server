@@ -71,6 +71,10 @@ This is *very* early stage software.
 
   This will cause compilation errors if a dependency contains invalid Haddock markup, though in a future version of GHC (hopefully 8.12), [these will be demoted to warnings](https://gitlab.haskell.org/ghc/ghc/-/merge_requests/2377).
 
+ - Integration with [retrie](https://hackage.haskell.org/package/retrie)
+
+   ![Retrie](https://i.imgur.com/VFKx1He.gif)
+
  - Many more (TBD)
 
 ## Installation
