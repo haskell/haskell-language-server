@@ -286,7 +286,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L l (HsRules {rds_rules}))
                 RunRetrieParams {..}
               )
         ]
-        | L _ (HsRule _ (L _ (_, rn)) _ _ _ _ _) <- rds_rules,
+        | L _ (HsRule {rd_name = (L _ (_, rn))}) <- rds_rules,
           let ruleName = unpackFS rn
       ]
 suggestRuleRewrites _ _ _ _ = []
