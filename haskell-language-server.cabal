@@ -15,6 +15,7 @@ build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
+    include/ghc-api-version.h
 
 flag agpl
   Description: Enable AGPL dependencies
@@ -93,6 +94,8 @@ library
     , time
     , transformers
     , unordered-containers
+  include-dirs:
+        include
   if os(windows)
     build-depends:     Win32
   else
