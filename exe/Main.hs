@@ -67,6 +67,7 @@ import Ide.Plugin.Example                 as Example
 import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
+import Ide.Plugin.Fourmolu                as Fourmolu
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Retrie                  as Retrie
@@ -102,8 +103,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       GhcIde.descriptor  "ghcide"
       , Pragmas.descriptor  "pragmas"
       , Floskell.descriptor "floskell"
-      -- , genericDescriptor     "generic"
-      -- , ghcmodDescriptor      "ghcmod"
+      , Fourmolu.descriptor "fourmolu"
+    --   , genericDescriptor     "generic"
+    --   , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"

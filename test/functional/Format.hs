@@ -36,6 +36,7 @@ tests = testGroup "format document" [
     , brittanyTests
 #endif
     , ormoluTests
+    , fourmoluTests
     ]
 
 rangeTests :: TestTree
@@ -156,6 +157,20 @@ ormoluTests = testGroup "ormolu"
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
       doc <- openDoc "Format2.hs" "haskell"
       formatDoc doc (FormattingOptions 2 True)
+      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+  ]
+
+fourmoluTests :: TestTree
+fourmoluTests = testGroup "fourmolu"
+  [ goldenVsStringDiff "formats correctly" goldenGitDiff "test/testdata/Format.fourmolu.formatted.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
+      doc <- openDoc "Format.hs" "haskell"
+      formatDoc doc (FormattingOptions 4 True)
+      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+  , goldenVsStringDiff "formats imports correctly" goldenGitDiff "test/testdata/Format2.fourmolu.formatted.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
+      doc <- openDoc "Format2.hs" "haskell"
+      formatDoc doc (FormattingOptions 4 True)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
