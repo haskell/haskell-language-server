@@ -9,6 +9,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+- aeson-1.5.2.0
 - ansi-terminal-0.10.3
 - base-compat-0.11.0
 - brittany-0.12.1.1@rev:2

@@ -8,6 +8,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+- aeson-1.5.2.0
 - apply-refact-0.7.0.0
 - bytestring-trie-0.2.5.0
 - cabal-plan-0.6.2.0

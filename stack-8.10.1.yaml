@@ -8,6 +8,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+- aeson-1.5.2.0
 - Cabal-3.0.2.0
 - hie-bios-0.6.1
 - cabal-plan-0.7.0.0
