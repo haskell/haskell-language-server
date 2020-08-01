@@ -6,16 +6,21 @@
 
 { sources ? import nix/sources.nix,
   nixpkgs ? import sources.nixpkgs {},
-  compiler ? "default"
+  compiler ? "default",
+  hoogle ? false
  }:
 with nixpkgs;
 
 let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.version;
     haskellPackagesForProject = p:
         if compiler == "default" || compiler == defaultCompiler
-            then haskellPackages.ghcWithPackages p
-            # for all other compilers there is no Nix cache so dont bother building deps with NIx
-            else haskell.packages.${compiler}.ghcWithPackages (_: []);
+            then if hoogle
+                then haskellPackages.ghcWithHoogle p
+                else haskellPackages.ghcWithPackages p
+            # for all other compilers there is no Nix cache so dont bother building deps
+            else if hoogle
+                then  haskell.packages.${compiler}.ghcWithHoogle (_: [])
+                else haskell.packages.${compiler}.ghcWithPackages (_: []);
 
     retrie = with haskell.lib; dontCheck(disableLibraryProfiling(haskellPackages.retrie));
     compilerWithPackages = haskellPackagesForProject(p:
