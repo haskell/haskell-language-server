@@ -73,7 +73,7 @@ This is *very* early stage software.
 
  - Integration with [retrie](https://hackage.haskell.org/package/retrie)
 
-   ![Retrie](https://i.imgur.com/VFKx1He.gif)
+   ![Retrie](https://i.imgur.com/fEKjrUG.gif)
 
  - Many more (TBD)
 
