@@ -49,8 +49,7 @@ import           Development.IDE.Core.Shake     (IdeRule,
                                                  IdeState (shakeExtras),
                                                  runIdeAction, use,
                                                  useWithStaleFast, use_)
-import           Development.IDE.GHC.Error      (isInsideSrcSpan,
-                                                 srcSpanToRange)
+import           Development.IDE.GHC.Error      (realSrcSpanToRange, isInsideSrcSpan)
 import           Development.IDE.GHC.Util       (hscEnv, prettyPrint, runGhcEnv)
 import           Development.IDE.Types.Location
 import           Development.Shake              (RuleResult)
@@ -435,9 +434,9 @@ asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
   [ (Uri spanLoc, edit)
     | Replacement {..} <- nubOrdOn replLocation reps,
-      s@(RealSrcSpan rspan) <- [replLocation],
+      (RealSrcSpan rspan) <- [replLocation],
       let spanLoc = T.pack $ unpackFS $ srcSpanFile rspan,
-      let edit = TextEdit (srcSpanToRange s) (T.pack replReplacement)
+      let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
   ]
 
 -------------------------------------------------------------------------------
