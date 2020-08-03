@@ -15,6 +15,7 @@ build-type:     Simple
 extra-source-files:
     README.md
     ChangeLog.md
+    include/ghc-api-version.h
 
 flag agpl
   Description: Enable AGPL dependencies
@@ -47,6 +48,7 @@ library
       Ide.Plugin.GhcIde
       Ide.Plugin.Ormolu
       Ide.Plugin.Pragmas
+      Ide.Plugin.Retrie
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
       Ide.Plugin.StylishHaskell
@@ -83,6 +85,8 @@ library
     , optparse-simple
     , process
     , regex-tdfa >= 1.3.1.0
+    , retrie >= 0.1.1.0
+    , safe-exceptions
     , shake >= 0.17.5
     , stylish-haskell == 0.11.*
     , temporary
@@ -90,6 +94,8 @@ library
     , time
     , transformers
     , unordered-containers
+  include-dirs:
+        include
   if os(windows)
     build-depends:     Win32
   else

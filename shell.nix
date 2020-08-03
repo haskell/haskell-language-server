@@ -17,7 +17,8 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
             # for all other compilers there is no Nix cache so dont bother building deps with NIx
             else haskell.packages.${compiler}.ghcWithPackages (_: []);
 
-   compilerWithPackages = haskellPackagesForProject(p:
+    retrie = with haskell.lib; dontCheck(disableLibraryProfiling(haskellPackages.retrie));
+    compilerWithPackages = haskellPackagesForProject(p:
         with p;
         [
           Diff
@@ -66,6 +67,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
           primes
           psqueues
           regex-tdfa
+          retrie
           rope-utf16-splay
           safe-exceptions
           shake

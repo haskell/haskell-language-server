@@ -18,6 +18,7 @@ module Ide.Plugin
     , responseError
     ) where
 
+import           Control.Exception(SomeException, catch)
 import           Control.Lens ( (^.) )
 import           Control.Monad
 import qualified Data.Aeson as J
@@ -206,7 +207,7 @@ executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
 --                             -> ExecuteCommandParams
 --                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 makeExecuteCommands :: [(PluginId, [PluginCommand])] -> LSP.LspFuncs Config -> ExecuteCommandProvider
-makeExecuteCommands ecs lf ide = do
+makeExecuteCommands ecs lf ide = wrapUnhandledExceptions $ do
   let
       pluginMap = Map.fromList ecs
       parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
@@ -331,6 +332,14 @@ makeExecuteCommands ecs lf ide = do
 -}
 
 -- -----------------------------------------------------------
+wrapUnhandledExceptions ::
+    (a -> IO (Either ResponseError J.Value, Maybe b)) ->
+       a -> IO (Either ResponseError J.Value, Maybe b)
+wrapUnhandledExceptions action input =
+    catch (action input) $ \(e::SomeException) -> do
+        let resp = ResponseError InternalError (T.pack $ show e) Nothing
+        return (Left resp, Nothing)
+
 
 -- | Runs a plugin command given a PluginId, CommandId and
 -- arguments in the form of a JSON object.

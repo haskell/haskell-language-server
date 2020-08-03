@@ -19,6 +19,7 @@ extra-deps:
 - monad-dijkstra-0.1.1.2
 - optics-core-0.3
 - ormolu-0.1.2.0
+- retrie-0.1.1.1
 - stylish-haskell-0.11.0.0
 - semigroups-0.18.5
 - temporary-1.2.1.1
@@ -31,6 +32,8 @@ flags:
     # but brittany is not usable with ghc-8.10.1
     # see https://github.com/lspitzner/brittany/issues/269
     agpl: false
+  retrie:
+    BuildExecutable: false
 
 # allow-newer: true
 

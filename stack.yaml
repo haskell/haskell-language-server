@@ -8,7 +8,7 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-- ansi-terminal-0.10.2
+- ansi-terminal-0.10.3
 - base-compat-0.11.0
 - brittany-0.12.1.1@rev:2
 - butcher-1.3.3.1
@@ -20,6 +20,7 @@ extra-deps:
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
 - ghc-check-0.5.0.1
+- ghc-exactprint-0.6.2
 - ghc-lib-parser-8.10.1.20200523
 - ghc-lib-parser-ex-8.10.0.4
 - haddock-api-2.22.0@rev:1
@@ -41,6 +42,7 @@ extra-deps:
 - regex-base-0.94.0.0
 - regex-pcre-builtin-0.95.1.1.8.43
 - regex-tdfa-1.3.1.0
+- retrie-0.1.1.1
 - semialign-1.1
 - stylish-haskell-0.11.0.0
 - tasty-rerun-1.1.17
@@ -51,6 +53,8 @@ extra-deps:
 flags:
   haskell-language-server:
     pedantic: true
+  retrie:
+    BuildExecutable: false
 
 # allow-newer: true
 
