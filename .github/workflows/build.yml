@@ -65,9 +65,9 @@ jobs:
       run: |
         HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
         HLS=haskell-language-server-$GHC_VER
-        mv $HLS_BUILD $HLS
+        mv $HLS_BUILD $HLS${{env.EXE_EXT}}
         if [[ "$OSTYPE" == "msys" ]]; then
-          7z a $HLS.zip $HLS
+          7z a $HLS.zip $HLS${{env.EXE_EXT}}
           echo ::set-output name=path::$HLS.zip
           echo ::set-output name=content_type::application/zip
           echo ::set-output name=extension::zip
@@ -103,9 +103,9 @@ jobs:
       run: |
         HLS_WRAPPER_BUILD=$(find dist-newstyle \( -name 'hls-wrapper' -o -name 'hls-wrapper.exe' \) -type f)
         HLS_WRAPPER=haskell-language-server-wrapper
-        mv $HLS_WRAPPER_BUILD $HLS_WRAPPER
+        mv $HLS_WRAPPER_BUILD $HLS_WRAPPER${{env.EXE_EXT}}
         if [[ "$OSTYPE" == "msys" ]]; then
-          7z a $HLS_WRAPPER.zip $HLS_WRAPPER
+          7z a $HLS_WRAPPER.zip $HLS_WRAPPER${{env.EXE_EXT}}
           echo ::set-output name=path::$HLS_WRAPPER.zip
           echo ::set-output name=content_type::application/zip
           echo ::set-output name=extension::zip
