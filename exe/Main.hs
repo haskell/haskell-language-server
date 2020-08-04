@@ -174,15 +174,18 @@ runLspMode lspArgs@LspArguments {..} = do
         hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins')
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg -> do
+        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg _getConfig -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             sessionLoader <- loadSession dir
+            -- config <- fromMaybe defaultLspConfig <$> getConfig
             let options = (defaultIdeOptions sessionLoader)
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = IdeTesting argsTesting
                     , optThreads        = argsThreads
+                    -- , optCheckParents   = checkParents config
+                    -- , optCheckProject   = checkProject config
                     }
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins)
