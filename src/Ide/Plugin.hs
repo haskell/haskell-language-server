@@ -72,8 +72,13 @@ asGhcIdePlugin mp =
         ls = Map.toList (ipMap mp)
 
         mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor -> Maybe b) -> Plugin Config
-        mkPlugin maker selector
-            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
+        mkPlugin maker selector =
+          case concatMap (\(pid, p) -> justs (pid, selector p)) ls of
+            -- If there are no plugins that provide a descriptor, use mempty to
+            -- create the plugin – otherwise we we end up declaring handlers for
+            -- capabilities that there are no plugins for
+            [] -> mempty
+            xs -> maker xs
 
 
 pluginDescToIdePlugins :: [PluginDescriptor] -> IdePlugins
