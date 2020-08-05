@@ -70,7 +70,7 @@ import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Retrie                  as Retrie
-#if AGPL
+#if AGPL && !MIN_VERSION_ghc(8,10,1)
 import Ide.Plugin.Brittany                as Brittany
 #endif
 import Ide.Plugin.Pragmas                 as Pragmas
