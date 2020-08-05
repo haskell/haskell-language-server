@@ -17,8 +17,8 @@ extra-deps:
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - extra-1.7.3
-- floskell-0.10.3
-- fourmolu-0.1.0.0
+- floskell-0.10.4
+- fourmolu-0.1.0.0@rev:1
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
 - ghc-check-0.5.0.1
@@ -31,7 +31,7 @@ extra-deps:
 - haskell-lsp-types-0.22.0.0
 - hie-bios-0.6.1
 - HsYAML-0.2.1.0@rev:1
-- HsYAML-aeson-0.2.0.0@rev:1
+- HsYAML-aeson-0.2.0.0@rev:2
 - indexed-profunctors-0.1
 - lens-4.18
 - lsp-test-0.11.0.3
@@ -48,7 +48,7 @@ extra-deps:
 - semialign-1.1
 # - github: wz1000/shake
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
-- stylish-haskell-0.11.0.0
+- stylish-haskell-0.11.0.3
 - tasty-rerun-1.1.17
 - temporary-1.2.1.1
 - type-equality-1
@@ -66,5 +66,3 @@ nix:
   packages: [ icu libcxx zlib ]
 
 concurrent-tests: false
-
-allow-newer: true

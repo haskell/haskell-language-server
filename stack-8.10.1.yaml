@@ -13,16 +13,17 @@ extra-deps:
 - hie-bios-0.6.1
 - cabal-plan-0.7.0.0
 - clock-0.7.2
-- floskell-0.10.3
-- fourmolu-0.1.0.0
+- floskell-0.10.4
+- fourmolu-0.1.0.0@rev:1
 - ghc-exactprint-0.6.3
+- HsYAML-aeson-0.2.0.0@rev:2
 - lens-4.19.1
 - lsp-test-0.11.0.3
 - monad-dijkstra-0.1.1.2
 - optics-core-0.3
 - ormolu-0.1.2.0
 - retrie-0.1.1.1
-- stylish-haskell-0.11.0.0
+- stylish-haskell-0.11.0.3
 - semigroups-0.18.5
 - temporary-1.2.1.1
 - these-1.1
@@ -43,5 +44,3 @@ nix:
   packages: [ icu libcxx zlib ]
 
 concurrent-tests: false
-
-allow-newer: true

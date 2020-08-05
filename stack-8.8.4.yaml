@@ -17,12 +17,13 @@ extra-deps:
 - clock-0.7.2
 - constrained-dynamic-0.1.0.0
 - extra-1.7.3
-- floskell-0.10.3
-- fourmolu-0.1.0.0
+- floskell-0.10.4
+- fourmolu-0.1.0.0@rev:1
 # - ghcide-0.1.0
 - haskell-src-exts-1.21.1
 - hie-bios-0.6.1
 - hlint-2.2.8
+- HsYAML-aeson-0.2.0.0@rev:2
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
@@ -30,6 +31,7 @@ extra-deps:
 - monad-dijkstra-0.1.1.2
 - retrie-0.1.1.1
 - semigroups-0.18.5
+- stylish-haskell-0.11.0.3
 # - github: wz1000/shake
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - temporary-1.2.1.1
@@ -46,5 +48,3 @@ nix:
   packages: [ icu libcxx zlib ]
 
 concurrent-tests: false
-
-allow-newer: true
