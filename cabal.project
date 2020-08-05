@@ -2,6 +2,13 @@ packages:
          ./
          ghcide
 
+source-repository-package
+    type: git
+    location: https://github.com/infinity0/brittany.git
+    tag: 0807fc9b30eb9758dffdb87d2a9a9fa6a17a62b1
+
+allow-newer: data-tree-print:base
+
 tests: true
 
 package *

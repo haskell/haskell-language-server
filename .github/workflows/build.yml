@@ -53,10 +53,8 @@ jobs:
         echo '::set-env name=LINUX_CABAL_ARGS::--enable-executable-static --ghc-options=-split-sections'
 
     - name: Build Server
-      # Try building it twice in case of flakey builds on Windows
       run: |
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS || \
-        cabal build exe:hls -O2 $LINUX_CABAL_ARGS -j1
+        cabal build exe:hls -O2 -fagpl $LINUX_CABAL_ARGS
 
     - name: Compress Server Binary
       id: compress_server_binary
@@ -95,7 +93,7 @@ jobs:
 
     - name: Build Wrapper
       if: matrix.ghc == '8.10.1'
-      run: cabal build exe:hls-wrapper -O2 $LINUX_CABAL_ARGS
+      run: cabal build exe:hls-wrapper -O2 -fagpl $LINUX_CABAL_ARGS
 
     - name: Compress Wrapper Binary
       if: matrix.ghc == '8.10.1'

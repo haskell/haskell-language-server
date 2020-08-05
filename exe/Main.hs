@@ -108,9 +108,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"
 #if AGPL
-#if !MIN_VERSION_ghc(8,10,1)
       , Brittany.descriptor    "brittany"
-#endif
 #endif
       , Eval.descriptor "eval"
       ]

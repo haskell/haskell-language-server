@@ -101,11 +101,10 @@ library
   else
     build-depends:     unix
   if flag(agpl)
-    if impl(ghc < 8.10)
-      build-depends:
-        brittany
-      exposed-modules:
-        Ide.Plugin.Brittany
+    build-depends:
+      brittany
+    exposed-modules:
+      Ide.Plugin.Brittany
 
   ghc-options:
          -Wall
