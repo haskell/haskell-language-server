@@ -20,7 +20,7 @@ extra-source-files:
 flag agpl
   Description: Enable AGPL dependencies
   Default:     True
-  Manual:      False
+  Manual:      True
 
 flag pedantic
   Description: Enable -Werror
@@ -101,10 +101,11 @@ library
   else
     build-depends:     unix
   if flag(agpl)
-    build-depends:
-      brittany
-    exposed-modules:
-      Ide.Plugin.Brittany
+    if impl(ghc < 8.10)
+      build-depends:
+        brittany
+      exposed-modules:
+        Ide.Plugin.Brittany
 
   ghc-options:
          -Wall
