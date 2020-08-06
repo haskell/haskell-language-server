@@ -9,6 +9,8 @@ ghc-options:
 
 extra-deps:
 - aeson-1.5.2.0
+- github: lspitzner/brittany
+  commit: 7d68b1cc3809e2921756c3a1bf67a83e82c21b0a
 - Cabal-3.0.2.0
 - hie-bios-0.6.1
 - cabal-plan-0.7.0.0

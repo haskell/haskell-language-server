@@ -11,6 +11,8 @@ ghc-options:
 extra-deps:
 - aeson-1.5.2.0
 - apply-refact-0.7.0.0
+- github: lspitzner/brittany
+  commit: 7d68b1cc3809e2921756c3a1bf67a83e82c21b0a
 - bytestring-trie-0.2.5.0
 - cabal-helper-1.1.0.0
 - cabal-plan-0.6.2.0
