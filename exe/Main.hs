@@ -71,7 +71,7 @@ import Ide.Plugin.Fourmolu                as Fourmolu
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Retrie                  as Retrie
-#if AGPL && !MIN_VERSION_ghc(8,10,1)
+#if AGPL
 import Ide.Plugin.Brittany                as Brittany
 #endif
 import Ide.Plugin.Pragmas                 as Pragmas
@@ -110,9 +110,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"
 #if AGPL
-#if !MIN_VERSION_ghc(8,10,1)
       , Brittany.descriptor    "brittany"
-#endif
 #endif
       , Eval.descriptor "eval"
       ]

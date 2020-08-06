@@ -12,8 +12,7 @@ import Test.Tasty
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
 
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
 import qualified Data.Text.IO as T
 #endif
 
@@ -30,9 +29,7 @@ tests = testGroup "format document" [
     , rangeTests
     , providerTests
     , stylishHaskellTests
--- There's no Brittany formatter on the 8.10.1 builds (yet)
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
     , brittanyTests
 #endif
     , ormoluTests
@@ -63,9 +60,7 @@ providerTests = testGroup "formatting provider" [
         formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
         documentContents doc >>= liftIO . (@?= orig)
 
--- There's no Brittany formatter on the 8.10.1 builds (yet)
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
     , testCase "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
         formattedBrittany <- liftIO $ T.readFile "test/testdata/Format.brittany.formatted.hs"
         formattedFloskell <- liftIO $ T.readFile "test/testdata/Format.floskell.formatted.hs"
@@ -114,8 +109,7 @@ stylishHaskellTests = testGroup "stylish-haskell" [
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
 brittanyTests :: TestTree
 brittanyTests = testGroup "brittany" [
     goldenVsStringDiff "formats a document with LF endings" goldenGitDiff "test/testdata/BrittanyLF.formatted_document.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
@@ -177,8 +171,7 @@ fourmoluTests = testGroup "fourmolu"
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
 
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
 -- | The same as 'formatLspConfig' but using the legacy section name
 formatLspConfigOld :: Value -> Value
 formatLspConfigOld provider = object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
