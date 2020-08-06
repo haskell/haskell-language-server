@@ -44,6 +44,7 @@ extra-deps:
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - stylish-haskell-0.11.0.3
 - temporary-1.2.1.1
+- these-1.1.1.1
 
 flags:
   haskell-language-server:
