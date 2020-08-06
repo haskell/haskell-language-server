@@ -42,6 +42,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
           data-default-instances-old-locale
           extra
           floskell
+          fourmolu
           fuzzy
           generic-deriving
           ghc-check
