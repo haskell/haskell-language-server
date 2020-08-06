@@ -10,8 +10,8 @@ ghc-options:
 extra-deps:
 - aeson-1.5.2.0
 - apply-refact-0.7.0.0
-- github: lspitzner/brittany
-  commit: 7d68b1cc3809e2921756c3a1bf67a83e82c21b0a
+- github: bubba/brittany
+  commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - bytestring-trie-0.2.5.0
 - cabal-plan-0.6.2.0
 - clock-0.7.2

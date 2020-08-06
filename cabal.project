@@ -4,8 +4,8 @@ packages:
 
 source-repository-package
   type: git
-  location: https://github.com/lspitzner/brittany.git
-  tag: 7d68b1cc3809e2921756c3a1bf67a83e82c21b0a
+  location: https://github.com/bubba/brittany.git
+  tag: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 
 tests: true
 
@@ -19,4 +19,6 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-08-05T14:24:10Z
+index-state: 2020-08-06T16:54:56Z
+
+allow-newer: data-tree-print:base
