@@ -15,6 +15,7 @@ extra-deps:
 - hie-bios-0.6.1
 - cabal-plan-0.7.0.0
 - clock-0.7.2
+- data-tree-print-0.1.0.2
 - floskell-0.10.4
 - fourmolu-0.1.0.0@rev:1
 - ghc-exactprint-0.6.3
@@ -36,7 +37,8 @@ flags:
   retrie:
     BuildExecutable: false
 
-# allow-newer: true
+# for data-tree-print's bounds on base (>=4.8 && <4.14); using base-4.14.0.0.
+allow-newer: true
 
 nix:
   packages: [ icu libcxx zlib ]
