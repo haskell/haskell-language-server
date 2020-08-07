@@ -224,7 +224,7 @@ common hls-test-utils
                      , hslogger
                      , hspec
                      , hspec-core
-                     , lsp-test >= 0.11.0.3
+                     , lsp-test >= 0.11.0.4
                      , stm
                      , tasty-hunit
                      , temporary
@@ -253,7 +253,7 @@ test-suite func-test
                       , haskell-lsp
                       , haskell-lsp-types
                       , lens
-                      , lsp-test >= 0.11.0.3
+                      , lsp-test >= 0.11.0.4
                       , tasty
                       , tasty-ant-xml >= 1.1.6
                       , tasty-expected-failure

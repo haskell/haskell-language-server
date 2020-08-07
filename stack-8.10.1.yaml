@@ -21,7 +21,7 @@ extra-deps:
 - ghc-exactprint-0.6.3
 - HsYAML-aeson-0.2.0.0@rev:2
 - lens-4.19.1
-- lsp-test-0.11.0.3
+- lsp-test-0.11.0.4
 - monad-dijkstra-0.1.1.2
 - optics-core-0.3
 - ormolu-0.1.2.0

@@ -27,7 +27,7 @@ extra-deps:
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
-- lsp-test-0.11.0.3
+- lsp-test-0.11.0.4
 - monad-dijkstra-0.1.1.2
 - retrie-0.1.1.1
 - semigroups-0.18.5
