@@ -8,26 +8,32 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+- aeson-1.5.2.0
 - apply-refact-0.7.0.0
+- github: bubba/brittany
+  commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - bytestring-trie-0.2.5.0
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - constrained-dynamic-0.1.0.0
 - extra-1.7.3
-- floskell-0.10.3
+- floskell-0.10.4
+- fourmolu-0.1.0.0@rev:1
 # - ghcide-0.1.0
 - haskell-src-exts-1.21.1
 - hie-bios-0.6.1
 - hlint-2.2.8
+- HsYAML-aeson-0.2.0.0@rev:2
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
-- lsp-test-0.11.0.3
+- lsp-test-0.11.0.4
 - monad-dijkstra-0.1.1.2
 - retrie-0.1.1.1
 - semigroups-0.18.5
 # - github: wz1000/shake
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
+- stylish-haskell-0.11.0.3
 - temporary-1.2.1.1
 
 flags:

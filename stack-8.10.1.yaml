@@ -8,19 +8,25 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+- aeson-1.5.2.0
+- github: bubba/brittany
+  commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - Cabal-3.0.2.0
 - hie-bios-0.6.1
 - cabal-plan-0.7.0.0
 - clock-0.7.2
-- floskell-0.10.3
+- data-tree-print-0.1.0.2
+- floskell-0.10.4
+- fourmolu-0.1.0.0@rev:1
 - ghc-exactprint-0.6.3
+- HsYAML-aeson-0.2.0.0@rev:2
 - lens-4.19.1
-- lsp-test-0.11.0.3
+- lsp-test-0.11.0.4
 - monad-dijkstra-0.1.1.2
 - optics-core-0.3
 - ormolu-0.1.2.0
 - retrie-0.1.1.1
-- stylish-haskell-0.11.0.0
+- stylish-haskell-0.11.0.3
 - semigroups-0.18.5
 - temporary-1.2.1.1
 - these-1.1
@@ -28,14 +34,11 @@ extra-deps:
 flags:
   haskell-language-server:
     pedantic: true
-    # We want to let agpl be the default value in .cabal (True)
-    # but brittany is not usable with ghc-8.10.1
-    # see https://github.com/lspitzner/brittany/issues/269
-    agpl: false
   retrie:
     BuildExecutable: false
 
-# allow-newer: true
+# for data-tree-print's bounds on base (>=4.8 && <4.14); using base-4.14.0.0.
+allow-newer: true
 
 nix:
   packages: [ icu libcxx zlib ]

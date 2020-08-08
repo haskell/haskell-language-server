@@ -45,6 +45,7 @@ library
       Ide.Plugin.Eval
       Ide.Plugin.Example
       Ide.Plugin.Example2
+      Ide.Plugin.Fourmolu
       Ide.Plugin.GhcIde
       Ide.Plugin.Ormolu
       Ide.Plugin.Pragmas
@@ -72,6 +73,7 @@ library
     , extra
     , filepath
     , floskell == 0.10.*
+    , fourmolu ^>= 0.1
     , ghc
     , ghc-boot-th
     , ghcide >= 0.1
@@ -101,11 +103,10 @@ library
   else
     build-depends:     unix
   if flag(agpl)
-    if impl(ghc < 8.10)
-      build-depends:
-        brittany
-      exposed-modules:
-        Ide.Plugin.Brittany
+    build-depends:
+      brittany
+    exposed-modules:
+      Ide.Plugin.Brittany
 
   ghc-options:
          -Wall
@@ -223,7 +224,7 @@ common hls-test-utils
                      , hslogger
                      , hspec
                      , hspec-core
-                     , lsp-test >= 0.11.0.3
+                     , lsp-test >= 0.11.0.4
                      , stm
                      , tasty-hunit
                      , temporary
@@ -252,7 +253,7 @@ test-suite func-test
                       , haskell-lsp
                       , haskell-lsp-types
                       , lens
-                      , lsp-test >= 0.11.0.3
+                      , lsp-test >= 0.11.0.4
                       , tasty
                       , tasty-ant-xml >= 1.1.6
                       , tasty-expected-failure

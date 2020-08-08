@@ -67,10 +67,11 @@ import Ide.Plugin.Example                 as Example
 import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
+import Ide.Plugin.Fourmolu                as Fourmolu
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Retrie                  as Retrie
-#if AGPL && !MIN_VERSION_ghc(8,10,1)
+#if AGPL
 import Ide.Plugin.Brittany                as Brittany
 #endif
 import Ide.Plugin.Pragmas                 as Pragmas
@@ -102,15 +103,14 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       GhcIde.descriptor  "ghcide"
       , Pragmas.descriptor  "pragmas"
       , Floskell.descriptor "floskell"
+      , Fourmolu.descriptor "fourmolu"
       -- , genericDescriptor     "generic"
       -- , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"
 #if AGPL
-#if !MIN_VERSION_ghc(8,10,1)
       , Brittany.descriptor    "brittany"
-#endif
 #endif
       , Eval.descriptor "eval"
       ]

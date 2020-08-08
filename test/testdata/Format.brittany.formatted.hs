@@ -11,5 +11,8 @@ bar s = do
   x <- return "hello"
   return "asdf"
 
-data Baz = Baz { a :: Int, b :: String }
+data Baz = Baz
+  { a :: Int
+  , b :: String
+  }
 

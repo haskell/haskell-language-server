@@ -12,8 +12,7 @@ import Test.Tasty
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
 
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
 import qualified Data.Text.IO as T
 #endif
 
@@ -30,12 +29,11 @@ tests = testGroup "format document" [
     , rangeTests
     , providerTests
     , stylishHaskellTests
--- There's no Brittany formatter on the 8.10.1 builds (yet)
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
     , brittanyTests
 #endif
     , ormoluTests
+    , fourmoluTests
     ]
 
 rangeTests :: TestTree
@@ -62,9 +60,7 @@ providerTests = testGroup "formatting provider" [
         formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
         documentContents doc >>= liftIO . (@?= orig)
 
--- There's no Brittany formatter on the 8.10.1 builds (yet)
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
     , testCase "can change on the fly" $ runSession hieCommand fullCaps "test/testdata" $ do
         formattedBrittany <- liftIO $ T.readFile "test/testdata/Format.brittany.formatted.hs"
         formattedFloskell <- liftIO $ T.readFile "test/testdata/Format.floskell.formatted.hs"
@@ -113,8 +109,7 @@ stylishHaskellTests = testGroup "stylish-haskell" [
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
 brittanyTests :: TestTree
 brittanyTests = testGroup "brittany" [
     goldenVsStringDiff "formats a document with LF endings" goldenGitDiff "test/testdata/BrittanyLF.formatted_document.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
@@ -159,11 +154,24 @@ ormoluTests = testGroup "ormolu"
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
+fourmoluTests :: TestTree
+fourmoluTests = testGroup "fourmolu"
+  [ goldenVsStringDiff "formats correctly" goldenGitDiff "test/testdata/Format.fourmolu.formatted.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
+      doc <- openDoc "Format.hs" "haskell"
+      formatDoc doc (FormattingOptions 4 True)
+      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+  , goldenVsStringDiff "formats imports correctly" goldenGitDiff "test/testdata/Format2.fourmolu.formatted.hs" $ runSession hieCommand fullCaps "test/testdata" $ do
+      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
+      doc <- openDoc "Format2.hs" "haskell"
+      formatDoc doc (FormattingOptions 4 True)
+      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
+  ]
+
 formatLspConfig :: Value -> Value
 formatLspConfig provider = object [ "haskell" .= object ["formattingProvider" .= (provider :: Value)] ]
 
-#if MIN_VERSION_GLASGOW_HASKELL(8,10,0,0) || !defined(AGPL)
-#else
+#if AGPL
 -- | The same as 'formatLspConfig' but using the legacy section name
 formatLspConfigOld :: Value -> Value
 formatLspConfigOld provider = object [ "languageServerHaskell" .= object ["formattingProvider" .= (provider :: Value)] ]
