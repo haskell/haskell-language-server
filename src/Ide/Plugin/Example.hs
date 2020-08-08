@@ -37,6 +37,7 @@ import Ide.Plugin
 import Ide.Types
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
+import Development.IDE.GHC.Compat (ParsedModule(ParsedModule))
 
 -- ---------------------------------------------------------------------
 
@@ -106,7 +107,9 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 
 -- | Generate code actions.
 codeAction :: CodeActionProvider
-codeAction _lf _state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
+codeAction _lf state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
+    let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
+    Just (ParsedModule{},_) <- runIdeAction "example" (shakeExtras state) $ useWithStaleFast GetParsedModule nfp
     let
       title = "Add TODO Item 1"
       tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
