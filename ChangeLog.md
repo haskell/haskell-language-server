@@ -1,5 +1,65 @@
 # Changelog for haskell-language-server
 
+## 0.3.0
+
+0.3.0 comes with two new plugins, retrie and fourmolu, provides binaries for
+GHC 8.8.4, and comes with a host of bug fixes.
+
+The retrie plugin supports RULES, functions and type synonyms which can be
+accessed through contextual code actions.
+
+Forourmolu can be used to format your code by setting the
+`haskell.formattingProvider` field in your LSP configuration to
+
+```json
+{
+  "haskell": {
+    "formattingProvider": "fourmolu"
+  }
+}
+```
+
+The Brittany formatter is now also available on GHC 8.10.1.
+
+### Pull requests merged
+
+- Fix haddock parse error in install.hs
+([#255](https://github.com/haskell/haskell-language-server/pull/255) by @georgefst)
+- Ormolu flags
+([#246](https://github.com/haskell/haskell-language-server/pull/246) by @pepeiborra)
+- Ormolu fix
+([#257](https://github.com/haskell/haskell-language-server/pull/257) by @sureyeaah)
+- Remove redundant CircleCI steps
+([#259](https://github.com/haskell/haskell-language-server/pull/259) by @bubba)
+- Slow down Tasty by limiting it to -j1
+([#261](https://github.com/haskell/haskell-language-server/pull/261) by @bubba)
+- Remove hspec-expectations
+([#260](https://github.com/haskell/haskell-language-server/pull/260) by @bubba)
+- Remove a redundant caching step
+([#262](https://github.com/haskell/haskell-language-server/pull/262) by @Ailrun)
+- add hie.yaml to coc configuration
+([#267](https://github.com/haskell/haskell-language-server/pull/267) by @sureyeaah)
+- Initial Retrie plugin
+([#266](https://github.com/haskell/haskell-language-server/pull/266) by @pepeiborra)
+- Add exe extension to win executables
+([#284](https://github.com/haskell/haskell-language-server/pull/284) by @jneira)
+- Use wz1000/hls-3 ghcide branch
+([#275](https://github.com/haskell/haskell-language-server/pull/275) by @alanz)
+- Fix rename capability being declared
+([#285](https://github.com/haskell/haskell-language-server/pull/285) by @bubba)
+- Add CI job for 8.8.4
+([#287](https://github.com/haskell/haskell-language-server/pull/287) by @bubba)
+- Make the AGPL flag manual in cabal
+([#250](https://github.com/haskell/haskell-language-server/pull/250) by @fendor)
+- Bring in doc URL fix for Windows
+([#289](https://github.com/haskell/haskell-language-server/pull/289) by @bubba)
+- Bring in fix for libm on Linux static binaries
+([#293](https://github.com/haskell/haskell-language-server/pull/293) by @bubba)
+- Add fourmolu plugin (attempt 2) and add Brittany for ghc-8.10.1
+([#264](https://github.com/haskell/haskell-language-server/pull/264) by @georgefst)
+- Trying new hls-3 branch
+([#300](https://github.com/haskell/haskell-language-server/pull/300) by @alanz)
+
 ## 0.2.2
 
 This changes the configuration section from "languageServerHaskell" to "haskell"
