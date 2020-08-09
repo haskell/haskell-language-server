@@ -8,7 +8,7 @@ GHC 8.8.4, and comes with a host of bug fixes.
 The retrie plugin supports RULES, functions and type synonyms which can be
 accessed through contextual code actions.
 
-Forourmolu can be used to format your code by setting the
+Fourmolu can be used to format your code by setting the
 `haskell.formattingProvider` field in your LSP configuration to
 
 ```json
