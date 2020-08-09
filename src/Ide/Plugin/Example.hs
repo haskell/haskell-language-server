@@ -23,21 +23,15 @@ import qualified Data.HashSet as HashSet
 import Data.Hashable
 import qualified Data.Text as T
 import Data.Typeable
-import Development.IDE.Core.OfInterest
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Rules
-import Development.IDE.Core.Service
-import Development.IDE.Core.Shake
-import Development.IDE.Types.Diagnostics as D
-import Development.IDE.Types.Location
-import Development.IDE.Types.Logger
-import Development.Shake hiding ( Diagnostic )
+import Development.IDE as D
+import Development.IDE.GHC.Compat (ParsedModule(ParsedModule))
+import Development.IDE.Core.Rules (useE)
+import Development.IDE.Core.Shake (getDiagnostics, getHiddenDiagnostics)
 import GHC.Generics
 import Ide.Plugin
 import Ide.Types
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
-import Development.IDE.GHC.Compat (ParsedModule(ParsedModule))
 
 -- ---------------------------------------------------------------------
 

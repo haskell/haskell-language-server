@@ -6,12 +6,11 @@ module Ide.Plugin.GhcIde
   ) where
 
 import Data.Aeson
-import Development.IDE.Core.Service
+import Development.IDE
+import Development.IDE.Plugin.Completions
+import Development.IDE.Plugin.CodeAction
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Outline
-import Development.IDE.Plugin.CodeAction
-import Development.IDE.Plugin.Completions
-import Development.IDE.Types.Logger
 import Ide.Plugin
 import Ide.Types
 import Language.Haskell.LSP.Types

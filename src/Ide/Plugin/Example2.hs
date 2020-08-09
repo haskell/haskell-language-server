@@ -13,7 +13,7 @@ module Ide.Plugin.Example2
     descriptor
   ) where
 
-import Control.DeepSeq ( NFData )
+import Control.DeepSeq (NFData)
 import Control.Monad.Trans.Maybe
 import Data.Aeson
 import Data.Binary
@@ -23,15 +23,9 @@ import qualified Data.HashSet as HashSet
 import Data.Hashable
 import qualified Data.Text as T
 import Data.Typeable
-import Development.IDE.Core.OfInterest
-import Development.IDE.Core.RuleTypes
+import Development.IDE as D
 import Development.IDE.Core.Rules
-import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
-import Development.IDE.Types.Diagnostics as D
-import Development.IDE.Types.Location
-import Development.IDE.Types.Logger
-import Development.Shake hiding ( Diagnostic )
 import GHC.Generics
 import Ide.Plugin
 import Ide.Types

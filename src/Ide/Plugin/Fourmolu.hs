@@ -13,12 +13,7 @@ where
 
 import           Control.Exception
 import qualified Data.Text                         as T
-import           Development.IDE.Core.Rules
-import           Development.IDE.Core.RuleTypes    (GhcSession (GhcSession))
-import           Development.IDE.Core.Shake        (use)
-import           Development.IDE.GHC.Util          (hscEnv)
-import           Development.IDE.Types.Diagnostics as D
-import           Development.IDE.Types.Location
+import           Development.IDE                   as D
 import qualified DynFlags                          as D
 import qualified EnumSet                           as S
 import           GHC
