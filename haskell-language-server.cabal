@@ -47,6 +47,7 @@ library
       Ide.Plugin.Example2
       Ide.Plugin.Fourmolu
       Ide.Plugin.GhcIde
+      Ide.Plugin.ImportLens
       Ide.Plugin.Ormolu
       Ide.Plugin.Pragmas
       Ide.Plugin.Retrie
