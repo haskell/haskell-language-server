@@ -3,19 +3,35 @@
 # while reducing Nix maintenance costs.
 # It does **not** aim to replace Cabal/Stack with Nix
 
+# Maintaining this file:
+#
+# - Dealing with broken nix-shell
+#
+#     1. Bump the nixpkgs version using `niv update nixpkgs`
+#     2. Comment out any remaining failing packages
+#
+# - Dealing with broken cabal build inside nix-shell:
+#
+#    If my understanding of cabal new-build is correct this should never happen,
+#    assuming that cabal new-build does succeed outside nix-shell
 
 { sources ? import nix/sources.nix,
   nixpkgs ? import sources.nixpkgs {},
-  compiler ? "default"
+  compiler ? "default",
+  hoogle ? false
  }:
 with nixpkgs;
 
 let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.version;
     haskellPackagesForProject = p:
         if compiler == "default" || compiler == defaultCompiler
-            then haskellPackages.ghcWithPackages p
-            # for all other compilers there is no Nix cache so dont bother building deps with NIx
-            else haskell.packages.${compiler}.ghcWithPackages (_: []);
+            then if hoogle
+                then haskellPackages.ghcWithHoogle p
+                else haskellPackages.ghcWithPackages p
+            # for all other compilers there is no Nix cache so dont bother building deps
+            else if hoogle
+                then  haskell.packages.${compiler}.ghcWithHoogle (_: [])
+                else haskell.packages.${compiler}.ghcWithPackages (_: []);
 
     retrie = with haskell.lib; dontCheck(disableLibraryProfiling(haskellPackages.retrie));
     compilerWithPackages = haskellPackagesForProject(p:
@@ -42,7 +58,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
           data-default-instances-old-locale
           extra
           floskell
-          fourmolu
+        #   fourmolu
           fuzzy
           generic-deriving
           ghc-check
@@ -94,9 +110,10 @@ in
 stdenv.mkDerivation {
   name = "haskell-language-server";
   buildInputs = [
+    git
     gmp
-    zlib
     ncurses
+    zlib
 
     haskellPackages.cabal-install
     haskellPackages.hlint
