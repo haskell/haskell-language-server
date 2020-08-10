@@ -1,34 +1,43 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 module Ide.Plugin.ImportLens (descriptor) where
-import Control.Monad (forM)
-import Data.Aeson (ToJSON)
-import Data.Aeson (Value(Null))
-import Data.Aeson.Types (FromJSON)
-import Data.IORef (readIORef)
-import Data.Map (Map)
-import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, catMaybes)
-import qualified Data.Text as T
-import Development.IDE
-import Development.IDE.GHC.Compat
-import GHC.Generics (Generic)
-import Ide.Plugin
-import Ide.Types
-import Language.Haskell.LSP.Types
-import RnNames (getMinimalImports, findImportUsage)
-import TcRnMonad (initTcWithGbl)
-import TcRnTypes (TcGblEnv(tcg_used_gres))
-import PrelNames (pRELUDE)
-import Data.Aeson (ToJSON(toJSON))
-import qualified Data.HashMap.Strict as HashMap
+import           Control.Monad                  (forM)
+import           Data.Aeson                     (ToJSON)
+import           Data.Aeson                     (Value (Null))
+import           Data.Aeson                     (ToJSON (toJSON))
+import           Data.Aeson.Types               (FromJSON)
+import qualified Data.HashMap.Strict            as HashMap
+import           Data.IORef                     (readIORef)
+import           Data.Map                       (Map)
+import qualified Data.Map.Strict                as Map
+import           Data.Maybe                     (catMaybes, fromMaybe)
+import qualified Data.Text                      as T
+import           Development.IDE.Core.RuleTypes (GhcSessionDeps (GhcSessionDeps),
+                                                 TcModuleResult (tmrModule),
+                                                 TypeCheck (TypeCheck))
+import           Development.IDE.Core.Service   (IdeState, runAction)
+import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
+                                                 runIdeAction, useWithStaleFast,
+                                                 use_)
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error      (realSpan, realSrcSpanToRange)
+import           Development.IDE.GHC.Util       (hscEnv, prettyPrint)
+import           GHC.Generics                   (Generic)
+import           Ide.Plugin
+import           Ide.Types
+import           Language.Haskell.LSP.Types
+import           PrelNames                      (pRELUDE)
+import           RnNames                        (findImportUsage,
+                                                 getMinimalImports)
+import           TcRnMonad                      (initTcWithGbl)
+import           TcRnTypes                      (TcGblEnv (tcg_used_gres))
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
