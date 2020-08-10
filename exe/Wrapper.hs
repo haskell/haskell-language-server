@@ -30,6 +30,12 @@ main = do
 
   hlsVer <- haskellLanguageServerVersion
   case args of
+      ProbeToolsMode -> do
+          programsOfInterest <- findProgramVersions
+          putStrLn hlsVer
+          putStrLn "Tool versions found on the $PATH"
+          putStrLn $ showProgramVersionOfInterest programsOfInterest
+
       VersionMode PrintVersion ->
           putStrLn hlsVer
 
@@ -60,7 +66,11 @@ launchHaskellLanguageServer LspArguments{..} = do
   hPutStrLn stderr $ "Arguments: " ++ show args
   hPutStrLn stderr $ "Cradle directory: " ++ cradleRootDir cradle
   hPutStrLn stderr $ "Cradle type: " ++ show (actionName (cradleOptsProg cradle))
-
+  programsOfInterest <- findProgramVersions
+  hPutStrLn stderr ""
+  hPutStrLn stderr "Tool versions found on the $PATH"
+  hPutStrLn stderr $ showProgramVersionOfInterest programsOfInterest
+  hPutStrLn stderr ""
   -- Get the ghc version -- this might fail!
   hPutStrLn stderr $ "Consulting the cradle to get project GHC version..."
   ghcVersion <- getRuntimeGhcVersion' cradle
