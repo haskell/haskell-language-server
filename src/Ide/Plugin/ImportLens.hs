@@ -23,8 +23,7 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.RuleTypes (GhcSessionDeps (GhcSessionDeps),
                                                  TcModuleResult (tmrModule),
                                                  TypeCheck (TypeCheck))
-import           Development.IDE.Core.Shake     (IdeAction, IdeState (..),
-                                                 runIdeAction, useWithStaleFast)
+import           Development.IDE.Core.Shake     (use, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      (realSpan, realSrcSpanToRange)
 import           Development.IDE.GHC.Util       (HscEnvEq, hscEnv, prettyPrint)
@@ -37,6 +36,8 @@ import           RnNames                        (findImportUsage,
                                                  getMinimalImports)
 import           TcRnMonad                      (initTcWithGbl)
 import           TcRnTypes                      (TcGblEnv (tcg_used_gres))
+import Development.IDE.Core.Service (runAction)
+import Development.Shake (Action)
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
@@ -85,14 +86,10 @@ provider _lspFuncs          -- LSP functions, not used
   -- haskell-lsp provides conversion functions
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri
   = do
-    -- Get the typechecking artifacts from the module, even if they are stale.
-    -- This is for responsiveness - we don't want our code lenses to vanish
-    -- just because there is a type error unrelated to the moduel imports.
-    -- However, if the user edits the imports while the module does not typecheck,
-    -- our code lenses will get out of sync
-    tmr <- runIde state $ useWithStaleFast TypeCheck nfp
+    -- Get the typechecking artifacts from the module
+    tmr <- runIde state $ use TypeCheck nfp
     -- We also need a GHC session with all the dependencies
-    hsc <- runIde state $ useWithStaleFast GhcSessionDeps nfp
+    hsc <- runIde state $ use GhcSessionDeps nfp
     -- Use the GHC api to extract the "minimal" imports
     (imports, mbMinImports) <- extractMinimalImports hsc tmr
 
@@ -112,10 +109,10 @@ provider _lspFuncs          -- LSP functions, not used
 
 -- | Use the ghc api to extract a minimal, explicit set of imports for this module
 extractMinimalImports
-  :: Maybe (HscEnvEq, a)
-  -> Maybe (TcModuleResult, b)
+  :: Maybe (HscEnvEq)
+  -> Maybe (TcModuleResult)
   -> IO ([LImportDecl GhcRn], Maybe [LImportDecl GhcRn])
-extractMinimalImports (Just (hsc, _)) (Just (tmrModule -> TypecheckedModule{..}, _)) = do
+extractMinimalImports (Just (hsc)) (Just (tmrModule -> TypecheckedModule{..})) = do
     -- extract the original imports and the typechecking environment
     let (tcEnv,_) = tm_internals_
         Just (_, imports, _, _) = tm_renamed_source
@@ -168,5 +165,5 @@ generateLens pId uri minImports (L src imp)
   = return Nothing
 
 -- | A helper to run ide actions
-runIde :: IdeState -> IdeAction a -> IO a
-runIde state = runIdeAction "importLens" (shakeExtras state)
+runIde :: IdeState -> Action a -> IO a
+runIde state = runAction "importLens" state
