@@ -44,6 +44,7 @@ import HIE.Bios.Cradle
 import qualified Language.Haskell.LSP.Core as LSP
 import Ide.Logger
 import Ide.Plugin
+import Ide.Version
 import Ide.Plugin.Config
 import Ide.Types                                (IdePlugins, ipMap)
 import Language.Haskell.LSP.Messages
@@ -133,6 +134,12 @@ main = do
 
     hlsVer <- haskellLanguageServerVersion
     case args of
+        ProbeToolsMode -> do
+            programsOfInterest <- findProgramVersions
+            putStrLn hlsVer
+            putStrLn "Tool versions found on the $PATH"
+            putStrLn $ showProgramVersionOfInterest programsOfInterest
+
         VersionMode PrintVersion ->
             putStrLn hlsVer
 
@@ -176,6 +183,7 @@ runLspMode lspArgs@LspArguments {..} = do
         hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins')
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
+
         runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg _getConfig -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
@@ -199,6 +207,10 @@ runLspMode lspArgs@LspArguments {..} = do
 
         putStrLn $ "(haskell-language-server)Ghcide setup tester in " ++ dir ++ "."
         putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
+        programsOfInterest <- findProgramVersions
+        putStrLn ""
+        putStrLn "Tool versions found on the $PATH"
+        putStrLn $ showProgramVersionOfInterest programsOfInterest
 
         putStrLn $ "\nStep 1/4: Finding files to test in " ++ dir
         files <- expandFiles (argFiles ++ ["." | null argFiles])

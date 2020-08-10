@@ -26,6 +26,7 @@ import System.Environment
 
 data Arguments
   = VersionMode PrintVersion
+  | ProbeToolsMode
   | LspMode LspArguments
   deriving Show
 
@@ -54,6 +55,7 @@ getArguments exeName = execParser opts
   where
     opts = info ((
       VersionMode <$> printVersionParser exeName
+      <|> probeToolsParser exeName
       <|> LspMode <$> arguments)
       <**> helper)
       ( fullDesc
@@ -67,6 +69,11 @@ printVersionParser exeName =
   <|>
   flag' PrintNumericVersion
     (long "numeric-version" <> help ("Show numeric version of " ++ exeName))
+
+probeToolsParser :: String -> Parser Arguments
+probeToolsParser exeName =
+  flag' ProbeToolsMode
+    (long "probe-tools" <> help ("Show " ++ exeName  ++ " version and other tools of interest"))
 
 arguments :: Parser LspArguments
 arguments = LspArguments
