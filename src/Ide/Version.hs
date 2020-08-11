@@ -13,6 +13,7 @@ import qualified Paths_haskell_language_server as Meta
 import           System.Info
 import           Data.Version
 import           Data.Maybe (listToMaybe)
+import           System.Directory
 import           System.Process
 import           System.Exit
 import           Text.ParserCombinators.ReadP
@@ -60,10 +61,12 @@ findProgramVersions = ProgramsOfInterest
 -- If the invocation has a non-zero exit-code, we return 'Nothing'
 findVersionOf :: FilePath -> IO (Maybe Version)
 findVersionOf tool =
-  readProcessWithExitCode tool ["--numeric-version"] "" >>= \case
-    (ExitSuccess, sout, _) -> pure $ consumeParser myVersionParser sout
-    _ -> pure $ Nothing
-
+  findExecutable tool >>= \case
+    Nothing -> pure Nothing
+    Just path ->
+      readProcessWithExitCode path ["--numeric-version"] "" >>= \case
+        (ExitSuccess, sout, _) -> pure $ consumeParser myVersionParser sout
+        _ -> pure $ Nothing
   where
     myVersionParser = do
       skipSpaces
