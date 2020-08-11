@@ -19,6 +19,7 @@ extra-deps:
 - fourmolu-0.1.0.0@rev:1
 - HsYAML-aeson-0.2.0.0@rev:2
 - monad-dijkstra-0.1.1.2
+- opentelemetry-0.4.2
 - retrie-0.1.1.1
 - stylish-haskell-0.11.0.3
 - semigroups-0.18.5
