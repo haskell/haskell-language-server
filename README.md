@@ -382,6 +382,7 @@ Follow Coc's [installation instructions](https://github.com/neoclide/coc.nvim).
 Then issue `:CocConfig` and add the following to your Coc config file.
 
 ```json
+{
 "languageserver": {
   "haskell": {
     "command": "haskell-language-server-wrapper",
@@ -403,6 +404,7 @@ Then issue `:CocConfig` and add the following to your Coc config file.
       }
     }
   }
+}
 }
 ```
 
