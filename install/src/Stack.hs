@@ -114,7 +114,7 @@ stackBuildFailMsg =
     $  "Building failed, "
     ++ "Try running `stack clean` and restart the build\n"
     ++ "If this does not work, open an issue at \n"
-    ++ "\thttps://github.com/haskell/haskell-language-engine"
+    ++ "\thttps://github.com/haskell/haskell-language-server"
 
 getVerbosityArg :: Verbosity -> String
 getVerbosityArg v = "--verbosity=" ++ stackVerbosity
