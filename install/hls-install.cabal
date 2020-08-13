@@ -1,6 +1,6 @@
 name:                hls-install
 version:             0.8.0.0
-synopsis:            Install the haskell-language-engine
+synopsis:            Install the haskell-language-server
 license:             BSD3
 author:              Many, TBD when we release
 maintainer:          samuel.pilz@posteo.net
