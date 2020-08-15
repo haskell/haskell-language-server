@@ -75,6 +75,10 @@ This is *very* early stage software.
 
    ![Retrie](https://i.imgur.com/Ev7B87k.gif)
 
+ - Code lenses for explicit import lists
+
+   ![Imports code lens](https://imgur.com/pX9kvY4.gif)
+
  - Many more (TBD)
 
 ## Installation

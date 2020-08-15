@@ -69,6 +69,7 @@ import Ide.Plugin.Example2                as Example2
 import Ide.Plugin.GhcIde                  as GhcIde
 import Ide.Plugin.Floskell                as Floskell
 import Ide.Plugin.Fourmolu                as Fourmolu
+import Ide.Plugin.ImportLens              as ImportLens
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Retrie                  as Retrie
@@ -114,6 +115,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , Brittany.descriptor    "brittany"
 #endif
       , Eval.descriptor "eval"
+      , ImportLens.descriptor "importLens"
       ]
     examplePlugins =
       [Example.descriptor  "eg"
