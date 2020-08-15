@@ -17,6 +17,7 @@
 
 module Ide.Plugin.Retrie (descriptor) where
 
+import           Control.Concurrent.Extra       (readVar)
 import           Control.Exception.Safe         (Exception (..), SomeException,
                                                  catch, throwIO, try)
 import           Control.Monad                  (forM, unless)
@@ -29,7 +30,9 @@ import           Data.Aeson.Types               (FromJSON)
 import           Data.Bifunctor                 (Bifunctor (first), second)
 import           Data.Coerce
 import           Data.Either                    (partitionEithers)
+import           Data.Hashable                  (unhashed)
 import qualified Data.HashMap.Strict            as HM
+import qualified Data.HashSet                   as Set
 import           Data.IORef.Extra               (atomicModifyIORef'_, newIORef,
                                                  readIORef)
 import           Data.List.Extra                (nubOrdOn)
@@ -45,20 +48,23 @@ import           Development.IDE.Core.RuleTypes as Ghcide (GetModIface (..),
                                                            HiFileResult (..),
                                                            TypeCheck (..),
                                                            tmrModule)
-import           Development.IDE.Core.Shake     (ideLogger, knownFilesVar, IdeRule,
+import           Development.IDE.Core.Shake     (IdeRule,
                                                  IdeState (shakeExtras),
+                                                 ideLogger, knownFilesVar,
                                                  runIdeAction, use,
                                                  useWithStaleFast, use_)
-import           Development.IDE.GHC.Error      (realSrcSpanToRange, isInsideSrcSpan)
+import           Development.IDE.GHC.Error      (isInsideSrcSpan,
+                                                 realSrcSpanToRange)
 import           Development.IDE.GHC.Util       (hscEnv, prettyPrint, runGhcEnv)
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger   (Logger (logPriority),
+                                                 Priority (..))
 import           Development.Shake              (RuleResult)
 import           GHC                            (GenLocated (L), GhcRn,
                                                  HsBindLR (FunBind),
                                                  HsGroup (..),
                                                  HsValBindsLR (..), HscEnv, IdP,
                                                  LRuleDecls,
-                                                 mi_fixities,
                                                  ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                  NHsValBindsLR (..),
                                                  ParsedModule (..),
@@ -68,8 +74,9 @@ import           GHC                            (GenLocated (L), GhcRn,
                                                  TyClDecl (SynDecl),
                                                  TyClGroup (..),
                                                  TypecheckedModule (..), fun_id,
-                                                 moduleNameString, parseModule,
-                                                 rds_rules, srcSpanFile)
+                                                 mi_fixities, moduleNameString,
+                                                 parseModule, rds_rules,
+                                                 srcSpanFile)
 import           GHC.Generics                   (Generic)
 import           GhcPlugins                     (Outputable,
                                                  SourceText (NoSourceText),
@@ -97,10 +104,6 @@ import           Retrie.SYB                     (listify)
 import           Retrie.Util                    (Verbosity (Loud))
 import           StringBuffer                   (stringToStringBuffer)
 import           System.Directory               (makeAbsolute)
-import Control.Concurrent.Extra (readVar)
-import Data.Hashable (unhashed)
-import qualified Data.HashSet as Set
-import Development.IDE.Types.Logger (Priority(..), Logger(logPriority))
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -118,11 +121,11 @@ retrieCommand =
 
 -- | Parameters for the runRetrie PluginCommand.
 data RunRetrieParams = RunRetrieParams
-  { description     :: T.Text,
+  { description               :: T.Text,
     -- | rewrites for Retrie
-    rewrites        :: [Either ImportSpec RewriteSpec],
+    rewrites                  :: [Either ImportSpec RewriteSpec],
     -- | Originating file
-    originatingFile :: String,
+    originatingFile           :: String,
     restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
