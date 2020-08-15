@@ -63,6 +63,7 @@ tests = testGroup
   , testCase "Refresh an evaluation w/ lets" $ goldenTest "T6.hs"
   , testCase "Refresh a multiline evaluation" $ goldenTest "T7.hs"
   , testCase "Evaluate incorrect expressions" $ goldenTest "T8.hs"
+  , testCase "Applies file LANGUAGE extensions" $ goldenTest "T9.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
