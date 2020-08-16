@@ -52,6 +52,7 @@ import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (rea
 import Ide.Logger
 import Ide.Types
 import Ide.Plugin
+import Ide.Plugin.Config
 import Ide.PluginUtils
 import Language.Haskell.HLint as Hlint
 import Language.Haskell.LSP.Types
@@ -83,8 +84,10 @@ type instance RuleResult GetHlintDiagnostics = ()
 rules :: Rules ()
 rules = do
   define $ \GetHlintDiagnostics file -> do
-    ideas <- getIdeas file
-    return $ (diagnostics file ideas, Just ())
+    hlintOn' <- hlintOn <$> getClientConfigAction
+    logm $ "hlint:rules:hlintOn=" <> show hlintOn'
+    ideas <- if hlintOn' then getIdeas file else return (Right [])
+    return (diagnostics file ideas, Just ())
 
   getHlintSettingsRule (HlintEnabled [])
 
@@ -138,7 +141,7 @@ rules = do
 
 getIdeas :: NormalizedFilePath -> Action (Either ParseError [Idea])
 getIdeas nfp = do
-  logm $ "getIdeas:file:" ++ show nfp
+  logm $ "hlint:getIdeas:file:" ++ show nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
 
   let applyHints' (Just (Right modEx)) = Right $ applyHints classify hint [modEx]
@@ -157,9 +160,9 @@ getIdeas nfp = do
           hsc <- hscEnv <$> use_ GhcSession nfp
           let dflags = hsc_dflags hsc
           let hscExts = EnumSet.toList (extensionFlags dflags)
-          logm $ "getIdeas:setExtensions:hscExtensions:" ++ show hscExts
+          logm $ "hlint:getIdeas:setExtensions:hscExtensions:" ++ show hscExts
           let hlintExts = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-          logm $ "getIdeas:setExtensions:hlintExtensions:" ++ show hlintExts
+          logm $ "hlint:getIdeas:setExtensions:hlintExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 #else
         moduleEx _flags = do
@@ -232,12 +235,12 @@ applyAllCmd _lf ide uri = do
   let file = maybe (error $ show uri ++ " is not a file.")
                     toNormalizedFilePath'
                    (uriToFilePath' uri)
-  logm $ "applyAllCmd:file=" ++ show file
+  logm $ "hlint:applyAllCmd:file=" ++ show file
   res <- applyHint ide file Nothing
-  logm $ "applyAllCmd:res=" ++ show res
+  logm $ "hlint:applyAllCmd:res=" ++ show res
   return $
     case res of
-      Left err -> (Left (responseError (T.pack $ "applyAll: " ++ show err)), Nothing)
+      Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
       Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
 -- ---------------------------------------------------------------------
@@ -262,11 +265,11 @@ applyOneCmd _lf ide (AOP uri pos title) = do
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
   res <- applyHint ide file (Just oneHint)
-  logm $ "applyOneCmd:file=" ++ show file
-  logm $ "applyOneCmd:res=" ++ show res
+  logm $ "hlint:applyOneCmd:file=" ++ show file
+  logm $ "hlint:applyOneCmd:res=" ++ show res
   return $
     case res of
-      Left err -> (Left (responseError (T.pack $ "applyOne: " ++ show err)), Nothing)
+      Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
       Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
 applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
@@ -301,7 +304,7 @@ applyHint ide nfp mhint =
         let uri = fromNormalizedUri (filePathToUri' nfp)
         oldContent <- liftIO $ T.readFile fp
         let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
-        liftIO $ logm $ "applyHint:diff=" ++ show wsEdit
+        liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
         ExceptT $ Right <$> (return wsEdit)
       Left err ->
         throwE (show err)
