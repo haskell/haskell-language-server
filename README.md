@@ -591,10 +591,10 @@ If you want to test HLS while hacking on it, follow the steps below.
 To do once:
 - Open some codebase on which you want to test your hacked HLS in your favorite editor
 - Configure this editor to use your custom HLS executable
-  - With Cabal: `<path to HLS project>/haskell-language-server/dist-newstyle/build/<os>/<ghc version>/haskell-language-server-<HLS version>/x/haskell-language-server/build/haskell-language-server/haskell-language-server`
-    - This value can be found by running `cabal exec which haskell-language-server`
-  - With Stack: `<path to HLS project>/haskell-language-server/.stack-work/dist/<os>/Cabal-<Cabal version>/build/haskell-language-server/haskell-language-server`
-    - This value can be found by running `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
+  - With Cabal: 
+    - On Unix systems: `cabal exec which haskell-language-server`
+    - On Windows: `cabal exec where haskell-language-server`
+  - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
 
 To do every time you changed code and want to test it:
 - Build HLS
