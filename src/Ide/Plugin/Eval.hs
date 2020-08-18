@@ -214,9 +214,8 @@ done, we want to switch back to GhcSessionDeps:
 
     hscEnv' <- ExceptT $
       evalGhcEnv (hscEnv session) $ do
-        df <- getSessionDynFlags
         env <- getSession
-        df <- liftIO $ setupDynFlagsForGHCiLike env df
+        df <- liftIO $ setupDynFlagsForGHCiLike env $ ms_hspp_opts ms
         _lp <- setSessionDynFlags df
 
         -- copy the package state to the interactive DynFlags
