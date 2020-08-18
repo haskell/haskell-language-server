@@ -46,6 +46,8 @@ This is *very* early stage software.
     - [Preprocessor](#preprocessor)
   - [Contributing](#contributing)
     - [It's time to join the project!](#its-time-to-join-the-project)
+    - [Building haskell-language-server](#building-haskell-language-server)
+    - [Hacking on haskell-language-server](#hacking-on-haskell-language-server)
 
 ## Features
 
@@ -551,7 +553,7 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 - Fork this repo and hack as much as you can.
 - Ask @alanz or @hvr to join the project.
 
-### Hacking on haskell-language-server
+### Building haskell-language-server
 
 Haskell-language-server can be used on itself. We provide
 preset samples of `hie.yaml` for Cabal and Stack.
@@ -577,3 +579,27 @@ $ stack build --test --no-run-tests
 $ cd install
 $ stack build
 ```
+
+### Hacking on haskell-language-server
+
+#### Introduction tutorial
+Pepeiborra [wrote an tutorial](https://github.com/pepeiborra/hls-tutorial) on writing a plugin in HLS.
+
+#### Test your hacked HLS in your editor
+If you want to test HLS while hacking on it, follow the steps below.
+
+To do once:
+- Open some codebase on which you want to test your hacked HLS in your favorite editor
+- Configure this editor to use your custom HLS executable
+  - With Cabal: 
+    - On Unix systems: `cabal exec which haskell-language-server`
+    - On Windows: `cabal exec where haskell-language-server`
+  - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
+
+To do every time you changed code and want to test it:
+- Build HLS
+  - With Cabal: `cabal build exe:haskell-language-server`
+  - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
+- Restart HLS
+  - With VS Code: `Haskell: Restart Haskell LSP Server`
+
