@@ -347,7 +347,7 @@ All of the editor integrations assume that you have already installed `haskell-l
 ### Using Haskell Language Server with VS Code
 
 Install from
-[the VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=alanz.vscode-hie-server), or manually from the repository [vscode-hie-server](https://github.com/alanz/vscode-hie-server).
+[the VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=haskell.haskell), or manually from the repository [vscode-haskell](https://github.com/haskell/vscode-haskell).
 The `haskell-language-server` and `haskell-language-server-wrapper` binaries will be automatically downloaded on an ad-hoc basis, but if you have them already installed on your PATH then it will just use them instead.
 
 ### Using Haskell Language Server with Sublime Text
