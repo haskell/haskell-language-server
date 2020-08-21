@@ -545,18 +545,16 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 
 ## Contributing
 
-### It's time to join the project
-
-:heart: Haskell tooling dream is near, we need your help! :heart:
+:heart: The Haskell tooling dream is near, we need your help! :heart:
 
 - Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-ide-engine) at `#haskell-ide-engine` on `freenode`.
-- Fork this repo and hack as much as you can.
-- Ask @alanz or @hvr to join the project.
+- Fork this repo and [ghcide](https://github.com/digital-asset/ghcide) and hack as much as you can.
 
 ### Building haskell-language-server
 
-Haskell-language-server can be used on itself. We provide
-preset samples of `hie.yaml` for Cabal and Stack.
+The project can be built with both `cabal build` and `stack build`.
+
+haskell-language-server can also be used with itself. We provide preset samples of `hie.yaml` for Cabal and Stack.
 
 Note: the `./install/` folder is not directly tied to the project so it has dedicated `./install/hie.yaml.[cbl|stack]`
 templates.
@@ -579,8 +577,6 @@ $ stack build --test --no-run-tests
 $ cd install
 $ stack build
 ```
-
-### Hacking on haskell-language-server
 
 #### Introduction tutorial
 Pepeiborra [wrote an tutorial](https://github.com/pepeiborra/hls-tutorial) on writing a plugin in HLS.
