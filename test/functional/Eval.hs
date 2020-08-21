@@ -67,6 +67,9 @@ tests = testGroup
   , testCase "Evaluate a type with :kind!" $ goldenTest "T10.hs"
   , testCase "Reports an error for an incorrect type with :kind!" 
     $ goldenTest "T11.hs"
+  , testCase "Shows a kind with :kind" $ goldenTest "T12.hs"
+  , testCase "Reports an error for an incorrect type with :kind" 
+    $ goldenTest "T13.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
