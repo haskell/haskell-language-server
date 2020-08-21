@@ -479,6 +479,7 @@ Install HLS along with the following emacs packages:
 [lsp-mode](https://github.com/emacs-lsp/lsp-mode)
 [lsp-ui](https://github.com/emacs-lsp/lsp-ui)
 [lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
+use-package
 
 Make sure to follow the instructions in the README of each of these packages.
 
