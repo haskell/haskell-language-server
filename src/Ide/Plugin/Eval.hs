@@ -258,7 +258,7 @@ done, we want to switch back to GhcSessionDeps:
               $ T.unlines 
               $ map ("-- " <>)
               $ (input <> " :: " <> T.pack (showSDoc df $ ppr kind))
-              : [ " = " <> T.pack (showSDoc df $ ppr ty) | reduce]
+              : [ "= " <> T.pack (showSDoc df $ ppr ty) | reduce]
           | isStmt df stmt = do
             -- set up a custom interactive print function
             liftIO $ writeFile temp ""
