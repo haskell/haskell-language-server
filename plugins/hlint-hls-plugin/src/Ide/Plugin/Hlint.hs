@@ -31,6 +31,7 @@ import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Typeable
+import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
 import Development.IDE.Core.Rules
 import Development.IDE.Core.Shake
@@ -154,25 +155,25 @@ getIdeas nfp = do
 #ifdef GHC_LIB
         moduleEx flags = do
           flags' <- setExtensions flags
-          Just <$> (liftIO $ parseModuleEx flags' (fromNormalizedFilePath nfp) Nothing)
+          (_, contents) <- getFileContents nfp
+          let fp = fromNormalizedFilePath nfp
+          let contents' = T.unpack <$> contents
+          Just <$> (liftIO $ parseModuleEx flags' fp contents')
 
         setExtensions flags = do
           hsc <- hscEnv <$> use_ GhcSession nfp
           let dflags = hsc_dflags hsc
           let hscExts = EnumSet.toList (extensionFlags dflags)
-          logm $ "hlint:getIdeas:setExtensions:hscExtensions:" ++ show hscExts
           let hlintExts = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-          logm $ "hlint:getIdeas:setExtensions:hlintExtensions:" ++ show hlintExts
+          logm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 #else
         moduleEx _flags = do
           mbpm <- getParsedModule nfp
-          case mbpm of
-            Nothing -> return Nothing
-            Just pm -> do
-              let anns = pm_annotations pm
-              let modu = pm_parsed_source pm
-              return $ Just $ Right (createModuleEx anns modu)
+          return $ createModule <$> mbpm
+          where createModule pm = Right (createModuleEx anns modu)
+                  where anns = pm_annotations pm
+                        modu = pm_parsed_source pm
 #endif
 
 -- ---------------------------------------------------------------------
