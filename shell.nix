@@ -16,9 +16,7 @@
 #    assuming that cabal new-build does succeed outside nix-shell
 
 { sources ? import nix/sources.nix,
-  # TODO Remove allowBroken once retrie is no longer marked as broken in Nixpkgs
-  # See https://github.com/haskell/haskell-language-server/issues/325
-  nixpkgs ? import sources.nixpkgs { config.allowBroken = true; },
+  nixpkgs ? import sources.nixpkgs { },
   compiler ? "default",
   hoogle ? false
  }:
