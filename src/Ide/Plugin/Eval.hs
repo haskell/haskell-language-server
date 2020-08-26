@@ -63,7 +63,7 @@ import           GHC                            (DynFlags, ExecResult (..), Gene
                                                  setInteractiveDynFlags,
                                                  setLogAction,
                                                  setSessionDynFlags, setTargets,
-                                                 simpleImportDecl, ways)
+                                                 simpleImportDecl, typeKind, ways)
 import           GHC.Generics                   (Generic)
 import           GhcMonad                       (modifySession)
 import           GhcPlugins                     (defaultLogActionHPutStrDoc,
@@ -86,6 +86,8 @@ import qualified Control.Exception             as E
 import           Control.DeepSeq                ( NFData
                                                 , deepseq
                                                 )
+import Outputable (Outputable(ppr), showSDoc)
+import Control.Applicative ((<|>))
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -245,6 +247,18 @@ done, we want to switch back to GhcSessionDeps:
 
     df <- liftIO $ evalGhcEnv hscEnv' getSessionDynFlags
     let eval (stmt, l)
+          | let stmt0 = T.strip $ T.pack stmt -- For stripping and de-prefixing
+          , Just (reduce, type_) <-
+                  (True,) <$> T.stripPrefix ":kind! " stmt0
+              <|> (False,) <$> T.stripPrefix ":kind " stmt0
+          = do
+            let input = T.strip type_
+            (ty, kind) <- typeKind reduce $ T.unpack input
+            pure $ Just
+              $ T.unlines 
+              $ map ("-- " <>)
+              $ (input <> " :: " <> T.pack (showSDoc df $ ppr kind))
+              : [ "= " <> T.pack (showSDoc df $ ppr ty) | reduce]
           | isStmt df stmt = do
             -- set up a custom interactive print function
             liftIO $ writeFile temp ""
