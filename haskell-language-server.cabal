@@ -81,7 +81,7 @@ library
     , gitrev
     , hashable
     , haskell-lsp == 0.22.*
-    , hie-bios ^>= 0.6.1
+    , hie-bios >= 0.6.1 && < 0.8
     , hslogger
     , lens
     , ormolu ^>= 0.1.2
