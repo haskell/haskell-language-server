@@ -132,11 +132,15 @@ extractMinimalImports (Just (hsc)) (Just (tmrModule -> TypecheckedModule{..})) =
 
 extractMinimalImports _ _ = return ([], Nothing)
 
--- | Given an import declaration, generate a code lens unless it has an explicit import list
+-- | Given an import declaration, generate a code lens unless it has an
+-- explicit import list or it's qualified
 generateLens :: PluginId -> Uri -> Map SrcLoc (ImportDecl GhcRn) -> LImportDecl GhcRn -> IO (Maybe CodeLens)
 generateLens pId uri minImports (L src imp)
   -- Explicit import list case
   | ImportDecl{ideclHiding = Just (False,_)} <- imp
+  = return Nothing
+  -- Qualified case
+  | ImportDecl{ideclQualified = True} <- imp
   = return Nothing
   -- No explicit import list
   | RealSrcSpan l <- src
