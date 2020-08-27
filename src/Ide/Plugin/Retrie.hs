@@ -17,6 +17,7 @@
 
 module Ide.Plugin.Retrie (descriptor) where
 
+import           Control.Concurrent.Extra       (readVar)
 import           Control.Exception.Safe         (Exception (..), SomeException,
                                                  catch, throwIO, try)
 import           Control.Monad                  (forM, unless)
@@ -29,7 +30,9 @@ import           Data.Aeson.Types               (FromJSON)
 import           Data.Bifunctor                 (Bifunctor (first), second)
 import           Data.Coerce
 import           Data.Either                    (partitionEithers)
+import           Data.Hashable                  (unhashed)
 import qualified Data.HashMap.Strict            as HM
+import qualified Data.HashSet                   as Set
 import           Data.IORef.Extra               (atomicModifyIORef'_, newIORef,
                                                  readIORef)
 import           Data.List.Extra                (nubOrdOn)
@@ -47,18 +50,21 @@ import           Development.IDE.Core.RuleTypes as Ghcide (GetModIface (..),
                                                            tmrModule)
 import           Development.IDE.Core.Shake     (IdeRule,
                                                  IdeState (shakeExtras),
+                                                 ideLogger, knownFilesVar,
                                                  runIdeAction, use,
                                                  useWithStaleFast, use_)
-import           Development.IDE.GHC.Error      (realSrcSpanToRange, isInsideSrcSpan)
+import           Development.IDE.GHC.Error      (isInsideSrcSpan,
+                                                 realSrcSpanToRange)
 import           Development.IDE.GHC.Util       (hscEnv, prettyPrint, runGhcEnv)
 import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger   (Logger (logPriority),
+                                                 Priority (..))
 import           Development.Shake              (RuleResult)
 import           GHC                            (GenLocated (L), GhcRn,
                                                  HsBindLR (FunBind),
                                                  HsGroup (..),
                                                  HsValBindsLR (..), HscEnv, IdP,
                                                  LRuleDecls,
-                                                 mi_fixities,
                                                  ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                  NHsValBindsLR (..),
                                                  ParsedModule (..),
@@ -68,8 +74,9 @@ import           GHC                            (GenLocated (L), GhcRn,
                                                  TyClDecl (SynDecl),
                                                  TyClGroup (..),
                                                  TypecheckedModule (..), fun_id,
-                                                 moduleNameString, parseModule,
-                                                 rds_rules, srcSpanFile)
+                                                 mi_fixities, moduleNameString,
+                                                 parseModule, rds_rules,
+                                                 srcSpanFile)
 import           GHC.Generics                   (Generic)
 import           GhcPlugins                     (Outputable,
                                                  SourceText (NoSourceText),
@@ -114,11 +121,12 @@ retrieCommand =
 
 -- | Parameters for the runRetrie PluginCommand.
 data RunRetrieParams = RunRetrieParams
-  { description     :: T.Text,
+  { description               :: T.Text,
     -- | rewrites for Retrie
-    rewrites        :: [Either ImportSpec RewriteSpec],
+    rewrites                  :: [Either ImportSpec RewriteSpec],
     -- | Originating file
-    originatingFile :: String -- NormalizedFilePath
+    originatingFile           :: String,
+    restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
@@ -139,6 +147,7 @@ runRetrieCmd lsp state RunRetrieParams {..} =
         (hscEnv session)
         rewrites
         (toNormalizedFilePath originatingFile)
+        restrictToOriginatingFile
     unless (null errors) $
       sendFunc lsp $
         NotShowMessage $
@@ -228,16 +237,23 @@ suggestBindRewrites originatingFile pos ms_mod (FunBind {fun_id = L l' rdrName, 
               let ideclAsString = moduleNameString . fst <$> isQual_maybe r,
               let ideclThing = Just (IEVar $ occNameString $ rdrNameOcc r)
           ]
-     in [ let rewrites =
-                [Right $ Unfold (qualify ms_mod pprName)]
-                  ++ map Left imports
-              description = "Unfold " <> pprNameText
-           in (description, CodeActionRefactorInline, RunRetrieParams {..}),
+        unfoldRewrite restrictToOriginatingFile =
+            let rewrites =
+                    [Right $ Unfold (qualify ms_mod pprName)]
+                    ++ map Left imports
+                description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+            in (description, CodeActionRefactorInline, RunRetrieParams {..})
+        foldRewrite restrictToOriginatingFile =
           let rewrites = [Right $ Fold (qualify ms_mod pprName)]
-              description = "Fold " <> pprNameText
+              description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
-        ]
+     in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
+  where
 suggestBindRewrites _ _ _ _ = []
+
+describeRestriction :: IsString p => Bool -> p
+describeRestriction restrictToOriginatingFile =
+        if restrictToOriginatingFile then " in current file" else ""
 
 -- TODO add imports to the rewrite
 suggestTypeRewrites ::
@@ -251,13 +267,15 @@ suggestTypeRewrites originatingFile pos ms_mod (SynDecl {tcdLName = L l rdrName}
   | pos `isInsideSrcSpan` l =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
-     in [ let rewrites = [Right $ TypeForward (qualify ms_mod pprName)]
-              description = "Unfold " <> pprNameText
-           in (description, CodeActionRefactorInline, RunRetrieParams {..}),
+        unfoldRewrite restrictToOriginatingFile =
+            let rewrites = [Right $ TypeForward (qualify ms_mod pprName)]
+                description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+           in (description, CodeActionRefactorInline, RunRetrieParams {..})
+        foldRewrite restrictToOriginatingFile =
           let rewrites = [Right $ TypeBackward (qualify ms_mod pprName)]
-              description = "Fold " <> pprNameText
+              description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
-        ]
+     in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
 suggestTypeRewrites _ _ _ _ = []
 
 -- TODO add imports to the rewrite
@@ -269,21 +287,11 @@ suggestRuleRewrites ::
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
     concat
-      [ [ let rewrites =
-                [Right $ RuleForward (qualify ms_mod ruleName)]
-              description = "Apply rule " <> T.pack ruleName <> " forward"
-           in ( description,
-                CodeActionRefactor,
-                RunRetrieParams {..}
-              ),
-          let rewrites =
-                [Right $ RuleBackward (qualify ms_mod ruleName)]
-              description = "Apply rule " <> T.pack ruleName <> " backwards"
-           in ( description,
-                CodeActionRefactor,
-                RunRetrieParams {..}
-              )
-        ]
+        [ [ forwardRewrite   ruleName True
+          , forwardRewrite   ruleName False
+          , backwardsRewrite ruleName True
+          , backwardsRewrite ruleName False
+          ]
         | L l r  <- rds_rules,
           pos `isInsideSrcSpan` l,
 #if MIN_GHC_API_VERSION(8,8,0)
@@ -293,6 +301,26 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
 #endif
           let ruleName = unpackFS rn
       ]
+  where
+    forwardRewrite ruleName restrictToOriginatingFile =
+        let rewrites =
+                [Right $ RuleForward (qualify ms_mod ruleName)]
+            description = "Apply rule " <> T.pack ruleName <> " forward" <>
+                            describeRestriction restrictToOriginatingFile
+
+        in ( description,
+            CodeActionRefactor,
+            RunRetrieParams {..}
+            )
+    backwardsRewrite ruleName restrictToOriginatingFile =
+          let rewrites =
+                [Right $ RuleBackward (qualify ms_mod ruleName)]
+              description = "Apply rule " <> T.pack ruleName <> " backwards"
+           in ( description,
+                CodeActionRefactor,
+                RunRetrieParams {..}
+              )
+
 suggestRuleRewrites _ _ _ _ = []
 
 qualify :: GHC.Module -> String -> String
@@ -321,8 +349,11 @@ callRetrie ::
   HscEnv ->
   [Either ImportSpec RewriteSpec] ->
   NormalizedFilePath ->
+  Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie state session rewrites origin = do
+callRetrie state session rewrites origin restrictToOriginatingFile = do
+  knownFiles <- readVar $ knownFilesVar $ shakeExtras state
+  print knownFiles
   let reuseParsedModule f = do
         pm <-
           useOrFail "GetParsedModule" NoParse GetParsedModule f
@@ -338,6 +369,7 @@ callRetrie state session rewrites origin = do
                       { ms_hspp_buf =
                           Just (stringToStringBuffer contents)
                       }
+              logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
               (_, parsed) <-
                 runGhcEnv session (parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
@@ -368,7 +400,13 @@ callRetrie state session rewrites origin = do
       target = "."
 
       retrieOptions :: Retrie.Options
-      retrieOptions = (defaultOptions target) {Retrie.verbosity = Loud}
+      retrieOptions = (defaultOptions target)
+        {Retrie.verbosity = Loud
+        ,Retrie.targetFiles = map fromNormalizedFilePath $
+            if restrictToOriginatingFile
+                then [origin]
+                else Set.toList $ unhashed knownFiles
+        }
 
       (theImports, theRewrites) = partitionEithers rewrites
 
