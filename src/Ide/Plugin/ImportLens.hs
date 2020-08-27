@@ -1,4 +1,4 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
@@ -8,6 +8,10 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE ViewPatterns          #-}
+
+#include "ghc-api-version.h"
+
 module Ide.Plugin.ImportLens (descriptor) where
 import           Control.Monad                  (forM)
 import           Data.Aeson                     (ToJSON)
@@ -140,7 +144,7 @@ generateLens pId uri minImports (L src imp)
   | ImportDecl{ideclHiding = Just (False,_)} <- imp
   = return Nothing
   -- Qualified case
-  | ImportDecl{ideclQualified = True} <- imp
+  | isQualifiedImport imp
   = return Nothing
   -- No explicit import list
   | RealSrcSpan l <- src
@@ -171,3 +175,12 @@ generateLens pId uri minImports (L src imp)
 -- | A helper to run ide actions
 runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "importLens" state
+
+isQualifiedImport :: ImportDecl a -> Bool
+#if MIN_GHC_API_VERSION(8,10,0)
+isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
+isQualifiedImport ImportDecl{} = True
+#else
+isQualifiedImport ImportDecl{ideclQualified} = ideclQualified
+#endif
+isQualifiedImport _ = False
