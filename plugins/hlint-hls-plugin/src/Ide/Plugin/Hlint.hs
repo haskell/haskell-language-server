@@ -303,7 +303,8 @@ applyHint ide nfp mhint =
     case res of
       Right appliedFile -> do
         let uri = fromNormalizedUri (filePathToUri' nfp)
-        oldContent <- liftIO $ T.readFile fp
+        (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents nfp
+        oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
         let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
         liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
         ExceptT $ Right <$> (return wsEdit)
