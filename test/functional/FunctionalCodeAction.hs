@@ -44,7 +44,7 @@ tests = testGroup "code actions" [
 
 hlintTests :: TestTree
 hlintTests = testGroup "hlint suggestions" [
-    ignoreTestBecause "Broken" $ testCase "provides 3.8 code actions" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "provides 3.8 code actions" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         diags@(reduceDiag:_) <- waitForDiagnostics
 
@@ -67,7 +67,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         noDiagnostics
 
-    , ignoreTestBecause "Broken" $ testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
+    , testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
 
         _ <- waitForDiagnostics
