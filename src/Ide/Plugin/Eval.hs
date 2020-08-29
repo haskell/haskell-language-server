@@ -337,7 +337,7 @@ instance E.Exception GhciLikeCmdException
 parseGhciLikeCmd :: Text -> Maybe (Text, Text)
 parseGhciLikeCmd input = do
   (':', rest) <- T.uncons $ T.stripStart input
-  pure $ second T.stripEnd $ T.break isSpace rest
+  pure $ second T.strip $ T.break isSpace rest
 
 strictTry :: NFData b => IO b -> IO (Either String b)
 strictTry op = E.catch
