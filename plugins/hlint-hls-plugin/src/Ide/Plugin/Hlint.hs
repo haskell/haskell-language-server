@@ -56,6 +56,7 @@ import Ide.Plugin
 import Ide.Plugin.Config
 import Ide.PluginUtils
 import Language.Haskell.HLint as Hlint
+import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as LSP
 import qualified Language.Haskell.LSP.Types.Lens as LSP
@@ -206,11 +207,33 @@ getHlintSettingsRule usage =
 -- ---------------------------------------------------------------------
 
 codeActionProvider :: CodeActionProvider
-codeActionProvider _ _ plId docId _ context = (Right . LSP.List . map CACodeAction) <$> hlintActions
+codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CACodeAction <$> getCodeActions
   where
 
-    hlintActions :: IO [LSP.CodeAction]
-    hlintActions = catMaybes <$> mapM mkHlintAction (filter validCommand diags)
+    getCodeActions = do
+        applyOne <- applyOneActions
+        diags <- getDiagnostics ideState
+        let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
+            numHintsInDoc = length
+              [d | (nfp, _, d) <- diags
+                 , d ^. LSP.source == Just "hlint"
+                 , Just nfp == docNfp
+              ]
+        -- We only want to show the applyAll code action if there is more than 1
+        -- hint in the current document
+        if numHintsInDoc >= 2 then do
+          applyAll <- applyAllAction
+          pure $ applyAll:applyOne
+        else
+          pure applyOne
+
+    applyAllAction = do
+      let args = Just [toJSON (docId ^. LSP.uri)]
+      cmd <- mkLspCommand plId "applyAll" "Apply all hints" args
+      pure $ LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing (Just cmd)
+
+    applyOneActions :: IO [LSP.CodeAction]
+    applyOneActions = catMaybes <$> mapM mkHlintAction (filter validCommand diags)
 
     -- |Some hints do not have an associated refactoring
     validCommand (LSP.Diagnostic _ _ (Just (LSP.StringValue code)) (Just "hlint") _ _ _) =
@@ -232,17 +255,22 @@ codeActionProvider _ _ plId docId _ context = (Right . LSP.List . map CACodeActi
 -- ---------------------------------------------------------------------
 
 applyAllCmd :: CommandFunction Uri
-applyAllCmd _lf ide uri = do
+applyAllCmd lf ide uri = do
   let file = maybe (error $ show uri ++ " is not a file.")
                     toNormalizedFilePath'
                    (uriToFilePath' uri)
-  logm $ "hlint:applyAllCmd:file=" ++ show file
-  res <- applyHint ide file Nothing
-  logm $ "hlint:applyAllCmd:res=" ++ show res
-  return $
-    case res of
-      Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
-      Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+  -- Persist the virtual file first since apply-refact works on files, not text content
+  mvfp <- persistVirtualFileFunc lf (toNormalizedUri uri)
+  case mvfp of
+    Nothing -> pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
+    Just vfp -> do
+      logm $ "hlint:applyAllCmd:file=" ++ show file
+      res <- applyHint ide (toNormalizedFilePath vfp) file Nothing
+      logm $ "hlint:applyAllCmd:res=" ++ show res
+      return $
+        case res of
+          Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
+          Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
 -- ---------------------------------------------------------------------
 
@@ -261,22 +289,27 @@ data OneHint = OneHint
   } deriving (Eq, Show)
 
 applyOneCmd :: CommandFunction ApplyOneParams
-applyOneCmd _lf ide (AOP uri pos title) = do
+applyOneCmd lf ide (AOP uri pos title) = do
   let oneHint = OneHint pos title
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
-  res <- applyHint ide file (Just oneHint)
-  logm $ "hlint:applyOneCmd:file=" ++ show file
-  logm $ "hlint:applyOneCmd:res=" ++ show res
-  return $
-    case res of
-      Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
-      Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+  -- Persist the virtual file first since apply-refact works on files, not text content
+  mvfp <- persistVirtualFileFunc lf (toNormalizedUri uri)
+  case mvfp of
+    Nothing -> pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
+    Just vfp -> do
+      res <- applyHint ide (toNormalizedFilePath vfp) file (Just oneHint)
+      logm $ "hlint:applyOneCmd:file=" ++ show file
+      logm $ "hlint:applyOneCmd:res=" ++ show res
+      return $
+        case res of
+          Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
+          Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
-applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
-applyHint ide nfp mhint =
+applyHint :: IdeState -> NormalizedFilePath -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
+applyHint ide virtualFp actualFp mhint =
   runExceptT $ do
-    ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas nfp
+    ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas virtualFp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map (show &&& ideaRefactoring) ideas'
     liftIO $ logm $ "applyHint:apply=" ++ show commands
@@ -295,15 +328,15 @@ applyHint ide nfp mhint =
     -- If we provide "applyRefactorings" with "Just (1,13)" then
     -- the "Redundant bracket" hint will never be executed
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
-    let fp = fromNormalizedFilePath nfp
+    let fp = fromNormalizedFilePath virtualFp
     res <- liftIO $ (Right <$> applyRefactorings Nothing commands fp) `catches`
               [ Handler $ \e -> return (Left (show (e :: IOException)))
               , Handler $ \e -> return (Left (show (e :: ErrorCall)))
               ]
     case res of
       Right appliedFile -> do
-        let uri = fromNormalizedUri (filePathToUri' nfp)
-        (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents nfp
+        let uri = fromNormalizedUri (filePathToUri' actualFp)
+        (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents actualFp
         oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
         let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
         liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
