@@ -88,6 +88,10 @@ import           Control.DeepSeq                ( NFData
                                                 )
 import Outputable (Outputable(ppr), showSDoc)
 import Control.Applicative ((<|>))
+import Data.Char (isSpace)
+import Control.Arrow (Arrow(second))
+import GHC (Ghc)
+import Type.Reflection (Typeable)
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -247,18 +251,8 @@ done, we want to switch back to GhcSessionDeps:
 
     df <- liftIO $ evalGhcEnv hscEnv' getSessionDynFlags
     let eval (stmt, l)
-          | let stmt0 = T.strip $ T.pack stmt -- For stripping and de-prefixing
-          , Just (reduce, type_) <-
-                  (True,) <$> T.stripPrefix ":kind! " stmt0
-              <|> (False,) <$> T.stripPrefix ":kind " stmt0
-          = do
-            let input = T.strip type_
-            (ty, kind) <- typeKind reduce $ T.unpack input
-            pure $ Just
-              $ T.unlines 
-              $ map ("-- " <>)
-              $ (input <> " :: " <> T.pack (showSDoc df $ ppr kind))
-              : [ "= " <> T.pack (showSDoc df $ ppr ty) | reduce]
+          | Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt
+          = evalGhciLikeCmd cmd arg
           | isStmt df stmt = do
             -- set up a custom interactive print function
             liftIO $ writeFile temp ""
@@ -308,6 +302,37 @@ done, we want to switch back to GhcSessionDeps:
         evalEdit = TextEdit editTarget (T.intercalate "\n" $ catMaybes edits)
 
     return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
+
+evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe Text)
+evalGhciLikeCmd cmd arg = do
+  df <- getSessionDynFlags
+  let tppr = T.pack . showSDoc df . ppr
+  case cmd of
+    "kind" -> do
+      let input = T.strip arg
+      (_, kind) <- typeKind False $ T.unpack input
+      pure $ Just $ "-- " <> input <> " :: " <> tppr kind <> "\n"
+    "kind!" -> do
+      let input = T.strip arg
+      (ty, kind) <- typeKind True $ T.unpack input
+      pure
+        $ Just
+        $ T.unlines 
+        $ map ("-- " <>)
+        [ input <> " :: " <> tppr kind
+        , "= " <> tppr ty
+        ]      
+    _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
+
+data GhciLikeCmdException = GhciLikeCmdNotImplemented Text Text
+  deriving (Show, Typeable)
+
+instance E.Exception GhciLikeCmdException
+
+parseGhciLikeCmd :: Text -> Maybe (Text, Text)
+parseGhciLikeCmd input = do
+  (':', rest) <- T.uncons $ T.stripStart input
+  pure $ second T.stripEnd $ T.break isSpace rest
 
 strictTry :: NFData b => IO b -> IO (Either String b)
 strictTry op = E.catch
