@@ -78,6 +78,8 @@ tests = testGroup
     $ goldenTest "T16.hs"
   , testCase ":type reports an error when given with unknown +x option"
     $ goldenTest "T17.hs"
+  , testCase "Reports an error when given with unknown command"
+    $ goldenTest "T18.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
