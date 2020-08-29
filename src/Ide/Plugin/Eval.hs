@@ -87,7 +87,6 @@ import           Control.DeepSeq                ( NFData
                                                 , deepseq
                                                 )
 import Outputable (Outputable(ppr), showSDoc)
-import Control.Applicative ((<|>))
 import Data.Char (isSpace)
 import Control.Arrow (Arrow(second))
 import GHC (Ghc)
