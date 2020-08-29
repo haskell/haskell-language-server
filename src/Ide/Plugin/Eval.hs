@@ -21,6 +21,11 @@
 --    [1] - https://github.com/jyp/dante
 module Ide.Plugin.Eval where
 
+import           Control.Arrow                  (second)
+import qualified Control.Exception             as E
+import           Control.DeepSeq                ( NFData
+                                                , deepseq
+                                                )
 import           Control.Monad                  (void)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Class      (MonadTrans (lift))
@@ -29,7 +34,9 @@ import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
 import           Data.Aeson                     (FromJSON, ToJSON, Value (Null),
                                                  toJSON)
 import           Data.Bifunctor                 (Bifunctor (first))
+import           Data.Char                      (isSpace)
 import qualified Data.HashMap.Strict            as Map
+import           Data.Maybe                     (catMaybes)
 import           Data.String                    (IsString (fromString))
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -44,7 +51,7 @@ import           Development.IDE.Types.Location (toNormalizedFilePath',
                                                  uriToFilePath')
 import           DynamicLoading                 (initializePlugins)
 import           DynFlags                       (targetPlatform)
-import           GHC                            (TcRnExprMode(..), DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+import           GHC                            (Ghc, TcRnExprMode(..), DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
                                                  GhcLink (LinkInMemory),
                                                  GhcMode (CompManager),
                                                  HscTarget (HscInterpreted),
@@ -52,6 +59,7 @@ import           GHC                            (TcRnExprMode(..), DynFlags, Exe
                                                  SuccessFlag (..),
                                                  execLineNumber, execOptions,
                                                  execSourceFile, execStmt,
+                                                 exprType,
                                                  getContext,
                                                  getInteractiveDynFlags,
                                                  getSession, getSessionDynFlags,
@@ -77,21 +85,12 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core      (LspFuncs (getVirtualFileFunc))
 import           Language.Haskell.LSP.Types
 import           Language.Haskell.LSP.VFS       (virtualFileText)
+import           Outputable (ppr, showSDoc)
 import           PrelNames                      (pRELUDE)
 import           System.FilePath
 import           System.IO                      (hClose)
 import           System.IO.Temp
-import Data.Maybe (catMaybes)
-import qualified Control.Exception             as E
-import           Control.DeepSeq                ( NFData
-                                                , deepseq
-                                                )
-import Outputable (Outputable(ppr), showSDoc)
-import Data.Char (isSpace)
-import Control.Arrow (Arrow(second))
-import GHC (Ghc)
-import Type.Reflection (Typeable)
-import GHC (exprType)
+import           Type.Reflection               (Typeable)
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
