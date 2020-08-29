@@ -21,6 +21,11 @@
 --    [1] - https://github.com/jyp/dante
 module Ide.Plugin.Eval where
 
+import           Control.Arrow                  (second)
+import qualified Control.Exception             as E
+import           Control.DeepSeq                ( NFData
+                                                , deepseq
+                                                )
 import           Control.Monad                  (void)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Class      (MonadTrans (lift))
@@ -29,7 +34,9 @@ import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
 import           Data.Aeson                     (FromJSON, ToJSON, Value (Null),
                                                  toJSON)
 import           Data.Bifunctor                 (Bifunctor (first))
+import           Data.Char                      (isSpace)
 import qualified Data.HashMap.Strict            as Map
+import           Data.Maybe                     (catMaybes)
 import           Data.String                    (IsString (fromString))
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
@@ -44,7 +51,7 @@ import           Development.IDE.Types.Location (toNormalizedFilePath',
                                                  uriToFilePath')
 import           DynamicLoading                 (initializePlugins)
 import           DynFlags                       (targetPlatform)
-import           GHC                            (DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+import           GHC                            (Ghc, TcRnExprMode(..), DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
                                                  GhcLink (LinkInMemory),
                                                  GhcMode (CompManager),
                                                  HscTarget (HscInterpreted),
@@ -52,6 +59,7 @@ import           GHC                            (DynFlags, ExecResult (..), Gene
                                                  SuccessFlag (..),
                                                  execLineNumber, execOptions,
                                                  execSourceFile, execStmt,
+                                                 exprType,
                                                  getContext,
                                                  getInteractiveDynFlags,
                                                  getSession, getSessionDynFlags,
@@ -77,17 +85,12 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core      (LspFuncs (getVirtualFileFunc))
 import           Language.Haskell.LSP.Types
 import           Language.Haskell.LSP.VFS       (virtualFileText)
+import           Outputable (ppr, showSDoc)
 import           PrelNames                      (pRELUDE)
 import           System.FilePath
 import           System.IO                      (hClose)
 import           System.IO.Temp
-import Data.Maybe (catMaybes)
-import qualified Control.Exception             as E
-import           Control.DeepSeq                ( NFData
-                                                , deepseq
-                                                )
-import Outputable (Outputable(ppr), showSDoc)
-import Control.Applicative ((<|>))
+import           Type.Reflection               (Typeable)
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -247,18 +250,8 @@ done, we want to switch back to GhcSessionDeps:
 
     df <- liftIO $ evalGhcEnv hscEnv' getSessionDynFlags
     let eval (stmt, l)
-          | let stmt0 = T.strip $ T.pack stmt -- For stripping and de-prefixing
-          , Just (reduce, type_) <-
-                  (True,) <$> T.stripPrefix ":kind! " stmt0
-              <|> (False,) <$> T.stripPrefix ":kind " stmt0
-          = do
-            let input = T.strip type_
-            (ty, kind) <- typeKind reduce $ T.unpack input
-            pure $ Just
-              $ T.unlines 
-              $ map ("-- " <>)
-              $ (input <> " :: " <> T.pack (showSDoc df $ ppr kind))
-              : [ "= " <> T.pack (showSDoc df $ ppr ty) | reduce]
+          | Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt
+          = evalGhciLikeCmd cmd arg
           | isStmt df stmt = do
             -- set up a custom interactive print function
             liftIO $ writeFile temp ""
@@ -308,6 +301,58 @@ done, we want to switch back to GhcSessionDeps:
         evalEdit = TextEdit editTarget (T.intercalate "\n" $ catMaybes edits)
 
     return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
+
+evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe Text)
+evalGhciLikeCmd cmd arg = do
+  df <- getSessionDynFlags
+  let tppr = T.pack . showSDoc df . ppr
+  case cmd of
+    "kind" -> do
+      let input = T.strip arg
+      (_, kind) <- typeKind False $ T.unpack input
+      pure $ Just $ "-- " <> input <> " :: " <> tppr kind <> "\n"
+    "kind!" -> do
+      let input = T.strip arg
+      (ty, kind) <- typeKind True $ T.unpack input
+      pure
+        $ Just
+        $ T.unlines 
+        $ map ("-- " <>)
+        [ input <> " :: " <> tppr kind
+        , "= " <> tppr ty
+        ]  
+    "type" -> do
+      let (emod, expr) = parseExprMode arg
+      ty <- exprType emod $ T.unpack expr
+      pure $ Just $ 
+        "-- " <> expr <> " :: " <> tppr ty <> "\n"
+    _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
+
+parseExprMode :: Text -> (TcRnExprMode, T.Text)
+parseExprMode rawArg =
+  case T.break isSpace rawArg of
+    ("+v", rest) -> (TM_NoInst, T.strip rest)
+    ("+d", rest) -> (TM_Default, T.strip rest)
+    _ -> (TM_Inst, rawArg)
+
+data GhciLikeCmdException =
+    GhciLikeCmdNotImplemented
+      { ghciCmdName :: Text
+      , ghciCmdArg  :: Text
+      }
+  deriving (Typeable)
+
+instance Show GhciLikeCmdException where
+  showsPrec _ GhciLikeCmdNotImplemented{..} =
+    showString "unknown command '" .
+    showString (T.unpack ghciCmdName) . showChar '\''
+  
+instance E.Exception GhciLikeCmdException
+
+parseGhciLikeCmd :: Text -> Maybe (Text, Text)
+parseGhciLikeCmd input = do
+  (':', rest) <- T.uncons $ T.stripStart input
+  pure $ second T.strip $ T.break isSpace rest
 
 strictTry :: NFData b => IO b -> IO (Either String b)
 strictTry op = E.catch

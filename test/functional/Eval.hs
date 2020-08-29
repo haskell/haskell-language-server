@@ -25,6 +25,7 @@ import           Language.Haskell.LSP.Types     ( ApplyWorkspaceEditRequest
 import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
+import           Test.Tasty.ExpectedFailure (expectFailBecause)
 import           Test.Tasty.HUnit
 
 tests :: TestTree
@@ -70,6 +71,21 @@ tests = testGroup
   , testCase "Shows a kind with :kind" $ goldenTest "T12.hs"
   , testCase "Reports an error for an incorrect type with :kind" 
     $ goldenTest "T13.hs"
+  , testCase "Returns a fully-instantiated type for :type"
+    $ goldenTest "T14.hs"
+  , testCase "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments"
+    $ goldenTest "T15.hs"
+  , testCase "Returns defaulted type for :type +d, admitting multiple whitespaces around arguments"
+    $ goldenTest "T16.hs"
+  , testCase ":type reports an error when given with unknown +x option"
+    $ goldenTest "T17.hs"
+  , testCase "Reports an error when given with unknown command"
+    $ goldenTest "T18.hs"
+  , testCase "Returns defaulted type for :type +d reflecting the default declaration specified in the >>> prompt"
+    $ goldenTest "T19.hs"
+  , expectFailBecause "known issue - see a note in P.R. #361"
+  $ testCase ":type +d reflects the `default' declaration of the module"
+  $ goldenTest "T20.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
