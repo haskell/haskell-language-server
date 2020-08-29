@@ -44,7 +44,7 @@ import           Development.IDE.Types.Location (toNormalizedFilePath',
                                                  uriToFilePath')
 import           DynamicLoading                 (initializePlugins)
 import           DynFlags                       (targetPlatform)
-import           GHC                            (DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+import           GHC                            (TcRnExprMode(..), DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
                                                  GhcLink (LinkInMemory),
                                                  GhcMode (CompManager),
                                                  HscTarget (HscInterpreted),
@@ -92,6 +92,7 @@ import Data.Char (isSpace)
 import Control.Arrow (Arrow(second))
 import GHC (Ghc)
 import Type.Reflection (Typeable)
+import GHC (exprType)
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -321,8 +322,20 @@ evalGhciLikeCmd cmd arg = do
         $ map ("-- " <>)
         [ input <> " :: " <> tppr kind
         , "= " <> tppr ty
-        ]      
+        ]  
+    "type" -> do
+      let (emod, expr) = parseExprMode arg
+      ty <- exprType emod $ T.unpack expr
+      pure $ Just $ 
+        "-- " <> expr <> " :: " <> tppr ty <> "\n"
     _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
+
+parseExprMode :: Text -> (TcRnExprMode, T.Text)
+parseExprMode rawArg =
+  case T.break isSpace rawArg of
+    ("+v", rest) -> (TM_NoInst, T.strip rest)
+    ("+d", rest) -> (TM_Default, T.strip rest)
+    _ -> (TM_Inst, rawArg)
 
 data GhciLikeCmdException = GhciLikeCmdNotImplemented Text Text
   deriving (Typeable)

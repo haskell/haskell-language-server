@@ -70,6 +70,12 @@ tests = testGroup
   , testCase "Shows a kind with :kind" $ goldenTest "T12.hs"
   , testCase "Reports an error for an incorrect type with :kind" 
     $ goldenTest "T13.hs"
+  , testCase "Returns a fully-instantiated type for :type"
+    $ goldenTest "T14.hs"
+  , testCase "Returns an uninstantiated type for :type +v, admitting multiple whitespaces around arguments"
+    $ goldenTest "T15.hs"
+  , testCase "Returns defaulted type for :type +v, admitting multiple whitespaces around arguments"
+    $ goldenTest "T16.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
