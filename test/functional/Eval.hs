@@ -80,6 +80,8 @@ tests = testGroup
     $ goldenTest "T17.hs"
   , testCase "Reports an error when given with unknown command"
     $ goldenTest "T18.hs"
+  , testCase "Returns defaulted type for :type +d reflecting the default declaration specified in the >>> prompt"
+    $ goldenTest "T19.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
