@@ -26,6 +26,7 @@ import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 
 tests :: TestTree
 tests = testGroup
@@ -82,6 +83,9 @@ tests = testGroup
     $ goldenTest "T18.hs"
   , testCase "Returns defaulted type for :type +d reflecting the default declaration specified in the >>> prompt"
     $ goldenTest "T19.hs"
+  , ignoreTestBecause "Expected failure - known issue (see a note in #361)"
+  $ testCase ":type +d reflects the `default' declaration of the module"
+  $ goldenTest "T20.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
