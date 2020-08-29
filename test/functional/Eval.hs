@@ -76,6 +76,8 @@ tests = testGroup
     $ goldenTest "T15.hs"
   , testCase "Returns defaulted type for :type +v, admitting multiple whitespaces around arguments"
     $ goldenTest "T16.hs"
+  , testCase ":type reports an error when given with unknown +x option"
+    $ goldenTest "T17.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
