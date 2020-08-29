@@ -325,8 +325,13 @@ evalGhciLikeCmd cmd arg = do
     _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
 
 data GhciLikeCmdException = GhciLikeCmdNotImplemented Text Text
-  deriving (Show, Typeable)
+  deriving (Typeable)
 
+instance Show GhciLikeCmdException where
+  showsPrec _ (GhciLikeCmdNotImplemented cmd _arg) =
+    showString "unknown command '" .
+    showString (T.unpack cmd) . showChar '\''
+  
 instance E.Exception GhciLikeCmdException
 
 parseGhciLikeCmd :: Text -> Maybe (Text, Text)
