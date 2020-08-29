@@ -335,13 +335,17 @@ parseExprMode rawArg =
     ("+d", rest) -> (TM_Default, T.strip rest)
     _ -> (TM_Inst, rawArg)
 
-data GhciLikeCmdException = GhciLikeCmdNotImplemented Text Text
+data GhciLikeCmdException =
+    GhciLikeCmdNotImplemented
+      { ghciCmdName :: Text
+      , ghciCmdArg  :: Text
+      }
   deriving (Typeable)
 
 instance Show GhciLikeCmdException where
-  showsPrec _ (GhciLikeCmdNotImplemented cmd _arg) =
+  showsPrec _ GhciLikeCmdNotImplemented{..} =
     showString "unknown command '" .
-    showString (T.unpack cmd) . showChar '\''
+    showString (T.unpack ghciCmdName) . showChar '\''
   
 instance E.Exception GhciLikeCmdException
 
