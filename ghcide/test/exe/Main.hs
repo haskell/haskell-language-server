@@ -1202,6 +1202,91 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
         , ""
         , "some = ()"
       ])
+  , testSession "delete unused binding in where clause" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (h, g) where"
+               , ""
+               , "h :: Int"
+               , "h = 3"
+               , ""
+               , "g :: Int"
+               , "g = 6"
+               , "  where"
+               , "    h :: Int"
+               , "    h = 4"
+               , ""
+               ])
+    (10, 4)
+    "Delete ‘h’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (h, g) where"
+               , ""
+               , "h :: Int"
+               , "h = 3"
+               , ""
+               , "g :: Int"
+               , "g = 6"
+               , "  where"
+               , ""
+               ])
+  , testSession "delete unused binding with multi-oneline signatures front" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (b, c) where"
+               , ""
+               , "a, b, c :: Int"
+               , "a = 3"
+               , "b = 4"
+               , "c = 5"
+               ])
+    (4, 0)
+    "Delete ‘a’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (b, c) where"
+               , ""
+               , "b, c :: Int"
+               , "b = 4"
+               , "c = 5"
+               ])
+  , testSession "delete unused binding with multi-oneline signatures mid" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (a, c) where"
+               , ""
+               , "a, b, c :: Int"
+               , "a = 3"
+               , "b = 4"
+               , "c = 5"
+               ])
+    (5, 0)
+    "Delete ‘b’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (a, c) where"
+               , ""
+               , "a, c :: Int"
+               , "a = 3"
+               , "c = 5"
+               ])
+  , testSession "delete unused binding with multi-oneline signatures end" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (a, b) where"
+               , ""
+               , "a, b, c :: Int"
+               , "a = 3"
+               , "b = 4"
+               , "c = 5"
+               ])
+    (6, 0)
+    "Delete ‘c’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wunused-binds #-}"
+               , "module A (a, b) where"
+               , ""
+               , "a, b :: Int"
+               , "a = 3"
+               , "b = 4"
+               ])
   ]
   where
     testFor source pos expectedTitle expectedResult = do

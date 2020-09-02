@@ -5,6 +5,7 @@ module Development.IDE.Plugin.CodeAction.PositionIndexed
   , indexedByPosition
   , indexedByPositionStartingFrom
   , extendAllToIncludeCommaIfPossible
+  , extendToIncludePreviousNewlineIfPossible
   , mergeRanges
   )
 where
@@ -110,3 +111,21 @@ extendToIncludeCommaIfPossible indexedString range
     ]
   | otherwise
   = [range]
+
+extendToIncludePreviousNewlineIfPossible :: PositionIndexedString -> Range -> Range
+extendToIncludePreviousNewlineIfPossible indexedString range
+  | Just (before, _, _) <- unconsRange range indexedString
+  , maybeFirstSpacePos <- lastSpacePos $ reverse before
+  = case maybeFirstSpacePos of
+      Nothing -> range
+      Just pos -> range { _start = pos }
+  | otherwise = range
+  where
+    lastSpacePos :: PositionIndexedString -> Maybe Position
+    lastSpacePos [] = Nothing
+    lastSpacePos ((pos, c):xs) =
+      if not $ isSpace c
+      then Nothing -- didn't find any space
+      else case xs of
+              (y:ys) | isSpace $ snd y -> lastSpacePos (y:ys)
+              _ -> Just pos
