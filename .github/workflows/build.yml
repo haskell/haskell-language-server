@@ -15,9 +15,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.1', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
+        ghc: ['8.10.2', '8.10.1', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
         os: [ubuntu-latest, macOS-latest, windows-latest]
         exclude:
+          - os: windows-latest
+            ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
           - os: windows-latest
             ghc: '8.8.4' # also fails due to segfault :(
           - os: windows-latest
@@ -29,7 +31,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: bubba/setup-haskell@d8110230d
+    - uses: bubba/setup-haskell@7235984
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
