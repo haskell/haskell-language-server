@@ -31,6 +31,7 @@ import           SrcLoc (RealLocated)
 import           GhcMonad
 import           Packages
 import           Name
+import           Language.Haskell.LSP.Types (getUri, filePathToUri)
 
 getDocumentationTryGhc :: GhcMonad m => Module -> [ParsedModule] -> Name -> m SpanDoc
 getDocumentationTryGhc mod deps n = head <$> getDocumentationsTryGhc mod deps [n]
@@ -55,24 +56,25 @@ getDocumentationsTryGhc _ sources names = mapM mkSpanDocText names
 #endif
     mkSpanDocText name =
       pure (SpanDocText (getDocumentation sources name)) <*> getUris name
-
+   
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do
       df <- getSessionDynFlags
-      (docFp, srcFp) <-
+      (docFu, srcFu) <-
         case nameModule_maybe name of
           Just mod -> liftIO $ do
-            doc <- fmap (fmap T.pack) $ lookupDocHtmlForModule df mod
-            src <- fmap (fmap T.pack) $ lookupSrcHtmlForModule df mod
+            doc <- toFileUriText $ lookupDocHtmlForModule df mod
+            src <- toFileUriText $ lookupSrcHtmlForModule df mod
             return (doc, src)
           Nothing -> pure (Nothing, Nothing)
-      let docUri = docFp >>= \fp -> pure $ "file://" <> fp <> "#" <> selector <> showName name
-          srcUri = srcFp >>= \fp -> pure $ "file://" <> fp <> "#" <> showName name
+      let docUri = (<> "#" <> selector <> showName name) <$> docFu
+          srcUri = (<> "#" <> showName name) <$> srcFu
           selector
             | isValName name = "v:"
             | otherwise = "t:"
       return $ SpanDocUris docUri srcUri
 
+    toFileUriText = (fmap . fmap) (getUri . filePathToUri)
 
 getDocumentation
  :: HasSrcSpan name
