@@ -87,6 +87,7 @@ main = do
     , nonLspCommandLine
     , benchmarkTests
     , ifaceTests
+    , bootTests
     ]
 
 initializeResponseTests :: TestTree
@@ -2795,6 +2796,22 @@ ifaceTests = testGroup "Interface loading tests"
     , ifaceErrorTest3
     , ifaceTHTest
     ]
+
+bootTests :: TestTree
+bootTests = testCase "boot-def-test" $ withoutStackEnv $ runWithExtraFiles "boot" $ \dir -> do
+  let cPath = dir </> "C.hs"
+  cSource <- liftIO $ readFileUtf8 cPath
+
+  -- Dirty the cache
+  liftIO $ runInDir dir $ do
+    cDoc <- createDoc cPath "haskell" cSource
+    _ <- getHover cDoc $ Position 4 3
+    closeDoc cDoc
+
+  cdoc <- createDoc cPath "haskell" cSource
+  locs <- getDefinitions cdoc (Position 7 4)
+  let floc = mkR 7 0 7 1
+  checkDefs locs (pure [floc])
 
 -- | test that TH reevaluates across interfaces
 ifaceTHTest :: TestTree
