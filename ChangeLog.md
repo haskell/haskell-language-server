@@ -2,9 +2,53 @@
 
 ## 0.4.0
 
+0.4.0 introduces the import lens plugin, which can convert your import statements into qualified imports, or into an explicit import list:
+
+![Imports code lens](https://imgur.com/pX9kvY4.gif)
+
+The eval plugin has also learnt two new commands, `:type` and `:kind`:
+
+```haskell
+{-# LANGUAGE TypeApplications #-}
+foo :: Show a => a -> String
+foo = show
+
+-- >>> :type foo @Int
+-- foo @Int :: Int -> String
+
+-- >>> :type +v foo @Int
+-- foo @Int :: Show Int => Int -> String
+```
+
+```haskell
+-- >>> type N = 1
+-- >>> type M = 40
+-- >>> :kind N + M + 1
+-- N + M + 1 :: Nat
+
+-- >>> type N = 1
+-- >>> type M = 40
+-- >>> :kind N + M + 1
+-- N + M + 1 :: Nat
+```
+
+There is now also support for GHC 8.10.2, and a new `haskell-language-server --probe-tools` command to help debug what version of each tool HLS is using.
+
+```
+$ haskell-language-server --probe-tools
+haskell-language-server version: 0.3.0.0 (GHC: 8.10.1) (PATH: /Users/luke/.cabal/store/ghc-8.10.1/hskll-lngg-srvr-0.3.0.0-7c6d48c3/bin/haskell-language-server)
+Tool versions found on the $PATH
+cabal:		3.2.0.0
+stack:		2.3.3
+ghc:		8.10.2
+```
 
 ### Pull requests merged
 
+- Bring over https://github.com/pepeiborra/hls-tutorial
+([#372](https://github.com/haskell/haskell-language-server/pull/372) by @bubba)
+- Update the ghcide upstream to be in haskell/ghcide
+([#370](https://github.com/haskell/haskell-language-server/pull/370) by @alanz)
 - Add ISSUE_TEMPLATE for github
 ([#305](https://github.com/haskell/haskell-language-server/pull/305) by @fendor)
 - Add use-package to the list of emacs packages
