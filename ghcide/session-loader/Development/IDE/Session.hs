@@ -210,8 +210,8 @@ loadSession dir = do
            cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
            -- Display a user friendly progress message here: They probably don't know what a
            -- cradle is
-           let progMsg = "Setting up project " <> T.pack (takeBaseName (cradleRootDir cradle))
-
+           let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
+                         <> " (for " <> T.pack cfp <> ")"
            eopts <- withIndefiniteProgress progMsg NotCancellable $
              cradleToOptsAndLibDir cradle cfp
 
