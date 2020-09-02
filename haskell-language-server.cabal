@@ -109,6 +109,7 @@ library hlint-plugin
     , lens
     , regex-tdfa
     , shake
+    , temporary
     , text
     , transformers
     , unordered-containers

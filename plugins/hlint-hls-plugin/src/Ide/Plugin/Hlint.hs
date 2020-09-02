@@ -60,6 +60,9 @@ import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as LSP
 import qualified Language.Haskell.LSP.Types.Lens as LSP
+import System.FilePath (takeFileName)
+import System.IO (hPutStr, noNewlineTranslation, hSetNewlineMode, utf8, hSetEncoding, IOMode(WriteMode), withFile, hClose)
+import System.IO.Temp
 import Text.Regex.TDFA.Text()
 import GHC.Generics (Generic)
 
@@ -95,7 +98,7 @@ rules = do
 
   action $ do
     files <- getFilesOfInterest
-    void $ uses GetHlintDiagnostics $ HashSet.toList files
+    void $ uses GetHlintDiagnostics $ HashSet.toList (files)
 
   where
 
@@ -259,20 +262,14 @@ applyAllCmd lf ide uri = do
   let file = maybe (error $ show uri ++ " is not a file.")
                     toNormalizedFilePath'
                    (uriToFilePath' uri)
-  -- Persist the virtual file first since apply-refact works on files, not text content
-  mvfp <- persistVirtualFileFunc lf (toNormalizedUri uri)
-  case mvfp of
-    Nothing -> 
-      pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
-    Just vfp -> 
-      withIndefiniteProgress lf "Applying all hints" Cancellable $ do
-        logm $ "hlint:applyAllCmd:file=" ++ show file
-        res <- applyHint ide (toNormalizedFilePath vfp) file Nothing
-        logm $ "hlint:applyAllCmd:res=" ++ show res
-        return $
-          case res of
-            Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
-            Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+  withIndefiniteProgress lf "Applying all hints" Cancellable $ do
+    logm $ "hlint:applyAllCmd:file=" ++ show file
+    res <- applyHint ide file Nothing
+    logm $ "hlint:applyAllCmd:res=" ++ show res
+    return $
+      case res of
+        Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
+        Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
 -- ---------------------------------------------------------------------
 
@@ -296,25 +293,19 @@ applyOneCmd lf ide (AOP uri pos title) = do
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
   let progTitle = "Applying hint: " <> title
-  -- Persist the virtual file first since apply-refact works on files, not text content
-  mvfp <- persistVirtualFileFunc lf (toNormalizedUri uri)
-  case mvfp of
-    Nothing ->
-      pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
-    Just vfp ->
-      withIndefiniteProgress lf progTitle Cancellable $ do
-        res <- applyHint ide (toNormalizedFilePath vfp) file (Just oneHint)
-        logm $ "hlint:applyOneCmd:file=" ++ show file
-        logm $ "hlint:applyOneCmd:res=" ++ show res
-        return $
-          case res of
-            Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
-            Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+  withIndefiniteProgress lf progTitle Cancellable $ do
+    logm $ "hlint:applyOneCmd:file=" ++ show file
+    res <- applyHint ide file (Just oneHint)
+    logm $ "hlint:applyOneCmd:res=" ++ show res
+    return $
+      case res of
+        Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
+        Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
-applyHint :: IdeState -> NormalizedFilePath -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
-applyHint ide virtualFp actualFp mhint =
+applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
+applyHint ide nfp mhint =
   runExceptT $ do
-    ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas virtualFp
+    ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map (show &&& ideaRefactoring) ideas'
     liftIO $ logm $ "applyHint:apply=" ++ show commands
@@ -333,16 +324,19 @@ applyHint ide virtualFp actualFp mhint =
     -- If we provide "applyRefactorings" with "Just (1,13)" then
     -- the "Redundant bracket" hint will never be executed
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
-    let fp = fromNormalizedFilePath virtualFp
-    res <- liftIO $ (Right <$> applyRefactorings Nothing commands fp) `catches`
-              [ Handler $ \e -> return (Left (show (e :: IOException)))
-              , Handler $ \e -> return (Left (show (e :: ErrorCall)))
-              ]
+    let fp = fromNormalizedFilePath nfp
+    (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents nfp
+    oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
+    res <- liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
+            hClose h
+            writeFileUTF8NoNewLineTranslation temp oldContent
+            (Right <$> applyRefactorings Nothing commands temp) `catches`
+                    [ Handler $ \e -> return (Left (show (e :: IOException)))
+                    , Handler $ \e -> return (Left (show (e :: ErrorCall)))
+                    ]
     case res of
       Right appliedFile -> do
-        let uri = fromNormalizedUri (filePathToUri' actualFp)
-        (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents actualFp
-        oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
+        let uri = fromNormalizedUri (filePathToUri' nfp)
         let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
         liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
         ExceptT $ return (Right wsEdit)
@@ -370,3 +364,10 @@ bimapExceptT f g (ExceptT m) = ExceptT (fmap h m) where
   h (Left e)  = Left (f e)
   h (Right a) = Right (g a)
 {-# INLINE bimapExceptT #-}
+
+writeFileUTF8NoNewLineTranslation :: FilePath -> T.Text -> IO()
+writeFileUTF8NoNewLineTranslation file txt =
+  withFile file WriteMode $ \h -> do
+    hSetEncoding h utf8
+    hSetNewlineMode h noNewlineTranslation
+    hPutStr h (T.unpack txt)
