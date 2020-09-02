@@ -23,6 +23,7 @@ module Development.IDE.GHC.Compat(
     dontWriteHieFiles,
 #if !MIN_GHC_API_VERSION(8,8,0)
     ml_hie_file,
+    addBootSuffixLocnOut,
 #endif
     hPutStringBuffer,
     includePathsGlobal,
@@ -122,6 +123,7 @@ import System.FilePath ((-<.>))
 
 #if MIN_GHC_API_VERSION(8,6,0)
 import GhcPlugins (srcErrorMessages)
+import Data.List (isSuffixOf)
 #else
 import System.IO.Error
 import IfaceEnv
@@ -153,7 +155,9 @@ hieExportNames = nameListFromAvails . hie_exports
 
 #if !MIN_GHC_API_VERSION(8,8,0)
 ml_hie_file :: GHC.ModLocation -> FilePath
-ml_hie_file ml = ml_hi_file ml -<.> ".hie"
+ml_hie_file ml
+  | "boot" `isSuffixOf ` ml_hi_file ml = ml_hi_file ml -<.> ".hie-boot"
+  | otherwise  = ml_hi_file ml -<.> ".hie"
 #endif
 
 #endif
@@ -380,6 +384,14 @@ instance HasSrcSpan (GenLocated SrcSpan a) where
 getHeaderImports a b c d =
     catch (Right <$> Hdr.getImports a b c d)
           (return . Left . srcErrorMessages)
+
+-- | Add the @-boot@ suffix to all output file paths associated with the
+-- module, not including the input file itself
+addBootSuffixLocnOut :: GHC.ModLocation -> GHC.ModLocation
+addBootSuffixLocnOut locn
+  = locn { ml_hi_file  = Module.addBootSuffix (ml_hi_file locn)
+         , ml_obj_file = Module.addBootSuffix (ml_obj_file locn)
+         }
 #endif
 
 getModuleHash :: ModIface -> Fingerprint
