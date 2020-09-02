@@ -4,7 +4,7 @@ Note: `ghcide` was previously called `hie-core`.
 
 Our vision is that you should build an IDE by combining:
 
-![vscode](https://raw.githubusercontent.com/digital-asset/ghcide/master/img/vscode2.png)
+![vscode](https://raw.githubusercontent.com/haskell/ghcide/master/img/vscode2.png)
 
 * [`hie-bios`](https://github.com/mpickering/hie-bios) for determining where your files are, what are their dependencies, what extensions are enabled and so on;
 * `ghcide` (i.e. this library) for defining how to type check, when to type check, and producing diagnostic messages;
@@ -64,7 +64,7 @@ Note that you need to compile `ghcide` with the same `ghc` as the project you ar
 
 First install the `ghcide` binary using `stack` or `cabal`, e.g.
 
-1. `git clone https://github.com/digital-asset/ghcide.git`
+1. `git clone https://github.com/haskell/ghcide.git`
 2. `cd ghcide`
 3. `cabal install` or `stack install` (and make sure `~/.local/bin` is on your `$PATH`)
 
@@ -338,8 +338,8 @@ Now opening a `.hs` file should work with `ghcide`.
 
 The teams behind this project and the [`haskell-ide-engine`](https://github.com/haskell/haskell-ide-engine#readme) have agreed to join forces under the [`haskell-language-server` project](https://github.com/haskell/haskell-language-server), see the [original announcement](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html). The technical work is ongoing, with the likely model being that this project serves as the core, while plugins and integrations are kept in the [`haskell-language-server` project](https://github.com/haskell/haskell-language-server).
 
-The code behind `ghcide` was originally developed by [Digital Asset](https://digitalasset.com/) as part of the [DAML programming language](https://github.com/digital-asset/daml). DAML is a smart contract language targeting distributed-ledger runtimes, based on [GHC](https://www.haskell.org/ghc/) with custom language extensions. The DAML programming language has [an IDE](https://webide.daml.com/), and work was done to separate off a reusable Haskell-only IDE (what is now `ghcide`) which the [DAML IDE then builds upon](https://github.com/digital-asset/daml/tree/master/compiler/damlc). Since that time, there have been various [non-Digital Asset contributors](https://github.com/digital-asset/ghcide/graphs/contributors), in addition to continued investment by Digital Asset. All contributions require a [Contributor License Agreement](https://cla.digitalasset.com/digital-asset/ghcide) that states you license the code under the [Apache License](LICENSE).
+The code behind `ghcide` was originally developed by [Digital Asset](https://digitalasset.com/) as part of the [DAML programming language](https://github.com/digital-asset/daml). DAML is a smart contract language targeting distributed-ledger runtimes, based on [GHC](https://www.haskell.org/ghc/) with custom language extensions. The DAML programming language has [an IDE](https://webide.daml.com/), and work was done to separate off a reusable Haskell-only IDE (what is now `ghcide`) which the [DAML IDE then builds upon](https://github.com/digital-asset/daml/tree/master/compiler/damlc). Since that time, there have been various [non-Digital Asset contributors](https://github.com/digital-asset/ghcide/graphs/contributors), in addition to continued investment by Digital Asset. The project has been handed over to Haskell.org as of September 2020.
 
 The Haskell community [has](https://github.com/DanielG/ghc-mod) [various](https://github.com/chrisdone/intero) [IDE](https://github.com/rikvdkleij/intellij-haskell) [choices](http://leksah.org/), but the one that had been gathering momentum is [`haskell-ide-engine`](https://github.com/haskell/haskell-ide-engine#readme). Our project owes a debt of gratitude to the `haskell-ide-engine`. We reuse libraries from their ecosystem, including [`hie-bios`](https://github.com/mpickering/hie-bios#readme) (a likely future environment setup layer in `haskell-ide-engine`), [`haskell-lsp`](https://github.com/alanz/haskell-lsp#readme) and [`lsp-test`](https://github.com/bubba/lsp-test#readme) (the `haskell-ide-engine` [LSP protocol](https://microsoft.github.io/language-server-protocol/) pieces). We make heavy use of their contributions to GHC itself, in particular the work to make GHC take string buffers rather than files.
 
-The best summary of the architecture of `ghcide` is available [this talk](https://www.youtube.com/watch?v=cijsaeWNf2E&list=PLxxF72uPfQVRdAsvj7THoys-nVj-oc4Ss) ([slides](https://ndmitchell.com/downloads/slides-making_a_haskell_ide-07_sep_2019.pdf)), given at [MuniHac 2019](https://munihac.de/2019.html). However, since that talk the project has renamed from `hie-core` to `ghcide`, and the repo has moved to [this location](https://github.com/digital-asset/ghcide/).
+The best summary of the architecture of `ghcide` is available [this talk](https://www.youtube.com/watch?v=cijsaeWNf2E&list=PLxxF72uPfQVRdAsvj7THoys-nVj-oc4Ss) ([slides](https://ndmitchell.com/downloads/slides-making_a_haskell_ide-07_sep_2019.pdf)), given at [MuniHac 2019](https://munihac.de/2019.html). However, since that talk the project has renamed from `hie-core` to `ghcide`, and the repo has moved to [this location](https://github.com/haskell/ghcide/).
