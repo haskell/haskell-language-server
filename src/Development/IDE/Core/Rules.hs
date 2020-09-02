@@ -233,6 +233,12 @@ priorityGenerateCore = Priority (-1)
 priorityFilesOfInterest :: Priority
 priorityFilesOfInterest = Priority (-2)
 
+-- | IMPORTANT FOR HLINT INTEGRATION:
+-- We currently parse the module both with and without Opt_Haddock, and
+-- return the one with Haddocks if it -- succeeds. However, this may not work
+-- for hlint, and we might need to save the one without haddocks too.
+-- See https://github.com/digital-asset/ghcide/pull/350#discussion_r370878197
+-- and https://github.com/mpickering/ghcide/pull/22#issuecomment-625070490
 getParsedModuleRule :: Rules ()
 getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
     sess <- use_ GhcSession file
@@ -251,18 +257,28 @@ getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
         then
             liftIO mainParse
         else do
-            let haddockParse = do
-                    (_, (!diagsHaddock, _)) <-
-                        getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs file modTime contents
-                    return diagsHaddock
+            let haddockParse = getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs file modTime contents
 
-            ((fingerPrint, (diags, res)), diagsHaddock) <-
-                -- parse twice, with and without Haddocks, concurrently
-                -- we want warnings if parsing with Haddock fails
-                -- but if we parse with Haddock we lose annotations
-                liftIO $ concurrently mainParse haddockParse
+            -- parse twice, with and without Haddocks, concurrently
+            -- we cannot ignore Haddock parse errors because files of
+            -- non-interest are always parsed with Haddocks
+            -- If we can parse Haddocks, might as well use them
+            --
+            -- HLINT INTEGRATION: might need to save the other parsed module too
+            ((fp,(diags,res)),(fph,(diagsh,resh))) <- liftIO $ concurrently mainParse haddockParse
 
-            return (fingerPrint, (mergeParseErrorsHaddock diags diagsHaddock, res))
+            -- Merge haddock and regular diagnostics so we can always report haddock
+            -- parse errors
+            let diagsM = mergeParseErrorsHaddock diags diagsh
+            case resh of
+              Just _
+                | HaddockParse <- optHaddockParse opt
+                -> pure (fph, (diagsM, resh))
+              -- If we fail to parse haddocks, report the haddock diagnostics as well and
+              -- return the non-haddock parse.
+              -- This seems to be the correct behaviour because the Haddock flag is added
+              -- by us and not the user, so our IDE shouldn't stop working because of it.
+              _ -> pure (fp, (diagsM, res))
 
 
 withOptHaddock :: HscEnv -> HscEnv
@@ -280,7 +296,6 @@ mergeParseErrorsHaddock normal haddock = normal ++
 
     fixMessage x | "parse error " `T.isPrefixOf` x = "Haddock " <> x
                  | otherwise = "Haddock: " <> x
-
 
 getParsedModuleDefinition :: HscEnv -> IdeOptions -> [PackageName] -> NormalizedFilePath -> UTCTime -> Maybe T.Text -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
 getParsedModuleDefinition packageState opt comp_pkgs file modTime contents = do

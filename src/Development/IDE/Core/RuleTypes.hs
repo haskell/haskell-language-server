@@ -61,6 +61,9 @@ type instance RuleResult GetKnownFiles = HS.HashSet NormalizedFilePath
 -- that module.
 data TcModuleResult = TcModuleResult
     { tmrModule     :: TypecheckedModule
+    -- ^ warning, the ModIface in the tm_checked_module_info of the
+    -- TypecheckedModule will always be Nothing, use the ModIface in the
+    -- HomeModInfo instead
     , tmrModInfo    :: HomeModInfo
     , tmrDeferedError :: !Bool -- ^ Did we defer any type errors for this module?
     }
