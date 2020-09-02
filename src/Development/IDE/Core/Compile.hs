@@ -19,7 +19,7 @@ module Development.IDE.Core.Compile
   , mkTcModuleResult
   , generateByteCode
   , generateAndWriteHieFile
-  , generateAndWriteHiFile
+  , writeHiFile
   , getModSummaryFromImports
   , loadHieFile
   , loadInterface
@@ -133,9 +133,10 @@ typecheckModule (IdeDefer defer) hsc pm = do
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
             GHC.typecheckModule $ enableTopLevelWarnings
                                 $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
-        tcm2 <- mkTcModuleResult tcm
         let errorPipeline = unDefer . hideDiag dflags
-        return (map errorPipeline warnings, tcm2)
+            diags = map errorPipeline warnings
+        tcm2 <- mkTcModuleResult tcm (any fst diags)
+        return (map snd diags, tcm2)
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
@@ -233,11 +234,11 @@ update_pm_mod_summary :: (ModSummary -> ModSummary) -> ParsedModule -> ParsedMod
 update_pm_mod_summary up pm =
   pm{pm_mod_summary = up $ pm_mod_summary pm}
 
-unDefer :: (WarnReason, FileDiagnostic) -> FileDiagnostic
-unDefer (Reason Opt_WarnDeferredTypeErrors         , fd) = upgradeWarningToError fd
-unDefer (Reason Opt_WarnTypedHoles                 , fd) = upgradeWarningToError fd
-unDefer (Reason Opt_WarnDeferredOutOfScopeVariables, fd) = upgradeWarningToError fd
-unDefer ( _                                        , fd) = fd
+unDefer :: (WarnReason, FileDiagnostic) -> (Bool, FileDiagnostic)
+unDefer (Reason Opt_WarnDeferredTypeErrors         , fd) = (True, upgradeWarningToError fd)
+unDefer (Reason Opt_WarnTypedHoles                 , fd) = (True, upgradeWarningToError fd)
+unDefer (Reason Opt_WarnDeferredOutOfScopeVariables, fd) = (True, upgradeWarningToError fd)
+unDefer ( _                                        , fd) = (False, fd)
 
 upgradeWarningToError :: FileDiagnostic -> FileDiagnostic
 upgradeWarningToError (nfp, sh, fd) =
@@ -257,8 +258,9 @@ addRelativeImport fp modu dflags = dflags
 mkTcModuleResult
     :: GhcMonad m
     => TypecheckedModule
+    -> Bool
     -> m TcModuleResult
-mkTcModuleResult tcm = do
+mkTcModuleResult tcm upgradedError = do
     session <- getSession
     let sf = modInfoSafe (tm_checked_module_info tcm)
 #if MIN_GHC_API_VERSION(8,10,0)
@@ -267,7 +269,7 @@ mkTcModuleResult tcm = do
     (iface, _) <- liftIO $ mkIfaceTc session Nothing sf details tcGblEnv
 #endif
     let mod_info = HomeModInfo iface details Nothing
-    return $ TcModuleResult tcm mod_info
+    return $ TcModuleResult tcm mod_info upgradedError
   where
     (tcGblEnv, details) = tm_internals_ tcm
 
@@ -294,8 +296,8 @@ generateAndWriteHieFile hscEnv tcm =
     mod_location = ms_location mod_summary
     targetPath   = Compat.ml_hie_file mod_location
 
-generateAndWriteHiFile :: HscEnv -> TcModuleResult -> IO [FileDiagnostic]
-generateAndWriteHiFile hscEnv tc =
+writeHiFile :: HscEnv -> TcModuleResult -> IO [FileDiagnostic]
+writeHiFile hscEnv tc =
   handleGenerationErrors dflags "interface generation" $ do
     atomicFileWrite targetPath $ \fp ->
       writeIfaceFile dflags fp modIface

@@ -6,6 +6,7 @@ module Development.IDE.GHC.Util(
     -- * HcsEnv and environment
     HscEnvEq,
     hscEnv, newHscEnvEq,
+    hscEnvWithImportPaths,
     modifyDynFlags,
     evalGhcEnv,
     runGhcEnv,
@@ -169,36 +170,46 @@ moduleImportPath (takeDirectory . fromNormalizedFilePath -> pathDir) mn
 
 -- | An 'HscEnv' with equality. Two values are considered equal
 --   if they are created with the same call to 'newHscEnvEq'.
-data HscEnvEq
-    = HscEnvEq !Unique !HscEnv
-               [(InstalledUnitId, DynFlags)] -- In memory components for this HscEnv
+data HscEnvEq = HscEnvEq
+    { envUnique :: !Unique
+    , hscEnv :: !HscEnv
+    , deps   :: [(InstalledUnitId, DynFlags)]
+               -- ^ In memory components for this HscEnv
                -- This is only used at the moment for the import dirs in
                -- the DynFlags
-
--- | Unwrap an 'HsEnvEq'.
-hscEnv :: HscEnvEq -> HscEnv
-hscEnv = either error id . hscEnv'
-
-hscEnv' :: HscEnvEq -> Either String HscEnv
-hscEnv' (HscEnvEq _ x _) = Right x
-deps :: HscEnvEq -> [(InstalledUnitId, DynFlags)]
-deps (HscEnvEq _ _ u) = u
+    , envImportPaths :: [String]
+        -- ^ Import dirs originally configured in this env
+        --   We remove them to prevent GHC from loading modules on its own
+    }
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEq e uids = do u <- newUnique; return $ HscEnvEq u e uids
+newHscEnvEq hscEnv0 deps = do
+    envUnique <- newUnique
+    let envImportPaths = importPaths $ hsc_dflags hscEnv0
+        hscEnv = removeImportPaths hscEnv0
+    return HscEnvEq{..}
+
+-- | Unwrap the 'HscEnv' with the original import paths.
+--   Used only for locating imports
+hscEnvWithImportPaths :: HscEnvEq -> HscEnv
+hscEnvWithImportPaths HscEnvEq{..} =
+    hscEnv{hsc_dflags = (hsc_dflags hscEnv){importPaths = envImportPaths}}
+
+removeImportPaths :: HscEnv -> HscEnv
+removeImportPaths hsc = hsc{hsc_dflags = (hsc_dflags hsc){importPaths = []}}
 
 instance Show HscEnvEq where
-  show (HscEnvEq a _ _) = "HscEnvEq " ++ show (hashUnique a)
+  show HscEnvEq{envUnique} = "HscEnvEq " ++ show (hashUnique envUnique)
 
 instance Eq HscEnvEq where
-  HscEnvEq a _ _ == HscEnvEq b _ _ = a == b
+  a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b c) = rnf (hashUnique a) `seq` b `seq` c `seq` ()
+  rnf (HscEnvEq a b c d) = rnf (hashUnique a) `seq` b `seq` c `seq` rnf d
 
 instance Hashable HscEnvEq where
-  hashWithSalt s (HscEnvEq a _b _c) = hashWithSalt s a
+  hashWithSalt s = hashWithSalt s . envUnique
 
 -- Fake instance needed to persuade Shake to accept this type as a key.
 -- No harm done as ghcide never persists these keys currently

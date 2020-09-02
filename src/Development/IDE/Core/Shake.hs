@@ -28,7 +28,7 @@ module Development.IDE.Core.Shake(
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
     shakeRestart,
-    shakeEnqueue,
+    shakeEnqueue, shakeEnqueueSession,
     shakeProfile,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
     FastResult(..),
@@ -44,6 +44,7 @@ module Development.IDE.Core.Shake(
     getIdeOptionsIO,
     GlobalIdeOptions(..),
     garbageCollect,
+    knownFiles,
     setPriority,
     sendEvent,
     ideLogger,
@@ -67,6 +68,7 @@ import           Development.Shake.Database
 import           Development.Shake.Classes
 import           Development.Shake.Rule
 import qualified Data.HashMap.Strict as HMap
+import qualified Data.HashSet as HSet
 import qualified Data.Map.Strict as Map
 import qualified Data.ByteString.Char8 as BS
 import           Data.Dynamic
@@ -111,6 +113,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Control.Monad.Trans.Maybe
 import Data.Traversable
+import Data.Hashable
 
 import Data.IORef
 import NameCache
@@ -148,7 +151,8 @@ data ShakeExtras = ShakeExtras
     ,withIndefiniteProgress :: WithIndefiniteProgressFunc
     -- ^ Same as 'withProgress', but for processes that do not report the percentage complete
     ,restartShakeSession :: [DelayedAction ()] -> IO ()
-    , ideNc :: IORef NameCache
+    ,ideNc :: IORef NameCache
+    ,knownFilesVar :: Var (Hashed (HSet.HashSet NormalizedFilePath))
     }
 
 type WithProgressFunc = forall a.
@@ -358,6 +362,12 @@ getValues state key file = do
             -- (which would be an internal error).
             evaluate (r `seqValue` Just r)
 
+-- | Get all the files in the project
+knownFiles :: Action (Hashed (HSet.HashSet NormalizedFilePath))
+knownFiles = do
+  ShakeExtras{knownFilesVar} <- getShakeExtras
+  liftIO $ readVar knownFilesVar
+
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
 -- elsewhere and doing it twice is expensive.
@@ -393,6 +403,7 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
         hiddenDiagnostics <- newVar mempty
         publishedDiagnostics <- newVar mempty
         positionMapping <- newVar HMap.empty
+        knownFilesVar <- newVar $ hashed HSet.empty
         let restartShakeSession = shakeRestart ideState
         let session = shakeSession
         mostRecentProgressEvent <- newTVarIO KickCompleted

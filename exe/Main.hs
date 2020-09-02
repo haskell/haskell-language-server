@@ -8,6 +8,7 @@ module Main(main) where
 import Arguments
 import Control.Concurrent.Extra
 import Control.Monad.Extra
+import Control.Lens ( (^.) )
 import Data.Default
 import Data.List.Extra
 import Data.Maybe
@@ -33,6 +34,7 @@ import Development.IDE.Session
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
+import Language.Haskell.LSP.Types.Lens (params, initializationOptions)
 import Development.IDE.LSP.LanguageServer
 import qualified System.Directory.Extra as IO
 import System.Environment
@@ -44,6 +46,7 @@ import System.Time.Extra
 import Paths_ghcide
 import Development.GitRev
 import qualified Data.HashSet as HashSet
+import qualified Data.Aeson as J
 
 import HIE.Bios.Cradle
 
@@ -78,8 +81,13 @@ main = do
     command <- makeLspCommandId "typesignature.add"
 
     let plugins = Completions.plugin <> CodeAction.plugin
-        onInitialConfiguration = const $ Right ()
-        onConfigurationChange  = const $ Right ()
+        onInitialConfiguration :: InitializeRequest -> Either T.Text LspConfig
+        onInitialConfiguration x = case x ^. params . initializationOptions of
+          Nothing -> Right defaultLspConfig
+          Just v -> case J.fromJSON v of
+            J.Error err -> Left $ T.pack err
+            J.Success a -> Right a
+        onConfigurationChange = const $ Left "Updating Not supported"
         options = def { LSP.executeCommandCommands = Just [command]
                       , LSP.completionTriggerCharacters = Just "."
                       }
@@ -88,15 +96,18 @@ main = do
         t <- offsetTime
         hPutStrLn stderr "Starting LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps wProg wIndefProg -> do
+        runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps wProg wIndefProg getConfig -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             sessionLoader <- loadSession dir
+            config <- fromMaybe defaultLspConfig <$> getConfig
             let options = (defaultIdeOptions sessionLoader)
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = IdeTesting argsTesting
                     , optThreads        = argsThreads
+                    , optCheckParents   = checkParents config
+                    , optCheckProject   = checkProject config
                     }
                 logLevel = if argsVerbose then minBound else Info
             debouncer <- newAsyncDebouncer
