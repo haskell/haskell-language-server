@@ -311,7 +311,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
                             $ hsmodDecls
   , Just pos <- _end . getLocatedRange <$> hsmodExports
   , Just needComma <- needsComma source <$> hsmodExports
-  , let exportName = (if needComma then "," else "") <> printExport exportType name 
+  , let exportName = (if needComma then "," else "") <> printExport exportType name
         insertPos = pos {_character = pred $ _character pos}
   = [("Export ‘" <> name <> "’", [TextEdit (Range insertPos insertPos) exportName])]
   | otherwise = []
@@ -833,19 +833,24 @@ suggestNewImport _ _ _ = []
 constructNewImportSuggestions
   :: PackageExportsMap -> NotInScope -> Maybe [T.Text] -> [T.Text]
 constructNewImportSuggestions exportsMap thingMissing notTheseModules = nubOrd
-  [ renderNewImport identInfo m
+  [ suggestion
   | (identInfo, m) <- fromMaybe [] $ Map.lookup name exportsMap
   , canUseIdent thingMissing identInfo
   , m `notElem` fromMaybe [] notTheseModules
+  , suggestion <- renderNewImport identInfo m
   ]
  where
   renderNewImport identInfo m
-    | Just q <- qual = "import qualified " <> m <> " as " <> q
-    | otherwise      = "import " <> m <> " (" <> importWhat identInfo <> ")"
+    | Just q <- qual
+    , asQ <- if q == m then "" else " as " <> q
+    = ["import qualified " <> m <> asQ]
+    | otherwise
+    = ["import " <> m <> " (" <> importWhat identInfo <> ")"
+      ,"import " <> m ]
 
   (qual, name) = case T.splitOn "." (notInScope thingMissing) of
     [n]      -> (Nothing, n)
-    segments -> (Just (T.concat $ init segments), last segments)
+    segments -> (Just (T.intercalate "." $ init segments), last segments)
   importWhat IdentInfo {parent, rendered}
     | Just p <- parent = p <> "(" <> rendered <> ")"
     | otherwise        = rendered
