@@ -2186,7 +2186,7 @@ findDefinitionAndHoverTests = let
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
   , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #246"
   , test  yes    yes    spaceL37   space        "top-level fn on space #315"
-  , test  no     broken docL41     doc           "documentation                     #7"
+  , test  no     yes    docL41     doc           "documentation                     #7"
   , test  no     yes    eitL40     kindE         "kind of Either                  #273"
   , test  no     yes    intL40     kindI         "kind of Int                     #273"
   , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #273"
