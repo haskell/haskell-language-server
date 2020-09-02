@@ -24,6 +24,7 @@ module Development.IDE.Types.Options
   , defaultLspConfig
   , CheckProject(..)
   , CheckParents(..)
+  , OptHaddockParse(..)
   ) where
 
 import Development.Shake
@@ -88,7 +89,15 @@ data IdeOptions = IdeOptions
     -- ^ Whether to typecheck the entire project on load
   , optCheckParents :: CheckParents
     -- ^ When to typecheck reverse dependencies of a file
+  , optHaddockParse :: OptHaddockParse
+    -- ^ Whether to return result of parsing module with Opt_Haddock.
+    --   Otherwise, return the result of parsing without Opt_Haddock, so
+    --   that the parsed module contains the result of Opt_KeepRawTokenStream,
+    --   which might be necessary for hlint.
   }
+
+data OptHaddockParse = HaddockParse | NoHaddockParse
+  deriving (Eq,Ord,Show,Enum)
 
 newtype CheckProject = CheckProject { shouldCheckProject :: Bool }
   deriving stock (Eq, Ord, Show)
@@ -147,6 +156,7 @@ defaultIdeOptions session = IdeOptions
     ,optTesting = IdeTesting False
     ,optCheckProject = checkProject defaultLspConfig
     ,optCheckParents = checkParents defaultLspConfig
+    ,optHaddockParse = HaddockParse
     }
 
 
