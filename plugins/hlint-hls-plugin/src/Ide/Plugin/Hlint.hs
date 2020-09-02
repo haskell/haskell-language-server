@@ -34,7 +34,7 @@ import Data.Typeable
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.OfInterest
 import Development.IDE.Core.Rules
-import Development.IDE.Core.Shake
+import Development.IDE.Core.Shake hiding (withIndefiniteProgress)
 import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
 import Development.Shake
@@ -262,15 +262,17 @@ applyAllCmd lf ide uri = do
   -- Persist the virtual file first since apply-refact works on files, not text content
   mvfp <- persistVirtualFileFunc lf (toNormalizedUri uri)
   case mvfp of
-    Nothing -> pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
-    Just vfp -> do
-      logm $ "hlint:applyAllCmd:file=" ++ show file
-      res <- applyHint ide (toNormalizedFilePath vfp) file Nothing
-      logm $ "hlint:applyAllCmd:res=" ++ show res
-      return $
-        case res of
-          Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
-          Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+    Nothing -> 
+      pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
+    Just vfp -> 
+      withIndefiniteProgress lf "Applying all hints" Cancellable $ do
+        logm $ "hlint:applyAllCmd:file=" ++ show file
+        res <- applyHint ide (toNormalizedFilePath vfp) file Nothing
+        logm $ "hlint:applyAllCmd:res=" ++ show res
+        return $
+          case res of
+            Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
+            Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
 -- ---------------------------------------------------------------------
 
@@ -293,18 +295,21 @@ applyOneCmd lf ide (AOP uri pos title) = do
   let oneHint = OneHint pos title
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
+  let progTitle = "Applying hint: " <> title
   -- Persist the virtual file first since apply-refact works on files, not text content
   mvfp <- persistVirtualFileFunc lf (toNormalizedUri uri)
   case mvfp of
-    Nothing -> pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
-    Just vfp -> do
-      res <- applyHint ide (toNormalizedFilePath vfp) file (Just oneHint)
-      logm $ "hlint:applyOneCmd:file=" ++ show file
-      logm $ "hlint:applyOneCmd:res=" ++ show res
-      return $
-        case res of
-          Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
-          Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+    Nothing ->
+      pure (Left (responseError (T.pack $ "Couldn't persist virtual file for " ++ show uri)), Nothing)
+    Just vfp ->
+      withIndefiniteProgress lf progTitle Cancellable $ do
+        res <- applyHint ide (toNormalizedFilePath vfp) file (Just oneHint)
+        logm $ "hlint:applyOneCmd:file=" ++ show file
+        logm $ "hlint:applyOneCmd:res=" ++ show res
+        return $
+          case res of
+            Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
+            Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
 
 applyHint :: IdeState -> NormalizedFilePath -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
 applyHint ide virtualFp actualFp mhint =
@@ -340,7 +345,7 @@ applyHint ide virtualFp actualFp mhint =
         oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
         let wsEdit = diffText' True (uri, oldContent) (T.pack appliedFile) IncludeDeletions
         liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
-        ExceptT $ Right <$> (return wsEdit)
+        ExceptT $ return (Right wsEdit)
       Left err ->
         throwE (show err)
     where
