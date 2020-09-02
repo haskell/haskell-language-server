@@ -11,6 +11,7 @@ module Development.IDE.Core.FileStore(
     setSomethingModified,
     fileStoreRules,
     modificationTime,
+    typecheckParents,
     VFSHandle,
     makeVFSHandle,
     makeLSPVFSHandle
@@ -37,6 +38,7 @@ import Development.IDE.Types.Location
 import Development.IDE.Core.OfInterest (kick)
 import Development.IDE.Core.RuleTypes
 import qualified Data.Rope.UTF16 as Rope
+import Development.IDE.Import.DependencyInformation
 
 #ifdef mingw32_HOST_OS
 import qualified System.Directory as Dir
@@ -202,8 +204,14 @@ setBufferModified state absFile contents = do
 
 -- | Note that some buffer for a specific file has been modified but not
 -- with what changes.
-setFileModified :: IdeState -> NormalizedFilePath -> IO ()
-setFileModified state nfp = do
+setFileModified :: IdeState
+                -> Bool -- ^ True indicates that we should also attempt to recompile
+                        -- modules which depended on this file. Currently
+                        -- it is true when saving but not on normal
+                        -- document modification events
+                -> NormalizedFilePath
+                -> IO ()
+setFileModified state prop nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
@@ -213,6 +221,22 @@ setFileModified state nfp = do
           void $ use GetSpanInfo nfp
           liftIO $ progressUpdate KickCompleted
     shakeRestart state [da]
+    when prop $
+      typecheckParents state nfp
+
+typecheckParents :: IdeState -> NormalizedFilePath -> IO ()
+typecheckParents state nfp = void $ shakeEnqueue state parents
+  where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction nfp)
+
+typecheckParentsAction :: NormalizedFilePath -> Action ()
+typecheckParentsAction nfp = do
+    revs <- reverseDependencies nfp <$> useNoFile_ GetModuleGraph
+    logger <- logger <$> getShakeExtras
+    let log = L.logInfo logger . T.pack
+    liftIO $ do
+      (log $ "Typechecking reverse dependencies for" ++ show nfp ++ ": " ++ show revs)
+        `catch` \(e :: SomeException) -> log (show e)
+    () <$ uses GetModIface revs
 
 -- | Note that some buffer somewhere has been modified, but don't say what.
 --   Only valid if the virtual file system was initialised by LSP, as that

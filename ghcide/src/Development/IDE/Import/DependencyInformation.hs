@@ -21,6 +21,7 @@ module Development.IDE.Import.DependencyInformation
   , reachableModules
   , processDependencyInformation
   , transitiveDeps
+  , reverseDependencies
 
   , BootIdMap
   , insertBootId
@@ -142,6 +143,8 @@ data DependencyInformation =
     , depModuleDeps :: !(FilePathIdMap FilePathIdSet)
     -- ^ For a non-error node, this contains the set of module immediate dependencies
     -- in the same package.
+    , depReverseModuleDeps :: !(IntMap IntSet)
+    -- ^ Contains a reverse mapping from a module to all those that immediately depend on it.
     , depPkgDeps :: !(FilePathIdMap (Set InstalledUnitId))
     -- ^ For a non-error node, this contains the set of immediate pkg deps.
     , depPathIdMap :: !PathIdMap
@@ -222,6 +225,7 @@ processDependencyInformation rawDepInfo@RawDependencyInformation{..} =
   DependencyInformation
     { depErrorNodes = IntMap.fromList errorNodes
     , depModuleDeps = moduleDeps
+    , depReverseModuleDeps = reverseModuleDeps
     , depModuleNames = IntMap.fromList $ coerce moduleNames
     , depPkgDeps = pkgDependencies rawDepInfo
     , depPathIdMap = rawPathIdMap
@@ -232,15 +236,20 @@ processDependencyInformation rawDepInfo@RawDependencyInformation{..} =
         moduleNames :: [(FilePathId, ModuleName)]
         moduleNames =
           [ (fId, modName) | (_, imports) <- successNodes, (L _ modName, fId) <- imports]
-        successEdges :: [(FilePathId, FilePathId, [FilePathId])]
+        successEdges :: [(FilePathId, [FilePathId])]
         successEdges =
             map
-              (\(file, imports) -> (FilePathId file, FilePathId file, map snd imports))
+              (bimap FilePathId (map snd))
               successNodes
         moduleDeps =
           IntMap.fromList $
-          map (\(_, FilePathId v, vs) -> (v, IntSet.fromList $ coerce vs))
+          map (\(FilePathId v, vs) -> (v, IntSet.fromList $ coerce vs))
             successEdges
+        reverseModuleDeps =
+          foldr (\(p, cs) res ->
+                                  let new = IntMap.fromList (map (, IntSet.singleton (coerce p)) (coerce cs))
+                                  in IntMap.unionWith IntSet.union new res ) IntMap.empty successEdges
+
 
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
 -- 1. Mark each node that is part of an import cycle as an error node.
@@ -306,6 +315,18 @@ partitionSCC (CyclicSCC xs:rest) = second (xs:) $ partitionSCC rest
 partitionSCC (AcyclicSCC x:rest) = first (x:)   $ partitionSCC rest
 partitionSCC []                  = ([], [])
 
+-- | Transitive reverse dependencies of a file
+reverseDependencies :: NormalizedFilePath -> DependencyInformation -> [NormalizedFilePath]
+reverseDependencies file DependencyInformation{..} =
+  let FilePathId cur_id = pathToId depPathIdMap file
+  in map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
+  where
+    go :: Int -> IntSet -> IntSet
+    go k i =
+      let outwards = fromMaybe IntSet.empty (IntMap.lookup k depReverseModuleDeps  )
+          res = IntSet.union i outwards
+          new = IntSet.difference i outwards
+      in IntSet.foldr go res new
 
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} file = do

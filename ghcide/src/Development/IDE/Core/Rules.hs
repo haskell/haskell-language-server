@@ -87,6 +87,8 @@ import Control.Monad.State
 import FastString (FastString(uniq))
 import qualified HeaderInfo as Hdr
 import Data.Time (UTCTime(..))
+import Data.Hashable
+import qualified Data.HashSet as HashSet
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -297,14 +299,18 @@ getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
     define $ \GetLocatedImports file -> do
         ms <- use_ GetModSummaryWithoutTimestamps file
+        targets <- useNoFile_ GetKnownFiles
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
-        let env = hscEnv env_eq
+        let env = hscEnvWithImportPaths env_eq
         let import_dirs = deps env_eq
         let dflags = addRelativeImport file (moduleName $ ms_mod ms) $ hsc_dflags env
         opt <- getIdeOptions
+        let getTargetExists nfp
+                | HashSet.null targets || nfp `HashSet.member` targets = getFileExists nfp
+                | otherwise = return False
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
-            diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getFileExists modName mbPkgName isSource
+            diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getTargetExists modName mbPkgName isSource
             case diagOrImp of
                 Left diags -> pure (diags, Left (modName, Nothing))
                 Right (FileImport path) -> pure ([], Left (modName, Just path))
@@ -500,6 +506,18 @@ typeCheckRule = define $ \TypeCheck file -> do
     -- for files of interest on every keystroke
     typeCheckRuleDefinition hsc pm SkipGenerationOfInterfaceFiles
 
+knownFilesRule :: Rules ()
+knownFilesRule = defineEarlyCutOffNoFile $ \GetKnownFiles -> do
+  alwaysRerun
+  fs <- knownFiles
+  pure (BS.pack (show $ hash fs), unhashed fs)
+
+getModuleGraphRule :: Rules ()
+getModuleGraphRule = defineNoFile $ \GetModuleGraph -> do
+  fs <- useNoFile_ GetKnownFiles
+  rawDepInfo <- rawDependencyInformation (HashSet.toList fs)
+  pure $ processDependencyInformation rawDepInfo
+
 data GenerateInterfaceFiles
     = DoGenerateInterfaceFiles
     | SkipGenerationOfInterfaceFiles
@@ -521,9 +539,14 @@ typeCheckRuleDefinition hsc pm generateArtifacts = do
   addUsageDependencies $ liftIO $ do
     res <- typecheckModule defer hsc pm
     case res of
-      (diags, Just (hsc,tcm)) | DoGenerateInterfaceFiles <- generateArtifacts -> do
+      (diags, Just (hsc,tcm))
+        | DoGenerateInterfaceFiles <- generateArtifacts
+        -- Don't save interface files for modules that compiled due to defering
+        -- type errors, as we won't get proper diagnostics if we load these from
+        -- disk
+        , not $ tmrDeferedError tcm -> do
         diagsHie <- generateAndWriteHieFile hsc (tmrModule tcm)
-        diagsHi  <- generateAndWriteHiFile hsc tcm
+        diagsHi  <- writeHiFile hsc tcm
         return (diags <> diagsHi <> diagsHie, Just tcm)
       (diags, res) ->
         return (diags, snd <$> res)
@@ -802,6 +825,8 @@ mainRule = do
     isFileOfInterestRule
     getModSummaryRule
     isHiFileStableRule
+    getModuleGraphRule
+    knownFilesRule
 
 -- | Given the path to a module src file, this rule returns True if the
 -- corresponding `.hi` file is stable, that is, if it is newer
