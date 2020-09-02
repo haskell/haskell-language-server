@@ -145,7 +145,7 @@ parsePragmasIntoDynFlags fp contents = catchSrcErrors "pragmas" $ do
     liftIO $ evaluate $ rnf opts
 
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
-    return dflags
+    return $ disableWarningsAsErrors dflags
 
 
 -- | Run (unlit) literate haskell preprocessor on a file, or buffer if set

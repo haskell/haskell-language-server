@@ -543,6 +543,7 @@ setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [Target
 setOptions (ComponentOptions theOpts compRoot _) dflags = do
     (dflags', targets) <- addCmdOpts theOpts dflags
     let dflags'' =
+          disableWarningsAsErrors $
           -- disabled, generated directly by ghcide instead
           flip gopt_unset Opt_WriteInterface $
           -- disabled, generated directly by ghcide instead

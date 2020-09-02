@@ -469,6 +469,34 @@ diagnosticTests = testGroup "diagnostics"
             Lens.filtered (T.isInfixOf ("/" <> name <> ".hs:"))
           failure msg = liftIO $ assertFailure $ "Expected file path to be stripped but got " <> T.unpack msg
       Lens.mapMOf_ offenders failure notification
+  , testSession' "-Werror in cradle is ignored" $ \sessionDir -> do
+      liftIO $ writeFile (sessionDir </> "hie.yaml")
+        "cradle: {direct: {arguments: [\"-Wall\", \"-Werror\"]}}"
+      let fooContent = T.unlines
+            [ "module Foo where"
+            , "foo = ()"
+            ]
+      _ <- createDoc "Foo.hs" "haskell" fooContent
+      expectDiagnostics
+        [ ( "Foo.hs"
+          , [(DsWarning, (1, 0), "Top-level binding with no type signature:")
+            ]
+          )
+        ]
+  , testSessionWait "-Werror in pragma is ignored" $ do
+      let fooContent = T.unlines
+            [ "{-# OPTIONS_GHC -Wall -Werror #-}"
+            , "module Foo() where"
+            , "foo :: Int"
+            , "foo = 1"
+            ]
+      _ <- createDoc "Foo.hs" "haskell" fooContent
+      expectDiagnostics
+        [ ( "Foo.hs"
+          , [(DsWarning, (3, 0), "Defined but not used:")
+            ]
+          )
+        ]
   ]
 
 codeActionTests :: TestTree
@@ -3122,7 +3150,7 @@ mkRange :: Int -> Int -> Int -> Int -> Range
 mkRange a b c d = Range (Position a b) (Position c d)
 
 run :: Session a -> IO a
-run s = withTempDir $ \dir -> runInDir dir s
+run s = run' (const s)
 
 runWithExtraFiles :: FilePath -> (FilePath -> Session a) -> IO a
 runWithExtraFiles prefix s = withTempDir $ \dir -> do
