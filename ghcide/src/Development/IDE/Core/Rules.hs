@@ -685,9 +685,7 @@ isHiFileStableRule :: Rules ()
 isHiFileStableRule = define $ \IsHiFileStable f -> do
     ms <- use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
-                $ case ms_hsc_src ms of
-                    HsBootFile -> addBootSuffix (ml_hi_file $ ms_location ms)
-                    _ -> ml_hi_file $ ms_location ms
+                $ ml_hi_file $ ms_location ms
     mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
     modVersion  <- use_ GetModificationTime f
     sourceModified <- case mbHiVersion of
