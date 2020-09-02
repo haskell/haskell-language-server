@@ -2821,28 +2821,26 @@ ifaceTHTest = testCase "iface-th-test" $ withoutStackEnv $ runWithExtraFiles "TH
 
 ifaceErrorTest :: TestTree
 ifaceErrorTest = testCase "iface-error-test-1" $ withoutStackEnv $ runWithExtraFiles "recomp" $ \dir -> do
-    let aPath = dir </> "A.hs"
-        bPath = dir </> "B.hs"
+    let bPath = dir </> "B.hs"
         pPath = dir </> "P.hs"
 
-    aSource <- liftIO $ readFileUtf8 aPath -- x = y :: Int
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
 
     bdoc <- createDoc bPath "haskell" bSource
-    pdoc <- createDoc pPath "haskell" pSource
     expectDiagnostics [("P.hs", [(DsWarning,(4,0), "Top-level binding")]) -- So what we know P has been loaded
                       ]
 
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
+    -- save so that we can that the error propogates to A
+    sendNotification TextDocumentDidSave (DidSaveTextDocumentParams bdoc)
 
     -- Check that the error propogates to A
-    adoc <- createDoc aPath "haskell" aSource
     expectDiagnostics
       [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])]
-    closeDoc adoc -- Close A
 
+    pdoc <- createDoc pPath "haskell" pSource
     changeDoc pdoc [TextDocumentContentChangeEvent Nothing Nothing $ pSource <> "\nfoo = y :: Bool" ]
     -- Now in P we have
     -- bar = x :: Int

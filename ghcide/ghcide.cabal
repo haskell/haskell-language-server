@@ -263,6 +263,7 @@ executable ghcide
                 "-with-rtsopts=-I0 -qg -A128M"
     main-is: Main.hs
     build-depends:
+        aeson,
         base == 4.*,
         data-default,
         directory,
@@ -274,6 +275,7 @@ executable ghcide
         haskell-lsp-types,
         hie-bios >= 0.6.0 && < 0.7,
         ghcide,
+        lens,
         optparse-applicative,
         text,
         unordered-containers
