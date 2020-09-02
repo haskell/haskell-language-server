@@ -2,17 +2,17 @@ cabal-version:      1.20
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            0.2.0
+version:            0.3.0
 license:            Apache-2.0
 license-file:       LICENSE
-author:             Digital Asset
-maintainer:         Digital Asset
-copyright:          Digital Asset 2018-2020
+author:             Digital Asset and Ghcide contributors
+maintainer:         Ghcide contributors
+copyright:          Digital Asset and Ghcide contributors 2018-2020
 synopsis:           The core of an IDE
 description:
     A library for building Haskell IDE's on top of the GHC API.
-homepage:           https://github.com/digital-asset/ghcide#readme
-bug-reports:        https://github.com/digital-asset/ghcide/issues
+homepage:           https://github.com/haskell/ghcide#readme
+bug-reports:        https://github.com/haskell/ghcide/issues
 tested-with:        GHC==8.6.5
 extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
                     test/data/hover/*.hs
@@ -25,7 +25,7 @@ extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
 
 source-repository head
     type:     git
-    location: https://github.com/digital-asset/ghcide.git
+    location: https://github.com/haskell/ghcide.git
 
 flag ghc-lib
   description: build against ghc-lib instead of the ghc package
