@@ -56,6 +56,7 @@ import System.Info
 import System.IO
 
 import GHC
+import GHCi
 import DynFlags
 import HscTypes
 import Linker
@@ -179,6 +180,23 @@ loadSession dir = do
                 -> IO ([NormalizedFilePath],(IdeResult HscEnvEq,[FilePath]))
         session args@(hieYaml, _cfp, _opts, _libDir) = do
           (hscEnv, new, old_deps) <- packageSetup args
+          
+          -- Whenever we spin up a session on Linux, dynamically load libm.so.6
+          -- in. We need this in case the binary is statically linked, in which
+          -- case the interactive session will fail when trying to load
+          -- ghc-prim, which happens whenever Template Haskell is being
+          -- evaluated or haskell-language-server's eval plugin tries to run
+          -- some code. If the binary is dynamically linked, then this will have
+          -- no effect.
+          -- See https://github.com/haskell/haskell-language-server/issues/221
+          when (os == "linux") $ do
+            initObjLinker hscEnv
+            res <- loadDLL hscEnv "libm.so.6"
+            case res of
+              Nothing -> pure ()
+              Just err -> hPutStrLn stderr $
+                "Error dynamically loading libm.so.6:\n" <> err 
+
           -- Make a map from unit-id to DynFlags, this is used when trying to
           -- resolve imports. (especially PackageImports)
           let uids = map (\ci -> (componentUnitId ci, componentDynFlags ci)) (new : old_deps)
