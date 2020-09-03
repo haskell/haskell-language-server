@@ -75,8 +75,6 @@ ghc:		8.10.2
 ([#329](https://github.com/haskell/haskell-language-server/pull/329) by @Sir4ur0n)
 - Apply the module pragmas for evaluation
 ([#322](https://github.com/haskell/haskell-language-server/pull/322) by @pepeiborra)
-- Use hie-bios implicit cradle with a fallback to the cabal-helper one
-([#110](https://github.com/haskell/haskell-language-server/pull/110) by @jneira)
 - Copy working stack-8.6.5.yaml to stack.yaml
 ([#332](https://github.com/haskell/haskell-language-server/pull/332) by @jneira)
 - tech(nix): Allow broken as retrie is marked as broken
