@@ -1,5 +1,103 @@
 # Changelog for haskell-language-server
 
+## 0.4.0
+
+0.4.0 introduces the import lens plugin, which can convert your import statements into qualified imports, or into an explicit import list:
+
+![Imports code lens](https://imgur.com/pX9kvY4.gif)
+
+The eval plugin has also learnt two new commands, `:type` and `:kind`:
+
+```haskell
+{-# LANGUAGE TypeApplications #-}
+foo :: Show a => a -> String
+foo = show
+
+-- >>> :type foo @Int
+-- foo @Int :: Int -> String
+
+-- >>> :type +v foo @Int
+-- foo @Int :: Show Int => Int -> String
+```
+
+```haskell
+-- >>> type N = 1
+-- >>> type M = 40
+-- >>> :kind N + M + 1
+-- N + M + 1 :: Nat
+
+-- >>> type N = 1
+-- >>> type M = 40
+-- >>> :kind N + M + 1
+-- N + M + 1 :: Nat
+```
+
+There is now also support for GHC 8.10.2, and a new `haskell-language-server --probe-tools` command to help debug what version of each tool HLS is using.
+
+```
+$ haskell-language-server --probe-tools
+haskell-language-server version: 0.3.0.0 (GHC: 8.10.1) (PATH: /Users/luke/.cabal/store/ghc-8.10.1/hskll-lngg-srvr-0.3.0.0-7c6d48c3/bin/haskell-language-server)
+Tool versions found on the $PATH
+cabal:		3.2.0.0
+stack:		2.3.3
+ghc:		8.10.2
+```
+
+### Pull requests merged
+
+- Bring over https://github.com/pepeiborra/hls-tutorial
+([#372](https://github.com/haskell/haskell-language-server/pull/372) by @bubba)
+- Update the ghcide upstream to be in haskell/ghcide
+([#370](https://github.com/haskell/haskell-language-server/pull/370) by @alanz)
+- Add ISSUE_TEMPLATE for github
+([#305](https://github.com/haskell/haskell-language-server/pull/305) by @fendor)
+- Add use-package to the list of emacs packages
+([#343](https://github.com/haskell/haskell-language-server/pull/343) by @rgleichman)
+- Implements `:type [+v/+d]` in Eval Plugin
+([#361](https://github.com/haskell/haskell-language-server/pull/361) by @konn)
+- Bump bounds of hie-bios to 0.7.0
+([#357](https://github.com/haskell/haskell-language-server/pull/357) by @maralorn)
+- Fix ImportLens plugin to work with GHC 8.10
+([#356](https://github.com/haskell/haskell-language-server/pull/356) by @Ailrun)
+- Add single file rewrites and ignore unknown files
+([#321](https://github.com/haskell/haskell-language-server/pull/321) by @pepeiborra)
+- Do not suggest explicit import lists for qualified imports
+([#354](https://github.com/haskell/haskell-language-server/pull/354) by @expipiplus1)
+- Explicit imports lens (as seen on Twitter)
+([#310](https://github.com/haskell/haskell-language-server/pull/310) by @pepeiborra)
+- Adds `:kind` and `:kind!` commands to Eval Plugin
+([#345](https://github.com/haskell/haskell-language-server/pull/345) by @konn)
+- tech(nix): update niv and remove allowbroken
+([#350](https://github.com/haskell/haskell-language-server/pull/350) by @willbush)
+- Update VS Code Haskell URL/repo
+([#338](https://github.com/haskell/haskell-language-server/pull/338) by @Sir4ur0n)
+- doc(hack): Add explanation to hack and test HLS
+([#329](https://github.com/haskell/haskell-language-server/pull/329) by @Sir4ur0n)
+- Apply the module pragmas for evaluation
+([#322](https://github.com/haskell/haskell-language-server/pull/322) by @pepeiborra)
+- Copy working stack-8.6.5.yaml to stack.yaml
+([#332](https://github.com/haskell/haskell-language-server/pull/332) by @jneira)
+- tech(nix): Allow broken as retrie is marked as broken
+([#331](https://github.com/haskell/haskell-language-server/pull/331) by @Sir4ur0n)
+- feat(git): Add install/hie.yaml to gitignore
+([#328](https://github.com/haskell/haskell-language-server/pull/328) by @Sir4ur0n)
+- Replace wrong occurrences of "engine" by "server"
+([#319](https://github.com/haskell/haskell-language-server/pull/319) by @tchoutri)
+- Simplify coc.nvim instructions
+([#315](https://github.com/haskell/haskell-language-server/pull/315) by @oblitum)
+- Coc config file requires a {} nesting everything
+([#317](https://github.com/haskell/haskell-language-server/pull/317) by @hyiltiz)
+- Restrict opentelemetry version for stack builds
+([#312](https://github.com/haskell/haskell-language-server/pull/312) by @jneira)
+- Add support for ghc-8.10.2
+([#308](https://github.com/haskell/haskell-language-server/pull/308) by @jneira)
+- Return nothing if tool is not on the PATH
+([#309](https://github.com/haskell/haskell-language-server/pull/309) by @fendor)
+- Probe tools cli
+([#306](https://github.com/haskell/haskell-language-server/pull/306) by @fendor)
+- Add fourmolu plugin (attempt 2) and add Brittany for ghc-8.10.1
+([#264](https://github.com/haskell/haskell-language-server/pull/264) by @georgefst)
+
 ## 0.3.0
 
 0.3.0 comes with two new plugins, retrie and fourmolu, provides binaries for
