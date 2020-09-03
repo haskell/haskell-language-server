@@ -1,6 +1,6 @@
 ### unreleased
 
-### 0.3.0 (2020-09-01)
+### 0.3.0 (2020-09-02)
 
 * CI: remove (internal) DA Slack notifications (#750) - (Gary Verhaegen)
 * Add session-loader to hie.yaml (#714) - (Luke Lau)
@@ -25,7 +25,6 @@
 * Fix spaninfo Haddocks for local modules (#678) - (Pepe Iborra)
 * Avoid excessive retypechecking of TH codebases (#673) - (Pepe Iborra)
 * Use stale information if it's available to answer requests quickly (#624) - (Matthew Pickering)
-* Code action: add constraint (#653) - (Denis Frezzato)
 * Code action: add constraint (#653) - (Denis Frezzato)
 * Make BenchHist non buildable by default and save logs (#666) - (Pepe Iborra)
 * Delete unused top level binding code action (#657) - (Serhii)
