@@ -196,7 +196,7 @@ library
       other-modules:
         Development.IDE.GHC.HieAst
         Development.IDE.GHC.HieBin
-    ghc-options: -Wall -Wno-name-shadowing
+    ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns
     -- This is needed to prevent a GHC crash when building
     -- Development.IDE.Session with stack on 8.10.1 on Windows
     if (impl(ghc > 8.9) && os(windows))
@@ -255,6 +255,7 @@ executable ghcide
     ghc-options:
                 -threaded
                 -Wall
+                -Wincomplete-uni-patterns
                 -Wno-name-shadowing
                 -- allow user RTS overrides
                 -rtsopts

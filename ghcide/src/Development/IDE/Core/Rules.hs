@@ -463,7 +463,7 @@ reportImportCyclesRule =
             | f `elem` fs = Just (imp, fs)
           cycleErrorInFile _ _ = Nothing
           toDiag imp mods = (fp , ShowDiag , ) $ Diagnostic
-            { _range = (_range :: Location -> Range) loc
+            { _range = rng
             , _severity = Just DsError
             , _source = Just "Import cycle detection"
             , _message = "Cyclic module dependency between " <> showCycle mods
@@ -471,8 +471,8 @@ reportImportCyclesRule =
             , _relatedInformation = Nothing
             , _tags = Nothing
             }
-            where loc = srcSpanToLocation (getLoc imp)
-                  fp = toNormalizedFilePath' $ srcSpanToFilename (getLoc imp)
+            where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
+                  fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
            ms <- use_ GetModSummaryWithoutTimestamps file
            pure (moduleNameString . moduleName . ms_mod $ ms)

@@ -171,7 +171,7 @@ querySpanInfoAt :: forall m
   -> [SpanInfo]
   -> MaybeT m [Location]
 querySpanInfoAt getSpan _ideOptions pos =
-    lift . fmap (map srcSpanToLocation) . mapMaybeM getSpan . spansAtPoint pos
+    lift . fmap (mapMaybe srcSpanToLocation) . mapMaybeM getSpan . spansAtPoint pos
 
 -- | Given a 'Name' attempt to find the location where it is defined.
 nameToLocation :: Monad f => (Module -> MaybeT f (HieFile, String)) -> Name -> f (Maybe SrcSpan)

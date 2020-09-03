@@ -15,6 +15,7 @@ import Data.Generics
 import Data.List.Extra as List hiding (stripPrefix)
 import qualified Data.Map  as Map
 import Data.Maybe (fromMaybe, mapMaybe)
+import qualified Data.Maybe as UnsafeMaybe (fromJust)
 import qualified Data.Text as T
 import qualified Text.Fuzzy as Fuzzy
 
@@ -233,7 +234,7 @@ cacheDataProducer packageState tm deps = do
       dflags = hsc_dflags packageState
       curMod = ms_mod $ pm_mod_summary parsedMod
       curModName = moduleName curMod
-      Just (_,limports,_,_) = tm_renamed_source tm
+      (_,limports,_,_) = UnsafeMaybe.fromJust $ tm_renamed_source tm -- safe because we always save the typechecked source
 
       iDeclToModName :: ImportDecl name -> ModuleName
       iDeclToModName = unLoc . ideclName
