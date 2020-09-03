@@ -88,6 +88,7 @@ main = do
     , benchmarkTests
     , ifaceTests
     , bootTests
+    , rootUriTests
     ]
 
 initializeResponseTests :: TestTree
@@ -3113,9 +3114,22 @@ benchmarkTests =
         , Bench.name e /= "edit" -- the edit experiment does not ever fail
     ]
 
+-- | checks if we use InitializeParams.rootUri for loading session
+rootUriTests :: TestTree
+rootUriTests = testCase "use rootUri" . withoutStackEnv . runTest "dirA" "dirB" $ \dir -> do
+  let bPath = dir </> "dirB/Foo.hs"
+  liftIO $ copyTestDataFiles dir "rootUri"
+  bSource <- liftIO $ readFileUtf8 bPath
+  _ <- createDoc "Foo.hs" "haskell" bSource
+  expectNoMoreDiagnostics 0.5
+  where
+    -- similar to run' except we can configure where to start ghcide and session
+    runTest :: FilePath -> FilePath -> (FilePath -> Session ()) -> IO ()
+    runTest dir1 dir2 s = withTempDir $ \dir -> runInDir' dir dir1 dir2 (s dir)
+
 ----------------------------------------------------------------------
 -- Utils
-
+----------------------------------------------------------------------
 
 testSession :: String -> Session () -> TestTree
 testSession name = testCase name . run
@@ -3174,20 +3188,27 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir s = do
-  ghcideExe <- locateGhcideExecutable
+runInDir dir = runInDir' dir "." "."
 
+-- | Takes a directory as well as relative paths to where we should launch the executable as well as the session root.
+runInDir' :: FilePath -> FilePath -> FilePath -> Session a -> IO a
+runInDir' dir startExeIn startSessionIn s = do
+  ghcideExe <- locateGhcideExecutable
+  let startDir = dir </> startExeIn
+  let projDir = dir </> startSessionIn
+
+  createDirectoryIfMissing True startDir
+  createDirectoryIfMissing True projDir
   -- Temporarily hack around https://github.com/mpickering/hie-bios/pull/56
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
-  createDirectoryIfMissing True $ dir ++ "/Data"
+  createDirectoryIfMissing True $ projDir ++ "/Data"
 
-
-  let cmd = unwords [ghcideExe, "--lsp", "--test", "--cwd", dir]
+  let cmd = unwords [ghcideExe, "--lsp", "--test", "--cwd", startDir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
   let lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
-  runSessionWithConfig conf cmd lspTestCaps dir s
+  runSessionWithConfig conf cmd lspTestCaps projDir s
   where
     conf = defaultConfig
       -- If you uncomment this you can see all logging
