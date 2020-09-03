@@ -107,7 +107,7 @@ extendToIncludeCommaIfPossible indexedString range
     -- a, |b|, c ===> a, |b, |c
     [ range { _end = end' }
     | (_, ',') : rest <- [after']
-    , let (end', _) : _ = dropWhile (isSpace . snd) rest
+    , (end', _) : _ <- pure $ dropWhile (isSpace . snd) rest
     ]
   | otherwise
   = [range]

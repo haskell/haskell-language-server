@@ -1,4 +1,4 @@
-
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 {-
 Forked from GHC v8.10.1 to work around the readFile side effect in mkHiefile
