@@ -30,6 +30,7 @@ import Development.IDE.LSP.Server
 import Development.IDE.Plugin.CodeAction.PositionIndexed
 import Development.IDE.Plugin.CodeAction.RuleTypes
 import Development.IDE.Plugin.CodeAction.Rules
+import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import Development.Shake (Rules)
@@ -58,6 +59,7 @@ import Data.Functor
 import Control.Applicative ((<|>))
 import Safe (atMay)
 import Bag (isEmptyBag)
+import Control.Concurrent.Extra (readVar)
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
@@ -83,10 +85,12 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
             <*> use GhcSession `traverse` mbFile
     -- This is quite expensive 0.6-0.7s on GHC
     pkgExports <- runAction "CodeAction:PackageExports" state $ (useNoFile_ . PackageExports) `traverse` env
+    localExports <- readVar (exportsMap $ shakeExtras state)
+    let exportsMap = Map.unionWith (<>) localExports (fromMaybe mempty pkgExports)
     let dflags = hsc_dflags . hscEnv <$> env
     pure $ Right
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction dflags (fromMaybe mempty pkgExports) ideOptions ( join parsedModule ) text x
+        | x <- xs, (title, tedit) <- suggestAction dflags exportsMap ideOptions ( join parsedModule ) text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
 
@@ -132,7 +136,7 @@ executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
 
 suggestAction
   :: Maybe DynFlags
-  -> PackageExportsMap
+  -> ExportsMap
   -> IdeOptions
   -> Maybe ParsedModule
   -> Maybe T.Text
@@ -815,7 +819,7 @@ removeRedundantConstraints mContents Diagnostic{..}
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewImport :: PackageExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestNewImport :: ExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
   | msg <- unifySpaces _message
   , Just name <- extractNotInScopeName msg
@@ -835,7 +839,7 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
 suggestNewImport _ _ _ = []
 
 constructNewImportSuggestions
-  :: PackageExportsMap -> NotInScope -> Maybe [T.Text] -> [T.Text]
+  :: ExportsMap -> NotInScope -> Maybe [T.Text] -> [T.Text]
 constructNewImportSuggestions exportsMap thingMissing notTheseModules = nubOrd
   [ suggestion
   | (identInfo, m) <- fromMaybe [] $ Map.lookup name exportsMap

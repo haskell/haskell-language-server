@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {- HLINT ignore -}
-module Testing ( module Testing ) where
+module GotoHover ( module GotoHover) where
 import Data.Text (Text, pack)
 import Foo (Bar, foo)
 

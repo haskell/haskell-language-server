@@ -1036,7 +1036,10 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f = quickCheck"              []                "import Test.QuickCheck (quickCheck)"
     ]
   , testGroup "want suggestion"
-    [ test True []          "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
+    [ test True []          "f = foo"                     []                "import Foo (foo)"
+    , test True []          "f = Bar"                     []                "import Bar (Bar(Bar))"
+    , test True []          "f :: Bar"                    []                "import Bar (Bar)"
+    , test True []          "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
     , test True []          "f = (:|)"                    []                "import Data.List.NonEmpty (NonEmpty((:|)))"
     , test True []          "f :: Natural"                ["f = undefined"] "import Numeric.Natural (Natural)"
     , test True []          "f :: Natural"                ["f = undefined"] "import Numeric.Natural"
@@ -1063,12 +1066,13 @@ suggestImportTests = testGroup "suggest import actions"
     ]
   ]
   where
-    test wanted imps def other newImp = testSession' (T.unpack def) $ \dir -> do
+    test wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
           after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
-          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -]}}"
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo, GotoHover]}}"
       liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
       doc <- createDoc "Test.hs" "haskell" before
+      void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
       _diags <- waitForDiagnostics
       let defLine = length imps + 1
           range = Range (Position defLine 0) (Position defLine maxBound)
@@ -2380,6 +2384,7 @@ thTests =
 -- | test that TH is reevaluated on typecheck
 thReloadingTest :: TestTree
 thReloadingTest = testCase "reloading-th-test" $ withoutStackEnv $ runWithExtraFiles "TH" $ \dir -> do
+
     let aPath = dir </> "THA.hs"
         bPath = dir </> "THB.hs"
         cPath = dir </> "THC.hs"

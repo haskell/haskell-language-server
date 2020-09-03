@@ -26,11 +26,13 @@ import qualified Data.Text as T
 import Data.Tuple.Extra
 import Development.Shake
 
+import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
-import Control.Monad
+import Data.Maybe (mapMaybe)
+import GhcPlugins (HomeModInfo(hm_iface))
 
 newtype OfInterestVar = OfInterestVar (Var (HashSet NormalizedFilePath))
 instance IsIdeGlobal OfInterestVar
@@ -88,5 +90,12 @@ kick = mkDelayedAction "kick" Debug $ do
     files <- getFilesOfInterest
     ShakeExtras{progressUpdate} <- getShakeExtras
     liftIO $ progressUpdate KickStarted
-    void $ uses TypeCheck $ HashSet.toList files
+
+    -- Update the exports map for the project
+    results <-  uses TypeCheck $ HashSet.toList files
+    ShakeExtras{exportsMap} <- getShakeExtras
+    let modIfaces = mapMaybe (fmap (hm_iface . tmrModInfo)) results
+        !exportsMap' = createExportsMap modIfaces
+    liftIO $ modifyVar_ exportsMap $ return . (exportsMap' <>)
+
     liftIO $ progressUpdate KickCompleted

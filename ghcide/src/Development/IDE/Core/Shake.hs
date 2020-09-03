@@ -87,6 +87,7 @@ import qualified Development.IDE.Types.Logger as Logger
 import Language.Haskell.LSP.Diagnostics
 import qualified Data.SortedList as SL
 import           Development.IDE.Types.Diagnostics
+import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import           Control.Concurrent.Async
@@ -153,6 +154,8 @@ data ShakeExtras = ShakeExtras
     ,restartShakeSession :: [DelayedAction ()] -> IO ()
     ,ideNc :: IORef NameCache
     ,knownFilesVar :: Var (Hashed (HSet.HashSet NormalizedFilePath))
+    -- | A mapping of exported identifiers for local modules. Updated on kick
+    ,exportsMap :: Var ExportsMap
     }
 
 type WithProgressFunc = forall a.
@@ -411,6 +414,7 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
         progressAsync <- async $
             when reportProgress $
                 progressThread mostRecentProgressEvent inProgress
+        exportsMap <- newVar HMap.empty
 
         pure (ShakeExtras{..}, cancel progressAsync)
     (shakeDbM, shakeClose) <-
