@@ -108,8 +108,8 @@ diagsFromCPPLogs filename logs =
     -- informational log messages and attaches them to the initial log message.
     go :: [CPPDiag] -> [CPPLog] -> [CPPDiag]
     go acc [] = reverse $ map (\d -> d {cdMessage = reverse $ cdMessage d}) acc
-    go acc (CPPLog sev span@(RealSrcSpan _) msg : logs) =
-      let diag = CPPDiag (srcSpanToRange span) (toDSeverity sev) [msg]
+    go acc (CPPLog sev (RealSrcSpan span) msg : logs) =
+      let diag = CPPDiag (realSrcSpanToRange span) (toDSeverity sev) [msg]
        in go (diag : acc) logs
     go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : logs) =
       go (diag {cdMessage = msg : cdMessage diag} : diags) logs

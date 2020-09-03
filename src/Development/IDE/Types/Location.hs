@@ -75,25 +75,25 @@ showPosition :: Position -> String
 showPosition Position{..} = show (_line + 1) ++ ":" ++ show (_character + 1)
 
 -- | Parser for the GHC output format
-readSrcSpan :: ReadS SrcSpan
+readSrcSpan :: ReadS RealSrcSpan
 readSrcSpan = readP_to_S (singleLineSrcSpanP <|> multiLineSrcSpanP)
   where
-    singleLineSrcSpanP, multiLineSrcSpanP :: ReadP SrcSpan
+    singleLineSrcSpanP, multiLineSrcSpanP :: ReadP RealSrcSpan
     singleLineSrcSpanP = do
       fp <- filePathP
       l  <- readS_to_P reads <* char ':'
       c0 <- readS_to_P reads
       c1 <- (char '-' *> readS_to_P reads) <|> pure c0
-      let from = mkSrcLoc fp l c0
-          to   = mkSrcLoc fp l c1
-      return $ mkSrcSpan from to
+      let from = mkRealSrcLoc fp l c0
+          to   = mkRealSrcLoc fp l c1
+      return $ mkRealSrcSpan from to
 
     multiLineSrcSpanP = do
       fp <- filePathP
       s <- parensP (srcLocP fp)
       void $ char '-'
       e <- parensP (srcLocP fp)
-      return $ mkSrcSpan s e
+      return $ mkRealSrcSpan s e
 
     parensP :: ReadP a -> ReadP a
     parensP = between (char '(') (char ')')
@@ -101,12 +101,12 @@ readSrcSpan = readP_to_S (singleLineSrcSpanP <|> multiLineSrcSpanP)
     filePathP :: ReadP FastString
     filePathP = fromString <$> (readFilePath <* char ':') <|> pure ""
 
-    srcLocP :: FastString -> ReadP SrcLoc
+    srcLocP :: FastString -> ReadP RealSrcLoc
     srcLocP fp = do
       l <- readS_to_P reads
       void $ char ','
       c <- readS_to_P reads
-      return $ mkSrcLoc fp l c
+      return $ mkRealSrcLoc fp l c
 
     readFilePath :: ReadP FilePath
     readFilePath = some ReadP.get

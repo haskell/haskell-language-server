@@ -13,6 +13,7 @@ module Development.IDE.GHC.Error
   -- * utilities working with spans
   , srcSpanToLocation
   , srcSpanToRange
+  , realSrcSpanToRange
   , srcSpanToFilename
   , zeroSpan
   , realSpan
@@ -25,6 +26,7 @@ module Development.IDE.GHC.Error
 
 import                     Development.IDE.Types.Diagnostics as D
 import qualified           Data.Text as T
+import Data.Maybe
 import Development.IDE.Types.Location
 import Development.IDE.GHC.Orphans()
 import qualified FastString as FS
@@ -41,9 +43,9 @@ import Exception (ExceptionMonad)
 
 
 diagFromText :: T.Text -> D.DiagnosticSeverity -> SrcSpan -> T.Text -> FileDiagnostic
-diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ srcSpanToFilename loc,ShowDiag,)
+diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename loc,ShowDiag,)
     Diagnostic
-    { _range    = srcSpanToRange loc
+    { _range    = fromMaybe noRange $ srcSpanToRange loc
     , _severity = Just sev
     , _source   = Just diagSource -- not shown in the IDE, but useful for ghcide developers
     , _message  = msg
@@ -64,9 +66,9 @@ diagFromErrMsgs :: T.Text -> DynFlags -> Bag ErrMsg -> [FileDiagnostic]
 diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . bagToList
 
 -- | Convert a GHC SrcSpan to a DAML compiler Range
-srcSpanToRange :: SrcSpan -> Range
-srcSpanToRange (UnhelpfulSpan _)  = noRange
-srcSpanToRange (RealSrcSpan real) = realSrcSpanToRange real
+srcSpanToRange :: SrcSpan -> Maybe Range
+srcSpanToRange (UnhelpfulSpan _)  = Nothing
+srcSpanToRange (RealSrcSpan real) = Just $ realSrcSpanToRange real
 
 realSrcSpanToRange :: RealSrcSpan -> Range
 realSrcSpanToRange real =
@@ -75,18 +77,21 @@ realSrcSpanToRange real =
 
 -- | Extract a file name from a GHC SrcSpan (use message for unhelpful ones)
 -- FIXME This may not be an _absolute_ file name, needs fixing.
-srcSpanToFilename :: SrcSpan -> FilePath
-srcSpanToFilename (UnhelpfulSpan fs) = FS.unpackFS fs
-srcSpanToFilename (RealSrcSpan real) = FS.unpackFS $ srcSpanFile real
+srcSpanToFilename :: SrcSpan -> Maybe FilePath
+srcSpanToFilename (UnhelpfulSpan _) = Nothing
+srcSpanToFilename (RealSrcSpan real) = Just $ FS.unpackFS $ srcSpanFile real
 
-srcSpanToLocation :: SrcSpan -> Location
-srcSpanToLocation src =
+srcSpanToLocation :: SrcSpan -> Maybe Location
+srcSpanToLocation src = do
+  fs <- srcSpanToFilename src
+  rng <- srcSpanToRange src
   -- important that the URI's we produce have been properly normalized, otherwise they point at weird places in VS Code
-  Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' $ srcSpanToFilename src) (srcSpanToRange src)
+  pure $ Location (fromNormalizedUri $ filePathToUri' $ toNormalizedFilePath' fs) rng
 
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
-p `isInsideSrcSpan` r = sp <= p && p <= ep
-  where Range sp ep = srcSpanToRange r
+p `isInsideSrcSpan` r = case srcSpanToRange r of
+  Just (Range sp ep) -> sp <= p && p <= ep
+  _ -> False
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
