@@ -139,6 +139,7 @@ library
         Development.IDE.LSP.Server
         Development.IDE.Spans.Common
         Development.IDE.Types.Diagnostics
+        Development.IDE.Types.Exports
         Development.IDE.Types.Location
         Development.IDE.Types.Logger
         Development.IDE.Types.Options
