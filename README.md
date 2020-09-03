@@ -8,7 +8,7 @@
 [badge-circleci]: https://img.shields.io/circleci/project/github/haskell/haskell-language-server/master.svg
 [circleci]: https://circleci.com/gh/haskell/haskell-language-server/
 
-Integration point for [ghcide](https://github.com/digital-asset/ghcide) and [haskell-ide-engine](https://github.com/haskell/haskell-ide-engine). One IDE to rule
+Integration point for [ghcide](https://github.com/haskell/ghcide) and [haskell-ide-engine](https://github.com/haskell/haskell-ide-engine). One IDE to rule
 them all. Read the [project's
 background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html).
 
@@ -45,9 +45,11 @@ This is *very* early stage software.
   - [Known limitations](#known-limitations)
     - [Preprocessor](#preprocessor)
   - [Contributing](#contributing)
-    - [It's time to join the project!](#its-time-to-join-the-project)
     - [Building haskell-language-server](#building-haskell-language-server)
-    - [Hacking on haskell-language-server](#hacking-on-haskell-language-server)
+      - [Using Cabal](#using-cabal)
+      - [Using Stack](#using-stack)
+      - [Introduction tutorial](#instructions-tutorial)
+      - [Test your hacked HLS in your editor](#test-your-hacked-hls-in-your-editor)
 
 ## Features
 
@@ -363,9 +365,9 @@ The `haskell-language-server` and `haskell-language-server-wrapper` binaries wil
       "command": ["haskell-language-server-wrapper", "--lsp"],
       "scopes": ["source.haskell"],
       "syntaxes": ["Packages/Haskell/Haskell.sublime-syntax"],
-      "languageId": "haskell",
-    },
-  },
+      "languageId": "haskell"
+    }
+  }
 }
 ```
 
@@ -389,14 +391,14 @@ Then issue `:CocConfig` and add the following to your Coc config file.
 
 ```json
 {
-"languageserver": {
-  "haskell": {
-    "command": "haskell-language-server-wrapper",
-    "args": ["--lsp"],
-    "rootPatterns": ["*.cabal", "stack.yaml", "cabal.project", "package.yaml", "hie.yaml"],
-    "filetypes": ["haskell", "lhaskell"]
+  "languageserver": {
+    "haskell": {
+      "command": "haskell-language-server-wrapper",
+      "args": ["--lsp"],
+      "rootPatterns": ["*.cabal", "stack.yaml", "cabal.project", "package.yaml", "hie.yaml"],
+      "filetypes": ["haskell", "lhaskell"]
+    }
   }
-}
 }
 ```
 
@@ -543,13 +545,12 @@ Example with `tasty-discover`:
 ```
 This returns an error in HLS if 'tasty-discover' is not in the path: `could not execute: tasty-discover`.
 
-
 ## Contributing
 
 :heart: The Haskell tooling dream is near, we need your help! :heart:
 
 - Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-ide-engine) at `#haskell-ide-engine` on `freenode`.
-- Fork this repo and [ghcide](https://github.com/digital-asset/ghcide) and hack as much as you can.
+- Fork this repo and [ghcide](https://github.com/haskell/ghcide) and hack as much as you can.
 
 ### Building haskell-language-server
 
