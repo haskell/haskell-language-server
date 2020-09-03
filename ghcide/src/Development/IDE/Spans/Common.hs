@@ -112,7 +112,7 @@ haddockToMarkdown H.DocEmpty
 haddockToMarkdown (H.DocAppend d1 d2)
   = haddockToMarkdown d1 ++ " " ++ haddockToMarkdown d2
 haddockToMarkdown (H.DocString s)
-  = s
+  = escapeBackticks s
 haddockToMarkdown (H.DocParagraph p)
   = "\n\n" ++ haddockToMarkdown p
 haddockToMarkdown (H.DocIdentifier i)
@@ -120,7 +120,7 @@ haddockToMarkdown (H.DocIdentifier i)
 haddockToMarkdown (H.DocIdentifierUnchecked i)
   = "`" ++ i ++ "`"
 haddockToMarkdown (H.DocModule i)
-  = "`" ++ i ++ "`"
+  = "`" ++ escapeBackticks i ++ "`"
 haddockToMarkdown (H.DocWarning w)
   = haddockToMarkdown w
 haddockToMarkdown (H.DocEmphasis d)
@@ -128,11 +128,7 @@ haddockToMarkdown (H.DocEmphasis d)
 haddockToMarkdown (H.DocBold d)
   = "**" ++ haddockToMarkdown d ++ "**"
 haddockToMarkdown (H.DocMonospaced d)
-  = "`" ++ escapeBackticks (haddockToMarkdown d) ++ "`"
-  where
-    escapeBackticks "" = ""
-    escapeBackticks ('`':ss) = '\\':'`':escapeBackticks ss
-    escapeBackticks (s  :ss) = s:escapeBackticks ss
+  = "`" ++ removeUnescapedBackticks (haddockToMarkdown d) ++ "`"
 haddockToMarkdown (H.DocCodeBlock d)
   = "\n```haskell\n" ++ haddockToMarkdown d ++ "\n```\n"
 haddockToMarkdown (H.DocExamples es)
@@ -149,7 +145,7 @@ haddockToMarkdown (H.DocPic (H.Picture url Nothing))
 haddockToMarkdown (H.DocPic (H.Picture url (Just label)))
   = "![" ++ label ++ "](" ++ url ++ ")"
 haddockToMarkdown (H.DocAName aname)
-  = "[" ++ aname ++ "]:"
+  = "[" ++ escapeBackticks aname ++ "]:"
 haddockToMarkdown (H.DocHeader (H.Header level title))
   = replicate level '#' ++ " " ++ haddockToMarkdown title
 
@@ -173,6 +169,18 @@ haddockToMarkdown (H.DocTable _t)
 -- things I don't really know how to handle
 haddockToMarkdown (H.DocProperty _)
   = ""  -- don't really know what to do
+
+escapeBackticks :: String -> String
+escapeBackticks "" = ""
+escapeBackticks ('`':ss) = '\\':'`':escapeBackticks ss
+escapeBackticks (s  :ss) = s:escapeBackticks ss
+
+removeUnescapedBackticks :: String -> String
+removeUnescapedBackticks = \case
+  '\\' : '`' : ss -> '\\' : '`' : removeUnescapedBackticks ss
+  '`' : ss -> removeUnescapedBackticks ss
+  "" -> ""
+  s : ss -> s : removeUnescapedBackticks ss
 
 splitForList :: String -> String
 splitForList s
