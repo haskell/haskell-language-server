@@ -83,7 +83,7 @@ library
         ghc >= 8.4,
         -- These dependencies are used by Development.IDE.Session and are
         -- Haskell specific. So don't use them when building with -fghc-lib!
-        ghc-check,
+        ghc-check >=0.5.0.1,
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.6.0 && < 0.8.0,
