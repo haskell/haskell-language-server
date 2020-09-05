@@ -94,6 +94,9 @@ data IdeOptions = IdeOptions
     --   Otherwise, return the result of parsing without Opt_Haddock, so
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
+  , optCustomDynFlags :: DynFlags -> DynFlags
+    -- ^ If given, it will be called right after setting up a new cradle,
+    --   allowing to customize the Ghc options used
   }
 
 data OptHaddockParse = HaddockParse | NoHaddockParse
@@ -157,6 +160,7 @@ defaultIdeOptions session = IdeOptions
     ,optCheckProject = checkProject defaultLspConfig
     ,optCheckParents = checkParents defaultLspConfig
     ,optHaddockParse = HaddockParse
+    ,optCustomDynFlags = id
     }
 
 

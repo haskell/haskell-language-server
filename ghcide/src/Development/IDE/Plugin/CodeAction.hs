@@ -48,8 +48,7 @@ import qualified Data.Text as T
 import Data.Tuple.Extra ((&&&))
 import HscTypes
 import Parser
-import Text.Regex.TDFA ((=~), (=~~))
-import Text.Regex.TDFA.Text()
+import Text.Regex.TDFA (mrAfter, (=~), (=~~))
 import Outputable (ppr, showSDocUnsafe)
 import DynFlags (xFlags, FlagSpec(..))
 import GHC.LanguageExtensions.Type (Extension)
@@ -143,14 +142,14 @@ suggestAction
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
 suggestAction dflags packageExports ideOptions parsedModule text diag = concat
-    [ suggestAddExtension diag
+   -- Order these suggestions by priority
+    [ suggestAddExtension diag             -- Highest priority
+    , suggestSignature True diag
     , suggestExtendImport dflags text diag
-    , suggestFillHole diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
     , suggestReplaceIdentifier text diag
-    , suggestSignature True diag
     , suggestConstraint text diag
     , removeRedundantConstraints text diag
     , suggestAddTypeAnnotationToSatisfyContraints text diag
@@ -160,13 +159,15 @@ suggestAction dflags packageExports ideOptions parsedModule text diag = concat
     ++ suggestNewImport packageExports pm diag
     ++ suggestDeleteUnusedBinding pm text diag
     ++ suggestExportUnusedTopBinding text pm diag
-    | Just pm <- [parsedModule]]
+    | Just pm <- [parsedModule]
+    ] ++
+    suggestFillHole diag                   -- Lowest priority
 
 
 suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
-    | Just [_, bindings] <- matchRegex _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
+    | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L l _) -> srcSpanToRange l == Just _range ) hsmodImports
     , Just c <- contents
     , ranges <- map (rangesForBinding impDecl . T.unpack) (T.splitOn ", " bindings)
@@ -184,11 +185,11 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
 
 suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestDeleteUnusedBinding
-  ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} 
+  ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}}
   contents
   Diagnostic{_range=_range,..}
 -- Foo.hs:4:1: warning: [-Wunused-binds] Defined but not used: ‘f’
-    | Just [name] <- matchRegex _message ".*Defined but not used: ‘([^ ]+)’"
+    | Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
     , Just indexedContent <- indexedByPosition . T.unpack <$> contents
       = let edits = flip TextEdit "" <$> relatedRanges indexedContent (T.unpack name)
         in ([("Delete ‘" <> name <> "’", edits) | not (null edits)])
@@ -205,7 +206,7 @@ suggestDeleteUnusedBinding
         name
         (L (RealSrcSpan l) (ValD (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
         case lname of
-          (L nLoc _name) | isTheBinding nLoc -> 
+          (L nLoc _name) | isTheBinding nLoc ->
             let findSig (L (RealSrcSpan l) (SigD sig)) = findRelatedSigSpan indexedContent name l sig
                 findSig _ = []
             in
@@ -214,11 +215,11 @@ suggestDeleteUnusedBinding
           _ -> concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpans _ _ _ = []
 
-      extractNameAndMatchesFromFunBind 
-        :: HsBind GhcPs 
+      extractNameAndMatchesFromFunBind
+        :: HsBind GhcPs
         -> Maybe (Located (IdP GhcPs), [LMatch GhcPs (LHsExpr GhcPs)])
-      extractNameAndMatchesFromFunBind 
-        FunBind 
+      extractNameAndMatchesFromFunBind
+        FunBind
           { fun_id=lname
           , fun_matches=MG {mg_alts=L _ matches}
           } = Just (lname, matches)
@@ -234,17 +235,17 @@ suggestDeleteUnusedBinding
 
       -- Second of the tuple means there is only one match
       findRelatedSigSpan1 :: String -> Sig GhcPs -> Maybe (SrcSpan, Bool)
-      findRelatedSigSpan1 name (TypeSig lnames _) = 
+      findRelatedSigSpan1 name (TypeSig lnames _) =
         let maybeIdx = findIndex (\(L _ id) -> isSameName id name) lnames
         in case maybeIdx of
             Nothing -> Nothing
             Just _ | length lnames == 1 -> Just (getLoc $ head lnames, True)
-            Just idx -> 
+            Just idx ->
               let targetLname = getLoc $ lnames !! idx
                   startLoc = srcSpanStart targetLname
                   endLoc = srcSpanEnd targetLname
-                  startLoc' = if idx == 0 
-                              then startLoc 
+                  startLoc' = if idx == 0
+                              then startLoc
                               else srcSpanEnd . getLoc $ lnames !! (idx - 1)
                   endLoc' = if idx == 0 && idx < length lnames - 1
                             then srcSpanStart . getLoc $ lnames !! (idx + 1)
@@ -263,7 +264,7 @@ suggestDeleteUnusedBinding
         name
         (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
         case grhssLocalBinds of
-          (L _ (HsValBinds (ValBinds bag lsigs))) -> 
+          (L _ (HsValBinds (ValBinds bag lsigs))) ->
             if isEmptyBag bag
             then []
             else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
@@ -278,10 +279,10 @@ suggestDeleteUnusedBinding
         -> [LSig GhcPs]
         -> LHsBind GhcPs
         -> [Range]
-      findRelatedSpanForHsBind 
+      findRelatedSpanForHsBind
         indexedContent
-        name 
-        lsigs 
+        name
+        lsigs
         (L (RealSrcSpan l) (extractNameAndMatchesFromFunBind -> Just (lname, matches))) =
         if isTheBinding (getLoc lname)
         then
@@ -306,9 +307,9 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
 -- Foo.hs:5:1: warning: [-Wunused-top-binds] Defined but not used: type constructor or class ‘F’
 -- Foo.hs:6:1: warning: [-Wunused-top-binds] Defined but not used: data constructor ‘Bar’
   | Just source <- srcOpt
-  , Just [name] <- matchRegex _message ".*Defined but not used: ‘([^ ]+)’"
-                   <|> matchRegex _message ".*Defined but not used: type constructor or class ‘([^ ]+)’"
-                   <|> matchRegex _message ".*Defined but not used: data constructor ‘([^ ]+)’"
+  , Just [name] <- matchRegexUnifySpaces _message ".*Defined but not used: ‘([^ ]+)’"
+                   <|> matchRegexUnifySpaces _message ".*Defined but not used: type constructor or class ‘([^ ]+)’"
+                   <|> matchRegexUnifySpaces _message ".*Defined but not used: data constructor ‘([^ ]+)’"
   , Just (exportType, _) <- find (matchWithDiagnostic _range . snd)
                             . mapMaybe
                                 (\(L l b) -> if maybe False isTopLevel $ srcSpanToRange l
@@ -386,11 +387,11 @@ suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,.
 --       In the expression: seq "test" seq "test" (traceShow "test")
 --       In an equation for ‘f’:
 --          f = seq "test" seq "test" (traceShow "test")
-    | Just [ty, lit] <- matchRegex _message (pat False False True)
-                        <|> matchRegex _message (pat False False False)
+    | Just [ty, lit] <- matchRegexUnifySpaces _message (pat False False True)
+                        <|> matchRegexUnifySpaces _message (pat False False False)
             = codeEdit ty lit (makeAnnotatedLit ty lit)
     | Just source <- sourceOpt
-    , Just [ty, lit] <- matchRegex _message (pat True True False)
+    , Just [ty, lit] <- matchRegexUnifySpaces _message (pat True True False)
             = let lit' = makeAnnotatedLit ty lit;
                   tir = textInRange _range source
               in codeEdit ty lit (T.replace lit lit' tir)
@@ -432,9 +433,9 @@ suggestNewDefinition :: IdeOptions -> ParsedModule -> Maybe T.Text -> Diagnostic
 suggestNewDefinition ideOptions parsedModule contents Diagnostic{_message, _range}
 --     * Variable not in scope:
 --         suggestAcion :: Maybe T.Text -> Range -> Range
-    | Just [name, typ] <- matchRegex message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
+    | Just [name, typ] <- matchRegexUnifySpaces message "Variable not in scope: ([^ ]+) :: ([^*•]+)"
     = newDefinitionAction ideOptions parsedModule _range name typ
-    | Just [name, typ] <- matchRegex message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps"
+    | Just [name, typ] <- matchRegexUnifySpaces message "Found hole: _([^ ]+) :: ([^*•]+) Or perhaps"
     , [(label, newDefinitionEdits)] <- newDefinitionAction ideOptions parsedModule _range name typ
     = [(label, mkRenameEdit contents _range name : newDefinitionEdits)]
     | otherwise = []
@@ -517,44 +518,82 @@ suggestModuleTypo Diagnostic{_range=_range,..}
 
 suggestFillHole :: Diagnostic -> [(T.Text, [TextEdit])]
 suggestFillHole Diagnostic{_range=_range,..}
---  ...Development/IDE/LSP/CodeAction.hs:103:9: warning:
---   * Found hole: _ :: Int -> String
---   * In the expression: _
---     In the expression: _ a
---     In an equation for ‘foo’: foo a = _ a
---   * Relevant bindings include
---       a :: Int
---         (bound at ...Development/IDE/LSP/CodeAction.hs:103:5)
---       foo :: Int -> String
---         (bound at ...Development/IDE/LSP/CodeAction.hs:103:1)
---     Valid hole fits include
---       foo :: Int -> String
---         (bound at ...Development/IDE/LSP/CodeAction.hs:103:1)
---       show :: forall a. Show a => a -> String
---         with show @Int
---         (imported from ‘Prelude’ at ...Development/IDE/LSP/CodeAction.hs:7:8-37
---          (and originally defined in ‘GHC.Show’))
---       mempty :: forall a. Monoid a => a
---         with mempty @(Int -> String)
---         (imported from ‘Prelude’ at ...Development/IDE/LSP/CodeAction.hs:7:8-37
---          (and originally defined in ‘GHC.Base’)) (lsp-ui)
-
-    | topOfHoleFitsMarker `T.isInfixOf` _message = let
-      findSuggestedHoleFits :: T.Text -> [T.Text]
-      findSuggestedHoleFits = extractFitNames . selectLinesWithFits . dropPreceding . T.lines
-      proposeHoleFit name = ("replace hole `" <> holeName <>  "` with " <> name, [TextEdit _range name])
-      holeName = T.strip $ last $ T.splitOn ":" $ head . T.splitOn "::" $ head $ filter ("Found hole" `T.isInfixOf`) $ T.lines _message
-      dropPreceding       = dropWhile (not . (topOfHoleFitsMarker `T.isInfixOf`))
-      selectLinesWithFits = filter ("::" `T.isInfixOf`)
-      extractFitNames     = map (T.strip . head . T.splitOn " :: ")
-      in map proposeHoleFit $ nubOrd $ findSuggestedHoleFits _message
-
+    | Just holeName <- extractHoleName _message
+    , (holeFits, refFits) <- processHoleSuggestions (T.lines _message)
+    = map (proposeHoleFit holeName False) holeFits
+    ++ map (proposeHoleFit holeName True) refFits
     | otherwise = []
+    where
+      extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
+      proposeHoleFit holeName parenthise name =
+          ( "replace " <> holeName <> " with " <> name
+          , [TextEdit _range $ if parenthise then parens name else name])
+      parens x = "(" <> x <> ")"
+
+processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
+processHoleSuggestions mm = (holeSuggestions, refSuggestions)
+{-
+    • Found hole: _ :: LSP.Handlers
+
+      Valid hole fits include def
+      Valid refinement hole fits include
+        fromMaybe (_ :: LSP.Handlers) (_ :: Maybe LSP.Handlers)
+        fromJust (_ :: Maybe LSP.Handlers)
+        haskell-lsp-types-0.22.0.0:Language.Haskell.LSP.Types.Window.$sel:_value:ProgressParams (_ :: ProgressParams
+                                                                                                        LSP.Handlers)
+        T.foldl (_ :: LSP.Handlers -> Char -> LSP.Handlers)
+                (_ :: LSP.Handlers)
+                (_ :: T.Text)
+        T.foldl' (_ :: LSP.Handlers -> Char -> LSP.Handlers)
+                 (_ :: LSP.Handlers)
+                 (_ :: T.Text)
+-}
+  where
+    t = id @T.Text
+    holeSuggestions = do
+      -- get the text indented under Valid hole fits
+      validHolesSection <-
+        getIndentedGroupsBy (=~ t " *Valid (hole fits|substitutions) include") mm
+      -- the Valid hole fits line can contain a hole fit
+      holeFitLine <-
+        mapHead
+            (mrAfter . (=~ t " *Valid (hole fits|substitutions) include"))
+            validHolesSection
+      let holeFit = T.strip $ T.takeWhile (/= ':') holeFitLine
+      guard (not $ T.null holeFit)
+      return holeFit
+    refSuggestions = do -- @[]
+      -- get the text indented under Valid refinement hole fits
+      refinementSection <-
+        getIndentedGroupsBy (=~ t " *Valid refinement hole fits include") mm
+      -- get the text for each hole fit
+      holeFitLines <- getIndentedGroups (tail refinementSection)
+      let holeFit = T.strip $ T.unwords holeFitLines
+      guard $ not $ holeFit =~ t "Some refinement hole fits suppressed"
+      return holeFit
+
+    mapHead f (a:aa) = f a : aa
+    mapHead _ [] = []
+
+-- > getIndentedGroups [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1,", "  l1", "  l2"], [" H2", "  l3"]]
+getIndentedGroups :: [T.Text] -> [[T.Text]]
+getIndentedGroups [] = []
+getIndentedGroups ll@(l:_) = getIndentedGroupsBy ((== indentation l) . indentation) ll
+-- |
+-- > getIndentedGroupsBy (" H" `isPrefixOf`) [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1", "  l1", "  l2"], [" H2", "  l3"]]
+getIndentedGroupsBy :: (T.Text -> Bool) -> [T.Text] -> [[T.Text]]
+getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
+    (l:ll) -> case span (\l' -> indentation l < indentation l') ll of
+        (indented, rest) -> (l:indented) : getIndentedGroupsBy pred rest
+    _ -> []
+
+indentation :: T.Text -> Int
+indentation = T.length . T.takeWhile isSpace
 
 suggestExtendImport :: Maybe DynFlags -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestExtendImport (Just dflags) contents Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
-      matchRegex _message
+      matchRegexUnifySpaces _message
       "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
     , Just c <- contents
     , POk _ (L _ name) <- runParser dflags (T.unpack binding) parseIdentifier
@@ -576,7 +615,7 @@ suggestFixConstructorImport _ Diagnostic{_range=_range,..}
     -- or
     -- import Data.Aeson.Types( Result(..) ) (lsp-ui)
   | Just [constructor, typ] <-
-    matchRegex _message
+    matchRegexUnifySpaces _message
     "‘([^’]*)’ is a data constructor of ‘([^’]*)’ To import it use"
   = let fixedImport = typ <> "(" <> constructor <> ")"
     in [("Fix import of " <> fixedImport, [TextEdit _range fixedImport])]
@@ -620,7 +659,7 @@ suggestConstraint mContents diag@Diagnostic {..}
       findMissingConstraint :: T.Text -> Maybe T.Text
       findMissingConstraint t =
         let regex = "(No instance for|Could not deduce) \\((.+)\\) arising from a use of"
-         in matchRegex t regex <&> last
+         in matchRegexUnifySpaces t regex <&> last
 
 normalizeConstraints :: T.Text -> T.Text -> T.Text
 normalizeConstraints existingConstraints constraint =
@@ -638,7 +677,7 @@ suggestInstanceConstraint contents Diagnostic {..} missingConstraint
 -- • In the expression: x == y
 --   In an equation for ‘==’: (Wrap x) == (Wrap y) = x == y
 --   In the instance declaration for ‘Eq (Wrap a)’
-  | Just [instanceDeclaration] <- matchRegex _message "In the instance declaration for ‘([^`]*)’"
+  | Just [instanceDeclaration] <- matchRegexUnifySpaces _message "In the instance declaration for ‘([^`]*)’"
   = let instanceLine = contents
           & T.splitOn ("instance " <> instanceDeclaration)
           & head & T.lines & length
@@ -657,7 +696,7 @@ suggestInstanceConstraint contents Diagnostic {..} missingConstraint
 --   In an equation for ‘==’:
 --       (Pair x x') == (Pair y y') = x == y && x' == y'
   | Just [instanceLineStr, constraintFirstCharStr]
-    <- matchRegex _message "bound by the instance declaration at .+:([0-9]+):([0-9]+)"
+    <- matchRegexUnifySpaces _message "bound by the instance declaration at .+:([0-9]+):([0-9]+)"
   = let existingConstraints = findExistingConstraints _message
         newConstraints = normalizeConstraints existingConstraints missingConstraint
         instanceLine = readPositionNumber instanceLineStr
@@ -681,7 +720,7 @@ suggestInstanceConstraint contents Diagnostic {..} missingConstraint
         <> "` to the context of the instance declaration"
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
-findTypeSignatureName t = matchRegex t "([^ ]+) :: " <&> head
+findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
 
 findTypeSignatureLine :: T.Text -> T.Text -> Int
 findTypeSignatureLine contents typeSignatureName =
@@ -727,7 +766,7 @@ suggestFunctionConstraint contents Diagnostic{..} missingConstraint
       findExistingConstraints :: T.Text -> Maybe T.Text
       findExistingConstraints message =
         if message =~ ("from the context:" :: String)
-           then fmap (T.strip . head) $ matchRegex message "\\. ([^=]+)"
+           then fmap (T.strip . head) $ matchRegexUnifySpaces message "\\. ([^=]+)"
            else Nothing
 
       buildNewConstraints :: T.Text -> Maybe T.Text -> T.Text
@@ -782,7 +821,7 @@ removeRedundantConstraints mContents Diagnostic{..}
         & T.lines
         & head
         & T.strip
-        & (`matchRegex` "Redundant constraints?: (.+)")
+        & (`matchRegexUnifySpaces` "Redundant constraints?: (.+)")
         <&> (head >>> parseConstraints)
 
       -- If the type signature is not formatted as expected (arbitrary number of spaces,
@@ -831,7 +870,7 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
           RealSrcLoc s -> Just $ srcLocLine s
           _ -> Nothing
   , insertPos <- Position insertLine 0
-  , extendImportSuggestions <- matchRegex msg
+  , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = [(imp, [TextEdit (Range insertPos insertPos) (imp <> "\n")])
     | imp <- constructNewImportSuggestions packageExportsMap name extendImportSuggestions
@@ -880,30 +919,23 @@ notInScope (NotInScopeThing t) = t
 
 extractNotInScopeName :: T.Text -> Maybe NotInScope
 extractNotInScopeName x
-  | Just [name] <- matchRegex x "Data constructor not in scope: ([^ ]+)"
+  | Just [name] <- matchRegexUnifySpaces x "Data constructor not in scope: ([^ ]+)"
   = Just $ NotInScopeDataConstructor name
-  | Just [name] <- matchRegex x "Not in scope: data constructor [^‘]*‘([^’]*)’"
+  | Just [name] <- matchRegexUnifySpaces x "Not in scope: data constructor [^‘]*‘([^’]*)’"
   = Just $ NotInScopeDataConstructor name
-  | Just [name] <- matchRegex x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
+  | Just [name] <- matchRegexUnifySpaces x "ot in scope: type constructor or class [^‘]*‘([^’]*)’"
   = Just $ NotInScopeTypeConstructorOrClass name
-  | Just [name] <- matchRegex x "ot in scope: \\(([^‘ ]+)\\)"
+  | Just [name] <- matchRegexUnifySpaces x "ot in scope: \\(([^‘ ]+)\\)"
   = Just $ NotInScopeThing name
-  | Just [name] <- matchRegex x "ot in scope: ([^‘ ]+)"
+  | Just [name] <- matchRegexUnifySpaces x "ot in scope: ([^‘ ]+)"
   = Just $ NotInScopeThing name
-  | Just [name] <- matchRegex x "ot in scope:[^‘]*‘([^’]*)’"
+  | Just [name] <- matchRegexUnifySpaces x "ot in scope:[^‘]*‘([^’]*)’"
   = Just $ NotInScopeThing name
   | otherwise
   = Nothing
 
 -------------------------------------------------------------------------------------------------
 
-topOfHoleFitsMarker :: T.Text
-topOfHoleFitsMarker =
-#if MIN_GHC_API_VERSION(8,6,0)
-  "Valid hole fits include"
-#else
-  "Valid substitutions include"
-#endif
 
 mkRenameEdit :: Maybe T.Text -> Range -> T.Text -> TextEdit
 mkRenameEdit contents range name =
@@ -1013,9 +1045,13 @@ addBindingToImportList binding importLine = case T.breakOn "(" importLine of
         $  "importLine does not have the expected structure: "
         <> T.unpack importLine
 
+-- | 'matchRegex' combined with 'unifySpaces'
+matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
+matchRegexUnifySpaces message = matchRegex (unifySpaces message)
+
 -- | Returns Just (the submatches) for the first capture, or Nothing.
 matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
-matchRegex message regex = case unifySpaces message =~~ regex of
+matchRegex message regex = case message =~~ regex of
     Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
     Nothing -> Nothing
 
