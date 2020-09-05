@@ -31,6 +31,7 @@ module Development.IDE.GHC.Compat(
     addIncludePathsQuote,
     getModuleHash,
     getPackageName,
+    setUpTypedHoles,
     pattern DerivD,
     pattern ForD,
     pattern InstD,
@@ -324,6 +325,31 @@ dontWriteHieFiles d =
 #else
     d
 #endif
+
+setUpTypedHoles ::DynFlags -> DynFlags
+#if MIN_GHC_API_VERSION(8,6,0)
+setUpTypedHoles df
+  = flip gopt_unset Opt_AbstractRefHoleFits    -- too spammy
+#if MIN_GHC_API_VERSION(8,8,0)
+  $ flip gopt_unset Opt_ShowDocsOfHoleFits     -- not used
+#endif
+  $ flip gopt_unset Opt_ShowMatchesOfHoleFits  -- nice but broken (forgets module qualifiers)
+  $ flip gopt_unset Opt_ShowProvOfHoleFits     -- not used
+  $ flip gopt_unset Opt_ShowTypeAppOfHoleFits  -- not used
+  $ flip gopt_unset Opt_ShowTypeAppVarsOfHoleFits -- not used
+  $ flip gopt_unset Opt_ShowTypeOfHoleFits     -- massively simplifies parsing
+  $ flip gopt_set   Opt_SortBySubsumHoleFits   -- very nice and fast enough in most cases
+  $ flip gopt_unset Opt_SortValidHoleFits
+  $ flip gopt_unset Opt_UnclutterValidHoleFits
+  $ df
+  { refLevelHoleFits = Just 1   -- becomes slow at higher levels
+  , maxRefHoleFits   = Just 10  -- quantity does not impact speed
+  , maxValidHoleFits = Nothing  -- quantity does not impact speed
+  }
+#else
+setUpTypedHoles = id
+#endif
+
 
 nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
 nameListFromAvails as =

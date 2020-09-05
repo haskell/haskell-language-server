@@ -35,6 +35,7 @@ import Data.Version
 import Development.IDE.Core.OfInterest
 import Development.IDE.Core.Shake
 import Development.IDE.Core.RuleTypes
+import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Util
 import Development.IDE.Session.VersionCheck
 import Development.IDE.Types.Diagnostics
@@ -56,7 +57,6 @@ import System.FilePath
 import System.Info
 import System.IO
 
-import GHC
 import GHCi
 import DynFlags
 import HscTypes
@@ -106,7 +106,10 @@ loadSession dir = do
                        withIndefiniteProgress, ideNc, knownFilesVar
                       } <- getShakeExtras
 
-    IdeOptions{optTesting = IdeTesting optTesting, optCheckProject = CheckProject checkProject } <- getIdeOptions
+    IdeOptions{ optTesting = IdeTesting optTesting
+              , optCheckProject = CheckProject checkProject
+              , optCustomDynFlags
+              } <- getIdeOptions
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
@@ -118,7 +121,7 @@ loadSession dir = do
           -- Parse DynFlags for the newly discovered component
           hscEnv <- emptyHscEnv ideNc libDir
           (df, targets) <- evalGhcEnv hscEnv $
-              setOptions opts (hsc_dflags hscEnv)
+              first optCustomDynFlags <$> setOptions opts (hsc_dflags hscEnv)
           let deps = componentDependencies opts ++ maybeToList hieYaml
           dep_info <- getDependencyInfo deps
           -- Now lookup to see whether we are combining with an existing HscEnv
@@ -182,7 +185,7 @@ loadSession dir = do
                 -> IO ([NormalizedFilePath],(IdeResult HscEnvEq,[FilePath]))
         session args@(hieYaml, _cfp, _opts, _libDir) = do
           (hscEnv, new, old_deps) <- packageSetup args
-          
+
           -- Whenever we spin up a session on Linux, dynamically load libm.so.6
           -- in. We need this in case the binary is statically linked, in which
           -- case the interactive session will fail when trying to load
@@ -197,7 +200,7 @@ loadSession dir = do
             case res of
               Nothing -> pure ()
               Just err -> hPutStrLn stderr $
-                "Error dynamically loading libm.so.6:\n" <> err 
+                "Error dynamically loading libm.so.6:\n" <> err
 
           -- Make a map from unit-id to DynFlags, this is used when trying to
           -- resolve imports. (especially PackageImports)
@@ -576,6 +579,7 @@ setOptions (ComponentOptions theOpts compRoot _) dflags = do
           setIgnoreInterfacePragmas $
           setLinkerOptions $
           disableOptimisation $
+          setUpTypedHoles $
           makeDynFlagsAbsolute compRoot dflags'
     -- initPackages parses the -package flags and
     -- sets up the visibility for each component.
