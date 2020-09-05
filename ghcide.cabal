@@ -101,6 +101,7 @@ library
         BangPatterns
         DeriveFunctor
         DeriveGeneric
+        FlexibleContexts
         GeneralizedNewtypeDeriving
         LambdaCase
         NamedFieldPuns
@@ -224,6 +225,7 @@ benchmark benchHist
         BangPatterns
         DeriveFunctor
         DeriveGeneric
+        FlexibleContexts
         GeneralizedNewtypeDeriving
         LambdaCase
         NamedFieldPuns
@@ -291,6 +293,7 @@ executable ghcide
         BangPatterns
         DeriveFunctor
         DeriveGeneric
+        FlexibleContexts
         GeneralizedNewtypeDeriving
         LambdaCase
         NamedFieldPuns
@@ -361,6 +364,7 @@ test-suite ghcide-tests
         BangPatterns
         DeriveFunctor
         DeriveGeneric
+        FlexibleContexts
         GeneralizedNewtypeDeriving
         LambdaCase
         NamedFieldPuns
@@ -399,6 +403,7 @@ executable ghcide-bench
         BangPatterns
         DeriveFunctor
         DeriveGeneric
+        FlexibleContexts
         GeneralizedNewtypeDeriving
         LambdaCase
         NamedFieldPuns
