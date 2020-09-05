@@ -53,7 +53,7 @@ This is *very* early stage software.
 
 ## Features
 
- - Code evaluation (inspired by [Dante](https://github.com/jyp/dante#-reploid))
+ - Code evaluation (inspired by [Dante](https://github.com/jyp/dante#-reploid)). You can evaluate code by writing it in a comment of the form -- >>>
 
    ![Eval](https://i.imgur.com/bh992sT.gif)
 
