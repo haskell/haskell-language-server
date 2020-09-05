@@ -54,6 +54,7 @@ import Test.Tasty.ExpectedFailure
 import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
+import System.Time.Extra
 
 main :: IO ()
 main = do
@@ -1036,9 +1037,9 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f = quickCheck"              []                "import Test.QuickCheck (quickCheck)"
     ]
   , testGroup "want suggestion"
-    [ test True []          "f = foo"                     []                "import Foo (foo)"
-    , test True []          "f = Bar"                     []                "import Bar (Bar(Bar))"
-    , test True []          "f :: Bar"                    []                "import Bar (Bar)"
+    [ wantWait  []          "f = foo"                     []                "import Foo (foo)"
+    , wantWait  []          "f = Bar"                     []                "import Bar (Bar(Bar))"
+    , wantWait  []          "f :: Bar"                    []                "import Bar (Bar)"
     , test True []          "f = nonEmpty"                []                "import Data.List.NonEmpty (nonEmpty)"
     , test True []          "f = (:|)"                    []                "import Data.List.NonEmpty (NonEmpty((:|)))"
     , test True []          "f :: Natural"                ["f = undefined"] "import Numeric.Natural (Natural)"
@@ -1066,7 +1067,9 @@ suggestImportTests = testGroup "suggest import actions"
     ]
   ]
   where
-    test wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
+    test = test' False
+    wantWait = test' True True
+    test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
           after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
           cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo, GotoHover]}}"
@@ -1074,6 +1077,8 @@ suggestImportTests = testGroup "suggest import actions"
       doc <- createDoc "Test.hs" "haskell" before
       void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
       _diags <- waitForDiagnostics
+      -- there isn't a good way to wait until the whole project is checked atm
+      when waitForCheckProject $ liftIO $ sleep 0.5
       let defLine = length imps + 1
           range = Range (Position defLine 0) (Position defLine maxBound)
       actions <- getCodeActions doc range
@@ -2427,6 +2432,7 @@ completionTests
 completionTest :: String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, Bool, Bool)] -> TestTree
 completionTest name src pos expected = testSessionWait name $ do
     docId <- createDoc "A.hs" "haskell" (T.unlines src)
+    _ <- waitForDiagnostics
     compls <- getCompletions docId pos
     let compls' = [ (_label, _kind) | CompletionItem{..} <- compls]
     liftIO $ do

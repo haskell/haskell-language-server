@@ -77,7 +77,10 @@ getFilesOfInterestUntracked = do
 
 -- | Modify the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
-modifyFilesOfInterest :: IdeState -> (HashSet NormalizedFilePath -> HashSet NormalizedFilePath) -> IO ()
+modifyFilesOfInterest
+    :: IdeState
+    -> (HashSet NormalizedFilePath -> HashSet NormalizedFilePath)
+    -> IO ()
 modifyFilesOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
     files <- modifyVar var $ pure . dupe . f
