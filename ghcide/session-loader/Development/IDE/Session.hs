@@ -102,8 +102,9 @@ loadSession dir = do
   runningCradle <- newVar dummyAs :: IO (Var (Async (IdeResult HscEnvEq,[FilePath])))
 
   return $ do
-    ShakeExtras{logger, eventer, restartShakeSession, withIndefiniteProgress
-               ,ideNc, knownFilesVar, session=ideSession} <- getShakeExtras
+    extras@ShakeExtras{logger, eventer, restartShakeSession,
+                       withIndefiniteProgress, ideNc, knownFilesVar
+                      } <- getShakeExtras
 
     IdeOptions{optTesting = IdeTesting optTesting, optCheckProject = CheckProject checkProject } <- getIdeOptions
 
@@ -295,7 +296,7 @@ loadSession dir = do
         return (fmap snd as, wait as)
       unless (null cs) $
         -- Typecheck all files in the project on startup
-        void $ shakeEnqueueSession ideSession $ mkDelayedAction "InitialLoad" Debug $ void $ do
+        void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
           cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cs
           -- populate the knownFilesVar with all the
           -- files in the project so that `knownFiles` can learn about them and

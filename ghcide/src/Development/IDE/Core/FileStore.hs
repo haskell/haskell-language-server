@@ -225,7 +225,7 @@ setFileModified state prop nfp = do
       typecheckParents state nfp
 
 typecheckParents :: IdeState -> NormalizedFilePath -> IO ()
-typecheckParents state nfp = void $ shakeEnqueue state parents
+typecheckParents state nfp = void $ shakeEnqueue (shakeExtras state) parents
   where parents = mkDelayedAction "ParentTC" L.Debug (typecheckParentsAction nfp)
 
 typecheckParentsAction :: NormalizedFilePath -> Action ()
