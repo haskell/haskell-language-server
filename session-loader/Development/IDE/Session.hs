@@ -64,6 +64,7 @@ import Linker
 import Module
 import NameCache
 import Packages
+import Control.Exception (evaluate)
 
 -- | Given a root directory, return a Shake 'Action' which setups an
 -- 'IdeGhcSession' given a file.
@@ -312,7 +313,7 @@ loadSession dir = do
             -- update xports map
             extras <- getShakeExtras
             let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-            liftIO $ modifyVar_ (exportsMap extras) $ return . (exportsMap' <>)
+            liftIO $ modifyVar_ (exportsMap extras) $ evaluate . (exportsMap' <>)
       pure opts
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.

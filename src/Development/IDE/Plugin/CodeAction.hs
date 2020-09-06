@@ -59,6 +59,7 @@ import Control.Applicative ((<|>))
 import Safe (atMay)
 import Bag (isEmptyBag)
 import Control.Concurrent.Extra (readVar)
+import qualified Data.HashSet as Set
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
@@ -85,7 +86,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
     -- This is quite expensive 0.6-0.7s on GHC
     pkgExports <- runAction "CodeAction:PackageExports" state $ (useNoFile_ . PackageExports) `traverse` env
     localExports <- readVar (exportsMap $ shakeExtras state)
-    let exportsMap = Map.unionWith (<>) localExports (fromMaybe mempty pkgExports)
+    let exportsMap = localExports <> fromMaybe mempty pkgExports
     let dflags = hsc_dflags . hscEnv <$> env
     pure $ Right
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
@@ -881,7 +882,7 @@ constructNewImportSuggestions
   :: ExportsMap -> NotInScope -> Maybe [T.Text] -> [T.Text]
 constructNewImportSuggestions exportsMap thingMissing notTheseModules = nubOrd
   [ suggestion
-  | (identInfo, m) <- fromMaybe [] $ Map.lookup name exportsMap
+  | (identInfo, m) <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
   , canUseIdent thingMissing identInfo
   , m `notElem` fromMaybe [] notTheseModules
   , suggestion <- renderNewImport identInfo m

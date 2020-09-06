@@ -413,7 +413,7 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
         progressAsync <- async $
             when reportProgress $
                 progressThread mostRecentProgressEvent inProgress
-        exportsMap <- newVar HMap.empty
+        exportsMap <- newVar mempty
 
         actionQueue <- newQueue
 
