@@ -51,6 +51,7 @@ library
       Ide.Plugin.Ormolu
       Ide.Plugin.Pragmas
       Ide.Plugin.Retrie
+      Ide.Plugin.Tactic
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
       Ide.Plugin.StylishHaskell
