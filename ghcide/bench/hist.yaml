@@ -2,6 +2,8 @@
 # At least 100 is recommended in order to observe space leaks
 samples: 100
 
+buildTool: stack
+
 # Path to the ghcide-bench binary to use for experiments
 ghcideBench: ghcide-bench
 
@@ -37,6 +39,6 @@ versions:
 # - v0.0.6
 # - v0.1.0
 # - v0.2.0
-- upstream: upstream/master
+# - v0.3.0
+- upstream: origin/master
 - HEAD
-
