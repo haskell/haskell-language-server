@@ -172,25 +172,10 @@ runEvalCmd lsp state EvalParams {..} = response' $ do
   contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri _uri
   text <- handleMaybe "contents" $ virtualFileText <$> contents
 
-{- Note: GhcSessionDeps
-
-Depending on GhcSession means we do need to reload all the module
-dependencies in the GHC session(from interface files, hopefully).
-
-The GhcSessionDeps dependency would allow us to reuse a GHC session preloaded
-with all the dependencies. Unfortunately, the ModSummary objects that
-GhcSessionDeps puts in the GHC session are not suitable for reuse since they
-clear out the timestamps; this is done to avoid internal ghcide bugs and
-can probably be relaxed so that plugins like Eval can reuse them. Once that's
-done, we want to switch back to GhcSessionDeps:
-
--- https://github.com/digital-asset/ghcide/pull/694
-
- -}
   session <-
     liftIO $
       runAction "runEvalCmd.ghcSession" state $
-        use_ GhcSession $ -- See the note on GhcSessionDeps
+        use_ GhcSessionDeps $
           toNormalizedFilePath' $
             fp
 
