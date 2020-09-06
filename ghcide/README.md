@@ -329,15 +329,17 @@ This writes a log file called `.tasty-rerun-log` of the failures, and only runs 
 See the [tasty-rerun](https://hackage.haskell.org/package/tasty-rerun-1.1.17/docs/Test-Tasty-Ingredients-Rerun.html) documentation for other options.
 
 If you are touching performance sensitive code, take the time to run a differential
-benchmark between HEAD and upstream using the benchHist script. The configuration in
-`bench/hist.yaml` is setup to do this by default assuming upstream is
-`origin/master`. Run the benchmarks with `stack`:
+benchmark between HEAD and master using the benchHist script. This assumes that
+"master" points to the upstream master.
+
+Run the benchmarks with `stack`:
 
     export STACK_YAML=...
     stack bench
 
-It should take around 15 minutes and the results will be stored in the `bench-hist` folder.
-To interpret the results, see the comments in the `bench/hist/Main.hs` module.
+It should take around 15 minutes and the results will be stored in the `bench-hist` folder. To interpret the results, see the comments in the `bench/hist/Main.hs` module.
+
+More details in [bench/README](bench/README.md)
 
 ### Building the extension
 
