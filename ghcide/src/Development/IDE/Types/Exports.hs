@@ -1,7 +1,9 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
 module Development.IDE.Types.Exports
 (
     IdentInfo(..),
-    ExportsMap,
+    ExportsMap(..),
     createExportsMap,
 ) where
 
@@ -16,8 +18,17 @@ import Name
 import FieldLabel (flSelector)
 import qualified Data.HashMap.Strict as Map
 import GhcPlugins (IfaceExport)
+import Data.HashSet (HashSet)
+import qualified Data.HashSet as Set
+import Data.Bifunctor (Bifunctor(second))
+import Data.Hashable (Hashable)
 
-type ExportsMap = HashMap IdentifierText [(IdentInfo,ModuleNameText)]
+newtype ExportsMap = ExportsMap
+    {getExportsMap :: HashMap IdentifierText (HashSet (IdentInfo,ModuleNameText))}
+    deriving newtype (Monoid, NFData, Show)
+
+instance Semigroup ExportsMap where
+    ExportsMap a <> ExportsMap b = ExportsMap $ Map.unionWith (<>) a b
 
 type IdentifierText = Text
 type ModuleNameText = Text
@@ -29,6 +40,7 @@ data IdentInfo = IdentInfo
     , isDatacon :: !Bool
     }
     deriving (Eq, Generic, Show)
+    deriving anyclass Hashable
 
 instance NFData IdentInfo
 
@@ -51,9 +63,9 @@ mkIdentInfos (AvailTC _ nn flds)
       ]
 
 createExportsMap :: [ModIface] -> ExportsMap
-createExportsMap = Map.fromListWith (++) . concatMap doOne
+createExportsMap = ExportsMap . Map.fromListWith (<>) . concatMap doOne
   where
-    doOne mi = concatMap (unpackAvail mn) (mi_exports mi)
+    doOne mi = concatMap (fmap (second Set.fromList) . unpackAvail mn) (mi_exports mi)
       where
         mn = moduleName $ mi_module mi
 

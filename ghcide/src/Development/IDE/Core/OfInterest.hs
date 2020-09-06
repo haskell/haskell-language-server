@@ -99,6 +99,6 @@ kick = mkDelayedAction "kick" Debug $ do
     ShakeExtras{exportsMap} <- getShakeExtras
     let modIfaces = mapMaybe (fmap (hm_iface . tmrModInfo)) results
         !exportsMap' = createExportsMap modIfaces
-    liftIO $ modifyVar_ exportsMap $ return . (exportsMap' <>)
+    liftIO $ modifyVar_ exportsMap $ evaluate . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted
