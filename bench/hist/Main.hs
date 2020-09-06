@@ -25,15 +25,14 @@
    For diff graphs, the "previous version" is the preceding entry in the list of versions
    in the config file. A possible improvement is to obtain this info via `git rev-list`.
 
-   The script relies on stack for building and running all the binaries.
-
    To execute the script:
 
-   > stack bench
+   > cabal/stack bench
 
    To build a specific analysis, enumerate the desired file artifacts
 
    > stack bench --ba "bench-hist/HEAD/results.csv bench-hist/HEAD/edit.diff.svg"
+   > cabal bench --benchmark-options "bench-hist/HEAD/results.csv bench-hist/HEAD/edit.diff.svg"
 
  -}
 {-# LANGUAGE DeriveAnyClass    #-}
@@ -42,6 +41,7 @@
 
 import Control.Applicative (Alternative (empty))
 import Control.Monad (when, forM, forM_, replicateM)
+import Data.Char (toLower)
 import Data.Foldable (find)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -103,8 +103,10 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
       readSamples = askOracle $ GetSamples ()
       getParent = askOracle . GetParent
 
-  build <- liftIO $ outputFolder <$> readConfigIO config
+  configStatic <- liftIO $ readConfigIO config
   ghcideBenchPath <- ghcideBench <$> liftIO (readConfigIO config)
+  let build = outputFolder configStatic
+      buildSystem = buildTool configStatic
 
   phony "all" $ do
     Config {..} <- readConfig config
@@ -139,11 +141,8 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
     &%> \[out, ghcpath] -> do
       liftIO $ createDirectoryIfMissing True $ dropFileName out
       need =<< getDirectoryFiles "." ["src//*.hs", "exe//*.hs", "ghcide.cabal"]
-      cmd_
-          ( "stack --local-bin-path=" <> takeDirectory out
-              <> " --stack-yaml=stack88.yaml build ghcide:ghcide --copy-bins --ghc-options -rtsopts"
-          )
-      Stdout ghcLoc <- cmd (s "stack --stack-yaml=stack88.yaml exec which ghc")
+      cmd_ $ buildGhcide buildSystem (takeDirectory out)
+      ghcLoc <- findGhc buildSystem
       writeFile' ghcpath ghcLoc
 
   [ build -/- "*/ghcide",
@@ -155,13 +154,8 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
       commitid <- readFile' $ b </> ver </> "commitid"
       cmd_ $ "git worktree add bench-temp " ++ commitid
       flip actionFinally (cmd_ (s "git worktree remove bench-temp --force")) $ do
-        Stdout ghcLoc <- cmd [Cwd "bench-temp"] (s "stack --stack-yaml=stack88.yaml exec which ghc")
-        cmd_
-          [Cwd "bench-temp"]
-          ( "stack --local-bin-path=../"
-              <> takeDirectory out
-              <> " --stack-yaml=stack88.yaml build ghcide:ghcide --copy-bins --ghc-options -rtsopts"
-          )
+        ghcLoc <- findGhc buildSystem
+        cmd_ [Cwd "bench-temp"] $ buildGhcide buildSystem (".." </> takeDirectory out)
         writeFile' ghcpath ghcLoc
 
   priority 8000 $
@@ -198,7 +192,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
                 RemEnv "GHC_PACKAGE_PATH",
                 AddPath [takeDirectory ghcPath, "."] []
               ]
-              ghcideBenchPath
+              ghcideBenchPath $
               [ "--timeout=3000",
                 "-v",
                 "--samples=" <> show samples,
@@ -208,7 +202,8 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
                 "--ghcide=" <> ghcide,
                 "--select",
                 unescaped (unescapeExperiment (Escaped $ dropExtension exp))
-              ]
+              ] ++
+              [ "--stack" | Stack == buildSystem]
           cmd_ Shell $ "mv *.benchmark-gcStats " <> dropFileName outcsv
 
   build -/- "results.csv" %> \out -> do
@@ -259,7 +254,30 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
         title = show (unescapeExperiment exp) <> " - live bytes over time"
     plotDiagram False diagram out
 
-----------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+buildGhcide :: BuildSystem -> String -> String
+buildGhcide Cabal out = unwords
+    ["cabal install"
+    ,"exe:ghcide"
+    ,"--installdir=" ++ out
+    ,"--install-method=copy"
+    ,"--overwrite-policy=always"
+    ,"--ghc-options -rtsopts"
+    ]
+buildGhcide Stack out =
+    "stack --local-bin-path=" <> out
+        <> " build ghcide:ghcide --copy-bins --ghc-options -rtsopts"
+
+
+findGhc :: BuildSystem -> Action FilePath
+findGhc Cabal =
+    liftIO $ fromMaybe (error "ghc is not in the PATH") <$> findExecutable "ghc"
+findGhc Stack = do
+    Stdout ghcLoc <- cmd (s "stack exec which ghc")
+    return ghcLoc
+
+--------------------------------------------------------------------------------
 
 data Config = Config
   { experiments :: [Unescaped String],
@@ -268,7 +286,8 @@ data Config = Config
     -- | Path to the ghcide-bench binary for the experiments
     ghcideBench :: FilePath,
     -- | Output folder ('foo' works, 'foo/bar' does not)
-    outputFolder :: String
+    outputFolder :: String,
+    buildTool :: BuildSystem
   }
   deriving (Generic, Show)
   deriving anyclass (FromJSON, ToJSON)
@@ -312,6 +331,18 @@ findPrev name (x : y : xx)
   | otherwise = findPrev name (y : xx)
 findPrev name _ = name
 
+data BuildSystem = Cabal | Stack
+  deriving (Eq, Read, Show)
+
+instance FromJSON BuildSystem where
+    parseJSON x = fromString . map toLower <$> parseJSON x
+      where
+        fromString "stack" = Stack
+        fromString "cabal" = Cabal
+        fromString other = error $ "Unknown build system: " <> other
+
+instance ToJSON BuildSystem where
+    toJSON = toJSON . show
 ----------------------------------------------------------------------------------------------------
 
 -- | A line in the output of -S
