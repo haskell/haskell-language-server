@@ -99,6 +99,7 @@ library
     , transformers
     , unordered-containers
     , refinery
+    , syb
   include-dirs:
         include
   if os(windows)
