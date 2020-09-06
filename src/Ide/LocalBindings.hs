@@ -1,4 +1,5 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.LocalBindings where
 
@@ -13,6 +14,7 @@ import           HsBinds
 import           HsExpr
 import           Id
 import           SrcLoc
+import Data.Monoid
 
 
 bindings :: TypecheckedModule -> (S.Set Id, M.Map SrcSpan (S.Set Id))
@@ -113,4 +115,14 @@ bindsBindings in_scope binds =
     VarBind _ name c _ ->  (S.singleton name, dataBindings in_scope c)
     PatSynBind _ _ ->  mempty
     XHsBindsLR _ -> mempty
+
+
+isItAHole :: TypecheckedModule -> SrcSpan -> Maybe UnboundVar
+isItAHole tcm span = getFirst $
+  everything (<>) (
+    mkQ mempty $ \case
+      L span' (HsUnboundVar _ z :: HsExpr GhcTc)
+        | span == span' -> pure z
+      _ -> mempty
+    ) $ tm_typechecked_source tcm
 
