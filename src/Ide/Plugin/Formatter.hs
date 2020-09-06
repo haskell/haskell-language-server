@@ -17,20 +17,10 @@ where
 
 import qualified Data.Map  as Map
 import qualified Data.Text as T
-import           Development.IDE.Core.FileStore
-import           Development.IDE.Core.Rules
-import           Development.IDE.Core.Shake
--- import           Development.IDE.LSP.Server
--- import           Development.IDE.Plugin
-import           Development.IDE.Types.Diagnostics as D
-import           Development.IDE.Types.Location
--- import           Development.Shake hiding ( Diagnostic )
--- import           Ide.Logger
+import           Development.IDE
 import           Ide.Types
-import           Development.IDE.Types.Logger
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
--- import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 

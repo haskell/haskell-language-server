@@ -30,9 +30,7 @@ import qualified Data.Map  as Map
 import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
-import           Development.IDE.Core.Rules
-import           Development.IDE.Types.Location
-import           Development.Shake
+import           Development.IDE
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Types

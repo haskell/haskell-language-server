@@ -7,7 +7,7 @@ import           Data.Coerce
 import           Data.Semigroup
 import           Data.Text                             (Text)
 import qualified Data.Text                             as T
-import           Development.IDE.Types.Location
+import           Development.IDE
 import           Language.Haskell.Brittany
 import           Language.Haskell.LSP.Types            as J
 import qualified Language.Haskell.LSP.Types.Lens       as J

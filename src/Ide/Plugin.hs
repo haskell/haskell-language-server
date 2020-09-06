@@ -28,13 +28,8 @@ import qualified Data.List                     as List
 import qualified Data.Map  as Map
 import           Data.Maybe
 import qualified Data.Text                     as T
-import           Development.IDE.Core.Rules
-import           Development.IDE.Core.Shake
+import           Development.IDE   hiding (pluginRules)
 import           Development.IDE.LSP.Server
-import           Development.IDE.Plugin hiding (pluginRules)
-import           Development.IDE.Types.Diagnostics as D
-import           Development.IDE.Types.Logger
-import           Development.Shake hiding ( Diagnostic, command )
 import           GHC.Generics
 import           Ide.Plugin.Config
 import           Ide.Plugin.Formatter
