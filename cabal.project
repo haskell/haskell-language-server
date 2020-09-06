@@ -1,6 +1,7 @@
 packages:
          ./
          ghcide
+         hls-plugin-api
 
 source-repository-package
   type: git
