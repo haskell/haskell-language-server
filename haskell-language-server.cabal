@@ -112,6 +112,7 @@ executable haskell-language-server
     , deepseq
     , floskell                 ^>=0.10
     , fourmolu                 ^>=0.1
+    , fingertree
     , ghc
     , ghc-boot-th
     , ghcide                   >=0.1
@@ -123,10 +124,21 @@ executable haskell-language-server
     , ormolu                   ^>=0.1.2
     , regex-tdfa
     , retrie                   >=0.1.1.0
+    , hslogger
+    , optparse-applicative
+    , haskell-lsp              ^>=0.22
+    , hls-plugin-api
+    , lens
+    , mtl
+    , ormolu                   ^>=0.1.2
+    , regex-tdfa
+    , retrie                   >=0.1.1.0
     , safe-exceptions
     , shake                    >=0.17.5
     , stylish-haskell          ^>=0.11
     , temporary
+    , text
+    , syb
     , time
     , transformers
     , unordered-containers
