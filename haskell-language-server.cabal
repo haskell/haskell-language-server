@@ -97,6 +97,7 @@ library
     , time
     , transformers
     , unordered-containers
+    , refinery
   include-dirs:
         include
   if os(windows)
