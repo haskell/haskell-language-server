@@ -86,7 +86,6 @@ dataBindings in_scope = foldMapOf biplate $ cool collect
     collect _ = mempty
 
 
-
 matchGroupBindings :: S.Set Id -> MatchGroup GhcTc (LHsExpr GhcTc) -> M.Map SrcSpan (S.Set Id)
 matchGroupBindings _ (XMatchGroup _) = M.empty
 matchGroupBindings in_scope (MG _ (L _ alts) _) = M.fromList $ do
@@ -101,9 +100,9 @@ localBindsBindings in_scope (HsValBinds _ (XValBindsLR (NValBinds groups _sigs))
   flip foldMap groups $ bindsBindings in_scope . snd
 localBindsBindings _ _  = (mempty, mempty)
 
+
 bindsBindings :: S.Set Id -> Bag (LHsBindLR GhcTc GhcTc) -> (S.Set Id, M.Map SrcSpan (S.Set Id))
 bindsBindings in_scope binds =
-  -- TODO(sandy): This doesn't do recursive binds
   flip foldMap (fmap unLoc $ bagToList binds) $ \case
     FunBind _ (L _ name) matches _ _ ->
       (S.singleton name, matchGroupBindings (S.insert name in_scope) matches)
@@ -111,5 +110,7 @@ bindsBindings in_scope binds =
       let bound = S.filter isId $ everything S.union (mkQ S.empty S.singleton) pat
        in (bound, dataBindings (S.union bound in_scope) rhs)
     AbsBinds _ _ _ _ _ binds' _ ->  bindsBindings in_scope binds'
-    _ -> (mempty, mempty)
+    VarBind _ name c _ ->  (S.singleton name, dataBindings in_scope c)
+    PatSynBind _ _ ->  mempty
+    XHsBindsLR _ -> mempty
 
