@@ -144,8 +144,8 @@ mostSpecificSpan span z
   = listToMaybe
   $ sortBy (leftmost_smallest `on` getLoc)
   $ everything (<>) (mkQ mempty $ \case
-      L span' a | span `isSubspanOf` span' -> [a]
-      _                                    -> [])
+      l@(L span' _) | span `isSubspanOf` span' -> [l]
+      _                                        -> [])
   $ z
 
 
