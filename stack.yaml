@@ -50,7 +50,7 @@ extra-deps:
 
 flags:
   haskell-language-server:
-    pedantic: true
+    pedantic: false
   retrie:
     BuildExecutable: false
 
