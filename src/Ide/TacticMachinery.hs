@@ -19,6 +19,7 @@ import           Name
 import           Refinery.Tactic
 import           TcType
 import           Type
+import Outputable
 
 
 ------------------------------------------------------------------------------
@@ -120,12 +121,13 @@ mkTyConName = fmap toLower . take 1 . occNameString . getOccName
 -- | Attempt to generate a term of the right type using in-scope bindings, and
 -- a given tactic.
 runTactic
-    :: Type              -- ^ Desired type
+    :: DynFlags
+    -> Type              -- ^ Desired type
     -> Map OccName Type  -- ^ In-scope bindings
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either TacticError (LHsExpr GhcPs)
-runTactic ty hy t
-  = fmap fst
+    -> Either TacticError String
+runTactic dflags ty hy t
+  = fmap (showSDoc dflags . ppr . fst)
   . runProvableT
   . runTacticT t
   . Judgement (fmap CType hy)
