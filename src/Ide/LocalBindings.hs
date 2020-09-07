@@ -8,13 +8,13 @@ import           Control.Lens
 import           Data.Data.Lens
 import           Data.Generics
 import qualified Data.Map as M
+import           Data.Monoid
 import qualified Data.Set as S
 import           GHC (TypecheckedModule (..), GhcTc)
 import           HsBinds
 import           HsExpr
 import           Id
 import           SrcLoc
-import Data.Monoid
 
 
 bindings :: TypecheckedModule -> (S.Set Id, M.Map SrcSpan (S.Set Id))

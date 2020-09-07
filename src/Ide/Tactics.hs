@@ -4,73 +4,34 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module IDE.Tactics where
+module Ide.Tactics
+  ( module Ide.Tactics
+  , runTactic
+  ) where
 
-import Control.Arrow
-import Data.Char
-import Data.List
-import Refinery.Tactic
-import GHC
-import OccName
-import GHC.Generics
-import Data.Function
-import Type
-import TcType
-import TyCoRep
 import Control.Monad.Except (throwError)
-import Control.Monad.Trans
-import GHC.SourceGen.Expr
+import Control.Monad.State
+import Data.List
+import Data.Traversable
+import DataCon
+import GHC
+import GHC.Exts
 import GHC.SourceGen.Binds
+import GHC.SourceGen.Expr
 import GHC.SourceGen.Overloaded
 import GHC.SourceGen.Pat
+import Ide.TacticMachinery
+import Name
+import Refinery.Tactic
+import TyCoRep
+import Type
 
-
-newtype CType = CType { unCType :: Type }
-
-instance Eq CType where
-  (==) = eqType `on` unCType
-
-instance Ord CType where
-  compare = nonDetCmpType `on` unCType
-
-
-data Judgement = Judgement
-  { jHypothesis :: [(OccName, CType)]
-  , jGoal       :: CType
-  }
-  deriving (Eq, Ord, Generic)
-
-
-data TacticError
-  = UndefinedHypothesis OccName
-  | GoalMismatch String CType
-  | UnsolvedSubgoals [Judgement]
-
-
-type ProvableM = ProvableT Judgement (Either TacticError)
-type TacticsM = TacticT Judgement (LHsExpr GhcPs) ProvableM
-type RuleM    = RuleT Judgement (LHsExpr GhcPs) ProvableM
 
 assumption :: TacticsM ()
 assumption = rule $ \(Judgement hy g) ->
   case find ((== g) . snd) hy of
     Just (v, _) -> pure $ noLoc $ HsVar NoExt $ noLoc $ Unqual v
     Nothing -> throwError $ GoalMismatch "assumption" g
-
-
-newSubgoal :: [(OccName, CType)] -> CType -> RuleM (LHsExpr GhcPs)
-newSubgoal hy g = subgoal =<< newJudgement hy g
-
-
-
-newJudgement
-    :: ( Monad m)
-    => [(OccName, CType)]
-    -> CType
-    -> m Judgement
-newJudgement hy g = do
-  pure $ Judgement hy g
-
 
 
 intro :: TacticsM ()
@@ -83,55 +44,77 @@ intro = rule $ \(Judgement hy g) ->
     _ -> throwError $ GoalMismatch "intro" g
 
 
-mkGoodName :: [OccName] -> Type -> OccName
-mkGoodName in_scope t =
-  let tn = mkTyName t
-   in mkVarOcc $ case elem (mkVarOcc tn) in_scope of
-        True -> tn ++ show (length in_scope)
-        False -> tn
+destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> TacticsM ()
+destruct' f term = rule $ \(Judgement hy g) -> do
+  case find ((== term) . fst) hy of
+    Nothing -> throwError $ UndefinedHypothesis term
+    Just (_, t) ->
+      case splitTyConApp_maybe $ unCType t of
+        Nothing -> throwError $ GoalMismatch "destruct" g
+        Just (tc, apps) -> do
+          fmap noLoc
+              $ case' (HsVar NoExt $ noLoc $ Unqual term)
+              <$> do
+            for (tyConDataCons tc) $ \dc -> do
+              let args = dataConInstArgTys dc apps
+              names <- flip evalStateT (getInScope hy) $ for args $ \at -> do
+                in_scope <- Control.Monad.State.get
+                let n = mkGoodName in_scope at
+                modify (n :)
+                pure n
+
+              let pat :: Pat GhcPs
+                  pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
+                      $ fmap (bvar . fromString . occNameString) names
+
+              j <- newJudgement (zip names (fmap CType args) ++ hy) g
+              sg <- f dc j
+              pure $ match [pat] $ unLoc sg
 
 
+destruct :: OccName -> TacticsM ()
+destruct = destruct' $ const subgoal
 
-mkTyName :: Type -> String
-mkTyName (tcSplitFunTys -> ([a@(isFunTy -> False)], b)) = "f" ++ mkTyName a ++ mkTyName b
-mkTyName (tcSplitFunTys -> ((_:_), b))                  = "f_" ++ mkTyName b
-mkTyName (splitTyConApp_maybe -> Just (c, args))        = mkTyConName c ++ foldMap mkTyName args
-mkTyName (getTyVar_maybe-> Just tv)                     = occNameString $ occName tv
-mkTyName (tcSplitSigmaTy-> ((_:_), _, t))               = mkTyName t
-mkTyName _ = "x"
+homo :: OccName -> TacticsM ()
+homo = destruct' $ \dc (Judgement hy (CType g)) ->
+  buildDataCon hy dc (snd $ splitAppTys g)
 
 
-mkTyConName :: TyCon -> String
-mkTyConName = fmap toLower . take 1 . occNameString . getOccName
+apply :: TacticsM ()
+apply = rule $ \(Judgement hy g) -> do
+  case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) hy of
+    Just (func, CType ty) -> do
+      let (args, _) = splitFunTys ty
+      sgs <- traverse (newSubgoal hy . CType) args
+      pure . noLoc
+           . foldl' (@@) (HsVar NoExt $ noLoc $ Unqual func)
+           $ fmap unLoc sgs
+    Nothing -> throwError $ GoalMismatch "apply" g
 
 
-tacticActual
-    :: TacticsM ()
-    -> Judgement
-    -> Either TacticError (LHsExpr GhcPs)
-tacticActual t = fmap fst . runProvableT . runTacticT t
-
-runTactic
-    :: Type
-    -> [(OccName, Type)]
-    -> TacticsM ()
-    -> Maybe (LHsExpr GhcPs)
-runTactic ty hy t
-  = hush
-  . tacticActual t
-  . Judgement (fmap (second CType) hy)
-  $ CType ty
+split :: TacticsM ()
+split = rule $ \(Judgement hy g) ->
+  case splitTyConApp_maybe $ unCType g of
+    Just (tc, apps) ->
+      case tyConDataCons tc of
+        [dc] -> buildDataCon hy dc apps
+        _ -> throwError $ GoalMismatch "split" g
+    Nothing -> throwError $ GoalMismatch "split" g
 
 
-hush :: Either a b -> Maybe b
-hush = either (const Nothing) Just
+deepen :: Int -> TacticsM ()
+deepen 0 = pure ()
+deepen depth = do
+  one
+  deepen $ depth - 1
 
+auto :: TacticsM ()
+auto = (intro >> auto)
+   <!> (assumption >> auto)
+   <!> (split >> auto)
+   <!> (apply >> auto)
+   <!> pure ()
 
-instance MonadExtract (LHsExpr GhcPs) ProvableM where
-  hole = pure $ noLoc $ HsUnboundVar NoExt $ TrueExprHole $ mkVarOcc "_"
-
-
-
-getInScope :: [(OccName, a)] -> [OccName]
-getInScope = fmap fst
+one :: TacticsM ()
+one = intro <!> assumption <!> split <!> apply <!> pure ()
 
