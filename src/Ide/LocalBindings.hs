@@ -8,6 +8,7 @@ module Ide.LocalBindings
   , isItAHole
   ) where
 
+import Data.Ord
 import           Bag
 import           Control.Lens
 import           Data.Data.Lens
@@ -139,10 +140,20 @@ bindsBindings in_scope binds =
     XHsBindsLR _ -> mempty
 
 
+size :: SrcSpan -> Int
+size (UnhelpfulSpan _) = maxBound
+size (RealSrcSpan span) =
+  (srcSpanEndLine span - srcSpanStartLine span) * 1000 -
+  (srcSpanEndCol span - srcSpanStartCol span)
+
+smallest :: SrcSpan -> SrcSpan -> Ordering
+smallest = comparing size
+
+
 mostSpecificSpan :: (Data a, Typeable pass) => SrcSpan -> a -> Maybe (LHsExpr pass)
 mostSpecificSpan span z
   = listToMaybe
-  $ sortBy (leftmost_smallest `on` getLoc)
+  $ sortBy (smallest `on` getLoc)
   $ everything (<>) (mkQ mempty $ \case
       l@(L span' _) | span `isSubspanOf` span' -> [l]
       _                                        -> [])
