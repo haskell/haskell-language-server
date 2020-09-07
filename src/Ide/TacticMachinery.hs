@@ -148,7 +148,7 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError String
 runTactic dflags ty hy t
-  = fmap (render dflags . fst)
+  = fmap (render dflags . noLoc . HsPar NoExt . fst)
   . runProvableT
   . runTacticT t
   . Judgement hy
