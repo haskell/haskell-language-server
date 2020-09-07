@@ -144,14 +144,14 @@ mkTyConName = fmap toLower . take 1 . occNameString . getOccName
 runTactic
     :: DynFlags
     -> Type              -- ^ Desired type
-    -> Map OccName Type  -- ^ In-scope bindings
+    -> Map OccName CType  -- ^ In-scope bindings
     -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError String
 runTactic dflags ty hy t
   = fmap (render dflags . fst)
   . runProvableT
   . runTacticT t
-  . Judgement (fmap CType hy)
+  . Judgement hy
   $ CType ty
 
 
@@ -180,7 +180,6 @@ buildDataCon hy dc apps = do
     . foldl' (@@)
         (HsVar NoExt $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
-
 
 render :: Outputable (LHsExpr pass) => DynFlags -> LHsExpr pass -> String
 render dflags = showSDoc dflags . ppr

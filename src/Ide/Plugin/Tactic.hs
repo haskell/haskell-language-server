@@ -11,6 +11,8 @@ module Ide.Plugin.Tactic
 import           Data.Aeson
 import           Data.Coerce
 import           Data.Maybe
+import           Data.Traversable
+import qualified Data.Map                        as Map
 import qualified Data.HashMap.Strict             as H
 import qualified Data.Text                       as T
 import qualified GHC.Generics                    as Generics
@@ -26,6 +28,7 @@ import           Development.IDE.GHC.Util
 
 import           Ide.Types
 import           Ide.TacticMachinery
+import           Ide.Tactics
 import           Ide.Plugin
 import           Ide.LocalBindings
 
@@ -38,6 +41,7 @@ import           HsExpr
 import           GHC
 import           SrcLoc
 import           DynFlags
+import           Type
 
 
 import System.IO
@@ -45,12 +49,18 @@ import System.IO
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
-    { pluginCommands = [PluginCommand (coerce tacticCommandName) "fill the hole using a tactic" tacticCmd]
+    { pluginCommands = fmap (\(name, tac) -> PluginCommand (coerce $ name <> "Command") (tacticDesc name) (tacticCmd tac)) $ Map.toList tacticCommands
     , pluginCodeActionProvider = Just codeActionProvider
     }
+tacticDesc :: T.Text -> T.Text
+tacticDesc name = "fill the hole using the " <> name <> " tactic"
 
-tacticCommandName :: T.Text
-tacticCommandName = "tacticCommand"
+tacticCommands :: Map.Map T.Text (TacticsM ())
+tacticCommands = Map.fromList
+    [ ("auto", auto)
+    , ("split", split)
+    , ("intro", intro)
+    ]
 
 runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
@@ -63,9 +73,6 @@ codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
           Just tmr <- runIde state $ use TypeCheck nfp
-          -- FIXME Get the dynflags from this?
-          hsc <- runIde state $ use GhcSessionDeps nfp
-          let title = "Fill Hole"
           let span = rangeToSrcSpan (fromNormalizedFilePath nfp) range
           let mod = tmrModule tmr
           case mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod) of
@@ -74,8 +81,11 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
             Just (L span' (HsVar _ _)) -> do
                 -- FIXME What happens if the range is unhelpful?
                 let params = TacticParams { file = uri, range = fromJust $ srcSpanToRange span' }
-                cmd <- mkLspCommand plId (coerce tacticCommandName) title (Just [toJSON params])
-                pure (Right (List [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing (Just cmd) ]))
+                let names = Map.keys tacticCommands
+                actions <- for names $ \name -> do
+                  cmd <- mkLspCommand plId (coerce $ name <> "Command") name (Just [toJSON params])
+                  pure $ CACodeAction $ CodeAction name (Just CodeActionQuickFix) Nothing Nothing (Just cmd)
+                pure $ Right $ List actions
             Just e -> pure (Right (List [ CACodeAction $ CodeAction (T.pack (render unsafeGlobalDynFlags e)) (Just CodeActionQuickFix) Nothing Nothing Nothing ]))
             Nothing -> pure (Right (List []))
 
@@ -86,13 +96,27 @@ data TacticParams = TacticParams
     }
   deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
-tacticCmd :: CommandFunction TacticParams
-tacticCmd _lf _ide (TacticParams uri range) = do
-    let
-      textEdits = J.List
-        [J.TextEdit range ("Howdy Partner!")
-        ]
-      res = J.WorkspaceEdit
-        (Just $ H.singleton uri textEdits)
-        Nothing
-    pure (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+tacticCmd :: TacticsM () -> CommandFunction TacticParams
+tacticCmd tac _lf state (TacticParams uri range)
+    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+        Just tmr <- runIde state $ use TypeCheck nfp
+        let
+          span = rangeToSrcSpan (fromNormalizedFilePath nfp) range
+          mod = tmrModule tmr
+          hyps = hypothesisFromBindings span $ bindings mod
+          Just (L _ (HsVar _ (L _ v))) = mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod)
+          goal = varType v
+        case runTactic unsafeGlobalDynFlags goal hyps tac of
+            Left err -> pure (Right Null, Nothing)
+            Right res ->
+                let edit = J.List [ J.TextEdit range (T.pack res) ]
+                    response = J.WorkspaceEdit (Just $ H.singleton uri edit) Nothing
+                in pure (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response))
+        --   result = runTactic unsafeGlobalDynFlags goal hyps _tac
+        --   textEdits = J.List
+        --     [J.TextEdit range ("Howdy Partner!")
+        --     ]
+        --   res = J.WorkspaceEdit
+        --     (Just $ H.singleton uri textEdits)
+        --     Nothing
+        -- pure (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
