@@ -39,6 +39,7 @@ common agpl
 library
   import: agpl
   exposed-modules:
+      Ide.LocalBindings
       Ide.Logger
       Ide.Plugin
       Ide.Plugin.Config
@@ -56,6 +57,8 @@ library
       Ide.Plugin.Formatter
       Ide.Plugin.StylishHaskell
       Ide.PluginUtils
+      Ide.TacticMachinery
+      Ide.Tactics
       Ide.Types
       Ide.Version
   other-modules:
