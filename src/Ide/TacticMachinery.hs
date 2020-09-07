@@ -6,18 +6,19 @@
 
 module Ide.TacticMachinery where
 
-import Control.Arrow
-import Data.Char
-import Data.Function
-import Data.List
-import DataCon
-import GHC
-import GHC.Generics
-import GHC.SourceGen.Overloaded
-import Name
-import Refinery.Tactic
-import TcType
-import Type
+import           Data.Char
+import           Data.Function
+import           Data.List
+import           Data.Map (Map)
+import qualified Data.Map as M
+import           DataCon
+import           GHC
+import           GHC.Generics
+import           GHC.SourceGen.Overloaded
+import           Name
+import           Refinery.Tactic
+import           TcType
+import           Type
 
 
 ------------------------------------------------------------------------------
@@ -34,7 +35,7 @@ instance Ord CType where
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement = Judgement
-  { jHypothesis :: [(OccName, CType)]
+  { jHypothesis :: Map OccName CType
   , jGoal       :: CType
   }
   deriving (Eq, Ord, Generic)
@@ -58,8 +59,8 @@ type Rule     = RuleM (LHsExpr GhcPs)
 -- | Produce a subgoal that must be solved before we can solve the original
 -- goal.
 newSubgoal
-    :: [(OccName, CType)]  -- ^ Available bindings
-    -> CType               -- ^ Sub-goal type
+    :: Map OccName CType  -- ^ Available bindings
+    -> CType              -- ^ Sub-goal type
     -> RuleM (LHsExpr GhcPs)
 newSubgoal hy g = subgoal =<< newJudgement hy g
 
@@ -68,8 +69,8 @@ newSubgoal hy g = subgoal =<< newJudgement hy g
 -- | Create a new judgment
 newJudgement
     ::  Monad m
-    => [(OccName, CType)]  -- ^ Available bindings
-    -> CType               -- ^ Sub-goal type
+    => Map OccName CType  -- ^ Available bindings
+    -> CType              -- ^ Sub-goal type
     -> m Judgement
 newJudgement hy g = do
   pure $ Judgement hy g
@@ -119,15 +120,15 @@ mkTyConName = fmap toLower . take 1 . occNameString . getOccName
 -- | Attempt to generate a term of the right type using in-scope bindings, and
 -- a given tactic.
 runTactic
-    :: Type               -- ^ Desired type
-    -> [(OccName, Type)]  -- ^ In-scope bindings
-    -> TacticsM ()        -- ^ Tactic to use
+    :: Type              -- ^ Desired type
+    -> Map OccName Type  -- ^ In-scope bindings
+    -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError (LHsExpr GhcPs)
 runTactic ty hy t
   = fmap fst
   . runProvableT
   . runTacticT t
-  . Judgement (fmap (second CType) hy)
+  . Judgement (fmap CType hy)
   $ CType ty
 
 
@@ -137,16 +138,16 @@ instance MonadExtract (LHsExpr GhcPs) ProvableM where
 
 ------------------------------------------------------------------------------
 -- | Which names are in scope?
-getInScope :: [(OccName, a)] -> [OccName]
-getInScope = fmap fst
+getInScope :: Map OccName a -> [OccName]
+getInScope = M.keys
 
 
 ------------------------------------------------------------------------------
 -- | Construct a data con with subgoals for each field.
 buildDataCon
-    :: [(OccName, CType)]  -- ^ In-scope bindings
-    -> DataCon             -- ^ The data con to build
-    -> [Type]              -- ^ Type arguments for the data con
+    :: Map OccName CType  -- ^ In-scope bindings
+    -> DataCon            -- ^ The data con to build
+    -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (LHsExpr GhcPs)
 buildDataCon hy dc apps = do
   let args = dataConInstArgTys dc apps

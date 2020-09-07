@@ -9,27 +9,28 @@ module Ide.Tactics
   , runTactic
   ) where
 
-import Control.Monad.Except (throwError)
-import Control.Monad.State
-import Data.List
-import Data.Traversable
-import DataCon
-import GHC
-import GHC.Exts
-import GHC.SourceGen.Binds
-import GHC.SourceGen.Expr
-import GHC.SourceGen.Overloaded
-import GHC.SourceGen.Pat
-import Ide.TacticMachinery
-import Name
-import Refinery.Tactic
-import TyCoRep
-import Type
+import           Control.Monad.Except (throwError)
+import           Control.Monad.State
+import           Data.List
+import qualified Data.Map as M
+import           Data.Traversable
+import           DataCon
+import           GHC
+import           GHC.Exts
+import           GHC.SourceGen.Binds
+import           GHC.SourceGen.Expr
+import           GHC.SourceGen.Overloaded
+import           GHC.SourceGen.Pat
+import           Ide.TacticMachinery
+import           Name
+import           Refinery.Tactic
+import           TyCoRep
+import           Type
 
 
 assumption :: TacticsM ()
 assumption = rule $ \(Judgement hy g) ->
-  case find ((== g) . snd) hy of
+  case find ((== g) . snd) $ toList hy of
     Just (v, _) -> pure $ noLoc $ HsVar NoExt $ noLoc $ Unqual v
     Nothing -> throwError $ GoalMismatch "assumption" g
 
@@ -39,14 +40,14 @@ intro = rule $ \(Judgement hy g) ->
   case unCType g of
     (FunTy a b) -> do
       v <- pure $ mkGoodName (getInScope hy) a
-      sg <- newSubgoal ((v, CType a) : hy) $ CType b
+      sg <- newSubgoal (M.singleton v (CType a) <> hy) $ CType b
       pure $ noLoc $ lambda [VarPat noExt $ noLoc $ Unqual v] $ unLoc sg
     _ -> throwError $ GoalMismatch "intro" g
 
 
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> TacticsM ()
 destruct' f term = rule $ \(Judgement hy g) -> do
-  case find ((== term) . fst) hy of
+  case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
     Just (_, t) ->
       case splitTyConApp_maybe $ unCType t of
@@ -67,7 +68,7 @@ destruct' f term = rule $ \(Judgement hy g) -> do
                   pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
                       $ fmap (bvar . fromString . occNameString) names
 
-              j <- newJudgement (zip names (fmap CType args) ++ hy) g
+              j <- newJudgement (M.fromList (zip names (fmap CType args)) <> hy) g
               sg <- f dc j
               pure $ match [pat] $ unLoc sg
 
@@ -82,7 +83,7 @@ homo = destruct' $ \dc (Judgement hy (CType g)) ->
 
 apply :: TacticsM ()
 apply = rule $ \(Judgement hy g) -> do
-  case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) hy of
+  case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) $ toList hy of
     Just (func, CType ty) -> do
       let (args, _) = splitFunTys ty
       sgs <- traverse (newSubgoal hy . CType) args
