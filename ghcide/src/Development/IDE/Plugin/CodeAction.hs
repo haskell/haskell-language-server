@@ -14,7 +14,11 @@ module Development.IDE.Plugin.CodeAction
     , codeAction
     , codeLens
     , rulePackageExports
-    , executeAddSignatureCommand
+    , commandHandler
+
+    -- * For testing
+    , blockCommandId
+    , typeSignatureCommandId
     ) where
 
 import Control.Monad (join, guard)
@@ -58,14 +62,21 @@ import Data.Functor
 import Control.Applicative ((<|>))
 import Safe (atMay)
 import Bag (isEmptyBag)
-import Control.Concurrent.Extra (readVar)
 import qualified Data.HashSet as Set
+import Control.Concurrent.Extra (threadDelay, readVar)
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
 
 rules :: Rules ()
 rules = rulePackageExports
+
+-- | a command that blocks forever. Used for testing
+blockCommandId :: T.Text
+blockCommandId = "ghcide.command.block"
+
+typeSignatureCommandId :: T.Text
+typeSignatureCommandId = "typesignature.add"
 
 -- | Generate code actions.
 codeAction
@@ -117,17 +128,23 @@ codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
       Nothing -> pure []
 
 -- | Execute the "typesignature.add" command.
-executeAddSignatureCommand
+commandHandler
     :: LSP.LspFuncs c
     -> IdeState
     -> ExecuteCommandParams
     -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-executeAddSignatureCommand _lsp _ideState ExecuteCommandParams{..}
+commandHandler lsp _ideState ExecuteCommandParams{..}
     -- _command is prefixed with a process ID, because certain clients
     -- have a global command registry, and all commands must be
     -- unique. And there can be more than one ghcide instance running
     -- at a time against the same client.
-    | T.isSuffixOf "typesignature.add" _command
+    | T.isSuffixOf blockCommandId _command
+    = do
+        LSP.sendFunc lsp $ NotCustomServer $
+            NotificationMessage "2.0" (CustomServerMethod "ghcide/blocking/command") Null
+        threadDelay maxBound
+        return (Right Null, Nothing)
+    | T.isSuffixOf typeSignatureCommandId _command
     , Just (List [edit]) <- _arguments
     , Success wedit <- fromJSON edit
     = return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
@@ -1058,8 +1075,13 @@ matchRegex message regex = case message =~~ regex of
 
 setHandlersCodeLens :: PartialHandlers c
 setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
-    LSP.codeLensHandler = withResponse RspCodeLens codeLens,
-    LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit executeAddSignatureCommand
+    LSP.codeLensHandler =
+        withResponse RspCodeLens codeLens,
+    LSP.executeCommandHandler =
+        withResponseAndRequest
+            RspExecuteCommand
+            ReqApplyWorkspaceEdit
+            commandHandler
     }
 
 filterNewlines :: T.Text -> T.Text
