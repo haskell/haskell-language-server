@@ -71,6 +71,8 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
     -- This should not happen but if it does, we will make sure that the whole server
     -- dies and can be restarted instead of losing threads silently.
     clientMsgBarrier <- newBarrier
+    -- Forcefully exit
+    let exit = signalBarrier clientMsgBarrier ()
 
     -- The set of requests ids that we have received but not finished processing
     pendingRequests <- newTVarIO Set.empty
@@ -107,7 +109,8 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
             setHandlersOutline <>
             userHandlers <>
             setHandlersNotifications <> -- absolutely critical, join them with user notifications
-            cancelHandler cancelRequest
+            cancelHandler cancelRequest <>
+            exitHandler exit
             -- Cancel requests are special since they need to be handled
             -- out of order to be useful. Existing handlers are run afterwards.
     handlers <- parts WithMessage{withResponse, withNotification, withResponseAndRequest, withInitialize} def
@@ -115,7 +118,7 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
     let initializeCallbacks = LSP.InitializeCallbacks
             { LSP.onInitialConfiguration = onInitialConfig
             , LSP.onConfigurationChange = onConfigChange
-            , LSP.onStartup = handleInit (signalBarrier clientMsgBarrier ()) clearReqId waitForCancel clientMsgChan
+            , LSP.onStartup = handleInit exit clearReqId waitForCancel clientMsgChan
             }
 
     void $ waitAnyCancel =<< traverse async
@@ -137,7 +140,8 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
 
             _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- readChan clientMsgChan
-                case msg of
+                -- dispatch the work to a new thread
+                void $ async $ case msg of
                     Notification x@NotificationMessage{_params} act -> do
                         catch (act lspFuncs ide _params) $ \(e :: SomeException) ->
                             logError (ideLogger ide) $ T.pack $
@@ -217,6 +221,9 @@ cancelHandler cancelRequest = PartialHandlers $ \_ x -> return x
             whenJust (LSP.cancelNotificationHandler x) ($ msg)
     }
 
+exitHandler :: IO () -> PartialHandlers c
+exitHandler exit = PartialHandlers $ \_ x -> return x
+    {LSP.exitNotificationHandler = Just $ const exit}
 
 -- | A message that we need to deal with - the pieces are split up with existentials to gain additional type safety
 --   and defer precise processing until later (allows us to keep at a higher level of abstraction slightly longer)

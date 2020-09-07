@@ -55,6 +55,8 @@ import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import System.Time.Extra
+import Development.IDE.Plugin.CodeAction (typeSignatureCommandId, blockCommandId)
+import Development.IDE.Plugin.Test (TestRequest(BlockSeconds))
 
 main :: IO ()
 main = do
@@ -90,6 +92,7 @@ main = do
     , ifaceTests
     , bootTests
     , rootUriTests
+    , asyncTests
     ]
 
 initializeResponseTests :: TestTree
@@ -127,7 +130,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider  Nothing
     , chk "NO color"                         _colorProvider (Just $ ColorOptionsStatic False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ FoldingRangeOptionsStatic False)
-    , che "   execute command"      _executeCommandProvider (Just $ ExecuteCommandOptions $ List ["typesignature.add"])
+    , che "   execute command"      _executeCommandProvider (Just $ ExecuteCommandOptions $ List [typeSignatureCommandId, blockCommandId])
     , chk "   workspace"                         _workspace (Just $ WorkspaceOptions (Just WorkspaceFolderOptions{_supported = Just True, _changeNotifications = Just ( WorkspaceFolderChangeNotificationsBool True )}))
     , chk "NO experimental"                   _experimental  Nothing
     ] where
@@ -3152,6 +3155,35 @@ rootUriTests = testCase "use rootUri" . withoutStackEnv . runTest "dirA" "dirB" 
     runTest :: FilePath -> FilePath -> (FilePath -> Session ()) -> IO ()
     runTest dir1 dir2 s = withTempDir $ \dir -> runInDir' dir dir1 dir2 (s dir)
 
+-- | Test if ghcide asynchronously handles Commands and user Requests
+asyncTests :: TestTree
+asyncTests = testGroup "async"
+    [
+      testSession "command" $ do
+            -- Execute a command that will block forever
+            let req = ExecuteCommandParams blockCommandId Nothing Nothing
+            void $ sendRequest WorkspaceExecuteCommand req
+            -- Load a file and check for code actions. Will only work if the command is run asynchronously
+            doc <- createDoc "A.hs" "haskell" $ T.unlines
+              [ "{-# OPTIONS -Wmissing-signatures #-}"
+              , "foo = id"
+              ]
+            void waitForDiagnostics
+            actions <- getCodeActions doc (Range (Position 1 0) (Position 1 0))
+            liftIO $ [ _title | CACodeAction CodeAction{_title} <- actions] @=? ["add signature: foo :: a -> a"]
+    , testSession "request" $ do
+            -- Execute a custom request that will block for 1000 seconds
+            void $ sendRequest (CustomClientMethod "test") $ BlockSeconds 1000
+            -- Load a file and check for code actions. Will only work if the request is run asynchronously
+            doc <- createDoc "A.hs" "haskell" $ T.unlines
+              [ "{-# OPTIONS -Wmissing-signatures #-}"
+              , "foo = id"
+              ]
+            void waitForDiagnostics
+            actions <- getCodeActions doc (Range (Position 0 0) (Position 0 0))
+            liftIO $ [ _title | CACodeAction CodeAction{_title} <- actions] @=? ["add signature: foo :: a -> a"]
+    ]
+
 ----------------------------------------------------------------------
 -- Utils
 ----------------------------------------------------------------------
@@ -3239,7 +3271,7 @@ runInDir' dir startExeIn startSessionIn s = do
       -- If you uncomment this you can see all logging
       -- which can be quite useful for debugging.
     --   { logStdErr = True, logColor = False }
-      -- If you really want to, you can also see all messages
+    --   If you really want to, you can also see all messages
     --   { logMessages = True, logColor = False }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier

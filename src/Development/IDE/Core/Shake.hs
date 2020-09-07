@@ -567,13 +567,20 @@ shakeRestart IdeState{..} acts =
 --
 --   Appropriate for user actions other than edits.
 shakeEnqueue :: ShakeExtras -> DelayedAction a -> IO (IO a)
-shakeEnqueue ShakeExtras{actionQueue} act = do
+shakeEnqueue ShakeExtras{actionQueue, logger} act = do
     (b, dai) <- instantiateDelayedAction act
     atomically $ pushQueue dai actionQueue
     let wait' b =
-            waitBarrier b `catch` \BlockedIndefinitelyOnMVar ->
-                fail $ "internal bug: forever blocked on MVar for " <>
-                        actionName act
+            waitBarrier b `catches`
+              [ Handler(\BlockedIndefinitelyOnMVar ->
+                    fail $ "internal bug: forever blocked on MVar for " <>
+                            actionName act)
+              , Handler (\e@AsyncCancelled -> do
+                  logPriority logger Debug $ T.pack $ actionName act <> " was cancelled"
+
+                  atomically $ abortQueue dai actionQueue
+                  throw e)
+              ]
     return (wait' b >>= either throwIO return)
 
 -- | Set up a new 'ShakeSession' with a set of initial actions

@@ -7,7 +7,7 @@ extra-deps:
 - base-orphans-0.8.2
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
-- lsp-test-0.11.0.2
+- lsp-test-0.11.0.5
 - rope-utf16-splay-0.3.1.0
 - filepattern-0.1.1
 - js-dgtable-0.5.2
