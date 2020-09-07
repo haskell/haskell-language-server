@@ -30,7 +30,7 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    ) where
+    newHscEnvEqPreserveImportPaths) where
 
 import Control.Concurrent
 import Data.List.Extra
@@ -178,24 +178,35 @@ data HscEnvEq = HscEnvEq
                -- ^ In memory components for this HscEnv
                -- This is only used at the moment for the import dirs in
                -- the DynFlags
-    , envImportPaths :: [String]
-        -- ^ Import dirs originally configured in this env
-        --   We remove them to prevent GHC from loading modules on its own
+    , envImportPaths :: Maybe [String]
+        -- ^ If Just, import dirs originally configured in this env
+        --   If Nothing, the env import dirs are unaltered
     }
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
 newHscEnvEq :: HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEq hscEnv0 deps = do
     envUnique <- newUnique
-    let envImportPaths = importPaths $ hsc_dflags hscEnv0
+    let envImportPaths = Just $ importPaths $ hsc_dflags hscEnv0
         hscEnv = removeImportPaths hscEnv0
+    return HscEnvEq{..}
+
+-- | Wrap an 'HscEnv' into an 'HscEnvEq'.
+newHscEnvEqPreserveImportPaths
+    :: HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEqPreserveImportPaths hscEnv deps = do
+    let envImportPaths = Nothing
+    envUnique <- newUnique
     return HscEnvEq{..}
 
 -- | Unwrap the 'HscEnv' with the original import paths.
 --   Used only for locating imports
 hscEnvWithImportPaths :: HscEnvEq -> HscEnv
-hscEnvWithImportPaths HscEnvEq{..} =
-    hscEnv{hsc_dflags = (hsc_dflags hscEnv){importPaths = envImportPaths}}
+hscEnvWithImportPaths HscEnvEq{..}
+    | Just imps <- envImportPaths
+    = hscEnv{hsc_dflags = (hsc_dflags hscEnv){importPaths = imps}}
+    | otherwise
+    = hscEnv
 
 removeImportPaths :: HscEnv -> HscEnv
 removeImportPaths hsc = hsc{hsc_dflags = (hsc_dflags hsc){importPaths = []}}
