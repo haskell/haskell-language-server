@@ -12,6 +12,7 @@ import           Data.Function
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           DataCon
@@ -21,7 +22,6 @@ import           GHC.SourceGen.Overloaded
 import           Ide.LocalBindings
 import           Name
 import           Outputable (ppr, showSDoc)
-import Data.Maybe
 import           Refinery.Tactic
 import           TcType
 import           Type
