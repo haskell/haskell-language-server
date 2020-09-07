@@ -70,9 +70,9 @@ expectNoMoreDiagnostics timeout = do
             "Got unexpected diagnostics for " <> show fileUri <>
             " got " <> show actual
     handleCustomMethodResponse =
-        -- the CustomClientMethod triggers a log message about ignoring it
+        -- the CustomClientMethod triggers a RspCustomServer
         -- handle that and then exit
-        void (LspTest.message :: Session LogMessageNotification)
+        void (LspTest.message :: Session CustomResponse)
     ignoreOthers = void anyMessage >> handleMessages
 
 expectDiagnostics :: [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])] -> Session ()
