@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -21,7 +23,7 @@ import           GHC.Generics
 import           GHC.SourceGen.Overloaded
 import           Ide.LocalBindings
 import           Name
-import           Outputable (ppr, showSDoc)
+import           Outputable (ppr, showSDoc, Outputable)
 import           Refinery.Tactic
 import           TcType
 import           Type
@@ -146,7 +148,7 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError String
 runTactic dflags ty hy t
-  = fmap (showSDoc dflags . ppr . fst)
+  = fmap (render dflags . fst)
   . runProvableT
   . runTacticT t
   . Judgement (fmap CType hy)
@@ -178,4 +180,8 @@ buildDataCon hy dc apps = do
     . foldl' (@@)
         (HsVar NoExt $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
+
+
+render :: Outputable (LHsExpr pass) => DynFlags -> LHsExpr pass -> String
+render dflags = showSDoc dflags . ppr
 
