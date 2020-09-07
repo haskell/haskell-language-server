@@ -27,6 +27,7 @@ import           Outputable (ppr, showSDoc, Outputable)
 import           Refinery.Tactic
 import           TcType
 import           Type
+import           TysWiredIn (listTyCon, pairTyCon)
 
 
 ------------------------------------------------------------------------------
@@ -140,7 +141,10 @@ mkTyName _ = "x"
 ------------------------------------------------------------------------------
 -- | Get a good name for a type constructor.
 mkTyConName :: TyCon -> String
-mkTyConName = fmap toLower . take 1 . occNameString . getOccName
+mkTyConName tc
+  | tc == listTyCon = "l_"
+  | tc == pairTyCon = "p_"
+  | otherwise = fmap toLower . take 1 . occNameString $ getOccName tc
 
 
 ------------------------------------------------------------------------------
@@ -153,11 +157,23 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError String
 runTactic dflags ty hy t
-  = fmap (render dflags . noLoc . HsPar NoExt . fst)
+  = fmap (render dflags . parenthesize . fst)
   . runProvableT
   . runTacticT t
   . Judgement hy
   $ CType ty
+
+
+------------------------------------------------------------------------------
+-- | Put parentheses around an expression if required.
+parenthesize :: LHsExpr GhcPs -> LHsExpr GhcPs
+parenthesize a@(L _ HsVar{})        = a
+parenthesize a@(L _ HsUnboundVar{}) = a
+parenthesize a@(L _ HsOverLabel{})  = a
+parenthesize a@(L _ HsOverLit{})    = a
+parenthesize a@(L _ HsIPVar{})      = a
+parenthesize a@(L _ HsLit{})        = a
+parenthesize a = noLoc $ HsPar NoExt a
 
 
 instance MonadExtract (LHsExpr GhcPs) ProvableM where
