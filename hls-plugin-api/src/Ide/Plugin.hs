@@ -27,6 +27,7 @@ import           Control.Monad
 import qualified Data.Aeson as J
 import qualified Data.Default
 import           Data.Either
+import           Data.Hashable (unhashed)
 import qualified Data.List                     as List
 import qualified Data.Map  as Map
 import           Data.Maybe
@@ -592,10 +593,10 @@ getClientConfig :: LSP.LspFuncs Config -> IO Config
 getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
 
 -- | Returns the client configurarion stored in the IdeState.
--- You can use this function to access it from shake Rules  
+-- You can use this function to access it from shake Rules
 getClientConfigAction :: Action Config
 getClientConfigAction = do
-  mbVal <- useNoFile_ GetClientSettings
+  mbVal <- unhashed <$> useNoFile_ GetClientSettings
   logm $ "getClientConfigAction:clientSettings:" ++ show mbVal
   case J.fromJSON <$> mbVal of
     Just (J.Success c) -> return c
