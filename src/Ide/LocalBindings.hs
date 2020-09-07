@@ -7,15 +7,15 @@ module Ide.LocalBindings
   , isItAHole
   ) where
 
-import qualified Data.Set as S
-import Data.Set (Set)
-import qualified Data.Map as M
-import Data.Map (Map)
 import           Bag
 import           Control.Lens
 import           Data.Data.Lens
 import           Data.Generics
+import           Data.Map (Map)
+import qualified Data.Map as M
 import           Data.Monoid
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           GHC (TypecheckedModule (..), GhcTc)
 import           HsBinds
 import           HsExpr

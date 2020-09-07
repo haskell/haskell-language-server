@@ -6,20 +6,25 @@
 
 module Ide.TacticMachinery where
 
+import           Control.Arrow
 import           Data.Char
 import           Data.Function
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           DataCon
 import           GHC
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
+import           Ide.LocalBindings
 import           Name
+import           Outputable (ppr, showSDoc)
+import Data.Maybe
 import           Refinery.Tactic
 import           TcType
 import           Type
-import Outputable
 
 
 ------------------------------------------------------------------------------
@@ -31,6 +36,20 @@ instance Eq CType where
 
 instance Ord CType where
   compare = nonDetCmpType `on` unCType
+
+
+------------------------------------------------------------------------------
+-- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
+hypothesisFromBindings :: SrcSpan -> Bindings -> Map OccName CType
+hypothesisFromBindings span (Bindings global local) =
+  buildHypothesis global
+    <> buildHypothesis (fromMaybe mempty $ M.lookup span local)
+
+
+------------------------------------------------------------------------------
+-- | Convert a @Set Id@ into a hypothesis.
+buildHypothesis :: Set Id -> Map OccName CType
+buildHypothesis s = M.fromList $ fmap (occName &&& CType . varType) $ S.toList s
 
 
 ------------------------------------------------------------------------------
