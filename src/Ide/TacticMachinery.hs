@@ -70,6 +70,11 @@ data TacticError
   | GoalMismatch String CType
   | UnsolvedSubgoals [Judgement]
 
+instance Show TacticError where
+    show (UndefinedHypothesis name) = "undefined is not a function"
+    show (GoalMismatch str typ) = "oh no"
+    show (UnsolvedSubgoals jdgs) = "so sad"
+
 
 type ProvableM = ProvableT Judgement (Either TacticError)
 type TacticsM = TacticT Judgement (LHsExpr GhcPs) ProvableM

@@ -20,7 +20,8 @@ import qualified GHC.Generics                    as Generics
 import           Development.IDE.Core.RuleTypes (GhcSessionDeps (GhcSessionDeps),
                                                  TcModuleResult (tmrModule),
                                                  TypeCheck (TypeCheck))
-import           Development.IDE.Core.Shake     (use, IdeState (..))
+import           Development.IDE.Core.Shake     (useWithStale, IdeState (..))
+import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.Service (runAction)
 import           Development.Shake (Action)
 import           Development.IDE.GHC.Error
@@ -72,15 +73,14 @@ rangeToSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
 codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-          Just tmr <- runIde state $ use TypeCheck nfp
-          let span = rangeToSrcSpan (fromNormalizedFilePath nfp) range
+          Just (tmr, pos) <- runIde state $ useWithStale TypeCheck nfp
+          let span = rangeToSrcSpan (fromNormalizedFilePath nfp) $ fromMaybe (error "bummer") $ fromCurrentRange pos range
           let mod = tmrModule tmr
           case mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod) of
             -- FIXME For some reason we get an HsVar instead of an HsUnboundVar. We should
             -- check if this is a hole somehow??
             Just (L span' (HsVar _ _)) -> do
-                -- FIXME What happens if the range is unhelpful?
-                let params = TacticParams { file = uri, range = fromJust $ srcSpanToRange span' }
+                let params = TacticParams { file = uri, range = fromMaybe (error "that is not great") $ toCurrentRange pos =<< srcSpanToRange span' }
                 let names = Map.keys tacticCommands
                 actions <- for names $ \name -> do
                   cmd <- mkLspCommand plId (coerce $ name <> "Command") name (Just [toJSON params])
@@ -99,24 +99,16 @@ data TacticParams = TacticParams
 tacticCmd :: TacticsM () -> CommandFunction TacticParams
 tacticCmd tac _lf state (TacticParams uri range)
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-        Just tmr <- runIde state $ use TypeCheck nfp
+        Just (tmr, pos) <- runIde state $ useWithStale TypeCheck nfp
         let
-          span = rangeToSrcSpan (fromNormalizedFilePath nfp) range
+          span = rangeToSrcSpan (fromNormalizedFilePath nfp) $ fromMaybe (error "Oh shucks") $ fromCurrentRange pos range
           mod = tmrModule tmr
           hyps = hypothesisFromBindings span $ bindings mod
           Just (L _ (HsVar _ (L _ v))) = mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod)
           goal = varType v
         case runTactic unsafeGlobalDynFlags goal hyps tac of
-            Left err -> pure (Right Null, Nothing)
+            Left err -> pure (Left (ResponseError InvalidRequest (T.pack $ show err) Nothing), Nothing)
             Right res ->
-                let edit = J.List [ J.TextEdit range (T.pack res) ]
+                let edit = J.List [ J.TextEdit (fromMaybe (error "Fiddlesticks" ) $ toCurrentRange pos range) (T.pack res) ]
                     response = J.WorkspaceEdit (Just $ H.singleton uri edit) Nothing
                 in pure (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response))
-        --   result = runTactic unsafeGlobalDynFlags goal hyps _tac
-        --   textEdits = J.List
-        --     [J.TextEdit range ("Howdy Partner!")
-        --     ]
-        --   res = J.WorkspaceEdit
-        --     (Just $ H.singleton uri textEdits)
-        --     Nothing
-        -- pure (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
