@@ -140,11 +140,12 @@ bindsBindings in_scope binds =
     XHsBindsLR _ -> mempty
 
 
-size :: SrcSpan -> Int
+size :: SrcSpan -> (Int, Int)
 size (UnhelpfulSpan _) = maxBound
 size (RealSrcSpan span) =
-  (srcSpanEndLine span - srcSpanStartLine span) * 1000 -
-  (srcSpanEndCol span - srcSpanStartCol span)
+  ( srcSpanEndLine span - srcSpanStartLine span
+  , srcSpanEndCol span - srcSpanStartCol span
+  )
 
 smallest :: SrcSpan -> SrcSpan -> Ordering
 smallest = comparing size
