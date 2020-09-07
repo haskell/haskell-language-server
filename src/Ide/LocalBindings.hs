@@ -4,15 +4,19 @@
 module Ide.LocalBindings
   ( Bindings (..)
   , bindings
+  , mostSpecificSpan
   , isItAHole
   ) where
 
 import           Bag
 import           Control.Lens
 import           Data.Data.Lens
+import           Data.Function
 import           Data.Generics
+import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Maybe
 import           Data.Monoid
 import           Data.Set (Set)
 import qualified Data.Set as S
@@ -133,6 +137,16 @@ bindsBindings in_scope binds =
     VarBind _ name c _ ->  (S.singleton name, dataBindings in_scope c)
     PatSynBind _ _ ->  mempty
     XHsBindsLR _ -> mempty
+
+
+mostSpecificSpan :: (Data a, Typeable pass) => SrcSpan -> a -> Maybe (LHsExpr pass)
+mostSpecificSpan span z
+  = listToMaybe
+  $ sortBy (leftmost_smallest `on` getLoc)
+  $ everything (<>) (mkQ mempty $ \case
+      L span' a | span `isSubspanOf` span' -> [a]
+      _                                    -> [])
+  $ z
 
 
 isItAHole :: TypecheckedModule -> SrcSpan -> Maybe UnboundVar
