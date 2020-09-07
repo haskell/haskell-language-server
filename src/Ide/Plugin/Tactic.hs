@@ -36,6 +36,7 @@ import           Ide.LocalBindings
 import qualified Language.Haskell.LSP.Types      as J
 import           Language.Haskell.LSP.Types
 
+import OccName
 import           FastString
 import           HsBinds
 import           HsExpr
@@ -56,11 +57,13 @@ descriptor plId = (defaultPluginDescriptor plId)
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
 
-tacticCommands :: Map.Map T.Text (TacticsM ())
+tacticCommands :: Map.Map T.Text (OccName -> TacticsM ())
 tacticCommands = Map.fromList
-    [ ("auto", auto)
-    , ("split", split)
-    , ("intro", intro)
+    [ ("auto", const auto)
+    , ("split", const split)
+    , ("intro", const intro)
+    , ("destruct", destruct)
+    , ("homo", homo)
     ]
 
 runIde :: IdeState -> Action a -> IO a
@@ -79,8 +82,12 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
           case mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod) of
             -- FIXME For some reason we get an HsVar instead of an HsUnboundVar. We should
             -- check if this is a hole somehow??
-            Just (L span' (HsVar _ _)) -> do
-                let params = TacticParams { file = uri, range = fromMaybe (error "that is not great") $ toCurrentRange pos =<< srcSpanToRange span' }
+            Just (L span' (HsVar _ (L _ var))) -> do
+                let params = TacticParams
+                      { file = uri
+                      , range = fromMaybe (error "that is not great") $ toCurrentRange pos =<< srcSpanToRange span'
+                      , var_name = T.pack $ occNameString $ occName var
+                      }
                 let names = Map.keys tacticCommands
                 actions <- for names $ \name -> do
                   cmd <- mkLspCommand plId (coerce $ name <> "Command") name (Just [toJSON params])
@@ -93,11 +100,12 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
 data TacticParams = TacticParams
     { file :: J.Uri -- ^ Uri of the file to fill the hole in
     , range :: J.Range -- ^ The range of the hole
+    , var_name :: T.Text
     }
   deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
-tacticCmd :: TacticsM () -> CommandFunction TacticParams
-tacticCmd tac _lf state (TacticParams uri range)
+tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
+tacticCmd tac _lf state (TacticParams uri range var_name)
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
         Just (tmr, pos) <- runIde state $ useWithStale TypeCheck nfp
         let
@@ -106,7 +114,7 @@ tacticCmd tac _lf state (TacticParams uri range)
           hyps = hypothesisFromBindings span $ bindings mod
           Just (L _ (HsVar _ (L _ v))) = mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod)
           goal = varType v
-        case runTactic unsafeGlobalDynFlags goal hyps tac of
+        case runTactic unsafeGlobalDynFlags goal hyps (tac $ mkVarOcc $ T.unpack var_name) of
             Left err -> pure (Left (ResponseError InvalidRequest (T.pack $ show err) Nothing), Nothing)
             Right res ->
                 let edit = J.List [ J.TextEdit (fromMaybe (error "Fiddlesticks" ) $ toCurrentRange pos range) (T.pack res) ]
