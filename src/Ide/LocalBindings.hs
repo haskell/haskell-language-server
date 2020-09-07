@@ -1,15 +1,21 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Ide.LocalBindings where
+module Ide.LocalBindings
+  ( Bindings (..)
+  , bindings
+  , isItAHole
+  ) where
 
+import qualified Data.Set as S
+import Data.Set (Set)
+import qualified Data.Map as M
+import Data.Map (Map)
 import           Bag
 import           Control.Lens
 import           Data.Data.Lens
 import           Data.Generics
-import qualified Data.Map as M
 import           Data.Monoid
-import qualified Data.Set as S
 import           GHC (TypecheckedModule (..), GhcTc)
 import           HsBinds
 import           HsExpr
@@ -17,8 +23,20 @@ import           Id
 import           SrcLoc
 
 
-bindings :: TypecheckedModule -> (S.Set Id, M.Map SrcSpan (S.Set Id))
-bindings = bindsBindings mempty . tm_typechecked_source
+data Bindings = Bindings
+  { bGlobalBinds :: Set Id
+  , bLocalBinds  :: Map SrcSpan (Set Id)
+  } deriving (Eq, Ord)
+
+instance Semigroup Bindings where
+  Bindings g1 l1 <> Bindings g2 l2 = Bindings (g1 <> g2) (l1 <> l2)
+
+instance Monoid Bindings where
+  mempty = Bindings mempty mempty
+
+
+bindings :: TypecheckedModule -> Bindings
+bindings = uncurry Bindings . bindsBindings mempty . tm_typechecked_source
 
 
 dataBindings :: Data a => S.Set Id -> a -> M.Map SrcSpan (S.Set Id)
