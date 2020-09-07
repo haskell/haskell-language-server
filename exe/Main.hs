@@ -73,6 +73,7 @@ import Ide.Plugin.ImportLens              as ImportLens
 import Ide.Plugin.Ormolu                  as Ormolu
 import Ide.Plugin.StylishHaskell          as StylishHaskell
 import Ide.Plugin.Retrie                  as Retrie
+import Ide.Plugin.Tactic                  as Tactic
 #if AGPL
 import Ide.Plugin.Brittany                as Brittany
 #endif
@@ -106,6 +107,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , Pragmas.descriptor  "pragmas"
       , Floskell.descriptor "floskell"
       , Fourmolu.descriptor "fourmolu"
+      , Tactic.descriptor "tactic"
       -- , genericDescriptor     "generic"
       -- , ghcmodDescriptor      "ghcmod"
       , Ormolu.descriptor   "ormolu"
