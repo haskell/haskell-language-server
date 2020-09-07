@@ -21,6 +21,7 @@ import           Development.IDE.Core.RuleTypes (GhcSessionDeps (GhcSessionDeps)
 import           Development.IDE.Core.Shake     (use, IdeState (..))
 import           Development.IDE.Core.Service (runAction)
 import           Development.Shake (Action)
+import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 
 import           Ide.Types
@@ -67,10 +68,16 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
           let title = "Fill Hole"
           let span = rangeToSrcSpan (fromNormalizedFilePath nfp) range
           let mod = tmrModule tmr
-          cmd <- mkLspCommand plId (coerce tacticCommandName) title Nothing
           case mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod) of
-            Just hole -> pure (Right (List [ CACodeAction $ CodeAction (title <> " " <> (T.pack $ render unsafeGlobalDynFlags hole)) (Just CodeActionQuickFix) Nothing Nothing (Just cmd) ]))
-            Nothing -> pure (Right (List [ CACodeAction $ CodeAction ("Broken: " <> " ") (Just CodeActionQuickFix) Nothing Nothing (Just cmd) ]))
+            -- FIXME For some reason we get an HsVar instead of an HsUnboundVar. We should
+            -- check if this is a hole somehow??
+            Just (L span' (HsVar _ _)) -> do
+                -- FIXME What happens if the range is unhelpful?
+                let params = TacticParams { file = uri, range = fromJust $ srcSpanToRange span' }
+                cmd <- mkLspCommand plId (coerce tacticCommandName) title (Just [toJSON params])
+                pure (Right (List [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing (Just cmd) ]))
+            Just e -> pure (Right (List [ CACodeAction $ CodeAction (T.pack (render unsafeGlobalDynFlags e)) (Just CodeActionQuickFix) Nothing Nothing Nothing ]))
+            Nothing -> pure (Right (List []))
 
 
 data TacticParams = TacticParams
