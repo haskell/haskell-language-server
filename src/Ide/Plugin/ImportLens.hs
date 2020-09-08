@@ -25,6 +25,7 @@ import qualified Data.Map.Strict                as Map
 import           Data.Maybe                     (catMaybes, fromMaybe)
 import qualified Data.Text                      as T
 import           Development.IDE
+import           Development.IDE.Core.Shake (useWithStale)
 import           Development.IDE.GHC.Compat
 import           GHC.Generics                   (Generic)
 import           Ide.Plugin
@@ -84,11 +85,11 @@ provider _lspFuncs          -- LSP functions, not used
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri
   = do
     -- Get the typechecking artifacts from the module
-    tmr <- runIde state $ use TypeCheck nfp
+    tmr <- runIde state $ useWithStale TypeCheck nfp
     -- We also need a GHC session with all the dependencies
-    hsc <- runIde state $ use GhcSessionDeps nfp
+    hsc <- runIde state $ useWithStale GhcSessionDeps nfp
     -- Use the GHC api to extract the "minimal" imports
-    (imports, mbMinImports) <- extractMinimalImports hsc tmr
+    (imports, mbMinImports) <- extractMinimalImports (fst <$> hsc) ( fst <$> tmr)
 
     case mbMinImports of
         -- Implement the provider logic:
