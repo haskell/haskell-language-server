@@ -81,12 +81,18 @@ tcCommandName = T.pack . show
 tcCommandTitle :: TacticCommand -> OccName -> T.Text
 tcCommandTitle tc occ = T.pack $ show tc <> " " <> occNameString occ
 
-commandVariety :: TacticCommand -> TacticVariety
-commandVariety Auto     = PerHole
-commandVariety Split    = PerHole
-commandVariety Intro    = PerHole
-commandVariety Destruct = PerBinding
-commandVariety Homo     = PerBinding
+commandProvider :: TacticCommand -> TacticProvider
+commandProvider Auto  = provide Auto "Auto" ""
+commandProvider Split = provide Split "Split" ""
+commandProvider Intro =
+  filterGoalType isFunction $
+    provide Intro "Intro" ""
+commandProvider Destruct =
+  filterBindingType destructFilter $ \occ _ ->
+    provide Destruct (tcCommandTitle Destruct occ) $ T.pack $ occNameString occ
+commandProvider Homo =
+  filterBindingType homoFilter $ \occ _ ->
+    provide Homo (tcCommandTitle Homo occ) $ T.pack $ occNameString occ
 
 commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto     = const auto
@@ -95,21 +101,13 @@ commandTactic Intro    = const intro
 commandTactic Destruct = destruct
 commandTactic Homo     = homo
 
-commandHoleFilter
-    :: TacticCommand
-    -> Type  -- ^ goal type
-    -> Bool
-commandHoleFilter _ _ = True
+homoFilter :: Type -> Type -> Bool
+homoFilter (algebraicTyCon -> Just t1) (algebraicTyCon -> Just t2) = t1 == t2
+homoFilter _ _ = False
 
-commandBindingFilter
-    :: TacticCommand
-    -> Type  -- ^ goal type
-    -> Type  -- ^ binding type
-    -> Bool
-commandBindingFilter Homo     (algebraicTyCon -> Just t1)
-                       (algebraicTyCon -> Just t2) = t1 == t2
-commandBindingFilter Destruct (algebraicTyCon -> Just _) _ = True
-commandBindingFilter _ _ _ = False
+destructFilter :: Type -> Type -> Bool
+destructFilter _ (algebraicTyCon -> Just _) = True
+destructFilter _ _ = False
 
 runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
@@ -125,7 +123,7 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
           let resulting_range
                 = fromMaybe (error "that is not great")
                 $ toCurrentRange pos =<< srcSpanToRange span'
-          actions <- mkTactics plId uri resulting_range jdg
+          actions <- (foldMap commandProvider [minBound .. maxBound]) plId uri resulting_range jdg
           pure $ Right $ List actions
         _ -> pure $ Right $ codeActions []
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
@@ -134,67 +132,34 @@ codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
 codeActions :: [CodeAction] -> List CAResult
 codeActions = List . fmap CACodeAction
 
-mkTactics :: PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
-mkTactics = flip foldMap [minBound .. maxBound] $ \tc ->
-  case commandVariety tc of
-    PerHole    -> mkGoalTactic    tc
-    PerBinding -> mkBindingTactic tc
 
+type TacticProvider = PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
 
-mkGoalTactic :: TacticCommand -> PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
-mkGoalTactic tc plId uri range (Judgement _ (CType g)) =
-    case commandHoleFilter tc g of
-      False -> pure []
-      True -> do
-        let params = TacticParams
-              { file = uri
-              , range = range
-              -- TODO(sandy): this should be Nothing
-              , var_name = ""
-              }
-        cmd <-
-          mkLspCommand
-            plId
-            (tcCommandId tc)
-            (tcCommandName tc)
-            (Just [toJSON params])
-        pure
-          $ pure
-          $ CACodeAction
-          $ CodeAction
-              (tcCommandName tc)
-              (Just CodeActionQuickFix)
-              Nothing
-              Nothing
-          $ Just cmd
+provide :: TacticCommand -> T.Text -> T.Text -> TacticProvider
+provide tc title name plId uri range _ = do
+  let params = TacticParams { file = uri , range = range , var_name = name }
+  cmd <- mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
+  pure
+    $ pure
+    $ CACodeAction
+    $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing
+    $ Just cmd
 
-mkBindingTactic :: TacticCommand -> PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
-mkBindingTactic tc plId uri range (Judgement hys (CType g)) =
+filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
+filterGoalType p tp plId uri range jdg@(Judgement _ (CType g)) =
+  case p g of
+    True  -> tp plId uri range jdg
+    False -> pure []
+
+filterBindingType
+    :: (Type -> Type -> Bool)
+    -> (OccName -> Type -> TacticProvider)
+    -> TacticProvider
+filterBindingType p tp plId uri range jdg@(Judgement hys (CType g)) =
   fmap join $ for (Map.toList hys) $ \(occ, CType ty) ->
-    case commandBindingFilter tc g ty of
+    case p g ty of
+      True  -> tp occ ty plId uri range jdg
       False -> pure []
-      True -> do
-        let name = T.pack $ occNameString occ
-        let params = TacticParams
-              { file = uri
-              , range = range
-              , var_name = name
-              }
-        cmd <-
-          mkLspCommand
-            plId
-            (tcCommandId tc)
-            (tcCommandTitle tc occ)
-            (Just [toJSON params])
-        pure
-          $ pure
-          $ CACodeAction
-          $ CodeAction
-              (tcCommandTitle tc occ)
-              (Just CodeActionQuickFix)
-              Nothing
-              Nothing
-          $ Just cmd
 
 
 data TacticParams = TacticParams
