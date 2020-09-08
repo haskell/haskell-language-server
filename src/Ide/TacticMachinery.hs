@@ -18,6 +18,8 @@ import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           DataCon
+import           Development.IDE.Types.Location
+import qualified FastString as FS
 import           GHC
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
@@ -179,9 +181,9 @@ runTactic
     :: DynFlags
     -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either TacticError String
+    -> Either TacticError (LHsExpr GhcPs)
 runTactic dflags jdg t
-  = fmap (render dflags . parenthesize . fst)
+  = fmap (parenthesize . fst)
   . runProvableT
   $ runTacticT t jdg
 
@@ -199,7 +201,7 @@ parenthesize a = noLoc $ HsPar NoExt a
 
 
 instance MonadExtract (LHsExpr GhcPs) ProvableM where
-  hole = pure $ noLoc $ HsUnboundVar NoExt $ TrueExprHole $ mkVarOcc "_"
+  hole = pure $ noLoc $ HsVar NoExt $ noLoc $ Unqual $ mkVarOcc "_"
 
 
 ------------------------------------------------------------------------------
@@ -226,4 +228,12 @@ buildDataCon hy dc apps = do
 
 render :: Outputable a => DynFlags -> a -> String
 render dflags = showSDoc dflags . ppr
+
+-- TODO(sandy): this doesn't belong here
+-- | Convert a DAML compiler Range to a GHC SrcSpan
+rangeToSrcSpan :: String -> Range -> SrcSpan
+rangeToSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
+    mkSrcSpan
+      (mkSrcLoc (FS.fsLit file) (startLn + 1) (startCh + 1))
+      (mkSrcLoc (FS.fsLit file) (endLn + 1) (endCh + 1))
 

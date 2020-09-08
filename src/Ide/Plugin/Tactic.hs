@@ -10,6 +10,7 @@ module Ide.Plugin.Tactic
   ( descriptor
   ) where
 
+import GHC.Generics
 import Control.Monad
 import           Data.Aeson
 import           Data.Coerce
@@ -34,6 +35,7 @@ import           Ide.Tactics
 import           Ide.Plugin
 import           Ide.LocalBindings
 
+import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.Types      as J
 import           Language.Haskell.LSP.Types
 
@@ -44,6 +46,7 @@ import           GHC
 import           DynFlags
 import           Type
 import System.IO
+import Ide.TreeTransform
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -232,36 +235,31 @@ judgmentForHole state nfp range = do
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
-tacticCmd tac _lf state (TacticParams uri range var_name)
+tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       (pos, _, jdg) <- judgmentForHole state nfp range
+      pm <- useAnnotatedSource "tacticsCmd" state nfp
       hPutStrLn stderr $ intercalate "; " $ fmap (\(occ, CType ty) -> occNameString occ <> " :: " <> render unsafeGlobalDynFlags ty) $ Map.toList $ jHypothesis jdg
-      pure $
-        case runTactic
-                unsafeGlobalDynFlags
-                jdg
-              $ tac
-              $ mkVarOcc
-              $ T.unpack var_name of
-          Left err ->
-            (, Nothing)
-              $ Left
-              $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-          Right res ->
-            let edit =
-                  J.List
-                    $ pure
-                    $ J.TextEdit
-                        ( fromMaybe (error "Fiddlesticks")
-                        $ toCurrentRange pos range
-                        )
-                    $ T.pack res
-
-                response =
-                  J.WorkspaceEdit (Just $ H.singleton uri edit) Nothing
-            in ( Right Null
-               , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response)
-               )
+      case runTactic
+              unsafeGlobalDynFlags
+              jdg
+            $ tac
+            $ mkVarOcc
+            $ T.unpack var_name of
+        Left err ->
+          pure $ (, Nothing)
+            $ Left
+            $ ResponseError InvalidRequest (T.pack $ show err) Nothing
+        Right res -> do
+          let range' =
+                fromMaybe (error "Fiddlesticks") $ toCurrentRange pos range
+              span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
+              g = graft span res
+          hPutStrLn stderr $ show span
+          let response = transform (LSP.clientCapabilities lf) uri g pm
+          pure $ ( Right Null
+             , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response)
+             )
 tacticCmd _ _ _ _ =
   pure (Left $ ResponseError InvalidRequest (T.pack "nah") Nothing, Nothing)
 
