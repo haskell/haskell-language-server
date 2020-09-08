@@ -81,6 +81,10 @@ homo = destruct' $ \dc (Judgement hy (CType g)) ->
   buildDataCon hy dc (snd $ splitAppTys g)
 
 
+solve :: TacticsM () -> TacticsM  ()
+solve t = t >> throwError NoProgress
+
+
 apply :: TacticsM ()
 apply = rule $ \(Judgement hy g) -> do
   case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) $ toList hy of
@@ -115,6 +119,11 @@ auto = (intro >> auto)
    <!> (split >> auto)
    <!> (apply >> auto)
    <!> pure ()
+
+
+autoIfPossible :: TacticsM () -> TacticsM ()
+autoIfPossible t = (t >> solve auto) <!> t
+
 
 one :: TacticsM ()
 one = intro <!> assumption <!> split <!> apply <!> pure ()

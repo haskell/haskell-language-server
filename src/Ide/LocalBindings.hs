@@ -5,10 +5,9 @@ module Ide.LocalBindings
   ( Bindings (..)
   , bindings
   , mostSpecificSpan
-  , isItAHole
+  , holify
   ) where
 
-import Data.Ord
 import           Bag
 import           Control.Lens
 import           Data.Data.Lens
@@ -18,15 +17,15 @@ import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Monoid
+import           Data.Ord
 import           Data.Set (Set)
 import qualified Data.Set as S
-import           GHC (TypecheckedModule (..), GhcTc)
+import           GHC (TypecheckedModule (..), GhcTc, NoExt (..))
 import           HsBinds
 import           HsExpr
 import           Id
+import           OccName
 import           SrcLoc
-
 
 data Bindings = Bindings
   { bGlobalBinds :: Set Id
@@ -160,12 +159,16 @@ mostSpecificSpan span z
       _                                        -> [])
   $ z
 
-isItAHole :: TypecheckedModule -> SrcSpan -> Maybe UnboundVar
-isItAHole tcm span = getFirst $
-  everything (<>) (
-    mkQ mempty $ \case
-      L span' (HsUnboundVar _ z :: HsExpr GhcTc)
-        | span == span' -> pure z
-      _ -> mempty
-    ) $ tm_typechecked_source tcm
+------------------------------------------------------------------------------
+-- | Convert an HsVar back into an HsUnboundVar if it isn't actually in scope.
+-- TODO(sandy): this will throw away the type >:(
+holify :: Bindings -> LHsExpr GhcTc -> LHsExpr GhcTc
+holify (Bindings _ local) v@(L span (HsVar _ (L _ var))) =
+  case M.lookup span local of
+    Nothing -> v
+    Just binds ->
+      case S.member var binds of
+        True  -> v
+        False -> L span $ HsUnboundVar NoExt $ TrueExprHole $ occName var
+holify _ v = v
 

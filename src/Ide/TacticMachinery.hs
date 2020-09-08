@@ -74,11 +74,13 @@ data TacticError
   = UndefinedHypothesis OccName
   | GoalMismatch String CType
   | UnsolvedSubgoals [Judgement]
+  | NoProgress
 
 instance Show TacticError where
     show (UndefinedHypothesis name) = "undefined is not a function"
     show (GoalMismatch str typ) = "oh no"
     show (UnsolvedSubgoals jdgs) = "so sad"
+    show NoProgress = "No Progress"
 
 
 type ProvableM = ProvableT Judgement (Either TacticError)
@@ -143,6 +145,12 @@ mkTyName _ = "x"
 
 
 ------------------------------------------------------------------------------
+-- | Is this a function type?
+isFunction :: Type -> Bool
+isFunction (tcSplitFunTys -> ((_:_), _)) = True
+isFunction _ = False
+
+------------------------------------------------------------------------------
 -- | Is this an algebraic type?
 algebraicTyCon :: Type -> Maybe TyCon
 algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
@@ -153,7 +161,6 @@ algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | tycon == funTyCon    = Nothing
   | otherwise = Just tycon
 algebraicTyCon _ = Nothing
-
 
 
 ------------------------------------------------------------------------------
@@ -217,6 +224,6 @@ buildDataCon hy dc apps = do
         (HsVar NoExt $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
 
-render :: Outputable (LHsExpr pass) => DynFlags -> LHsExpr pass -> String
+render :: Outputable a => DynFlags -> a -> String
 render dflags = showSDoc dflags . ppr
 
