@@ -27,7 +27,7 @@ import           Outputable (ppr, showSDoc, Outputable)
 import           Refinery.Tactic
 import           TcType
 import           Type
-import           TysWiredIn (listTyCon, pairTyCon)
+import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 
 
 ------------------------------------------------------------------------------
@@ -52,7 +52,11 @@ hypothesisFromBindings span (Bindings global local) =
 ------------------------------------------------------------------------------
 -- | Convert a @Set Id@ into a hypothesis.
 buildHypothesis :: Set Id -> Map OccName CType
-buildHypothesis s = M.fromList $ fmap (occName &&& CType . varType) $ S.toList s
+buildHypothesis
+  = M.fromList
+  . fmap (occName &&& CType . varType)
+  . filter (isAlpha . head . occNameString . occName)
+  . S.toList
 
 
 ------------------------------------------------------------------------------
@@ -139,6 +143,20 @@ mkTyName _ = "x"
 
 
 ------------------------------------------------------------------------------
+-- | Is this an algebraic type?
+algebraicTyCon :: Type -> Maybe TyCon
+algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
+  | tycon == intTyCon    = Nothing
+  | tycon == floatTyCon  = Nothing
+  | tycon == doubleTyCon = Nothing
+  | tycon == charTyCon   = Nothing
+  | tycon == funTyCon    = Nothing
+  | otherwise = Just tycon
+algebraicTyCon _ = Nothing
+
+
+
+------------------------------------------------------------------------------
 -- | Get a good name for a type constructor.
 mkTyConName :: TyCon -> String
 mkTyConName tc
@@ -152,16 +170,13 @@ mkTyConName tc
 -- a given tactic.
 runTactic
     :: DynFlags
-    -> Type              -- ^ Desired type
-    -> Map OccName CType  -- ^ In-scope bindings
+    -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError String
-runTactic dflags ty hy t
+runTactic dflags jdg t
   = fmap (render dflags . parenthesize . fst)
   . runProvableT
-  . runTacticT t
-  . Judgement hy
-  $ CType ty
+  $ runTacticT t jdg
 
 
 ------------------------------------------------------------------------------
