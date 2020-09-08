@@ -59,6 +59,10 @@ descriptor plId = (defaultPluginDescriptor plId)
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
 
+------------------------------------------------------------------------------
+-- | The list of tactics exposed to the outside world. These are attached to
+-- actual tactics via 'commandTactic' and are contextually provided to the
+-- editor via 'commandProvider'.
 data TacticCommand
   = Auto
   | Split
@@ -67,15 +71,32 @@ data TacticCommand
   | Homo
   deriving (Eq, Ord, Show, Enum, Bounded)
 
+
+------------------------------------------------------------------------------
+-- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
+-- UI.
+type TacticProvider = PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
+
+
+------------------------------------------------------------------------------
+-- | Construct a 'CommandId'
 tcCommandId :: TacticCommand -> CommandId
 tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 
+
+------------------------------------------------------------------------------
+-- | The name of the command for the LS.
 tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
 
+------------------------------------------------------------------------------
+-- | Construct a title for a command.
 tcCommandTitle :: TacticCommand -> OccName -> T.Text
 tcCommandTitle tc occ = T.pack $ show tc <> " " <> occNameString occ
 
+------------------------------------------------------------------------------
+-- | Mapping from tactic commands to their contextual providers. See 'provide',
+-- 'filterGoalType' and 'filterBindingType' for the nitty gritty.
 commandProvider :: TacticCommand -> TacticProvider
 commandProvider Auto  = provide Auto "Auto" ""
 commandProvider Split = provide Split "Split" ""
@@ -89,6 +110,8 @@ commandProvider Homo =
   filterBindingType homoFilter $ \occ _ ->
     provide Homo (tcCommandTitle Homo occ) $ T.pack $ occNameString occ
 
+------------------------------------------------------------------------------
+-- | A mapping from tactic commands to actual tactics for refinery.
 commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto     = const auto
 commandTactic Split    = const split
@@ -96,10 +119,16 @@ commandTactic Intro    = const intro
 commandTactic Destruct = destruct
 commandTactic Homo     = homo
 
+------------------------------------------------------------------------------
+-- | We should show homos only when the goal type is the same as the binding
+-- type, and that both are usual algebraic types.
 homoFilter :: Type -> Type -> Bool
 homoFilter (algebraicTyCon -> Just t1) (algebraicTyCon -> Just t2) = t1 == t2
 homoFilter _ _ = False
 
+------------------------------------------------------------------------------
+-- | We should show destruct for bindings only when those bindings have usual
+-- algebraic types.
 destructFilter :: Type -> Type -> Bool
 destructFilter _ (algebraicTyCon -> Just _) = True
 destructFilter _ _ = False
@@ -128,8 +157,9 @@ codeActions :: [CodeAction] -> List CAResult
 codeActions = List . fmap CACodeAction
 
 
-type TacticProvider = PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
-
+------------------------------------------------------------------------------
+-- | Terminal constructor for providing context-sensitive tactics. Tactics
+-- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> T.Text -> TacticProvider
 provide tc title name plId uri range _ = do
   let params = TacticParams { file = uri , range = range , var_name = name }
@@ -140,14 +170,22 @@ provide tc title name plId uri range _ = do
     $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing
     $ Just cmd
 
+
+------------------------------------------------------------------------------
+-- | Restrict a 'TacticProvider', making sure it appears only when the given
+-- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
 filterGoalType p tp plId uri range jdg@(Judgement _ (CType g)) =
   case p g of
     True  -> tp plId uri range jdg
     False -> pure []
 
+
+------------------------------------------------------------------------------
+-- | Multiply a 'TacticProvider' for each binding, making sure it appears only
+-- when the given predicate holds over the goal and binding types.
 filterBindingType
-    :: (Type -> Type -> Bool)
+    :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
 filterBindingType p tp plId uri range jdg@(Judgement hys (CType g)) =
@@ -165,6 +203,9 @@ data TacticParams = TacticParams
   deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
 
+------------------------------------------------------------------------------
+-- | Find the last typechecked module, and find the most specific span, as well
+-- as the judgement at the given range.
 judgmentForHole
     :: IdeState
     -> NormalizedFilePath
