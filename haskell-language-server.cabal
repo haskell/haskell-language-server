@@ -36,14 +36,56 @@ common agpl
     cpp-options:
       -DAGPL
 
+common common-deps
+  build-depends:
+      base >=4.12 && <5
+    , directory
+    , extra
+    , filepath
+    , text
+
+library
+  import: agpl, common-deps
+  exposed-modules:
+      Ide.Arguments
+      Ide.Main
+      Ide.Version
+  other-modules:
+      Paths_haskell_language_server
+  autogen-modules:
+      Paths_haskell_language_server
+  hs-source-dirs:
+      src
+  build-depends:
+    , containers
+    , data-default
+    , ghc
+    , ghcide
+    , gitrev
+    , haskell-lsp == 0.22.*
+    , hie-bios >= 0.6.1 && < 0.8
+    , hls-plugin-api
+    , hslogger
+    , optparse-applicative
+    , optparse-simple
+    , process
+    , unordered-containers
+  ghc-options:
+      -Wall
+      -Wredundant-constraints
+      -Wno-name-shadowing
+  if flag(pedantic)
+     ghc-options:      -Werror
+
+  default-language: Haskell2010
+
 executable haskell-language-server
-  import: agpl
+  import: agpl, common-deps
   main-is: Main.hs
   hs-source-dirs:
       exe
       plugins/default/src
   other-modules:
-      Arguments
       Ide.Plugin.Eval
       Ide.Plugin.Example
       Ide.Plugin.Example2
@@ -54,102 +96,80 @@ executable haskell-language-server
       Ide.Plugin.Retrie
       Ide.Plugin.Floskell
       Ide.Plugin.StylishHaskell
-      Ide.Version
-      Paths_haskell_language_server
-  autogen-modules:
-      Paths_haskell_language_server
   ghc-options:
-              -threaded
-              -Wall
-              -Wno-name-shadowing
-              -Wredundant-constraints
-              -- allow user RTS overrides
-              -rtsopts
-              -- disable idle GC
-              -- disable parallel GC
-              -- increase nursery size
-              "-with-rtsopts=-I0 -qg -A128M"
+      -threaded
+      -Wall
+      -Wno-name-shadowing
+      -Wredundant-constraints
+      -- allow user RTS overrides
+      -rtsopts
+      -- disable idle GC
+      -- disable parallel GC
+      -- increase nursery size
+      "-with-rtsopts=-I0 -qg -A128M"
   if flag(pedantic)
      ghc-options:      -Werror
-
   build-depends:
-      base >=4.7 && <5
     , aeson
     , binary
     , bytestring
     , containers
-    , data-default
     , deepseq
-    , directory
-    , extra
-    , floskell
-    , filepath
-    , fourmolu
-    , process
+    , floskell == 0.10.*
+    , fourmolu ^>= 0.1
     , ghc
     , ghc-boot-th
-    , ghcide
-    , gitrev
+    , ghcide >= 0.1
     , hashable
-    , haskell-lsp
-    , hie-bios
+    , haskell-language-server
+    , haskell-lsp == 0.22.*
     , hls-plugin-api
-    , hslogger
     , lens
-    , optparse-applicative
-    , optparse-simple
-    , ormolu
+    , ormolu ^>= 0.1.2
     , regex-tdfa
-    , retrie
+    , retrie >= 0.1.1.0
     , safe-exceptions
     , shake >= 0.17.5
-    , stylish-haskell
-    , text
+    , stylish-haskell == 0.11.*
     , time
     , temporary
     , transformers
     , unordered-containers
-  include-dirs:
-    include
   if flag(agpl)
     build-depends:
       brittany
     other-modules:
       Ide.Plugin.Brittany
+  include-dirs: include
   default-language: Haskell2010
 
 executable haskell-language-server-wrapper
-  import: agpl
+  import: agpl, common-deps
   main-is: Wrapper.hs
   hs-source-dirs:
       exe
   other-modules:
-      Arguments
-      Ide.Version
       Paths_haskell_language_server
   autogen-modules:
       Paths_haskell_language_server
   ghc-options:
-              -threaded
-              -Wall
-              -Wno-name-shadowing
-              -Wredundant-constraints
-              -- allow user RTS overrides
-              -rtsopts
-              -- disable idle GC
-              -- disable parallel GC
-              -- increase nursery size
-              "-with-rtsopts=-I0 -qg -A128M"
+      -threaded
+      -Wall
+      -Wno-name-shadowing
+      -Wredundant-constraints
+      -- allow user RTS overrides
+      -rtsopts
+      -- disable idle GC
+      -- disable parallel GC
+      -- increase nursery size
+      "-with-rtsopts=-I0 -qg -A128M"
   if flag(pedantic)
      ghc-options:      -Werror
   build-depends:
-      base
-    , directory
-    , extra
-    , filepath
-    , gitrev
+      gitrev
     , ghc
     , ghc-paths
+    , haskell-language-server
     , hie-bios
     , optparse-simple
     , optparse-applicative
@@ -160,19 +180,16 @@ executable haskell-language-server-wrapper
 -- We removed it due to issues with stack when loading the project using a stack based hie.yaml
 -- See https://github.com/haskell/haskell-language-server/issues/114
 common hls-test-utils
-  import: agpl
+  import: agpl, common-deps
   hs-source-dirs:      test/utils
   other-modules:       Test.Hls.Util
-  build-depends:       base
-                     , hls-plugin-api
+  build-depends:       hls-plugin-api
                      , haskell-lsp
                      , hie-bios
                      , aeson
                      , blaze-markup
                      , containers
                      , data-default
-                     , directory
-                     , filepath
                      , hslogger
                      , hspec
                      , hspec-core
@@ -180,7 +197,6 @@ common hls-test-utils
                      , stm
                      , tasty-hunit
                      , temporary
-                     , text
                      , transformers
                      , unordered-containers
                      , yaml
@@ -190,30 +206,19 @@ common hls-test-utils
   default-language:    Haskell2010
 
 test-suite func-test
-  import:               agpl, hls-test-utils
+  import:               agpl, common-deps, hls-test-utils
   type:                 exitcode-stdio-1.0
   default-language:     Haskell2010
   build-tool-depends:   haskell-language-server:haskell-language-server
                       , ghcide:ghcide-test-preprocessor
-  build-depends:        base >=4.7 && <5
-                      , aeson
-                      , bytestring
+  build-depends:        bytestring
                       , data-default
-                      , directory
-                      , filepath
-                      , hls-plugin-api
-                      , haskell-lsp
-                      , haskell-lsp-types
                       , lens
-                      , lsp-test >= 0.11.0.4
                       , tasty
                       , tasty-ant-xml >= 1.1.6
                       , tasty-expected-failure
                       , tasty-golden
-                      , tasty-hunit
                       , tasty-rerun
-                      , text
-                      , unordered-containers
   hs-source-dirs:       test/functional
   main-is:              Main.hs
   other-modules:        Command
@@ -244,11 +249,10 @@ test-suite wrapper-test
   type:                 exitcode-stdio-1.0
   build-tool-depends:   haskell-language-server:haskell-language-server-wrapper
   default-language:     Haskell2010
-  build-depends:        base == 4.*
+  build-depends:        base
                       , directory
                       , process
                       , tasty
-                      , tasty-hunit
                       , tasty-ant-xml >= 1.1.6
   hs-source-dirs:       test/wrapper
   main-is:              Main.hs
