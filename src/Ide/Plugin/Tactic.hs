@@ -1,10 +1,11 @@
--- | A plugin that uses tactics to synthesize code
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE ViewPatterns      #-}
 
+-- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic
   ( descriptor
   ) where
@@ -46,33 +47,69 @@ import           Type
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
     { pluginCommands
-        = fmap (\(name, tac) ->
+        = fmap (\tc ->
             PluginCommand
-              (coerce $ name <> "Command")
-              (tacticDesc name)
-              (tacticCmd tac))
-              (Map.toList registeredCommands)
+              (tcCommandId tc)
+              (tacticDesc $ tcCommandName tc)
+              (tacticCmd $ commandTactic tc))
+              [minBound .. maxBound]
     , pluginCodeActionProvider = Just codeActionProvider
     }
 
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
 
-registeredCommands :: Map.Map T.Text (OccName -> TacticsM ())
-registeredCommands = Map.fromList
-    [ ("auto",     const auto)
-    , ("split",    const split)
-    , ("intro",    const intro)
-    , ("destruct", destruct)
-    , ("homo",     homo)
-    ]
+data TacticCommand
+  = Auto
+  | Split
+  | Intro
+  | Destruct
+  | Homo
+  deriving (Eq, Ord, Show, Enum, Bounded)
 
-alwaysCommands :: [T.Text]
-alwaysCommands =
-    [ "auto"
-    , "split"
-    , "intro"
-    ]
+data TacticVariety
+  = PerHole
+  | PerBinding
+  deriving (Eq, Ord, Show, Enum, Bounded)
+
+tcCommandId :: TacticCommand -> CommandId
+tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
+
+tcCommandName :: TacticCommand -> T.Text
+tcCommandName = T.pack . show
+
+tcCommandTitle :: TacticCommand -> OccName -> T.Text
+tcCommandTitle tc occ = T.pack $ show tc <> " " <> occNameString occ
+
+commandVariety :: TacticCommand -> TacticVariety
+commandVariety Auto     = PerHole
+commandVariety Split    = PerHole
+commandVariety Intro    = PerHole
+commandVariety Destruct = PerBinding
+commandVariety Homo     = PerBinding
+
+commandTactic :: TacticCommand -> OccName -> TacticsM ()
+commandTactic Auto     = const auto
+commandTactic Split    = const split
+commandTactic Intro    = const intro
+commandTactic Destruct = destruct
+commandTactic Homo     = homo
+
+commandHoleFilter
+    :: TacticCommand
+    -> Type  -- ^ goal type
+    -> Bool
+commandHoleFilter _ _ = True
+
+commandBindingFilter
+    :: TacticCommand
+    -> Type  -- ^ goal type
+    -> Type  -- ^ binding type
+    -> Bool
+commandBindingFilter Homo     (algebraicTyCon -> Just t1)
+                       (algebraicTyCon -> Just t2) = t1 == t2
+commandBindingFilter Destruct (algebraicTyCon -> Just _) _ = True
+commandBindingFilter _ _ _ = False
 
 runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
@@ -84,38 +121,12 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
       case mss of
         -- FIXME For some reason we get an HsVar instead of an
         -- HsUnboundVar. We should check if this is a hole somehow??
-        L span' (HsVar _ (L _ var)) -> do
+        L span' (HsVar _ (L _ _)) -> do
           let resulting_range
                 = fromMaybe (error "that is not great")
                 $ toCurrentRange pos =<< srcSpanToRange span'
-          let params = TacticParams
-                { file = uri
-                , range = resulting_range
-                , var_name = T.pack $ occNameString $ occName var
-                }
-          let names = alwaysCommands
-          actions <- for names $ \name -> do
-            cmd <-
-              mkLspCommand
-                plId
-                (coerce $ name <> "Command")
-                name
-                (Just [toJSON params])
-            pure
-              $ CACodeAction
-              $ CodeAction
-                  name
-                  (Just CodeActionQuickFix)
-                  Nothing
-                  Nothing
-              $ Just cmd
-          split_actions <- mkSplits plId uri resulting_range jdg
-          homo_actions  <- mkHomos plId uri resulting_range jdg
-          pure $ Right $ List $ mconcat
-            [ actions
-            , split_actions
-            , homo_actions
-            ]
+          actions <- mkTactics plId uri resulting_range jdg
+          pure $ Right $ List actions
         _ -> pure $ Right $ codeActions []
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
 
@@ -123,13 +134,46 @@ codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
 codeActions :: [CodeAction] -> List CAResult
 codeActions = List . fmap CACodeAction
 
+mkTactics :: PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
+mkTactics = flip foldMap [minBound .. maxBound] $ \tc ->
+  case commandVariety tc of
+    PerHole    -> mkGoalTactic    tc
+    PerBinding -> mkBindingTactic tc
 
-mkSplits :: PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
-mkSplits plId uri range (Judgement hys _) =
+
+mkGoalTactic :: TacticCommand -> PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
+mkGoalTactic tc plId uri range (Judgement _ (CType g)) =
+    case commandHoleFilter tc g of
+      False -> pure []
+      True -> do
+        let params = TacticParams
+              { file = uri
+              , range = range
+              -- TODO(sandy): this should be Nothing
+              , var_name = ""
+              }
+        cmd <-
+          mkLspCommand
+            plId
+            (tcCommandId tc)
+            (tcCommandName tc)
+            (Just [toJSON params])
+        pure
+          $ pure
+          $ CACodeAction
+          $ CodeAction
+              (tcCommandName tc)
+              (Just CodeActionQuickFix)
+              Nothing
+              Nothing
+          $ Just cmd
+
+mkBindingTactic :: TacticCommand -> PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
+mkBindingTactic tc plId uri range (Judgement hys (CType g)) =
   fmap join $ for (Map.toList hys) $ \(occ, CType ty) ->
-    case algebraicTyCon ty of
-      Nothing -> pure []
-      Just _ -> do
+    case commandBindingFilter tc g ty of
+      False -> pure []
+      True -> do
         let name = T.pack $ occNameString occ
         let params = TacticParams
               { file = uri
@@ -139,53 +183,18 @@ mkSplits plId uri range (Judgement hys _) =
         cmd <-
           mkLspCommand
             plId
-            ("destructCommand")
-            name
+            (tcCommandId tc)
+            (tcCommandTitle tc occ)
             (Just [toJSON params])
         pure
           $ pure
           $ CACodeAction
           $ CodeAction
-              ("destruct " <> name)
+              (tcCommandTitle tc occ)
               (Just CodeActionQuickFix)
               Nothing
               Nothing
           $ Just cmd
-
-
-mkHomos :: PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
-mkHomos plId uri range (Judgement hys (CType g)) =
-  case algebraicTyCon g of
-    Nothing -> pure []
-    Just tycon ->
-      fmap join $ for (Map.toList hys) $ \(occ, CType ty) ->
-        case algebraicTyCon ty of
-          Just tycon2 | tycon == tycon2 -> do
-            let name = T.pack $ occNameString occ
-            let params = TacticParams
-                  { file = uri
-                  , range = range
-                  , var_name = name
-                  }
-            cmd <-
-              mkLspCommand
-                plId
-                ("homoCommand")
-                name
-                (Just [toJSON params])
-            pure
-              $ pure
-              $ CACodeAction
-              $ CodeAction
-                  ("homo " <> name)
-                  (Just CodeActionQuickFix)
-                  Nothing
-                  Nothing
-              $ Just cmd
-          _ -> pure []
-
-
-
 
 
 data TacticParams = TacticParams
