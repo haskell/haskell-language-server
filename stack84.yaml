@@ -11,7 +11,7 @@ extra-deps:
 - rope-utf16-splay-0.3.1.0
 - filepattern-0.1.1
 - js-dgtable-0.5.2
-- hie-bios-0.6.1
+- hie-bios-0.7.1
 - fuzzy-0.1.0.0
 - shake-0.18.5
 - time-compat-1.9.2.2
@@ -32,8 +32,9 @@ extra-deps:
 # For benchHist
 - Chart-1.9.3
 - Chart-diagrams-1.9.3
-
-
+# For hie-bios-0.7.1
+- yaml-0.11.2.0
+- libyaml-0.1.2
 nix:
   packages: [zlib]
 
