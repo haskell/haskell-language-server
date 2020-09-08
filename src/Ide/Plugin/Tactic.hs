@@ -141,9 +141,7 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       (pos, mss, jdg) <- judgmentForHole state nfp range
       case mss of
-        -- FIXME For some reason we get an HsVar instead of an
-        -- HsUnboundVar. We should check if this is a hole somehow??
-        L span' (HsVar _ (L _ _)) -> do
+        L span' (HsUnboundVar _ _) -> do
           let resulting_range
                 = fromMaybe (error "that is not great")
                 $ toCurrentRange pos =<< srcSpanToRange span'
@@ -226,8 +224,9 @@ judgmentForHole state nfp range = do
       Just (mss@(L span' (HsVar _ (L _ v))))
         = mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod)
       goal = varType v
-      hyps = hypothesisFromBindings span' $ bindings mod
-  pure (pos, mss, Judgement hyps $ CType goal)
+      binds = bindings mod
+      hyps = hypothesisFromBindings span' binds
+  pure (pos, holify binds mss, Judgement hyps $ CType goal)
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
