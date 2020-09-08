@@ -147,7 +147,13 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
           let resulting_range
                 = fromMaybe (error "that is not great")
                 $ toCurrentRange pos =<< srcSpanToRange span'
-          actions <- (foldMap commandProvider [minBound .. maxBound]) plId uri resulting_range jdg
+          actions <-
+            -- This foldMap is over the function monoid.
+            foldMap commandProvider [minBound .. maxBound]
+              plId
+              uri
+              resulting_range
+              jdg
           pure $ Right $ List actions
         _ -> pure $ Right $ codeActions []
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
