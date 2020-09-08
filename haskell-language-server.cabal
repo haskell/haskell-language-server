@@ -61,6 +61,7 @@ library
       Ide.Tactics
       Ide.Types
       Ide.Version
+      Ide.TreeTransform
   other-modules:
       Paths_haskell_language_server
   hs-source-dirs:
@@ -105,6 +106,7 @@ library
     , syb
     , mtl
     , ghc-source-gen
+    , ghc-exactprint
   include-dirs:
         include
   if os(windows)
