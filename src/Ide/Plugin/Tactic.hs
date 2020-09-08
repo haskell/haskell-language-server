@@ -67,11 +67,6 @@ data TacticCommand
   | Homo
   deriving (Eq, Ord, Show, Enum, Bounded)
 
-data TacticVariety
-  = PerHole
-  | PerBinding
-  deriving (Eq, Ord, Show, Enum, Bounded)
-
 tcCommandId :: TacticCommand -> CommandId
 tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 
