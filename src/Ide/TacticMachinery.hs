@@ -74,11 +74,13 @@ data TacticError
   = UndefinedHypothesis OccName
   | GoalMismatch String CType
   | UnsolvedSubgoals [Judgement]
+  | NoProgress
 
 instance Show TacticError where
     show (UndefinedHypothesis name) = "undefined is not a function"
     show (GoalMismatch str typ) = "oh no"
     show (UnsolvedSubgoals jdgs) = "so sad"
+    show NoProgress = "No Progress"
 
 
 type ProvableM = ProvableT Judgement (Either TacticError)

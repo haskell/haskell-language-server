@@ -116,8 +116,8 @@ commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto     = const auto
 commandTactic Split    = const split
 commandTactic Intro    = const intro
-commandTactic Destruct = destruct
-commandTactic Homo     = homo
+commandTactic Destruct = autoIfPossible . destruct
+commandTactic Homo     = autoIfPossible . homo
 
 ------------------------------------------------------------------------------
 -- | We should show homos only when the goal type is the same as the binding
