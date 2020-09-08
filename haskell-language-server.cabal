@@ -97,6 +97,11 @@ library
     , time
     , transformers
     , unordered-containers
+    , refinery
+    , syb
+    , mtl
+    , ghc-source-gen
+    , ghc-exactprint
   include-dirs:
         include
   if os(windows)
@@ -238,67 +243,67 @@ common hls-test-utils
      ghc-options:      -Werror
   default-language:    Haskell2010
 
-test-suite func-test
-  import:               agpl, hls-test-utils
-  type:                 exitcode-stdio-1.0
-  default-language:     Haskell2010
-  build-tool-depends:   haskell-language-server:haskell-language-server
-                      , ghcide:ghcide-test-preprocessor
-  build-depends:        base >=4.7 && <5
-                      , aeson
-                      , bytestring
-                      , data-default
-                      , directory
-                      , filepath
-                      , haskell-language-server
-                      , haskell-lsp
-                      , haskell-lsp-types
-                      , lens
-                      , lsp-test >= 0.11.0.4
-                      , tasty
-                      , tasty-ant-xml >= 1.1.6
-                      , tasty-expected-failure
-                      , tasty-golden
-                      , tasty-hunit
-                      , tasty-rerun
-                      , text
-                      , unordered-containers
-  hs-source-dirs:       test/functional
-  main-is:              Main.hs
-  other-modules:        Command
-                      , Completion
-                      , Deferred
-                      , Definition
-                      , Diagnostic
-                      , Eval
-                      , Format
-                      , FunctionalBadProject
-                      , FunctionalCodeAction
-                      , FunctionalLiquid
-                      , HieBios
-                      , Highlight
-                      , Progress
-                      , Reference
-                      , Rename
-                      , Symbol
-                      , TypeDefinition
-  ghc-options:          -Wall
-                        -Wno-name-shadowing
-                        -threaded -rtsopts -with-rtsopts=-N
-  if flag(pedantic)
-     ghc-options: -Werror -Wredundant-constraints
+-- test-suite func-test
+--   import:               agpl, hls-test-utils
+--   type:                 exitcode-stdio-1.0
+--   default-language:     Haskell2010
+--   build-tool-depends:   haskell-language-server:haskell-language-server
+--                       , ghcide:ghcide-test-preprocessor
+--   build-depends:        base >=4.7 && <5
+--                       , aeson
+--                       , bytestring
+--                       , data-default
+--                       , directory
+--                       , filepath
+--                       , haskell-language-server
+--                       , haskell-lsp
+--                       , haskell-lsp-types
+--                       , lens
+--                       , lsp-test >= 0.11.0.4
+--                       , tasty
+--                       , tasty-ant-xml >= 1.1.6
+--                       , tasty-expected-failure
+--                       , tasty-golden
+--                       , tasty-hunit
+--                       , tasty-rerun
+--                       , text
+--                       , unordered-containers
+--   hs-source-dirs:       test/functional
+--   main-is:              Main.hs
+--   other-modules:        Command
+--                       , Completion
+--                       , Deferred
+--                       , Definition
+--                       , Diagnostic
+--                       , Eval
+--                       , Format
+--                       , FunctionalBadProject
+--                       , FunctionalCodeAction
+--                       , FunctionalLiquid
+--                       , HieBios
+--                       , Highlight
+--                       , Progress
+--                       , Reference
+--                       , Rename
+--                       , Symbol
+--                       , TypeDefinition
+--   ghc-options:          -Wall
+--                         -Wno-name-shadowing
+--                         -threaded -rtsopts -with-rtsopts=-N
+--   if flag(pedantic)
+--      ghc-options: -Werror -Wredundant-constraints
 
-test-suite wrapper-test
-  import:               agpl, hls-test-utils
-  type:                 exitcode-stdio-1.0
-  build-tool-depends:   haskell-language-server:haskell-language-server-wrapper
-  default-language:     Haskell2010
-  build-depends:        base == 4.*
-                      , directory
-                      , process
-                      , tasty
-                      , tasty-hunit
-                      , tasty-ant-xml >= 1.1.6
-  hs-source-dirs:       test/wrapper
-  main-is:              Main.hs
-  ghc-options:          -Wall
+-- test-suite wrapper-test
+--   import:               agpl, hls-test-utils
+--   type:                 exitcode-stdio-1.0
+--   build-tool-depends:   haskell-language-server:haskell-language-server-wrapper
+--   default-language:     Haskell2010
+--   build-depends:        base == 4.*
+--                       , directory
+--                       , process
+--                       , tasty
+--                       , tasty-hunit
+--                       , tasty-ant-xml >= 1.1.6
+--   hs-source-dirs:       test/wrapper
+--   main-is:              Main.hs
+--   ghc-options:          -Wall
