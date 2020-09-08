@@ -224,6 +224,6 @@ buildDataCon hy dc apps = do
         (HsVar NoExt $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
 
-render :: Outputable (LHsExpr pass) => DynFlags -> LHsExpr pass -> String
+render :: Outputable a => DynFlags -> a -> String
 render dflags = showSDoc dflags . ppr
 

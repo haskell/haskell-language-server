@@ -161,6 +161,7 @@ mostSpecificSpan span z
 
 ------------------------------------------------------------------------------
 -- | Convert an HsVar back into an HsUnboundVar if it isn't actually in scope.
+-- TODO(sandy): this will throw away the type >:(
 holify :: Bindings -> LHsExpr GhcTc -> LHsExpr GhcTc
 holify (Bindings _ local) v@(L span (HsVar _ (L _ var))) =
   case M.lookup span local of

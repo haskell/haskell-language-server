@@ -37,11 +37,13 @@ import           Ide.LocalBindings
 import qualified Language.Haskell.LSP.Types      as J
 import           Language.Haskell.LSP.Types
 
+import Data.List (intercalate)
 import OccName
 import           HsExpr
 import           GHC
 import           DynFlags
 import           Type
+import System.IO
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -233,6 +235,7 @@ tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac _lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       (pos, _, jdg) <- judgmentForHole state nfp range
+      hPutStrLn stderr $ intercalate "; " $ fmap (\(occ, CType ty) -> occNameString occ <> " :: " <> render unsafeGlobalDynFlags ty) $ Map.toList $ jHypothesis jdg
       pure $
         case runTactic
                 unsafeGlobalDynFlags

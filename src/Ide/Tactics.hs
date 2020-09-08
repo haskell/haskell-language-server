@@ -122,7 +122,7 @@ auto = (intro >> auto)
 
 
 autoIfPossible :: TacticsM () -> TacticsM ()
-autoIfPossible t = t >> (solve auto <!> pure ())
+autoIfPossible t = (t >> solve auto) <!> t
 
 
 one :: TacticsM ()
