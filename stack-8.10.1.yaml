@@ -3,6 +3,7 @@ resolver: nightly-2020-08-08
 packages:
 - .
 - ./ghcide/
+- ./hls-plugin-api
 
 ghc-options:
   "$everything": -haddock

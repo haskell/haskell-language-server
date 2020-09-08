@@ -36,3 +36,6 @@ cradle:
         
             - path: "./ghcide/exe"
               component: "ghcide:exe:ghcide"
+
+            - path: "./hls-plugin-api/src"
+              component: "hls-plugin-api:lib:hls-plugin-api"
