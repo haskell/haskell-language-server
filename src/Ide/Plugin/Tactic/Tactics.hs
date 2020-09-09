@@ -4,8 +4,8 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Tactics
-  ( module Ide.Tactics
+module Ide.Plugin.Tactic.Tactics
+  ( module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
@@ -21,7 +21,7 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
-import           Ide.TacticMachinery
+import           Ide.Plugin.Tactic.Machinery
 import           Name
 import           Refinery.Tactic
 import           TyCoRep
@@ -90,7 +90,7 @@ destruct = destruct' $ const subgoal
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
 homo = destruct' $ \dc (Judgement hy (CType g)) ->
-  buildDatctiaCon hy dc (snd $ splitAppTys g)
+  buildDataCon hy dc (snd $ splitAppTys g)
 
 
 ------------------------------------------------------------------------------

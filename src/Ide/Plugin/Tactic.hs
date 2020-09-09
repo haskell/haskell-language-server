@@ -31,8 +31,8 @@ import           GHC
 import           GHC.Generics (Generic)
 import           Ide.LocalBindings (bindings, mostSpecificSpan, holify)
 import           Ide.Plugin (mkLspCommand)
-import           Ide.TacticMachinery
-import           Ide.Tactics
+import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Tactics
 import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)

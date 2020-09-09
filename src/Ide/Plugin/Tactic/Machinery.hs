@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.TacticMachinery where
+module Ide.Plugin.Tactic.Machinery where
 
 import           Control.Arrow
 import           Data.Char

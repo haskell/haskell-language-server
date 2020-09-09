@@ -53,12 +53,12 @@ library
       Ide.Plugin.Pragmas
       Ide.Plugin.Retrie
       Ide.Plugin.Tactic
+      Ide.Plugin.Tactic.Machinery
+      Ide.Plugin.Tactic.Tactics
       Ide.Plugin.Floskell
       Ide.Plugin.Formatter
       Ide.Plugin.StylishHaskell
       Ide.PluginUtils
-      Ide.TacticMachinery
-      Ide.Tactics
       Ide.Types
       Ide.Version
       Ide.TreeTransform
