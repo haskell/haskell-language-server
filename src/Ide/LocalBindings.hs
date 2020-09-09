@@ -164,11 +164,14 @@ mostSpecificSpan span z
 -- TODO(sandy): this will throw away the type >:(
 holify :: Bindings -> LHsExpr GhcTc -> LHsExpr GhcTc
 holify (Bindings _ local) v@(L span (HsVar _ (L _ var))) =
-  case M.lookup span local of
-    Nothing -> v
-    Just binds ->
-      case S.member var binds of
-        True  -> v
-        False -> L span $ HsUnboundVar NoExt $ TrueExprHole $ occName var
+  let occ = occName var
+   in case M.lookup span local of
+        Nothing -> v
+        Just binds ->
+          -- Make sure the binding is not in scope and that it begins with an
+          -- underscore
+          case not (S.member var binds) && take 1 (occNameString occ) == "_" of
+            True  -> L span $ HsUnboundVar NoExt $ TrueExprHole occ
+            False -> v
 holify _ v = v
 
