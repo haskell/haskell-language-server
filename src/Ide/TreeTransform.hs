@@ -22,9 +22,6 @@ import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import Retrie.ExactPrint
 import Text.Regex.TDFA.Text()
 import qualified Data.Text as T
-import Debug.Trace
-import Ide.TacticMachinery
-import DynFlags
 
 
 useAnnotatedSource :: String -> IdeState -> NormalizedFilePath -> IO (Annotated ParsedSource)
@@ -51,9 +48,9 @@ transform
     -> Annotated ParsedSource
     -> WorkspaceEdit
 transform ccs uri f a =
-  let src = traceShowId $ printA a
+  let src = printA a
       a' = runIdentity $ transformA a $ runGraft f
-      res = trace (render unsafeGlobalDynFlags $ astA a') $ printA a'
+      res = printA a'
    in diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 
@@ -66,7 +63,7 @@ graft
 graft dst (L _ val) = Graft $ \a -> do
   span <- uniqueSrcSpanT
   let val' = L span val
-  modifyAnnsT $ addAnnotationsForPretty [] val'
+  modifyAnnsT $ mappend $ addAnnotationsForPretty [] val' mempty
   pure $ everywhere
     ( mkT $ \case
               L src (_ :: b) | src == dst -> val'

@@ -183,7 +183,7 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError (LHsExpr GhcPs)
 runTactic dflags jdg t
-  = fmap (parenthesize . fst)
+  = fmap (fst)
   . runProvableT
   $ runTacticT t jdg
 

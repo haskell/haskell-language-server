@@ -10,15 +10,13 @@ module Ide.Plugin.Tactic
   ( descriptor
   ) where
 
-import GHC.Generics
-import Control.Monad
+import           Control.Monad
 import           Data.Aeson
 import           Data.Coerce
-import           Data.Maybe
-import           Data.Traversable
 import qualified Data.Map                        as Map
-import qualified Data.HashMap.Strict             as H
+import           Data.Maybe
 import qualified Data.Text                       as T
+import           Data.Traversable
 import qualified GHC.Generics                    as Generics
 
 import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule),
@@ -239,7 +237,6 @@ tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       (pos, _, jdg) <- judgmentForHole state nfp range
       pm <- useAnnotatedSource "tacticsCmd" state nfp
-      hPutStrLn stderr $ intercalate "; " $ fmap (\(occ, CType ty) -> occNameString occ <> " :: " <> render unsafeGlobalDynFlags ty) $ Map.toList $ jHypothesis jdg
       case runTactic
               unsafeGlobalDynFlags
               jdg
@@ -255,7 +252,6 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                 fromMaybe (error "Fiddlesticks") $ toCurrentRange pos range
               span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
               g = graft span res
-          hPutStrLn stderr $ show span
           let response = transform (LSP.clientCapabilities lf) uri g pm
           pure $ ( Right Null
              , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response)
