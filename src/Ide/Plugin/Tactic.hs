@@ -252,7 +252,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                 fromMaybe (error "Fiddlesticks") $ toCurrentRange pos range
               span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
               g = graft span res
-          let response = transform (LSP.clientCapabilities lf) uri g pm
+          let response = transform unsafeGlobalDynFlags (LSP.clientCapabilities lf) uri g pm
           pure $ ( Right Null
              , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response)
              )

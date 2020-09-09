@@ -188,17 +188,6 @@ runTactic dflags jdg t
   $ runTacticT t jdg
 
 
-------------------------------------------------------------------------------
--- | Put parentheses around an expression if required.
-parenthesize :: LHsExpr GhcPs -> LHsExpr GhcPs
-parenthesize a@(L _ HsVar{})        = a
-parenthesize a@(L _ HsUnboundVar{}) = a
-parenthesize a@(L _ HsOverLabel{})  = a
-parenthesize a@(L _ HsOverLit{})    = a
-parenthesize a@(L _ HsIPVar{})      = a
-parenthesize a@(L _ HsLit{})        = a
-parenthesize a = noLoc $ HsPar NoExt a
-
 
 instance MonadExtract (LHsExpr GhcPs) ProvableM where
   hole = pure $ noLoc $ HsVar NoExt $ noLoc $ Unqual $ mkVarOcc "_"
