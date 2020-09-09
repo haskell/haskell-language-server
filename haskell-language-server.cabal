@@ -59,9 +59,9 @@ library
       Ide.Plugin.Formatter
       Ide.Plugin.StylishHaskell
       Ide.PluginUtils
+      Ide.TreeTransform
       Ide.Types
       Ide.Version
-      Ide.TreeTransform
   other-modules:
       Paths_haskell_language_server
   hs-source-dirs:
@@ -82,6 +82,8 @@ library
     , fourmolu ^>= 0.1
     , ghc
     , ghc-boot-th
+    , ghc-exactprint
+    , ghc-source-gen
     , ghcide >= 0.1
     , gitrev
     , hashable
@@ -89,24 +91,22 @@ library
     , hie-bios >= 0.6.1 && < 0.8
     , hslogger
     , lens
+    , mtl
     , ormolu ^>= 0.1.2
     , optparse-simple
     , process
     , regex-tdfa >= 1.3.1.0
+    , refinery
     , retrie >= 0.1.1.0
     , safe-exceptions
     , shake >= 0.17.5
     , stylish-haskell == 0.11.*
+    , syb
     , temporary
     , text
     , time
     , transformers
     , unordered-containers
-    , refinery
-    , syb
-    , mtl
-    , ghc-source-gen
-    , ghc-exactprint
   include-dirs:
         include
   if os(windows)
@@ -178,42 +178,42 @@ executable haskell-language-server
     , unordered-containers
   default-language: Haskell2010
 
--- executable haskell-language-server-wrapper
---   import: agpl
---   main-is: Wrapper.hs
---   hs-source-dirs:
---       exe
---   other-modules:
---       Arguments
---       Paths_haskell_language_server
---   autogen-modules:
---       Paths_haskell_language_server
---   ghc-options:
---               -threaded
---               -Wall
---               -Wno-name-shadowing
---               -Wredundant-constraints
---               -- allow user RTS overrides
---               -rtsopts
---               -- disable idle GC
---               -- disable parallel GC
---               -- increase nursery size
---               "-with-rtsopts=-I0 -qg -A128M"
---   if flag(pedantic)
---      ghc-options:      -Werror
---   build-depends:
---       base
---     , directory
---     , extra
---     , filepath
---     , gitrev
---     , ghc
---     , ghc-paths
---     , hie-bios
---     , haskell-language-server
---     , optparse-applicative
---     , process
---   default-language:    Haskell2010
+executable haskell-language-server-wrapper
+  import: agpl
+  main-is: Wrapper.hs
+  hs-source-dirs:
+      exe
+  other-modules:
+      Arguments
+      Paths_haskell_language_server
+  autogen-modules:
+      Paths_haskell_language_server
+  ghc-options:
+              -threaded
+              -Wall
+              -Wno-name-shadowing
+              -Wredundant-constraints
+              -- allow user RTS overrides
+              -rtsopts
+              -- disable idle GC
+              -- disable parallel GC
+              -- increase nursery size
+              "-with-rtsopts=-I0 -qg -A128M"
+  if flag(pedantic)
+     ghc-options:      -Werror
+  build-depends:
+      base
+    , directory
+    , extra
+    , filepath
+    , gitrev
+    , ghc
+    , ghc-paths
+    , hie-bios
+    , haskell-language-server
+    , optparse-applicative
+    , process
+  default-language:    Haskell2010
 
 -- This common stanza simulates a previous private lib
 -- We removed it due to issues with stack when loading the project using a stack based hie.yaml
@@ -248,67 +248,67 @@ common hls-test-utils
      ghc-options:      -Werror
   default-language:    Haskell2010
 
--- test-suite func-test
---   import:               agpl, hls-test-utils
---   type:                 exitcode-stdio-1.0
---   default-language:     Haskell2010
---   build-tool-depends:   haskell-language-server:haskell-language-server
---                       , ghcide:ghcide-test-preprocessor
---   build-depends:        base >=4.7 && <5
---                       , aeson
---                       , bytestring
---                       , data-default
---                       , directory
---                       , filepath
---                       , haskell-language-server
---                       , haskell-lsp
---                       , haskell-lsp-types
---                       , lens
---                       , lsp-test >= 0.11.0.4
---                       , tasty
---                       , tasty-ant-xml >= 1.1.6
---                       , tasty-expected-failure
---                       , tasty-golden
---                       , tasty-hunit
---                       , tasty-rerun
---                       , text
---                       , unordered-containers
---   hs-source-dirs:       test/functional
---   main-is:              Main.hs
---   other-modules:        Command
---                       , Completion
---                       , Deferred
---                       , Definition
---                       , Diagnostic
---                       , Eval
---                       , Format
---                       , FunctionalBadProject
---                       , FunctionalCodeAction
---                       , FunctionalLiquid
---                       , HieBios
---                       , Highlight
---                       , Progress
---                       , Reference
---                       , Rename
---                       , Symbol
---                       , TypeDefinition
---   ghc-options:          -Wall
---                         -Wno-name-shadowing
---                         -threaded -rtsopts -with-rtsopts=-N
---   if flag(pedantic)
---      ghc-options: -Werror -Wredundant-constraints
+test-suite func-test
+  import:               agpl, hls-test-utils
+  type:                 exitcode-stdio-1.0
+  default-language:     Haskell2010
+  build-tool-depends:   haskell-language-server:haskell-language-server
+                      , ghcide:ghcide-test-preprocessor
+  build-depends:        base >=4.7 && <5
+                      , aeson
+                      , bytestring
+                      , data-default
+                      , directory
+                      , filepath
+                      , haskell-language-server
+                      , haskell-lsp
+                      , haskell-lsp-types
+                      , lens
+                      , lsp-test >= 0.11.0.4
+                      , tasty
+                      , tasty-ant-xml >= 1.1.6
+                      , tasty-expected-failure
+                      , tasty-golden
+                      , tasty-hunit
+                      , tasty-rerun
+                      , text
+                      , unordered-containers
+  hs-source-dirs:       test/functional
+  main-is:              Main.hs
+  other-modules:        Command
+                      , Completion
+                      , Deferred
+                      , Definition
+                      , Diagnostic
+                      , Eval
+                      , Format
+                      , FunctionalBadProject
+                      , FunctionalCodeAction
+                      , FunctionalLiquid
+                      , HieBios
+                      , Highlight
+                      , Progress
+                      , Reference
+                      , Rename
+                      , Symbol
+                      , TypeDefinition
+  ghc-options:          -Wall
+                        -Wno-name-shadowing
+                        -threaded -rtsopts -with-rtsopts=-N
+  if flag(pedantic)
+     ghc-options: -Werror -Wredundant-constraints
 
--- test-suite wrapper-test
---   import:               agpl, hls-test-utils
---   type:                 exitcode-stdio-1.0
---   build-tool-depends:   haskell-language-server:haskell-language-server-wrapper
---   default-language:     Haskell2010
---   build-depends:        base == 4.*
---                       , directory
---                       , process
---                       , tasty
---                       , tasty-hunit
---                       , tasty-ant-xml >= 1.1.6
---   hs-source-dirs:       test/wrapper
---   main-is:              Main.hs
---   ghc-options:          -Wall
+test-suite wrapper-test
+  import:               agpl, hls-test-utils
+  type:                 exitcode-stdio-1.0
+  build-tool-depends:   haskell-language-server:haskell-language-server-wrapper
+  default-language:     Haskell2010
+  build-depends:        base == 4.*
+                      , directory
+                      , process
+                      , tasty
+                      , tasty-hunit
+                      , tasty-ant-xml >= 1.1.6
+  hs-source-dirs:       test/wrapper
+  main-is:              Main.hs
+  ghc-options:          -Wall
