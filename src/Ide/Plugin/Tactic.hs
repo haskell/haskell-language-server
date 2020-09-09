@@ -235,7 +235,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         (pos, _, jdg) <- MaybeT $ judgmentForHole state nfp range
         let dflags = unsafeGlobalDynFlags
         pm <- lift $ useAnnotatedSource "tacticsCmd" state nfp
-        case runTactic dflags jdg
+        case runTactic jdg
               $ tac
               $ mkVarOcc
               $ T.unpack var_name of

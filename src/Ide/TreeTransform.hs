@@ -10,7 +10,6 @@ module Ide.TreeTransform
 
 import           BasicTypes (appPrec)
 import           Control.Monad
-import           Data.Bool
 import           Data.Functor.Identity
 import qualified Data.Text as T
 import           Debug.Trace
@@ -30,12 +29,21 @@ import           Retrie.ExactPrint hiding (parseExpr)
 import           Text.Regex.TDFA.Text()
 
 
-useAnnotatedSource :: String -> IdeState -> NormalizedFilePath -> IO (Annotated ParsedSource)
+------------------------------------------------------------------------------
+-- | Get the latest version of the annotated parse source.
+useAnnotatedSource
+    :: String
+    -> IdeState
+    -> NormalizedFilePath
+    -> IO (Annotated ParsedSource)
 useAnnotatedSource herald state nfp = do
   Just pm <- runAction herald state $ use GetParsedModule nfp
   pure $ fixAnns pm
 
 
+------------------------------------------------------------------------------
+-- | A transformation for grafting source trees together. Use the semigroup
+-- instance to combine 'Graft's, and run them via 'transform'.
 newtype Graft a = Graft
   { runGraft :: DynFlags -> a -> Transform a
   }
@@ -47,6 +55,8 @@ instance Monoid (Graft a) where
   mempty = Graft $ const pure
 
 
+------------------------------------------------------------------------------
+-- | Convert a 'Graft' into a 'WorkspaceEdit'.
 transform
     :: DynFlags
     -> ClientCapabilities
@@ -61,11 +71,15 @@ transform dflags ccs uri f a =
    in diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 
+------------------------------------------------------------------------------
+-- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with the
+-- given 'LHSExpr'. The node at that position must already be a 'LHsExpr', or
+-- this is a no-op.
 graft
     :: forall a
-     . (Data a)
+     . Data a
     => SrcSpan
-    -> Located (HsExpr GhcPs)
+    -> LHsExpr GhcPs
     -> Graft a
 graft dst val = Graft $ \dflags a -> do
   (anns, val') <- annotate dflags $ parenthesize val
@@ -78,12 +92,16 @@ graft dst val = Graft $ \dflags a -> do
     ) a
 
 
+------------------------------------------------------------------------------
+-- | Dark magic I stole from retrie. No idea what it does.
 fixAnns :: ParsedModule -> Annotated ParsedSource
 fixAnns ParsedModule {..} =
   let ranns = relativiseApiAnns pm_parsed_source pm_annotations
    in unsafeMkA pm_parsed_source ranns 0
 
 
+------------------------------------------------------------------------------
+-- | Given an 'LHSExpr', compute its exactprint annotations.
 annotate :: DynFlags -> LHsExpr GhcPs -> Transform (Anns, LHsExpr GhcPs)
 annotate dflags expr = do
   uniq <- show <$> uniqueSrcSpanT
@@ -92,8 +110,12 @@ annotate dflags expr = do
       anns' = setPrecedingLines expr' 0 1 anns
   pure (anns', expr')
 
+
+------------------------------------------------------------------------------
+-- | Print out something 'Outputable'.
 render :: Outputable a => DynFlags -> a -> String
 render dflags = showSDoc dflags . ppr
+
 
 ------------------------------------------------------------------------------
 -- | Put parentheses around an expression if required.

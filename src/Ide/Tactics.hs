@@ -28,6 +28,8 @@ import           TyCoRep
 import           Type
 
 
+------------------------------------------------------------------------------
+-- | Use something in the hypothesis to fill the hole.
 assumption :: TacticsM ()
 assumption = rule $ \(Judgement hy g) ->
   case find ((== g) . snd) $ toList hy of
@@ -35,6 +37,8 @@ assumption = rule $ \(Judgement hy g) ->
     Nothing -> throwError $ GoalMismatch "assumption" g
 
 
+------------------------------------------------------------------------------
+-- | Introduce a lambda.
 intro :: TacticsM ()
 intro = rule $ \(Judgement hy g) ->
   case unCType g of
@@ -45,6 +49,9 @@ intro = rule $ \(Judgement hy g) ->
     _ -> throwError $ GoalMismatch "intro" g
 
 
+------------------------------------------------------------------------------
+-- | Combinator for performign case splitting, and running sub-rules on the
+-- resulting matches.
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> TacticsM ()
 destruct' f term = rule $ \(Judgement hy g) -> do
   case find ((== term) . fst) $ toList hy of
@@ -73,18 +80,28 @@ destruct' f term = rule $ \(Judgement hy g) -> do
               pure $ match [pat] $ unLoc sg
 
 
+------------------------------------------------------------------------------
+-- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
 destruct = destruct' $ const subgoal
 
+
+------------------------------------------------------------------------------
+-- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
 homo = destruct' $ \dc (Judgement hy (CType g)) ->
-  buildDataCon hy dc (snd $ splitAppTys g)
+  buildDatctiaCon hy dc (snd $ splitAppTys g)
 
 
+------------------------------------------------------------------------------
+-- | Ensure a tactic produces no subgoals. Useful when working with
+-- backtracking.
 solve :: TacticsM () -> TacticsM  ()
 solve t = t >> throwError NoProgress
 
 
+------------------------------------------------------------------------------
+-- | Apply a function from the hypothesis.
 apply :: TacticsM ()
 apply = rule $ \(Judgement hy g) -> do
   case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) $ toList hy of
@@ -97,6 +114,9 @@ apply = rule $ \(Judgement hy g) -> do
     Nothing -> throwError $ GoalMismatch "apply" g
 
 
+------------------------------------------------------------------------------
+-- | Introduce a data constructor, splitting a goal into the datacon's
+-- constituent sub-goals.
 split :: TacticsM ()
 split = rule $ \(Judgement hy g) ->
   case splitTyConApp_maybe $ unCType g of
@@ -107,12 +127,17 @@ split = rule $ \(Judgement hy g) ->
     Nothing -> throwError $ GoalMismatch "split" g
 
 
+------------------------------------------------------------------------------
+-- | Run 'one' many times.
 deepen :: Int -> TacticsM ()
 deepen 0 = pure ()
 deepen depth = do
   one
   deepen $ depth - 1
 
+
+------------------------------------------------------------------------------
+-- | Automatically solve a goal.
 auto :: TacticsM ()
 auto = (intro >> auto)
    <!> (assumption >> auto)
@@ -121,10 +146,15 @@ auto = (intro >> auto)
    <!> pure ()
 
 
+------------------------------------------------------------------------------
+-- | Run a tactic, and subsequently apply auto if it completes. If not, just
+-- run the first tactic, leaving its subgoals as holes.
 autoIfPossible :: TacticsM () -> TacticsM ()
 autoIfPossible t = (t >> solve auto) <!> t
 
 
+------------------------------------------------------------------------------
+-- | Do one obvious thing.
 one :: TacticsM ()
 one = intro <!> assumption <!> split <!> apply <!> pure ()
 

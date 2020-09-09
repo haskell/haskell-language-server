@@ -27,6 +27,8 @@ import           Id
 import           OccName
 import           SrcLoc
 
+------------------------------------------------------------------------------
+-- | The available bindings at every point in a Haskell tree.
 data Bindings = Bindings
   { bGlobalBinds :: Set Id
   , bLocalBinds  :: Map SrcSpan (Set Id)
@@ -39,10 +41,20 @@ instance Monoid Bindings where
   mempty = Bindings mempty mempty
 
 
+------------------------------------------------------------------------------
+-- | Determine what bindings are in scope at every point in a program.
+--
+-- **WARNING:** This doesn't find bindings inside of TH splices or arrow syntax
+-- --- and possibly other obscure pieces of the AST.
 bindings :: TypecheckedModule -> Bindings
 bindings = uncurry Bindings . bindsBindings mempty . tm_typechecked_source
 
 
+------------------------------------------------------------------------------
+-- | Helper function for implementing 'binding'.
+--
+-- **WARNING:** This doesn't yet work over TH splices or arrow syntax --- and
+-- possibly other obscure pieces of the AST.
 dataBindings :: Data a => S.Set Id -> a -> M.Map SrcSpan (S.Set Id)
 dataBindings in_scope = foldMapOf biplate $ cool collect
   where
@@ -110,6 +122,8 @@ dataBindings in_scope = foldMapOf biplate $ cool collect
     collect _ = mempty
 
 
+------------------------------------------------------------------------------
+-- | Map the binds from a match group into over their containing spans.
 matchGroupBindings :: S.Set Id -> MatchGroup GhcTc (LHsExpr GhcTc) -> M.Map SrcSpan (S.Set Id)
 matchGroupBindings _ (XMatchGroup _) = M.empty
 matchGroupBindings in_scope (MG _ (L _ alts) _) = M.fromList $ do
@@ -118,6 +132,8 @@ matchGroupBindings in_scope (MG _ (L _ alts) _) = M.fromList $ do
   M.toList $ dataBindings (S.union bound in_scope) body
 
 
+------------------------------------------------------------------------------
+-- | Map the binds from a local binds into over their containing spans.
 localBindsBindings :: S.Set Id -> HsLocalBindsLR GhcTc GhcTc -> (S.Set Id, M.Map SrcSpan (S.Set Id))
 localBindsBindings in_scope (HsValBinds _ (ValBinds _ binds _sigs)) = bindsBindings in_scope binds
 localBindsBindings in_scope (HsValBinds _ (XValBindsLR (NValBinds groups _sigs))) =
@@ -125,6 +141,8 @@ localBindsBindings in_scope (HsValBinds _ (XValBindsLR (NValBinds groups _sigs))
 localBindsBindings _ _  = (mempty, mempty)
 
 
+------------------------------------------------------------------------------
+-- | Map the binds from a hsbindlr into over their containing spans.
 bindsBindings :: S.Set Id -> Bag (LHsBindLR GhcTc GhcTc) -> (S.Set Id, M.Map SrcSpan (S.Set Id))
 bindsBindings in_scope binds =
   flip foldMap (fmap unLoc $ bagToList binds) $ \case
@@ -139,21 +157,23 @@ bindsBindings in_scope binds =
     XHsBindsLR _ -> mempty
 
 
-size :: SrcSpan -> (Int, Int)
-size (UnhelpfulSpan _) = maxBound
-size (RealSrcSpan span) =
+------------------------------------------------------------------------------
+-- | How many lines and columns does a SrcSpan span?
+srcSpanSize :: SrcSpan -> (Int, Int)
+srcSpanSize (UnhelpfulSpan _) = maxBound
+srcSpanSize (RealSrcSpan span) =
   ( srcSpanEndLine span - srcSpanStartLine span
   , srcSpanEndCol span - srcSpanStartCol span
   )
 
-smallest :: SrcSpan -> SrcSpan -> Ordering
-smallest = comparing size
 
-
+------------------------------------------------------------------------------
+-- | Given a SrcSpan, find the smallest LHsExpr that entirely contains that
+-- span. Useful for determining what node in the tree your cursor is hovering over.
 mostSpecificSpan :: (Data a, Typeable pass) => SrcSpan -> a -> Maybe (LHsExpr pass)
 mostSpecificSpan span z
   = listToMaybe
-  $ sortBy (smallest `on` getLoc)
+  $ sortBy (comparing srcSpanSize `on` getLoc)
   $ everything (<>) (mkQ mempty $ \case
       l@(L span' _) | span `isSubspanOf` span' -> [l]
       _                                        -> [])

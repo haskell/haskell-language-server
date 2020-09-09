@@ -19,17 +19,24 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           DataCon
 import           Development.IDE.Types.Location
+import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
 import           Ide.LocalBindings
 import           Name
-import           Outputable (ppr, showSDoc, Outputable)
+import           Outputable hiding ((<>))
 import           Refinery.Tactic
 import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
+
+
+------------------------------------------------------------------------------
+-- | Orphan instance for producing holes when attempting to solve tactics.
+instance MonadExtract (LHsExpr GhcPs) ProvableM where
+  hole = pure $ noLoc $ HsVar NoExt $ noLoc $ Unqual $ mkVarOcc "_"
 
 
 ------------------------------------------------------------------------------
@@ -79,10 +86,19 @@ data TacticError
   | NoProgress
 
 instance Show TacticError where
-    show (UndefinedHypothesis name) = "undefined is not a function"
-    show (GoalMismatch str typ) = "oh no"
-    show (UnsolvedSubgoals jdgs) = "so sad"
-    show NoProgress = "No Progress"
+    show (UndefinedHypothesis name) =
+      occNameString name <> " is not available in the hypothesis."
+    show (GoalMismatch tac (CType typ)) =
+      mconcat
+        [ "The tactic "
+        , tac
+        , " doesn't apply to goal type "
+        , unsafeRender typ
+        ]
+    show (UnsolvedSubgoals _) =
+      "There were unsolved subgoals"
+    show NoProgress =
+      "Unable to make progress"
 
 
 type ProvableM = ProvableT Judgement (Either TacticError)
@@ -178,19 +194,13 @@ mkTyConName tc
 -- | Attempt to generate a term of the right type using in-scope bindings, and
 -- a given tactic.
 runTactic
-    :: DynFlags
-    -> Judgement
+    :: Judgement
     -> TacticsM ()       -- ^ Tactic to use
     -> Either TacticError (LHsExpr GhcPs)
-runTactic dflags jdg t
+runTactic jdg t
   = fmap (fst)
   . runProvableT
   $ runTacticT t jdg
-
-
-
-instance MonadExtract (LHsExpr GhcPs) ProvableM where
-  hole = pure $ noLoc $ HsVar NoExt $ noLoc $ Unqual $ mkVarOcc "_"
 
 
 ------------------------------------------------------------------------------
@@ -215,14 +225,18 @@ buildDataCon hy dc apps = do
         (HsVar NoExt $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
 
-render :: Outputable a => DynFlags -> a -> String
-render dflags = showSDoc dflags . ppr
 
--- TODO(sandy): this doesn't belong here
+------------------------------------------------------------------------------
 -- | Convert a DAML compiler Range to a GHC SrcSpan
+-- TODO(sandy): this doesn't belong here
 rangeToSrcSpan :: String -> Range -> SrcSpan
 rangeToSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
     mkSrcSpan
       (mkSrcLoc (FS.fsLit file) (startLn + 1) (startCh + 1))
       (mkSrcLoc (FS.fsLit file) (endLn + 1) (endCh + 1))
+
+------------------------------------------------------------------------------
+-- | Print something
+unsafeRender :: Outputable a => a -> String
+unsafeRender = showSDoc unsafeGlobalDynFlags . ppr
 
