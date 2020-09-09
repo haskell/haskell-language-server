@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeApplications  #-}
@@ -11,40 +12,33 @@ module Ide.Plugin.Tactic
   ) where
 
 import           Control.Monad
+import           Control.Monad.Trans
+import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
-import qualified Data.Map                        as Map
+import qualified Data.Map as M
 import           Data.Maybe
-import qualified Data.Text                       as T
+import qualified Data.Text as T
 import           Data.Traversable
-import qualified GHC.Generics                    as Generics
-
-import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule),
-                                                 TypeCheck (TypeCheck))
-import           Development.IDE.Core.Shake     (useWithStale, IdeState (..))
 import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule), TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service (runAction)
+import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
+import           Development.IDE.GHC.Error (srcSpanToRange)
 import           Development.Shake (Action)
-import           Development.IDE.GHC.Error
-
-import           Ide.Types
+import           DynFlags (unsafeGlobalDynFlags)
+import           GHC
+import           GHC.Generics (Generic)
+import           Ide.LocalBindings (bindings, mostSpecificSpan, holify)
+import           Ide.Plugin (mkLspCommand)
 import           Ide.TacticMachinery
 import           Ide.Tactics
-import           Ide.Plugin
-import           Ide.LocalBindings
-
-import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.Types      as J
+import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
+import           Ide.Types
+import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
-
-import Data.List (intercalate)
-import OccName
-import           HsExpr
-import           GHC
-import           DynFlags
+import           OccName
 import           Type
-import System.IO
-import Ide.TreeTransform
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -141,23 +135,24 @@ runIde state = runAction "tactic" state
 
 codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      (pos, mss, jdg) <- judgmentForHole state nfp range
-      case mss of
-        L span' (HsUnboundVar _ _) -> do
-          let resulting_range
-                = fromMaybe (error "that is not great")
-                $ toCurrentRange pos =<< srcSpanToRange span'
-          actions <-
-            -- This foldMap is over the function monoid.
-            foldMap commandProvider [minBound .. maxBound]
-              plId
-              uri
-              resulting_range
-              jdg
-          pure $ Right $ List actions
-        _ -> pure $ Right $ codeActions []
+  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
+      fromMaybeT (Right $ List []) $ do
+        (pos, mss, jdg) <- MaybeT $ judgmentForHole state nfp range
+        case mss of
+          L span' (HsUnboundVar _ _) -> do
+            resulting_range <-
+              liftMaybe $ toCurrentRange pos =<< srcSpanToRange span'
+            actions <- lift $
+              -- This foldMap is over the function monoid.
+              foldMap commandProvider [minBound .. maxBound]
+                plId
+                uri
+                resulting_range
+                jdg
+            pure $ Right $ List actions
+          _ -> pure $ Right $ codeActions []
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
+
 
 
 codeActions :: [CodeAction] -> List CAResult
@@ -196,18 +191,18 @@ filterBindingType
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
 filterBindingType p tp plId uri range jdg@(Judgement hys (CType g)) =
-  fmap join $ for (Map.toList hys) $ \(occ, CType ty) ->
+  fmap join $ for (M.toList hys) $ \(occ, CType ty) ->
     case p g ty of
       True  -> tp occ ty plId uri range jdg
       False -> pure []
 
 
 data TacticParams = TacticParams
-    { file :: J.Uri -- ^ Uri of the file to fill the hole in
-    , range :: J.Range -- ^ The range of the hole
+    { file :: Uri -- ^ Uri of the file to fill the hole in
+    , range :: Range -- ^ The range of the hole
     , var_name :: T.Text
     }
-  deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
+  deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 
 ------------------------------------------------------------------------------
@@ -217,16 +212,17 @@ judgmentForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> IO (PositionMapping, LHsExpr GhcTc, Judgement)
-judgmentForHole state nfp range = do
-  Just (tmr, pos) <- runIde state $ useWithStale TypeCheck nfp
-  let span = rangeToSrcSpan (fromNormalizedFilePath nfp)
-           $ fromMaybe (error "Oh shucks")
-           $ fromCurrentRange pos range
+    -> IO (Maybe (PositionMapping, LHsExpr GhcTc, Judgement))
+judgmentForHole state nfp range = runMaybeT $ do
+  (tmr, pos) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+  range' <- liftMaybe $ fromCurrentRange pos range
+  let span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
       mod = tmrModule tmr
-      Just (mss@(L span' (HsVar _ (L _ v))))
-        = mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod)
-      goal = varType v
+
+  (mss@(L span' (HsVar _ (L _ v))))
+    <- liftMaybe $ mostSpecificSpan @_ @GhcTc span (tm_typechecked_source mod)
+
+  let goal = varType v
       binds = bindings mod
       hyps = hypothesisFromBindings span' binds
   pure (pos, holify binds mss, Judgement hyps $ CType goal)
@@ -234,28 +230,35 @@ judgmentForHole state nfp range = do
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac lf state (TacticParams uri range var_name)
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      (pos, _, jdg) <- judgmentForHole state nfp range
-      pm <- useAnnotatedSource "tacticsCmd" state nfp
-      case runTactic
-              unsafeGlobalDynFlags
-              jdg
-            $ tac
-            $ mkVarOcc
-            $ T.unpack var_name of
-        Left err ->
-          pure $ (, Nothing)
-            $ Left
-            $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-        Right res -> do
-          let range' =
-                fromMaybe (error "Fiddlesticks") $ toCurrentRange pos range
-              span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
-              g = graft span res
-          let response = transform unsafeGlobalDynFlags (LSP.clientCapabilities lf) uri g pm
-          pure $ ( Right Null
-             , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response)
-             )
+  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
+      fromMaybeT (Right Null, Nothing) $ do
+        (pos, _, jdg) <- MaybeT $ judgmentForHole state nfp range
+        let dflags = unsafeGlobalDynFlags
+        pm <- lift $ useAnnotatedSource "tacticsCmd" state nfp
+        case runTactic dflags jdg
+              $ tac
+              $ mkVarOcc
+              $ T.unpack var_name of
+          Left err ->
+            pure $ (, Nothing)
+              $ Left
+              $ ResponseError InvalidRequest (T.pack $ show err) Nothing
+          Right res -> do
+            range' <- liftMaybe $ toCurrentRange pos range
+            let span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
+                g = graft span res
+            let response = transform dflags (clientCapabilities lf) uri g pm
+            pure
+              ( Right Null
+              , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response)
+              )
 tacticCmd _ _ _ _ =
   pure (Left $ ResponseError InvalidRequest (T.pack "nah") Nothing, Nothing)
+
+
+fromMaybeT :: Functor m => a -> MaybeT m a -> m a
+fromMaybeT def = fmap (fromMaybe def) . runMaybeT
+
+liftMaybe :: Monad m => Maybe a -> MaybeT m a
+liftMaybe a = MaybeT $ pure a
 
