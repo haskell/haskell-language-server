@@ -127,8 +127,8 @@ commandTactic Auto         = const auto
 commandTactic Split        = const split
 commandTactic Intro        = const intro
 commandTactic Intros       = const intros
-commandTactic Destruct     = autoIfPossible . destruct
-commandTactic Homomorphism = autoIfPossible . homo
+commandTactic Destruct     = destruct
+commandTactic Homomorphism = homo
 
 
 ------------------------------------------------------------------------------
