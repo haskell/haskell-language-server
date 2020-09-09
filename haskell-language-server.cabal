@@ -77,63 +77,6 @@ library
 
   default-language: Haskell2010
 
-flag ghc-lib
-  default: False
-  manual: True
-  description: Force dependency on ghc-lib-parser even if GHC API in the ghc package is supported
-
-library hlint-plugin
-  exposed-modules:
-    Ide.Plugin.Hlint
-  hs-source-dirs:
-    plugins/hlint-hls-plugin/src
-  build-depends:
-      base
-    , aeson
-    , apply-refact
-    , binary
-    , bytestring
-    , containers
-    , data-default
-    , deepseq
-    , Diff
-    , directory
-    , extra
-    , filepath
-    , ghcide
-    , hashable
-    , haskell-language-server
-    , haskell-lsp
-    , hlint >= 3.0
-    , hslogger
-    , lens
-    , regex-tdfa
-    , shake
-    , temporary
-    , text
-    , transformers
-    , unordered-containers
-  if !flag(ghc-lib) && impl(ghc >= 8.10.1) && impl(ghc < 8.11.0)
-    build-depends:
-        ghc == 8.10.*
-  else
-    build-depends:
-        ghc
-      , ghc-lib == 8.10.*
-      , ghc-lib-parser-ex == 8.10.*
-    cpp-options:
-        -DGHC_LIB
-    mixins:
-        ghc (GHC as RealGHC, HscTypes as RealGHC.HscTypes, EnumSet as RealGHC.EnumSet)
-
-  ghc-options:
-         -Wall
-         -Wredundant-constraints
-         -Wno-name-shadowing
-  if flag(pedantic)
-     ghc-options:      -Werror
-
-  default-language: Haskell2010
 
 executable haskell-language-server
   import:           agpl, common-deps
@@ -177,6 +120,7 @@ executable haskell-language-server
     , hashable
     , haskell-language-server
     , haskell-lsp              ^>=0.22
+    , hlint-hls-plugin
     , hls-plugin-api
     , hls-tactics-plugin
     , lens

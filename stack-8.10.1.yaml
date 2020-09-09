@@ -1,16 +1,16 @@
-resolver: nightly-2020-08-08
+resolver: nightly-2020-08-16 # Last 8.10.1
 
 packages:
 - .
 - ./ghcide/
 - ./hls-plugin-api
 - ./plugins/tactics
+- ./plugins/hlint-hls-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
-- aeson-1.5.2.0
 - github: bubba/brittany
   commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - Cabal-3.0.2.0
