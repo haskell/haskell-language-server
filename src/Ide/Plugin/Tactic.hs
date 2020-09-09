@@ -49,7 +49,7 @@ descriptor plId = (defaultPluginDescriptor plId)
               (tcCommandId tc)
               (tacticDesc $ tcCommandName tc)
               (tacticCmd $ commandTactic tc))
-              [minBound .. maxBound]
+              enabledTactics
     , pluginCodeActionProvider = Just codeActionProvider
     }
 
@@ -64,9 +64,14 @@ data TacticCommand
   = Auto
   | Split
   | Intro
+  | Intros
   | Destruct
-  | Homo
+  | Homomorphism
   deriving (Eq, Ord, Show, Enum, Bounded)
+
+
+enabledTactics :: [TacticCommand]
+enabledTactics = [Intros, Destruct, Homomorphism]
 
 
 ------------------------------------------------------------------------------
@@ -86,10 +91,6 @@ tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
 
-------------------------------------------------------------------------------
--- | Construct a title for a command.
-tcCommandTitle :: TacticCommand -> OccName -> T.Text
-tcCommandTitle tc occ = T.pack $ show tc <> " " <> occNameString occ
 
 ------------------------------------------------------------------------------
 -- | Mapping from tactic commands to their contextual providers. See 'provide',
@@ -100,21 +101,35 @@ commandProvider Split = provide Split "Split" ""
 commandProvider Intro =
   filterGoalType isFunction $
     provide Intro "Intro" ""
+commandProvider Intros =
+  filterGoalType isFunction $
+    provide Intros "Introduce lambda" ""
 commandProvider Destruct =
   filterBindingType destructFilter $ \occ _ ->
-    provide Destruct (tcCommandTitle Destruct occ) $ T.pack $ occNameString occ
-commandProvider Homo =
+    provide
+        Destruct
+        ("Case split on " <> T.pack (occNameString occ))
+      . T.pack
+      $ occNameString occ
+commandProvider Homomorphism =
   filterBindingType homoFilter $ \occ _ ->
-    provide Homo (tcCommandTitle Homo occ) $ T.pack $ occNameString occ
+    provide
+        Homomorphism
+        ("Homomorphic case split on " <> T.pack (occNameString occ))
+      . T.pack
+      $ occNameString occ
+
 
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
 commandTactic :: TacticCommand -> OccName -> TacticsM ()
-commandTactic Auto     = const auto
-commandTactic Split    = const split
-commandTactic Intro    = const intro
-commandTactic Destruct = autoIfPossible . destruct
-commandTactic Homo     = autoIfPossible . homo
+commandTactic Auto         = const auto
+commandTactic Split        = const split
+commandTactic Intro        = const intro
+commandTactic Intros       = const intros
+commandTactic Destruct     = autoIfPossible . destruct
+commandTactic Homomorphism = autoIfPossible . homo
+
 
 ------------------------------------------------------------------------------
 -- | We should show homos only when the goal type is the same as the binding
@@ -123,6 +138,7 @@ homoFilter :: Type -> Type -> Bool
 homoFilter (algebraicTyCon -> Just t1) (algebraicTyCon -> Just t2) = t1 == t2
 homoFilter _ _ = False
 
+
 ------------------------------------------------------------------------------
 -- | We should show destruct for bindings only when those bindings have usual
 -- algebraic types.
@@ -130,8 +146,10 @@ destructFilter :: Type -> Type -> Bool
 destructFilter _ (algebraicTyCon -> Just _) = True
 destructFilter _ _ = False
 
+
 runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
+
 
 codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
@@ -144,7 +162,7 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
               liftMaybe $ toCurrentRange pos =<< srcSpanToRange span'
             actions <- lift $
               -- This foldMap is over the function monoid.
-              foldMap commandProvider [minBound .. maxBound]
+              foldMap commandProvider enabledTactics
                 plId
                 uri
                 resulting_range
@@ -152,7 +170,6 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
             pure $ Right $ List actions
           _ -> pure $ Right $ codeActions []
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
-
 
 
 codeActions :: [CodeAction] -> List CAResult

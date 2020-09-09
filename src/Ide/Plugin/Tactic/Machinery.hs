@@ -9,6 +9,7 @@
 module Ide.Plugin.Tactic.Machinery where
 
 import           Control.Arrow
+import           Control.Monad.State (get, modify, evalStateT)
 import           Data.Char
 import           Data.Function
 import           Data.List
@@ -17,6 +18,7 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Data.Traversable
 import           DataCon
 import           Development.IDE.Types.Location
 import           DynFlags (unsafeGlobalDynFlags)
@@ -139,6 +141,21 @@ mkGoodName in_scope t =
    in mkVarOcc $ case elem (mkVarOcc tn) in_scope of
         True -> tn ++ show (length in_scope)
         False -> tn
+
+
+------------------------------------------------------------------------------
+-- | Like 'mkGoodName' but creates several apart names.
+mkManyGoodNames
+  :: (Traversable t, Monad m)
+  => M.Map OccName a
+  -> t Type
+  -> m (t OccName)
+mkManyGoodNames hy args =
+  flip evalStateT (getInScope hy) $ for args $ \at -> do
+    in_scope <- Control.Monad.State.get
+    let n = mkGoodName in_scope at
+    modify (n :)
+    pure n
 
 
 ------------------------------------------------------------------------------

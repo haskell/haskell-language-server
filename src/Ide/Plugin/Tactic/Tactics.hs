@@ -10,7 +10,6 @@ module Ide.Plugin.Tactic.Tactics
   ) where
 
 import           Control.Monad.Except (throwError)
-import           Control.Monad.State
 import           Data.List
 import qualified Data.Map as M
 import           Data.Traversable
@@ -24,6 +23,7 @@ import           GHC.SourceGen.Pat
 import           Ide.Plugin.Tactic.Machinery
 import           Name
 import           Refinery.Tactic
+import           TcType
 import           TyCoRep
 import           Type
 
@@ -48,6 +48,20 @@ intro = rule $ \(Judgement hy g) ->
       pure $ noLoc $ lambda [VarPat noExt $ noLoc $ Unqual v] $ unLoc sg
     _ -> throwError $ GoalMismatch "intro" g
 
+------------------------------------------------------------------------------
+-- | Introduce a lambda binding every variable.
+intros :: TacticsM ()
+intros = rule $ \(Judgement hy g) ->
+  case tcSplitFunTys $ unCType g of
+    ([], _) -> throwError $ GoalMismatch "intro" g
+    (as, b) -> do
+      vs <- mkManyGoodNames hy as
+      sg <- newSubgoal (M.fromList (zip vs $ fmap CType as) <> hy) $ CType b
+      pure
+        . noLoc
+        . lambda (fmap (bvar . fromString . occNameString) vs)
+        $ unLoc sg
+
 
 ------------------------------------------------------------------------------
 -- | Combinator for performign case splitting, and running sub-rules on the
@@ -65,11 +79,7 @@ destruct' f term = rule $ \(Judgement hy g) -> do
               <$> do
             for (tyConDataCons tc) $ \dc -> do
               let args = dataConInstArgTys dc apps
-              names <- flip evalStateT (getInScope hy) $ for args $ \at -> do
-                in_scope <- Control.Monad.State.get
-                let n = mkGoodName in_scope at
-                modify (n :)
-                pure n
+              names <- mkManyGoodNames hy args
 
               let pat :: Pat GhcPs
                   pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
