@@ -8,6 +8,7 @@ module Ide.TreeTransform
   ( Graft, graft, transform, useAnnotatedSource
   ) where
 
+import           BasicTypes (appPrec)
 import           Control.Monad
 import           Data.Bool
 import           Data.Functor.Identity
@@ -67,16 +68,7 @@ graft
     -> Located (HsExpr GhcPs)
     -> Graft a
 graft dst val = Graft $ \dflags a -> do
-  let inside_app =
-        everything (||)
-          (mkQ False $ \case
-            (L _ (HsApp _ (L src _) _) :: LHsExpr GhcPs)
-              | src == dst -> True
-            (L _ (HsApp _ _ (L src _)) :: LHsExpr GhcPs)
-              | src == dst -> True
-            _ -> False
-          ) a
-  (anns, val') <- annotate dflags $ bool val (parenthesize val) inside_app
+  (anns, val') <- annotate dflags $ parenthesize val
   modifyAnnsT $ mappend anns
   pure $ everywhere'
     ( mkT $
@@ -106,11 +98,5 @@ render dflags = showSDoc dflags . ppr
 ------------------------------------------------------------------------------
 -- | Put parentheses around an expression if required.
 parenthesize :: LHsExpr GhcPs -> LHsExpr GhcPs
-parenthesize a@(L _ HsVar{})        = a
-parenthesize a@(L _ HsUnboundVar{}) = a
-parenthesize a@(L _ HsOverLabel{})  = a
-parenthesize a@(L _ HsOverLit{})    = a
-parenthesize a@(L _ HsIPVar{})      = a
-parenthesize a@(L _ HsLit{})        = a
-parenthesize a = noLoc $ HsPar NoExt a
+parenthesize = parenthesizeHsExpr appPrec
 
