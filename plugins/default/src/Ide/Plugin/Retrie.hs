@@ -41,7 +41,7 @@ import qualified Data.Text                      as T
 import qualified Data.Text.IO                   as T
 import           Data.Typeable                  (Typeable)
 import           Development.IDE
-import           Development.IDE.Core.Shake     (ShakeExtras(knownFilesVar))
+import           Development.IDE.Core.Shake     (toKnownFiles, ShakeExtras(knownTargetsVar))
 import           Development.IDE.GHC.Compat     (GenLocated (L), GhcRn,
                                                  HsBindLR (FunBind),
                                                  HsGroup (..),
@@ -334,7 +334,7 @@ callRetrie ::
   Bool ->
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
-  knownFiles <- readVar $ knownFilesVar $ shakeExtras state
+  knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
   print knownFiles
   let reuseParsedModule f = do
         pm <-
@@ -387,7 +387,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
         ,Retrie.targetFiles = map fromNormalizedFilePath $
             if restrictToOriginatingFile
                 then [origin]
-                else Set.toList $ unhashed knownFiles
+                else Set.toList knownFiles
         }
 
       (theImports, theRewrites) = partitionEithers rewrites

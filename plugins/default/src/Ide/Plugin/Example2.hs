@@ -19,7 +19,6 @@ import Data.Aeson
 import Data.Binary
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
-import qualified Data.HashSet as HashSet
 import Data.Hashable
 import qualified Data.Text as T
 import Data.Typeable
@@ -75,7 +74,7 @@ exampleRules = do
 
   action $ do
     files <- getFilesOfInterest
-    void $ uses Example2 $ HashSet.toList files
+    void $ uses Example2 $ Map.keys files
 
 mkDiag :: NormalizedFilePath
        -> DiagnosticSource

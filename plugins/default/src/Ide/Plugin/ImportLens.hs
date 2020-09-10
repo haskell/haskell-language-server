@@ -25,7 +25,6 @@ import qualified Data.Map.Strict                as Map
 import           Data.Maybe                     (catMaybes, fromMaybe)
 import qualified Data.Text                      as T
 import           Development.IDE
-import           Development.IDE.Core.Shake (useWithStale)
 import           Development.IDE.GHC.Compat
 import           GHC.Generics                   (Generic)
 import           Ide.Plugin

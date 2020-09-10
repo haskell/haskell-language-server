@@ -18,9 +18,9 @@ module Ide.Main(defaultMain, runLspMode) where
 import Control.Concurrent.Extra
 import Control.Monad.Extra
 import Data.Default
-import qualified Data.HashSet as HashSet
 import Data.List.Extra
 import qualified Data.Map.Strict as Map
+import qualified Data.HashMap.Strict as HashMap
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -170,7 +170,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions sessionLoader) vfs
 
         putStrLn "\nStep 4/4: Type checking the files"
-        setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
+        setFilesOfInterest ide $ HashMap.fromList $ map ((, OnDisk) . toNormalizedFilePath') files
         results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' files)
         let (worked, failed) = partition fst $ zip (map isJust results) files
         when (failed /= []) $
