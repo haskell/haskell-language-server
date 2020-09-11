@@ -23,7 +23,7 @@ import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule), TypeCheck (..), GetModIface(..), hirModSummary)
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (use, useWithStale, IdeState (..))
+import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (srcSpanToRange)
 import           Development.Shake (Action)

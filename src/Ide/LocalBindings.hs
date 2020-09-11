@@ -10,6 +10,7 @@ module Ide.LocalBindings
 
 import           Bag
 import           Control.Lens
+import           Control.Monad
 import           Data.Data.Lens
 import           Data.Function
 import           Data.Generics
@@ -20,12 +21,27 @@ import           Data.Maybe
 import           Data.Ord
 import           Data.Set (Set)
 import qualified Data.Set as S
-import           Development.IDE.GHC.Compat (TypecheckedModule (..), GhcTc, NoExt (..))
+import           Development.IDE.GHC.Compat (TypecheckedModule (..), GhcTc, NoExt (..), RefMap, identType)
 import           HsBinds
 import           HsExpr
 import           Id
 import           OccName
 import           SrcLoc
+
+
+------------------------------------------------------------------------------
+-- | WIP function for getting 'bindings' from HIE, rather than stupidly
+-- traversing the entire AST.
+_bindigsHIE :: RefMap -> SrcSpan -> Set Id
+_bindigsHIE _ (UnhelpfulSpan _) = mempty
+_bindigsHIE refmap (RealSrcSpan span) = S.fromList $ do
+  (ident, refs) <- M.toList refmap
+  Right _name <- pure ident
+  (ref_span, ident_details) <- refs
+  Just _ty <- pure $ identType ident_details
+  guard $ ref_span `containsSpan` span
+  mempty
+
 
 
 ------------------------------------------------------------------------------
