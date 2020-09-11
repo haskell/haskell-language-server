@@ -73,6 +73,7 @@ import Control.Monad.Extra
 import Control.Monad.Except
 import Control.Monad.Trans.Except
 import Data.Bifunctor                           (first, second)
+import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import           Data.IORef
 import           Data.List.Extra
@@ -280,13 +281,13 @@ atomicFileWrite targetPath write = do
   (tempFilePath, cleanUp) <- newTempFileWithin dir
   (write tempFilePath >> renameFile tempFilePath targetPath) `onException` cleanUp
 
-generateAndWriteHieFile :: HscEnv -> TypecheckedModule -> IO [FileDiagnostic]
-generateAndWriteHieFile hscEnv tcm =
+generateAndWriteHieFile :: HscEnv -> TypecheckedModule -> BS.ByteString -> IO [FileDiagnostic]
+generateAndWriteHieFile hscEnv tcm source =
   handleGenerationErrors dflags "extended interface generation" $ do
     case tm_renamed_source tcm of
       Just rnsrc -> do
         hf <- runHsc hscEnv $
-          GHC.mkHieFile mod_summary (fst $ tm_internals_ tcm) rnsrc ""
+          GHC.mkHieFile mod_summary (fst $ tm_internals_ tcm) rnsrc source
         atomicFileWrite targetPath $ flip GHC.writeHieFile hf
       _ ->
         return ()
