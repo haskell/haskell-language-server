@@ -21,6 +21,7 @@ import Progress
 import Reference
 import Rename
 import Symbol
+import Tactic
 import TypeDefinition
 
 main :: IO ()
@@ -48,5 +49,6 @@ main =
         , Reference.tests
         , Rename.tests
         , Symbol.tests
+        , Tactic.tests
         , TypeDefinition.tests
         ]

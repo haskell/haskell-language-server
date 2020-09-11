@@ -291,6 +291,7 @@ test-suite func-test
                       , Reference
                       , Rename
                       , Symbol
+                      , Tactic
                       , TypeDefinition
   ghc-options:          -Wall
                         -Wno-name-shadowing
