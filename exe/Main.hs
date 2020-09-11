@@ -46,7 +46,7 @@ import System.FilePath
 import System.Time.Extra
 import Paths_ghcide
 import Development.GitRev
-import qualified Data.HashSet as HashSet
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Aeson as J
 
 import HIE.Bios.Cradle
@@ -144,7 +144,7 @@ main = do
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer (defaultIdeOptions sessionLoader)  vfs
 
         putStrLn "\nStep 4/4: Type checking the files"
-        setFilesOfInterest ide $ HashSet.fromList $ map toNormalizedFilePath' files
+        setFilesOfInterest ide $ HashMap.fromList $ map ((, OnDisk) . toNormalizedFilePath') files
         results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' files)
         let (worked, failed) = partition fst $ zip (map isJust results) files
         when (failed /= []) $

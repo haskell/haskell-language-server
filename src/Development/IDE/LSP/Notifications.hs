@@ -23,6 +23,7 @@ import           Development.IDE.Types.Options
 import           Control.Monad.Extra
 import           Data.Foldable                    as F
 import           Data.Maybe
+import qualified Data.HashMap.Strict              as M
 import qualified Data.HashSet                     as S
 import qualified Data.Text                        as Text
 
@@ -39,32 +40,30 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
     {LSP.didOpenTextDocumentNotificationHandler = withNotification (LSP.didOpenTextDocumentNotificationHandler x) $
         \_ ide (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> do
             updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
-            IdeOptions{optCheckParents} <- getIdeOptionsIO $ shakeExtras ide
             whenUriFile _uri $ \file -> do
-                modifyFilesOfInterest ide (S.insert file)
-                let checkParents = optCheckParents == AlwaysCheck
-                setFileModified ide checkParents file
+                modifyFilesOfInterest ide (M.insert file OnDisk)
+                setFileModified ide False file
                 logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
     ,LSP.didChangeTextDocumentNotificationHandler = withNotification (LSP.didChangeTextDocumentNotificationHandler x) $
         \_ ide (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> do
             updatePositionMapping ide identifier changes
-            IdeOptions{optCheckParents} <- getIdeOptionsIO $ shakeExtras ide
-            let checkParents = optCheckParents == AlwaysCheck
-            whenUriFile _uri $ \file -> setFileModified ide checkParents file
+            whenUriFile _uri $ \file -> do
+              modifyFilesOfInterest ide (M.insert file Modified)
+              setFileModified ide False file
             logInfo (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
     ,LSP.didSaveTextDocumentNotificationHandler = withNotification (LSP.didSaveTextDocumentNotificationHandler x) $
         \_ ide (DidSaveTextDocumentParams TextDocumentIdentifier{_uri}) -> do
-            IdeOptions{optCheckParents} <- getIdeOptionsIO $ shakeExtras ide
-            let checkParents = optCheckParents >= CheckOnSaveAndClose
-            whenUriFile _uri $ \file -> setFileModified ide checkParents file
+            whenUriFile _uri $ \file -> do
+                modifyFilesOfInterest ide (M.insert file OnDisk)
+                setFileModified ide True file
             logInfo (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
     ,LSP.didCloseTextDocumentNotificationHandler = withNotification (LSP.didCloseTextDocumentNotificationHandler x) $
         \_ ide (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> do
             whenUriFile _uri $ \file -> do
-                modifyFilesOfInterest ide (S.delete file)
+                modifyFilesOfInterest ide (M.delete file)
                 -- Refresh all the files that depended on this
                 IdeOptions{optCheckParents} <- getIdeOptionsIO $ shakeExtras ide
                 when (optCheckParents >= CheckOnClose) $ typecheckParents ide file

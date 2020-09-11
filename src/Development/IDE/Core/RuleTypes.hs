@@ -132,7 +132,19 @@ type instance RuleResult GetModIfaceFromDisk = HiFileResult
 -- | Get a module interface details, either from an interface file or a typechecked module
 type instance RuleResult GetModIface = HiFileResult
 
-type instance RuleResult IsFileOfInterest = Bool
+data FileOfInterestStatus = OnDisk | Modified
+  deriving (Eq, Show, Typeable, Generic)
+instance Hashable FileOfInterestStatus
+instance NFData   FileOfInterestStatus
+instance Binary   FileOfInterestStatus
+
+data IsFileOfInterestResult = NotFOI | IsFOI FileOfInterestStatus
+  deriving (Eq, Show, Typeable, Generic)
+instance Hashable IsFileOfInterestResult
+instance NFData   IsFileOfInterestResult
+instance Binary   IsFileOfInterestResult
+
+type instance RuleResult IsFileOfInterest = IsFileOfInterestResult
 
 -- | Generate a ModSummary that has enough information to be used to get .hi and .hie files.
 -- without needing to parse the entire source

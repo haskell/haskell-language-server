@@ -56,7 +56,7 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import System.Time.Extra
 import Development.IDE.Plugin.CodeAction (typeSignatureCommandId, blockCommandId)
-import Development.IDE.Plugin.Test (TestRequest(BlockSeconds))
+import Development.IDE.Plugin.Test (TestRequest(BlockSeconds,GetInterfaceFilesDir))
 
 main :: IO ()
 main = do
@@ -2991,6 +2991,21 @@ ifaceErrorTest = testCase "iface-error-test-1" $ withoutStackEnv $ runWithExtraF
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
     -- save so that we can that the error propogates to A
     sendNotification TextDocumentDidSave (DidSaveTextDocumentParams bdoc)
+
+    -- Check that we wrote the interfaces for B when we saved
+    lid <- sendRequest (CustomClientMethod "hidir") $ GetInterfaceFilesDir bPath
+    res <- skipManyTill (message :: Session WorkDoneProgressCreateRequest) $
+           skipManyTill (message :: Session WorkDoneProgressBeginNotification) $
+             responseForId lid
+    liftIO $ case res of
+      ResponseMessage{_result=Right hidir} -> do
+        hi_exists <- doesFileExist $ hidir </> "B.hi"
+        assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
+#if MIN_GHC_API_VERSION(8,6,0)
+        hie_exists <- doesFileExist $ hidir </> "B.hie"
+        assertBool ("Couldn't find B.hie in " ++ hidir) hie_exists
+#endif
+      _ -> assertFailure $ "Got malformed response for CustomMessage hidir: " ++ show res
 
     -- Check that the error propogates to A
     expectDiagnostics
