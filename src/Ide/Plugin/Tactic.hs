@@ -9,6 +9,8 @@
 -- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic
   ( descriptor
+  , tacticTitle
+  , TacticCommand (..)
   ) where
 
 import           Control.Monad
@@ -21,13 +23,15 @@ import           Data.Maybe
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule), TypeCheck (..), GetModIface(..), hirModSummary)
+import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule), TypeCheck (..), GhcSession(..))
 import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (srcSpanToRange)
+import           Development.IDE.GHC.Util (hscEnv)
 import           Development.Shake (Action)
 import           GHC.Generics (Generic)
+import           HscTypes (hsc_dflags)
 import           Ide.LocalBindings (bindings, mostSpecificSpan, holify)
 import           Ide.Plugin (mkLspCommand)
 import           Ide.Plugin.Tactic.Machinery
@@ -92,31 +96,34 @@ tcCommandName = T.pack . show
 
 
 ------------------------------------------------------------------------------
+-- | Generate a title for the command.
+tacticTitle :: TacticCommand -> T.Text -> T.Text
+tacticTitle Auto _ = "Auto"
+tacticTitle Split _ = "Auto"
+tacticTitle Intro _ = "Intro"
+tacticTitle Intros _ = "Introduce lambda"
+tacticTitle Destruct var = "Case split on " <> var
+tacticTitle Homomorphism var = "Homomorphic case split on " <> var
+
+
+------------------------------------------------------------------------------
 -- | Mapping from tactic commands to their contextual providers. See 'provide',
 -- 'filterGoalType' and 'filterBindingType' for the nitty gritty.
 commandProvider :: TacticCommand -> TacticProvider
-commandProvider Auto  = provide Auto "Auto" ""
-commandProvider Split = provide Split "Split" ""
+commandProvider Auto  = provide Auto ""
+commandProvider Split = provide Split ""
 commandProvider Intro =
   filterGoalType isFunction $
-    provide Intro "Intro" ""
+    provide Intro ""
 commandProvider Intros =
   filterGoalType isFunction $
-    provide Intros "Introduce lambda" ""
+    provide Intros ""
 commandProvider Destruct =
   filterBindingType destructFilter $ \occ _ ->
-    provide
-        Destruct
-        ("Case split on " <> T.pack (occNameString occ))
-      . T.pack
-      $ occNameString occ
+    provide Destruct $ T.pack $ occNameString occ
 commandProvider Homomorphism =
   filterBindingType homoFilter $ \occ _ ->
-    provide
-        Homomorphism
-        ("Homomorphic case split on " <> T.pack (occNameString occ))
-      . T.pack
-      $ occNameString occ
+    provide Homomorphism $ T.pack $ occNameString occ
 
 
 ------------------------------------------------------------------------------
@@ -178,9 +185,10 @@ codeActions = List . fmap CACodeAction
 ------------------------------------------------------------------------------
 -- | Terminal constructor for providing context-sensitive tactics. Tactics
 -- given by 'provide' are always available.
-provide :: TacticCommand -> T.Text -> T.Text -> TacticProvider
-provide tc title name plId uri range _ = do
-  let params = TacticParams { file = uri , range = range , var_name = name }
+provide :: TacticCommand -> T.Text -> TacticProvider
+provide tc name plId uri range _ = do
+  let title = tacticTitle tc name
+      params = TacticParams { file = uri , range = range , var_name = name }
   cmd <- mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
   pure
     $ pure
@@ -251,8 +259,8 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         (pos, _, jdg) <- MaybeT $ judgmentForHole state nfp range
         -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
         -- which don't change very often.
-        (mod_iface, _) <- MaybeT $ runIde state $ useWithStale GetModIface nfp
-        let dflags = ms_hspp_opts $ hirModSummary mod_iface
+        (hscenv, _) <- MaybeT $ runIde state $ useWithStale GhcSession nfp
+        let dflags = hsc_dflags $ hscEnv hscenv
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         case runTactic jdg
               $ tac
