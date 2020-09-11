@@ -58,6 +58,7 @@ import Data.IntMap.Strict (IntMap)
 import Data.List
 import qualified Data.Set                                 as Set
 import qualified Data.Text                                as T
+import qualified Data.Text.Encoding                       as T
 import           Development.IDE.GHC.Error
 import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
@@ -188,11 +189,18 @@ getHomeHieFile f = do
       wait <- lift $ delayedAction $ mkDelayedAction "OutOfDateHie" L.Info $ do
         hsc <- hscEnv <$> use_ GhcSession f
         pm <- use_ GetParsedModule f
-        typeCheckRuleDefinition hsc pm DoGenerateInterfaceFiles
+        source <- getSourceFileSource f
+        typeCheckRuleDefinition hsc pm DoGenerateInterfaceFiles (Just source)
       _ <- MaybeT $ liftIO $ timeout 1 wait
       ncu <- mkUpdater
       liftIO $ loadHieFile ncu hie_f
 
+getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
+getSourceFileSource nfp = do
+    (_, msource) <- getFileContents nfp
+    case msource of
+        Nothing -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
+        Just source -> pure $ T.encodeUtf8 source
 
 getPackageHieFile :: ShakeExtras
                   -> Module             -- ^ Package Module to load .hie file for
@@ -519,7 +527,7 @@ typeCheckRule = define $ \TypeCheck file -> do
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
     -- do not generate interface files as this rule is called
     -- for files of interest on every keystroke
-    typeCheckRuleDefinition hsc pm SkipGenerationOfInterfaceFiles
+    typeCheckRuleDefinition hsc pm SkipGenerationOfInterfaceFiles Nothing
 
 knownFilesRule :: Rules ()
 knownFilesRule = defineEarlyCutOffNoFile $ \GetKnownFiles -> do
@@ -546,8 +554,9 @@ typeCheckRuleDefinition
     :: HscEnv
     -> ParsedModule
     -> GenerateInterfaceFiles -- ^ Should generate .hi and .hie files ?
+    -> Maybe BS.ByteString
     -> Action (IdeResult TcModuleResult)
-typeCheckRuleDefinition hsc pm generateArtifacts = do
+typeCheckRuleDefinition hsc pm generateArtifacts source = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
 
@@ -560,7 +569,7 @@ typeCheckRuleDefinition hsc pm generateArtifacts = do
         -- type errors, as we won't get proper diagnostics if we load these from
         -- disk
         , not $ tmrDeferedError tcm -> do
-        diagsHie <- generateAndWriteHieFile hsc (tmrModule tcm)
+        diagsHie <- generateAndWriteHieFile hsc (tmrModule tcm) (fromMaybe "" source)
         diagsHi  <- writeHiFile hsc tcm
         return (diags <> diagsHi <> diagsHie, Just tcm)
       (diags, res) ->
@@ -801,9 +810,10 @@ regenerateHiFile sess f = do
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do
+            source <- getSourceFileSource f
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags', tmr) <- typeCheckRuleDefinition hsc pm DoGenerateInterfaceFiles
+            (diags', tmr) <- typeCheckRuleDefinition hsc pm DoGenerateInterfaceFiles (Just source)
             -- Bang pattern is important to avoid leaking 'tmr'
             let !res = extractHiFileResult tmr
             return (diags <> diags', res)
