@@ -8,32 +8,20 @@ module Tactic
   )
 where
 
-import Debug.Trace
 import Data.Foldable
 import Data.Text (Text)
 import qualified Data.Text as T
-import           Control.Applicative.Combinators
-                                                ( skipManyTill )
 import           Control.Monad.IO.Class         ( MonadIO(liftIO) )
-import qualified Data.Text.IO                  as T
 import           Language.Haskell.LSP.Test
-import           Language.Haskell.LSP.Types     ( ApplyWorkspaceEditRequest
-                                                , CodeLens
-                                                , Command(_title)
-                                                , Position(..)
+import           Language.Haskell.LSP.Types     ( Position(..)
                                                 , Range(..)
-                                                , Location(Location)
                                                 , CAResult(..)
                                                 , CodeAction(..)
-                                                , Uri
                                                 )
-import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure (expectFailBecause)
 import           Test.Tasty.HUnit
-import Data.List
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (mapMaybe)
 import Ide.Plugin.Tactic (tacticTitle, TacticCommand (..))
 
 
