@@ -21,13 +21,12 @@ import           Data.Maybe
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule), TypeCheck (TypeCheck))
+import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule), TypeCheck (..), GetModIface(..), hirModSummary)
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
+import           Development.IDE.Core.Shake (use, useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (srcSpanToRange)
 import           Development.Shake (Action)
-import           DynFlags (unsafeGlobalDynFlags)
 import           GHC.Generics (Generic)
 import           Ide.LocalBindings (bindings, mostSpecificSpan, holify)
 import           Ide.Plugin (mkLspCommand)
@@ -250,7 +249,10 @@ tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
         (pos, _, jdg) <- MaybeT $ judgmentForHole state nfp range
-        let dflags = unsafeGlobalDynFlags
+        -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
+        -- which don't change very often.
+        (mod_iface, _) <- MaybeT $ runIde state $ useWithStale GetModIface nfp
+        let dflags = ms_hspp_opts $ hirModSummary mod_iface
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         case runTactic jdg
               $ tac
