@@ -20,10 +20,10 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
+import           Development.IDE.GHC.Compat
 import           Development.IDE.Types.Location
 import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
-import           GHC
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
 import           Ide.LocalBindings

@@ -20,12 +20,13 @@ import           Data.Maybe
 import           Data.Ord
 import           Data.Set (Set)
 import qualified Data.Set as S
-import           GHC (TypecheckedModule (..), GhcTc, NoExt (..))
+import           Development.IDE.GHC.Compat (TypecheckedModule (..), GhcTc, NoExt (..))
 import           HsBinds
 import           HsExpr
 import           Id
 import           OccName
 import           SrcLoc
+
 
 ------------------------------------------------------------------------------
 -- | The available bindings at every point in a Haskell tree.

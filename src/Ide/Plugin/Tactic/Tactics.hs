@@ -14,7 +14,7 @@ import           Data.List
 import qualified Data.Map as M
 import           Data.Traversable
 import           DataCon
-import           GHC
+import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
@@ -26,6 +26,12 @@ import           Refinery.Tactic
 import           TcType
 import           TyCoRep
 import           Type
+
+
+------------------------------------------------------------------------------
+-- | Like 'bvar', but works over standard GHC 'OccName's.
+bvar' :: BVar a => OccName -> a
+bvar' = bvar . fromString . occNameString
 
 
 ------------------------------------------------------------------------------
@@ -45,7 +51,7 @@ intro = rule $ \(Judgement hy g) ->
     (FunTy a b) -> do
       v <- pure $ mkGoodName (getInScope hy) a
       sg <- newSubgoal (M.singleton v (CType a) <> hy) $ CType b
-      pure $ noLoc $ lambda [VarPat noExt $ noLoc $ Unqual v] $ unLoc sg
+      pure $ noLoc $ lambda [bvar' v] $ unLoc sg
     _ -> throwError $ GoalMismatch "intro" g
 
 ------------------------------------------------------------------------------
@@ -59,7 +65,7 @@ intros = rule $ \(Judgement hy g) ->
       sg <- newSubgoal (M.fromList (zip vs $ fmap CType as) <> hy) $ CType b
       pure
         . noLoc
-        . lambda (fmap (bvar . fromString . occNameString) vs)
+        . lambda (fmap bvar' vs)
         $ unLoc sg
 
 
@@ -83,7 +89,7 @@ destruct' f term = rule $ \(Judgement hy g) -> do
 
               let pat :: Pat GhcPs
                   pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
-                      $ fmap (bvar . fromString . occNameString) names
+                      $ fmap bvar' names
 
               j <- newJudgement (M.fromList (zip names (fmap CType args)) <> hy) g
               sg <- f dc j

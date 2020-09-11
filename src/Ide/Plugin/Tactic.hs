@@ -24,10 +24,10 @@ import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes (TcModuleResult (tmrModule), TypeCheck (TypeCheck))
 import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
+import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (srcSpanToRange)
 import           Development.Shake (Action)
 import           DynFlags (unsafeGlobalDynFlags)
-import           GHC
 import           GHC.Generics (Generic)
 import           Ide.LocalBindings (bindings, mostSpecificSpan, holify)
 import           Ide.Plugin (mkLspCommand)
@@ -251,7 +251,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
       fromMaybeT (Right Null, Nothing) $ do
         (pos, _, jdg) <- MaybeT $ judgmentForHole state nfp range
         let dflags = unsafeGlobalDynFlags
-        pm <- lift $ useAnnotatedSource "tacticsCmd" state nfp
+        pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         case runTactic jdg
               $ tac
               $ mkVarOcc
@@ -270,7 +270,9 @@ tacticCmd tac lf state (TacticParams uri range var_name)
               , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams response)
               )
 tacticCmd _ _ _ _ =
-  pure (Left $ ResponseError InvalidRequest (T.pack "nah") Nothing, Nothing)
+  pure ( Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
+       , Nothing
+       )
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a

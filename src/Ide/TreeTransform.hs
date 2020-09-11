@@ -16,8 +16,8 @@ import           Debug.Trace
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat  hiding (parseExpr)
 import           Development.IDE.Types.Location
-import           GHC hiding (parseExpr)
 import           Generics.SYB
 import           Ide.PluginUtils
 import           Language.Haskell.GHC.ExactPrint
@@ -35,10 +35,10 @@ useAnnotatedSource
     :: String
     -> IdeState
     -> NormalizedFilePath
-    -> IO (Annotated ParsedSource)
+    -> IO (Maybe (Annotated ParsedSource))
 useAnnotatedSource herald state nfp = do
-  Just pm <- runAction herald state $ use GetParsedModule nfp
-  pure $ fixAnns pm
+  pm <- runAction herald state $ use GetParsedModule nfp
+  pure $ fmap fixAnns pm
 
 
 ------------------------------------------------------------------------------
