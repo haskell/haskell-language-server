@@ -25,15 +25,24 @@ import Data.Maybe (mapMaybe)
 import Ide.Plugin.Tactic (tacticTitle, TacticCommand (..))
 
 
+------------------------------------------------------------------------------
+-- | Get a range at the given line and column corresponding to having nothing
+-- selected.
+--
+-- NB: These coordinates are in "file space", ie, 1-indexed.
 pointRange :: Int -> Int -> Range
 pointRange
   (subtract 1 -> line)
   (subtract 1 -> col) =
     Range (Position line col) (Position line $ col + 1)
 
+
+------------------------------------------------------------------------------
+-- | Get the title of a code action.
 codeActionTitle :: CAResult -> Maybe Text
 codeActionTitle CACommand{} = Nothing
 codeActionTitle (CACodeAction(CodeAction title _ _ _ _)) = Just title
+
 
 tests :: TestTree
 tests = testGroup
@@ -66,16 +75,19 @@ tests = testGroup
       ]
   ]
 
+
+------------------------------------------------------------------------------
+-- | Make a tactic unit test.
 mkTest
     :: Foldable t
-    => String
-    -> FilePath
-    -> Int
-    -> Int
+    => String  -- ^ The test name
+    -> FilePath  -- ^ The file to load
+    -> Int  -- ^ Cursor line
+    -> Int  -- ^ Cursor columnn
     -> t ( Bool -> Bool   -- Use 'not' for actions that shouldnt be present
-         , TacticCommand
-         , Text
-         )
+         , TacticCommand  -- An expected command ...
+         , Text           -- ... for this variable
+         ) -- ^ A collection of (un)expected code actions.
     -> TestTree
 mkTest name fp line col ts =
   testCase name $ do
