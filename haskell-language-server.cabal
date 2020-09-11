@@ -127,6 +127,7 @@ executable haskell-language-server
     , haskell-lsp              ^>=0.22
     , hls-plugin-api
     , lens
+    , mtl
     , ormolu                   ^>=0.1.2
     , refinery
     , regex-tdfa
@@ -134,6 +135,7 @@ executable haskell-language-server
     , safe-exceptions
     , shake                    >=0.17.5
     , stylish-haskell          ^>=0.11
+    , syb
     , temporary
     , time
     , transformers
