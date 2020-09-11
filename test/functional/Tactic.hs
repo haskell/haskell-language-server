@@ -53,13 +53,28 @@ tests = testGroup
   [ mkTest
       "Produces intros code action"
       "T1.hs" 2 14
-      [ (Intros, "")
+      [ (id, Intros, "")
       ]
   , mkTest
       "Produces destruct and homomorphism code actions"
       "T2.hs" 2 21
-      [ (Destruct, "eab")
-      , (Homomorphism, "eab")
+      [ (id, Destruct, "eab")
+      , (id, Homomorphism, "eab")
+      ]
+  , mkTest
+      "Can destruct globals"
+      "T2.hs" 8 8
+      [ (id, Destruct, "global")
+      ]
+  , mkTest
+      "Won't suggest homomorphism on the wrong type"
+      "T2.hs" 8 8
+      [ (not, Homomorphism, "global")
+      ]
+  , mkTest
+      "Won't suggest intros on the wrong type"
+      "T2.hs" 8 8
+      [ (not, Intros, "")
       ]
   ]
 
@@ -69,7 +84,10 @@ mkTest
     -> FilePath
     -> Int
     -> Int
-    -> t (TacticCommand, Text)
+    -> t ( Bool -> Bool   -- Use 'not' for actions that shouldnt be present
+         , TacticCommand
+         , Text
+         )
     -> TestTree
 mkTest name fp line col ts =
   testCase name $ do
@@ -77,10 +95,10 @@ mkTest name fp line col ts =
     doc <- openDoc fp "haskell"
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
-    for_ ts $ \(tc, var) -> do
+    for_ ts $ \(f, tc, var) -> do
       let title = tacticTitle tc var
       liftIO $
-        elem title titles
+        f (elem title titles)
           @? ("Expected a code action with title " <> T.unpack title)
 
 tacticPath :: FilePath
