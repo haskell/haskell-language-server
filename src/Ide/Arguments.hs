@@ -7,7 +7,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 
-module Arguments
+module Ide.Arguments
   ( Arguments(..)
   , LspArguments(..)
   , PrintVersion(..)

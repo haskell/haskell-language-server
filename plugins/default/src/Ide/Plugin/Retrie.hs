@@ -40,27 +40,9 @@ import           Data.String                    (IsString (fromString))
 import qualified Data.Text                      as T
 import qualified Data.Text.IO                   as T
 import           Data.Typeable                  (Typeable)
-import           Development.IDE.Core.FileStore (getFileContents)
-import           Development.IDE.Core.Rules
-import           Development.IDE.Core.RuleTypes as Ghcide (GetModIface (..),
-                                                           GetModSummary (..),
-                                                           GhcSessionDeps (..),
-                                                           HiFileResult (..),
-                                                           TypeCheck (..),
-                                                           tmrModule)
-import           Development.IDE.Core.Shake     (IdeRule,
-                                                 IdeState (shakeExtras),
-                                                 ideLogger, knownFilesVar,
-                                                 runIdeAction, use,
-                                                 useWithStaleFast, use_)
-import           Development.IDE.GHC.Error      (isInsideSrcSpan,
-                                                 realSrcSpanToRange)
-import           Development.IDE.GHC.Util       (hscEnv, prettyPrint, runGhcEnv)
-import           Development.IDE.Types.Location
-import           Development.IDE.Types.Logger   (Logger (logPriority),
-                                                 Priority (..))
-import           Development.Shake              (RuleResult)
-import           GHC                            (GenLocated (L), GhcRn,
+import           Development.IDE
+import           Development.IDE.Core.Shake     (ShakeExtras(knownFilesVar))
+import           Development.IDE.GHC.Compat     (GenLocated (L), GhcRn,
                                                  HsBindLR (FunBind),
                                                  HsGroup (..),
                                                  HsValBindsLR (..), HscEnv, IdP,

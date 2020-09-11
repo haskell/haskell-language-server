@@ -4,6 +4,7 @@ compiler: ghc-8.10.2
 packages:
 - .
 - ./ghcide/
+- ./hls-plugin-api
 
 ghc-options:
   "$everything": -haddock

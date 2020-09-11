@@ -15,24 +15,30 @@ cradle:
 
             - path: "./test/utils/"
               component: "haskell-language-server:func-test"
-        
+
             - path: "./exe/Main.hs"
               component: "haskell-language-server:exe:haskell-language-server"
-        
+
             - path: "./exe/Arguments.hs"
+              component: "haskell-language-server:exe:haskell-language-server"
+
+            - path: "./plugins/default/src"
               component: "haskell-language-server:exe:haskell-language-server"
 
             - path: "./exe/Wrapper.hs"
               component: "haskell-language-server:exe:haskell-language-server-wrapper"
-        
+
             - path: "./src"
               component: "lib:haskell-language-server"
 
             - path: "./.stack-work/"
               component: "lib:haskell-language-server"
-        
+
             - path: "./ghcide/src"
               component: "ghcide:lib:ghcide"
-        
+
             - path: "./ghcide/exe"
               component: "ghcide:exe:ghcide"
+
+            - path: "./hls-plugin-api/src"
+              component: "hls-plugin-api:lib:hls-plugin-api"

@@ -3,7 +3,6 @@
 -- https://github.com/alanz/vscode-hie-server
 module Main where
 
-import Arguments
 import Control.Monad.Extra
 import Data.Foldable
 import Data.List
@@ -11,6 +10,7 @@ import Data.Void
 import HIE.Bios
 import HIE.Bios.Environment
 import HIE.Bios.Types
+import Ide.Arguments
 import Ide.Version
 import System.Directory
 import System.Environment

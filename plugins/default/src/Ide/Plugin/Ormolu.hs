@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 
-module Ide.Plugin.Fourmolu
+module Ide.Plugin.Ormolu
   (
     descriptor
   , provider
@@ -13,12 +13,7 @@ where
 
 import           Control.Exception
 import qualified Data.Text                         as T
-import           Development.IDE.Core.Rules
-import           Development.IDE.Core.RuleTypes    (GhcSession (GhcSession))
-import           Development.IDE.Core.Shake        (use)
-import           Development.IDE.GHC.Util          (hscEnv)
-import           Development.IDE.Types.Diagnostics as D
-import           Development.IDE.Types.Location
+import           Development.IDE
 import qualified DynFlags                          as D
 import qualified EnumSet                           as S
 import           GHC
@@ -30,7 +25,7 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core         (LspFuncs (withIndefiniteProgress),
                                                     ProgressCancellable (Cancellable))
 import           Language.Haskell.LSP.Types
-import "fourmolu" Ormolu
+import "ormolu"  Ormolu
 import           System.FilePath                   (takeFileName)
 import           Text.Regex.TDFA.Text              ()
 
@@ -57,7 +52,7 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
       in
         return $ map DynOption $ pp <> pm <> ex
 
-  ghc <- runAction "Fourmolu" ideState $ use GhcSession fp
+  ghc <- runAction "Ormolu" ideState $ use GhcSession fp
   let df = hsc_dflags . hscEnv <$> ghc
   fileOpts <- case df of
           Nothing -> return []
@@ -66,28 +61,20 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
   let
     fullRegion = RegionIndices Nothing Nothing
     rangeRegion s e = RegionIndices (Just $ s + 1) (Just $ e + 1)
-    mkConf o region = do
-      printerOpts <- loadConfigFile True (Just fp') defaultPrinterOpts
-      return $ defaultConfig
-        { cfgDynOptions = o
-        , cfgRegion = region
-        , cfgDebug = True
-        , cfgPrinterOpts = printerOpts
-        }
+    mkConf o region = defaultConfig { cfgDynOptions = o,  cfgRegion = region }
     fmt :: T.Text -> Config RegionIndices -> IO (Either OrmoluException T.Text)
     fmt cont conf =
-      try @OrmoluException (ormolu conf fp' $ T.unpack cont)
-    fp' = fromNormalizedFilePath fp
+      try @OrmoluException (ormolu conf (fromNormalizedFilePath fp) $ T.unpack cont)
 
   case typ of
-    FormatText -> ret <$> (fmt contents =<< mkConf fileOpts fullRegion)
+    FormatText -> ret <$> fmt contents (mkConf fileOpts fullRegion)
     FormatRange (Range (Position sl _) (Position el _)) ->
-      ret <$> (fmt contents =<< mkConf fileOpts (rangeRegion sl el))
+      ret <$> fmt contents (mkConf fileOpts (rangeRegion sl el))
  where
   title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)
   ret (Left err) = Left
-    (responseError (T.pack $ "fourmoluCmd: " ++ show err) )
+    (responseError (T.pack $ "ormoluCmd: " ++ show err) )
   ret (Right new) = Right (makeDiffTextEdit contents new)
 
 showExtension :: Extension -> String

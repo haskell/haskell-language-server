@@ -24,13 +24,9 @@ import           Data.Map                       (Map)
 import qualified Data.Map.Strict                as Map
 import           Data.Maybe                     (catMaybes, fromMaybe)
 import qualified Data.Text                      as T
-import           Development.IDE.Core.RuleTypes (GhcSessionDeps (GhcSessionDeps),
-                                                 TcModuleResult (tmrModule),
-                                                 TypeCheck (TypeCheck))
-import           Development.IDE.Core.Shake     (use, IdeState (..))
+import           Development.IDE
+import           Development.IDE.Core.Shake (useWithStale)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error      (realSpan, realSrcSpanToRange)
-import           Development.IDE.GHC.Util       (HscEnvEq, hscEnv, prettyPrint)
 import           GHC.Generics                   (Generic)
 import           Ide.Plugin
 import           Ide.Types
@@ -40,8 +36,6 @@ import           RnNames                        (findImportUsage,
                                                  getMinimalImports)
 import           TcRnMonad                      (initTcWithGbl)
 import           TcRnTypes                      (TcGblEnv (tcg_used_gres))
-import Development.IDE.Core.Service (runAction)
-import Development.Shake (Action)
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
@@ -91,11 +85,11 @@ provider _lspFuncs          -- LSP functions, not used
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri
   = do
     -- Get the typechecking artifacts from the module
-    tmr <- runIde state $ use TypeCheck nfp
+    tmr <- runIde state $ useWithStale TypeCheck nfp
     -- We also need a GHC session with all the dependencies
-    hsc <- runIde state $ use GhcSessionDeps nfp
+    hsc <- runIde state $ useWithStale GhcSessionDeps nfp
     -- Use the GHC api to extract the "minimal" imports
-    (imports, mbMinImports) <- extractMinimalImports hsc tmr
+    (imports, mbMinImports) <- extractMinimalImports (fst <$> hsc) ( fst <$> tmr)
 
     case mbMinImports of
         -- Implement the provider logic:

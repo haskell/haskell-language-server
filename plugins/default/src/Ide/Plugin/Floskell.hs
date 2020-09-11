@@ -14,8 +14,7 @@ where
 import qualified Data.ByteString.Lazy           as BS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding             as T
-import           Development.IDE.Types.Diagnostics as D
-import           Development.IDE.Types.Location
+import           Development.IDE as D
 import           Floskell
 import           Ide.Plugin.Formatter
 import           Ide.Types

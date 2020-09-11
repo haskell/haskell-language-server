@@ -18,7 +18,7 @@ import           Ide.Types
 import qualified GHC.Generics                    as Generics
 import qualified Language.Haskell.LSP.Types      as J
 import qualified Language.Haskell.LSP.Types.Lens as J
-import           Development.IDE.Types.Diagnostics as D
+import           Development.IDE as D
 import           Language.Haskell.LSP.Types
 
 -- ---------------------------------------------------------------------

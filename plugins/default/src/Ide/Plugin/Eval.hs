@@ -41,17 +41,10 @@ import           Data.String                    (IsString (fromString))
 import           Data.Text                      (Text)
 import qualified Data.Text                      as T
 import           Data.Time                      (getCurrentTime)
-import           Development.IDE.Core.Rules     (runAction)
-import           Development.IDE.Core.RuleTypes (GetModSummary (..),
-                                                 GhcSession (..))
-import           Development.IDE.Core.Shake     (use_)
-import           Development.IDE.GHC.Util       (evalGhcEnv, hscEnv,
-                                                 textToStringBuffer)
-import           Development.IDE.Types.Location (toNormalizedFilePath',
-                                                 uriToFilePath')
+import           Development.IDE
 import           DynamicLoading                 (initializePlugins)
 import           DynFlags                       (targetPlatform)
-import           GHC                            (Ghc, TcRnExprMode(..), DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+import           Development.IDE.GHC.Compat     (Ghc, TcRnExprMode(..), DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
                                                  GhcLink (LinkInMemory),
                                                  GhcMode (CompManager),
                                                  HscTarget (HscInterpreted),
@@ -179,25 +172,10 @@ runEvalCmd lsp state EvalParams {..} = response' $ do
   contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri _uri
   text <- handleMaybe "contents" $ virtualFileText <$> contents
 
-{- Note: GhcSessionDeps
-
-Depending on GhcSession means we do need to reload all the module
-dependencies in the GHC session(from interface files, hopefully).
-
-The GhcSessionDeps dependency would allow us to reuse a GHC session preloaded
-with all the dependencies. Unfortunately, the ModSummary objects that
-GhcSessionDeps puts in the GHC session are not suitable for reuse since they
-clear out the timestamps; this is done to avoid internal ghcide bugs and
-can probably be relaxed so that plugins like Eval can reuse them. Once that's
-done, we want to switch back to GhcSessionDeps:
-
--- https://github.com/digital-asset/ghcide/pull/694
-
- -}
   session <-
     liftIO $
       runAction "runEvalCmd.ghcSession" state $
-        use_ GhcSession $ -- See the note on GhcSessionDeps
+        use_ GhcSessionDeps $
           toNormalizedFilePath' $
             fp
 
@@ -316,15 +294,15 @@ evalGhciLikeCmd cmd arg = do
       (ty, kind) <- typeKind True $ T.unpack input
       pure
         $ Just
-        $ T.unlines 
+        $ T.unlines
         $ map ("-- " <>)
         [ input <> " :: " <> tppr kind
         , "= " <> tppr ty
-        ]  
+        ]
     "type" -> do
       let (emod, expr) = parseExprMode arg
       ty <- exprType emod $ T.unpack expr
-      pure $ Just $ 
+      pure $ Just $
         "-- " <> expr <> " :: " <> tppr ty <> "\n"
     _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
 
@@ -346,7 +324,7 @@ instance Show GhciLikeCmdException where
   showsPrec _ GhciLikeCmdNotImplemented{..} =
     showString "unknown command '" .
     showString (T.unpack ghciCmdName) . showChar '\''
-  
+
 instance E.Exception GhciLikeCmdException
 
 parseGhciLikeCmd :: Text -> Maybe (Text, Text)
