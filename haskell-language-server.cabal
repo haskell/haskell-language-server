@@ -222,13 +222,23 @@ test-suite func-test
     , bytestring
     , data-default
     , lens
+    , ghc
+    , ghc-source-gen
+    , ghc-exactprint
+    , ghcide
+    , mtl
+    , refinery
+    , regex-tdfa
+    , retrie
+    , shake
+    , syb
     , tasty
     , tasty-ant-xml           >=1.1.6
     , tasty-expected-failure
     , tasty-golden
     , tasty-rerun
 
-  hs-source-dirs:     test/functional
+  hs-source-dirs:     test/functional plugins/default/src
   main-is:            Main.hs
   other-modules:
     Command
@@ -249,6 +259,11 @@ test-suite func-test
     Symbol
     Tactic
     TypeDefinition
+    Ide.LocalBindings
+    Ide.Plugin.Tactic
+    Ide.Plugin.Tactic.Machinery
+    Ide.Plugin.Tactic.Tactics
+    Ide.TreeTransform
 
   ghc-options:
     -Wall -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
