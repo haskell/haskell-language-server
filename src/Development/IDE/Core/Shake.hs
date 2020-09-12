@@ -24,6 +24,7 @@
 module Development.IDE.Core.Shake(
     IdeState, shakeExtras,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
+    KnownTargets, toKnownFiles,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -44,7 +45,7 @@ module Development.IDE.Core.Shake(
     getIdeOptionsIO,
     GlobalIdeOptions(..),
     garbageCollect,
-    knownFiles,
+    knownTargets,
     setPriority,
     sendEvent,
     ideLogger,
@@ -67,20 +68,22 @@ import           Development.Shake hiding (ShakeValue, doesFileExist, Info)
 import           Development.Shake.Database
 import           Development.Shake.Classes
 import           Development.Shake.Rule
+import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HMap
-import qualified Data.HashSet as HSet
 import qualified Data.Map.Strict as Map
 import qualified Data.ByteString.Char8 as BS
 import           Data.Dynamic
 import           Data.Maybe
-import Data.Map.Strict (Map)
+import           Data.Map.Strict (Map)
 import           Data.List.Extra (partition, takeEnd)
+import           Data.HashSet (HashSet)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import Data.Tuple.Extra
 import Data.Unique
 import Development.IDE.Core.Debouncer
-import Development.IDE.GHC.Compat ( NameCacheUpdater(..), upNameCache )
+import Development.IDE.GHC.Compat (ModuleName, NameCacheUpdater(..), upNameCache )
+import Development.IDE.GHC.Orphans ()
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Types.Action
 import Development.IDE.Types.Logger hiding (Priority)
@@ -120,6 +123,7 @@ import NameCache
 import UniqSupply
 import PrelInfo
 import Data.Int (Int64)
+import qualified Data.HashSet as HSet
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -152,12 +156,19 @@ data ShakeExtras = ShakeExtras
     -- ^ Same as 'withProgress', but for processes that do not report the percentage complete
     ,restartShakeSession :: [DelayedAction ()] -> IO ()
     ,ideNc :: IORef NameCache
-    ,knownFilesVar :: Var (Hashed (HSet.HashSet NormalizedFilePath))
+    -- | A mapping of module name to known target (or candidate targets, if missing)
+    ,knownTargetsVar :: Var (Hashed KnownTargets)
     -- | A mapping of exported identifiers for local modules. Updated on kick
     ,exportsMap :: Var ExportsMap
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
     }
+
+-- | A mapping of module name to known files
+type KnownTargets = HashMap ModuleName [NormalizedFilePath]
+
+toKnownFiles :: KnownTargets -> HashSet NormalizedFilePath
+toKnownFiles = HSet.fromList . concat . HMap.elems
 
 type WithProgressFunc = forall a.
     T.Text -> LSP.ProgressCancellable -> ((LSP.Progress -> IO ()) -> IO a) -> IO a
@@ -365,10 +376,10 @@ getValues state key file = do
             evaluate (r `seqValue` Just r)
 
 -- | Get all the files in the project
-knownFiles :: Action (Hashed (HSet.HashSet NormalizedFilePath))
-knownFiles = do
-  ShakeExtras{knownFilesVar} <- getShakeExtras
-  liftIO $ readVar knownFilesVar
+knownTargets :: Action (Hashed KnownTargets)
+knownTargets = do
+  ShakeExtras{knownTargetsVar} <- getShakeExtras
+  liftIO $ readVar knownTargetsVar
 
 -- | Seq the result stored in the Shake value. This only
 -- evaluates the value to WHNF not NF. We take care of the latter
@@ -405,7 +416,7 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
         hiddenDiagnostics <- newVar mempty
         publishedDiagnostics <- newVar mempty
         positionMapping <- newVar HMap.empty
-        knownFilesVar <- newVar $ hashed HSet.empty
+        knownTargetsVar <- newVar $ hashed HMap.empty
         let restartShakeSession = shakeRestart ideState
         let session = shakeSession
         mostRecentProgressEvent <- newTVarIO KickCompleted

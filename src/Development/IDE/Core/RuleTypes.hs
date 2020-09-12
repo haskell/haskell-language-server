@@ -16,10 +16,10 @@ import Data.Binary
 import           Development.IDE.Import.DependencyInformation
 import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Util
+import Development.IDE.Core.Shake (KnownTargets)
 import           Data.Hashable
 import           Data.Typeable
 import qualified Data.Set as S
-import qualified Data.HashSet                             as HS
 import           Development.Shake
 import           GHC.Generics                             (Generic)
 
@@ -29,7 +29,6 @@ import HscTypes (hm_iface, CgGuts, Linkable, HomeModInfo, ModDetails)
 import           Development.IDE.Spans.Type
 import           Development.IDE.Import.FindImports (ArtifactsLocation)
 import Data.ByteString (ByteString)
-import Language.Haskell.LSP.Types (NormalizedFilePath)
 
 
 -- NOTATION
@@ -50,12 +49,12 @@ type instance RuleResult GetDependencies = TransitiveDependencies
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
-data GetKnownFiles = GetKnownFiles
+data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
-instance Hashable GetKnownFiles
-instance NFData   GetKnownFiles
-instance Binary   GetKnownFiles
-type instance RuleResult GetKnownFiles = HS.HashSet NormalizedFilePath
+instance Hashable GetKnownTargets
+instance NFData   GetKnownTargets
+instance Binary   GetKnownTargets
+type instance RuleResult GetKnownTargets = KnownTargets
 
 -- | Contains the typechecked module and the OrigNameCache entry for
 -- that module.

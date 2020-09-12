@@ -7,6 +7,7 @@ module Development.IDE.GHC.Util(
     HscEnvEq,
     hscEnv, newHscEnvEq,
     hscEnvWithImportPaths,
+    envImportPaths,
     modifyDynFlags,
     evalGhcEnv,
     runGhcEnv,
@@ -184,10 +185,11 @@ data HscEnvEq = HscEnvEq
     }
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEq hscEnv0 deps = do
+newHscEnvEq :: FilePath -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEq cradlePath hscEnv0 deps = do
     envUnique <- newUnique
-    let envImportPaths = Just $ importPaths $ hsc_dflags hscEnv0
+    let envImportPaths = Just $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
+        relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
     return HscEnvEq{..}
 

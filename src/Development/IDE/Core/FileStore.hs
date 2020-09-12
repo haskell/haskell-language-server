@@ -252,15 +252,13 @@ typecheckParents state nfp = void $ shakeEnqueue (shakeExtras state) parents
 
 typecheckParentsAction :: NormalizedFilePath -> Action ()
 typecheckParentsAction nfp = do
-    fs <- useNoFile_ GetKnownFiles
-    unless (null fs) $ do
-      revs <- reverseDependencies nfp <$> useNoFile_ GetModuleGraph
-      logger <- logger <$> getShakeExtras
-      let log = L.logInfo logger . T.pack
-      liftIO $ do
-        (log $ "Typechecking reverse dependencies for" ++ show nfp ++ ": " ++ show revs)
-          `catch` \(e :: SomeException) -> log (show e)
-      () <$ uses GetModIface revs
+    revs <- reverseDependencies nfp <$> useNoFile_ GetModuleGraph
+    logger <- logger <$> getShakeExtras
+    let log = L.logInfo logger . T.pack
+    liftIO $ do
+      (log $ "Typechecking reverse dependencies for" ++ show nfp ++ ": " ++ show revs)
+        `catch` \(e :: SomeException) -> log (show e)
+    () <$ uses GetModIface revs
 
 -- | Note that some buffer somewhere has been modified, but don't say what.
 --   Only valid if the virtual file system was initialised by LSP, as that
