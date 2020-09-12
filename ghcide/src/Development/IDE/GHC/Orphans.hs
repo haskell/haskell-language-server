@@ -75,3 +75,8 @@ deriving instance Eq SourceModified
 deriving instance Show SourceModified
 instance NFData SourceModified where
     rnf = rwhnf
+
+instance Show ModuleName where
+    show = moduleNameString
+instance Hashable ModuleName where
+    hashWithSalt salt = hashWithSalt salt . show

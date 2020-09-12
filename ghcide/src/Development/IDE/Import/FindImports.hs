@@ -66,7 +66,7 @@ modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location ms) (i
 locateModuleFile :: MonadIO m
              => [[FilePath]]
              -> [String]
-             -> (NormalizedFilePath -> m Bool)
+             -> (ModuleName -> NormalizedFilePath -> m Bool)
              -> Bool
              -> ModuleName
              -> m (Maybe NormalizedFilePath)
@@ -74,7 +74,7 @@ locateModuleFile import_dirss exts doesExist isSource modName = do
   let candidates import_dirs =
         [ toNormalizedFilePath' (prefix </> M.moduleNameSlashes modName <.> maybeBoot ext)
            | prefix <- import_dirs , ext <- exts]
-  findM doesExist (concatMap candidates import_dirss)
+  findM (doesExist modName) (concatMap candidates import_dirss)
   where
     maybeBoot ext
       | isSource = ext ++ "-boot"
@@ -92,12 +92,12 @@ mkImportDirs df (i, DynFlags{importPaths}) = (, importPaths) <$> getPackageName 
 locateModule
     :: MonadIO m
     => DynFlags
-    -> [(M.InstalledUnitId, DynFlags)] -- Sets import directories to look in
-    -> [String]
-    -> (NormalizedFilePath -> m Bool)
-    -> Located ModuleName
-    -> Maybe FastString
-    -> Bool
+    -> [(M.InstalledUnitId, DynFlags)] -- ^ Import directories
+    -> [String]                        -- ^ File extensions
+    -> (ModuleName -> NormalizedFilePath -> m Bool)  -- ^ does file exist predicate
+    -> Located ModuleName              -- ^ Moudle name
+    -> Maybe FastString                -- ^ Package name
+    -> Bool                            -- ^ Is boot module
     -> m (Either [FileDiagnostic] Import)
 locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
   case mbPkgName of
