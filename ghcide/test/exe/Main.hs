@@ -533,7 +533,7 @@ codeLensesTests = testGroup "code lenses"
 watchedFilesTests :: TestTree
 watchedFilesTests = testGroup "watched files"
   [ testSession' "workspace files" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\"]}}"
+      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-isrc\", \"A\", \"WatchedFilesMissingModule\"]}}"
       _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
@@ -546,7 +546,7 @@ watchedFilesTests = testGroup "watched files"
       liftIO $ length watchedFileRegs @?= 5
 
   , testSession' "non workspace file" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-i/tmp\"]}}"
+      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-i/tmp\", \"A\", \"WatchedFilesMissingModule\"]}}"
       _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
@@ -2917,11 +2917,11 @@ simpleMultiTest2 = testCase "simple-multi-test2" $ withoutStackEnv $ runWithExtr
         bPath = dir </> "b/B.hs"
     bSource <- liftIO $ readFileUtf8 bPath
     bdoc <- createDoc bPath "haskell" bSource
-    expectNoMoreDiagnostics 5
+    expectNoMoreDiagnostics 10
     aSource <- liftIO $ readFileUtf8 aPath
     (TextDocumentIdentifier adoc) <- createDoc aPath "haskell" aSource
     -- Need to have some delay here or the test fails
-    expectNoMoreDiagnostics 6
+    expectNoMoreDiagnostics 10
     locs <- getDefinitions bdoc (Position 2 7)
     let fooL = mkL adoc 2 0 2 3
     checkDefs locs (pure [fooL])
@@ -2931,7 +2931,8 @@ ifaceTests :: TestTree
 ifaceTests = testGroup "Interface loading tests"
     [ -- https://github.com/digital-asset/ghcide/pull/645/
       ifaceErrorTest
-    , ifaceErrorTest2
+    -- https://github.com/haskell/ghcide/pull/781
+    , ignoreTestBecause "too flaky" ifaceErrorTest2
     , ifaceErrorTest3
     , ifaceTHTest
     ]
@@ -3056,6 +3057,10 @@ ifaceErrorTest2 = testCase "iface-error-test-2" $ withoutStackEnv $ runWithExtra
       ,("P.hs", [(DsWarning,(4,0), "Top-level binding")])
       ,("P.hs", [(DsWarning,(6,0), "Top-level binding")])
       ]
+    -- FLAKY: 1 out of 5 times in CI ghcide does not send any diagnostics back,
+    --        not even for P, which makes the expectDiagnostics above to time out
+    --        cannot repro locally even after wiping the interface cache dir
+
     expectNoMoreDiagnostics 2
 
 ifaceErrorTest3 :: TestTree
@@ -3267,19 +3272,24 @@ runInDir' dir startExeIn startSessionIn s = do
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
   createDirectoryIfMissing True $ projDir ++ "/Data"
 
-  let cmd = unwords [ghcideExe, "--lsp", "--test", "--cwd", startDir]
+  let cmd = unwords [ghcideExe, "--lsp", "--test", "--verbose", "--cwd", startDir]
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
   let lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
-  runSessionWithConfig conf cmd lspTestCaps projDir s
+  logColor <- fromMaybe True <$> checkEnv "LSP_TEST_LOG_COLOR"
+  runSessionWithConfig conf{logColor} cmd lspTestCaps projDir s
   where
+    checkEnv :: String -> IO (Maybe Bool)
+    checkEnv s = fmap convertVal <$> getEnv s
+    convertVal "0" = False
+    convertVal _ = True
+
     conf = defaultConfig
-      -- If you uncomment this you can see all logging
-      -- which can be quite useful for debugging.
-    --   { logStdErr = True, logColor = False }
-    --   If you really want to, you can also see all messages
-    --   { logMessages = True, logColor = False }
+      -- uncomment this or set LSP_TEST_LOG_STDERR=1 to see all logging
+    --   { logStdErr = True }
+    --   uncomment this or set LSP_TEST_LOG_MESSAGES=1 to see all messages
+    --   { logMessages = True }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do

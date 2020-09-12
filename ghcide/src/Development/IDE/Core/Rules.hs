@@ -90,6 +90,7 @@ import qualified HeaderInfo as Hdr
 import Data.Time (UTCTime(..))
 import Data.Hashable
 import qualified Data.HashSet as HashSet
+import qualified Data.HashMap.Strict as HM
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -322,15 +323,20 @@ getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
     define $ \GetLocatedImports file -> do
         ms <- use_ GetModSummaryWithoutTimestamps file
-        targets <- useNoFile_ GetKnownFiles
+        targets <- useNoFile_ GetKnownTargets
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
         let env = hscEnvWithImportPaths env_eq
         let import_dirs = deps env_eq
-        let dflags = addRelativeImport file (moduleName $ ms_mod ms) $ hsc_dflags env
+        let dflags = hsc_dflags env
+            isImplicitCradle = isNothing $ envImportPaths env_eq
+        dflags <- return $ if isImplicitCradle
+                    then addRelativeImport file (moduleName $ ms_mod ms) dflags
+                    else dflags
         opt <- getIdeOptions
-        let getTargetExists nfp
-                | HashSet.null targets || nfp `HashSet.member` targets = getFileExists nfp
+        let getTargetExists modName nfp
+                | isImplicitCradle = getFileExists nfp
+                | HM.member modName targets = getFileExists nfp
                 | otherwise = return False
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getTargetExists modName mbPkgName isSource
@@ -532,14 +538,14 @@ typeCheckRule = define $ \TypeCheck file -> do
     typeCheckRuleDefinition hsc pm isFoi (Just source)
 
 knownFilesRule :: Rules ()
-knownFilesRule = defineEarlyCutOffNoFile $ \GetKnownFiles -> do
+knownFilesRule = defineEarlyCutOffNoFile $ \GetKnownTargets -> do
   alwaysRerun
-  fs <- knownFiles
+  fs <- knownTargets
   pure (BS.pack (show $ hash fs), unhashed fs)
 
 getModuleGraphRule :: Rules ()
 getModuleGraphRule = defineNoFile $ \GetModuleGraph -> do
-  fs <- useNoFile_ GetKnownFiles
+  fs <- toKnownFiles <$> useNoFile_ GetKnownTargets
   rawDepInfo <- rawDependencyInformation (HashSet.toList fs)
   pure $ processDependencyInformation rawDepInfo
 
@@ -683,7 +689,7 @@ ghcSessionDepsDefinition file = do
             setupFinderCache (map hirModSummary ifaces)
             mapM_ (uncurry loadDepModule) inLoadOrder
 
-        res <- liftIO $ newHscEnvEq session' []
+        res <- liftIO $ newHscEnvEq "" session' []
         return ([], Just res)
  where
   unpack HiFileResult{..} bc = (hirModIface, bc)

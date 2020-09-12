@@ -25,7 +25,6 @@ import Data.Bifunctor
 import qualified Data.ByteString.Base16 as B16
 import Data.Either.Extra
 import Data.Function
-import qualified Data.HashSet as HashSet
 import Data.Hashable
 import Data.List
 import Data.IORef
@@ -65,6 +64,7 @@ import Module
 import NameCache
 import Packages
 import Control.Exception (evaluate)
+import Data.Char
 
 -- | Given a root directory, return a Shake 'Action' which setups an
 -- 'IdeGhcSession' given a file.
@@ -104,13 +104,27 @@ loadSession dir = do
 
   return $ do
     extras@ShakeExtras{logger, eventer, restartShakeSession,
-                       withIndefiniteProgress, ideNc, knownFilesVar
+                       withIndefiniteProgress, ideNc, knownTargetsVar
                       } <- getShakeExtras
 
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = CheckProject checkProject
               , optCustomDynFlags
               } <- getIdeOptions
+
+        -- populate the knownTargetsVar with all the
+        -- files in the project so that `knownFiles` can learn about them and
+        -- we can generate a complete module graph
+    let extendKnownTargets newTargets = do
+          knownTargets <- forM newTargets $ \TargetDetails{..} -> do
+            found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
+            return (targetModule, found)
+          modifyVar_ knownTargetsVar $ traverseHashed $ \known -> do
+            let known' = HM.unionWith (<>) known $ HM.fromList knownTargets
+            when (known /= known') $
+                logDebug logger $ "Known files updated: " <>
+                    T.pack(show $ (HM.map . map) fromNormalizedFilePath known')
+            evaluate known'
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
@@ -212,20 +226,26 @@ loadSession dir = do
 
           -- New HscEnv for the component in question, returns the new HscEnvEq and
           -- a mapping from FilePath to the newly created HscEnvEq.
-          let new_cache = newComponentCache logger isImplicit hscEnv uids
-              isImplicit = isNothing hieYaml
+          let new_cache = newComponentCache logger hieYaml hscEnv uids
           (cs, res) <- new_cache new
           -- Modified cache targets for everything else in the hie.yaml file
           -- which now uses the same EPS and so on
           cached_targets <- concatMapM (fmap fst . new_cache) old_deps
+
+          let all_targets = cs ++ cached_targets
+
           modifyVar_ fileToFlags $ \var -> do
-              pure $ Map.insert hieYaml (HM.fromList (cs ++ cached_targets)) var
+              pure $ Map.insert hieYaml (HM.fromList (concatMap toFlagsMap all_targets)) var
+
+          extendKnownTargets all_targets
 
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
           invalidateShakeCache
           restartShakeSession [kick]
 
-          return (map fst cs ++ map fst cached_targets, second Map.keys res)
+          let resultCachedTargets = concatMap targetLocations all_targets
+
+          return (resultCachedTargets, second Map.keys res)
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
         consultCradle hieYaml cfp = do
@@ -299,14 +319,10 @@ loadSession dir = do
         void $ wait as
         as <- async $ getOptions file
         return (fmap snd as, wait as)
-      unless (null cs) $
+      unless (null cs) $ do
+        cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cs
         -- Typecheck all files in the project on startup
         void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
-          cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cs
-          -- populate the knownFilesVar with all the
-          -- files in the project so that `knownFiles` can learn about them and
-          -- we can generate a complete module graph
-          liftIO $ modifyVar_ knownFilesVar $ traverseHashed $ pure . HashSet.union (HashSet.fromList cfps')
           when checkProject $ do
             mmt <- uses GetModificationTime cfps'
             let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
@@ -320,6 +336,7 @@ loadSession dir = do
 -- | Run the specific cradle on a specific FilePath via hie-bios.
 -- This then builds dependencies or whatever based on the cradle, gets the
 -- GHC options/dynflags needed for the session and the GHC library directory
+
 cradleToOptsAndLibDir :: Show a => Cradle a -> FilePath
                       -> IO (Either [CradleError] (ComponentOptions, FilePath))
 cradleToOptsAndLibDir cradle file = do
@@ -349,52 +366,79 @@ emptyHscEnv nc libDir = do
     initDynLinker env
     pure $ setNameCache nc env
 
--- | Convert a target to a list of potential absolute paths.
--- A TargetModule can be anywhere listed by the supplied include
--- directories
--- A target file is a relative path but with a specific prefix so just need
--- to canonicalise it.
-targetToFile :: [FilePath] -> TargetId -> IO [NormalizedFilePath]
-targetToFile is (TargetModule mod) = do
+data TargetDetails = TargetDetails
+  {
+      targetModule :: !ModuleName,
+      targetEnv :: !(IdeResult HscEnvEq),
+      targetDepends :: !DependencyInfo,
+      targetLocations :: ![NormalizedFilePath]
+  }
+
+fromTargetId :: [FilePath]          -- ^ import paths
+             -> TargetId
+             -> IdeResult HscEnvEq
+             -> DependencyInfo
+             -> IO [TargetDetails]
+-- For a target module we consider all the import paths
+fromTargetId is (TargetModule mod) env dep = do
     let fps = [i </> moduleNameSlashes mod -<.> ext | ext <- exts, i <- is ]
         exts = ["hs", "hs-boot", "lhs"]
-    mapM (fmap toNormalizedFilePath' . canonicalizePath) fps
-targetToFile _ (TargetFile f _) = do
-  f' <- canonicalizePath f
-  return [toNormalizedFilePath' f']
+    locs <- mapM (fmap toNormalizedFilePath' . canonicalizePath) fps
+    return [TargetDetails mod env dep locs]
+-- For a 'TargetFile' we consider all the possible module names
+fromTargetId _ (TargetFile f _) env deps = do
+    nf <- toNormalizedFilePath' <$> canonicalizePath f
+    return [TargetDetails m env deps [nf] | m <- moduleNames f]
+
+-- >>> moduleNames "src/A/B.hs"
+-- [A.B,B]
+moduleNames :: FilePath -> [ModuleName]
+moduleNames f = map (mkModuleName .intercalate ".") $ init $ tails nameSegments
+    where
+        nameSegments = reverse
+                     $ takeWhile (isUpper . head)
+                     $ reverse
+                     $ splitDirectories
+                     $ dropExtension f
+
+toFlagsMap :: TargetDetails -> [(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))]
+toFlagsMap TargetDetails{..} =
+    [ (l, (targetEnv, targetDepends)) | l <-  targetLocations]
+
 
 setNameCache :: IORef NameCache -> HscEnv -> HscEnv
 setNameCache nc hsc = hsc { hsc_NC = nc }
 
-
 -- | Create a mapping from FilePaths to HscEnvEqs
 newComponentCache
          :: Logger
-         -> Bool    -- ^ Is this for an implicit/crappy cradle
+         -> Maybe FilePath -- Path to cradle
          -> HscEnv
          -> [(InstalledUnitId, DynFlags)]
          -> ComponentInfo
-         -> IO ([(NormalizedFilePath, (IdeResult HscEnvEq, DependencyInfo))], (IdeResult HscEnvEq, DependencyInfo))
-newComponentCache logger isImplicit hsc_env uids ci = do
+         -> IO ( [TargetDetails], (IdeResult HscEnvEq, DependencyInfo))
+newComponentCache logger cradlePath hsc_env uids ci = do
     let df = componentDynFlags ci
     let hscEnv' = hsc_env { hsc_dflags = df
                           , hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
 
-    let newFunc = if isImplicit then newHscEnvEqPreserveImportPaths else newHscEnvEq
+    let newFunc = maybe newHscEnvEqPreserveImportPaths newHscEnvEq cradlePath
     henv <- newFunc hscEnv' uids
-    let res = (([], Just henv), componentDependencyInfo ci)
+    let targetEnv = ([], Just henv)
+        targetDepends = componentDependencyInfo ci
+        res = (targetEnv, targetDepends)
     logDebug logger ("New Component Cache HscEnvEq: " <> T.pack (show res))
 
-    let is = importPaths df
-    ctargets <- concatMapM (targetToFile is  . targetId) (componentTargets ci)
+    let mk t = fromTargetId (importPaths df) (targetId t) targetEnv targetDepends
+    ctargets <- concatMapM mk (componentTargets ci)
+
     -- A special target for the file which caused this wonderful
     -- component to be created. In case the cradle doesn't list all the targets for
     -- the component, in which case things will be horribly broken anyway.
     -- Otherwise, we will immediately attempt to reload this module which
     -- causes an infinite loop and high CPU usage.
-    let special_target = (componentFP ci, res)
-    let xs = map (,res) ctargets
-    return (special_target:xs, res)
+    let special_target = TargetDetails (mkModuleName "special") targetEnv targetDepends [componentFP ci]
+    return (special_target:ctargets, res)
 
 {- Note [Avoiding bad interface files]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
