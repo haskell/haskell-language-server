@@ -688,23 +688,30 @@ garbageCollect keep = do
                    mapMaybe (\((file, _key), v) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
                    HMap.toList newState
            modifyVar_ positionMapping $ \mappings -> return $! filterVersionMap versionsForFile mappings
+
+-- | Define a new Rule without early cutoff
 define
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
 define op = defineEarlyCutoff $ \k v -> (Nothing,) <$> op k v
 
+-- | Request a Rule result if available
 use :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe v)
 use key file = head <$> uses key [file]
 
+-- | Request a Rule result, it not available return the last computed result, if any, which may be stale
 useWithStale :: IdeRule k v
     => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
 useWithStale key file = head <$> usesWithStale key [file]
 
+-- | Request a Rule result, it not available return the last computed result which may be stale.
+--   Errors out if none available.
 useWithStale_ :: IdeRule k v
     => k -> NormalizedFilePath -> Action (v, PositionMapping)
 useWithStale_ key file = head <$> usesWithStale_ key [file]
 
+-- | Plural version of 'useWithStale_'
 usesWithStale_ :: IdeRule k v => k -> [NormalizedFilePath] -> Action [(v, PositionMapping)]
 usesWithStale_ key files = do
     res <- usesWithStale key files
@@ -821,7 +828,7 @@ instance NFData (A v) where rnf (A v) = v `seq` ()
 type instance RuleResult (Q k) = A (RuleResult k)
 
 
--- | Return up2date results. Stale results will be ignored.
+-- | Plural version of 'use'
 uses :: IdeRule k v
     => k -> [NormalizedFilePath] -> Action [Maybe v]
 uses key files = map (\(A value) -> currentValue value) <$> apply (map (Q . (key,)) files)
@@ -833,7 +840,7 @@ usesWithStale key files = do
     values <- map (\(A value) -> value) <$> apply (map (Q . (key,)) files)
     zipWithM lastValue files values
 
-
+-- | Define a new Rule with early cutoff
 defineEarlyCutoff
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
