@@ -88,6 +88,7 @@ executable haskell-language-server
     Ide.Plugin.Floskell
     Ide.Plugin.Fourmolu
     Ide.Plugin.ImportLens
+    Ide.Plugin.Munihac
     Ide.Plugin.Ormolu
     Ide.Plugin.Pragmas
     Ide.Plugin.Retrie
