@@ -87,6 +87,7 @@ library
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.7.1 && < 0.8.0,
+        implicit-hie-cradle >= 0.1.0.0 && < 0.2.0,
         base16-bytestring >=0.1.1 && <0.2
     if os(windows)
       build-depends:
@@ -201,10 +202,6 @@ library
         Development.IDE.GHC.HieAst
         Development.IDE.GHC.HieBin
     ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns
-    -- This is needed to prevent a GHC crash when building
-    -- Development.IDE.Session with stack on 8.10.1 on Windows
-    if (impl(ghc > 8.9) && os(windows))
-      ghc-options: -fexternal-interpreter
 
 executable ghcide-test-preprocessor
     default-language: Haskell2010
