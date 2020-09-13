@@ -140,20 +140,21 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
 
             _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- readChan clientMsgChan
-                -- dispatch the work to a new thread
-                void $ async $ case msg of
+                -- We dispatch notifications synchronously and requests asynchronously
+                -- This is to ensure that all file edits and config changes are applied before a request is handled
+                case msg of
                     Notification x@NotificationMessage{_params} act -> do
                         catch (act lspFuncs ide _params) $ \(e :: SomeException) ->
                             logError (ideLogger ide) $ T.pack $
                                 "Unexpected exception on notification, please report!\n" ++
                                 "Message: " ++ show x ++ "\n" ++
                                 "Exception: " ++ show e
-                    Response x@RequestMessage{_id, _params} wrap act ->
+                    Response x@RequestMessage{_id, _params} wrap act -> void $ async $
                         checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
                             \case
                               Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Left e)
                               Right r -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Right r)
-                    ResponseAndRequest x@RequestMessage{_id, _params} wrap wrapNewReq act ->
+                    ResponseAndRequest x@RequestMessage{_id, _params} wrap wrapNewReq act -> void $ async $
                         checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
                             \(res, newReq) -> do
                                 case res of
