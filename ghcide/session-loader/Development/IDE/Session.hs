@@ -47,6 +47,7 @@ import GHC.Check
 import HIE.Bios
 import HIE.Bios.Environment hiding (getCacheDir)
 import HIE.Bios.Types
+import Hie.Implicit.Cradle (loadImplicitHieCradle)
 import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
@@ -252,7 +253,7 @@ loadSession dir = do
            when optTesting $ eventer $ notifyCradleLoaded cfp
            logInfo logger $ T.pack ("Consulting the cradle for " <> show cfp)
 
-           cradle <- maybe (loadImplicitCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
+           cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
            -- Display a user friendly progress message here: They probably don't know what a
            -- cradle is
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
