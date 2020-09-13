@@ -891,7 +891,7 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = [(imp, [TextEdit (Range insertPos insertPos) (imp <> "\n")])
-    | imp <- constructNewImportSuggestions packageExportsMap name extendImportSuggestions
+    | imp <- sort $ constructNewImportSuggestions packageExportsMap name extendImportSuggestions
     ]
 suggestNewImport _ _ _ = []
 
