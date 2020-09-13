@@ -75,7 +75,7 @@ import           GhcPlugins                     (defaultLogActionHPutStrDoc,
 import           HscTypes
 import           Ide.Plugin
 import           Ide.Types
-import           Language.Haskell.LSP.Core      (LspFuncs (getVirtualFileFunc))
+import           Language.Haskell.LSP.Core
 import           Language.Haskell.LSP.Types
 import           Language.Haskell.LSP.VFS       (virtualFileText)
 import           Outputable (ppr, showSDoc)
@@ -166,7 +166,7 @@ data EvalParams = EvalParams
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
 runEvalCmd :: CommandFunction EvalParams
-runEvalCmd lsp state EvalParams {..} = response' $ do
+runEvalCmd lsp state EvalParams {..} = withIndefiniteProgress lsp "Eval" Cancellable $ response' $ do
   let TextDocumentIdentifier {_uri} = module_
   fp <- handleMaybe "uri" $ uriToFilePath' _uri
   contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri _uri
