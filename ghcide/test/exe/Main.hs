@@ -502,6 +502,25 @@ diagnosticTests = testGroup "diagnostics"
             ]
           )
         ]
+  , testCase "typecheck-all-parents-of-interest" $ withoutStackEnv $ runWithExtraFiles "recomp" $ \dir -> do
+    let bPath = dir </> "B.hs"
+        pPath = dir </> "P.hs"
+
+    bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
+    pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
+
+    bdoc <- createDoc bPath "haskell" bSource
+    _pdoc <- createDoc pPath "haskell" pSource
+    expectDiagnostics [("P.hs", [(DsWarning,(4,0), "Top-level binding")]) -- So that we know P has been loaded
+                      ]
+
+    -- Change y from Int to B which introduces a type error in A (imported from P)
+    changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $
+                    T.unlines ["module B where", "y :: Bool", "y = undefined"]]
+    expectDiagnostics
+      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
+      ]
+    expectNoMoreDiagnostics 2
   ]
 
 codeActionTests :: TestTree
@@ -2931,8 +2950,7 @@ ifaceTests :: TestTree
 ifaceTests = testGroup "Interface loading tests"
     [ -- https://github.com/digital-asset/ghcide/pull/645/
       ifaceErrorTest
-    -- https://github.com/haskell/ghcide/pull/781
-    , ignoreTestBecause "too flaky" ifaceErrorTest2
+    , ifaceErrorTest2
     , ifaceErrorTest3
     , ifaceTHTest
     ]
@@ -3057,9 +3075,6 @@ ifaceErrorTest2 = testCase "iface-error-test-2" $ withoutStackEnv $ runWithExtra
       ,("P.hs", [(DsWarning,(4,0), "Top-level binding")])
       ,("P.hs", [(DsWarning,(6,0), "Top-level binding")])
       ]
-    -- FLAKY: 1 out of 5 times in CI ghcide does not send any diagnostics back,
-    --        not even for P, which makes the expectDiagnostics above to time out
-    --        cannot repro locally even after wiping the interface cache dir
 
     expectNoMoreDiagnostics 2
 
