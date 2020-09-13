@@ -22,7 +22,7 @@ import Data.List.Extra
 import Data.Maybe
 import Data.Rope.UTF16 (Rope)
 import qualified Data.Rope.UTF16 as Rope
-import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent)
+import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent, PositionResult(..), positionResultToMaybe)
 import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
@@ -3366,94 +3366,94 @@ positionMappingTests =
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "ab"
-                    (Position 0 0) @?= Just (Position 0 0)
+                    (Position 0 0) @?= PositionExact (Position 0 0)
               , testCase "after, same line, same length" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "ab"
-                    (Position 0 3) @?= Just (Position 0 3)
+                    (Position 0 3) @?= PositionExact (Position 0 3)
               , testCase "after, same line, increased length" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc"
-                    (Position 0 3) @?= Just (Position 0 4)
+                    (Position 0 3) @?= PositionExact (Position 0 4)
               , testCase "after, same line, decreased length" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "a"
-                    (Position 0 3) @?= Just (Position 0 2)
+                    (Position 0 3) @?= PositionExact (Position 0 2)
               , testCase "after, next line, no newline" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc"
-                    (Position 1 3) @?= Just (Position 1 3)
+                    (Position 1 3) @?= PositionExact (Position 1 3)
               , testCase "after, next line, newline" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc\ndef"
-                    (Position 1 0) @?= Just (Position 2 0)
+                    (Position 1 0) @?= PositionExact (Position 2 0)
               , testCase "after, same line, newline" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc\nd"
-                    (Position 0 4) @?= Just (Position 1 2)
+                    (Position 0 4) @?= PositionExact (Position 1 2)
               , testCase "after, same line, newline + newline at end" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc\nd\n"
-                    (Position 0 4) @?= Just (Position 2 1)
+                    (Position 0 4) @?= PositionExact (Position 2 1)
               , testCase "after, same line, newline + newline at end" $
                 toCurrent
                     (Range (Position 0 1) (Position 0 1))
                     "abc"
-                    (Position 0 1) @?= Just (Position 0 4)
+                    (Position 0 1) @?= PositionExact (Position 0 4)
               ]
         , testGroup "fromCurrent"
               [ testCase "before" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "ab"
-                    (Position 0 0) @?= Just (Position 0 0)
+                    (Position 0 0) @?= PositionExact (Position 0 0)
               , testCase "after, same line, same length" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "ab"
-                    (Position 0 3) @?= Just (Position 0 3)
+                    (Position 0 3) @?= PositionExact (Position 0 3)
               , testCase "after, same line, increased length" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc"
-                    (Position 0 4) @?= Just (Position 0 3)
+                    (Position 0 4) @?= PositionExact (Position 0 3)
               , testCase "after, same line, decreased length" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "a"
-                    (Position 0 2) @?= Just (Position 0 3)
+                    (Position 0 2) @?= PositionExact (Position 0 3)
               , testCase "after, next line, no newline" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc"
-                    (Position 1 3) @?= Just (Position 1 3)
+                    (Position 1 3) @?= PositionExact (Position 1 3)
               , testCase "after, next line, newline" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc\ndef"
-                    (Position 2 0) @?= Just (Position 1 0)
+                    (Position 2 0) @?= PositionExact (Position 1 0)
               , testCase "after, same line, newline" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc\nd"
-                    (Position 1 2) @?= Just (Position 0 4)
+                    (Position 1 2) @?= PositionExact (Position 0 4)
               , testCase "after, same line, newline + newline at end" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 3))
                     "abc\nd\n"
-                    (Position 2 1) @?= Just (Position 0 4)
+                    (Position 2 1) @?= PositionExact (Position 0 4)
               , testCase "after, same line, newline + newline at end" $
                 fromCurrent
                     (Range (Position 0 1) (Position 0 1))
                     "abc"
-                    (Position 0 4) @?= Just (Position 0 1)
+                    (Position 0 4) @?= PositionExact (Position 0 1)
               ]
         , adjustOption (\(QuickCheckTests i) -> QuickCheckTests (max 1000 i)) $ testGroup "properties"
               [ testProperty "fromCurrent r t <=< toCurrent r t" $ do
@@ -3469,9 +3469,9 @@ positionMappingTests =
                         pure (range, replacement, oldPos)
                 forAll
                     (suchThatMap gen
-                        (\(range, replacement, oldPos) -> (range, replacement, oldPos,) <$> toCurrent range replacement oldPos)) $
+                        (\(range, replacement, oldPos) -> positionResultToMaybe $ (range, replacement, oldPos,) <$> toCurrent range replacement oldPos)) $
                     \(range, replacement, oldPos, newPos) ->
-                    fromCurrent range replacement newPos === Just oldPos
+                    fromCurrent range replacement newPos === PositionExact oldPos
               , testProperty "toCurrent r t <=< fromCurrent r t" $ do
                 let gen = do
                         rope <- genRope
@@ -3482,9 +3482,9 @@ positionMappingTests =
                         pure (range, replacement, newPos)
                 forAll
                     (suchThatMap gen
-                        (\(range, replacement, newPos) -> (range, replacement, newPos,) <$> fromCurrent range replacement newPos)) $
+                        (\(range, replacement, newPos) -> positionResultToMaybe $ (range, replacement, newPos,) <$> fromCurrent range replacement newPos)) $
                     \(range, replacement, newPos, oldPos) ->
-                    toCurrent range replacement oldPos === Just newPos
+                    toCurrent range replacement oldPos === PositionExact newPos
               ]
         ]
 
