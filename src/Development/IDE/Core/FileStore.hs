@@ -6,7 +6,6 @@
 module Development.IDE.Core.FileStore(
     getFileContents,
     getVirtualFile,
-    setBufferModified,
     setFileModified,
     setSomethingModified,
     fileStoreRules,
@@ -212,16 +211,6 @@ fileStoreRules vfs = do
     getFileContentsRule vfs
     isFileOfInterestRule
 
--- | Notify the compiler service that a particular file has been modified.
---   Use 'Nothing' to say the file is no longer in the virtual file system
---   but should be sourced from disk, or 'Just' to give its new value.
-setBufferModified :: IdeState -> NormalizedFilePath -> Maybe T.Text -> IO ()
-setBufferModified state absFile contents = do
-    VFSHandle{..} <- getIdeGlobalState state
-    whenJust setVirtualFileContents $ \set ->
-        set (filePathToUri' absFile) contents
-    void $ shakeRestart state [kick]
-
 -- | Note that some buffer for a specific file has been modified but not
 -- with what changes.
 setFileModified :: IdeState
@@ -236,13 +225,8 @@ setFileModified state saved nfp = do
           _ -> False
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
-        fail "setSomethingModified can't be called on this type of VFSHandle"
-    let da = mkDelayedAction "FileStoreTC" L.Info $ do
-          ShakeExtras{progressUpdate} <- getShakeExtras
-          liftIO $ progressUpdate KickStarted
-          void $ use GetSpanInfo nfp
-          liftIO $ progressUpdate KickCompleted
-    shakeRestart state [da]
+        fail "setFileModified can't be called on this type of VFSHandle"
+    shakeRestart state [kick]
     when checkParents $
       typecheckParents state nfp
 
