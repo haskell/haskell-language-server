@@ -28,14 +28,14 @@ extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
-- hie-bios-0.6.1
+- hie-bios-0.7.1
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - HsYAML-0.2.1.0@rev:1
 - HsYAML-aeson-0.2.0.0@rev:2
 - ilist-0.3.1.0
-- lsp-test-0.11.0.4
+- lsp-test-0.11.0.5
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
 - ormolu-0.1.2.0

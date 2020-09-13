@@ -39,7 +39,7 @@ hover' ideState params = do
 
 commandAddSignature :: CommandFunction WorkspaceEdit
 commandAddSignature lf ide params
-    = executeAddSignatureCommand lf ide (ExecuteCommandParams "typesignature.add" (Just (List [toJSON params])) Nothing)
+    = commandHandler lf ide (ExecuteCommandParams "typesignature.add" (Just (List [toJSON params])) Nothing)
 
 -- ---------------------------------------------------------------------
 
