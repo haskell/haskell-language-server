@@ -16,4 +16,5 @@ pr:
 jobs:
   - template: ./.azure/linux-stack.yml
   - template: ./.azure/windows-stack.yml
-  - template: ./.azure/linux-bench.yml
+# https://github.com/haskell/ghcide/pull/801
+#   - template: ./.azure/linux-bench.yml
