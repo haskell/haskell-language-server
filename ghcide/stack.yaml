@@ -2,10 +2,11 @@ resolver: nightly-2019-09-21
 packages:
 - .
 extra-deps:
+- aeson-1.4.6.0
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 - lsp-test-0.11.0.5
-- hie-bios-0.7.1
+- hie-bios-0.7.1@rev:2
 - implicit-hie-0.1.1.0
 - github: Avi-D-coder/implicit-hie-cradle
   commit: f7bfc24ed036e31c0a758b9ab6665c4999eb4fe0
