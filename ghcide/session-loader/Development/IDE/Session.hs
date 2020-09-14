@@ -250,14 +250,18 @@ loadSession dir = do
 
     let consultCradle :: Maybe FilePath -> FilePath -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
         consultCradle hieYaml cfp = do
-           when optTesting $ eventer $ notifyCradleLoaded cfp
-           logInfo logger $ T.pack ("Consulting the cradle for " <> show cfp)
+           lfp <- flip makeRelative cfp <$> getCurrentDirectory
+           logInfo logger $ T.pack ("Consulting the cradle for " <> show lfp)
+
+           when (isNothing hieYaml) $ eventer $ notifyUserImplicitCradle lfp
 
            cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
-           -- Display a user friendly progress message here: They probably don't know what a
-           -- cradle is
+
+           when optTesting $ eventer $ notifyCradleLoaded lfp
+
+           -- Display a user friendly progress message here: They probably don't know what a cradle is
            let progMsg = "Setting up " <> T.pack (takeBaseName (cradleRootDir cradle))
-                         <> " (for " <> T.pack cfp <> ")"
+                         <> " (for " <> T.pack lfp <> ")"
            eopts <- withIndefiniteProgress progMsg NotCancellable $
              cradleToOptsAndLibDir cradle cfp
 
@@ -669,6 +673,14 @@ getCacheDir prefix opts = getXdgDirectory XdgCache (cacheDir </> prefix ++ "-" +
 -- | Sub directory for the cache path
 cacheDir :: String
 cacheDir = "ghcide"
+
+notifyUserImplicitCradle:: FilePath -> FromServerMessage
+notifyUserImplicitCradle fp =
+    NotShowMessage $
+    NotificationMessage "2.0" WindowShowMessage $ ShowMessageParams MtWarning $
+      "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
+      <> T.pack fp <>
+      ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie)"
 
 notifyCradleLoaded :: FilePath -> FromServerMessage
 notifyCradleLoaded fp =
