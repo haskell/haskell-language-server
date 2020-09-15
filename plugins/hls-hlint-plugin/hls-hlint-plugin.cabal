@@ -1,5 +1,5 @@
 cabal-version: 2.2
-name:          hlint-hls-plugin
+name:          hls-hlint-plugin
 version:       0.1.0.0
 synopsis:      Hlint integration plugin with Haskell Language Server
 description:   Please see README.md

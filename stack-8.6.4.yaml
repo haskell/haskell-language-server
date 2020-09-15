@@ -6,7 +6,7 @@ packages:
 - ./ghcide/
 - ./hls-plugin-api
 - ./plugins/tactics
-- ./plugins/hlint-hls-plugin
+- ./plugins/hls-hlint-plugin
 
 ghc-options:
   "$everything": -haddock

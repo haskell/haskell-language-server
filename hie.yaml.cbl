@@ -34,10 +34,7 @@ cradle:
             - path: "./src"
               component: "lib:haskell-language-server"
 
-            - path: "./plugins/hlint-hls-plugin/src/Ide/Plugin/Hlint.hs"
-              component: "lib:hlint-plugin"
-
-            - path: "./dist-newstyle/"
+           - path: "./dist-newstyle/"
               component: "lib:haskell-language-server"
 
             - path: "./ghcide/src"
@@ -48,3 +45,6 @@ cradle:
 
             - path: "./hls-plugin-api/src"
               component: "hls-plugin-api:lib:hls-plugin-api"
+
+            - path: "./plugins/hls-hlint-plugin/src/Ide/Plugin/Hlint.hs"
+              component: "lib:hlint-plugin"

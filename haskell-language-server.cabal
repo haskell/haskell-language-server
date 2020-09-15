@@ -120,7 +120,7 @@ executable haskell-language-server
     , hashable
     , haskell-language-server
     , haskell-lsp              ^>=0.22
-    , hlint-hls-plugin
+    , hls-hlint-plugin
     , hls-plugin-api
     , hls-tactics-plugin
     , lens

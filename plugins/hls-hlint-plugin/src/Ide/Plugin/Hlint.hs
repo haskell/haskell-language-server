@@ -371,3 +371,4 @@ writeFileUTF8NoNewLineTranslation file txt =
     hSetEncoding h utf8
     hSetNewlineMode h noNewlineTranslation
     hPutStr h (T.unpack txt)
+    
