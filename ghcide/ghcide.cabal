@@ -352,7 +352,7 @@ test-suite ghcide-tests
         text
     hs-source-dirs: test/cabal test/exe test/src bench/lib
     include-dirs: include
-    ghc-options: -Wall -Wno-name-shadowing -O0
+    ghc-options: -threaded -Wall -Wno-name-shadowing -O0
     main-is: Main.hs
     other-modules:
         Development.IDE.Test
