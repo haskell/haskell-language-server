@@ -8,8 +8,7 @@ extra-deps:
 - lsp-test-0.11.0.5
 - hie-bios-0.7.1@rev:2
 - implicit-hie-0.1.1.0
-- github: Avi-D-coder/implicit-hie-cradle
-  commit: f7bfc24ed036e31c0a758b9ab6665c4999eb4fe0
+- implicit-hie-cradle-0.2.0.0
 - fuzzy-0.1.0.0
 - regex-pcre-builtin-0.95.1.1.8.43
 - regex-base-0.94.0.0

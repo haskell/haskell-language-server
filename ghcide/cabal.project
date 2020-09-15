@@ -1,10 +1,5 @@
 packages: .
 
-source-repository-package
-  type: git
-  location: https://github.com/Avi-D-coder/implicit-hie-cradle.git
-  tag: f7bfc24ed036e31c0a758b9ab6665c4999eb4fe0
-
 allow-newer:
 	active:base,
 	diagrams-contrib:base,

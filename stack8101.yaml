@@ -25,8 +25,7 @@ extra-deps:
 - force-layout-0.4.0.6
 - statestack-0.3
 - implicit-hie-0.1.1.0
-- github: Avi-D-coder/implicit-hie-cradle
-  commit: f7bfc24ed036e31c0a758b9ab6665c4999eb4f
+- implicit-hie-cradle-0.2.0.0
 
 nix:
   packages: [zlib]
