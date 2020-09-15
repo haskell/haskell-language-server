@@ -1,3 +1,5 @@
+# Upon change, also update hie.yaml.cbl and hie.yaml.stack
+
 cradle:
   multi:
     - path: "./test/data"
