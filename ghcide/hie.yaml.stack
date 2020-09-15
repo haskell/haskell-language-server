@@ -10,6 +10,8 @@ cradle:
               component: "ghcide:lib"
             - path: "./exe"
               component: "ghcide:exe:ghcide"
+            - path: "./session-loader"
+              component: "ghcide:lib"
             - path: "./test"
               component: "ghcide:test:ghcide-tests"
             - path: "./bench"
