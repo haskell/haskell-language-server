@@ -41,7 +41,9 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
         \_ ide (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> do
             updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
             whenUriFile _uri $ \file -> do
-                modifyFilesOfInterest ide (M.insert file OnDisk)
+                -- We don't know if the file actually exists, or if the contents match those on disk
+                -- For example, vscode restores previously unsaved contents on open
+                modifyFilesOfInterest ide (M.insert file Modified)
                 setFileModified ide False file
                 logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
