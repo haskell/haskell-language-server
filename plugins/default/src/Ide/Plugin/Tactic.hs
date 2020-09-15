@@ -36,6 +36,7 @@ import           Ide.LocalBindings (bindings, mostSpecificSpan, holify)
 import           Ide.Plugin (mkLspCommand)
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Tactics
+import           Ide.Plugin.Tactic.Types
 import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
@@ -60,22 +61,9 @@ tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
 
 ------------------------------------------------------------------------------
--- | The list of tactics exposed to the outside world. These are attached to
--- actual tactics via 'commandTactic' and are contextually provided to the
--- editor via 'commandProvider'.
-data TacticCommand
-  = Auto
-  | Split
-  | Intro
-  | Intros
-  | Destruct
-  | Homomorphism
-  deriving (Eq, Ord, Show, Enum, Bounded)
-
 
 enabledTactics :: [TacticCommand]
 enabledTactics = [Intros, Destruct, Homomorphism]
-
 
 ------------------------------------------------------------------------------
 -- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
@@ -93,18 +81,6 @@ tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 -- | The name of the command for the LS.
 tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
-
-
-------------------------------------------------------------------------------
--- | Generate a title for the command.
-tacticTitle :: TacticCommand -> T.Text -> T.Text
-tacticTitle Auto _ = "Auto"
-tacticTitle Split _ = "Auto"
-tacticTitle Intro _ = "Intro"
-tacticTitle Intros _ = "Introduce lambda"
-tacticTitle Destruct var = "Case split on " <> var
-tacticTitle Homomorphism var = "Homomorphic case split on " <> var
-
 
 ------------------------------------------------------------------------------
 -- | Mapping from tactic commands to their contextual providers. See 'provide',

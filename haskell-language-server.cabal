@@ -92,6 +92,12 @@ executable haskell-language-server
     Ide.Plugin.Pragmas
     Ide.Plugin.Retrie
     Ide.Plugin.StylishHaskell
+    Ide.LocalBindings
+    Ide.Plugin.Tactic
+    Ide.Plugin.Tactic.Types
+    Ide.Plugin.Tactic.Machinery
+    Ide.Plugin.Tactic.Tactics
+    Ide.TreeTransform
 
   ghc-options:
     -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
@@ -142,6 +148,9 @@ executable haskell-language-server
     , time
     , transformers
     , unordered-containers
+    , ghc-source-gen
+    , refinery
+    , ghc-exactprint
 
   if flag(agpl)
     build-depends: brittany
@@ -230,7 +239,7 @@ test-suite func-test
     , tasty-golden
     , tasty-rerun
 
-  hs-source-dirs:     test/functional
+  hs-source-dirs:     test/functional plugins/default/src
   main-is:            Main.hs
   other-modules:
     Command
@@ -250,6 +259,8 @@ test-suite func-test
     Rename
     Symbol
     TypeDefinition
+    Tactic
+    Ide.Plugin.Tactic.Types
 
   ghc-options:
     -Wall -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N
