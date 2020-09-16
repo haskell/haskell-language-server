@@ -25,8 +25,8 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
 import Data.Aeson.Types (ToJSON(..), FromJSON(..), Value(..))
 import Data.Binary
-import qualified Data.HashSet as HashSet
 import Data.Hashable
+import qualified Data.HashMap.Strict as Map
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -98,7 +98,7 @@ rules = do
 
   action $ do
     files <- getFilesOfInterest
-    void $ uses GetHlintDiagnostics $ HashSet.toList (files)
+    void $ uses GetHlintDiagnostics $ Map.keys files
 
   where
 
