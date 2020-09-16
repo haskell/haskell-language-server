@@ -28,7 +28,6 @@ extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
-- hie-bios-0.7.1
 - hlint-2.2.8
 - hoogle-5.0.17.11
 - hsimport-0.11.0
@@ -47,6 +46,9 @@ extra-deps:
 - stylish-haskell-0.11.0.3
 - temporary-1.2.1.1
 - these-1.1.1.1
+- implicit-hie-cradle-0.2.0.0
+- implicit-hie-0.1.1.0
+- hie-bios-0.7.1
 
 flags:
   haskell-language-server:

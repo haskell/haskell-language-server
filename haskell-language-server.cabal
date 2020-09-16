@@ -70,7 +70,7 @@ library
     , process
     , unordered-containers
 
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wincomplete-uni-patterns
+  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
 
   if flag(pedantic)
     ghc-options: -Werror
@@ -99,7 +99,7 @@ executable haskell-language-server
     Ide.TreeTransform
 
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints -Wincomplete-uni-patterns
+    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
@@ -164,7 +164,7 @@ executable haskell-language-server-wrapper
   other-modules:    Paths_haskell_language_server
   autogen-modules:  Paths_haskell_language_server
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints -Wincomplete-uni-patterns
+    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
