@@ -21,10 +21,14 @@ extra-deps:
 - HsYAML-aeson-0.2.0.0@rev:2
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
+- refinery-0.1.0.0
 - retrie-0.1.1.1
 - stylish-haskell-0.11.0.3
 - semigroups-0.18.5
 - temporary-1.2.1.1
+- implicit-hie-cradle-0.2.0.0
+- implicit-hie-0.1.1.0
+- hie-bios-0.7.1
 
 flags:
   haskell-language-server:

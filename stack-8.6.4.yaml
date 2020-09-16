@@ -28,6 +28,7 @@ extra-deps:
 - ghc-exactprint-0.6.2
 - ghc-lib-parser-8.10.1.20200523
 - ghc-lib-parser-ex-8.10.0.4
+- ghc-source-gen-0.4.0.0
 - haddock-api-2.22.0@rev:1
 - haddock-library-1.8.0
 - haskell-lsp-0.22.0.0
@@ -45,6 +46,7 @@ extra-deps:
 - ormolu-0.1.2.0
 - parser-combinators-1.2.1
 - primitive-0.7.1.0
+- refinery-0.1.0.0
 - regex-base-0.94.0.0
 - regex-pcre-builtin-0.95.1.1.8.43
 - regex-tdfa-1.3.1.0
@@ -58,6 +60,8 @@ extra-deps:
 - these-1.1.1.1
 - type-equality-1
 - topograph-1
+- implicit-hie-cradle-0.2.0.0
+- implicit-hie-0.1.1.0
 
 flags:
   haskell-language-server:
