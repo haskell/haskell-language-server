@@ -25,9 +25,9 @@ extra-deps:
 # - ghcide-0.1.0
 - ghc-check-0.5.0.1
 - ghc-exactprint-0.6.2
-- ghc-lib-parser-8.10.1.20200523
-- ghc-lib-parser-ex-8.10.0.4
-  ghc-source-gen-0.4.0.0
+- ghc-lib-parser-8.10.2.20200808
+- ghc-lib-parser-ex-8.10.0.16
+- ghc-source-gen-0.4.0.0
 - haddock-api-2.22.0@rev:1
 - haddock-library-1.8.0
 - haskell-lsp-0.22.0.0
@@ -61,7 +61,6 @@ extra-deps:
 - topograph-1
 - implicit-hie-cradle-0.2.0.0
 - implicit-hie-0.1.1.0
-- hie-bios-0.7.1
 
 flags:
   haskell-language-server:
