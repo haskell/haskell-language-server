@@ -148,7 +148,7 @@ executable haskell-language-server
     , unordered-containers
     , ghc-source-gen
     , refinery
-    , ghc-exactprint           >= 0.6.3.2
+    , ghc-exactprint
 
   if flag(agpl)
     build-depends: brittany
