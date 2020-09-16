@@ -350,6 +350,10 @@ test-suite ghcide-tests
         tasty-quickcheck,
         tasty-rerun,
         text
+    if (impl(ghc >= 8.6))
+      build-depends:
+          record-dot-preprocessor,
+          record-hasfield
     hs-source-dirs: test/cabal test/exe test/src bench/lib
     include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing -O0
