@@ -35,7 +35,7 @@ import qualified Data.HashMap.Strict            as HM
 import qualified Data.HashSet                   as Set
 import           Data.IORef.Extra               (atomicModifyIORef'_, newIORef,
                                                  readIORef)
-import           Data.List.Extra                (nubOrdOn)
+import           Data.List.Extra                (find, nubOrdOn)
 import           Data.String                    (IsString (fromString))
 import qualified Data.Text                      as T
 import qualified Data.Text.IO                   as T
@@ -86,6 +86,8 @@ import           Retrie.SYB                     (listify)
 import           Retrie.Util                    (Verbosity (Loud))
 import           StringBuffer                   (stringToStringBuffer)
 import           System.Directory               (makeAbsolute)
+import Control.Monad.Trans.Maybe
+import Development.IDE.Core.PositionMapping
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -104,9 +106,7 @@ retrieCommand =
 -- | Parameters for the runRetrie PluginCommand.
 data RunRetrieParams = RunRetrieParams
   { description               :: T.Text,
-    -- | rewrites for Retrie
-    rewrites                  :: [Either ImportSpec RewriteSpec],
-    -- | Originating file
+    rewrites                  :: [RewriteSpec],
     originatingFile           :: String,
     restrictToOriginatingFile :: Bool
   }
@@ -117,29 +117,55 @@ runRetrieCmd ::
   IdeState ->
   RunRetrieParams ->
   IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-runRetrieCmd lsp state RunRetrieParams {..} =
+runRetrieCmd lsp state RunRetrieParams{..} =
   withIndefiniteProgress lsp description Cancellable $ do
-    session <-
-      runAction "Retrie.GhcSessionDeps" state $
-        use_ GhcSessionDeps $
-          toNormalizedFilePath originatingFile
-    (errors, edits) <-
-      callRetrie
-        state
-        (hscEnv session)
-        rewrites
-        (toNormalizedFilePath originatingFile)
-        restrictToOriginatingFile
-    unless (null errors) $
-      sendFunc lsp $
-        NotShowMessage $
-          NotificationMessage "2.0" WindowShowMessage $
-            ShowMessageParams MtWarning $
-              T.unlines $
-                "## Found errors during rewrite:" :
-                  ["-" <> T.pack (show e) | e <- errors]
+    res <- runMaybeT $ do
+        let nfp = toNormalizedFilePath' originatingFile
+        (session, _) <- MaybeT $
+            runAction "Retrie.GhcSessionDeps" state $
+                useWithStale GhcSessionDeps $
+                toNormalizedFilePath originatingFile
+        (ms, binds, _, _, _) <- MaybeT $ runAction "Retrie.getBinds" state $ getBinds nfp
+        let importRewrites = concatMap (extractImports ms binds) rewrites
+        (errors, edits) <- lift $
+            callRetrie
+                state
+                (hscEnv session)
+                (map Right rewrites <> map Left importRewrites)
+                (toNormalizedFilePath originatingFile)
+                restrictToOriginatingFile
+        unless (null errors) $
+            lift $ sendFunc lsp $
+                NotShowMessage $
+                NotificationMessage "2.0" WindowShowMessage $
+                    ShowMessageParams MtWarning $
+                    T.unlines $
+                        "## Found errors during rewrite:" :
+                        ["-" <> T.pack (show e) | e <- errors]
+        return (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
     return
-      (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits))
+      (Right Null, res)
+
+extractImports :: ModSummary -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> [ImportSpec]
+extractImports ModSummary{ms_mod} topLevelBinds (Unfold thing)
+  | Just FunBind {fun_matches}
+  <- find (\case FunBind{fun_id = L _ n} -> prettyPrint n == thing ; _ -> False) topLevelBinds
+  , names <- listify p fun_matches
+  =
+    [ AddImport {..}
+    | name <- names,
+        Just ideclNameString <-
+        [moduleNameString . GHC.moduleName <$> nameModule_maybe name],
+        let ideclSource = False,
+        let r = nameRdrName name,
+        let ideclQualifiedBool = isQual r,
+        let ideclAsString = moduleNameString . fst <$> isQual_maybe r,
+        let ideclThing = Just (IEVar $ occNameString $ rdrNameOcc r)
+    ]
+    where
+        p name = nameModule_maybe name /= Just ms_mod
+-- TODO handle imports for all rewrites
+extractImports _ _ _ = []
 
 -------------------------------------------------------------------------------
 
@@ -149,14 +175,31 @@ provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
   fp <- handleMaybe "uri" $ uriToFilePath' uri
   let nfp = toNormalizedFilePath' fp
 
-  tm <-
-    handleMaybeM "no typechecked module" $
-      useRule "retrie.typecheckModule" state TypeCheck nfp
+  (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
+    <- handleMaybeM "typecheck" $ runAction "retrie" state $ getBinds nfp
 
-  ModSummary {ms_mod} <-
-    handleMaybeM "no mod summary" $
-      useRule "retrie.typecheckModule" state GetModSummary nfp
+  pos <- handleMaybe "pos" $ _start <$> fromCurrentRange posMapping range
+  let rewrites =
+        concatMap (suggestBindRewrites fp pos ms_mod) topLevelBinds
+          ++ concatMap (suggestRuleRewrites fp pos ms_mod) hs_ruleds
+          ++ [ r
+               | TyClGroup {group_tyclds} <- hs_tyclds,
+                 L l g <- group_tyclds,
+                 r <- suggestTypeRewrites fp ms_mod g,
+                 pos `isInsideSrcSpan` l
 
+             ]
+
+  commands <- lift $
+    forM rewrites $ \(title, kind, params) -> do
+      c <- mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
+      return $ CodeAction title (Just kind) Nothing Nothing (Just c)
+
+  return $ J.List [CACodeAction c | c <- commands]
+
+getBinds :: NormalizedFilePath -> Action (Maybe (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn]))
+getBinds nfp = runMaybeT $ do
+  (tm, posMapping) <- MaybeT $ useWithStale TypeCheck nfp
   -- we use the typechecked source instead of the parsed source
   -- to be able to extract module names from the Ids,
   -- so that we can include adding the required imports in the retrie command
@@ -173,28 +216,12 @@ provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
         _
         ) = rn
 
-      pos = _start range
       topLevelBinds =
         [ decl
           | (_, bagBinds) <- binds,
             L _ decl <- GHC.bagToList bagBinds
         ]
-
-      rewrites =
-        concatMap (suggestBindRewrites fp pos ms_mod) topLevelBinds
-          ++ concatMap (suggestRuleRewrites fp pos ms_mod) hs_ruleds
-          ++ [ r
-               | TyClGroup {group_tyclds} <- hs_tyclds,
-                 L _ g <- group_tyclds,
-                 r <- suggestTypeRewrites fp pos ms_mod g
-             ]
-
-  commands <- lift $
-    forM rewrites $ \(title, kind, params) -> do
-      c <- mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
-      return $ CodeAction title (Just kind) Nothing Nothing (Just c)
-
-  return $ J.List [CACodeAction c | c <- commands]
+  return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
 
 suggestBindRewrites ::
   String ->
@@ -202,31 +229,16 @@ suggestBindRewrites ::
   GHC.Module ->
   HsBindLR GhcRn GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestBindRewrites originatingFile pos ms_mod (FunBind {fun_id = L l' rdrName, fun_matches})
+suggestBindRewrites originatingFile pos ms_mod (FunBind {fun_id = L l' rdrName})
   | pos `isInsideSrcSpan` l' =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
-        names = listify p fun_matches
-        p name = nameModule_maybe name /= Just ms_mod
-        imports =
-          [ AddImport {..}
-            | name <- names,
-              Just ideclNameString <-
-                [moduleNameString . GHC.moduleName <$> nameModule_maybe name],
-              let ideclSource = False,
-              let r = nameRdrName name,
-              let ideclQualifiedBool = isQual r,
-              let ideclAsString = moduleNameString . fst <$> isQual_maybe r,
-              let ideclThing = Just (IEVar $ occNameString $ rdrNameOcc r)
-          ]
         unfoldRewrite restrictToOriginatingFile =
-            let rewrites =
-                    [Right $ Unfold (qualify ms_mod pprName)]
-                    ++ map Left imports
+            let rewrites = [Unfold (qualify ms_mod pprName)]
                 description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
             in (description, CodeActionRefactorInline, RunRetrieParams {..})
         foldRewrite restrictToOriginatingFile =
-          let rewrites = [Right $ Fold (qualify ms_mod pprName)]
+          let rewrites = [Fold (qualify ms_mod pprName)]
               description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
@@ -237,30 +249,26 @@ describeRestriction :: IsString p => Bool -> p
 describeRestriction restrictToOriginatingFile =
         if restrictToOriginatingFile then " in current file" else ""
 
--- TODO add imports to the rewrite
 suggestTypeRewrites ::
   (Outputable (IdP pass)) =>
   String ->
-  Position ->
   GHC.Module ->
   TyClDecl pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestTypeRewrites originatingFile pos ms_mod (SynDecl {tcdLName = L l rdrName})
-  | pos `isInsideSrcSpan` l =
+suggestTypeRewrites originatingFile ms_mod (SynDecl {tcdLName = L _ rdrName}) =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
         unfoldRewrite restrictToOriginatingFile =
-            let rewrites = [Right $ TypeForward (qualify ms_mod pprName)]
+            let rewrites = [TypeForward (qualify ms_mod pprName)]
                 description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionRefactorInline, RunRetrieParams {..})
         foldRewrite restrictToOriginatingFile =
-          let rewrites = [Right $ TypeBackward (qualify ms_mod pprName)]
+          let rewrites = [TypeBackward (qualify ms_mod pprName)]
               description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
-suggestTypeRewrites _ _ _ _ = []
+suggestTypeRewrites _ _ _ = []
 
--- TODO add imports to the rewrite
 suggestRuleRewrites ::
   FilePath ->
   Position ->
@@ -285,8 +293,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
       ]
   where
     forwardRewrite ruleName restrictToOriginatingFile =
-        let rewrites =
-                [Right $ RuleForward (qualify ms_mod ruleName)]
+        let rewrites = [RuleForward (qualify ms_mod ruleName)]
             description = "Apply rule " <> T.pack ruleName <> " forward" <>
                             describeRestriction restrictToOriginatingFile
 
@@ -295,8 +302,7 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
             RunRetrieParams {..}
             )
     backwardsRewrite ruleName restrictToOriginatingFile =
-          let rewrites =
-                [Right $ RuleBackward (qualify ms_mod ruleName)]
+          let rewrites = [RuleBackward (qualify ms_mod ruleName)]
               description = "Apply rule " <> T.pack ruleName <> " backwards"
            in ( description,
                 CodeActionRefactor,
