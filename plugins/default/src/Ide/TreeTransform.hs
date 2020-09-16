@@ -10,7 +10,7 @@ module Ide.TreeTransform
 
 import           BasicTypes (appPrec)
 import           Control.Monad
-import           Data.Functor.Identity
+import           Control.Monad.Trans.Class
 import qualified Data.Text as T
 import           Debug.Trace
 import           Development.IDE.Core.RuleTypes
@@ -45,7 +45,7 @@ useAnnotatedSource herald state nfp = do
 -- | A transformation for grafting source trees together. Use the semigroup
 -- instance to combine 'Graft's, and run them via 'transform'.
 newtype Graft a = Graft
-  { runGraft :: DynFlags -> a -> Transform a
+  { runGraft :: DynFlags -> a -> TransformT (Either String) a
   }
 
 instance Semigroup (Graft a) where
@@ -63,12 +63,12 @@ transform
     -> Uri
     -> Graft ParsedSource
     -> Annotated ParsedSource
-    -> WorkspaceEdit
-transform dflags ccs uri f a =
+    -> Either String WorkspaceEdit
+transform dflags ccs uri f a = do
   let src = printA a
-      a' = runIdentity $ transformA a $ runGraft f dflags
-      res = printA a'
-   in diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
+  a' <- transformA a $ runGraft f dflags
+  let res = printA a'
+  pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 
 ------------------------------------------------------------------------------
@@ -102,12 +102,12 @@ fixAnns ParsedModule {..} =
 
 ------------------------------------------------------------------------------
 -- | Given an 'LHSExpr', compute its exactprint annotations.
-annotate :: DynFlags -> LHsExpr GhcPs -> Transform (Anns, LHsExpr GhcPs)
+annotate :: DynFlags -> LHsExpr GhcPs -> TransformT (Either String) (Anns, LHsExpr GhcPs)
 annotate dflags expr = do
   uniq <- show <$> uniqueSrcSpanT
   let rendered = traceId $ render dflags expr
-      Right (anns, expr') = parseExpr dflags uniq rendered
-      anns' = setPrecedingLines expr' 0 1 anns
+  (anns, expr') <- lift $ either (Left . show) Right $ parseExpr dflags uniq rendered
+  let anns' = setPrecedingLines expr' 0 1 anns
   pure (anns', expr')
 
 

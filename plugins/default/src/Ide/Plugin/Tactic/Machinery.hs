@@ -5,18 +5,16 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Tactic.Machinery where
 
-import           Control.Arrow
 import           Control.Monad.State (get, modify, evalStateT)
 import           Data.Char
 import           Data.Function
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
-import           Data.Set (Set)
-import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
@@ -25,19 +23,21 @@ import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
-import           Ide.LocalBindings
+import Development.IDE.Spans.LocalBindings
 import           Name
 import           Outputable hiding ((<>))
 import           Refinery.Tactic
 import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import Data.Maybe
+import SrcLoc
 
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
 instance MonadExtract (LHsExpr GhcPs) ProvableM where
-  hole = pure $ noLoc $ HsVar noExt $ noLoc $ Unqual $ mkVarOcc "_"
+  hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
 
 
 ------------------------------------------------------------------------------
@@ -59,12 +59,17 @@ hypothesisFromBindings span bs = buildHypothesis (getLocalScope bs span)
 
 ------------------------------------------------------------------------------
 -- | Convert a @Set Id@ into a hypothesis.
-buildHypothesis :: Set Id -> Map OccName CType
+buildHypothesis :: [(Name, Maybe Type)] -> Map OccName CType
 buildHypothesis
   = M.fromList
-  . fmap (occName &&& CType . varType)
-  . filter (isAlpha . head . occNameString . occName)
-  . S.toList
+  . mapMaybe go
+  where
+    go (n, t)
+      | Just ty <- t
+      , isAlpha . head . occNameString $ occ = Just (occ, CType ty)
+      | otherwise = Nothing
+      where
+        occ = occName n
 
 
 ------------------------------------------------------------------------------
@@ -236,7 +241,7 @@ buildDataCon hy dc apps = do
   pure
     . noLoc
     . foldl' (@@)
-        (HsVar noExt $ noLoc $ Unqual $ nameOccName $ dataConName dc)
+        (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
 
 
@@ -244,10 +249,13 @@ buildDataCon hy dc apps = do
 -- | Convert a DAML compiler Range to a GHC SrcSpan
 -- TODO(sandy): this doesn't belong here
 rangeToSrcSpan :: String -> Range -> SrcSpan
-rangeToSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
-    mkSrcSpan
-      (mkSrcLoc (FS.fsLit file) (startLn + 1) (startCh + 1))
-      (mkSrcLoc (FS.fsLit file) (endLn + 1) (endCh + 1))
+rangeToSrcSpan file range = RealSrcSpan $ rangeToRealSrcSpan file range
+
+rangeToRealSrcSpan :: String -> Range -> RealSrcSpan
+rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
+    mkRealSrcSpan
+      (mkRealSrcLoc (FS.fsLit file) (startLn + 1) (startCh + 1))
+      (mkRealSrcLoc (FS.fsLit file) (endLn + 1) (endCh + 1))
 
 ------------------------------------------------------------------------------
 -- | Print something

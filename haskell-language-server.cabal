@@ -70,7 +70,7 @@ library
     , process
     , unordered-containers
 
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
+  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wincomplete-uni-patterns
 
   if flag(pedantic)
     ghc-options: -Werror
@@ -92,7 +92,6 @@ executable haskell-language-server
     Ide.Plugin.Pragmas
     Ide.Plugin.Retrie
     Ide.Plugin.StylishHaskell
-    Ide.LocalBindings
     Ide.Plugin.Tactic
     Ide.Plugin.Tactic.Types
     Ide.Plugin.Tactic.Machinery
@@ -100,7 +99,7 @@ executable haskell-language-server
     Ide.TreeTransform
 
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
+    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints -Wincomplete-uni-patterns
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
@@ -118,7 +117,6 @@ executable haskell-language-server
     , deepseq
     , floskell                 ^>=0.10
     , fourmolu                 ^>=0.1
-    , fingertree
     , ghc
     , ghc-boot-th
     , ghcide                   >=0.1
@@ -150,7 +148,7 @@ executable haskell-language-server
     , unordered-containers
     , ghc-source-gen
     , refinery
-    , ghc-exactprint
+    , ghc-exactprint           >= 0.6.3.2
 
   if flag(agpl)
     build-depends: brittany
@@ -166,7 +164,7 @@ executable haskell-language-server-wrapper
   other-modules:    Paths_haskell_language_server
   autogen-modules:  Paths_haskell_language_server
   ghc-options:
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
+    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints -Wincomplete-uni-patterns
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC

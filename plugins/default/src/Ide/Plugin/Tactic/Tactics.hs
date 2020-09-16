@@ -24,7 +24,6 @@ import           Ide.Plugin.Tactic.Machinery
 import           Name
 import           Refinery.Tactic
 import           TcType
-import           TyCoRep
 import           Type hiding (Var)
 
 
@@ -52,8 +51,8 @@ assumption = rule $ \(Judgement hy g) ->
 -- | Introduce a lambda.
 intro :: TacticsM ()
 intro = rule $ \(Judgement hy g) ->
-  case unCType g of
-    (FunTy a b) -> do
+  case splitFunTy_maybe $ unCType g of
+    Just (a, b) -> do
       v <- pure $ mkGoodName (getInScope hy) a
       sg <- newSubgoal (M.singleton v (CType a) <> hy) $ CType b
       pure $ noLoc $ lambda [bvar' v] $ unLoc sg
