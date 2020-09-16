@@ -735,11 +735,12 @@ isHiFileStableRule = define $ \IsHiFileStable f -> do
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ \GetModSummary f -> do
-        dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
+        session <- hscEnv <$> use_ GhcSession f
+        let dflags = hsc_dflags session
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ evalWithDynFlags dflags $ runExceptT $
-                getModSummaryFromImports fp modTime (textToStringBuffer <$> mFileContent)
+                getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
             Right ms -> do
                 let fingerPrint = hash (computeFingerprint f dflags ms, hashUTC modTime)

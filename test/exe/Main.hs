@@ -77,7 +77,8 @@ main = do
     , codeLensesTests
     , outlineTests
     , findDefinitionAndHoverTests
-    , pluginTests
+    , pluginSimpleTests
+    , pluginParsedResultTests
     , preprocessorTests
     , thTests
     , safeTests
@@ -2250,29 +2251,43 @@ checkFileCompiles fp =
     void (openTestDataDoc (dir </> fp))
     expectNoMoreDiagnostics 0.5
 
+pluginSimpleTests :: TestTree
+pluginSimpleTests = 
+  testSessionWait "simple plugin" $ do
+    let content =
+          T.unlines
+            [ "{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}"
+            , "{-# LANGUAGE DataKinds, ScopedTypeVariables, TypeOperators #-}"
+            , "module Testing where"
+            , "import Data.Proxy"
+            , "import GHC.TypeLits"
+            -- This function fails without plugins being initialized.
+            , "f :: forall n. KnownNat n => Proxy n -> Integer"
+            , "f _ = natVal (Proxy :: Proxy n) + natVal (Proxy :: Proxy (n+2))"
+            , "foo :: Int -> Int -> Int"
+            , "foo a b = a + c"
+            ]
+    _ <- createDoc "Testing.hs" "haskell" content
+    expectDiagnostics
+      [ ( "Testing.hs",
+          [(DsError, (8, 14), "Variable not in scope: c")]
+          )
+      ]
 
-
-pluginTests :: TestTree
-pluginTests = testSessionWait "plugins" $ do
-  let content =
-        T.unlines
-          [ "{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}"
-          , "{-# LANGUAGE DataKinds, ScopedTypeVariables, TypeOperators #-}"
-          , "module Testing where"
-          , "import Data.Proxy"
-          , "import GHC.TypeLits"
-          -- This function fails without plugins being initialized.
-          , "f :: forall n. KnownNat n => Proxy n -> Integer"
-          , "f _ = natVal (Proxy :: Proxy n) + natVal (Proxy :: Proxy (n+2))"
-          , "foo :: Int -> Int -> Int"
-          , "foo a b = a + c"
-          ]
-  _ <- createDoc "Testing.hs" "haskell" content
-  expectDiagnostics
-    [ ( "Testing.hs",
-        [(DsError, (8, 14), "Variable not in scope: c")]
-      )
-    ]
+pluginParsedResultTests :: TestTree 
+pluginParsedResultTests = 
+  (`xfail84` "record-dot-preprocessor unsupported on 8.4") $ testSessionWait "parsedResultAction plugin" $ do 
+    let content = 
+          T.unlines 
+            [ "{-# LANGUAGE DuplicateRecordFields, TypeApplications, FlexibleContexts, DataKinds, MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}"
+            , "{-# OPTIONS_GHC -fplugin=RecordDotPreprocessor #-}"
+            , "module Testing (Company(..), display) where"
+            , "data Company = Company {name :: String}"
+            , "display :: Company -> String"
+            , "display c = c.name"
+            ]
+    _ <- createDoc "Testing.hs" "haskell" content 
+    expectNoMoreDiagnostics 1
 
 cppTests :: TestTree
 cppTests =
@@ -2733,6 +2748,13 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
+
+xfail84 :: TestTree -> String -> TestTree
+#if MIN_GHC_API_VERSION(8,6,0)
+xfail84 t _ = t
+#else
+xfail84 = flip expectFailBecause
+#endif
 
 expectFailCabal :: String -> TestTree -> TestTree
 #ifdef STACK

@@ -56,6 +56,8 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
 
     module GHC,
+    initializePlugins,
+    applyPluginsParsedResultAction,
 #if MIN_GHC_API_VERSION(8,6,0)
 
 #if MIN_GHC_API_VERSION(8,8,0)
@@ -112,6 +114,8 @@ import FastString (FastString)
 #if MIN_GHC_API_VERSION(8,6,0)
 import Development.IDE.GHC.HieAst (mkHieFile)
 import Development.IDE.GHC.HieBin
+import qualified DynamicLoading
+import Plugins (Plugin(parsedResultAction), withPlugins)
 
 #if MIN_GHC_API_VERSION(8,8,0)
 import HieUtils
@@ -467,3 +471,27 @@ wopt_unset_fatal :: DynFlags -> WarningFlag -> DynFlags
 wopt_unset_fatal dfs f
     = dfs { fatalWarningFlags = EnumSet.delete f (fatalWarningFlags dfs) }
 #endif
+
+#if MIN_GHC_API_VERSION(8,6,0)
+initializePlugins :: HscEnv -> DynFlags -> IO DynFlags
+initializePlugins env dflags = do
+    DynamicLoading.initializePlugins env dflags
+
+applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> ApiAnns -> ParsedSource -> IO ParsedSource
+applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
+  -- Apply parsedResultAction of plugins
+  let applyPluginAction p opts = parsedResultAction p opts ms
+  fmap hpm_module $ 
+    runHsc env $ withPlugins dflags applyPluginAction 
+      (HsParsedModule parsed [] hpm_annotations)
+
+#else
+initializePlugins :: HscEnv -> DynFlags -> IO DynFlags
+initializePlugins _env dflags = do
+    return dflags
+
+applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> ApiAnns -> ParsedSource -> IO ParsedSource
+applyPluginsParsedResultAction _env _dflags _ms _hpm_annotations parsed =
+    return parsed
+#endif
+
