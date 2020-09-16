@@ -19,6 +19,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
 import qualified Data.Map as M
+import qualified Data.Set as S
 import           Data.Maybe
 import qualified Data.Text as T
 import           Data.Traversable
@@ -136,15 +137,13 @@ codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right $ List []) $ do
-        (pos, span, jdg) <- MaybeT $ judgementForHole state nfp range
-        resulting_range <-
-          liftMaybe $ toCurrentRange pos $ realSrcSpanToRange span
+        (_, span, jdg) <- MaybeT $ judgementForHole state nfp range
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider enabledTactics
             plId
             uri
-            resulting_range
+            span
             jdg
         pure $ Right $ List actions
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
@@ -208,22 +207,26 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> IO (Maybe (PositionMapping, RealSrcSpan, Judgement))
+    -> IO (Maybe (PositionMapping, Range, Judgement))
 judgementForHole state nfp range = runMaybeT $ do
-  (asts, pos) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
-  range' <- liftMaybe $ fromCurrentRange pos range
+  (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
+  range' <- liftMaybe $ fromCurrentRange amapping range
+
+  (binds, _) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
 
   (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
       case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
         Nothing -> Nothing
         Just ast' -> do
-          ty <- listToMaybe $ nodeType $ nodeInfo ast'
+          let info = nodeInfo ast'
+          ty <- listToMaybe $ nodeType info
+          guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
           pure (nodeSpan ast', ty)
 
-  (binds,_) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
+  resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
 
   let hyps = hypothesisFromBindings rss binds
-  pure (pos, rss, Judgement hyps $ CType goal)
+  pure (amapping, resulting_range, Judgement hyps $ CType goal)
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
