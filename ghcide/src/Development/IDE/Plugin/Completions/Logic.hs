@@ -38,6 +38,7 @@ import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.VFS as VFS
 import Development.IDE.Core.Compile
+import Development.IDE.Core.PositionMapping
 import Development.IDE.Plugin.Completions.Types
 import Development.IDE.Spans.Documentation
 import Development.IDE.GHC.Compat as GHC
@@ -371,10 +372,18 @@ toggleSnippets ClientCapabilities { _textDocument } (WithSnippets with) x
   where supported = Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
 
 -- | Returns the cached completions for the given module and position.
-getCompletions :: IdeOptions -> CachedCompletions -> ParsedModule -> VFS.PosPrefixInfo -> ClientCapabilities -> WithSnippets -> IO [CompletionItem]
-getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules }
-               pm prefixInfo caps withSnippets = do
-  let VFS.PosPrefixInfo { VFS.fullLine, VFS.prefixModule, VFS.prefixText } = prefixInfo
+getCompletions
+    :: IdeOptions
+    -> CachedCompletions
+    -> ParsedModule
+    -> PositionMapping     -- ^ map current position to position in parsed module
+    -> VFS.PosPrefixInfo
+    -> ClientCapabilities
+    -> WithSnippets
+    -> IO [CompletionItem]
+getCompletions ideOpts cc pm pmapping prefixInfo caps withSnippets = do
+  let CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules } = cc
+      VFS.PosPrefixInfo { VFS.fullLine, VFS.prefixModule, VFS.prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
 
@@ -404,8 +413,12 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
 
       filtCompls = map Fuzzy.original $ Fuzzy.filter prefixText ctxCompls "" "" label False
         where
+          mcc = do
+              position' <- fromCurrentPosition pmapping pos
+              getCContext position' pm
+
           -- completions specific to the current context
-          ctxCompls' = case getCContext pos pm of
+          ctxCompls' = case mcc of
                         Nothing -> compls
                         Just TypeContext -> filter isTypeCompl compls
                         Just ValueContext -> filter (not . isTypeCompl) compls

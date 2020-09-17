@@ -24,7 +24,6 @@ import Development.IDE.Plugin.Completions.Logic
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import Development.IDE.Core.Compile
-import Development.IDE.Core.PositionMapping
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat (hsmodExports, ParsedModule(..), ModSummary (ms_hspp_buf))
@@ -150,15 +149,14 @@ getCompletionsLSP lsp ide
             pure (opts, liftA2 (,) compls pm)
         case compls of
           Just ((cci', _), (pm, mapping)) -> do
-            let !position' = fromCurrentPosition mapping position
-            pfix <- maybe (return Nothing) (flip VFS.getCompletionPrefix cnts) position'
+            pfix <- VFS.getCompletionPrefix position cnts
             case (pfix, completionContext) of
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (Completions $ List [])
               (Just pfix', _) -> do
                   -- TODO pass the real capabilities here (or remove the logic for snippets)
                 let fakeClientCapabilities = ClientCapabilities Nothing Nothing Nothing Nothing
-                Completions . List <$> getCompletions ideOpts cci' pm pfix' fakeClientCapabilities (WithSnippets True)
+                Completions . List <$> getCompletions ideOpts cci' pm mapping pfix' fakeClientCapabilities (WithSnippets True)
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
