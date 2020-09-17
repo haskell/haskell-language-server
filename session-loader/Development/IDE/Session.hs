@@ -111,6 +111,7 @@ loadSession dir = do
     IdeOptions{ optTesting = IdeTesting optTesting
               , optCheckProject = CheckProject checkProject
               , optCustomDynFlags
+              , optExtensions
               } <- getIdeOptions
 
         -- populate the knownTargetsVar with all the
@@ -227,7 +228,7 @@ loadSession dir = do
 
           -- New HscEnv for the component in question, returns the new HscEnvEq and
           -- a mapping from FilePath to the newly created HscEnvEq.
-          let new_cache = newComponentCache logger hieYaml hscEnv uids
+          let new_cache = newComponentCache logger optExtensions hieYaml hscEnv uids
           (cs, res) <- new_cache new
           -- Modified cache targets for everything else in the hie.yaml file
           -- which now uses the same EPS and so on
@@ -380,18 +381,22 @@ data TargetDetails = TargetDetails
   }
 
 fromTargetId :: [FilePath]          -- ^ import paths
+             -> [String]            -- ^ extensions to consider
              -> TargetId
              -> IdeResult HscEnvEq
              -> DependencyInfo
              -> IO [TargetDetails]
 -- For a target module we consider all the import paths
-fromTargetId is (TargetModule mod) env dep = do
-    let fps = [i </> moduleNameSlashes mod -<.> ext | ext <- exts, i <- is ]
-        exts = ["hs", "hs-boot", "lhs"]
+fromTargetId is exts (TargetModule mod) env dep = do
+    let fps = [i </> moduleNameSlashes mod -<.> ext <> boot
+              | ext <- exts
+              , i <- is
+              , boot <- ["", "-boot"]
+              ]
     locs <- mapM (fmap toNormalizedFilePath' . canonicalizePath) fps
     return [TargetDetails mod env dep locs]
 -- For a 'TargetFile' we consider all the possible module names
-fromTargetId _ (TargetFile f _) env deps = do
+fromTargetId _ _ (TargetFile f _) env deps = do
     nf <- toNormalizedFilePath' <$> canonicalizePath f
     return [TargetDetails m env deps [nf] | m <- moduleNames f]
 
@@ -417,12 +422,13 @@ setNameCache nc hsc = hsc { hsc_NC = nc }
 -- | Create a mapping from FilePaths to HscEnvEqs
 newComponentCache
          :: Logger
+         -> [String]       -- File extensions to consider
          -> Maybe FilePath -- Path to cradle
          -> HscEnv
          -> [(InstalledUnitId, DynFlags)]
          -> ComponentInfo
          -> IO ( [TargetDetails], (IdeResult HscEnvEq, DependencyInfo))
-newComponentCache logger cradlePath hsc_env uids ci = do
+newComponentCache logger exts cradlePath hsc_env uids ci = do
     let df = componentDynFlags ci
     let hscEnv' = hsc_env { hsc_dflags = df
                           , hsc_IC = (hsc_IC hsc_env) { ic_dflags = df } }
@@ -434,7 +440,7 @@ newComponentCache logger cradlePath hsc_env uids ci = do
         res = (targetEnv, targetDepends)
     logDebug logger ("New Component Cache HscEnvEq: " <> T.pack (show res))
 
-    let mk t = fromTargetId (importPaths df) (targetId t) targetEnv targetDepends
+    let mk t = fromTargetId (importPaths df) exts (targetId t) targetEnv targetDepends
     ctargets <- concatMapM mk (componentTargets ci)
 
     -- A special target for the file which caused this wonderful
