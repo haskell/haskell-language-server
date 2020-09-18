@@ -130,13 +130,14 @@ typecheckModule (IdeDefer defer) hsc pm = do
             dflags = ms_hspp_opts modSummary
 
         modSummary' <- initPlugins modSummary
-        (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
+        (warnings, tcm1) <- withWarnings "typecheck" $ \tweak ->
             GHC.typecheckModule $ enableTopLevelWarnings
                                 $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+        tcm2 <- liftIO $ fixDetailsForTH tcm1
         let errorPipeline = unDefer . hideDiag dflags
             diags = map errorPipeline warnings
-        tcm2 <- mkTcModuleResult tcm (any fst diags)
-        return (map snd diags, tcm2)
+        tcm3 <- mkTcModuleResult tcm2 (any fst diags)
+        return (map snd diags, tcm3)
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 

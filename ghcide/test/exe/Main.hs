@@ -2426,6 +2426,38 @@ thTests =
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
     , thReloadingTest `xfail` "expect broken (#672)"
+    -- Regression test for https://github.com/digital-asset/ghcide/issues/614
+    , testSessionWait "findsTHIdentifiers" $ do
+        let sourceA =
+              T.unlines
+                [ "{-# LANGUAGE TemplateHaskell #-}"
+                , "module A (a) where"
+                , "a = [| glorifiedID |]"
+                , "glorifiedID :: a -> a"
+                , "glorifiedID = id" ]
+        let sourceB =
+              T.unlines
+                [ "{-# OPTIONS_GHC -Wall #-}"
+                , "{-# LANGUAGE TemplateHaskell #-}"
+                , "module B where"
+                , "import A"
+                , "main = $a (putStrLn \"success!\")"]
+        _ <- createDoc "A.hs" "haskell" sourceA
+        _ <- createDoc "B.hs" "haskell" sourceB
+        expectDiagnostics [ ( "B.hs", [(DsWarning, (4, 0), "Top-level binding with no type signature: main :: IO ()")] ) ]
+#if MIN_GHC_API_VERSION(8,6,0)
+    , flip xfail "expect broken (#614)" $ testCase "findsTHnewNameConstructor" $ withoutStackEnv $ runWithExtraFiles "THNewName" $ \dir -> do
+
+    -- This test defines a TH value with the meaning "data A = A" in A.hs
+    -- Loads and export the template in B.hs
+    -- And checks wether the constructor A can be loaded in C.hs
+    -- This test does not fail when either A and B get manually loaded before C.hs
+    -- or when we remove the seemingly unnecessary TH pragma from C.hs
+
+    let cPath = dir </> "C.hs"
+    _ <- openDoc cPath "haskell"
+    expectDiagnostics [ ( cPath, [(DsWarning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
+#endif
     ]
 
 -- | test that TH is reevaluated on typecheck
