@@ -46,7 +46,7 @@ import           Development.IDE.Core.FileExists
 import           Development.IDE.Core.FileStore        (modificationTime, getFileContents)
 import           Development.IDE.Types.Diagnostics as Diag
 import Development.IDE.Types.Location
-import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule)
+import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, TargetModule, TargetFile)
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.WithDynFlags
 import Data.Either.Extra
@@ -67,7 +67,7 @@ import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Core.PositionMapping
 
 import qualified GHC.LanguageExtensions as LangExt
-import HscTypes
+import HscTypes hiding (TargetModule, TargetFile)
 import PackageConfig
 import DynFlags (gopt_set, xopt)
 import GHC.Generics(Generic)
@@ -336,7 +336,9 @@ getLocatedImportsRule =
         opt <- getIdeOptions
         let getTargetExists modName nfp
                 | isImplicitCradle = getFileExists nfp
-                | HM.member modName targets = getFileExists nfp
+                | HM.member (TargetModule modName) targets
+                || HM.member (TargetFile nfp) targets
+                = getFileExists nfp
                 | otherwise = return False
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getTargetExists modName mbPkgName isSource
