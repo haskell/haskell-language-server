@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
@@ -24,7 +26,7 @@
 module Development.IDE.Core.Shake(
     IdeState, shakeExtras,
     ShakeExtras(..), getShakeExtras, getShakeExtrasRules,
-    KnownTargets, toKnownFiles,
+    KnownTargets, Target(..), toKnownFiles,
     IdeRule, IdeResult,
     GetModificationTime(GetModificationTime, GetModificationTime_, missingFileDiagnostics),
     shakeOpen, shakeShut,
@@ -165,7 +167,11 @@ data ShakeExtras = ShakeExtras
     }
 
 -- | A mapping of module name to known files
-type KnownTargets = HashMap ModuleName [NormalizedFilePath]
+type KnownTargets = HashMap Target [NormalizedFilePath]
+
+data Target = TargetModule ModuleName | TargetFile NormalizedFilePath
+  deriving ( Eq, Generic, Show )
+  deriving anyclass (Hashable, NFData)
 
 toKnownFiles :: KnownTargets -> HashSet NormalizedFilePath
 toKnownFiles = HSet.fromList . concat . HMap.elems
@@ -720,7 +726,7 @@ usesWithStale_ key files = do
         Just v -> return v
 
 newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
-    deriving (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
+    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
 
 -- | IdeActions are used when we want to return a result immediately, even if it
 -- is stale Useful for UI actions like hover, completion where we don't want to
@@ -802,7 +808,7 @@ isBadDependency x
     | otherwise = False
 
 newtype Q k = Q (k, NormalizedFilePath)
-    deriving (Eq,Hashable,NFData, Generic)
+    deriving newtype (Eq, Hashable, NFData)
 
 instance Binary k => Binary (Q k) where
     put (Q (k, fp)) = put (k, fp)
