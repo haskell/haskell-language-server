@@ -1,6 +1,12 @@
-{-# LANGUAGE DeriveAnyClass, DeriveGeneric, DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase, NamedFieldPuns, OverloadedStrings        #-}
-{-# LANGUAGE RecordWildCards, ScopedTypeVariables, TupleSections  #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
 
 -- | A plugin inspired by the REPLoid feature of Dante[1] which allows
 --     to evaluate code in comment prompts and splice the results right below:
