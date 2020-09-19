@@ -292,7 +292,7 @@ evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe Text)
 evalGhciLikeCmd cmd arg = do
   df <- getSessionDynFlags
   case lookup cmd ghciLikeCommands
-    <|> snd <$> find ((T.isPrefixOf cmd).fst) ghciLikeCommands of
+    <|> snd <$> find (T.isPrefixOf cmd . fst) ghciLikeCommands of
     Just hndler -> hndler df arg
     _           -> E.throw $ GhciLikeCmdNotImplemented cmd arg
 
