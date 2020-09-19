@@ -1,12 +1,6 @@
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE NamedFieldPuns        #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE DeriveAnyClass, DeriveGeneric, DuplicateRecordFields #-}
+{-# LANGUAGE LambdaCase, NamedFieldPuns, OverloadedStrings        #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables, TupleSections  #-}
 
 -- | A plugin inspired by the REPLoid feature of Dante[1] which allows
 --     to evaluate code in comment prompts and splice the results right below:
@@ -21,69 +15,66 @@
 --    [1] - https://github.com/jyp/dante
 module Ide.Plugin.Eval where
 
-import           Control.Arrow                  (second)
-import qualified Control.Exception             as E
-import           Control.DeepSeq                ( NFData
-                                                , deepseq
-                                                )
-import           Control.Monad                  (void)
-import           Control.Monad.IO.Class         (MonadIO (liftIO))
-import           Control.Monad.Trans.Class      (MonadTrans (lift))
-import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
-                                                 throwE)
-import           Data.Aeson                     (FromJSON, ToJSON, Value (Null),
-                                                 toJSON)
-import           Data.Bifunctor                 (Bifunctor (first))
-import           Data.Char                      (isSpace)
-import qualified Data.HashMap.Strict            as Map
-import           Data.Maybe                     (catMaybes)
-import           Data.String                    (IsString (fromString))
-import           Data.Text                      (Text)
-import qualified Data.Text                      as T
-import           Data.Time                      (getCurrentTime)
+import           Control.Applicative        (Alternative ((<|>)))
+import           Control.Arrow              (second)
+import           Control.DeepSeq            (NFData, deepseq)
+import qualified Control.Exception          as E
+import           Control.Monad              (void)
+import           Control.Monad.IO.Class     (MonadIO (liftIO))
+import           Control.Monad.Trans.Class  (MonadTrans (lift))
+import           Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
+import           Data.Aeson                 (FromJSON, ToJSON, Value (Null),
+                                             toJSON)
+import           Data.Bifunctor             (Bifunctor (first))
+import           Data.Char                  (isSpace)
+import qualified Data.HashMap.Strict        as Map
+import           Data.List                  (find)
+import           Data.Maybe                 (catMaybes)
+import           Data.String                (IsString (fromString))
+import           Data.Text                  (Text)
+import qualified Data.Text                  as T
+import           Data.Time                  (getCurrentTime)
 import           Development.IDE
-import           DynamicLoading                 (initializePlugins)
-import           DynFlags                       (targetPlatform)
-import           Development.IDE.GHC.Compat     (Ghc, TcRnExprMode(..), DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
-                                                 GhcLink (LinkInMemory),
-                                                 GhcMode (CompManager),
-                                                 HscTarget (HscInterpreted),
-                                                 LoadHowMuch (LoadAllTargets),
-                                                 SuccessFlag (..),
-                                                 execLineNumber, execOptions,
-                                                 execSourceFile, execStmt,
-                                                 exprType,
-                                                 getContext,
-                                                 getInteractiveDynFlags,
-                                                 getSession, getSessionDynFlags,
-                                                 ghcLink, ghcMode, hscTarget,
-                                                 isImport, isStmt, load,
-                                                 moduleName, packageFlags,
-                                                 parseImportDecl, pkgDatabase,
-                                                 pkgState, runDecls, setContext,
-                                                 setInteractiveDynFlags,
-                                                 setLogAction,
-                                                 setSessionDynFlags, setTargets,
-                                                 simpleImportDecl, typeKind, ways)
-import           GHC.Generics                   (Generic)
-import           GhcMonad                       (modifySession)
-import           GhcPlugins                     (defaultLogActionHPutStrDoc,
-                                                 gopt_set, gopt_unset,
-                                                 interpWays, updateWays,
-                                                 wayGeneralFlags,
-                                                 wayUnsetGeneralFlags)
+import           Development.IDE.GHC.Compat (DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+                                             Ghc, GhcLink (LinkInMemory),
+                                             GhcMode (CompManager),
+                                             HscTarget (HscInterpreted),
+                                             LoadHowMuch (LoadAllTargets),
+                                             SuccessFlag (..),
+                                             TcRnExprMode (..), execLineNumber,
+                                             execOptions, execSourceFile,
+                                             execStmt, exprType, getContext,
+                                             getInteractiveDynFlags, getSession,
+                                             getSessionDynFlags, ghcLink,
+                                             ghcMode, hscTarget, isImport,
+                                             isStmt, load, moduleName,
+                                             packageFlags, parseImportDecl,
+                                             pkgDatabase, pkgState, runDecls,
+                                             setContext, setInteractiveDynFlags,
+                                             setLogAction, setSessionDynFlags,
+                                             setTargets, simpleImportDecl,
+                                             typeKind, ways)
+import           DynamicLoading             (initializePlugins)
+import           DynFlags                   (targetPlatform)
+import           GHC.Generics               (Generic)
+import           GhcMonad                   (modifySession)
+import           GhcPlugins                 (defaultLogActionHPutStrDoc,
+                                             gopt_set, gopt_unset, interpWays,
+                                             updateWays, wayGeneralFlags,
+                                             wayUnsetGeneralFlags)
 import           HscTypes
 import           Ide.Plugin
 import           Ide.Types
 import           Language.Haskell.LSP.Core
 import           Language.Haskell.LSP.Types
-import           Language.Haskell.LSP.VFS       (virtualFileText)
-import           Outputable (ppr, showSDoc)
-import           PrelNames                      (pRELUDE)
+import           Language.Haskell.LSP.VFS   (virtualFileText)
+import           Outputable                 (nest, ppr, showSDoc, text, ($$),
+                                             (<+>))
+import           PrelNames                  (pRELUDE)
 import           System.FilePath
-import           System.IO                      (hClose)
+import           System.IO                  (hClose)
 import           System.IO.Temp
-import           Type.Reflection               (Typeable)
+import           Type.Reflection            (Typeable)
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -280,38 +271,71 @@ runEvalCmd lsp state EvalParams {..} = withIndefiniteProgress lsp "Eval" Cancell
 
     return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
 
+
+type GHCiLikeCmd = DynFlags -> Text -> Ghc (Maybe Text)
+
+-- Should we use some sort of trie here?
+ghciLikeCommands :: [(Text, GHCiLikeCmd)]
+ghciLikeCommands =
+  [ ("kind", doKindCmd False)
+  , ("kind!", doKindCmd True)
+  , ("type", doTypeCmd)
+  ]
+
 evalGhciLikeCmd :: Text -> Text -> Ghc (Maybe Text)
 evalGhciLikeCmd cmd arg = do
   df <- getSessionDynFlags
-  let tppr = T.pack . showSDoc df . ppr
-  case cmd of
-    "kind" -> do
-      let input = T.strip arg
-      (_, kind) <- typeKind False $ T.unpack input
-      pure $ Just $ "-- " <> input <> " :: " <> tppr kind <> "\n"
-    "kind!" -> do
-      let input = T.strip arg
-      (ty, kind) <- typeKind True $ T.unpack input
-      pure
-        $ Just
-        $ T.unlines
-        $ map ("-- " <>)
-        [ input <> " :: " <> tppr kind
-        , "= " <> tppr ty
-        ]
-    "type" -> do
-      let (emod, expr) = parseExprMode arg
-      ty <- exprType emod $ T.unpack expr
-      pure $ Just $
-        "-- " <> expr <> " :: " <> tppr ty <> "\n"
-    _ -> E.throw $ GhciLikeCmdNotImplemented cmd arg
+  case lookup cmd ghciLikeCommands
+    <|> snd <$> find ((T.isPrefixOf cmd).fst) ghciLikeCommands of
+    Just hndler -> hndler df arg
+    _           -> E.throw $ GhciLikeCmdNotImplemented cmd arg
+
+doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
+doKindCmd False df arg = do
+  let input = T.strip arg
+  (_, kind) <- typeKind False $ T.unpack input
+  let kindText = text (T.unpack input) <+> "::" <+> ppr kind
+  pure
+    $ Just
+    $ T.unlines
+    $ map ("-- " <>)
+    $ T.lines (T.pack (showSDoc df kindText))
+doKindCmd True df arg = do
+  let input = T.strip arg
+  (ty, kind) <- typeKind True $ T.unpack input
+  let kindDoc = text (T.unpack input) <+> "::" <+> ppr kind
+      tyDoc = "=" <+> ppr ty
+  pure
+    $ Just
+    $ T.unlines
+    $ map ("-- " <>)
+    $ T.lines
+    $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
+
+doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
+doTypeCmd dflags arg = do
+  let (emod, expr) = parseExprMode arg
+  ty <- exprType emod $ T.unpack expr
+  let rawType = T.strip $ T.pack $ showSDoc dflags $ ppr ty
+      broken = T.any (\c -> c == '\r' || c == '\n') rawType
+  pure $ Just $
+    if broken
+    then T.unlines
+      $ map ("-- " <>)
+      $ T.lines$ T.pack
+      $ showSDoc dflags
+      $ text (T.unpack expr) $$
+          (nest 2 $
+            "::" <+> ppr ty
+          )
+    else "-- " <> expr <> " :: " <> rawType <> "\n"
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg =
   case T.break isSpace rawArg of
     ("+v", rest) -> (TM_NoInst, T.strip rest)
     ("+d", rest) -> (TM_Default, T.strip rest)
-    _ -> (TM_Inst, rawArg)
+    _            -> (TM_Inst, rawArg)
 
 data GhciLikeCmdException =
     GhciLikeCmdNotImplemented
