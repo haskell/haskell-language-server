@@ -199,7 +199,7 @@ loadSession dir = do
 
 
     let session :: (Maybe FilePath, NormalizedFilePath, ComponentOptions, FilePath)
-                -> IO ([NormalizedFilePath],(IdeResult HscEnvEq,[FilePath]))
+                -> IO (IdeResult HscEnvEq,[FilePath])
         session args@(hieYaml, _cfp, _opts, _libDir) = do
           (hscEnv, new, old_deps) <- packageSetup args
 
@@ -245,11 +245,21 @@ loadSession dir = do
           invalidateShakeCache
           restartShakeSession [kick]
 
-          let resultCachedTargets = concatMap targetLocations all_targets
+          -- Typecheck all files in the project on startup
+          unless (null cs || not checkProject) $ do
+                cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) (concatMap targetLocations cs)
+                void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
+                    mmt <- uses GetModificationTime cfps'
+                    let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
+                    modIfaces <- uses GetModIface cs_exist
+                    -- update exports map
+                    extras <- getShakeExtras
+                    let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
+                    liftIO $ modifyVar_ (exportsMap extras) $ evaluate . (exportsMap' <>)
 
-          return (resultCachedTargets, second Map.keys res)
+          return (second Map.keys res)
 
-    let consultCradle :: Maybe FilePath -> FilePath -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
+    let consultCradle :: Maybe FilePath -> FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         consultCradle hieYaml cfp = do
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
            logInfo logger $ T.pack ("Consulting the cradle for " <> show lfp)
@@ -276,7 +286,7 @@ loadSession dir = do
                  InstallationNotFound{..} ->
                      error $ "GHC installation not found in libdir: " <> libdir
                  InstallationMismatch{..} ->
-                     return ([],(([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[]))
+                     return (([renderPackageSetupException cfp GhcVersionMismatch{..}], Nothing),[])
                  InstallationChecked _compileTime _ghcLibCheck ->
                    session (hieYaml, toNormalizedFilePath' cfp, opts, libDir)
              -- Failure case, either a cradle error or the none cradle
@@ -286,12 +296,12 @@ loadSession dir = do
                let res = (map (renderCradleError ncfp) err, Nothing)
                modifyVar_ fileToFlags $ \var -> do
                  pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
-               return ([ncfp],(res,[]))
+               return (res,[])
 
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
     -- Returns the Ghc session and the cradle dependencies
     let sessionOpts :: (Maybe FilePath, FilePath)
-                    -> IO ([NormalizedFilePath], (IdeResult HscEnvEq, [FilePath]))
+                    -> IO (IdeResult HscEnvEq, [FilePath])
         sessionOpts (hieYaml, file) = do
           v <- fromMaybe HM.empty . Map.lookup hieYaml <$> readVar fileToFlags
           cfp <- canonicalizePath file
@@ -306,37 +316,25 @@ loadSession dir = do
                   -- Keep the same name cache
                   modifyVar_ hscEnvs (return . Map.adjust (\(h, _) -> (h, [])) hieYaml )
                   consultCradle hieYaml cfp
-                else return (HM.keys v, (opts, Map.keys old_di))
+                else return (opts, Map.keys old_di)
             Nothing -> consultCradle hieYaml cfp
 
     -- The main function which gets options for a file. We only want one of these running
     -- at a time. Therefore the IORef contains the currently running cradle, if we try
     -- to get some more options then we wait for the currently running action to finish
     -- before attempting to do so.
-    let getOptions :: FilePath -> IO ([NormalizedFilePath],(IdeResult HscEnvEq, [FilePath]))
+    let getOptions :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
         getOptions file = do
             hieYaml <- cradleLoc file
             sessionOpts (hieYaml, file) `catch` \e ->
-                return ([],(([renderPackageSetupException file e], Nothing),[]))
+                return (([renderPackageSetupException file e], Nothing),[])
 
     returnWithVersion $ \file -> do
-      (cs, opts) <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
+      opts <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
         -- If the cradle is not finished, then wait for it to finish.
         void $ wait as
         as <- async $ getOptions file
-        return (fmap snd as, wait as)
-      unless (null cs) $ do
-        cfps' <- liftIO $ filterM (IO.doesFileExist . fromNormalizedFilePath) cs
-        -- Typecheck all files in the project on startup
-        void $ shakeEnqueue extras $ mkDelayedAction "InitialLoad" Debug $ void $ do
-          when checkProject $ do
-            mmt <- uses GetModificationTime cfps'
-            let cs_exist = catMaybes (zipWith (<$) cfps' mmt)
-            modIfaces <- uses GetModIface cs_exist
-            -- update xports map
-            extras <- getShakeExtras
-            let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-            liftIO $ modifyVar_ (exportsMap extras) $ evaluate . (exportsMap' <>)
+        return (as, wait as)
       pure opts
 
 -- | Run the specific cradle on a specific FilePath via hie-bios.
