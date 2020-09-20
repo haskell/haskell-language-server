@@ -12,6 +12,7 @@ module Development.IDE.Spans.Documentation (
   ) where
 
 import           Control.Monad
+import           Control.Monad.Extra (findM)
 import           Data.Foldable
 import           Data.List.Extra
 import qualified Data.Map as M
@@ -172,8 +173,10 @@ lookupHtmlForModule :: (FilePath -> FilePath -> FilePath) -> DynFlags -> Module 
 lookupHtmlForModule mkDocPath df m = do
   -- try all directories
   let mfs = fmap (concatMap go) (lookupHtmls df ui)
-  htmls <- filterM doesFileExist (concat . maybeToList $ mfs)
-  return $ listToMaybe htmls
+  html <- findM doesFileExist (concat . maybeToList $ mfs)
+  -- canonicalize located html to remove /../ indirection which can break some clients
+  -- (vscode on Windows at least)
+  traverse canonicalizePath html
   where
     go pkgDocDir = map (mkDocPath pkgDocDir) mns
     ui = moduleUnitId m
@@ -186,4 +189,7 @@ lookupHtmlForModule mkDocPath df m = do
       map (`intercalate` chunks) [".", "-"]
 
 lookupHtmls :: DynFlags -> UnitId -> Maybe [FilePath]
-lookupHtmls df ui = haddockHTMLs <$> lookupPackage df ui
+lookupHtmls df ui =
+  -- use haddockInterfaces instead of haddockHTMLs: GHC treats haddockHTMLs as URL not path 
+  -- and therefore doesn't expand $topdir on Windows
+  map takeDirectory . haddockInterfaces <$> lookupPackage df ui
