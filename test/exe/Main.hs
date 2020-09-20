@@ -2547,7 +2547,18 @@ localCompletionTests = [
         "class"
         ["bar :: Xx", "xxx = ()", "-- | haddock", "class Xxx a"]
         (Position 0 9)
-        [("Xxx", CiClass, False, True)]
+        [("Xxx", CiClass, False, True)],
+    completionTest
+        "records"
+        ["data Person = Person { _personName:: String, _personAge:: Int}", "bar = Person { _pers }" ]
+        (Position 1 19)
+        [("_personName", CiFunction, False, True),
+         ("_personAge", CiFunction, False, True)],
+    completionTest
+        "recordsConstructor"
+        ["data XxRecord = XyRecord { x:: String, y:: Int}", "bar = Xy" ]
+        (Position 1 19)
+        [("XyRecord", CiConstructor, False, True)]
     ]
 
 nonLocalCompletionTests :: [TestTree]
