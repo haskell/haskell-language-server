@@ -85,6 +85,7 @@ noneProvider _ _ _ _ _ _ = return $ Right (List [])
 
 responseError :: T.Text -> ResponseError
 responseError txt = ResponseError InvalidParams txt Nothing
+
 -- ---------------------------------------------------------------------
 
 extractRange :: Range -> T.Text -> T.Text
