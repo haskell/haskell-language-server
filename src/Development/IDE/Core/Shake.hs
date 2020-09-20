@@ -562,7 +562,7 @@ shakeRestart IdeState{..} acts =
     withMVar'
         shakeSession
         (\runner -> do
-              (stopTime,queue) <- duration (cancelShakeSession runner)
+              (stopTime,()) <- duration (cancelShakeSession runner)
               res <- shakeDatabaseProfile shakeProfileDir shakeDb
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
@@ -570,7 +570,6 @@ shakeRestart IdeState{..} acts =
               logDebug (logger shakeExtras) $ T.pack $
                   "Restarting build session (aborting the previous one took " ++
                   showDuration stopTime ++ profile ++ ")"
-              return queue
         )
         -- It is crucial to be masked here, otherwise we can get killed
         -- between spawning the new thread and updating shakeSession.
@@ -621,9 +620,8 @@ newSession ShakeExtras{..} shakeDb acts = do
                 "finish: " ++ actionName d ++ " (took " ++ showDuration runTime ++ ")"
 
         workRun restore = do
-          let acts' = pumpActionThread : map getAction (reenqueued ++ acts)
-          res <- try @SomeException
-                 (restore $ shakeRunDatabase shakeDb acts')
+          let acts' = pumpActionThread : map run (reenqueued ++ acts)
+          res <- try @SomeException (restore $ shakeRunDatabase shakeDb acts')
           let res' = case res of
                       Left e -> "exception: " <> displayException e
                       Right _ -> "completed"
@@ -658,8 +656,8 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
         alreadyDone <- liftIO $ isJust <$> waitBarrierMaybe b
         unless alreadyDone $ do
           x <- actionCatch @SomeException (Right <$> a) (pure . Left)
-          liftIO $ do
-            signalBarrier b x
+          -- ignore exceptions if the barrier has been filled concurrently
+          liftIO $ void $ try @SomeException $ signalBarrier b x
       d' = DelayedAction (Just u) s p a'
   return (b, d')
 
