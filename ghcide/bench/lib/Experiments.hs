@@ -36,6 +36,8 @@ import System.Process
 import System.Time.Extra
 import Text.ParserCombinators.ReadP (readP_to_S)
 import System.Environment.Blank (getEnv)
+import Development.IDE.Plugin.Test
+import Data.Aeson (Value(Null))
 
 -- Points to a string in the target file,
 -- convenient for hygienic edits
@@ -71,7 +73,7 @@ experiments =
       ---------------------------------------------------------------------------------------
       bench "edit" 10 $ \doc -> do
         changeDoc doc [hygienicEdit]
-        void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+        waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
       bench "hover after edit" 10 $ \doc -> do
@@ -97,7 +99,7 @@ experiments =
         10
         ( \doc -> do
             changeDoc doc [breakingEdit]
-            void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+            waitForProgressDone
             return identifierP
         )
         ( \p doc -> do
@@ -239,15 +241,28 @@ runBenchmarks allBenchmarks = do
                 in (b,) <$> runBench run b
 
   -- output raw data as CSV
-  let headers = ["name", "success", "samples", "startup", "setup", "experiment", "maxResidency"]
+  let headers =
+        [ "name"
+        , "success"
+        , "samples"
+        , "startup"
+        , "setup"
+        , "userTime"
+        , "delayedTime"
+        , "totalTime"
+        , "maxResidency"
+        , "allocatedBytes"]
       rows =
         [ [ name,
             show success,
             show samples,
             show startup,
             show runSetup',
+            show userWaits,
+            show delayedWork,
             show runExperiment,
-            showMB maxResidency
+            show maxResidency,
+            show allocations
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -265,8 +280,11 @@ runBenchmarks allBenchmarks = do
             show samples,
             showDuration startup,
             showDuration runSetup',
+            showDuration userWaits,
+            showDuration delayedWork,
             showDuration runExperiment,
-            showMB maxResidency
+            showMB maxResidency,
+            showMB allocations
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -280,6 +298,7 @@ runBenchmarks allBenchmarks = do
       unwords $
         [ ghcide ?config,
           "--lsp",
+          "--test",
           "--cwd",
           dir,
           "+RTS",
@@ -288,9 +307,9 @@ runBenchmarks allBenchmarks = do
         ]
           ++ ghcideOptions ?config
           ++ concat
-            [ ["--shake-profiling", path]
-              | Just path <- [shakeProfiling ?config]
+            [ ["--shake-profiling", path] | Just path <- [shakeProfiling ?config]
             ]
+          ++ ["--verbose" | verbose ?config]
     lspTestCaps =
       fullCaps {_window = Just $ WindowClientCapabilities $ Just True}
     conf =
@@ -305,12 +324,15 @@ data BenchRun = BenchRun
   { startup :: !Seconds,
     runSetup :: !Seconds,
     runExperiment :: !Seconds,
+    userWaits :: !Seconds,
+    delayedWork :: !Seconds,
     success :: !Bool,
-    maxResidency :: !Int
+    maxResidency :: !Int,
+    allocations :: !Int
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 False 0
+badRun = BenchRun 0 0 0 0 0 False 0 0
 
 waitForProgressDone :: Session ()
 waitForProgressDone =
@@ -328,27 +350,36 @@ runBench runSess Bench {..} = handleAny (\e -> print e >> return badRun)
       changeDoc doc [hygienicEdit]
       waitForProgressDone
 
-
     liftIO $ output $ "Running " <> name <> " benchmark"
     (runSetup, userState) <- duration $ benchSetup doc
-    let loop 0 = return True
-        loop n = do
+    let loop !userWaits !delayedWork 0 = return $ Just (userWaits, delayedWork)
+        loop !userWaits !delayedWork n = do
           (t, res) <- duration $ experiment userState doc
           if not res
-            then return False
+            then return Nothing
             else do
               output (showDuration t)
-              loop (n -1)
+              -- Wait for the delayed actions to finish
+              waitId <- sendRequest (CustomClientMethod "test") WaitForShakeQueue
+              (td, resp) <- duration $ skipManyTill anyMessage $ responseForId waitId
+              case resp of
+                  ResponseMessage{_result=Right Null} -> do
+                    loop (userWaits+t) (delayedWork+td) (n -1)
+                  _ ->
+                  -- Assume a ghcide build lacking the WaitForShakeQueue command
+                    loop (userWaits+t) delayedWork (n -1)
 
-    (runExperiment, success) <- duration $ loop samples
+    (runExperiment, result) <- duration $ loop 0 0 samples
+    let success = isJust result
+        (userWaits, delayedWork) = fromMaybe (0,0) result
 
     -- sleep to give ghcide a chance to GC
     liftIO $ threadDelay 1100000
 
-    maxResidency <- liftIO $
+    (maxResidency, allocations) <- liftIO $
         ifM (doesFileExist gcStats)
-            (parseMaxResidency <$> readFile gcStats)
-            (pure 0)
+            (parseMaxResidencyAndAllocations <$> readFile gcStats)
+            (pure (0,0))
 
     return BenchRun {..}
   where
@@ -400,13 +431,15 @@ setup = do
 
 --------------------------------------------------------------------------------------------
 
--- Parse the max residency in RTS -s output
-parseMaxResidency :: String -> Int
-parseMaxResidency input =
-  case find ("maximum residency" `isInfixOf`) (reverse $ lines input) of
-    Just l -> read $ filter isDigit $ head (words l)
-    Nothing -> -1
-
+-- Parse the max residency and allocations in RTS -s output
+parseMaxResidencyAndAllocations :: String -> (Int, Int)
+parseMaxResidencyAndAllocations input =
+    (f "maximum residency", f "bytes allocated in the heap")
+  where
+    inps = reverse $ lines input
+    f label = case find (label `isInfixOf`) inps of
+        Just l -> read $ filter isDigit $ head $ words l
+        Nothing -> -1
 
 escapeSpaces :: String -> String
 escapeSpaces = map f

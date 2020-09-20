@@ -20,11 +20,14 @@ import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import System.Time.Extra
 import Development.IDE.Core.RuleTypes
+import Control.Monad
 
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null
     | GetInterfaceFilesDir FilePath  -- ^ :: String
     | GetShakeSessionQueueCount      -- ^ :: Number
+    | WaitForShakeQueue
+      -- ^ Block until the Shake queue is empty. Returns Null
     deriving Generic
     deriving anyclass (FromJSON, ToJSON)
 
@@ -61,4 +64,9 @@ requestHandler _ s (GetInterfaceFilesDir fp) = do
 requestHandler _ s GetShakeSessionQueueCount = do
     n <- atomically $ countQueue $ actionQueue $ shakeExtras s
     return $ Right (toJSON n)
+requestHandler _ s WaitForShakeQueue = do
+    atomically $ do
+        n <- countQueue $ actionQueue $ shakeExtras s
+        when (n>0) retry
+    return $ Right Null
 
