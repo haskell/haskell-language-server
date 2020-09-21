@@ -25,8 +25,7 @@ import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Class      (MonadTrans (lift))
 import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
                                                  throwE)
-import           Data.Aeson                     (ToJSON (toJSON), Value (Null))
-import           Data.Aeson.Types               (FromJSON)
+import           Data.Aeson                     (genericParseJSON, FromJSON(..), ToJSON (..), Value (Null))
 import           Data.Bifunctor                 (Bifunctor (first), second)
 import           Data.Coerce
 import           Data.Either                    (partitionEithers)
@@ -88,6 +87,7 @@ import           StringBuffer                   (stringToStringBuffer)
 import           System.Directory               (makeAbsolute)
 import Control.Monad.Trans.Maybe
 import Development.IDE.Core.PositionMapping
+import qualified Data.Aeson as Aeson
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -107,24 +107,33 @@ retrieCommand =
 data RunRetrieParams = RunRetrieParams
   { description               :: T.Text,
     rewrites                  :: [RewriteSpec],
-    originatingFile           :: String,
+    originatingFile           :: NormalizedUriJSON,
     restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
+newtype NormalizedUriJSON = NormalizedUriJSON NormalizedUri
+  deriving (Eq, Show)
+
+instance FromJSON NormalizedUriJSON where
+    parseJSON = fmap NormalizedUriJSON . genericParseJSON Aeson.defaultOptions
+
+instance ToJSON NormalizedUriJSON where
+    toJSON (NormalizedUriJSON x) = Aeson.genericToJSON Aeson.defaultOptions x
 
 runRetrieCmd ::
   LspFuncs a ->
   IdeState ->
   RunRetrieParams ->
   IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-runRetrieCmd lsp state RunRetrieParams{..} =
+runRetrieCmd lsp state RunRetrieParams{originatingFile = NormalizedUriJSON nuri, ..} =
   withIndefiniteProgress lsp description Cancellable $ do
     res <- runMaybeT $ do
-        let nfp = toNormalizedFilePath' originatingFile
+        nfp <- MaybeT $ return $ uriToNormalizedFilePath nuri
         (session, _) <- MaybeT $
             runAction "Retrie.GhcSessionDeps" state $
                 useWithStale GhcSessionDeps $
-                toNormalizedFilePath originatingFile
+                nfp
         (ms, binds, _, _, _) <- MaybeT $ runAction "Retrie.getBinds" state $ getBinds nfp
         let importRewrites = concatMap (extractImports ms binds) rewrites
         (errors, edits) <- lift $
@@ -132,7 +141,7 @@ runRetrieCmd lsp state RunRetrieParams{..} =
                 state
                 (hscEnv session)
                 (map Right rewrites <> map Left importRewrites)
-                (toNormalizedFilePath originatingFile)
+                nfp
                 restrictToOriginatingFile
         unless (null errors) $
             lift $ sendFunc lsp $
@@ -172,20 +181,21 @@ extractImports _ _ _ = []
 provider :: CodeActionProvider
 provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
   let (J.CodeActionContext _diags _monly) = ca
-  fp <- handleMaybe "uri" $ uriToFilePath' uri
-  let nfp = toNormalizedFilePath' fp
+      nuri = toNormalizedUri uri
+      nuriJson = NormalizedUriJSON nuri
+  nfp <- handleMaybe "uri" $ uriToNormalizedFilePath nuri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
     <- handleMaybeM "typecheck" $ runAction "retrie" state $ getBinds nfp
 
   pos <- handleMaybe "pos" $ _start <$> fromCurrentRange posMapping range
   let rewrites =
-        concatMap (suggestBindRewrites fp pos ms_mod) topLevelBinds
-          ++ concatMap (suggestRuleRewrites fp pos ms_mod) hs_ruleds
+        concatMap (suggestBindRewrites nuriJson pos ms_mod) topLevelBinds
+          ++ concatMap (suggestRuleRewrites nuriJson pos ms_mod) hs_ruleds
           ++ [ r
                | TyClGroup {group_tyclds} <- hs_tyclds,
                  L l g <- group_tyclds,
-                 r <- suggestTypeRewrites fp ms_mod g,
+                 r <- suggestTypeRewrites nuriJson ms_mod g,
                  pos `isInsideSrcSpan` l
 
              ]
@@ -224,7 +234,7 @@ getBinds nfp = runMaybeT $ do
   return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
 
 suggestBindRewrites ::
-  String ->
+  NormalizedUriJSON ->
   Position ->
   GHC.Module ->
   HsBindLR GhcRn GhcRn ->
@@ -251,7 +261,7 @@ describeRestriction restrictToOriginatingFile =
 
 suggestTypeRewrites ::
   (Outputable (IdP pass)) =>
-  String ->
+  NormalizedUriJSON ->
   GHC.Module ->
   TyClDecl pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
@@ -270,7 +280,7 @@ suggestTypeRewrites originatingFile ms_mod (SynDecl {tcdLName = L _ rdrName}) =
 suggestTypeRewrites _ _ _ = []
 
 suggestRuleRewrites ::
-  FilePath ->
+  NormalizedUriJSON ->
   Position ->
   GHC.Module ->
   LRuleDecls pass ->
