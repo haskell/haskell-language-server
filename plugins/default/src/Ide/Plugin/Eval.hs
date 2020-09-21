@@ -277,7 +277,9 @@ runEvalCmd lsp state EvalParams {..} = withIndefiniteProgress lsp "Eval" Cancell
 
     return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
 
-
+-- | Resulting @Text@ MUST NOT prefix each line with @--@
+--   Such comment-related post-process will be taken place
+--   solely in 'evalGhciLikeCmd'.
 type GHCiLikeCmd = DynFlags -> Text -> Ghc (Maybe Text)
 
 -- Should we use some sort of trie here?
@@ -293,7 +295,11 @@ evalGhciLikeCmd cmd arg = do
   df <- getSessionDynFlags
   case lookup cmd ghciLikeCommands
     <|> snd <$> find (T.isPrefixOf cmd . fst) ghciLikeCommands of
-    Just hndler -> hndler df arg
+    Just hndler -> 
+      fmap
+        (T.unlines . map ("-- " <>) . T.lines
+        )
+      <$> hndler df arg
     _           -> E.throw $ GhciLikeCmdNotImplemented cmd arg
 
 doKindCmd :: Bool -> DynFlags -> Text -> Ghc (Maybe Text)
@@ -301,22 +307,13 @@ doKindCmd False df arg = do
   let input = T.strip arg
   (_, kind) <- typeKind False $ T.unpack input
   let kindText = text (T.unpack input) <+> "::" <+> ppr kind
-  pure
-    $ Just
-    $ T.unlines
-    $ map ("-- " <>)
-    $ T.lines (T.pack (showSDoc df kindText))
+  pure $ Just $ T.pack (showSDoc df kindText)
 doKindCmd True df arg = do
   let input = T.strip arg
   (ty, kind) <- typeKind True $ T.unpack input
   let kindDoc = text (T.unpack input) <+> "::" <+> ppr kind
       tyDoc = "=" <+> ppr ty
-  pure
-    $ Just
-    $ T.unlines
-    $ map ("-- " <>)
-    $ T.lines
-    $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
+  pure $ Just $ T.pack (showSDoc df $ kindDoc $$ tyDoc)
 
 doTypeCmd :: DynFlags -> Text -> Ghc (Maybe Text)
 doTypeCmd dflags arg = do
@@ -326,15 +323,13 @@ doTypeCmd dflags arg = do
       broken = T.any (\c -> c == '\r' || c == '\n') rawType
   pure $ Just $
     if broken
-    then T.unlines
-      $ map ("-- " <>)
-      $ T.lines$ T.pack
+    then T.pack
       $ showSDoc dflags
       $ text (T.unpack expr) $$
           (nest 2 $
             "::" <+> ppr ty
           )
-    else "-- " <> expr <> " :: " <> rawType <> "\n"
+    else expr <> " :: " <> rawType <> "\n"
 
 parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg =
