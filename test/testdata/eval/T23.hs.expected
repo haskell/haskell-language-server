@@ -1,4 +1,5 @@
-{-# LANGUAGE PolyKinds, ScopedTypeVariables #-}
+{-# LANGUAGE PolyKinds           #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module T23 where
 import Data.Proxy      (Proxy (..))
 import GHC.TypeNats    (KnownNat)

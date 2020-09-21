@@ -1,4 +1,6 @@
-{-# LANGUAGE NamedFieldPuns, OverloadedStrings, ScopedTypeVariables #-}
+{-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Eval
   ( tests

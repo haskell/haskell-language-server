@@ -1,5 +1,8 @@
-{-# LANGUAGE DataKinds, PolyKinds, TypeFamilies, TypeOperators #-}
-{-# LANGUAGE UndecidableInstances                              #-}
+{-# LANGUAGE DataKinds            #-}
+{-# LANGUAGE PolyKinds            #-}
+{-# LANGUAGE TypeFamilies         #-}
+{-# LANGUAGE TypeOperators        #-}
+{-# LANGUAGE UndecidableInstances #-}
 module T25 where
 import GHC.TypeNats (type (-))
 data Proxy a = Stop | Next (Proxy a)
