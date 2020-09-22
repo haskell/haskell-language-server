@@ -195,7 +195,7 @@ For brevity, only the `stack`-based commands are presented in the following sect
 ##### Install specific GHC Version
 
 The script will install the executables `haskell-language-server-wrapper` and `haskell-language-server`.
-It will copy the latter appending the used ghc version, needed by the wrapper to choose the suited version
+It will copy the latter appending the used ghc version, needed by the wrapper to choose the suitable version
 for the project at hand. 
 So installing the executables directly with `stack install` or `cabal v2-install` may not be enough 
 for it to work properly.
@@ -609,4 +609,3 @@ To do every time you changed code and want to test it:
   - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
 - Restart HLS
   - With VS Code: `Haskell: Restart Haskell LSP Server`
-
