@@ -142,4 +142,4 @@ If you get an error like:
 ghcide.exe: CradleError (ExitFailure 1) ["Failed to parse result of calling stack","'stty' is not recognized as an internal or external command,","operable program or batch file."
 ```
 
-Then the workaround from https://github.com/haskell/haskell-ide-engine/issues/1428#issuecomment-547530794 might help.
+It is fixed for stack-2.3.1 so upgrading your stack installation is the recommended action. However, there is a workaround for earlier versions described here: https://github.com/haskell/haskell-ide-engine/issues/1428#issuecomment-547530794.
