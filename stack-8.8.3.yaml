@@ -29,6 +29,7 @@ extra-deps:
 - ilist-0.3.1.0
 - lsp-test-0.11.0.5
 - monad-dijkstra-0.1.1.2
+- ormolu-0.1.3.0
 - refinery-0.2.0.0
 - retrie-0.1.1.1
 - semigroups-0.18.5
