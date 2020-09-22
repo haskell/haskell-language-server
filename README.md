@@ -561,6 +561,13 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 - Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-ide-engine) at `#haskell-ide-engine` on `freenode`.
 - Fork this repo and [ghcide](https://github.com/haskell/ghcide) and hack as much as you can.
 
+### Style guidelines
+
+The project includes a [`.editorconfig`](https://editorconfig.org) [file](https://github.com/haskell/haskell-language-server/blob/master/.editorconfig) with the editor basic settings used by the project.
+However, most editors will need some action to honour those settings automatically. 
+For example vscode needs to have installed a specific [extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
+Please, try to follow those basic settings to keep the codebase as uniform as possible.
+
 ### Building haskell-language-server
 
 The project can be built with both `cabal build` and `stack build`.
