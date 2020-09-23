@@ -18,6 +18,7 @@ This is *very* early stage software.
   - [Features](#features)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
+    - [ghcup](#ghcup)
     - [Visual Studio Code](#visual-studio-code)
     - [Pre-built binaries](#pre-built-binaries)
     - [Installation from source](#installation-from-source)
