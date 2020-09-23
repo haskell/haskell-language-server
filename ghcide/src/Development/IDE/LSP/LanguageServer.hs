@@ -204,7 +204,10 @@ initHandler
     -> IdeState
     -> InitializeParams
     -> IO ()
-initHandler _ ide params = registerIdeConfiguration (shakeExtras ide) (parseConfiguration params)
+initHandler _ ide params = do
+    let initConfig = parseConfiguration params
+    logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
+    registerIdeConfiguration (shakeExtras ide) initConfig
 
 -- | Things that get sent to us, but we don't deal with.
 --   Set them to avoid a warning in VS Code output.

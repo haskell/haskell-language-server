@@ -91,4 +91,11 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             modifyWorkspaceFolders ide
               $ add       (foldMap (S.singleton . parseWorkspaceFolder) (_added   events))
               . substract (foldMap (S.singleton . parseWorkspaceFolder) (_removed events))
+
+    ,LSP.didChangeConfigurationParamsHandler = withNotification (LSP.didChangeConfigurationParamsHandler x) $
+        \_ ide (DidChangeConfigurationParams cfg) -> do
+            let msg = Text.pack $ show cfg
+            logInfo (ideLogger ide) $ "Configuration changed: " <> msg
+            modifyClientSettings ide (const $ Just cfg)
+            setSomethingModified ide
     }
