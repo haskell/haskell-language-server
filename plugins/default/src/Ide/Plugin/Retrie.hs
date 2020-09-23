@@ -468,10 +468,10 @@ asEditMap = coerce . HM.fromListWith (++) . concatMap (map (second pure))
 asTextEdits :: Change -> [(Uri, TextEdit)]
 asTextEdits NoChange = []
 asTextEdits (Change reps _imports) =
-  [ (Uri spanLoc, edit)
+  [ (filePathToUri spanLoc, edit)
     | Replacement {..} <- nubOrdOn replLocation reps,
       (RealSrcSpan rspan) <- [replLocation],
-      let spanLoc = T.pack $ unpackFS $ srcSpanFile rspan,
+      let spanLoc = unpackFS $ srcSpanFile rspan,
       let edit = TextEdit (realSrcSpanToRange rspan) (T.pack replReplacement)
   ]
 
