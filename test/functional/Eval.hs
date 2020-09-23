@@ -7,25 +7,17 @@ module Eval
   )
 where
 
-import           Control.Applicative.Combinators
-                                                ( skipManyTill )
-import           Control.Monad.IO.Class         ( MonadIO(liftIO) )
-import qualified Data.Text.IO                  as T
+import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import qualified Data.Text.IO                    as T
 import           Language.Haskell.LSP.Test
-import           Language.Haskell.LSP.Types     ( ApplyWorkspaceEditRequest
-                                                , CodeLens
-                                                  ( CodeLens
-                                                  , _command
-                                                  , _range
-                                                  )
-                                                , Command(_title)
-                                                , Position(..)
-                                                , Range(..)
-                                                )
+import           Language.Haskell.LSP.Types      (ApplyWorkspaceEditRequest, CodeLens (CodeLens, _command, _range),
+                                                  Command (_title),
+                                                  Position (..), Range (..))
 import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure (expectFailBecause)
+import           Test.Tasty.ExpectedFailure      (expectFailBecause)
 import           Test.Tasty.HUnit
 
 tests :: TestTree
@@ -66,10 +58,10 @@ tests = testGroup
   , testCase "Evaluate incorrect expressions" $ goldenTest "T8.hs"
   , testCase "Applies file LANGUAGE extensions" $ goldenTest "T9.hs"
   , testCase "Evaluate a type with :kind!" $ goldenTest "T10.hs"
-  , testCase "Reports an error for an incorrect type with :kind!" 
+  , testCase "Reports an error for an incorrect type with :kind!"
     $ goldenTest "T11.hs"
   , testCase "Shows a kind with :kind" $ goldenTest "T12.hs"
-  , testCase "Reports an error for an incorrect type with :kind" 
+  , testCase "Reports an error for an incorrect type with :kind"
     $ goldenTest "T13.hs"
   , testCase "Returns a fully-instantiated type for :type"
     $ goldenTest "T14.hs"
@@ -86,6 +78,16 @@ tests = testGroup
   , expectFailBecause "known issue - see a note in P.R. #361"
   $ testCase ":type +d reflects the `default' declaration of the module"
   $ goldenTest "T20.hs"
+  , testCase ":type handles a multilined result properly"
+  $ goldenTest "T21.hs"
+  , testCase ":t behaves exactly the same as :type"
+  $ goldenTest "T22.hs"
+  , testCase ":type does \"dovetails\" for short identifiers"
+  $ goldenTest "T23.hs"
+  , testCase ":kind! treats a multilined result properly"
+  $ goldenTest "T24.hs"
+  , testCase ":kind treats a multilined result properly"
+  $ goldenTest "T25.hs"
   ]
 
 goldenTest :: FilePath -> IO ()
