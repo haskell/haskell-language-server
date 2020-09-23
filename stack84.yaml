@@ -13,7 +13,7 @@ extra-deps:
 - js-dgtable-0.5.2
 - hie-bios-0.7.1
 - implicit-hie-0.1.1.0
-- implicit-hie-cradle-0.2.0.0
+- implicit-hie-cradle-0.2.0.1
 - fuzzy-0.1.0.0
 - shake-0.18.5
 - time-compat-1.9.2.2
