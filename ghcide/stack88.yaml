@@ -9,7 +9,7 @@ extra-deps:
 - hie-bios-0.7.1
 - extra-1.7.2
 - implicit-hie-0.1.1.0
-- implicit-hie-cradle-0.2.0.0
+- implicit-hie-cradle-0.2.0.1
 
 nix:
   packages: [zlib]
