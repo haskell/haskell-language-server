@@ -42,6 +42,8 @@ import qualified GHC.LanguageExtensions.Type as GHC
 import Development.IDE.Types.Options
 import Development.IDE.Types.Location
 
+import Language.Haskell.LSP.Types (DiagnosticTag(..))
+
 #if MIN_GHC_API_VERSION(8,6,0)
 import LoadIface (loadModuleInterface)
 #endif
@@ -132,9 +134,10 @@ typecheckModule (IdeDefer defer) hsc pm = do
         modSummary' <- initPlugins modSummary
         (warnings, tcm1) <- withWarnings "typecheck" $ \tweak ->
             GHC.typecheckModule $ enableTopLevelWarnings
+                                $ enableUnnecessaryAndDeprecationWarnings
                                 $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
         tcm2 <- liftIO $ fixDetailsForTH tcm1
-        let errorPipeline = unDefer . hideDiag dflags
+        let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
         tcm3 <- mkTcModuleResult tcm2 (any fst diags)
         return (map snd diags, tcm3)
@@ -248,9 +251,56 @@ upgradeWarningToError (nfp, sh, fd) =
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
 hideDiag :: DynFlags -> (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
-hideDiag originalFlags (Reason warning, (nfp, _sh, fd))
-  | not (wopt warning originalFlags) = (Reason warning, (nfp, HideDiag, fd))
+hideDiag originalFlags (Reason warning, (nfp, sh, fd))
+  | not (wopt warning originalFlags)
+  = if null (_tags fd)
+       then (Reason warning, (nfp, HideDiag, fd))
+            -- keep the diagnostic if it has an associated tag
+       else (Reason warning, (nfp, sh, fd{_severity = Just DsInfo}))
 hideDiag _originalFlags t = t
+
+enableUnnecessaryAndDeprecationWarnings :: ParsedModule -> ParsedModule
+enableUnnecessaryAndDeprecationWarnings =
+  (update_pm_mod_summary . update_hspp_opts)
+  (foldr (.) id [(`wopt_set` flag) | flag <- unnecessaryDeprecationWarningFlags])
+
+-- | Warnings which lead to a diagnostic tag
+unnecessaryDeprecationWarningFlags :: [WarningFlag]
+unnecessaryDeprecationWarningFlags
+  = [ Opt_WarnUnusedTopBinds
+    , Opt_WarnUnusedLocalBinds
+    , Opt_WarnUnusedPatternBinds
+    , Opt_WarnUnusedImports
+    , Opt_WarnUnusedMatches
+    , Opt_WarnUnusedTypePatterns
+    , Opt_WarnUnusedForalls
+#if MIN_GHC_API_VERSION(8,10,0)
+    , Opt_WarnUnusedRecordWildcards
+#endif
+#if MIN_GHC_API_VERSION(8,6,0)
+    , Opt_WarnInaccessibleCode
+#endif
+    , Opt_WarnWarningsDeprecations
+    ]
+
+-- | Add a unnecessary/deprecated tag to the required diagnostics.
+tagDiag :: (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
+tagDiag (Reason warning, (nfp, sh, fd))
+  | Just tag <- requiresTag warning
+  = (Reason warning, (nfp, sh, fd { _tags = addTag tag (_tags fd) }))
+  where
+    requiresTag :: WarningFlag -> Maybe DiagnosticTag
+    requiresTag Opt_WarnWarningsDeprecations
+      = Just DtDeprecated
+    requiresTag wflag  -- deprecation was already considered above
+      | wflag `elem` unnecessaryDeprecationWarningFlags
+      = Just DtUnnecessary
+    requiresTag _ = Nothing
+    addTag :: DiagnosticTag -> Maybe (List DiagnosticTag) -> Maybe (List DiagnosticTag)
+    addTag t Nothing          = Just (List [t])
+    addTag t (Just (List ts)) = Just (List (t : ts))
+-- other diagnostics are left unaffected
+tagDiag t = t
 
 addRelativeImport :: NormalizedFilePath -> ModuleName -> DynFlags -> DynFlags
 addRelativeImport fp modu dflags = dflags
