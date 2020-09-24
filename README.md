@@ -96,6 +96,7 @@ This is *very* early stage software.
 
 ### ghcup
 
+If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install the latest version of `haskell-language-server` with
 ```
 ghcup install hls
 ```
