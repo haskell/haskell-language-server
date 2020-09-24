@@ -40,7 +40,7 @@ extra-deps:
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - temporary-1.2.1.1
 - ghc-exactprint-0.6.3.2
-- implicit-hie-cradle-0.2.0.0
+- implicit-hie-cradle-0.2.0.1
 - implicit-hie-0.1.1.0
 
 flags:

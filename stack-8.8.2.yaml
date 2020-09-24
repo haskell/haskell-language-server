@@ -46,7 +46,7 @@ extra-deps:
 - stylish-haskell-0.11.0.3
 - temporary-1.2.1.1
 - these-1.1.1.1
-- implicit-hie-cradle-0.2.0.0
+- implicit-hie-cradle-0.2.0.1
 - implicit-hie-0.1.1.0
 - hie-bios-0.7.1
 
