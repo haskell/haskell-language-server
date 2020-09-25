@@ -149,6 +149,7 @@ executable haskell-language-server
     , ghc-source-gen
     , refinery
     , ghc-exactprint
+    , fingertree
 
   if flag(agpl)
     build-depends: brittany

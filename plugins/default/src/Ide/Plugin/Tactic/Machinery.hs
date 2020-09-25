@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
@@ -18,24 +19,24 @@ import           Data.Functor.Identity
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Maybe
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
 import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
-import Development.IDE.Spans.LocalBindings
 import           Name
 import           Outputable hiding ((<>))
 import           Refinery.Tactic
+import           SrcLoc
 import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unify
-import Data.Maybe
-import SrcLoc
 
 
 ------------------------------------------------------------------------------
@@ -282,5 +283,8 @@ rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)
 ------------------------------------------------------------------------------
 -- | Print something
 unsafeRender :: Outputable a => a -> String
-unsafeRender = showSDoc unsafeGlobalDynFlags . ppr
+unsafeRender = unsafeRender' . ppr
+
+unsafeRender' :: SDoc -> String
+unsafeRender' = showSDoc unsafeGlobalDynFlags
 
