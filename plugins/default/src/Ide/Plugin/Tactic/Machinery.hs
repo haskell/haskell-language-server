@@ -9,9 +9,12 @@
 
 module Ide.Plugin.Tactic.Machinery where
 
+import           Control.Monad.Except (throwError)
 import           Control.Monad.State (get, modify, evalStateT)
 import           Data.Char
+import           Data.Either
 import           Data.Function
+import           Data.Functor.Identity
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -30,6 +33,7 @@ import           Refinery.Tactic
 import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import           Unify
 import Data.Maybe
 import SrcLoc
 
@@ -87,7 +91,9 @@ data TacticError
   = UndefinedHypothesis OccName
   | GoalMismatch String CType
   | UnsolvedSubgoals [Judgement]
+  | UnificationError CType CType
   | NoProgress
+  | NoApplicableTactic
 
 instance Show TacticError where
     show (UndefinedHypothesis name) =
@@ -101,14 +107,22 @@ instance Show TacticError where
         ]
     show (UnsolvedSubgoals _) =
       "There were unsolved subgoals"
+    show (UnificationError (CType t1) (CType t2)) =
+        mconcat
+          [ "Could not unify "
+          , unsafeRender t1
+          , " and "
+          , unsafeRender t2
+          ]
     show NoProgress =
       "Unable to make progress"
+    show NoApplicableTactic =
+      "No tactic could be applied"
 
-
-type ProvableM = ProvableT Judgement (Either TacticError)
-type TacticsM = TacticT Judgement (LHsExpr GhcPs) ProvableM
-type RuleM    = RuleT Judgement (LHsExpr GhcPs) ProvableM
-type Rule     = RuleM (LHsExpr GhcPs)
+type ProvableM = ProvableT Judgement Identity
+type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError ProvableM
+type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError ProvableM
+type Rule      = RuleM (LHsExpr GhcPs)
 
 
 ------------------------------------------------------------------------------
@@ -215,11 +229,12 @@ mkTyConName tc
 runTactic
     :: Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either TacticError (LHsExpr GhcPs)
-runTactic jdg t
-  = fmap (fst)
-  . runProvableT
-  $ runTacticT t jdg
+    -> Either [TacticError] (LHsExpr GhcPs)
+runTactic jdg t = case partitionEithers $ runProvable $ runTacticT t jdg of
+    (errs, []) -> Left $ errs
+    (_, solns) ->
+      let soln = listToMaybe $ filter (null . snd) solns
+      in Right $ fst $ fromMaybe (head solns) soln
 
 
 ------------------------------------------------------------------------------
@@ -243,6 +258,13 @@ buildDataCon hy dc apps = do
     . foldl' (@@)
         (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
+
+------------------------------------------------------------------------------
+-- | Attempt to unify two types.
+unify :: CType -> CType -> RuleM TCvSubst
+unify (CType t1) (CType t2) = case tcUnifyTy t1 t2 of
+  Just unifier -> pure unifier
+  Nothing -> throwError (UnificationError (CType t1) (CType t2))
 
 
 ------------------------------------------------------------------------------

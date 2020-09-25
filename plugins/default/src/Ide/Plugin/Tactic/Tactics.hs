@@ -9,8 +9,13 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
+
+import           Control.Applicative
+import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Control.Monad.Except (throwError)
+import           Data.Function
 import           Data.List
+import           Data.Maybe
 import qualified Data.Map as M
 import           Data.Traversable
 import           DataCon
@@ -23,6 +28,7 @@ import           GHC.SourceGen.Pat
 import           Ide.Plugin.Tactic.Machinery
 import           Name
 import           Refinery.Tactic
+import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
 
@@ -116,9 +122,8 @@ homo = destruct' $ \dc (Judgement hy (CType g)) ->
 ------------------------------------------------------------------------------
 -- | Ensure a tactic produces no subgoals. Useful when working with
 -- backtracking.
-solve :: TacticsM () -> TacticsM  ()
+solve :: TacticsM () -> TacticsM ()
 solve t = t >> throwError NoProgress
-
 
 ------------------------------------------------------------------------------
 -- | Apply a function from the hypothesis.
@@ -132,6 +137,20 @@ apply = rule $ \(Judgement hy g) -> do
            . foldl' (@@) (var' func)
            $ fmap unLoc sgs
     Nothing -> throwError $ GoalMismatch "apply" g
+
+apply' :: OccName -> TacticsM ()
+apply' fname = rule $ \(Judgement hy g) ->
+  case M.lookup fname hy of
+    Just (CType fty) -> do
+      let (args, r) = splitFunTys fty
+      -- FIXME Need to use the unifier
+      subst <- unify g (CType r)
+      let hy' = fmap (CType . substTy subst . unCType) hy
+      sgs <- traverse (newSubgoal hy' . CType . substTy subst) args
+      pure . noLoc
+           . foldl' (@@) (var' fname)
+           $ fmap unLoc sgs
+    Nothing -> throwError $ GoalMismatch "apply'" g
 
 
 ------------------------------------------------------------------------------
@@ -155,26 +174,47 @@ deepen depth = do
   one
   deepen $ depth - 1
 
+------------------------------------------------------------------------------
+-- | @matching f@ takes a function from a judgement to a @Tactic@, and
+-- then applies the resulting @Tactic@.
+matching :: (Judgement -> TacticsM ()) -> TacticsM ()
+matching f = TacticT $ StateT $ \s -> runStateT (unTacticT $ f $ s) s
+
+attemptOn :: (a -> TacticsM ()) -> (Judgement -> [a]) -> TacticsM ()
+attemptOn tac getNames = matching (choice . fmap (\s -> tac s) . getNames)
 
 ------------------------------------------------------------------------------
 -- | Automatically solve a goal.
 auto :: TacticsM ()
-auto = (intro >> auto)
-   <!> (assumption >> auto)
-   <!> (split >> auto)
-   <!> (apply >> auto)
-   <!> pure ()
+auto = TacticT $ StateT $ \(Judgement _ goal) -> runStateT (unTacticT $ auto' 5) (Judgement M.empty goal)
+    -- auto' 5
 
+auto' :: Int -> TacticsM ()
+auto' 0 = throwError NoProgress
+auto' n = do
+    many_ intro
+    choice
+           [ split >> (auto' $ n - 1)
+           , attemptOn (\fname -> apply' fname >> (auto' $ n - 1)) functionNames
+           , attemptOn (\aname -> progress ((==) `on` jGoal) NoProgress (destruct aname) >> (auto' $ n - 1)) algebraicNames
+           , assumption >> (auto' $ n - 1)
+           ]
+  where
+    functionNames :: Judgement -> [OccName]
+    functionNames (Judgement hys _) = M.keys $ M.filter (isFunction . unCType) hys
+
+    algebraicNames :: Judgement -> [OccName]
+    algebraicNames (Judgement hys _) = M.keys $ M.filter (isJust . algebraicTyCon . unCType) hys
 
 ------------------------------------------------------------------------------
 -- | Run a tactic, and subsequently apply auto if it completes. If not, just
 -- run the first tactic, leaving its subgoals as holes.
 autoIfPossible :: TacticsM () -> TacticsM ()
-autoIfPossible t = (t >> solve auto) <!> t
+autoIfPossible t = (t >> solve auto) <|> t
 
 
 ------------------------------------------------------------------------------
 -- | Do one obvious thing.
 one :: TacticsM ()
-one = intro <!> assumption <!> split <!> apply <!> pure ()
+one = intro <|> assumption <|> split <|> apply <|> pure ()
 

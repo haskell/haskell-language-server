@@ -63,7 +63,7 @@ tacticDesc name = "fill the hole using the " <> name <> " tactic"
 ------------------------------------------------------------------------------
 
 enabledTactics :: [TacticCommand]
-enabledTactics = [Intros, Destruct, Homomorphism]
+enabledTactics = [Intros, Destruct, Homomorphism, Auto]
 
 ------------------------------------------------------------------------------
 -- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
