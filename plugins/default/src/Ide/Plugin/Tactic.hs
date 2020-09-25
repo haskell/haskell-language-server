@@ -19,8 +19,8 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
 import qualified Data.Map as M
-import qualified Data.Set as S
 import           Data.Maybe
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
@@ -31,9 +31,11 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.Util (hscEnv)
 import           Development.Shake (Action)
+import qualified FastString
 import           GHC.Generics (Generic)
 import           HscTypes (hsc_dflags)
 import           Ide.Plugin (mkLspCommand)
+import           Ide.Plugin.Tactic.BindSites
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.Types
@@ -42,7 +44,6 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
-import qualified FastString
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -207,33 +208,35 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> IO (Maybe (PositionMapping, HieAST Type, Range, Judgement))
+    -> IO (Maybe (PositionMapping, BindSites, Range, Judgement))
 judgementForHole state nfp range = runMaybeT $ do
   (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
   range' <- liftMaybe $ fromCurrentRange amapping range
 
   (binds, _) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
+  (har, _) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
+  let b2 = bindSites $ refMap har
 
-  (ast, rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
+  (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
       case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
         Nothing -> Nothing
         Just ast' -> do
           let info = nodeInfo ast'
           ty <- listToMaybe $ nodeType info
           guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
-          pure (ast, nodeSpan ast', ty)
+          pure (nodeSpan ast', ty)
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
 
   let hyps = hypothesisFromBindings rss binds
-  pure (amapping, ast, resulting_range, Judgement hyps $ CType goal)
+  pure (amapping, b2, resulting_range, Judgement hyps $ CType goal)
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
-        (pos, ast, _, jdg) <- MaybeT $ judgementForHole state nfp range
+        (pos, b2, _, jdg) <- MaybeT $ judgementForHole state nfp range
         -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
         -- which don't change very often.
         (hscenv, _) <- MaybeT $ runIde state $ useWithStale GhcSession nfp
@@ -253,7 +256,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                 g = graft (RealSrcSpan span) res
                 -- TODO(sandy): unclear if this span is correct; might be
                 -- pointing to the wrong version of the file
-                _this_name = currentBindingName ast span
+                _this_name = getDefiningBindings b2 span
             let response = transform dflags (clientCapabilities lf) uri g pm
             pure $ case response of
                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))

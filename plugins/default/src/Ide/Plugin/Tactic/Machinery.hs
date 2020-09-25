@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
@@ -19,8 +20,6 @@ import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Monoid
-import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
@@ -288,36 +287,4 @@ unsafeRender = unsafeRender' . ppr
 
 unsafeRender' :: SDoc -> String
 unsafeRender' = showSDoc unsafeGlobalDynFlags
-
-currentBindingName :: HieAST a -> Span -> Maybe Name
-currentBindingName ast s = firstContainingMap s isDefining ast
-
-
-isDefining :: HieAST a -> Maybe Name
-isDefining t = getFirst $ foldMap pure $ do
-  (Right name, details) <- M.toList . nodeIdentifiers $ nodeInfo t
-  -- Find anything in module scope that has a real source span; that is, only
-  -- things that actually appear in the source, and not default methods.
-  ValBind _ ModuleScope (Just _) <- S.toList $ identInfo details
-  pure name
-
-firstContainingMap
-  :: Span
-  -> (HieAST a -> Maybe b)
-  -> HieAST a
-  -> Maybe b
-firstContainingMap sp cond node
-  | nodeSpan node `containsSpan` sp = firstMap cond node
-  | sp `containsSpan` nodeSpan node = Nothing
-  | otherwise = Nothing
-
-firstMap
-  :: (HieAST a -> Maybe b)
-  -> HieAST a
-  -> Maybe b
-firstMap cond node = getFirst $ mconcat
-  [ First $ cond node
-  , foldMap (First . firstMap cond) $
-      nodeChildren node
-  ]
 
