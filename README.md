@@ -208,7 +208,7 @@ The script will install the executables `haskell-language-server-wrapper` and `h
 It will copy the latter appending the used ghc version, needed by the wrapper to choose the suitable version
 for the project at hand.
 
-So installing the executables directly with `stack install` or `cabal v2-install` may not be enough 
+So installing the executables directly with `stack install` or `cabal v2-install` may not be enough
 for it to work properly.
 
 Install haskell-language-server for the latest available and supported GHC version (and hoogle docs):
@@ -604,7 +604,7 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 ### Style guidelines
 
 The project includes a [`.editorconfig`](https://editorconfig.org) [file](https://github.com/haskell/haskell-language-server/blob/master/.editorconfig) with the editor basic settings used by the project.
-However, most editors will need some action to honour those settings automatically. 
+However, most editors will need some action to honour those settings automatically.
 For example vscode needs to have installed a specific [extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
 Please, try to follow those basic settings to keep the codebase as uniform as possible.
 
@@ -645,7 +645,7 @@ If you want to test HLS while hacking on it, follow the steps below.
 To do once:
 - Open some codebase on which you want to test your hacked HLS in your favorite editor
 - Configure this editor to use your custom HLS executable
-  - With Cabal: 
+  - With Cabal:
     - On Unix systems: `cabal exec which haskell-language-server`
     - On Windows: `cabal exec where haskell-language-server`
   - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
