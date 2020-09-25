@@ -29,6 +29,7 @@ This is *very* early stage software.
       - [Building](#building)
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
+  - [HLS LSP Configuration](#hls-lsp-configuration)
   - [Project Configuration](#project-configuration)
   - [Editor Integration](#editor-integration)
     - [VS Code](#using-haskell-language-server-with-vs-code)
@@ -251,6 +252,34 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 ```bash
 ./cabal-hls-install hls-8.6.5
 ./cabal-hls-install data
+```
+
+## HLS LSP Configuration
+
+haskell-language-server supports some forms of configuration.
+
+### Formatting providers
+By default, haskell-language-server is compiled with support for several different formatters.
+
+These include
+* `floskell`
+* `fourmolu`
+* `ormolu`
+* `stylish-haskell`
+* `brittany` (if compiled with AGPL)
+
+To choose one of them, you need to include the name of the one you want to use
+as the value for the `formattingProvider` key in your LSP configuration like so:
+```json
+{
+  ...
+  "haskell": {
+    ...
+    "formattingProvider": "fourmolu"
+    ...
+  }
+  ...
+}
 ```
 
 ## Project Configuration
