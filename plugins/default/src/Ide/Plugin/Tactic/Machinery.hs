@@ -284,7 +284,10 @@ rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)
 ------------------------------------------------------------------------------
 -- | Print something
 unsafeRender :: Outputable a => a -> String
-unsafeRender = showSDoc unsafeGlobalDynFlags . ppr
+unsafeRender = unsafeRender' . ppr
+
+unsafeRender' :: SDoc -> String
+unsafeRender' = showSDoc unsafeGlobalDynFlags
 
 currentBindingName :: HieAST a -> Span -> Maybe Name
 currentBindingName ast s = firstContainingMap s isDefining ast
@@ -293,7 +296,9 @@ currentBindingName ast s = firstContainingMap s isDefining ast
 isDefining :: HieAST a -> Maybe Name
 isDefining t = getFirst $ foldMap pure $ do
   (Right name, details) <- M.toList . nodeIdentifiers $ nodeInfo t
-  ValBind _ ModuleScope _ <- S.toList $ identInfo details
+  -- Find anything in module scope that has a real source span; that is, only
+  -- things that actually appear in the source, and not default methods.
+  ValBind _ ModuleScope (Just _) <- S.toList $ identInfo details
   pure name
 
 firstContainingMap

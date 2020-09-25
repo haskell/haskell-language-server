@@ -252,7 +252,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
             let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
                 g = graft (RealSrcSpan span) res
                 -- TODO(sandy): unclear if this span is correct; might be
-                -- pointing to the wrong version
+                -- pointing to the wrong version of the file
                 _this_name = currentBindingName ast span
             let response = transform dflags (clientCapabilities lf) uri g pm
             pure $ case response of
