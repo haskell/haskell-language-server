@@ -46,7 +46,7 @@ extra-deps:
 - parser-combinators-1.2.1
 - primitive-0.7.1.0
 - github: totbwf/refinery
-  commit: 2eb856d1c582a7df7eb184f8cec1ca5e5aa4a82b
+  commit: 5709a3f10645dd49af20912aec5eb06e72990849
 
 - regex-base-0.94.0.0
 - regex-pcre-builtin-0.95.1.1.8.43

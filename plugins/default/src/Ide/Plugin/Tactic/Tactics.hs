@@ -194,9 +194,9 @@ auto' 0 = throwError NoProgress
 auto' n = do
     many_ intro
     choice
-           [ split >> (auto' $ n - 1)
-           , attemptOn (\fname -> apply' fname >> (auto' $ n - 1)) functionNames
+           [ attemptOn (\fname -> apply' fname >> (auto' $ n - 1)) functionNames
            , attemptOn (\aname -> progress ((==) `on` jGoal) NoProgress (destruct aname) >> (auto' $ n - 1)) algebraicNames
+           , split >> (auto' $ n - 1)
            , assumption >> (auto' $ n - 1)
            ]
   where
