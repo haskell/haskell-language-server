@@ -192,7 +192,7 @@ auto = TacticT $ StateT $ \(Judgement _ goal) -> runStateT (unTacticT $ auto' 5)
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
-    many_ intro
+    intros <|> many_ intro
     choice
            [ attemptOn (\fname -> apply' fname >> (auto' $ n - 1)) functionNames
            , attemptOn (\aname -> progress ((==) `on` jGoal) NoProgress (destruct aname) >> (auto' $ n - 1)) algebraicNames
