@@ -137,7 +137,7 @@ codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right $ List []) $ do
-        (_, span, jdg) <- MaybeT $ judgementForHole state nfp range
+        (_, _, span, jdg) <- MaybeT $ judgementForHole state nfp range
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider enabledTactics
@@ -207,33 +207,33 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> IO (Maybe (PositionMapping, Range, Judgement))
+    -> IO (Maybe (PositionMapping, HieAST Type, Range, Judgement))
 judgementForHole state nfp range = runMaybeT $ do
   (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
   range' <- liftMaybe $ fromCurrentRange amapping range
 
   (binds, _) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
 
-  (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
+  (ast, rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
       case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
         Nothing -> Nothing
         Just ast' -> do
           let info = nodeInfo ast'
           ty <- listToMaybe $ nodeType info
           guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
-          pure (nodeSpan ast', ty)
+          pure (ast, nodeSpan ast', ty)
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
 
   let hyps = hypothesisFromBindings rss binds
-  pure (amapping, resulting_range, Judgement hyps $ CType goal)
+  pure (amapping, ast, resulting_range, Judgement hyps $ CType goal)
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
-        (pos, _, jdg) <- MaybeT $ judgementForHole state nfp range
+        (pos, ast, _, jdg) <- MaybeT $ judgementForHole state nfp range
         -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
         -- which don't change very often.
         (hscenv, _) <- MaybeT $ runIde state $ useWithStale GhcSession nfp
@@ -249,8 +249,11 @@ tacticCmd tac lf state (TacticParams uri range var_name)
               $ ResponseError InvalidRequest (T.pack $ show err) Nothing
           Right res -> do
             range' <- liftMaybe $ toCurrentRange pos range
-            let span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
-                g = graft span res
+            let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
+                g = graft (RealSrcSpan span) res
+                -- TODO(sandy): unclear if this span is correct; might be
+                -- pointing to the wrong version
+                _this_name = currentBindingName ast span
             let response = transform dflags (clientCapabilities lf) uri g pm
             pure $ case response of
                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))

@@ -18,24 +18,26 @@ import           Data.Functor.Identity
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Maybe
+import           Data.Monoid
+import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
 import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
-import Development.IDE.Spans.LocalBindings
 import           Name
 import           Outputable hiding ((<>))
 import           Refinery.Tactic
+import           SrcLoc
 import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unify
-import Data.Maybe
-import SrcLoc
 
 
 ------------------------------------------------------------------------------
@@ -283,4 +285,34 @@ rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)
 -- | Print something
 unsafeRender :: Outputable a => a -> String
 unsafeRender = showSDoc unsafeGlobalDynFlags . ppr
+
+currentBindingName :: HieAST a -> Span -> Maybe Name
+currentBindingName ast s = firstContainingMap s isDefining ast
+
+
+isDefining :: HieAST a -> Maybe Name
+isDefining t = getFirst $ foldMap pure $ do
+  (Right name, details) <- M.toList . nodeIdentifiers $ nodeInfo t
+  ValBind _ ModuleScope _ <- S.toList $ identInfo details
+  pure name
+
+firstContainingMap
+  :: Span
+  -> (HieAST a -> Maybe b)
+  -> HieAST a
+  -> Maybe b
+firstContainingMap sp cond node
+  | nodeSpan node `containsSpan` sp = firstMap cond node
+  | sp `containsSpan` nodeSpan node = Nothing
+  | otherwise = Nothing
+
+firstMap
+  :: (HieAST a -> Maybe b)
+  -> HieAST a
+  -> Maybe b
+firstMap cond node = getFirst $ mconcat
+  [ First $ cond node
+  , foldMap (First . firstMap cond) $
+      nodeChildren node
+  ]
 
