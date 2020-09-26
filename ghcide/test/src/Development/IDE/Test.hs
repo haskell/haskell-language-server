@@ -12,6 +12,7 @@ module Development.IDE.Test
   , expectDiagnosticsWithTags
   , expectNoMoreDiagnostics
   , canonicalizeUri
+  , standardizeQuotes
   ) where
 
 import Control.Applicative.Combinators
