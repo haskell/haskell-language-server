@@ -258,6 +258,12 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 
 haskell-language-server supports some forms of configuration.
 
+This configuration is done via the LSP settings you provide with your editor and/or LSP client.
+Some examples include:
+* in VSCode/VSCodium this is done via the `Settings` tab
+* with `LanguageClient-neovim` you can point the [`g:LanguageClient_settingsPath`](https://github.com/autozimu/LanguageClient-neovim/blob/0e5c9546bfddbaa2b01e5056389c25aefc8bf989/doc/LanguageClient.txt#L221)
+  variable to the file in which you want to keep your LSP settings
+
 ### Formatting providers
 By default, haskell-language-server is compiled with support for several different formatters.
 
