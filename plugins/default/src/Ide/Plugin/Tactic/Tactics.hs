@@ -167,7 +167,8 @@ instantiate func ty = rule $ \jdg@(Judgement _ (CType g)) -> do
     Just subst ->
       -- TODO(sandy): How does this affect the judgment wrt our new ununified
       -- tyvars?
-      applySpecific func (CType $ instantiateType $ substTy subst ty) jdg
+      let (_fresh_vars, ty') = instantiateType $ substTy subst ty
+       in applySpecific func (CType ty') jdg
     Nothing -> throwError $ GoalMismatch  "instantiate" $ CType g
 
 

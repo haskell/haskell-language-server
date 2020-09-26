@@ -31,17 +31,18 @@ oneWayUnify binders toinst res =
         False -> Nothing
 
 
-instantiateType :: Type -> Type
+instantiateType :: Type -> ([TyVar], Type)
 instantiateType t = do
   let vs  = tyCoVarsOfTypeList t
       vs' = fmap cloneTyVar vs
-      subst = foldr (\(v,t) a -> extendTCvSubst a v t) emptyTCvSubst $ zip vs vs'
-   in substTy subst t
+      subst = foldr (\(v,t) a -> extendTCvSubst a v $ TyVarTy t) emptyTCvSubst
+            $ zip vs vs'
+   in (vs', substTy subst t)
 
 
-cloneTyVar :: TyVar -> Type
+cloneTyVar :: TyVar -> TyVar
 cloneTyVar t =
   let uniq = getUnique t
       some_magic_number = 49
-   in TyVarTy $ setVarUnique t (deriveUnique uniq some_magic_number)
+   in setVarUnique t $ deriveUnique uniq some_magic_number
 
