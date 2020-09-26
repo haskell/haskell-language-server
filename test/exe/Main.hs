@@ -61,7 +61,6 @@ import Development.IDE.Plugin.Test (TestRequest(BlockSeconds,GetInterfaceFilesDi
 main :: IO ()
 main = do
   -- We mess with env vars so run single-threaded.
-  setEnv "TASTY_NUM_THREADS" "1" True
   defaultMainWithRerun $ testGroup "ghcide"
     [ testSession "open close" $ do
         doc <- createDoc "Testing.hs" "haskell" ""
@@ -2115,6 +2114,7 @@ findDefinitionAndHoverTests = let
       closeDoc fooDoc
 
     doc <- openTestDataDoc (dir </> sourceFilePath)
+    void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
     found <- get doc pos
     check found targetRange
 
@@ -2126,7 +2126,7 @@ findDefinitionAndHoverTests = let
     check expected =
       case hover of
         Nothing -> unless (expected == ExpectNoHover) $ liftIO $ assertFailure "no hover found"
-        Just Hover{_contents = (HoverContents MarkupContent{_value = msg})
+        Just Hover{_contents = (HoverContents MarkupContent{_value = standardizeQuotes -> msg})
                   ,_range    = rangeInHover } ->
           case expected of
             ExpectRange  expectedRange -> checkHoverRange expectedRange rangeInHover msg
@@ -2186,7 +2186,7 @@ findDefinitionAndHoverTests = let
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
   dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
   dcL12  = Position 16 11  ;
-  xtcL5  = Position  9 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in ‘GHC.Types’"]]
+  xtcL5  = Position  9 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in 'GHC.Types'"]]
   tcL6   = Position 10 11  ;  tcData = [mkR   7  0    9 16, ExpectHoverText ["TypeConstructor", "GotoHover.hs:8:1"]]
   vvL16  = Position 20 12  ;  vv     = [mkR  20  4   20  6]
   opL16  = Position 20 15  ;  op     = [mkR  21  2   21  4]
@@ -2196,7 +2196,7 @@ findDefinitionAndHoverTests = let
   xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["Data.Text.pack", ":: String -> Text"]]
   clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
   clL25  = Position 29  9
-  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ‘GHC.Num’"]]
+  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in 'GHC.Num'"]]
   dnbL29 = Position 33 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  33 12   33 21]
   dnbL30 = Position 34 23
   lcbL33 = Position 37 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  37 26   37 27]
