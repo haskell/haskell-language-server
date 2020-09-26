@@ -26,6 +26,7 @@ import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
 import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.GHC
 import           Name
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -128,14 +129,9 @@ solve t = t >> throwError NoProgress
 ------------------------------------------------------------------------------
 -- | Apply a function from the hypothesis.
 apply :: TacticsM ()
-apply = rule $ \(Judgement hy g) -> do
+apply = rule $ \jdg@(Judgement hy g) -> do
   case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) $ toList hy of
-    Just (func, CType ty) -> do
-      let (args, _) = splitFunTys ty
-      sgs <- traverse (newSubgoal hy . CType) args
-      pure . noLoc
-           . foldl' (@@) (var' func)
-           $ fmap unLoc sgs
+    Just (func, ty) -> applySpecific func ty jdg
     Nothing -> throwError $ GoalMismatch "apply" g
 
 apply' :: OccName -> TacticsM ()
@@ -151,6 +147,28 @@ apply' fname = rule $ \(Judgement hy g) ->
            . foldl' (@@) (var' fname)
            $ fmap unLoc sgs
     Nothing -> throwError $ GoalMismatch "apply'" g
+
+
+applySpecific :: OccName -> CType -> Judgement -> RuleM (LHsExpr GhcPs)
+applySpecific func (CType ty) (Judgement hy _) = do
+  let (args, _) = splitFunTys ty
+  sgs <- traverse (newSubgoal hy . CType) args
+  pure . noLoc
+       . foldl' (@@) (var' func)
+       $ fmap unLoc sgs
+
+
+instantiate :: OccName -> Type -> TacticsM ()
+instantiate func ty = rule $ \jdg@(Judgement _ (CType g)) -> do
+  -- TODO(sandy): We need to get available from the type sig and compare
+  -- against _ctx
+  let (binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
+  case oneWayUnify binders res g of
+    Just subst ->
+      -- TODO(sandy): How does this affect the judgment wrt our new ununified
+      -- tyvars?
+      applySpecific func (CType $ instantiateType $ substTy subst ty) jdg
+    Nothing -> throwError $ GoalMismatch  "instantiate" $ CType g
 
 
 ------------------------------------------------------------------------------
