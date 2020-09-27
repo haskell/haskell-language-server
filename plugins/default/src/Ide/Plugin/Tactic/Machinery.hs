@@ -121,8 +121,8 @@ instance Show TacticError where
       "No tactic could be applied"
 
 type ProvableM = ProvableT Judgement Identity
-type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError ProvableM
-type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError ProvableM
+type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError () ProvableM
+type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError () ProvableM
 type Rule      = RuleM (LHsExpr GhcPs)
 
 
@@ -231,7 +231,7 @@ runTactic
     :: Judgement
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] (LHsExpr GhcPs)
-runTactic jdg t = case partitionEithers $ runProvable $ runTacticT t jdg of
+runTactic jdg t = case partitionEithers $ runProvable $ runTacticT t jdg () of
     (errs, []) -> Left $ errs
     (_, solns) ->
       let soln = listToMaybe $ filter (null . snd) solns
