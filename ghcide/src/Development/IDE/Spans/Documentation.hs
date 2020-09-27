@@ -21,9 +21,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Maybe
 import qualified Data.Text as T
-#if MIN_GHC_API_VERSION(8,6,0)
 import           Development.IDE.Core.Compile
-#endif
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
@@ -75,20 +73,15 @@ getDocumentationTryGhc mod deps n = head <$> getDocumentationsTryGhc mod deps [n
 getDocumentationsTryGhc :: GhcMonad m => Module -> [ParsedModule] -> [Name] -> m [SpanDoc]
 -- Interfaces are only generated for GHC >= 8.6.
 -- In older versions, interface files do not embed Haddocks anyway
-#if MIN_GHC_API_VERSION(8,6,0)
 getDocumentationsTryGhc mod sources names = do
   res <- catchSrcErrors "docs" $ getDocsBatch mod names
   case res of
       Left _ -> mapM mkSpanDocText names
       Right res -> zipWithM unwrap res names
   where
-    unwrap (Right (Just docs, _)) n = SpanDocString <$> pure docs <*> getUris n
+    unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
     unwrap _ n = mkSpanDocText n
 
-#else
-getDocumentationsTryGhc _ sources names = mapM mkSpanDocText names
-  where
-#endif
     mkSpanDocText name =
       pure (SpanDocText (getDocumentation sources name)) <*> getUris name
    
@@ -132,7 +125,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
 
   -- Top level names bound by the module
   let bs = [ n | let L _ HsModule{hsmodDecls} = pm_parsed_source tc
-           , L _ (ValD hsbind) <- hsmodDecls
+           , L _ (ValD _ hsbind) <- hsmodDecls
            , Just n <- [name_of_bind hsbind]
            ]
   -- Sort the names' source spans.

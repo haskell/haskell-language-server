@@ -554,7 +554,7 @@ getDocMapRule =
 
 -- When possible, rely on the haddocks embedded in our interface files
 -- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
-#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
+#if !defined(GHC_LIB)
       let parsedDeps = []
 #else
       parsedDeps <- uses_ GetParsedModule tdeps
@@ -822,7 +822,7 @@ getModSummaryRule = do
 
 getModIfaceRule :: Rules ()
 getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
-#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
+#if !defined(GHC_LIB)
   fileOfInterest <- use_ IsFileOfInterest f
   case fileOfInterest of
     IsFOI _ -> do
