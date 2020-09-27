@@ -45,9 +45,7 @@ import Development.IDE.Types.Location
 
 import Language.Haskell.LSP.Types (DiagnosticTag(..))
 
-#if MIN_GHC_API_VERSION(8,6,0)
 import LoadIface (loadModuleInterface)
-#endif
 
 import qualified Parser
 import           Lexer
@@ -147,13 +145,9 @@ typecheckModule (IdeDefer defer) hsc pm = do
 
 initPlugins :: GhcMonad m => ModSummary -> m ModSummary
 initPlugins modSummary = do
-#if MIN_GHC_API_VERSION(8,6,0)
     session <- getSession
     dflags <- liftIO $ initializePlugins session (ms_hspp_opts modSummary)
     return modSummary{ms_hspp_opts = dflags}
-#else
-    return modSummary
-#endif
 
 -- | Whether we should run the -O0 simplifier when generating core.
 --
@@ -278,9 +272,7 @@ unnecessaryDeprecationWarningFlags
 #if MIN_GHC_API_VERSION(8,10,0)
     , Opt_WarnUnusedRecordWildcards
 #endif
-#if MIN_GHC_API_VERSION(8,6,0)
     , Opt_WarnInaccessibleCode
-#endif
     , Opt_WarnWarningsDeprecations
     ]
 
@@ -662,9 +654,7 @@ removePackageImports pkgs (L l h@HsModule {hsmodImports} ) = L l (h { hsmodImpor
       case PackageName . sl_fs <$> ideclPkgQual of
         Just pn | pn `elem` pkgs -> L l (i { ideclPkgQual = Nothing })
         _ -> L l i
-#if MIN_GHC_API_VERSION(8,6,0)
     do_one_import l = l
-#endif
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
 loadHieFile ncu f = do
@@ -709,7 +699,6 @@ getDocsBatch :: GhcMonad m
         -> [Name]
         -> m [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
 getDocsBatch _mod _names =
-#if MIN_GHC_API_VERSION(8,6,0)
   withSession $ \hsc_env -> liftIO $ do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
         case nameModule_maybe name of
@@ -733,9 +722,6 @@ getDocsBatch _mod _names =
       case nameSrcLoc n of
         RealSrcLoc {} -> False
         UnhelpfulLoc {} -> True
-#else
-    return []
-#endif
 
 fakeSpan :: RealSrcSpan
 fakeSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<ghcide>") 1 1

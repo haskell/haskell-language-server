@@ -77,16 +77,11 @@ emptySpanDoc :: SpanDoc
 emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)
 
 spanDocToMarkdown :: SpanDoc -> [T.Text]
-#if MIN_GHC_API_VERSION(8,6,0)
 spanDocToMarkdown (SpanDocString docs uris)
   = [T.pack $ haddockToMarkdown $ H.toRegular $ H._doc $ H.parseParas Nothing $ unpackHDS docs]
     <> ["\n"] <> spanDocUrisToMarkdown uris
   -- Append the extra newlines since this is markdown --- to get a visible newline,
   -- you need to have two newlines
-#else
-spanDocToMarkdown (SpanDocString _ uris)
-  = spanDocUrisToMarkdown uris
-#endif
 spanDocToMarkdown (SpanDocText txt uris) = txt <> ["\n"] <> spanDocUrisToMarkdown uris
 
 spanDocUrisToMarkdown :: SpanDocUris -> [T.Text]

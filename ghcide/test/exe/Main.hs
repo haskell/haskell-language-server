@@ -1590,11 +1590,9 @@ fillTypedHoleTests = let
           "_"             "n" "n"
           "globalConvert" "n" "n"
 
-#if MIN_GHC_API_VERSION(8,6,0)
   , check "replace _convertme with localConvert"
           "_convertme"   "n" "n"
           "localConvert" "n" "n"
-#endif
 
   , check "replace _b with globalInt"
           "_a" "_b"        "_c"
@@ -1604,14 +1602,12 @@ fillTypedHoleTests = let
           "_a" "_b"        "_c"
           "_a" "_b" "globalInt"
 
-#if MIN_GHC_API_VERSION(8,6,0)
   , check "replace _c with parameterInt"
           "_a" "_b" "_c"
           "_a" "_b"  "parameterInt"
   , check "replace _ with foo _"
           "_" "n" "n"
           "(foo _)" "n" "n"
-#endif
   ]
 
 addInstanceConstraintTests :: TestTree
@@ -2217,13 +2213,8 @@ findDefinitionAndHoverTests = let
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   cccL17 = Position 17 11  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
-#if MIN_GHC_API_VERSION(8,6,0)
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
-#else
-  imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo"], mkL foo 5 0 5 3]
-  reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar"], mkL bar 3 0 3 14]
-#endif
   in
   mkFindTests
   --      def    hover  look       expect
@@ -2306,7 +2297,7 @@ pluginSimpleTests =
 
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
-  (`xfail84` "record-dot-preprocessor unsupported on 8.4") $ testSessionWait "parsedResultAction plugin" $ do
+  testSessionWait "parsedResultAction plugin" $ do
     let content =
           T.unlines
             [ "{-# LANGUAGE DuplicateRecordFields, TypeApplications, FlexibleContexts, DataKinds, MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}"
@@ -2475,7 +2466,6 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         expectDiagnostics [ ( "B.hs", [(DsWarning, (4, 0), "Top-level binding with no type signature: main :: IO ()")] ) ]
-#if MIN_GHC_API_VERSION(8,6,0)
     , flip xfail "expect broken (#614)" $ testCase "findsTHnewNameConstructor" $ withoutStackEnv $ runWithExtraFiles "THNewName" $ \dir -> do
 
     -- This test defines a TH value with the meaning "data A = A" in A.hs
@@ -2487,7 +2477,6 @@ thTests =
     let cPath = dir </> "C.hs"
     _ <- openDoc cPath "haskell"
     expectDiagnostics [ ( cPath, [(DsWarning, (3, 0), "Top-level binding with no type signature: a :: A")] ) ]
-#endif
     ]
 
 -- | test that TH is reevaluated on typecheck
@@ -2954,13 +2943,6 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
 
-xfail84 :: TestTree -> String -> TestTree
-#if MIN_GHC_API_VERSION(8,6,0)
-xfail84 t _ = t
-#else
-xfail84 = flip expectFailBecause
-#endif
-
 expectFailCabal :: String -> TestTree -> TestTree
 #ifdef STACK
 expectFailCabal _ = id
@@ -3253,10 +3235,8 @@ ifaceErrorTest = testCase "iface-error-test-1" $ withoutStackEnv $ runWithExtraF
       ResponseMessage{_result=Right hidir} -> do
         hi_exists <- doesFileExist $ hidir </> "B.hi"
         assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
-#if MIN_GHC_API_VERSION(8,6,0)
         hie_exists <- doesFileExist $ hidir </> "B.hie"
         assertBool ("Couldn't find B.hie in " ++ hidir) hie_exists
-#endif
       _ -> assertFailure $ "Got malformed response for CustomMessage hidir: " ++ show res
 
     pdoc <- createDoc pPath "haskell" pSource
