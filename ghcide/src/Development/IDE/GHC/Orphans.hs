@@ -17,6 +17,7 @@ import qualified StringBuffer as SB
 import Control.DeepSeq
 import Data.Hashable
 import Development.IDE.GHC.Util
+import Bag
 
 
 -- Orphan instances for types from the GHC API.
@@ -80,3 +81,21 @@ instance Show ModuleName where
     show = moduleNameString
 instance Hashable ModuleName where
     hashWithSalt salt = hashWithSalt salt . show
+
+
+#if MIN_GHC_API_VERSION(8,6,0)
+instance NFData a => NFData (IdentifierDetails a) where
+    rnf (IdentifierDetails a b) = rnf a `seq` rnf (length b)
+ 
+instance NFData RealSrcSpan where
+    rnf = rwhnf
+
+instance NFData Type where
+    rnf = rwhnf
+#endif
+
+instance Show a => Show (Bag a) where
+    show = show . bagToList
+
+instance NFData HsDocString where
+    rnf = rwhnf

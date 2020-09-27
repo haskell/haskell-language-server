@@ -24,6 +24,7 @@ module Development.IDE.Core.Rules(
     getAtPoint,
     getDefinition,
     getTypeDefinition,
+    highlightAtPoint,
     getDependencies,
     getParsedModule,
     generateCore,
@@ -39,14 +40,15 @@ import Control.Monad.Trans.Maybe
 import Development.IDE.Core.Compile
 import Development.IDE.Core.OfInterest
 import Development.IDE.Types.Options
-import Development.IDE.Spans.Calculate
+import Development.IDE.Spans.Documentation
+import Development.IDE.Spans.LocalBindings
 import Development.IDE.Import.DependencyInformation
 import Development.IDE.Import.FindImports
 import           Development.IDE.Core.FileExists
 import           Development.IDE.Core.FileStore        (modificationTime, getFileContents)
 import           Development.IDE.Types.Diagnostics as Diag
 import Development.IDE.Types.Location
-import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, TargetModule, TargetFile)
+import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile, TargetModule, TargetFile)
 import Development.IDE.GHC.Util
 import Development.IDE.GHC.WithDynFlags
 import Data.Either.Extra
@@ -57,14 +59,15 @@ import qualified Data.IntMap.Strict as IntMap
 import Data.IntMap.Strict (IntMap)
 import Data.List
 import qualified Data.Set                                 as Set
+import qualified Data.Map as M
 import qualified Data.Text                                as T
 import qualified Data.Text.Encoding                       as T
 import           Development.IDE.GHC.Error
 import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
-import Development.IDE.Spans.Type
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Core.PositionMapping
+import           Language.Haskell.LSP.Types (DocumentHighlight (..))
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes hiding (TargetModule, TargetFile)
@@ -134,26 +137,35 @@ getAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe (Maybe Range, [
 getAtPoint file pos = fmap join $ runMaybeT $ do
   ide <- ask
   opts <- liftIO $ getIdeOptionsIO ide
-  (spans, mapping) <- useE  GetSpanInfo file
+
+  (hieAst -> hf, mapping) <- useE GetHieAst file
+  dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> (runMaybeT $ useE GetDocMap file)
+
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  return $ AtPoint.atPoint opts spans pos'
+  return $ AtPoint.atPoint opts hf dkMap pos'
 
 -- | Goto Definition.
 getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe Location)
 getDefinition file pos = runMaybeT $ do
     ide <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (spans,mapping) <- useE GetSpanInfo file
+    (HAR _ hf _ imports, mapping) <- useE GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    AtPoint.gotoDefinition (getHieFile ide file) opts (spansExprs spans) pos'
+    AtPoint.gotoDefinition (getHieFile ide file) opts imports hf pos'
 
 getTypeDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe [Location])
 getTypeDefinition file pos = runMaybeT $ do
     ide <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (spans,mapping) <- useE GetSpanInfo file
+    (hieAst -> hf, mapping) <- useE GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-    AtPoint.gotoTypeDefinition (getHieFile ide file) opts (spansExprs spans) pos'
+    AtPoint.gotoTypeDefinition (getHieFile ide file) opts hf pos'
+
+highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
+highlightAtPoint file pos = runMaybeT $ do
+    (HAR _ hf rf _,mapping) <- useE GetHieAst file
+    !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
+    AtPoint.documentHighlight hf rf pos'
 
 getHieFile
   :: ShakeExtras
@@ -507,27 +519,51 @@ getDependenciesRule =
         let mbFingerprints = map (fingerprintString . fromNormalizedFilePath) allFiles <$ optShakeFiles opts
         return (fingerprintToBS . fingerprintFingerprints <$> mbFingerprints, ([], transitiveDeps depInfo file))
 
--- Source SpanInfo is used by AtPoint and Goto Definition.
-getSpanInfoRule :: Rules ()
-getSpanInfoRule =
-    define $ \GetSpanInfo file -> do
-        tc <- use_ TypeCheck file
-        packageState <- hscEnv <$> use_ GhcSessionDeps file
+getHieAstsRule :: Rules ()
+getHieAstsRule =
+    define $ \GetHieAst f -> do
+      tmr <- use_ TypeCheck f
+      (diags,masts) <- case tmrHieAsts tmr of
+        -- If we already have them from typechecking, return them
+        Just asts -> pure ([], Just asts)
+        -- Compute asts if we haven't already computed them
+        Nothing -> do
+          hsc <- hscEnv <$> use_ GhcSession f
+          (diagsHieGen, masts) <- liftIO $ generateHieAsts hsc (tmrModule tmr)
+          pure (diagsHieGen, masts)
+      let refmap = generateReferencesMap . getAsts <$> masts
+      im <- use GetLocatedImports f
+      let mkImports (fileImports, _) = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp)  fileImports
+      pure (diags, HAR (ms_mod  $ tmrModSummary tmr) <$> masts <*> refmap <*> fmap mkImports im)
+
+getBindingsRule :: Rules ()
+getBindingsRule =
+  define $ \GetBindings f -> do
+    har <- use_ GetHieAst f
+    pure ([], Just $ bindings $ refMap har)
+
+getDocMapRule :: Rules ()
+getDocMapRule =
+    define $ \GetDocMap file -> do
+      hmi <- hirModIface <$> use_ GetModIface file
+      hsc <- hscEnv <$> use_ GhcSessionDeps file
+      (refMap -> rf) <- use_ GetHieAst file
+
+      deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
+      let tdeps = transitiveModuleDeps deps
 
 -- When possible, rely on the haddocks embedded in our interface files
 -- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
 #if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
-        let parsedDeps = []
+      let parsedDeps = []
 #else
-        deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
-        let tdeps = transitiveModuleDeps deps
-        parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule tdeps
+      parsedDeps <- uses_ GetParsedModule tdeps
 #endif
 
-        (fileImports, _) <- use_ GetLocatedImports file
-        let imports = second (fmap artifactFilePath) <$> fileImports
-        x <- liftIO $ getSrcSpanInfos packageState imports tc parsedDeps
-        return ([], Just x)
+      ifaces <- uses_ GetModIface tdeps
+
+      dkMap <- liftIO $ evalGhcEnv hsc $ mkDocMap parsedDeps rf hmi (map hirModIface ifaces)
+      return ([],Just dkMap)
 
 -- Typechecks a module.
 typeCheckRule :: Rules ()
@@ -573,14 +609,20 @@ typeCheckRuleDefinition hsc pm isFoi source = do
         case isFoi of
           IsFOI Modified -> return (diags, Just tcm)
           _ -> do -- If the file is saved on disk, or is not a FOI, we write out ifaces
-            diagsHie <- generateAndWriteHieFile hsc (tmrModule tcm) (fromMaybe "" source)
+            let tm = tmrModule tcm
+                ms = tmrModSummary tcm
+                exports = tcg_exports $ fst $ tm_internals_ tm
+            (diagsHieGen, masts) <- generateHieAsts hsc (tmrModule tcm)
+            diagsHieWrite <- case masts of
+              Nothing -> pure mempty
+              Just asts -> writeHieFile hsc ms exports asts $ fromMaybe "" source
             -- Don't save interface files for modules that compiled due to defering
             -- type errors, as we won't get proper diagnostics if we load these from
             -- disk
             diagsHi  <- if not $ tmrDeferedError tcm
                         then writeHiFile hsc tcm
                         else pure mempty
-            return (diags <> diagsHi <> diagsHie, Just tcm)
+            return (diags <> diagsHi <> diagsHieGen <> diagsHieWrite, Just tcm{tmrHieAsts = masts})
       (diags, res) ->
         return (diags, snd <$> res)
  where
@@ -849,7 +891,7 @@ mainRule = do
     reportImportCyclesRule
     getDependenciesRule
     typeCheckRule
-    getSpanInfoRule
+    getDocMapRule
     generateCoreRule
     generateByteCodeRule
     loadGhcSession
@@ -860,6 +902,8 @@ mainRule = do
     getModuleGraphRule
     knownFilesRule
     getClientSettingsRule
+    getHieAstsRule
+    getBindingsRule
 
 -- | Given the path to a module src file, this rule returns True if the
 -- corresponding `.hi` file is stable, that is, if it is newer

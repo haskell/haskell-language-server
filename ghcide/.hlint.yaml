@@ -95,7 +95,7 @@
 - flags:
   - default: false
   - {name: [-Wno-missing-signatures, -Wno-orphans, -Wno-overlapping-patterns, -Wno-incomplete-patterns, -Wno-missing-fields, -Wno-unused-matches]}
-  - {name: [-Wno-dodgy-imports], within: [Main, Development.IDE.GHC.Compat]}
+  - {name: [-Wno-dodgy-imports,-Wno-incomplete-uni-patterns], within: [Main, Development.IDE.GHC.Compat]}
 # - modules:
 #   - {name: [Data.Set, Data.HashSet], as: Set} # if you import Data.Set qualified, it must be as 'Set'
 #   - {name: Control.Arrow, within: []} # Certain modules are banned entirely

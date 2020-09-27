@@ -74,7 +74,6 @@ toCurrentPosition (PositionMapping pm) = positionResultToMaybe . toDelta pm
 -- a specific version
 newtype PositionMapping = PositionMapping PositionDelta
 
-
 toCurrentRange :: PositionMapping -> Range -> Maybe Range
 toCurrentRange mapping (Range a b) =
     Range <$> toCurrentPosition mapping a <*> toCurrentPosition mapping b
@@ -121,7 +120,7 @@ toCurrent (Range start@(Position startLine startColumn) end@(Position endLine en
     | line > endLine || line == endLine && column >= endColumn =
       -- Position is after the change so increase line and column number
       -- as necessary.
-      PositionExact $ Position newLine newColumn
+      PositionExact $ newLine `seq` newColumn `seq` Position newLine newColumn
     | otherwise = PositionRange start end
     -- Position is in the region that was changed.
     where
@@ -131,10 +130,10 @@ toCurrent (Range start@(Position startLine startColumn) end@(Position endLine en
         newEndColumn
           | linesNew == 0 = startColumn + T.length t
           | otherwise = T.length $ T.takeWhileEnd (/= '\n') t
-        !newColumn
+        newColumn
           | line == endLine = column + newEndColumn - endColumn
           | otherwise = column
-        !newLine = line + lineDiff
+        newLine = line + lineDiff
 
 fromCurrent :: Range -> T.Text -> Position -> PositionResult Position
 fromCurrent (Range start@(Position startLine startColumn) end@(Position endLine endColumn)) t (Position line column)
@@ -144,7 +143,7 @@ fromCurrent (Range start@(Position startLine startColumn) end@(Position endLine 
     | line > newEndLine || line == newEndLine && column >= newEndColumn =
       -- Position is after the change so increase line and column number
       -- as necessary.
-      PositionExact $ Position newLine newColumn
+      PositionExact $ newLine `seq` newColumn `seq` Position newLine newColumn
     | otherwise = PositionRange start end
     -- Position is in the region that was changed.
     where
@@ -155,7 +154,7 @@ fromCurrent (Range start@(Position startLine startColumn) end@(Position endLine 
         newEndColumn
           | linesNew == 0 = startColumn + T.length t
           | otherwise = T.length $ T.takeWhileEnd (/= '\n') t
-        !newColumn
+        newColumn
           | line == newEndLine = column - (newEndColumn - endColumn)
           | otherwise = column
-        !newLine = line - lineDiff
+        newLine = line - lineDiff

@@ -9,6 +9,8 @@ module Development.IDE.Spans.Documentation (
     getDocumentation
   , getDocumentationTryGhc
   , getDocumentationsTryGhc
+  , DocMap
+  , mkDocMap
   ) where
 
 import           Control.Monad
@@ -16,6 +18,7 @@ import           Control.Monad.Extra (findM)
 import           Data.Foldable
 import           Data.List.Extra
 import qualified Data.Map as M
+import qualified Data.Set as S
 import           Data.Maybe
 import qualified Data.Text as T
 #if MIN_GHC_API_VERSION(8,6,0)
@@ -24,6 +27,7 @@ import           Development.IDE.Core.Compile
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
+import           Development.IDE.Core.RuleTypes
 import           System.Directory
 import           System.FilePath
 
@@ -33,12 +37,42 @@ import           GhcMonad
 import           Packages
 import           Name
 import           Language.Haskell.LSP.Types (getUri, filePathToUri)
+import Data.Either
+
+mkDocMap
+  :: GhcMonad m
+  => [ParsedModule]
+  -> RefMap
+  -> ModIface
+  -> [ModIface]
+  -> m DocAndKindMap
+mkDocMap sources rm hmi deps =
+  do mapM_ (`loadDepModule` Nothing) (reverse deps)
+     loadDepModule hmi Nothing
+     d <- foldrM getDocs M.empty names
+     k <- foldrM getType M.empty names
+     pure $ DKMap d k
+  where
+    getDocs n map = do
+      doc <- getDocumentationTryGhc mod sources n
+      pure $ M.insert n doc map
+    getType n map
+      | isTcOcc $ occName n = do
+        kind <- lookupKind mod n
+        pure $ maybe id (M.insert n) kind map
+      | otherwise = pure map
+    names = rights $ S.toList idents
+    idents = M.keysSet rm
+    mod = mi_module hmi
+
+lookupKind :: GhcMonad m => Module -> Name -> m (Maybe Type)
+lookupKind mod =
+    fmap (either (const Nothing) (safeTyThingType =<<)) . catchSrcErrors "span" . lookupName mod
 
 getDocumentationTryGhc :: GhcMonad m => Module -> [ParsedModule] -> Name -> m SpanDoc
 getDocumentationTryGhc mod deps n = head <$> getDocumentationsTryGhc mod deps [n]
 
 getDocumentationsTryGhc :: GhcMonad m => Module -> [ParsedModule] -> [Name] -> m [SpanDoc]
-
 -- Interfaces are only generated for GHC >= 8.6.
 -- In older versions, interface files do not embed Haddocks anyway
 #if MIN_GHC_API_VERSION(8,6,0)

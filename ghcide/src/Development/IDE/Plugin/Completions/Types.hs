@@ -5,6 +5,7 @@ module Development.IDE.Plugin.Completions.Types (
 import           Control.DeepSeq
 import qualified Data.Map  as Map
 import qualified Data.Text as T
+import SrcLoc
 
 import Development.IDE.Spans.Common
 import Language.Haskell.LSP.Types (CompletionItemKind)
@@ -17,7 +18,7 @@ data Backtick = Surrounded | LeftSide
 data CompItem = CI
   { compKind     :: CompletionItemKind
   , insertText   :: T.Text         -- ^ Snippet for the completion
-  , importedFrom :: T.Text         -- ^ From where this item is imported from.
+  , importedFrom :: Either SrcSpan T.Text         -- ^ From where this item is imported from.
   , typeText     :: Maybe T.Text   -- ^ Available type information.
   , label        :: T.Text         -- ^ Label to display to the user.
   , isInfix      :: Maybe Backtick -- ^ Did the completion happen

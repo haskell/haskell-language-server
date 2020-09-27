@@ -15,22 +15,24 @@ import           Control.DeepSeq
 import Data.Aeson.Types (Value)
 import Data.Binary
 import           Development.IDE.Import.DependencyInformation
-import Development.IDE.GHC.Compat
+import Development.IDE.GHC.Compat hiding (HieFileResult)
 import Development.IDE.GHC.Util
 import Development.IDE.Core.Shake (KnownTargets)
 import           Data.Hashable
 import           Data.Typeable
 import qualified Data.Set as S
+import qualified Data.Map as M
 import           Development.Shake
 import           GHC.Generics                             (Generic)
 
 import Module (InstalledUnitId)
 import HscTypes (hm_iface, CgGuts, Linkable, HomeModInfo, ModDetails)
 
-import           Development.IDE.Spans.Type
+import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Import.FindImports (ArtifactsLocation)
 import Data.ByteString (ByteString)
-
+import Language.Haskell.LSP.Types (NormalizedFilePath)
 
 -- NOTATION
 --   Foo+ means Foo for the dependencies
@@ -66,6 +68,7 @@ data TcModuleResult = TcModuleResult
     -- HomeModInfo instead
     , tmrModInfo    :: HomeModInfo
     , tmrDeferedError :: !Bool -- ^ Did we defer any type errors for this module?
+    , tmrHieAsts :: !(Maybe (HieASTs Type)) -- ^ The HieASTs if we computed them
     }
 instance Show TcModuleResult where
     show = show . pm_mod_summary . tm_parsed_module . tmrModule
@@ -98,11 +101,38 @@ instance NFData HiFileResult where
 instance Show HiFileResult where
     show = show . hirModSummary
 
+-- | Save the uncompressed AST here, we compress it just before writing to disk
+data HieAstResult
+  = HAR
+  { hieModule :: Module
+  , hieAst :: !(HieASTs Type)
+  , refMap :: !RefMap
+  , importMap :: !(M.Map ModuleName NormalizedFilePath) -- ^ Where are the modules imported by this file located?
+  }
+ 
+instance NFData HieAstResult where
+    rnf (HAR m hf rm im) = rnf m `seq` rwhnf hf `seq` rnf rm `seq` rnf im
+ 
+instance Show HieAstResult where
+    show = show . hieModule
+
 -- | The type checked version of this file, requires TypeCheck+
 type instance RuleResult TypeCheck = TcModuleResult
 
--- | Information about what spans occur where, requires TypeCheck
-type instance RuleResult GetSpanInfo = SpansInfo
+-- | The uncompressed HieAST
+type instance RuleResult GetHieAst = HieAstResult
+
+-- | A IntervalMap telling us what is in scope at each point
+type instance RuleResult GetBindings = Bindings
+
+data DocAndKindMap = DKMap {getDocMap :: !DocMap, getKindMap :: !KindMap}
+instance NFData DocAndKindMap where
+    rnf (DKMap a b) = rnf a `seq` rnf b
+
+instance Show DocAndKindMap where
+    show = const "docmap"
+
+type instance RuleResult GetDocMap = DocAndKindMap
 
 -- | Convert to Core, requires TypeCheck*
 type instance RuleResult GenerateCore = (SafeHaskellMode, CgGuts, ModDetails)
@@ -196,11 +226,23 @@ instance Hashable TypeCheck
 instance NFData   TypeCheck
 instance Binary   TypeCheck
 
-data GetSpanInfo = GetSpanInfo
+data GetDocMap = GetDocMap
     deriving (Eq, Show, Typeable, Generic)
-instance Hashable GetSpanInfo
-instance NFData   GetSpanInfo
-instance Binary   GetSpanInfo
+instance Hashable GetDocMap
+instance NFData   GetDocMap
+instance Binary   GetDocMap
+
+data GetHieAst = GetHieAst
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetHieAst
+instance NFData   GetHieAst
+instance Binary   GetHieAst
+
+data GetBindings = GetBindings
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetBindings
+instance NFData   GetBindings
+instance Binary   GetBindings
 
 data GenerateCore = GenerateCore
     deriving (Eq, Show, Typeable, Generic)
