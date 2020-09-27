@@ -14,6 +14,7 @@ module Development.IDE.GHC.Error
   , srcSpanToLocation
   , srcSpanToRange
   , realSrcSpanToRange
+  , realSrcLocToPosition
   , srcSpanToFilename
   , zeroSpan
   , realSpan
@@ -72,8 +73,12 @@ srcSpanToRange (RealSrcSpan real) = Just $ realSrcSpanToRange real
 
 realSrcSpanToRange :: RealSrcSpan -> Range
 realSrcSpanToRange real =
-  Range (Position (srcSpanStartLine real - 1) (srcSpanStartCol real - 1))
-            (Position (srcSpanEndLine real - 1) (srcSpanEndCol real - 1))
+  Range (realSrcLocToPosition $ realSrcSpanStart real)
+        (realSrcLocToPosition $ realSrcSpanEnd   real)
+
+realSrcLocToPosition :: RealSrcLoc -> Position
+realSrcLocToPosition real =
+  Position (srcLocLine real - 1) (srcLocCol real - 1)
 
 -- | Extract a file name from a GHC SrcSpan (use message for unhelpful ones)
 -- FIXME This may not be an _absolute_ file name, needs fixing.

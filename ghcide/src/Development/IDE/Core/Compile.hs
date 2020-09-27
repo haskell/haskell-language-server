@@ -18,7 +18,8 @@ module Development.IDE.Core.Compile
   , addRelativeImport
   , mkTcModuleResult
   , generateByteCode
-  , generateAndWriteHieFile
+  , generateHieAsts
+  , writeHieFile
   , writeHiFile
   , getModSummaryFromImports
   , loadHieFile
@@ -56,7 +57,7 @@ import ErrUtils
 #endif
 
 import           Finder
-import           Development.IDE.GHC.Compat hiding (parseModule, typecheckModule)
+import           Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile)
 import qualified Development.IDE.GHC.Compat     as GHC
 import qualified Development.IDE.GHC.Compat     as Compat
 import           GhcMonad
@@ -65,7 +66,7 @@ import qualified HeaderInfo                     as Hdr
 import           HscMain                        (hscInteractive, hscSimplify)
 import           MkIface
 import           StringBuffer                   as SB
-import           TcRnMonad (tct_id, TcTyThing(AGlobal, ATcId), initTc, initIfaceLoad, tcg_th_coreplugins)
+import           TcRnMonad (tct_id, TcTyThing(AGlobal, ATcId), initTc, initIfaceLoad, tcg_th_coreplugins, tcg_binds)
 import           TcIface                        (typecheckIface)
 import           TidyPgm
 
@@ -320,7 +321,7 @@ mkTcModuleResult tcm upgradedError = do
     (iface, _) <- liftIO $ mkIfaceTc session Nothing sf details tcGblEnv
 #endif
     let mod_info = HomeModInfo iface details Nothing
-    return $ TcModuleResult tcm mod_info upgradedError
+    return $ TcModuleResult tcm mod_info upgradedError Nothing
   where
     (tcGblEnv, details) = tm_internals_ tcm
 
@@ -331,19 +332,25 @@ atomicFileWrite targetPath write = do
   (tempFilePath, cleanUp) <- newTempFileWithin dir
   (write tempFilePath >> renameFile tempFilePath targetPath) `onException` cleanUp
 
-generateAndWriteHieFile :: HscEnv -> TypecheckedModule -> BS.ByteString -> IO [FileDiagnostic]
-generateAndWriteHieFile hscEnv tcm source =
-  handleGenerationErrors dflags "extended interface generation" $ do
+generateHieAsts :: HscEnv -> TypecheckedModule -> IO ([FileDiagnostic], Maybe (HieASTs Type))
+generateHieAsts hscEnv tcm =
+  handleGenerationErrors' dflags "extended interface generation" $ do
     case tm_renamed_source tcm of
-      Just rnsrc -> do
-        hf <- runHsc hscEnv $
-          GHC.mkHieFile mod_summary (fst $ tm_internals_ tcm) rnsrc source
-        atomicFileWrite targetPath $ flip GHC.writeHieFile hf
+      Just rnsrc -> runHsc hscEnv $
+        Just <$> GHC.enrichHie (tcg_binds $ fst $ tm_internals_ tcm) rnsrc
       _ ->
-        return ()
+        return Nothing
   where
     dflags       = hsc_dflags hscEnv
-    mod_summary  = pm_mod_summary $ tm_parsed_module tcm
+
+writeHieFile :: HscEnv -> ModSummary -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
+writeHieFile hscEnv mod_summary exports ast source =
+  handleGenerationErrors dflags "extended interface write/compression" $ do
+    hf <- runHsc hscEnv $
+      GHC.mkHieFile' mod_summary exports ast source
+    atomicFileWrite targetPath $ flip GHC.writeHieFile hf
+  where
+    dflags       = hsc_dflags hscEnv
     mod_location = ms_location mod_summary
     targetPath   = Compat.ml_hie_file mod_location
 
@@ -362,6 +369,14 @@ handleGenerationErrors dflags source action =
   action >> return [] `catches`
     [ Handler $ return . diagFromGhcException source dflags
     , Handler $ return . diagFromString source DsError (noSpan "<internal>")
+    . (("Error during " ++ T.unpack source) ++) . show @SomeException
+    ]
+
+handleGenerationErrors' :: DynFlags -> T.Text -> IO (Maybe a) -> IO ([FileDiagnostic], Maybe a)
+handleGenerationErrors' dflags source action =
+  fmap ([],) action `catches`
+    [ Handler $ return . (,Nothing) . diagFromGhcException source dflags
+    , Handler $ return . (,Nothing) . diagFromString source DsError (noSpan "<internal>")
     . (("Error during " ++ T.unpack source) ++) . show @SomeException
     ]
 

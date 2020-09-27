@@ -17,7 +17,7 @@ Main functions for .hie file generation
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DataKinds #-}
-module Development.IDE.GHC.HieAst ( mkHieFile ) where
+module Development.IDE.GHC.HieAst ( mkHieFile, enrichHie ) where
 
 import Avail                      ( Avails )
 import Bag                        ( Bag, bagToList )
@@ -32,7 +32,7 @@ import HsSyn
 import HscTypes
 import Module                     ( ModuleName, ml_hs_file )
 import MonadUtils                 ( concatMapM, liftIO )
-import Name                       ( Name, nameSrcSpan, setNameLoc )
+import Name                       ( Name, nameSrcSpan )
 import SrcLoc
 import TcHsSyn                    ( hsLitType, hsPatType )
 import Type                       ( mkFunTys, Type )
@@ -739,6 +739,8 @@ instance ( a ~ GhcPass p
          , ToHie (RScoped (LHsLocalBinds a))
          , ToHie (TScoped (LHsWcType (NoGhcTc a)))
          , ToHie (TScoped (LHsSigWcType (NoGhcTc a)))
+         , ToHie (TScoped (XExprWithTySig (GhcPass p)))
+         , ToHie (TScoped (XAppTypeE (GhcPass p)))
          , Data (HsExpr a)
          , Data (HsSplice a)
          , Data (HsTupArg a)
@@ -771,9 +773,9 @@ instance ( a ~ GhcPass p
         [ toHie a
         , toHie b
         ]
-      HsAppType _sig expr ->
+      HsAppType sig expr ->
         [ toHie expr
-        -- , toHie $ TS (ResolvedScopes []) sig
+        , toHie $ TS (ResolvedScopes []) sig
         ]
       OpApp _ a b c ->
         [ toHie a
@@ -831,9 +833,9 @@ instance ( a ~ GhcPass p
         [ toHie expr
         , toHie $ map (RC RecFieldAssign) upds
         ]
-      ExprWithTySig _ expr ->
+      ExprWithTySig sig expr ->
         [ toHie expr
-        -- , toHie $ TS (ResolvedScopes [mkLScope expr]) sig
+        , toHie $ TS (ResolvedScopes [mkLScope expr]) sig
         ]
       ArithSeq _ _ info ->
         [ toHie info
@@ -1006,20 +1008,17 @@ instance ( ToHie (RFContext (Located label))
       , toHie expr
       ]
 
-removeDefSrcSpan :: Name -> Name
-removeDefSrcSpan n = setNameLoc n noSrcSpan
-
 instance ToHie (RFContext (LFieldOcc GhcRn)) where
   toHie (RFC c rhs (L nspan f)) = concatM $ case f of
     FieldOcc name _ ->
-      [ toHie $ C (RecField c rhs) (L nspan $ removeDefSrcSpan name)
+      [ toHie $ C (RecField c rhs) (L nspan name)
       ]
     XFieldOcc _ -> []
 
 instance ToHie (RFContext (LFieldOcc GhcTc)) where
   toHie (RFC c rhs (L nspan f)) = concatM $ case f of
     FieldOcc var _ ->
-      let var' = setVarName var (removeDefSrcSpan $ varName var)
+      let var' = setVarName var (varName var)
       in [ toHie $ C (RecField c rhs) (L nspan var')
          ]
     XFieldOcc _ -> []
@@ -1027,7 +1026,7 @@ instance ToHie (RFContext (LFieldOcc GhcTc)) where
 instance ToHie (RFContext (Located (AmbiguousFieldOcc GhcRn))) where
   toHie (RFC c rhs (L nspan afo)) = concatM $ case afo of
     Unambiguous name _ ->
-      [ toHie $ C (RecField c rhs) $ L nspan $ removeDefSrcSpan name
+      [ toHie $ C (RecField c rhs) $ L nspan name
       ]
     Ambiguous _name _ ->
       [ ]
@@ -1036,11 +1035,11 @@ instance ToHie (RFContext (Located (AmbiguousFieldOcc GhcRn))) where
 instance ToHie (RFContext (Located (AmbiguousFieldOcc GhcTc))) where
   toHie (RFC c rhs (L nspan afo)) = concatM $ case afo of
     Unambiguous var _ ->
-      let var' = setVarName var (removeDefSrcSpan $ varName var)
+      let var' = setVarName var (varName var)
       in [ toHie $ C (RecField c rhs) (L nspan var')
          ]
     Ambiguous var _ ->
-      let var' = setVarName var (removeDefSrcSpan $ varName var)
+      let var' = setVarName var (varName var)
       in [ toHie $ C (RecField c rhs) (L nspan var')
          ]
     XAmbiguousFieldOcc _ -> []
