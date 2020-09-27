@@ -49,6 +49,7 @@ library
         fuzzy,
         filepath,
         fingertree,
+        Glob,
         haddock-library >= 1.8,
         hashable,
         haskell-lsp-types == 0.22.*,
