@@ -46,6 +46,8 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
           diagrams-svg
           extra
           fuzzy
+          fingertree
+          Glob
           ghc-check
           gitrev
           happy

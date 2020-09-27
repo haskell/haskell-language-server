@@ -214,8 +214,7 @@ initHandler _ ide params = do
 --   Set them to avoid a warning in VS Code output.
 setHandlersIgnore :: PartialHandlers config
 setHandlersIgnore = PartialHandlers $ \_ x -> return x
-    {LSP.initializedHandler = none
-    ,LSP.responseHandler = none
+    {LSP.responseHandler = none
     }
     where none = Just $ const $ return ()
 

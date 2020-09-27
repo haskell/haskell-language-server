@@ -68,7 +68,7 @@ initialise caps mainRule getLspId toDiags wProg wIndefProg logger debouncer opti
             addIdeGlobal $ GlobalIdeOptions options
             fileStoreRules vfs
             ofInterestRules
-            fileExistsRules getLspId caps vfs
+            fileExistsRules caps vfs
             mainRule
 
 writeProfile :: IdeState -> FilePath -> IO ()
