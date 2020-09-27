@@ -222,10 +222,10 @@ suggestDeleteUnusedBinding
       findRelatedSpans
         indexedContent
         name
-        (L (RealSrcSpan l) (ValD (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
+        (L (RealSrcSpan l) (ValD _ (extractNameAndMatchesFromFunBind -> Just (lname, matches)))) =
         case lname of
           (L nLoc _name) | isTheBinding nLoc ->
-            let findSig (L (RealSrcSpan l) (SigD sig)) = findRelatedSigSpan indexedContent name l sig
+            let findSig (L (RealSrcSpan l) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
                 findSig _ = []
             in
               [extendForSpaces indexedContent $ toRange l]
@@ -253,7 +253,7 @@ suggestDeleteUnusedBinding
 
       -- Second of the tuple means there is only one match
       findRelatedSigSpan1 :: String -> Sig GhcPs -> Maybe (SrcSpan, Bool)
-      findRelatedSigSpan1 name (TypeSig lnames _) =
+      findRelatedSigSpan1 name (TypeSig _ lnames _) =
         let maybeIdx = findIndex (\(L _ id) -> isSameName id name) lnames
         in case maybeIdx of
             Nothing -> Nothing
@@ -282,14 +282,12 @@ suggestDeleteUnusedBinding
         name
         (L _ Match{m_grhss=GRHSs{grhssLocalBinds}}) = do
         case grhssLocalBinds of
-          (L _ (HsValBinds (ValBinds bag lsigs))) ->
+          (L _ (HsValBinds _ (ValBinds _ bag lsigs))) ->
             if isEmptyBag bag
             then []
             else concatMap (findRelatedSpanForHsBind indexedContent name lsigs) bag
           _ -> []
-#if MIN_GHC_API_VERSION(8,6,0)
       findRelatedSpanForMatch _ _ _ = []
-#endif
 
       findRelatedSpanForHsBind
         :: PositionIndexedString
@@ -368,12 +366,12 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     isTopLevel l = (_character . _start) l == 0
 
     exportsAs :: HsDecl p -> Maybe (ExportsAs, Located (IdP p))
-    exportsAs (ValD FunBind {fun_id})          = Just (ExportName, fun_id)
-    exportsAs (ValD (PatSynBind PSB {psb_id})) = Just (ExportPattern, psb_id)
-    exportsAs (TyClD SynDecl{tcdLName})      = Just (ExportName, tcdLName)
-    exportsAs (TyClD DataDecl{tcdLName})     = Just (ExportAll, tcdLName)
-    exportsAs (TyClD ClassDecl{tcdLName})    = Just (ExportAll, tcdLName)
-    exportsAs (TyClD FamDecl{tcdFam})        = Just (ExportAll, fdLName tcdFam)
+    exportsAs (ValD _ FunBind {fun_id})          = Just (ExportName, fun_id)
+    exportsAs (ValD _ (PatSynBind _ PSB {psb_id})) = Just (ExportPattern, psb_id)
+    exportsAs (TyClD _ SynDecl{tcdLName})      = Just (ExportName, tcdLName)
+    exportsAs (TyClD _ DataDecl{tcdLName})     = Just (ExportAll, tcdLName)
+    exportsAs (TyClD _ ClassDecl{tcdLName})    = Just (ExportAll, tcdLName)
+    exportsAs (TyClD _ FamDecl{tcdFam})        = Just (ExportAll, fdLName tcdFam)
     exportsAs _                                = Nothing
 
 suggestAddTypeAnnotationToSatisfyContraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
@@ -1039,8 +1037,8 @@ rangesForBinding _ _ = []
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
 rangesForBinding' b (L l x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
 rangesForBinding' b (L l x@IEThingAbs{}) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L l (IEThingAll x)) | showSDocUnsafe (ppr x) == b = [l]
-rangesForBinding' b (L l (IEThingWith thing _  inners labels))
+rangesForBinding' b (L l (IEThingAll _ x)) | showSDocUnsafe (ppr x) == b = [l]
+rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
     | showSDocUnsafe (ppr thing) == b = [l]
     | otherwise =
         [ l' | L l' x <- inners, showSDocUnsafe (ppr x) == b] ++

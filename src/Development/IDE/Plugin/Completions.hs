@@ -35,7 +35,7 @@ import HscTypes (HscEnv(hsc_dflags))
 import Data.Maybe
 import Data.Functor ((<&>))
 
-#if !MIN_GHC_API_VERSION(8,6,0) || defined(GHC_LIB)
+#if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
 #endif
 
@@ -65,7 +65,7 @@ produceCompletions = do
 
 -- When possible, rely on the haddocks embedded in our interface files
 -- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
-#if MIN_GHC_API_VERSION(8,6,0) && !defined(GHC_LIB)
+#if !defined(GHC_LIB)
         let parsedDeps = []
 #else
         deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file

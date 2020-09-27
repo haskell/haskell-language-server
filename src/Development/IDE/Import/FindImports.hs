@@ -155,14 +155,12 @@ notFoundErr dfs modName reason =
              { fr_pkgs_hidden = map (moduleUnitId . fst) pkg_hiddens
              , fr_mods_hidden = map (moduleUnitId . fst) mod_hiddens
              }
-#if MIN_GHC_API_VERSION(8,6,0)
         LookupUnusable unusable ->
           let unusables' = map get_unusable unusable
               get_unusable (m, ModUnusable r) = (moduleUnitId m, r)
               get_unusable (_, r) =
                 pprPanic "findLookupResult: unexpected origin" (ppr r)
            in notFound {fr_unusables = unusables'}
-#endif
         LookupNotFound suggest ->
           notFound {fr_suggestions = suggest}
 
@@ -172,8 +170,6 @@ notFound = NotFound
   , fr_pkg = Nothing
   , fr_pkgs_hidden = []
   , fr_mods_hidden = []
-#if MIN_GHC_API_VERSION(8,6,0)
   , fr_unusables = []
-#endif
   , fr_suggestions = []
   }
