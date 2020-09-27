@@ -84,6 +84,6 @@ flags:
 # allow-newer: true
 
 nix:
-  packages: [ icu libcxx zlib ]
+  packages: [icu libcxx zlib]
 
 concurrent-tests: false

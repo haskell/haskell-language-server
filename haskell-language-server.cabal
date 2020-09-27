@@ -289,6 +289,12 @@ executable haskell-language-server
     , time
     , transformers
     , unordered-containers
+    , parser-combinators
+    , pretty-simple
+    , Diff
+    , QuickCheck
+    , ghc-paths
+
 
   include-dirs:     include
   default-language: Haskell2010
@@ -374,6 +380,7 @@ test-suite func-test
     , tasty-ant-xml           >=1.1.6
     , tasty-golden
     , tasty-rerun
+    , QuickCheck
 
   hs-source-dirs:     test/functional plugins/tactics/src
 
@@ -425,3 +432,7 @@ test-suite wrapper-test
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
   ghc-options:        -Wall
+
+
+
+
