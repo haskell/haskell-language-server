@@ -16,7 +16,7 @@ Main functions for .hie file generation
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-module Development.IDE.GHC.HieAst ( mkHieFile ) where
+module Development.IDE.GHC.HieAst ( mkHieFile, enrichHie ) where
 
 import Avail                      ( Avails )
 import Bag                        ( Bag, bagToList )
@@ -31,7 +31,7 @@ import HsSyn
 import HscTypes
 import Module                     ( ModuleName, ml_hs_file )
 import MonadUtils                 ( concatMapM, liftIO )
-import Name                       ( Name, nameSrcSpan, setNameLoc )
+import Name                       ( Name, nameSrcSpan )
 import SrcLoc
 import TcHsSyn                    ( hsLitType, hsPatType )
 import Type                       ( mkFunTys, Type )
@@ -998,20 +998,17 @@ instance ( ToHie (RFContext (Located label))
       , toHie expr
       ]
 
-removeDefSrcSpan :: Name -> Name
-removeDefSrcSpan n = setNameLoc n noSrcSpan
-
 instance ToHie (RFContext (LFieldOcc GhcRn)) where
   toHie (RFC c rhs (L nspan f)) = concatM $ case f of
     FieldOcc name _ ->
-      [ toHie $ C (RecField c rhs) (L nspan $ removeDefSrcSpan name)
+      [ toHie $ C (RecField c rhs) (L nspan name)
       ]
     XFieldOcc _ -> []
 
 instance ToHie (RFContext (LFieldOcc GhcTc)) where
   toHie (RFC c rhs (L nspan f)) = concatM $ case f of
     FieldOcc var _ ->
-      let var' = setVarName var (removeDefSrcSpan $ varName var)
+      let var' = setVarName var (varName var)
       in [ toHie $ C (RecField c rhs) (L nspan var')
          ]
     XFieldOcc _ -> []
@@ -1019,7 +1016,7 @@ instance ToHie (RFContext (LFieldOcc GhcTc)) where
 instance ToHie (RFContext (Located (AmbiguousFieldOcc GhcRn))) where
   toHie (RFC c rhs (L nspan afo)) = concatM $ case afo of
     Unambiguous name _ ->
-      [ toHie $ C (RecField c rhs) $ L nspan $ removeDefSrcSpan name
+      [ toHie $ C (RecField c rhs) $ L nspan name
       ]
     Ambiguous _name _ ->
       [ ]
@@ -1028,11 +1025,11 @@ instance ToHie (RFContext (Located (AmbiguousFieldOcc GhcRn))) where
 instance ToHie (RFContext (Located (AmbiguousFieldOcc GhcTc))) where
   toHie (RFC c rhs (L nspan afo)) = concatM $ case afo of
     Unambiguous var _ ->
-      let var' = setVarName var (removeDefSrcSpan $ varName var)
+      let var' = setVarName var (varName var)
       in [ toHie $ C (RecField c rhs) (L nspan var')
          ]
     Ambiguous var _ ->
-      let var' = setVarName var (removeDefSrcSpan $ varName var)
+      let var' = setVarName var (varName var)
       in [ toHie $ C (RecField c rhs) (L nspan var')
          ]
     XAmbiguousFieldOcc _ -> []

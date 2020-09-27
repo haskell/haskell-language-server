@@ -48,6 +48,7 @@ library
         extra,
         fuzzy,
         filepath,
+        fingertree,
         haddock-library >= 1.8,
         hashable,
         haskell-lsp-types == 0.22.*,
@@ -140,6 +141,8 @@ library
         Development.IDE.LSP.Protocol
         Development.IDE.LSP.Server
         Development.IDE.Spans.Common
+        Development.IDE.Spans.AtPoint
+        Development.IDE.Spans.LocalBindings
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Exports
         Development.IDE.Types.Location
@@ -173,10 +176,7 @@ library
         Development.IDE.GHC.WithDynFlags
         Development.IDE.Import.FindImports
         Development.IDE.LSP.Notifications
-        Development.IDE.Spans.AtPoint
-        Development.IDE.Spans.Calculate
         Development.IDE.Spans.Documentation
-        Development.IDE.Spans.Type
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.CodeAction.Rules
         Development.IDE.Plugin.CodeAction.RuleTypes

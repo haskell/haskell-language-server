@@ -10,7 +10,7 @@ module Development.IDE.Plugin.Completions.Logic (
 ) where
 
 import Control.Applicative
-import Data.Char (isSpace, isUpper)
+import Data.Char (isUpper)
 import Data.Generics
 import Data.List.Extra as List hiding (stripPrefix)
 import qualified Data.Map  as Map
@@ -41,6 +41,7 @@ import Development.IDE.Core.Compile
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Plugin.Completions.Types
 import Development.IDE.Spans.Documentation
+import Development.IDE.Spans.LocalBindings
 import Development.IDE.GHC.Compat as GHC
 import Development.IDE.GHC.Error
 import Development.IDE.Types.Options
@@ -147,14 +148,17 @@ mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs}
     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
   where kind = Just compKind
-        docs' = ("*Defined in '" <> importedFrom <> "'*\n") : spanDocToMarkdown docs
+        docs' = imported : spanDocToMarkdown docs
+        imported = case importedFrom of
+          Left pos -> "*Defined at '" <> ppr pos <> "'*\n'"
+          Right mod -> "*Defined in '" <> mod <> "'*\n"
         colon = if optNewColonConvention then ": " else ":: "
 
 mkNameCompItem :: Name -> ModuleName -> Maybe Type -> Maybe Backtick -> SpanDoc -> CompItem
 mkNameCompItem origName origMod thingType isInfix docs = CI{..}
   where
     compKind = occNameToComKind typeText $ occName origName
-    importedFrom = showModName origMod
+    importedFrom = Right $ showModName origMod
     isTypeCompl = isTcOcc $ occName origName
     label = T.pack $ showGhc origName
     insertText = case isInfix of
@@ -351,15 +355,15 @@ localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{
         ]
 
     mkComp n ctyp ty =
-        CI ctyp pn thisModName ty pn Nothing doc (ctyp `elem` [CiStruct, CiClass])
+        CI ctyp pn (Right thisModName) ty pn Nothing doc (ctyp `elem` [CiStruct, CiClass])
       where
         pn = ppr n
         doc = SpanDocText (getDocumentation [pm] n) (SpanDocUris Nothing Nothing)
 
     thisModName = ppr hsmodName
 
-    ppr :: Outputable a => a -> T.Text
-    ppr = T.pack . prettyPrint
+ppr :: Outputable a => a -> T.Text
+ppr = T.pack . prettyPrint
 
 newtype WithSnippets = WithSnippets Bool
 
@@ -375,15 +379,15 @@ toggleSnippets ClientCapabilities { _textDocument } (WithSnippets with) x
 getCompletions
     :: IdeOptions
     -> CachedCompletions
-    -> ParsedModule
-    -> PositionMapping     -- ^ map current position to position in parsed module
+    -> Maybe (ParsedModule, PositionMapping)
+    -> (Bindings, PositionMapping)
     -> VFS.PosPrefixInfo
     -> ClientCapabilities
     -> WithSnippets
     -> IO [CompletionItem]
-getCompletions ideOpts cc pm pmapping prefixInfo caps withSnippets = do
-  let CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules } = cc
-      VFS.PosPrefixInfo { VFS.fullLine, VFS.prefixModule, VFS.prefixText } = prefixInfo
+getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules}
+               maybe_parsed (localBindings, bmapping) prefixInfo caps withSnippets = do
+  let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
 
@@ -392,19 +396,7 @@ getCompletions ideOpts cc pm pmapping prefixInfo caps withSnippets = do
           to                             'foo :: Int -> String ->    '
                                                               ^
       -}
-      pos =
-        let Position l c = VFS.cursorPos prefixInfo
-            typeStuff = [isSpace, (`elem` (">-." :: String))]
-            stripTypeStuff = T.dropWhileEnd (\x -> any (\f -> f x) typeStuff)
-            -- if oldPos points to
-            -- foo -> bar -> baz
-            --    ^
-            -- Then only take the line up to there, discard '-> bar -> baz'
-            partialLine = T.take c fullLine
-            -- drop characters used when writing incomplete type sigs
-            -- like '-> '
-            d = T.length fullLine - T.length (stripTypeStuff partialLine)
-        in Position l (c - d)
+      pos = VFS.cursorPos prefixInfo
 
       filtModNameCompls =
         map mkModCompl
@@ -413,9 +405,15 @@ getCompletions ideOpts cc pm pmapping prefixInfo caps withSnippets = do
 
       filtCompls = map Fuzzy.original $ Fuzzy.filter prefixText ctxCompls "" "" label False
         where
-          mcc = do
-              position' <- fromCurrentPosition pmapping pos
-              getCContext position' pm
+
+          mcc = case maybe_parsed of
+            Nothing -> Nothing
+            Just (pm, pmapping) ->
+              let PositionMapping pDelta = pmapping
+                  position' = fromDelta pDelta pos
+                  lpos = lowerRange position'
+                  hpos = upperRange position'
+              in getCContext lpos pm <|> getCContext hpos pm
 
           -- completions specific to the current context
           ctxCompls' = case mcc of
@@ -427,10 +425,26 @@ getCompletions ideOpts cc pm pmapping prefixInfo caps withSnippets = do
           ctxCompls = map (\comp -> comp { isInfix = infixCompls }) ctxCompls'
 
           infixCompls :: Maybe Backtick
-          infixCompls = isUsedAsInfix fullLine prefixModule prefixText (VFS.cursorPos prefixInfo)
+          infixCompls = isUsedAsInfix fullLine prefixModule prefixText pos
+
+          PositionMapping bDelta = bmapping
+          oldPos = fromDelta bDelta $ VFS.cursorPos prefixInfo
+          startLoc = lowerRange oldPos
+          endLoc = upperRange oldPos
+          localCompls = map (uncurry localBindsToCompItem) $ getFuzzyScope localBindings startLoc endLoc
+          localBindsToCompItem :: Name -> Maybe Type -> CompItem
+          localBindsToCompItem name typ = CI ctyp pn thisModName ty pn Nothing emptySpanDoc (not $ isValOcc occ)
+            where
+              occ = nameOccName name
+              ctyp = occNameToComKind Nothing occ
+              pn = ppr name
+              ty = ppr <$> typ
+              thisModName = case nameModule_maybe name of
+                Nothing -> Left $ nameSrcSpan name
+                Just m -> Right $ ppr m
 
           compls = if T.null prefixModule
-            then unqualCompls
+            then localCompls ++ unqualCompls
             else Map.findWithDefault [] prefixModule $ getQualCompls qualCompls
 
       filtListWith f list =
@@ -473,6 +487,7 @@ getCompletions ideOpts cc pm pmapping prefixInfo caps withSnippets = do
                             ++ filtKeywordCompls
 
   return result
+
 
 -- The supported languages and extensions
 languagesAndExts :: [T.Text]

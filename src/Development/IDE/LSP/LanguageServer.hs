@@ -106,6 +106,7 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
             initializeRequestHandler <>
             setHandlersIgnore <> -- least important
             setHandlersDefinition <> setHandlersHover <> setHandlersTypeDefinition <>
+            setHandlersDocHighlight <>
             setHandlersOutline <>
             userHandlers <>
             setHandlersNotifications <> -- absolutely critical, join them with user notifications

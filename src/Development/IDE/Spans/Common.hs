@@ -1,11 +1,11 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveAnyClass #-}
 #include "ghc-api-version.h"
 
 module Development.IDE.Spans.Common (
   showGhc
 , showName
-, listifyAllSpans
-, listifyAllSpans'
 , safeTyThingId
 , safeTyThingType
 , SpanDoc(..)
@@ -13,13 +13,16 @@ module Development.IDE.Spans.Common (
 , emptySpanDoc
 , spanDocToMarkdown
 , spanDocToMarkdownForTest
+, DocMap
+, KindMap
 ) where
 
-import Data.Data
-import qualified Data.Generics
 import Data.Maybe
 import qualified Data.Text as T
 import Data.List.Extra
+import Data.Map (Map)
+import Control.DeepSeq
+import GHC.Generics
 
 import GHC
 import Outputable hiding ((<>))
@@ -30,6 +33,10 @@ import Var
 
 import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types as H
+import Development.IDE.GHC.Orphans ()
+
+type DocMap = Map Name SpanDoc
+type KindMap = Map Name Type
 
 showGhc :: Outputable a => a -> String
 showGhc = showPpr unsafeGlobalDynFlags
@@ -39,18 +46,6 @@ showName = T.pack . prettyprint
   where
     prettyprint x = renderWithStyle unsafeGlobalDynFlags (ppr x) style
     style = mkUserStyle unsafeGlobalDynFlags neverQualify AllTheWay
-
--- | Get ALL source spans in the source.
-listifyAllSpans :: (Typeable a, Data m) => m -> [Located a]
-listifyAllSpans tcs =
-  Data.Generics.listify p tcs
-  where p (L spn _) = isGoodSrcSpan spn
--- This is a version of `listifyAllSpans` specialized on picking out
--- patterns.  It comes about since GHC now defines `type LPat p = Pat
--- p` (no top-level locations).
-listifyAllSpans' :: Typeable a
-                   => TypecheckedSource -> [Pat a]
-listifyAllSpans' tcs = Data.Generics.listify (const True) tcs
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
 safeTyThingType :: TyThing -> Maybe Type
@@ -68,13 +63,15 @@ safeTyThingId _                           = Nothing
 data SpanDoc
   = SpanDocString HsDocString SpanDocUris
   | SpanDocText   [T.Text] SpanDocUris
-  deriving (Eq, Show)
+  deriving stock (Eq, Show, Generic)
+  deriving anyclass NFData
 
 data SpanDocUris =
   SpanDocUris
   { spanDocUriDoc :: Maybe T.Text -- ^ The haddock html page
   , spanDocUriSrc :: Maybe T.Text -- ^ The hyperlinked source html page
-  } deriving (Eq, Show)
+  } deriving stock (Eq, Show, Generic)
+    deriving anyclass NFData
 
 emptySpanDoc :: SpanDoc
 emptySpanDoc = SpanDocText [] (SpanDocUris Nothing Nothing)

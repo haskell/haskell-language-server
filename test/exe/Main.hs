@@ -75,6 +75,7 @@ main = do
     , codeActionTests
     , codeLensesTests
     , outlineTests
+    , highlightTests
     , findDefinitionAndHoverTests
     , pluginSimpleTests
     , pluginParsedResultTests
@@ -117,7 +118,7 @@ initializeResponseTests = withResource acquire release tests where
     -- for now
     , chk "NO goto implementation"  _implementationProvider (Just $ GotoOptionsStatic True)
     , chk "NO find references"          _referencesProvider  Nothing
-    , chk "NO doc highlight"     _documentHighlightProvider  Nothing
+    , chk "   doc highlight"     _documentHighlightProvider  (Just True)
     , chk "   doc symbol"           _documentSymbolProvider  (Just True)
     , chk "NO workspace symbol"    _workspaceSymbolProvider  Nothing
     , chk "   code action"             _codeActionProvider $ Just $ CodeActionOptionsStatic True
@@ -2193,7 +2194,7 @@ findDefinitionAndHoverTests = let
   opL18  = Position 22 22  ;  opp    = [mkR  22 13   22 17]
   aL18   = Position 22 20  ;  apmp   = [mkR  22 10   22 11]
   b'L19  = Position 23 13  ;  bp     = [mkR  23  6   23  7]
-  xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["Data.Text.pack", ":: String -> Text"]]
+  xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["pack", ":: String -> Text", "Data.Text"]]
   clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
   clL25  = Position 29  9
   eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in 'GHC.Num'"]]
@@ -2227,7 +2228,7 @@ findDefinitionAndHoverTests = let
   mkFindTests
   --      def    hover  look       expect
   [ test  yes    yes    fffL4      fff           "field in record definition"
-  , test  broken broken fffL8      fff           "field in record construction     #71"
+  , test  yes    yes    fffL8      fff           "field in record construction     #71"
   , test  yes    yes    fffL14     fff           "field name used as accessor"          -- 120 in Calculate.hs
   , test  yes    yes    aaaL14     aaa           "top-level name"                       -- 120
   , test  yes    yes    dcL7       tcDC          "data constructor record         #247"
@@ -2249,16 +2250,20 @@ findDefinitionAndHoverTests = let
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
   , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #246"
-  , test  yes    yes    spaceL37   space        "top-level fn on space #315"
+#if MIN_GHC_API_VERSION(8,10,0)
+  , test  yes    yes    spaceL37   space         "top-level fn on space #315"
+#else
+  , test  yes    broken spaceL37   space         "top-level fn on space #315"
+#endif
   , test  no     yes    docL41     doc           "documentation                     #7"
   , test  no     yes    eitL40     kindE         "kind of Either                  #273"
   , test  no     yes    intL40     kindI         "kind of Int                     #273"
   , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #273"
-  , test  no     yes    intL41     litI          "literal Int  in hover info      #274"
-  , test  no     yes    chrL36     litC          "literal Char in hover info      #274"
-  , test  no     yes    txtL8      litT          "literal Text in hover info      #274"
-  , test  no     yes    lstL43     litL          "literal List in hover info      #274"
-  , test  no     yes    docL41     constr        "type constraint in hover info   #283"
+  , test  no     broken intL41     litI          "literal Int  in hover info      #274"
+  , test  no     broken chrL36     litC          "literal Char in hover info      #274"
+  , test  no     broken txtL8      litT          "literal Text in hover info      #274"
+  , test  no     broken lstL43     litL          "literal List in hover info      #274"
+  , test  no     broken docL41     constr        "type constraint in hover info   #283"
   , test  broken broken outL45     outSig        "top-level signature             #310"
   , test  broken broken innL48     innSig        "inner     signature             #310"
   , test  no     yes    cccL17     docLink       "Haddock html links"
@@ -2524,6 +2529,7 @@ completionTests :: TestTree
 completionTests
   = testGroup "completion"
     [ testGroup "non local" nonLocalCompletionTests
+    , testGroup "topLevel" topLevelCompletionTests
     , testGroup "local" localCompletionTests
     , testGroup "other" otherCompletionTests
     ]
@@ -2542,8 +2548,8 @@ completionTest name src pos expected = testSessionWait name $ do
             when expectedDocs $
                 assertBool ("Missing docs: " <> T.unpack _label) (isJust _documentation)
 
-localCompletionTests :: [TestTree]
-localCompletionTests = [
+topLevelCompletionTests :: [TestTree]
+topLevelCompletionTests = [
     completionTest
         "variable"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
@@ -2584,6 +2590,67 @@ localCompletionTests = [
         ["data XxRecord = XyRecord { x:: String, y:: Int}", "bar = Xy" ]
         (Position 1 19)
         [("XyRecord", CiConstructor, False, True)]
+    ]
+
+localCompletionTests :: [TestTree]
+localCompletionTests = [
+    completionTest
+        "argument"
+        ["bar (Just abcdef) abcdefg = abcd"]
+        (Position 0 32)
+        [("abcdef", CiFunction, True, False),
+         ("abcdefg", CiFunction , True, False)
+        ],
+    completionTest
+        "let"
+        ["bar = let (Just abcdef) = undefined"
+        ,"          abcdefg = let abcd = undefined in undefined"
+        ,"        in abcd"
+        ]
+        (Position 2 15)
+        [("abcdef", CiFunction, True, False),
+         ("abcdefg", CiFunction , True, False)
+        ],
+    completionTest
+        "where"
+        ["bar = abcd"
+        ,"  where (Just abcdef) = undefined"
+        ,"        abcdefg = let abcd = undefined in undefined"
+        ]
+        (Position 0 10)
+        [("abcdef", CiFunction, True, False),
+         ("abcdefg", CiFunction , True, False)
+        ],
+    completionTest
+        "do/1"
+        ["bar = do"
+        ,"  Just abcdef <- undefined"
+        ,"  abcd"
+        ,"  abcdefg <- undefined"
+        ,"  pure ()"
+        ]
+        (Position 2 6)
+        [("abcdef", CiFunction, True, False)
+        ],
+    completionTest
+        "do/2"
+        ["bar abcde = do"
+        ,"    Just [(abcdef,_)] <- undefined"
+        ,"    abcdefg <- undefined"
+        ,"    let abcdefgh = undefined"
+        ,"        (Just [abcdefghi]) = undefined"
+        ,"    abcd"
+        ,"  where"
+        ,"    abcdefghij = undefined"
+        ]
+        (Position 5 8)
+        [("abcde", CiFunction, True, False)
+        ,("abcdefghij", CiFunction, True, False)
+        ,("abcdef", CiFunction, True, False)
+        ,("abcdefg", CiFunction, True, False)
+        ,("abcdefgh", CiFunction, True, False)
+        ,("abcdefghi", CiFunction, True, False)
+        ]
     ]
 
 nonLocalCompletionTests :: [TestTree]
@@ -2635,6 +2702,76 @@ otherCompletionTests = [
       (Position 3 11)
       [("Integer", CiStruct, True, True)]
   ]
+
+highlightTests :: TestTree
+highlightTests = testGroup "highlight"
+  [ testSessionWait "value" $ do
+    doc <- createDoc "A.hs" "haskell" source
+    _ <- waitForDiagnostics
+    highlights <- getHighlights doc (Position 2 2)
+    liftIO $ highlights @?=
+            [ DocumentHighlight (R 1 0 1 3) (Just HkRead)
+            , DocumentHighlight (R 2 0 2 3) (Just HkWrite)
+            , DocumentHighlight (R 3 6 3 9) (Just HkRead)
+            , DocumentHighlight (R 4 22 4 25) (Just HkRead)
+            ]
+  , testSessionWait "type" $ do
+    doc <- createDoc "A.hs" "haskell" source
+    _ <- waitForDiagnostics
+    highlights <- getHighlights doc (Position 1 8)
+    liftIO $ highlights @?=
+            [ DocumentHighlight (R 1 7 1 10) (Just HkRead)
+            , DocumentHighlight (R 2 11 2 14) (Just HkRead)
+            ]
+  , testSessionWait "local" $ do
+    doc <- createDoc "A.hs" "haskell" source
+    _ <- waitForDiagnostics
+    highlights <- getHighlights doc (Position 5 5)
+    liftIO $ highlights @?=
+            [ DocumentHighlight (R 5 4 5 7) (Just HkWrite)
+            , DocumentHighlight (R 5 10 5 13) (Just HkRead)
+            , DocumentHighlight (R 6 12 6 15) (Just HkRead)
+            ]
+  , testSessionWait "record" $ do
+    doc <- createDoc "A.hs" "haskell" recsource
+    _ <- waitForDiagnostics
+    highlights <- getHighlights doc (Position 3 15)
+    liftIO $ highlights @?=
+      -- Span is just the .. on 8.10, but Rec{..} before
+#if MIN_GHC_API_VERSION(8,10,0)
+            [ DocumentHighlight (R 3 8 3 10) (Just HkWrite)
+#else
+            [ DocumentHighlight (R 3 4 3 11) (Just HkWrite)
+#endif
+            , DocumentHighlight (R 3 14 3 20) (Just HkRead)
+            ]
+    highlights <- getHighlights doc (Position 2 17)
+    liftIO $ highlights @?=
+            [ DocumentHighlight (R 2 17 2 23) (Just HkWrite)
+      -- Span is just the .. on 8.10, but Rec{..} before
+#if MIN_GHC_API_VERSION(8,10,0)
+            , DocumentHighlight (R 3 8 3 10) (Just HkRead)
+#else
+            , DocumentHighlight (R 3 4 3 11) (Just HkRead)
+#endif
+            ]
+  ]
+  where
+    source = T.unlines
+      ["module Highlight where"
+      ,"foo :: Int"
+      ,"foo = 3 :: Int"
+      ,"bar = foo"
+      ,"  where baz = let x = foo in x"
+      ,"baz arg = arg + x"
+      ,"  where x = arg"
+      ]
+    recsource = T.unlines
+      ["{-# LANGUAGE RecordWildCards #-}"
+      ,"module Highlight where"
+      ,"data Rec = Rec { field1 :: Int, field2 :: Char }"
+      ,"foo Rec{..} = field2 + field1"
+      ]
 
 outlineTests :: TestTree
 outlineTests = testGroup
