@@ -12,6 +12,8 @@ import           Development.IDE.LSP.Server
 import qualified Language.Haskell.LSP.Core        as LSP
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types       as LSP
+import qualified Language.Haskell.LSP.Messages    as LSP
+import qualified Language.Haskell.LSP.Types.Capabilities as LSP
 
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service
@@ -21,6 +23,7 @@ import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
 
 import           Control.Monad.Extra
+import qualified Data.Aeson                       as A
 import           Data.Foldable                    as F
 import           Data.Maybe
 import qualified Data.HashMap.Strict              as M
@@ -28,7 +31,7 @@ import qualified Data.HashSet                     as S
 import qualified Data.Text                        as Text
 
 import           Development.IDE.Core.FileStore   (setSomethingModified, setFileModified, typecheckParents)
-import           Development.IDE.Core.FileExists  (modifyFileExists)
+import           Development.IDE.Core.FileExists  (modifyFileExists, watchedGlobs)
 import           Development.IDE.Core.OfInterest
 
 
@@ -72,6 +75,8 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
                 logInfo (ideLogger ide) $ "Closed text document: " <> getUri _uri
     ,LSP.didChangeWatchedFilesNotificationHandler = withNotification (LSP.didChangeWatchedFilesNotificationHandler x) $
         \_ ide (DidChangeWatchedFilesParams fileEvents) -> do
+            -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
+            -- what we do with them
             let events =
                     mapMaybe
                         (\(FileEvent uri ev) ->
@@ -98,4 +103,45 @@ setHandlersNotifications = PartialHandlers $ \WithMessage{..} x -> return x
             logInfo (ideLogger ide) $ "Configuration changed: " <> msg
             modifyClientSettings ide (const $ Just cfg)
             setSomethingModified ide
+
+    -- Initialized handler, good time to dynamically register capabilities
+    ,LSP.initializedHandler = withNotification (LSP.initializedHandler x) $ \lsp@LSP.LspFuncs{..} ide _ -> do
+        let watchSupported = case () of
+              _ | LSP.ClientCapabilities{_workspace} <- clientCapabilities
+                , Just LSP.WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
+                , Just LSP.DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
+                , Just True <- _dynamicRegistration
+                  -> True
+                | otherwise -> False
+
+        if watchSupported
+        then registerWatcher lsp ide
+        else logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
+
     }
+    where
+        registerWatcher LSP.LspFuncs{..} ide = do
+            lspId <- getNextReqId
+            opts <- getIdeOptionsIO $ shakeExtras ide
+            let
+              req = RequestMessage "2.0" lspId ClientRegisterCapability regParams
+              regParams    = RegistrationParams (List [registration])
+              -- The registration ID is arbitrary and is only used in case we want to deregister (which we won't).
+              -- We could also use something like a random UUID, as some other servers do, but this works for
+              -- our purposes.
+              registration = Registration "globalFileWatches"
+                                          WorkspaceDidChangeWatchedFiles
+                                          (Just (A.toJSON regOptions))
+              regOptions =
+                DidChangeWatchedFilesRegistrationOptions { _watchers = List watchers }
+              -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind
+              watchKind = WatchKind { _watchCreate = True, _watchChange = False, _watchDelete = True}
+              -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
+              -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
+              -- followed by a file with an extension 'hs'.
+              watcher glob = FileSystemWatcher { _globPattern = glob, _kind = Just watchKind }
+              -- We use multiple watchers instead of one using '{}' because lsp-test doesn't
+              -- support that: https://github.com/bubba/lsp-test/issues/77
+              watchers = [ watcher glob | glob <- watchedGlobs opts ]
+
+            sendFunc $ LSP.ReqRegisterCapability req

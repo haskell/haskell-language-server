@@ -582,24 +582,16 @@ watchedFilesTests = testGroup "watched files"
       _doc <- createDoc "A.hs" "haskell" "{-#LANGUAGE NoImplicitPrelude #-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
-      -- Expect 4 subscriptions (A does not get any because it's VFS):
-      --  - /path-to-workspace/hie.yaml
-      --  - /path-to-workspace/WatchedFilesMissingModule.hs
-      --  - /path-to-workspace/WatchedFilesMissingModule.lhs
-      --  - /path-to-workspace/src/WatchedFilesMissingModule.hs
-      --  - /path-to-workspace/src/WatchedFilesMissingModule.lhs
-      liftIO $ length watchedFileRegs @?= 5
+      -- Expect 1 subscription: we only ever send one
+      liftIO $ length watchedFileRegs @?= 1
 
   , testSession' "non workspace file" $ \sessionDir -> do
       liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-i/tmp\", \"A\", \"WatchedFilesMissingModule\"]}}"
       _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
-      -- Expect 2 subscriptions (/tmp does not get any as it is out of the workspace):
-      --  - /path-to-workspace/hie.yaml
-      --  - /path-to-workspace/WatchedFilesMissingModule.hs
-      --  - /path-to-workspace/WatchedFilesMissingModule.lhs
-      liftIO $ length watchedFileRegs @?= 3
+      -- Expect 1 subscription: we only ever send one
+      liftIO $ length watchedFileRegs @?= 1
 
   -- TODO add a test for didChangeWorkspaceFolder
   ]
