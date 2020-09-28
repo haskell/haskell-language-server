@@ -280,21 +280,44 @@ buildDataCon hy dc apps = do
         (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
     $ fmap unLoc sgs
 
+
+-- | We need to make sure that we don't try to unify any skolems.
+-- To see why, consider the case:
+--
+-- uhh :: (Int -> Int) -> a
+-- uhh f = _
+--
+-- If we were to apply 'f', then we would try to unify 'Int' and 'a'.
+-- This is fine from the perspective of 'tcUnifyTy', but will cause obvious
+-- type errors in our use case. Therefore, we need to ensure that our
+-- 'TCvSubst' doesn't try to unify skolems.
+checkSkolemUnification :: CType -> CType -> TCvSubst -> RuleM ()
+checkSkolemUnification t1 t2 subst = do
+    skolems <- gets ts_skolems
+    case traverse (lookupTyVar subst) skolems of
+        Just _ -> throwError (UnificationError t1 t2)
+        Nothing -> pure ()
+
 ------------------------------------------------------------------------------
 -- | Attempt to unify two types.
-unify :: CType -> CType -> RuleM TCvSubst
-unify (CType t1) (CType t2) = case tcUnifyTy t1 t2 of
-  Just unifier -> pure unifier
-  Nothing -> throwError (UnificationError (CType t1) (CType t2))
+unify :: CType -> CType -> RuleM ()
+unify t1 t2 =
+    case tcUnifyTy (unCType t1) (unCType t2) of
+      Just subst -> do
+          checkSkolemUnification t1 t2 subst
+          modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
+      Nothing -> throwError (UnificationError t1 t2)
 
 oneWayUnifyRule
     :: [TyVar]  -- ^ binders
     -> CType     -- ^ type to instiate
     -> CType     -- ^ at this type
-    -> RuleM TCvSubst
+    -> RuleM ()
 oneWayUnifyRule binders t1 t2 =
   case oneWayUnify binders (unCType t1) (unCType t2) of
-    Just subst -> pure subst
+    Just subst -> do
+        checkSkolemUnification t1 t2 subst
+        modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
     Nothing -> throwError $ UnificationError t1 t2
 
 

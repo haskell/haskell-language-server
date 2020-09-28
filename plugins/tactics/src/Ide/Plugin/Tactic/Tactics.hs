@@ -153,13 +153,15 @@ instantiate func (CType ty) = rule $ \jdg@(Judgement _ (CType g)) -> do
   -- TODO(sandy): We need to get available from the type sig and compare
   -- against _ctx
   let (binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
-  case oneWayUnify binders res g of
-    Just subst ->
-      -- TODO(sandy): How does this affect the judgment wrt our new ununified
-      -- tyvars?
-      let (_fresh_vars, ty') = instantiateType $ substTy subst ty
-       in applySpecific func (CType ty') jdg
-    Nothing -> throwError $ GoalMismatch  "instantiate" $ CType g
+  oneWayUnifyRule binders (CType res) (CType g)
+  applySpecific func (CType ty) jdg
+  -- case oneWayUnify binders res g of
+  --   Just subst ->
+  --     -- TODO(sandy): How does this affect the judgment wrt our new ununified
+  --     -- tyvars?
+  --     let (_fresh_vars, ty') = instantiateType $ substTy subst ty
+  --      in applySpecific func (CType ty') jdg
+    -- Nothing -> throwError $ GoalMismatch  "instantiate" $ CType g
 
 
 ------------------------------------------------------------------------------
