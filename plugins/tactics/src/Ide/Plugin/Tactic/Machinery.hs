@@ -30,6 +30,7 @@ import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
+import           Ide.Plugin.Tactic.GHC (oneWayUnify)
 import           Name
 import           Outputable hiding ((<>))
 import           Refinery.Tactic
@@ -285,6 +286,16 @@ unify :: CType -> CType -> RuleM TCvSubst
 unify (CType t1) (CType t2) = case tcUnifyTy t1 t2 of
   Just unifier -> pure unifier
   Nothing -> throwError (UnificationError (CType t1) (CType t2))
+
+oneWayUnifyRule
+    :: [TyVar]  -- ^ binders
+    -> CType     -- ^ type to instiate
+    -> CType     -- ^ at this type
+    -> RuleM TCvSubst
+oneWayUnifyRule binders t1 t2 =
+  case oneWayUnify binders (unCType t1) (unCType t2) of
+    Just subst -> pure subst
+    Nothing -> throwError $ UnificationError t1 t2
 
 
 ------------------------------------------------------------------------------
