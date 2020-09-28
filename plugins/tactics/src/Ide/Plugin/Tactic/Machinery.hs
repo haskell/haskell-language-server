@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -20,11 +22,14 @@ import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
+import           GHC.Generics
 
 import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
@@ -94,15 +99,24 @@ buildHypothesis
 
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
-data Judgement = Judgement
-  { jHypothesis :: Map OccName CType
-  , jGoal       :: CType
+data Judgement' a = Judgement
+  { _jHypothesis :: Map OccName a
+  , _jDestructed :: Set OccName
+  , _jGoal       :: a
   }
-  deriving (Eq, Ord, Generic)
+  deriving stock (Eq, Ord, Generic, Functor)
+
+jHypothesis :: Judgement' a -> Map OccName a
+jHypothesis = _jHypothesis
+
+jGoal :: Judgement' a -> a
+jGoal = _jGoal
+
+type Judgement = Judgement' CType
 
 
 substJdg :: TCvSubst -> Judgement -> Judgement
-substJdg subst (Judgement hys goal) = Judgement (fmap (substCTy subst) hys) (substCTy subst goal)
+substJdg = fmap . substCTy
 
 ------------------------------------------------------------------------------
 -- | Reasons a tactic might fail.
@@ -164,7 +178,7 @@ newJudgement
     -> CType              -- ^ Sub-goal type
     -> m Judgement
 newJudgement hy g = do
-  pure $ Judgement hy g
+  pure $ Judgement hy mempty g
 
 
 ------------------------------------------------------------------------------

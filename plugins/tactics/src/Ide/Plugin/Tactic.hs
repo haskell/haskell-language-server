@@ -173,7 +173,7 @@ provide tc name plId uri range _ = do
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp plId uri range jdg@(Judgement _ (CType g)) =
+filterGoalType p tp plId uri range jdg@(Judgement _ _ (CType g)) =
   case p g of
     True  -> tp plId uri range jdg
     False -> pure []
@@ -186,7 +186,7 @@ filterBindingType
     :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
-filterBindingType p tp plId uri range jdg@(Judgement hys (CType g)) =
+filterBindingType p tp plId uri range jdg@(Judgement hys _ (CType g)) =
   fmap join $ for (M.toList hys) $ \(occ, CType ty) ->
     case p g ty of
       True  -> tp occ ty plId uri range jdg
@@ -229,7 +229,7 @@ judgementForHole state nfp range = runMaybeT $ do
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
 
   let hyps = hypothesisFromBindings rss binds
-  pure (amapping, b2, resulting_range, Judgement hyps $ CType goal)
+  pure (amapping, b2, resulting_range, Judgement hyps mempty $ CType goal)
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams

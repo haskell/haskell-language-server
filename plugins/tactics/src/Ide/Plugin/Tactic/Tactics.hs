@@ -48,7 +48,7 @@ bvar' = bvar . fromString . occNameString
 ------------------------------------------------------------------------------
 -- | Use something in the hypothesis to fill the hole.
 assumption :: TacticsM ()
-assumption = rule $ \(Judgement hy g) ->
+assumption = rule $ \(Judgement hy _ g) ->
   case find ((== g) . snd) $ toList hy of
     Just (v, _) -> pure $ noLoc $ var' v
     Nothing -> throwError $ GoalMismatch "assumption" g
@@ -57,7 +57,7 @@ assumption = rule $ \(Judgement hy g) ->
 ------------------------------------------------------------------------------
 -- | Introduce a lambda.
 intro :: TacticsM ()
-intro = rule $ \(Judgement hy g) ->
+intro = rule $ \(Judgement hy _ g) ->
   case splitFunTy_maybe $ unCType g of
     Just (a, b) -> do
       v <- pure $ mkGoodName (getInScope hy) a
@@ -68,7 +68,7 @@ intro = rule $ \(Judgement hy g) ->
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = rule $ \(Judgement hy g) ->
+intros = rule $ \(Judgement hy _ g) ->
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intro" g
     (as, b) -> do
@@ -84,7 +84,7 @@ intros = rule $ \(Judgement hy g) ->
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> TacticsM ()
-destruct' f term = rule $ \(Judgement hy g) -> do
+destruct' f term = rule $ \(Judgement hy _ g) -> do
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
     Just (_, t) ->
@@ -116,7 +116,7 @@ destruct = destruct' $ const subgoal
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
-homo = destruct' $ \dc (Judgement hy (CType g)) ->
+homo = destruct' $ \dc (Judgement hy _ (CType g)) ->
   buildDataCon hy dc (snd $ splitAppTys g)
 
 
@@ -129,13 +129,13 @@ solve t = t >> throwError NoProgress
 ------------------------------------------------------------------------------
 -- | Apply a function from the hypothesis.
 apply :: TacticsM ()
-apply = rule $ \jdg@(Judgement hy g) -> do
+apply = rule $ \jdg@(Judgement hy _ g) -> do
   case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) $ toList hy of
     Just (func, ty) -> applySpecific func ty jdg
     Nothing -> throwError $ GoalMismatch "apply" g
 
 apply' :: OccName -> TacticsM ()
-apply' func = rule $ \(Judgement hys g) ->
+apply' func = rule $ \(Judgement hys _ g) ->
     case M.lookup func hys of
       Just (CType ty) -> do
           let (args, ret) = splitFunTys ty
@@ -147,7 +147,7 @@ apply' func = rule $ \(Judgement hys g) ->
       Nothing -> throwError $ GoalMismatch "apply" g
 
 applySpecific :: OccName -> CType -> Judgement -> RuleM (LHsExpr GhcPs)
-applySpecific func (CType ty) (Judgement hy _) = do
+applySpecific func (CType ty) (Judgement hy _ _) = do
   let (args, _) = splitFunTys ty
   sgs <- traverse (newSubgoal hy . CType) args
   pure . noLoc
@@ -156,7 +156,7 @@ applySpecific func (CType ty) (Judgement hy _) = do
 
 
 instantiate :: OccName -> CType -> TacticsM ()
-instantiate func (CType ty) = rule $ \jdg@(Judgement _ (CType g)) -> do
+instantiate func (CType ty) = rule $ \jdg@(Judgement _ _ (CType g)) -> do
   -- TODO(sandy): We need to get available from the type sig and compare
   -- against _ctx
   let (_binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
@@ -175,7 +175,7 @@ instantiate func (CType ty) = rule $ \jdg@(Judgement _ (CType g)) -> do
 -- | Introduce a data constructor, splitting a goal into the datacon's
 -- constituent sub-goals.
 split :: TacticsM ()
-split = rule $ \(Judgement hy g) ->
+split = rule $ \(Judgement hy _ g) ->
   case splitTyConApp_maybe $ unCType g of
     Just (tc, apps) ->
       case tyConDataCons tc of
@@ -204,7 +204,7 @@ attemptOn tac getNames = matching (choice . fmap (\s -> tac s) . getNames)
 ------------------------------------------------------------------------------
 -- | Automatically solve a goal.
 auto :: TacticsM ()
-auto = TacticT $ StateT $ \(Judgement _ goal) -> runStateT (unTacticT $ auto' 5) (Judgement M.empty goal)
+auto = TacticT $ StateT $ \(Judgement _ _ goal) -> runStateT (unTacticT $ auto' 5) (Judgement mempty mempty goal)
 
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
@@ -218,10 +218,10 @@ auto' n = do
            ]
   where
     functionNames :: Judgement -> [OccName]
-    functionNames (Judgement hys _) = M.keys $ M.filter (isFunction . unCType) hys
+    functionNames (Judgement hys _ _) = M.keys $ M.filter (isFunction . unCType) hys
 
     algebraicNames :: Judgement -> [OccName]
-    algebraicNames (Judgement hys _) = M.keys $ M.filter (isJust . algebraicTyCon . unCType) hys
+    algebraicNames (Judgement hys _ _) = M.keys $ M.filter (isJust . algebraicTyCon . unCType) hys
 
 ------------------------------------------------------------------------------
 -- | Run a tactic, and subsequently apply auto if it completes. If not, just
