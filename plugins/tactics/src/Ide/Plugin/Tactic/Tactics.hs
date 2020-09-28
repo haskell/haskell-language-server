@@ -11,43 +11,27 @@ module Ide.Plugin.Tactic.Tactics
 
 
 import           Control.Applicative
-import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Control.Monad.Except (throwError)
-import Data.Coerce
+import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Function
 import           Data.List
-import           Data.Maybe
 import qualified Data.Map as M
-import           Data.Traversable
-import           DataCon
+import           Data.Maybe
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
-import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
-import           GHC.SourceGen.Pat
+import           Ide.Plugin.Tactic.CodeGen
 import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Types
 import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Naming
+import           Ide.Plugin.Tactic.Types
 
-import           Name
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
-
-
-------------------------------------------------------------------------------
--- | Like 'var', but works over standard GHC 'OccName's.
-var' :: Var a => OccName -> a
-var' = var . fromString . occNameString
-
-------------------------------------------------------------------------------
--- | Like 'bvar', but works over standard GHC 'OccName's.
-bvar' :: BVar a => OccName -> a
-bvar' = bvar . fromString . occNameString
 
 
 ------------------------------------------------------------------------------
@@ -86,49 +70,21 @@ intros = rule $ \(Judgement hy _ g) ->
 
 
 ------------------------------------------------------------------------------
--- | Combinator for performign case splitting, and running sub-rules on the
--- resulting matches.
-destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> TacticsM ()
-destruct' f term = rule $ \jdg@(Judgement hy _ g) -> do
-  case find ((== term) . fst) $ toList hy of
-    Nothing -> throwError $ UndefinedHypothesis term
-    Just (_, t) ->
-      case splitTyConApp_maybe $ unCType t of
-        Nothing -> throwError $ GoalMismatch "destruct" g
-        Just (tc, apps) -> do
-          fmap noLoc
-              $ case' (var' term)
-              <$> do
-            for (tyConDataCons tc) $ \dc -> do
-              let args = dataConInstArgTys dc apps
-              names <- mkManyGoodNames hy args
-
-              let pat :: Pat GhcPs
-                  pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
-                      $ fmap bvar' names
-
-              let j = destructing term
-                    $ introducing (zip names $ coerce args)
-                    $ withNewGoal g jdg
-              sg <- f dc j
-              pure $ match [pat] $ unLoc sg
-
-
-------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
 destruct name = do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
-    False -> destruct' (const subgoal) name
+    False -> rule $ \jdg -> destruct' (const subgoal) name jdg
 
 
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
-homo = destruct' $ \dc (Judgement hy _ (CType g)) ->
-  buildDataCon hy dc (snd $ splitAppTys g)
+homo = rule .  destruct'
+  (\dc (Judgement hy _ (CType g)) ->
+    buildDataCon hy dc (snd $ splitAppTys g))
 
 
 ------------------------------------------------------------------------------
@@ -136,6 +92,7 @@ homo = destruct' $ \dc (Judgement hy _ (CType g)) ->
 -- backtracking.
 solve :: TacticsM () -> TacticsM ()
 solve t = t >> throwError NoProgress
+
 
 ------------------------------------------------------------------------------
 -- | Apply a function from the hypothesis.
@@ -156,6 +113,7 @@ apply' func = rule $ \(Judgement hys _ g) ->
                . foldl' (@@) (var' func)
                $ fmap unLoc sgs
       Nothing -> throwError $ GoalMismatch "apply" g
+
 
 applySpecific :: OccName -> CType -> Judgement -> RuleM (LHsExpr GhcPs)
 applySpecific func (CType ty) (Judgement hy _ _) = do
@@ -196,14 +154,17 @@ deepen depth = do
   one
   deepen $ depth - 1
 
+
 ------------------------------------------------------------------------------
 -- | @matching f@ takes a function from a judgement to a @Tactic@, and
 -- then applies the resulting @Tactic@.
 matching :: (Judgement -> TacticsM ()) -> TacticsM ()
 matching f = TacticT $ StateT $ \s -> runStateT (unTacticT $ f $ s) s
 
+
 attemptOn :: (a -> TacticsM ()) -> (Judgement -> [a]) -> TacticsM ()
 attemptOn tac getNames = matching (choice . fmap (\s -> tac s) . getNames)
+
 
 ------------------------------------------------------------------------------
 -- | Automatically solve a goal.
@@ -226,6 +187,7 @@ auto' n = do
 
     algebraicNames :: Judgement -> [OccName]
     algebraicNames (Judgement hys _ _) = M.keys $ M.filter (isJust . algebraicTyCon . unCType) hys
+
 
 ------------------------------------------------------------------------------
 -- | Run a tactic, and subsequently apply auto if it completes. If not, just

@@ -16,25 +16,20 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
-import           Control.Monad.Except (throwError)
-import           Control.Monad.Reader
-import           Control.Monad.State (gets, modify)
-import           Data.Coerce
-import           Data.Either
-import           Data.List
-import           Data.Map (Map)
-import           Data.Maybe
-import           DataCon
-import           Development.IDE.GHC.Compat
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Types
-
-import           GHC.SourceGen.Overloaded
-import           Name
-import           Refinery.Tactic
-import           TcType
-import           Type
-import           Unify
+import Control.Monad.Except (throwError)
+import Control.Monad.Reader
+import Control.Monad.State (gets, modify)
+import Data.Coerce
+import Data.Either
+import Data.Map (Map)
+import Data.Maybe
+import Development.IDE.GHC.Compat
+import Ide.Plugin.Tactic.Judgements
+import Ide.Plugin.Tactic.Types
+import Refinery.Tactic
+import TcType
+import Type
+import Unify
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -52,6 +47,7 @@ newSubgoal hy g = do
     j <- newJudgement hy g
     unifier <- gets ts_unifier
     subgoal $ substJdg unifier j
+
 
 ------------------------------------------------------------------------------
 -- | Create a new judgment
@@ -82,22 +78,6 @@ runTactic ctx jdg t =
         let soln = listToMaybe $ filter (null . snd) solns
         in Right $ fst $ fromMaybe (head solns) soln
 
-
-------------------------------------------------------------------------------
--- | Construct a data con with subgoals for each field.
-buildDataCon
-    :: Map OccName CType  -- ^ In-scope bindings
-    -> DataCon            -- ^ The data con to build
-    -> [Type]             -- ^ Type arguments for the data con
-    -> RuleM (LHsExpr GhcPs)
-buildDataCon hy dc apps = do
-  let args = dataConInstArgTys dc apps
-  sgs <- traverse (newSubgoal hy . CType) args
-  pure
-    . noLoc
-    . foldl' (@@)
-        (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
-    $ fmap unLoc sgs
 
 
 ------------------------------------------------------------------------------
