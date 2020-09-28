@@ -9,7 +9,6 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
-
 import           Control.Applicative
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State.Strict (StateT(..), runStateT)
@@ -149,6 +148,4 @@ auto' n = do
 
     algebraicNames :: Judgement -> [OccName]
     algebraicNames (Judgement hys _ _) = M.keys $ M.filter (isJust . algebraicTyCon . unCType) hys
-
-
 

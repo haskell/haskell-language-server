@@ -21,7 +21,6 @@ import Control.Monad.Reader
 import Control.Monad.State (gets, modify)
 import Data.Coerce
 import Data.Either
-import Data.Map (Map)
 import Data.Maybe
 import Development.IDE.GHC.Compat
 import Ide.Plugin.Tactic.Judgements
@@ -45,17 +44,6 @@ newSubgoal
 newSubgoal j = do
     unifier <- gets ts_unifier
     subgoal $ substJdg unifier j
-
-
-------------------------------------------------------------------------------
--- | Create a new judgment
-newJudgement
-    ::  Monad m
-    => Map OccName CType  -- ^ Available bindings
-    -> CType              -- ^ Sub-goal type
-    -> m Judgement
-newJudgement hy g = do
-  pure $ Judgement hy mempty g
 
 
 ------------------------------------------------------------------------------
