@@ -2660,6 +2660,12 @@ nonLocalCompletionTests =
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
       [ ("head", CiFunction, True, True)
+      ],
+    completionTest
+      "duplicate import"
+      ["module A where", "import Data.List", "import Data.List", "f = perm"]
+      (Position 3 8)
+      [ ("permutations", CiFunction, False, False)
       ]
   ]
 
