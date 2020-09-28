@@ -26,7 +26,6 @@ import           Language.Haskell.LSP.Types
 import           Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import           Outputable
 import           Retrie.ExactPrint hiding (parseExpr)
-import           Text.Regex.TDFA.Text()
 
 
 ------------------------------------------------------------------------------

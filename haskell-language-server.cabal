@@ -77,6 +77,43 @@ library
 
   default-language: Haskell2010
 
+library hls-tactics
+  import:           agpl, common-deps
+  hs-source-dirs:   plugins/tactics/src
+  exposed-modules:
+    Ide.Plugin.Tactic
+    Ide.Plugin.Tactic.Types
+    Ide.Plugin.Tactic.Machinery
+    Ide.Plugin.Tactic.Tactics
+    Ide.Plugin.Tactic.BindSites
+    Ide.Plugin.Tactic.GHC
+    Ide.TreeTransform
+
+  ghc-options:
+    -Wall -Wno-name-shadowing -Wredundant-constraints
+  if flag(pedantic)
+    ghc-options: -Werror
+
+  build-depends:
+    , aeson
+    , containers
+    , fingertree
+    , ghc
+    , ghc-exactprint
+    , ghc-source-gen
+    , ghcide                   >=0.1
+    , haskell-lsp              ^>=0.22
+    , hls-plugin-api
+    , mtl
+    , refinery
+    , retrie                   >=0.1.1.0
+    , shake
+    , syb
+    , text
+    , transformers
+
+  default-language: Haskell2010
+
 executable haskell-language-server
   import:           agpl, common-deps
   main-is:          Main.hs
@@ -92,13 +129,6 @@ executable haskell-language-server
     Ide.Plugin.Pragmas
     Ide.Plugin.Retrie
     Ide.Plugin.StylishHaskell
-    Ide.Plugin.Tactic
-    Ide.Plugin.Tactic.Types
-    Ide.Plugin.Tactic.Machinery
-    Ide.Plugin.Tactic.Tactics
-    Ide.Plugin.Tactic.BindSites
-    Ide.Plugin.Tactic.GHC
-    Ide.TreeTransform
 
   ghc-options:
     -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
@@ -131,6 +161,7 @@ executable haskell-language-server
     , regex-tdfa
     , retrie                   >=0.1.1.0
     , hslogger
+    , hls-tactics
     , optparse-applicative
     , haskell-lsp              ^>=0.22
     , hls-plugin-api
@@ -233,6 +264,7 @@ test-suite func-test
   build-depends:
     , bytestring
     , data-default
+    , hls-tactics
     , lens
     , tasty
     , tasty-ant-xml           >=1.1.6
@@ -240,7 +272,7 @@ test-suite func-test
     , tasty-golden
     , tasty-rerun
 
-  hs-source-dirs:     test/functional plugins/default/src
+  hs-source-dirs:     test/functional
   main-is:            Main.hs
   other-modules:
     Command
