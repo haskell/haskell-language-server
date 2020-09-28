@@ -13,14 +13,12 @@
 
 module Ide.Plugin.Tactic.Machinery where
 
-import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State (gets, get, modify, evalStateT)
 import           Control.Monad.Reader
 import           Data.Char
 import           Data.Either
 import           Data.Function
-import           Data.Functor.Identity
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -32,13 +30,11 @@ import           DataCon
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
-import           GHC.Generics
 
 import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
-import           Ide.Plugin.Tactic.GHC (oneWayUnify)
 import           Name
 import           Outputable hiding ((<>))
 import           Refinery.Tactic
@@ -172,6 +168,8 @@ instance Show TacticError where
       "Unable to make progress"
     show NoApplicableTactic =
       "No tactic could be applied"
+    show (AlreadyDestructed name) =
+      "Aleady destructed " <> unsafeRender name
 
 mkContext :: [(OccName, Type)] -> Context
 mkContext = Context
