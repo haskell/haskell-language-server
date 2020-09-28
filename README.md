@@ -506,20 +506,8 @@ Make sure to follow the instructions in the README of each of these packages.
 
 The default `lsp-haskell-server-path` is set to `haskell-language-server-wrapper`. In 
 case you would like your editor to use a specific version of the `hls` server, then this
-variable can be updated.
-
-Install [use-package](https://github.com/jwiegley/use-package), and add the following to your .emacs 
-when you want to customize this variable.
-
-``` emacs-lisp
-(use-package lsp-haskell
- :ensure t
- :config
-     (setq lsp-haskell-server-path "haskell-language-server-8.10.2")
- ;; Comment/uncomment this line to see interactions between lsp client/server.
- ;;(setq lsp-log-io t)
-)
-```
+variable can be updated. For more information on other configurations can be found at 
+[lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
 
 ### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
