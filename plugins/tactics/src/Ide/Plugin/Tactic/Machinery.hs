@@ -14,33 +14,19 @@
 
 module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
-  , module Ide.Plugin.Tactic.Debug
-  , module Ide.Plugin.Tactic.Types
-  , module Ide.Plugin.Tactic.Judgements
-  , module Ide.Plugin.Tactic.Context
-  , module Ide.Plugin.Tactic.Range
-  , module Ide.Plugin.Tactic.Naming
   ) where
 
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader
 import           Control.Monad.State (gets, modify)
-import           Data.Char
 import           Data.Coerce
 import           Data.Either
 import           Data.List
 import           Data.Map (Map)
-import qualified Data.Map as M
 import           Data.Maybe
 import           DataCon
 import           Development.IDE.GHC.Compat
-import           Development.IDE.Spans.LocalBindings
-import           Development.IDE.Types.Location
-import           Ide.Plugin.Tactic.Context
-import           Ide.Plugin.Tactic.Debug
 import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Naming
-import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Types
 
 import           GHC.SourceGen.Overloaded
@@ -53,24 +39,6 @@ import           Unify
 
 substCTy :: TCvSubst -> CType -> CType
 substCTy subst = coerce . substTy subst . coerce
-
-------------------------------------------------------------------------------
--- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
-hypothesisFromBindings :: RealSrcSpan -> Bindings -> Map OccName CType
-hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
-
-
-------------------------------------------------------------------------------
--- | Convert a @Set Id@ into a hypothesis.
-buildHypothesis :: [(Name, Maybe Type)] -> Map OccName CType
-buildHypothesis
-  = M.fromList
-  . mapMaybe go
-  where
-    go (occName -> occ, t)
-      | Just ty <- t
-      , isAlpha . head . occNameString $ occ = Just (occ, CType ty)
-      | otherwise = Nothing
 
 
 ------------------------------------------------------------------------------
@@ -96,8 +64,6 @@ newJudgement hy g = do
   pure $ Judgement hy mempty g
 
 
-
-
 ------------------------------------------------------------------------------
 -- | Attempt to generate a term of the right type using in-scope bindings, and
 -- a given tactic.
@@ -117,7 +83,6 @@ runTactic ctx jdg t =
         in Right $ fst $ fromMaybe (head solns) soln
 
 
-
 ------------------------------------------------------------------------------
 -- | Construct a data con with subgoals for each field.
 buildDataCon
@@ -135,6 +100,7 @@ buildDataCon hy dc apps = do
     $ fmap unLoc sgs
 
 
+------------------------------------------------------------------------------
 -- | We need to make sure that we don't try to unify any skolems.
 -- To see why, consider the case:
 --
@@ -150,6 +116,7 @@ checkSkolemUnification t1 t2 subst = do
     skolems <- gets ts_skolems
     unless (all (flip notElemTCvSubst subst) skolems) $
       throwError (UnificationError t1 t2)
+
 
 ------------------------------------------------------------------------------
 -- | Attempt to unify two types.

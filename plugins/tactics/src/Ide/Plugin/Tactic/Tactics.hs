@@ -26,8 +26,11 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
-import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.GHC
+import           Ide.Plugin.Tactic.Types
+import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Naming
+import           Ide.Plugin.Tactic.Machinery
 
 import           Name
 import           Refinery.Tactic

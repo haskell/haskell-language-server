@@ -8,7 +8,9 @@
 
 module Ide.Plugin.Tactic.Types
   ( module Ide.Plugin.Tactic.Types
+  , module Ide.Plugin.Tactic.Debug
   , OccName
+  , Name
   , Type
   , TyVar
   , Span

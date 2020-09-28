@@ -37,9 +37,12 @@ import           GHC.Generics (Generic)
 import           HscTypes (hsc_dflags)
 import           Ide.Plugin (mkLspCommand)
 import           Ide.Plugin.Tactic.BindSites
+import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
+import           Ide.Plugin.Tactic.Types
 import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
