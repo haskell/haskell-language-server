@@ -13,6 +13,7 @@ module Ide.Plugin.Tactic.Tactics
 import           Control.Applicative
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Control.Monad.Except (throwError)
+import Data.Coerce
 import           Data.Function
 import           Data.List
 import           Data.Maybe
@@ -84,7 +85,7 @@ intros = rule $ \(Judgement hy _ g) ->
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> TacticsM ()
-destruct' f term = rule $ \(Judgement hy _ g) -> do
+destruct' f term = rule $ \jdg@(Judgement hy _ g) -> do
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
     Just (_, t) ->
@@ -102,7 +103,9 @@ destruct' f term = rule $ \(Judgement hy _ g) -> do
                   pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
                       $ fmap bvar' names
 
-              j <- newJudgement (M.fromList (zip names (fmap CType args)) <> hy) g
+              let j = destructing term
+                    $ introducing (zip names $ coerce args)
+                    $ withNewGoal g jdg
               sg <- f dc j
               pure $ match [pat] $ unLoc sg
 
@@ -110,7 +113,11 @@ destruct' f term = rule $ \(Judgement hy _ g) -> do
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
-destruct = destruct' $ const subgoal
+destruct name = do
+  jdg <- goal
+  case hasDestructed jdg name of
+    True -> throwError $ AlreadyDestructed name
+    False -> destruct' (const subgoal) name
 
 
 ------------------------------------------------------------------------------

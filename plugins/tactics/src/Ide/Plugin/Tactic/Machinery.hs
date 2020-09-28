@@ -1,11 +1,12 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -107,6 +108,24 @@ data Judgement' a = Judgement
   }
   deriving stock (Eq, Ord, Generic, Functor)
 
+hasDestructed :: Judgement -> OccName -> Bool
+hasDestructed j n = S.member n $ _jDestructed j
+
+destructing :: OccName -> Judgement -> Judgement
+destructing n jdg@Judgement{..} = jdg
+  { _jDestructed = _jDestructed <> S.singleton n
+  }
+
+withNewGoal :: a -> Judgement' a -> Judgement' a
+withNewGoal t jdg = jdg
+  { _jGoal = t
+  }
+
+introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
+introducing ns jdg@Judgement{..} = jdg
+  { _jHypothesis = M.fromList ns <> _jHypothesis
+  }
+
 jHypothesis :: Judgement' a -> Map OccName a
 jHypothesis = _jHypothesis
 
@@ -128,6 +147,7 @@ data TacticError
   | UnificationError CType CType
   | NoProgress
   | NoApplicableTactic
+  | AlreadyDestructed OccName
 
 instance Show TacticError where
     show (UndefinedHypothesis name) =
@@ -155,6 +175,9 @@ instance Show TacticError where
 
 mkContext :: [(OccName, Type)] -> Context
 mkContext = Context
+
+getCurrentDefinitions :: MonadReader Context m => m [OccName]
+getCurrentDefinitions = asks $ fmap fst . ctxDefiningFuncs
 
 data Context = Context
   { ctxDefiningFuncs :: [(OccName, Type)]
