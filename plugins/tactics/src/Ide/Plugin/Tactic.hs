@@ -39,7 +39,6 @@ import           Ide.Plugin (mkLspCommand)
 import           Ide.Plugin.Tactic.BindSites
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.Types
 import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)

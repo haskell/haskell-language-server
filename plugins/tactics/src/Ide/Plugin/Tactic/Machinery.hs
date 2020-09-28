@@ -10,6 +10,7 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# OPTIONS_GHC -fno-warn-orphans  #-}
 
 module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
@@ -26,7 +27,6 @@ import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
@@ -37,7 +37,6 @@ import           Ide.Plugin.Tactic.Debug
 import           Ide.Plugin.Tactic.Types
 
 import qualified FastString as FS
-import           GHC.Generics
 import           GHC.SourceGen.Overloaded
 import           Name
 import           Refinery.Tactic
@@ -46,6 +45,7 @@ import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unify
+
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.

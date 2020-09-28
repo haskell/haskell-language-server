@@ -5,20 +5,17 @@
 
 module Ide.Plugin.Tactic.Types where
 
-import qualified Data.Map as M
-import Data.Map (Map)
-import qualified Data.Set as S
-import Data.Set (Set)
-import qualified Data.Text as T
-import           Type
+import           Control.Monad.Reader
 import           Data.Function
-import GHC.Generics
-import OccName
-import Ide.Plugin.Tactic.Debug
-import Development.IDE.GHC.Compat
-import Refinery.Tactic (RuleT)
-import Refinery.Tactic.Internal
-import Control.Monad.Reader
+import           Data.Map (Map)
+import           Data.Set (Set)
+import qualified Data.Text as T
+import           Development.IDE.GHC.Compat
+import           GHC.Generics
+import           Ide.Plugin.Tactic.Debug
+import           OccName
+import           Refinery.Tactic.Internal
+import           Type
 
 ------------------------------------------------------------------------------
 -- | The list of tactics exposed to the outside world. These are attached to
