@@ -13,6 +13,7 @@ import Control.Exception
 import Data.Either.Extra
 import System.FilePath
 
+import Control.Lens ((^.))
 import qualified Data.Text as T
 import Development.IDE as D
 import qualified DynFlags as D
@@ -27,6 +28,7 @@ import Language.Haskell.LSP.Messages (FromServerMessage (ReqShowMessage))
 import Ide.Types
 import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Types
+import Language.Haskell.LSP.Types.Lens
 import "fourmolu" Ormolu
 
 -- ---------------------------------------------------------------------
@@ -40,7 +42,7 @@ descriptor plId =
 -- ---------------------------------------------------------------------
 
 provider :: FormattingProvider IO
-provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancellable $ do
+provider lf ideState typ contents fp fo = withIndefiniteProgress lf title Cancellable $ do
     ghc <- runAction "Fourmolu" ideState $ use GhcSession fp
     fileOpts <- case hsc_dflags . hscEnv <$> ghc of
         Nothing -> return []
@@ -55,7 +57,10 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
                     { cfgDynOptions = fileOpts
                     , cfgRegion = region
                     , cfgDebug = True
-                    , cfgPrinterOpts = fillMissingPrinterOpts printerOpts defaultPrinterOpts
+                    , cfgPrinterOpts =
+                        fillMissingPrinterOpts
+                            (lspPrinterOpts <> printerOpts)
+                            defaultPrinterOpts
                     }
 
     loadConfigFile fp' >>= \case
@@ -87,6 +92,7 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
   where
     fp' = fromNormalizedFilePath fp
     title = "Formatting " <> T.pack (takeFileName fp')
+    lspPrinterOpts = mempty{poIndentation = Just $ fo ^. tabSize}
     region = case typ of
         FormatText ->
             RegionIndices Nothing Nothing
