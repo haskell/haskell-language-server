@@ -11,7 +11,7 @@
 module Ide.Plugin.Tactic.Machinery where
 
 import           Control.Monad.Except (throwError)
-import           Control.Monad.State (get, modify, evalStateT)
+import           Control.Monad.State (gets, get, modify, evalStateT)
 import           Data.Char
 import           Data.Either
 import           Data.Function
@@ -25,6 +25,7 @@ import           DataCon
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
+import           Ide.Plugin.Tactic.GHC
 import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
@@ -38,6 +39,17 @@ import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unify
 
+
+data TacticState = TacticState
+    { ts_skolems :: [TyVar]
+    , ts_unifier :: TCvSubst
+    }
+
+initialTacticState :: TacticState
+initialTacticState = TacticState
+    { ts_skolems = []
+    , ts_unifier = emptyTCvSubst
+    }
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
@@ -55,6 +67,8 @@ instance Eq CType where
 instance Ord CType where
   compare = nonDetCmpType `on` unCType
 
+substCTy :: TCvSubst -> CType -> CType
+substCTy subst = CType . substTy subst . unCType
 
 ------------------------------------------------------------------------------
 -- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
@@ -85,6 +99,9 @@ data Judgement = Judgement
   }
   deriving (Eq, Ord, Generic)
 
+
+substJdg :: TCvSubst -> Judgement -> Judgement
+substJdg subst (Judgement hys goal) = Judgement (fmap (substCTy subst) hys) (substCTy subst goal)
 
 ------------------------------------------------------------------------------
 -- | Reasons a tactic might fail.
@@ -121,8 +138,8 @@ instance Show TacticError where
       "No tactic could be applied"
 
 type ProvableM = ProvableT Judgement Identity
-type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError () ProvableM
-type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError () ProvableM
+type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
+type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
 type Rule      = RuleM (LHsExpr GhcPs)
 
 
@@ -133,8 +150,10 @@ newSubgoal
     :: Map OccName CType  -- ^ Available bindings
     -> CType              -- ^ Sub-goal type
     -> RuleM (LHsExpr GhcPs)
-newSubgoal hy g = subgoal =<< newJudgement hy g
-
+newSubgoal hy g = do
+    j <- newJudgement hy g
+    unifier <- gets ts_unifier
+    subgoal $ substJdg unifier j
 
 ------------------------------------------------------------------------------
 -- | Create a new judgment
@@ -231,7 +250,7 @@ runTactic
     :: Judgement
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] (LHsExpr GhcPs)
-runTactic jdg t = case partitionEithers $ runProvable $ runTacticT t jdg () of
+runTactic jdg t = case partitionEithers $ runProvable $ runTacticT t jdg initialTacticState of
     (errs, []) -> Left $ errs
     (_, solns) ->
       let soln = listToMaybe $ filter (null . snd) solns

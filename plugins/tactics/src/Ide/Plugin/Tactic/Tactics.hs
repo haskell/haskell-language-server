@@ -135,19 +135,9 @@ apply = rule $ \jdg@(Judgement hy g) -> do
     Nothing -> throwError $ GoalMismatch "apply" g
 
 apply' :: OccName -> TacticsM ()
-apply' fname = rule $ \(Judgement hy g) ->
-  case M.lookup fname hy of
-    Just (CType fty) -> do
-      let (args, r) = splitFunTys fty
-      -- FIXME Need to use the unifier
-      subst <- unify g (CType r)
-      let hy' = fmap (CType . substTy subst . unCType) hy
-      sgs <- traverse (newSubgoal hy' . CType . substTy subst) args
-      pure . noLoc
-           . foldl' (@@) (var' fname)
-           $ fmap unLoc sgs
-    Nothing -> throwError $ GoalMismatch "apply'" g
-
+apply' fname = do
+    (Judgement _ ty) <- goal
+    instantiate fname ty
 
 applySpecific :: OccName -> CType -> Judgement -> RuleM (LHsExpr GhcPs)
 applySpecific func (CType ty) (Judgement hy _) = do
@@ -158,8 +148,8 @@ applySpecific func (CType ty) (Judgement hy _) = do
        $ fmap unLoc sgs
 
 
-instantiate :: OccName -> Type -> TacticsM ()
-instantiate func ty = rule $ \jdg@(Judgement _ (CType g)) -> do
+instantiate :: OccName -> CType -> TacticsM ()
+instantiate func (CType ty) = rule $ \jdg@(Judgement _ (CType g)) -> do
   -- TODO(sandy): We need to get available from the type sig and compare
   -- against _ctx
   let (binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
@@ -206,7 +196,6 @@ attemptOn tac getNames = matching (choice . fmap (\s -> tac s) . getNames)
 -- | Automatically solve a goal.
 auto :: TacticsM ()
 auto = TacticT $ StateT $ \(Judgement _ goal) -> runStateT (unTacticT $ auto' 5) (Judgement M.empty goal)
-    -- auto' 5
 
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
