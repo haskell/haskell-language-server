@@ -122,11 +122,11 @@ split = rule $ \jdg@(Judgement _ _ g) ->
 -- | @matching f@ takes a function from a judgement to a @Tactic@, and
 -- then applies the resulting @Tactic@.
 matching :: (Judgement -> TacticsM ()) -> TacticsM ()
-matching f = TacticT $ StateT $ \s -> runStateT (unTacticT $ f $ s) s
+matching f = TacticT $ StateT $ \s -> runStateT (unTacticT $ f s) s
 
 
-attemptOn :: (a -> TacticsM ()) -> (Judgement -> [a]) -> TacticsM ()
-attemptOn tac getNames = matching (choice . fmap (\s -> tac s) . getNames)
+attemptOn :: (Judgement -> [a]) -> (a -> TacticsM ()) -> TacticsM ()
+attemptOn getNames tac = matching (choice . fmap (\s -> tac s) . getNames)
 
 
 ------------------------------------------------------------------------------
@@ -141,17 +141,24 @@ auto = do
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
-    intros <|> many_ intro
-    choice
-      [ attemptOn (\fname -> apply' fname >> (auto' $ n - 1)) functionNames
-      , attemptOn (\aname -> progress ((==) `on` jGoal) NoProgress (destruct aname) >> (auto' $ n - 1)) algebraicNames
-      , split >> (auto' $ n - 1)
-      , assumption >> (auto' $ n - 1)
-      ]
-  where
-    functionNames :: Judgement -> [OccName]
-    functionNames (Judgement hys _ _) = M.keys $ M.filter (isFunction . unCType) hys
+  let loop = auto' (n - 1)
+  intros <|> many_ intro
+  choice
+    [ attemptOn functionNames $ \fname -> do
+        apply' fname
+        loop
+    , attemptOn algebraicNames $ \aname -> do
+        progress ((==) `on` jGoal) NoProgress (destruct aname)
+        loop
+    , split >> loop
+    , assumption >> loop
+    ]
 
-    algebraicNames :: Judgement -> [OccName]
-    algebraicNames (Judgement hys _ _) = M.keys $ M.filter (isJust . algebraicTyCon . unCType) hys
+functionNames :: Judgement -> [OccName]
+functionNames  =
+  M.keys . M.filter (isFunction . unCType) . jHypothesis
+
+algebraicNames :: Judgement -> [OccName]
+algebraicNames =
+  M.keys . M.filter (isJust . algebraicTyCon . unCType) . jHypothesis
 
