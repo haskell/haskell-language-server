@@ -21,6 +21,7 @@ import           GHC.Exts
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           Ide.Plugin.Tactic.CodeGen
+import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
@@ -30,6 +31,7 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import Control.Monad.Trans
 
 
 ------------------------------------------------------------------------------
@@ -130,18 +132,22 @@ attemptOn tac getNames = matching (choice . fmap (\s -> tac s) . getNames)
 ------------------------------------------------------------------------------
 -- | Automatically solve a goal.
 auto :: TacticsM ()
-auto = TacticT $ StateT $ \(Judgement _ _ goal) -> runStateT (unTacticT $ auto' 5) (Judgement mempty mempty goal)
+auto = do
+  -- TODO(reed): there is no MonadReader instance for ProvableT
+  current <- TacticT $ lift $ lift $ lift getCurrentDefinitions
+  TacticT $ StateT $ \jdg ->
+    runStateT (unTacticT $ auto' 5) $ disallowing current jdg
 
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
     intros <|> many_ intro
     choice
-           [ attemptOn (\fname -> apply' fname >> (auto' $ n - 1)) functionNames
-           , attemptOn (\aname -> progress ((==) `on` jGoal) NoProgress (destruct aname) >> (auto' $ n - 1)) algebraicNames
-           , split >> (auto' $ n - 1)
-           , assumption >> (auto' $ n - 1)
-           ]
+      [ attemptOn (\fname -> apply' fname >> (auto' $ n - 1)) functionNames
+      , attemptOn (\aname -> progress ((==) `on` jGoal) NoProgress (destruct aname) >> (auto' $ n - 1)) algebraicNames
+      , split >> (auto' $ n - 1)
+      , assumption >> (auto' $ n - 1)
+      ]
   where
     functionNames :: Judgement -> [OccName]
     functionNames (Judgement hys _ _) = M.keys $ M.filter (isFunction . unCType) hys

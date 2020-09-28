@@ -52,6 +52,11 @@ introducing ns jdg@Judgement{..} = jdg
   { _jHypothesis = M.fromList ns <> _jHypothesis
   }
 
+disallowing :: [OccName] -> Judgement' a -> Judgement' a
+disallowing ns jdg@Judgement{..} = jdg
+  { _jHypothesis = M.withoutKeys _jHypothesis $ S.fromList ns
+  }
+
 jHypothesis :: Judgement' a -> Map OccName a
 jHypothesis = _jHypothesis
 
