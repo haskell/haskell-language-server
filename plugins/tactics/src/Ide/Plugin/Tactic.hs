@@ -13,6 +13,7 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
+import Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
@@ -240,9 +241,14 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
         -- which don't change very often.
         (hscenv, _) <- MaybeT $ runIde state $ useWithStale GhcSession nfp
-        let dflags = hsc_dflags $ hscEnv hscenv
+        range' <- liftMaybe $ toCurrentRange pos range
+        let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
+            -- TODO(sandy): unclear if this span is correct; might be
+            -- pointing to the wrong version of the file
+            dflags = hsc_dflags $ hscEnv hscenv
+            ctx = mkContext $ mapMaybe (sequenceA . first occName) $ getDefiningBindings b2 span
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        case runTactic jdg
+        case runTactic ctx jdg
               $ tac
               $ mkVarOcc
               $ T.unpack var_name of
@@ -251,13 +257,8 @@ tacticCmd tac lf state (TacticParams uri range var_name)
               $ Left
               $ ResponseError InvalidRequest (T.pack $ show err) Nothing
           Right res -> do
-            range' <- liftMaybe $ toCurrentRange pos range
-            let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
-                g = graft (RealSrcSpan span) res
-                -- TODO(sandy): unclear if this span is correct; might be
-                -- pointing to the wrong version of the file
-                _this_name = getDefiningBindings b2 span
-            let response = transform dflags (clientCapabilities lf) uri g pm
+            let g = graft (RealSrcSpan span) res
+                response = transform dflags (clientCapabilities lf) uri g pm
             pure $ case response of
                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
                Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)

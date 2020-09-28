@@ -15,6 +15,7 @@ module Ide.Plugin.Tactic.Machinery where
 import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State (gets, get, modify, evalStateT)
+import           Control.Monad.Reader
 import           Data.Char
 import           Data.Either
 import           Data.Function
@@ -152,7 +153,14 @@ instance Show TacticError where
     show NoApplicableTactic =
       "No tactic could be applied"
 
-type ProvableM = ProvableT Judgement Identity
+mkContext :: [(OccName, Type)] -> Context
+mkContext = Context
+
+data Context = Context
+  { ctxDefiningFuncs :: [(OccName, Type)]
+  }
+
+type ProvableM = ProvableT Judgement (Reader Context)
 type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
 type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
 type Rule      = RuleM (LHsExpr GhcPs)
@@ -262,14 +270,15 @@ mkTyConName tc
 -- | Attempt to generate a term of the right type using in-scope bindings, and
 -- a given tactic.
 runTactic
-    :: Judgement
+    :: Context
+    -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] (LHsExpr GhcPs)
-runTactic jdg t =
+runTactic ctx jdg t =
     -- FIXME [Reed] This code does not work
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
         tacticState = initialTacticState { ts_skolems = skolems }
-    in case partitionEithers $ runProvable $ runTacticT t jdg tacticState of
+    in case partitionEithers $ flip runReader ctx $ runProvableT $ runTacticT t jdg tacticState of
       (errs, []) -> Left $ errs
       (_, solns) ->
         let soln = listToMaybe $ filter (null . snd) solns
