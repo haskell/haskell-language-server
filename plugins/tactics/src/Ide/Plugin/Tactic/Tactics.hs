@@ -87,20 +87,6 @@ homo = rule .  destruct'
     buildDataCon hy dc (snd $ splitAppTys g))
 
 
-------------------------------------------------------------------------------
--- | Ensure a tactic produces no subgoals. Useful when working with
--- backtracking.
-solve :: TacticsM () -> TacticsM ()
-solve t = t >> throwError NoProgress
-
-
-------------------------------------------------------------------------------
--- | Apply a function from the hypothesis.
-apply :: TacticsM ()
-apply = rule $ \jdg@(Judgement hy _ g) -> do
-  case find ((== Just g) . fmap (CType . snd) . splitFunTy_maybe . unCType . snd) $ toList hy of
-    Just (func, ty) -> applySpecific func ty jdg
-    Nothing -> throwError $ GoalMismatch "apply" g
 
 apply' :: OccName -> TacticsM ()
 apply' func = rule $ \(Judgement hys _ g) ->
@@ -146,14 +132,6 @@ split = rule $ \(Judgement hy _ g) ->
     Nothing -> throwError $ GoalMismatch "split" g
 
 
-------------------------------------------------------------------------------
--- | Run 'one' many times.
-deepen :: Int -> TacticsM ()
-deepen 0 = pure ()
-deepen depth = do
-  one
-  deepen $ depth - 1
-
 
 ------------------------------------------------------------------------------
 -- | @matching f@ takes a function from a judgement to a @Tactic@, and
@@ -189,15 +167,4 @@ auto' n = do
     algebraicNames (Judgement hys _ _) = M.keys $ M.filter (isJust . algebraicTyCon . unCType) hys
 
 
-------------------------------------------------------------------------------
--- | Run a tactic, and subsequently apply auto if it completes. If not, just
--- run the first tactic, leaving its subgoals as holes.
-autoIfPossible :: TacticsM () -> TacticsM ()
-autoIfPossible t = (t >> solve auto) <|> t
-
-
-------------------------------------------------------------------------------
--- | Do one obvious thing.
-one :: TacticsM ()
-one = intro <|> assumption <|> split <|> apply <|> pure ()
 
