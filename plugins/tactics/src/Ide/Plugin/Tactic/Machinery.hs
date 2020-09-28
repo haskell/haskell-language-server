@@ -11,11 +11,14 @@
 {-# LANGUAGE ViewPatterns          #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.Tactic.Machinery where
+module Ide.Plugin.Tactic.Machinery
+  ( module Ide.Plugin.Tactic.Machinery
+  , module Ide.Plugin.Tactic.Debug
+  ) where
 
 import           Control.Monad.Except (throwError)
-import           Control.Monad.State (gets, get, modify, evalStateT)
 import           Control.Monad.Reader
+import           Control.Monad.State (gets, get, modify, evalStateT)
 import           Data.Char
 import           Data.Either
 import           Data.Function
@@ -30,13 +33,12 @@ import           DataCon
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
+import           Ide.Plugin.Tactic.Debug
 
-import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
 import           GHC.SourceGen.Overloaded
 import           Name
-import           Outputable hiding ((<>))
 import           Refinery.Tactic
 import           SrcLoc
 import           TcType
@@ -369,12 +371,4 @@ rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)
     mkRealSrcSpan
       (mkRealSrcLoc (FS.fsLit file) (startLn + 1) (startCh + 1))
       (mkRealSrcLoc (FS.fsLit file) (endLn + 1) (endCh + 1))
-
-------------------------------------------------------------------------------
--- | Print something
-unsafeRender :: Outputable a => a -> String
-unsafeRender = unsafeRender' . ppr
-
-unsafeRender' :: SDoc -> String
-unsafeRender' = showSDoc unsafeGlobalDynFlags
 
