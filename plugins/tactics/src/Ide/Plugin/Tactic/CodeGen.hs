@@ -1,23 +1,21 @@
 module Ide.Plugin.Tactic.CodeGen where
 
-import Data.Map (Map)
+import Control.Monad.Except
+import Data.List
+import Data.Traversable
+import DataCon
+import Development.IDE.GHC.Compat
 import GHC.Exts
 import GHC.SourceGen.Binds
 import GHC.SourceGen.Expr
 import GHC.SourceGen.Overloaded
 import GHC.SourceGen.Pat
-import OccName
-import           DataCon
-import           Development.IDE.GHC.Compat
-import           Ide.Plugin.Tactic.Types
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Machinery
-import Name
+import Ide.Plugin.Tactic.Judgements
+import Ide.Plugin.Tactic.Machinery
 import Ide.Plugin.Tactic.Naming
-import Data.Traversable
+import Ide.Plugin.Tactic.Types
+import Name
 import Type hiding (Var)
-import Data.List
-import Control.Monad.Except
 
 
 ------------------------------------------------------------------------------
@@ -52,13 +50,13 @@ destruct' f term jdg@(Judgement hy _ g) = do
 ------------------------------------------------------------------------------
 -- | Construct a data con with subgoals for each field.
 buildDataCon
-    :: Map OccName CType  -- ^ In-scope bindings
+    :: Judgement
     -> DataCon            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (LHsExpr GhcPs)
-buildDataCon hy dc apps = do
+buildDataCon jdg dc apps = do
   let args = dataConInstArgTys dc apps
-  sgs <- traverse (newSubgoal hy . CType) args
+  sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
   pure
     . noLoc
     . foldl' (@@)

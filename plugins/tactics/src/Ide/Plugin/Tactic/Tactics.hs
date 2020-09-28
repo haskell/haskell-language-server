@@ -27,7 +27,6 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
@@ -46,23 +45,26 @@ assumption = rule $ \(Judgement hy _ g) ->
 ------------------------------------------------------------------------------
 -- | Introduce a lambda.
 intro :: TacticsM ()
-intro = rule $ \(Judgement hy _ g) ->
+intro = rule $ \jdg@(Judgement hy _ g) ->
   case splitFunTy_maybe $ unCType g of
     Just (a, b) -> do
       v <- pure $ mkGoodName (getInScope hy) a
-      sg <- newSubgoal (M.singleton v (CType a) <> hy) $ CType b
+      let jdg' = introducing [(v, CType a)] $ withNewGoal (CType b) jdg
+      sg <- newSubgoal jdg'
       pure $ noLoc $ lambda [bvar' v] $ unLoc sg
     _ -> throwError $ GoalMismatch "intro" g
+
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = rule $ \(Judgement hy _ g) ->
+intros = rule $ \jdg@(Judgement hy _ g) ->
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intro" g
     (as, b) -> do
       vs <- mkManyGoodNames hy as
-      sg <- newSubgoal (M.fromList (zip vs $ fmap CType as) <> hy) $ CType b
+      let jdg' = introducing (zip vs $ coerce as) $ withNewGoal (CType b) jdg
+      sg <- newSubgoal jdg'
       pure
         . noLoc
         . lambda (fmap bvar' vs)
@@ -83,51 +85,33 @@ destruct name = do
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
 homo = rule .  destruct'
-  (\dc (Judgement hy _ (CType g)) ->
-    buildDataCon hy dc (snd $ splitAppTys g))
+  (\dc jdg@(Judgement _ _ (CType g)) ->
+    buildDataCon jdg dc (snd $ splitAppTys g))
 
 
 
 apply' :: OccName -> TacticsM ()
-apply' func = rule $ \(Judgement hys _ g) ->
+apply' func = rule $ \jdg@(Judgement hys _ g) ->
     case M.lookup func hys of
       Just (CType ty) -> do
           let (args, ret) = splitFunTys ty
           unify g (CType ret)
-          sgs <- traverse (newSubgoal hys . CType) args
+          sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
           pure . noLoc
                . foldl' (@@) (var' func)
                $ fmap unLoc sgs
       Nothing -> throwError $ GoalMismatch "apply" g
 
 
-applySpecific :: OccName -> CType -> Judgement -> RuleM (LHsExpr GhcPs)
-applySpecific func (CType ty) (Judgement hy _ _) = do
-  let (args, _) = splitFunTys ty
-  sgs <- traverse (newSubgoal hy . CType) args
-  pure . noLoc
-       . foldl' (@@) (var' func)
-       $ fmap unLoc sgs
-
-
-instantiate :: OccName -> CType -> TacticsM ()
-instantiate func (CType ty) = rule $ \jdg@(Judgement _ _ (CType g)) -> do
-  -- TODO(sandy): We need to get available from the type sig and compare
-  -- against _ctx
-  let (_binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
-  unify (CType res) (CType g)
-  applySpecific func (CType ty) jdg
-
-
 ------------------------------------------------------------------------------
 -- | Introduce a data constructor, splitting a goal into the datacon's
 -- constituent sub-goals.
 split :: TacticsM ()
-split = rule $ \(Judgement hy _ g) ->
+split = rule $ \jdg@(Judgement _ _ g) ->
   case splitTyConApp_maybe $ unCType g of
     Just (tc, apps) ->
       case tyConDataCons tc of
-        [dc] -> buildDataCon hy dc apps
+        [dc] -> buildDataCon jdg dc apps
         _ -> throwError $ GoalMismatch "split" g
     Nothing -> throwError $ GoalMismatch "split" g
 

@@ -40,11 +40,9 @@ substCTy subst = coerce . substTy subst . coerce
 -- | Produce a subgoal that must be solved before we can solve the original
 -- goal.
 newSubgoal
-    :: Map OccName CType  -- ^ Available bindings
-    -> CType              -- ^ Sub-goal type
+    :: Judgement
     -> RuleM (LHsExpr GhcPs)
-newSubgoal hy g = do
-    j <- newJudgement hy g
+newSubgoal j = do
     unifier <- gets ts_unifier
     subgoal $ substJdg unifier j
 
