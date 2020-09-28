@@ -26,7 +26,7 @@ import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
 import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.GHC
+
 import           Name
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -135,9 +135,16 @@ apply = rule $ \jdg@(Judgement hy g) -> do
     Nothing -> throwError $ GoalMismatch "apply" g
 
 apply' :: OccName -> TacticsM ()
-apply' fname = do
-    (Judgement _ ty) <- goal
-    instantiate fname ty
+apply' func = rule $ \(Judgement hys g) ->
+    case M.lookup func hys of
+      Just (CType ty) -> do
+          let (args, ret) = splitFunTys ty
+          unify g (CType ret)
+          sgs <- traverse (newSubgoal hys . CType) args
+          pure . noLoc
+               . foldl' (@@) (var' func)
+               $ fmap unLoc sgs
+      Nothing -> throwError $ GoalMismatch "apply" g
 
 applySpecific :: OccName -> CType -> Judgement -> RuleM (LHsExpr GhcPs)
 applySpecific func (CType ty) (Judgement hy _) = do
@@ -152,8 +159,8 @@ instantiate :: OccName -> CType -> TacticsM ()
 instantiate func (CType ty) = rule $ \jdg@(Judgement _ (CType g)) -> do
   -- TODO(sandy): We need to get available from the type sig and compare
   -- against _ctx
-  let (binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
-  oneWayUnifyRule binders (CType res) (CType g)
+  let (_binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
+  unify (CType res) (CType g)
   applySpecific func (CType ty) jdg
   -- case oneWayUnify binders res g of
   --   Just subst ->

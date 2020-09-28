@@ -25,7 +25,7 @@ import           DataCon
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
-import           Ide.Plugin.Tactic.GHC
+
 import           DynFlags (unsafeGlobalDynFlags)
 import qualified FastString as FS
 import           GHC.Generics
@@ -251,11 +251,15 @@ runTactic
     :: Judgement
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] (LHsExpr GhcPs)
-runTactic jdg t = case partitionEithers $ runProvable $ runTacticT t jdg initialTacticState of
-    (errs, []) -> Left $ errs
-    (_, solns) ->
-      let soln = listToMaybe $ filter (null . snd) solns
-      in Right $ fst $ fromMaybe (head solns) soln
+runTactic jdg t =
+    -- FIXME [Reed] This code does not work
+    let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
+        tacticState = initialTacticState { ts_skolems = skolems }
+    in case partitionEithers $ runProvable $ runTacticT t jdg tacticState of
+      (errs, []) -> Left $ errs
+      (_, solns) ->
+        let soln = listToMaybe $ filter (null . snd) solns
+        in Right $ fst $ fromMaybe (head solns) soln
 
 
 ------------------------------------------------------------------------------
