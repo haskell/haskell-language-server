@@ -1,7 +1,10 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE TypeSynonymInstances  #-}
 
 module Ide.Plugin.Tactic.Types
   ( module Ide.Plugin.Tactic.Types
@@ -18,12 +21,13 @@ import           Data.Map (Map)
 import           Data.Set (Set)
 import qualified Data.Text as T
 import           Development.IDE.GHC.Compat
+import           Development.IDE.Types.Location
 import           GHC.Generics
 import           Ide.Plugin.Tactic.Debug
 import           OccName
+import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           Type
-import           Development.IDE.Types.Location
 
 
 ------------------------------------------------------------------------------
@@ -82,6 +86,13 @@ data Judgement' a = Judgement
   deriving stock (Eq, Ord, Generic, Functor)
 
 type Judgement = Judgement' CType
+
+
+------------------------------------------------------------------------------
+-- | Orphan instance for producing holes when attempting to solve tactics.
+instance MonadExtract (LHsExpr GhcPs) ProvableM where
+  hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
+
 
 ------------------------------------------------------------------------------
 -- | Reasons a tactic might fail.

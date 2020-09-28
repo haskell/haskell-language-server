@@ -101,6 +101,7 @@ executable haskell-language-server
     Ide.Plugin.Tactic.Judgements
     Ide.Plugin.Tactic.Context
     Ide.Plugin.Tactic.Range
+    Ide.Plugin.Tactic.Naming
     Ide.Plugin.Tactic.GHC
     Ide.TreeTransform
 

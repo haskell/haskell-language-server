@@ -1,9 +1,14 @@
+{-# LANGUAGE ViewPatterns #-}
+
 module Ide.Plugin.Tactic.GHC where
 
 import TcType
 import TyCoRep
 import Var
 import Unique
+import TyCon
+import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import Type
 
 tcTyVar_maybe :: Type -> Maybe Var
 tcTyVar_maybe ty | Just ty' <- tcView ty = tcTyVar_maybe ty'
@@ -45,4 +50,23 @@ cloneTyVar t =
   let uniq = getUnique t
       some_magic_number = 49
    in setVarUnique t $ deriveUnique uniq some_magic_number
+
+
+------------------------------------------------------------------------------
+-- | Is this a function type?
+isFunction :: Type -> Bool
+isFunction (tcSplitFunTys -> ((_:_), _)) = True
+isFunction _ = False
+
+------------------------------------------------------------------------------
+-- | Is this an algebraic type?
+algebraicTyCon :: Type -> Maybe TyCon
+algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
+  | tycon == intTyCon    = Nothing
+  | tycon == floatTyCon  = Nothing
+  | tycon == doubleTyCon = Nothing
+  | tycon == charTyCon   = Nothing
+  | tycon == funTyCon    = Nothing
+  | otherwise = Just tycon
+algebraicTyCon _ = Nothing
 

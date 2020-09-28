@@ -19,11 +19,12 @@ module Ide.Plugin.Tactic.Machinery
   , module Ide.Plugin.Tactic.Judgements
   , module Ide.Plugin.Tactic.Context
   , module Ide.Plugin.Tactic.Range
+  , module Ide.Plugin.Tactic.Naming
   ) where
 
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader
-import           Control.Monad.State (gets, get, modify, evalStateT)
+import           Control.Monad.State (gets, modify)
 import           Data.Char
 import           Data.Coerce
 import           Data.Either
@@ -31,7 +32,6 @@ import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
@@ -41,20 +41,15 @@ import           Ide.Plugin.Tactic.Debug
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Types
+import           Ide.Plugin.Tactic.Naming
 
 import           GHC.SourceGen.Overloaded
 import           Name
 import           Refinery.Tactic
 import           TcType
 import           Type
-import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unify
 
-
-------------------------------------------------------------------------------
--- | Orphan instance for producing holes when attempting to solve tactics.
-instance MonadExtract (LHsExpr GhcPs) ProvableM where
-  hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
 
 substCTy :: TCvSubst -> CType -> CType
 substCTy subst = coerce . substTy subst . coerce
@@ -101,81 +96,6 @@ newJudgement hy g = do
   pure $ Judgement hy mempty g
 
 
-------------------------------------------------------------------------------
--- | Produce a unique, good name for a type.
-mkGoodName
-    :: [OccName]  -- ^ Bindings in scope; used to ensure we don't shadow anything
-    -> Type       -- ^ The type to produce a name for
-    -> OccName
-mkGoodName in_scope t =
-  let tn = mkTyName t
-   in mkVarOcc $ case elem (mkVarOcc tn) in_scope of
-        True -> tn ++ show (length in_scope)
-        False -> tn
-
-
-------------------------------------------------------------------------------
--- | Like 'mkGoodName' but creates several apart names.
-mkManyGoodNames
-  :: (Traversable t, Monad m)
-  => M.Map OccName a
-  -> t Type
-  -> m (t OccName)
-mkManyGoodNames hy args =
-  flip evalStateT (getInScope hy) $ for args $ \at -> do
-    in_scope <- Control.Monad.State.get
-    let n = mkGoodName in_scope at
-    modify (n :)
-    pure n
-
-
-------------------------------------------------------------------------------
--- | Use type information to create a reasonable name.
-mkTyName :: Type -> String
--- eg. mkTyName (a -> B) = "fab"
-mkTyName (tcSplitFunTys -> ([a@(isFunTy -> False)], b))
-  = "f" ++ mkTyName a ++ mkTyName b
--- eg. mkTyName (a -> b -> C) = "f_C"
-mkTyName (tcSplitFunTys -> ((_:_), b))
-  = "f_" ++ mkTyName b
--- eg. mkTyName (Either A B) = "eab"
-mkTyName (splitTyConApp_maybe -> Just (c, args))
-  = mkTyConName c ++ foldMap mkTyName args
--- eg. mkTyName a = "a"
-mkTyName (getTyVar_maybe-> Just tv)
-  = occNameString $ occName tv
--- eg. mkTyName (forall x. y) = "y"
-mkTyName (tcSplitSigmaTy-> ((_:_), _, t))
-  = mkTyName t
-mkTyName _ = "x"
-
-
-------------------------------------------------------------------------------
--- | Is this a function type?
-isFunction :: Type -> Bool
-isFunction (tcSplitFunTys -> ((_:_), _)) = True
-isFunction _ = False
-
-------------------------------------------------------------------------------
--- | Is this an algebraic type?
-algebraicTyCon :: Type -> Maybe TyCon
-algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
-  | tycon == intTyCon    = Nothing
-  | tycon == floatTyCon  = Nothing
-  | tycon == doubleTyCon = Nothing
-  | tycon == charTyCon   = Nothing
-  | tycon == funTyCon    = Nothing
-  | otherwise = Just tycon
-algebraicTyCon _ = Nothing
-
-
-------------------------------------------------------------------------------
--- | Get a good name for a type constructor.
-mkTyConName :: TyCon -> String
-mkTyConName tc
-  | tc == listTyCon = "l_"
-  | tc == pairTyCon = "p_"
-  | otherwise = fmap toLower . take 1 . occNameString $ getOccName tc
 
 
 ------------------------------------------------------------------------------
@@ -196,11 +116,6 @@ runTactic ctx jdg t =
         let soln = listToMaybe $ filter (null . snd) solns
         in Right $ fst $ fromMaybe (head solns) soln
 
-
-------------------------------------------------------------------------------
--- | Which names are in scope?
-getInScope :: Map OccName a -> [OccName]
-getInScope = M.keys
 
 
 ------------------------------------------------------------------------------
