@@ -14,6 +14,7 @@
 module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   , module Ide.Plugin.Tactic.Debug
+  , module Ide.Plugin.Tactic.Types
   ) where
 
 import           Control.Monad.Except (throwError)
@@ -21,7 +22,6 @@ import           Control.Monad.Reader
 import           Control.Monad.State (gets, get, modify, evalStateT)
 import           Data.Char
 import           Data.Either
-import           Data.Function
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -34,6 +34,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
 import           Ide.Plugin.Tactic.Debug
+import           Ide.Plugin.Tactic.Types
 
 import qualified FastString as FS
 import           GHC.Generics
@@ -46,32 +47,10 @@ import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unify
 
-data TacticState = TacticState
-    { ts_skolems :: [TyVar]
-    , ts_unifier :: TCvSubst
-    }
-
-initialTacticState :: TacticState
-initialTacticState = TacticState
-    { ts_skolems = []
-    , ts_unifier = emptyTCvSubst
-    }
-
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
 instance MonadExtract (LHsExpr GhcPs) ProvableM where
   hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
-
-
-------------------------------------------------------------------------------
--- | A wrapper around 'Type' which supports equality and ordering.
-newtype CType = CType { unCType :: Type }
-
-instance Eq CType where
-  (==) = eqType `on` unCType
-
-instance Ord CType where
-  compare = nonDetCmpType `on` unCType
 
 substCTy :: TCvSubst -> CType -> CType
 substCTy subst = CType . substTy subst . unCType
@@ -95,16 +74,6 @@ buildHypothesis
       | otherwise = Nothing
       where
         occ = occName n
-
-
-------------------------------------------------------------------------------
--- | The current bindings and goal for a hole to be filled by refinery.
-data Judgement' a = Judgement
-  { _jHypothesis :: Map OccName a
-  , _jDestructed :: Set OccName
-  , _jGoal       :: a
-  }
-  deriving stock (Eq, Ord, Generic, Functor)
 
 hasDestructed :: Judgement -> OccName -> Bool
 hasDestructed j n = S.member n $ _jDestructed j
@@ -130,63 +99,15 @@ jHypothesis = _jHypothesis
 jGoal :: Judgement' a -> a
 jGoal = _jGoal
 
-type Judgement = Judgement' CType
-
 
 substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg = fmap . substCTy
 
-------------------------------------------------------------------------------
--- | Reasons a tactic might fail.
-data TacticError
-  = UndefinedHypothesis OccName
-  | GoalMismatch String CType
-  | UnsolvedSubgoals [Judgement]
-  | UnificationError CType CType
-  | NoProgress
-  | NoApplicableTactic
-  | AlreadyDestructed OccName
-
-instance Show TacticError where
-    show (UndefinedHypothesis name) =
-      occNameString name <> " is not available in the hypothesis."
-    show (GoalMismatch tac (CType typ)) =
-      mconcat
-        [ "The tactic "
-        , tac
-        , " doesn't apply to goal type "
-        , unsafeRender typ
-        ]
-    show (UnsolvedSubgoals _) =
-      "There were unsolved subgoals"
-    show (UnificationError (CType t1) (CType t2)) =
-        mconcat
-          [ "Could not unify "
-          , unsafeRender t1
-          , " and "
-          , unsafeRender t2
-          ]
-    show NoProgress =
-      "Unable to make progress"
-    show NoApplicableTactic =
-      "No tactic could be applied"
-    show (AlreadyDestructed name) =
-      "Aleady destructed " <> unsafeRender name
-
-mkContext :: [(OccName, Type)] -> Context
+mkContext :: [(OccName, CType)] -> Context
 mkContext = Context
 
 getCurrentDefinitions :: MonadReader Context m => m [OccName]
 getCurrentDefinitions = asks $ fmap fst . ctxDefiningFuncs
-
-data Context = Context
-  { ctxDefiningFuncs :: [(OccName, Type)]
-  }
-
-type ProvableM = ProvableT Judgement (Reader Context)
-type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
-type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
-type Rule      = RuleM (LHsExpr GhcPs)
 
 
 ------------------------------------------------------------------------------
@@ -300,7 +221,7 @@ runTactic
 runTactic ctx jdg t =
     -- FIXME [Reed] This code does not work
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
-        tacticState = initialTacticState { ts_skolems = skolems }
+        tacticState = mempty { ts_skolems = skolems }
     in case partitionEithers $ flip runReader ctx $ runProvableT $ runTacticT t jdg tacticState of
       (errs, []) -> Left $ errs
       (_, solns) ->

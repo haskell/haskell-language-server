@@ -246,7 +246,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
             -- TODO(sandy): unclear if this span is correct; might be
             -- pointing to the wrong version of the file
             dflags = hsc_dflags $ hscEnv hscenv
-            ctx = mkContext $ mapMaybe (sequenceA . first occName) $ getDefiningBindings b2 span
+            ctx = mkContext $ mapMaybe (sequenceA . (occName *** coerce)) $ getDefiningBindings b2 span
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         case runTactic ctx jdg
               $ tac
