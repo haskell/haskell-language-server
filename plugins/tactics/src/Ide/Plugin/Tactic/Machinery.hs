@@ -39,9 +39,9 @@ import           Development.IDE.Types.Location
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.Debug
 import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Types
-import           Ide.Plugin.Tactic.Naming
 
 import           GHC.SourceGen.Overloaded
 import           Name

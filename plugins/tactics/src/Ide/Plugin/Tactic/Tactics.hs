@@ -27,6 +27,7 @@ import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
 import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.GHC
 
 import           Name
 import           Refinery.Tactic
@@ -169,13 +170,6 @@ instantiate func (CType ty) = rule $ \jdg@(Judgement _ _ (CType g)) -> do
   let (_binders, _ctx, tcSplitFunTys -> (_, res)) = tcSplitSigmaTy ty
   unify (CType res) (CType g)
   applySpecific func (CType ty) jdg
-  -- case oneWayUnify binders res g of
-  --   Just subst ->
-  --     -- TODO(sandy): How does this affect the judgment wrt our new ununified
-  --     -- tyvars?
-  --     let (_fresh_vars, ty') = instantiateType $ substTy subst ty
-  --      in applySpecific func (CType ty') jdg
-    -- Nothing -> throwError $ GoalMismatch  "instantiate" $ CType g
 
 
 ------------------------------------------------------------------------------

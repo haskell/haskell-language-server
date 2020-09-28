@@ -13,7 +13,7 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
-import Control.Arrow
+import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
@@ -37,6 +37,7 @@ import           GHC.Generics (Generic)
 import           HscTypes (hsc_dflags)
 import           Ide.Plugin (mkLspCommand)
 import           Ide.Plugin.Tactic.BindSites
+import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.TreeTransform (transform, graft, useAnnotatedSource)

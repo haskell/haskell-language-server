@@ -26,7 +26,6 @@ import           GHC.Generics
 import           Ide.Plugin.Tactic.Debug
 import           OccName
 import           Refinery.Tactic
-import           Refinery.Tactic.Internal
 import           Type
 
 

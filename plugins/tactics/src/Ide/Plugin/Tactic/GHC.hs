@@ -4,11 +4,12 @@ module Ide.Plugin.Tactic.GHC where
 
 import TcType
 import TyCoRep
-import Var
-import Unique
 import TyCon
-import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import Type
+import TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import Unique
+import Var
+
 
 tcTyVar_maybe :: Type -> Maybe Var
 tcTyVar_maybe ty | Just ty' <- tcView ty = tcTyVar_maybe ty'
@@ -17,23 +18,6 @@ tcTyVar_maybe (CastTy ty _) = tcTyVar_maybe ty  -- look through casts, as
                                                 -- e.g., FlexibleContexts
 tcTyVar_maybe (TyVarTy v)   = Just v
 tcTyVar_maybe _             = Nothing
-
-
-oneWayUnify
-    :: [TyVar]  -- ^ binders
-    -> Type     -- ^ type to instiate
-    -> Type     -- ^ at this type
-    -> Maybe TCvSubst
-oneWayUnify binders toinst res =
-  case tcTyVar_maybe toinst of
-    Just var ->
-      case elem var binders of
-        True  -> pure $ mkTvSubstPrs $ pure (var, res)
-        False -> Nothing
-    Nothing ->
-      case eqType toinst res of
-        True  -> pure emptyTCvSubst
-        False -> Nothing
 
 
 instantiateType :: Type -> ([TyVar], Type)
