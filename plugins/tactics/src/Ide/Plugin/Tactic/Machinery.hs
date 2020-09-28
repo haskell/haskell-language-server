@@ -10,6 +10,7 @@
 
 module Ide.Plugin.Tactic.Machinery where
 
+import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State (gets, get, modify, evalStateT)
 import           Data.Char
@@ -39,7 +40,6 @@ import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unify
-
 
 data TacticState = TacticState
     { ts_skolems :: [TyVar]
@@ -298,31 +298,20 @@ buildDataCon hy dc apps = do
 checkSkolemUnification :: CType -> CType -> TCvSubst -> RuleM ()
 checkSkolemUnification t1 t2 subst = do
     skolems <- gets ts_skolems
-    case traverse (lookupTyVar subst) skolems of
-        Just _ -> throwError (UnificationError t1 t2)
-        Nothing -> pure ()
+    unless (all (flip notElemTCvSubst subst) skolems) $
+      throwError (UnificationError t1 t2)
 
 ------------------------------------------------------------------------------
 -- | Attempt to unify two types.
-unify :: CType -> CType -> RuleM ()
-unify t1 t2 =
-    case tcUnifyTy (unCType t1) (unCType t2) of
+unify :: CType -- ^ The goal type
+      -> CType -- ^ The type we are trying unify the goal type with
+      -> RuleM ()
+unify goal inst =
+    case tcUnifyTy (unCType inst) (unCType goal) of
       Just subst -> do
-          checkSkolemUnification t1 t2 subst
+          checkSkolemUnification inst goal subst
           modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
-      Nothing -> throwError (UnificationError t1 t2)
-
-oneWayUnifyRule
-    :: [TyVar]  -- ^ binders
-    -> CType     -- ^ type to instiate
-    -> CType     -- ^ at this type
-    -> RuleM ()
-oneWayUnifyRule binders t1 t2 =
-  case oneWayUnify binders (unCType t1) (unCType t2) of
-    Just subst -> do
-        checkSkolemUnification t1 t2 subst
-        modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
-    Nothing -> throwError $ UnificationError t1 t2
+      Nothing -> throwError (UnificationError inst goal)
 
 
 ------------------------------------------------------------------------------
