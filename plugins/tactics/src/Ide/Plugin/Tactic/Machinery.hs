@@ -16,31 +16,35 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   , module Ide.Plugin.Tactic.Debug
   , module Ide.Plugin.Tactic.Types
+  , module Ide.Plugin.Tactic.Judgements
+  , module Ide.Plugin.Tactic.Context
+  , module Ide.Plugin.Tactic.Range
   ) where
 
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader
 import           Control.Monad.State (gets, get, modify, evalStateT)
 import           Data.Char
+import           Data.Coerce
 import           Data.Either
 import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
-import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Location
+import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.Debug
+import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Types
 
-import qualified FastString as FS
 import           GHC.SourceGen.Overloaded
 import           Name
 import           Refinery.Tactic
-import           SrcLoc
 import           TcType
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, intTyCon, floatTyCon, doubleTyCon, charTyCon)
@@ -53,12 +57,12 @@ instance MonadExtract (LHsExpr GhcPs) ProvableM where
   hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
 
 substCTy :: TCvSubst -> CType -> CType
-substCTy subst = CType . substTy subst . unCType
+substCTy subst = coerce . substTy subst . coerce
 
 ------------------------------------------------------------------------------
 -- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
 hypothesisFromBindings :: RealSrcSpan -> Bindings -> Map OccName CType
-hypothesisFromBindings span bs = buildHypothesis (getLocalScope bs span)
+hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
 
 
 ------------------------------------------------------------------------------
@@ -68,46 +72,10 @@ buildHypothesis
   = M.fromList
   . mapMaybe go
   where
-    go (n, t)
+    go (occName -> occ, t)
       | Just ty <- t
       , isAlpha . head . occNameString $ occ = Just (occ, CType ty)
       | otherwise = Nothing
-      where
-        occ = occName n
-
-hasDestructed :: Judgement -> OccName -> Bool
-hasDestructed j n = S.member n $ _jDestructed j
-
-destructing :: OccName -> Judgement -> Judgement
-destructing n jdg@Judgement{..} = jdg
-  { _jDestructed = _jDestructed <> S.singleton n
-  }
-
-withNewGoal :: a -> Judgement' a -> Judgement' a
-withNewGoal t jdg = jdg
-  { _jGoal = t
-  }
-
-introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducing ns jdg@Judgement{..} = jdg
-  { _jHypothesis = M.fromList ns <> _jHypothesis
-  }
-
-jHypothesis :: Judgement' a -> Map OccName a
-jHypothesis = _jHypothesis
-
-jGoal :: Judgement' a -> a
-jGoal = _jGoal
-
-
-substJdg :: TCvSubst -> Judgement -> Judgement
-substJdg = fmap . substCTy
-
-mkContext :: [(OccName, CType)] -> Context
-mkContext = Context
-
-getCurrentDefinitions :: MonadReader Context m => m [OccName]
-getCurrentDefinitions = asks $ fmap fst . ctxDefiningFuncs
 
 
 ------------------------------------------------------------------------------
@@ -279,17 +247,4 @@ unify goal inst =
           checkSkolemUnification inst goal subst
           modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
       Nothing -> throwError (UnificationError inst goal)
-
-
-------------------------------------------------------------------------------
--- | Convert a DAML compiler Range to a GHC SrcSpan
--- TODO(sandy): this doesn't belong here
-rangeToSrcSpan :: String -> Range -> SrcSpan
-rangeToSrcSpan file range = RealSrcSpan $ rangeToRealSrcSpan file range
-
-rangeToRealSrcSpan :: String -> Range -> RealSrcSpan
-rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
-    mkRealSrcSpan
-      (mkRealSrcLoc (FS.fsLit file) (startLn + 1) (startCh + 1))
-      (mkRealSrcLoc (FS.fsLit file) (endLn + 1) (endCh + 1))
 

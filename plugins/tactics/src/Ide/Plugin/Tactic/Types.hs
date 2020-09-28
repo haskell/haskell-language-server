@@ -3,7 +3,14 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Ide.Plugin.Tactic.Types where
+module Ide.Plugin.Tactic.Types
+  ( module Ide.Plugin.Tactic.Types
+  , OccName
+  , Type
+  , TyVar
+  , Span
+  , Range
+  ) where
 
 import           Control.Monad.Reader
 import           Data.Function
@@ -16,6 +23,8 @@ import           Ide.Plugin.Tactic.Debug
 import           OccName
 import           Refinery.Tactic.Internal
 import           Type
+import           Development.IDE.Types.Location
+
 
 ------------------------------------------------------------------------------
 -- | The list of tactics exposed to the outside world. These are attached to

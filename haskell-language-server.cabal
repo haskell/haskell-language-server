@@ -98,6 +98,9 @@ executable haskell-language-server
     Ide.Plugin.Tactic.Machinery
     Ide.Plugin.Tactic.Tactics
     Ide.Plugin.Tactic.BindSites
+    Ide.Plugin.Tactic.Judgements
+    Ide.Plugin.Tactic.Context
+    Ide.Plugin.Tactic.Range
     Ide.Plugin.Tactic.GHC
     Ide.TreeTransform
 
