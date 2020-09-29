@@ -1,8 +1,11 @@
 cabal-version: 2.2
 name:          hls-plugin-api
-version:       0.4.0.0
+version:       0.4.1.0
 synopsis:      Haskell Language Server API for plugin communication
-description:   Please see README.md
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+homepage:      https://github.com/haskell/haskell-language-server/hls-plugin-api
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0
 license-file:  LICENSE
 author:        Many,TBD when we release
@@ -15,6 +18,10 @@ flag pedantic
   description: Enable -Werror
   default:     False
   manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
 
 library
   exposed-modules:
@@ -35,7 +42,7 @@ library
     , Diff
     , ghc
     , ghc-boot-th
-    , ghcide                >=0.1
+    , ghcide                >=0.4
     , haskell-lsp           ^>=0.22
     , hslogger
     , lens

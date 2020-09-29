@@ -59,11 +59,6 @@ tests = testGroup
       , (id, Homomorphism, "eab")
       ]
   , mkTest
-      "Can destruct globals"
-      "T2.hs" 8 8
-      [ (id, Destruct, "global")
-      ]
-  , mkTest
       "Won't suggest homomorphism on the wrong type"
       "T2.hs" 8 8
       [ (not, Homomorphism, "global")
