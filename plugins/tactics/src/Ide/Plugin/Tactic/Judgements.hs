@@ -52,6 +52,15 @@ introducing ns jdg@Judgement{..} = jdg
   { _jHypothesis = M.fromList ns <> _jHypothesis
   }
 
+------------------------------------------------------------------------------
+-- | Pattern vals are currently tracked in jHypothesis, with an extra piece of data sitting around in jPatternVals.
+introducingPat :: [(OccName, a)] -> Judgement' a -> Judgement' a
+introducingPat ns jdg@Judgement{..} = jdg
+  { _jHypothesis  = M.fromList ns <> _jHypothesis
+  , _jPatternVals = S.fromList (fmap fst ns) <> _jPatternVals
+  }
+
+
 disallowing :: [OccName] -> Judgement' a -> Judgement' a
 disallowing ns jdg@Judgement{..} = jdg
   { _jHypothesis = M.withoutKeys _jHypothesis $ S.fromList ns
@@ -59,6 +68,14 @@ disallowing ns jdg@Judgement{..} = jdg
 
 jHypothesis :: Judgement' a -> Map OccName a
 jHypothesis = _jHypothesis
+
+
+------------------------------------------------------------------------------
+-- | Only the hypothesis members which are pattern vals
+jPatHypothesis :: Judgement' a -> Map OccName a
+jPatHypothesis jdg
+  = M.restrictKeys (jHypothesis jdg) $ _jPatternVals jdg
+
 
 jGoal :: Judgement' a -> a
 jGoal = _jGoal
@@ -68,5 +85,5 @@ substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
 mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
-mkFirstJudgement hy = Judgement hy mempty . CType
+mkFirstJudgement hy = Judgement hy mempty mempty . CType
 

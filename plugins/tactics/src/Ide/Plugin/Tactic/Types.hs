@@ -82,6 +82,9 @@ instance Monoid TacticState where
 data Judgement' a = Judgement
   { _jHypothesis :: Map OccName a
   , _jDestructed :: Set OccName
+    -- ^ These should align with keys of _jHypothesis
+  , _jPatternVals :: Set OccName
+    -- ^ These should align with keys of _jHypothesis
   , _jGoal       :: a
   }
   deriving stock (Eq, Ord, Generic, Functor)

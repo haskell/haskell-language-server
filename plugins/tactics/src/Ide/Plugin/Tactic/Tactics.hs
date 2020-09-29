@@ -12,6 +12,7 @@ module Ide.Plugin.Tactic.Tactics
 import           Control.Applicative
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Control.Monad.Trans
 import           Data.Function
 import           Data.List
 import qualified Data.Map as M
@@ -31,7 +32,6 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
-import Control.Monad.Trans
 
 
 ------------------------------------------------------------------------------

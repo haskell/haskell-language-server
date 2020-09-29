@@ -43,7 +43,7 @@ destruct' f term jdg = do
                       $ fmap bvar' names
 
               let j = destructing term
-                    $ introducing (zip names $ coerce args)
+                    $ introducingPat (zip names $ coerce args)
                     $ withNewGoal g jdg
               sg <- f dc j
               pure $ match [pat] $ unLoc sg
