@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE LambdaCase           #-}
 
 module Ide.Plugin.Fourmolu
   (
@@ -13,6 +14,7 @@ where
 
 import           Control.Exception
 import qualified Data.Text                         as T
+import           Data.Maybe                        (fromMaybe)
 import           Development.IDE                   as D
 import qualified DynFlags                          as D
 import qualified EnumSet                           as S
@@ -64,8 +66,19 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
 
     mkConf :: [DynOption] -> region -> IO (Config region)
     mkConf o region = do
-      printerOpts <- loadConfigFile True (Just fp') defaultPrinterOpts
-      return $ defaultConfig
+      printerOpts <- do
+        filePrinterOpts <-
+          loadConfigFile fp' >>= \case
+            ConfigLoaded _ po -> pure $ Just po
+            _ -> pure Nothing
+
+        pure $
+          fillMissingPrinterOpts
+            (fromMaybe mempty filePrinterOpts)
+            defaultPrinterOpts
+
+
+      pure $ defaultConfig
         { cfgDynOptions = o
         , cfgRegion = region
         , cfgDebug = True
