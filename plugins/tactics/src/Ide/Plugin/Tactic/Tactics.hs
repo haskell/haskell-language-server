@@ -37,7 +37,9 @@ import Control.Monad.Trans
 ------------------------------------------------------------------------------
 -- | Use something in the hypothesis to fill the hole.
 assumption :: TacticsM ()
-assumption = rule $ \(Judgement hy _ g) ->
+assumption = rule $ \jdg -> do
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
   case find ((== g) . snd) $ toList hy of
     Just (v, _) -> pure $ noLoc $ var' v
     Nothing -> throwError $ GoalMismatch "assumption" g
@@ -46,7 +48,9 @@ assumption = rule $ \(Judgement hy _ g) ->
 ------------------------------------------------------------------------------
 -- | Introduce a lambda.
 intro :: TacticsM ()
-intro = rule $ \jdg@(Judgement hy _ g) ->
+intro = rule $ \jdg -> do
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
   case splitFunTy_maybe $ unCType g of
     Just (a, b) -> do
       v <- pure $ mkGoodName (getInScope hy) a
@@ -59,7 +63,9 @@ intro = rule $ \jdg@(Judgement hy _ g) ->
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = rule $ \jdg@(Judgement hy _ g) ->
+intros = rule $ \jdg -> do
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intro" g
     (as, b) -> do
@@ -85,30 +91,31 @@ destruct name = do
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
-homo = rule .  destruct'
-  (\dc jdg@(Judgement _ _ (CType g)) ->
-    buildDataCon jdg dc (snd $ splitAppTys g))
-
+homo = rule . destruct' (\dc jdg ->
+  buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
 apply' :: OccName -> TacticsM ()
-apply' func = rule $ \jdg@(Judgement hys _ g) ->
-    case M.lookup func hys of
-      Just (CType ty) -> do
-          let (args, ret) = splitFunTys ty
-          unify g (CType ret)
-          sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
-          pure . noLoc
-               . foldl' (@@) (var' func)
-               $ fmap unLoc sgs
-      Nothing -> throwError $ GoalMismatch "apply" g
+apply' func = rule $ \jdg -> do
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
+  case M.lookup func hy of
+    Just (CType ty) -> do
+        let (args, ret) = splitFunTys ty
+        unify g (CType ret)
+        sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
+        pure . noLoc
+             . foldl' (@@) (var' func)
+             $ fmap unLoc sgs
+    Nothing -> throwError $ GoalMismatch "apply" g
 
 
 ------------------------------------------------------------------------------
 -- | Introduce a data constructor, splitting a goal into the datacon's
 -- constituent sub-goals.
 split :: TacticsM ()
-split = rule $ \jdg@(Judgement _ _ g) ->
+split = rule $ \jdg -> do
+  let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
     Just (tc, apps) ->
       case tyConDataCons tc of

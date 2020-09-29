@@ -22,7 +22,9 @@ import Type hiding (Var)
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
-destruct' f term jdg@(Judgement hy _ g) = do
+destruct' f term jdg = do
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
     Just (_, t) ->

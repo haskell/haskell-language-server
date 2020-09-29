@@ -67,3 +67,6 @@ jGoal = _jGoal
 substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
+mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
+mkFirstJudgement hy = Judgement hy mempty . CType
+
