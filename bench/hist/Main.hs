@@ -2,14 +2,14 @@
 
     A Shake script to analyze the performance of ghcide over the git history of the project
 
-    Driven by a config file `bench/hist.yaml` containing the list of Git references to analyze.
+    Driven by a config file `bench/config.yaml` containing the list of Git references to analyze.
 
     Builds each one of them and executes a set of experiments using the ghcide-bench suite.
 
     The results of the benchmarks and the analysis are recorded in the file
     system with the following structure:
 
-    bench-hist
+    bench-results
     ├── <git-reference>                       - one folder per version
     │   ├── <experiment>.benchmark-gcStats    - RTS -s output
     │   ├── <experiment>.csv                  - stats for the experiment
@@ -31,8 +31,8 @@
 
    To build a specific analysis, enumerate the desired file artifacts
 
-   > stack bench --ba "bench-hist/HEAD/results.csv bench-hist/HEAD/edit.diff.svg"
-   > cabal bench --benchmark-options "bench-hist/HEAD/results.csv bench-hist/HEAD/edit.diff.svg"
+   > stack bench --ba "bench-results/HEAD/results.csv bench-results/HEAD/edit.diff.svg"
+   > cabal bench --benchmark-options "bench-results/HEAD/results.csv bench-results/HEAD/edit.diff.svg"
 
  -}
 {-# LANGUAGE DeriveAnyClass    #-}
@@ -49,6 +49,7 @@ import qualified Data.Text as T
 import Data.Yaml ((.!=), (.:?), FromJSON (..), ToJSON (..), Value (..), decodeFileThrow)
 import Development.Shake
 import Development.Shake.Classes (Binary, Hashable, NFData)
+import Experiments.Types (exampleToOptions, Example(..))
 import GHC.Exts (IsList (..))
 import GHC.Generics (Generic)
 import qualified Graphics.Rendering.Chart.Backend.Diagrams as E
@@ -61,7 +62,7 @@ import qualified Text.ParserCombinators.ReadP as P
 import Text.Read (Read (..), get, readMaybe, readP_to_Prec)
 
 config :: FilePath
-config = "bench/hist.yaml"
+config = "bench/config.yaml"
 
 -- | Read the config without dependency
 readConfigIO :: FilePath -> IO Config
@@ -197,12 +198,12 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
                 "-v",
                 "--samples=" <> show samples,
                 "--csv=" <> outcsv,
-                "--example-package-version=3.0.0.0",
                 "--ghcide-options= +RTS -I0.5 -RTS",
                 "--ghcide=" <> ghcide,
                 "--select",
                 unescaped (unescapeExperiment (Escaped $ dropExtension exp))
               ] ++
+              exampleToOptions (example configStatic) ++
               [ "--stack" | Stack == buildSystem]
           cmd_ Shell $ "mv *.benchmark-gcStats " <> dropFileName outcsv
 
@@ -281,6 +282,7 @@ findGhc Stack = do
 
 data Config = Config
   { experiments :: [Unescaped String],
+    example :: Example,
     samples :: Natural,
     versions :: [GitCommit],
     -- | Path to the ghcide-bench binary for the experiments
@@ -290,7 +292,7 @@ data Config = Config
     buildTool :: BuildSystem
   }
   deriving (Generic, Show)
-  deriving anyclass (FromJSON, ToJSON)
+  deriving anyclass (FromJSON)
 
 data GitCommit = GitCommit
   { -- | A git hash, tag or branch name (e.g. v0.1.0)
