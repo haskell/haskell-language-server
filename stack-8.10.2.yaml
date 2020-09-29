@@ -17,7 +17,8 @@ extra-deps:
 - clock-0.7.2
 - data-tree-print-0.1.0.2
 - floskell-0.10.4
-- fourmolu-0.1.0.0@rev:1
+- github: parsonsmatt/fourmolu
+  commit: 93ff2c108da8955fd6cf72d7cdc07696a72e9cfb
 - HsYAML-aeson-0.2.0.0@rev:2
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
