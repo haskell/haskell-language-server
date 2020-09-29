@@ -45,6 +45,6 @@ main = do
 
   output "starting test"
 
-  cleanUp <- setup
+  SetupResult{..} <- setup
 
   runBenchmarks experiments `finally` cleanUp

@@ -8,7 +8,16 @@ buildTool: stack
 ghcideBench: ghcide-bench
 
 # Output folder for the experiments
-outputFolder: bench-hist
+outputFolder: bench-results
+
+# Example project used to run the experiments
+# Can either be a Hackage package (name,version)
+# or a local project (path) with a valid `hie.yaml` file
+example:
+    name: Cabal
+    version: 3.0.0.0
+    # path: path/to/example
+    module: Distribution/Simple.hs
 
 # The set of experiments to execute
 experiments:
@@ -40,5 +49,6 @@ versions:
 # - v0.1.0
 # - v0.2.0
 # - v0.3.0
+# - v0.4.0
 - upstream: origin/master
 - HEAD

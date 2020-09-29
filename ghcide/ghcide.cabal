@@ -216,7 +216,9 @@ benchmark benchHist
     type: exitcode-stdio-1.0
     default-language: Haskell2010
     ghc-options: -Wall -Wno-name-shadowing -threaded
-    main-is: bench/hist/Main.hs
+    main-is: Main.hs
+    hs-source-dirs: bench/hist bench/lib
+    other-modules: Experiments.Types
     build-tool-depends:
         ghcide:ghcide,
         ghcide:ghcide-bench
@@ -363,6 +365,7 @@ test-suite ghcide-tests
         Development.IDE.Test
         Development.IDE.Test.Runfiles
         Experiments
+        Experiments.Types
     default-extensions:
         BangPatterns
         DeriveFunctor
@@ -395,13 +398,15 @@ executable ghcide-bench
         lsp-test >= 0.11.0.2 && < 0.12,
         optparse-applicative,
         process,
-        safe-exceptions
+        safe-exceptions,
+        text
     hs-source-dirs: bench/lib bench/exe
     include-dirs: include
     ghc-options: -threaded -Wall -Wno-name-shadowing
     main-is: Main.hs
     other-modules:
         Experiments
+        Experiments.Types
     default-extensions:
         BangPatterns
         DeriveFunctor

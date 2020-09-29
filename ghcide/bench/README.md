@@ -9,7 +9,7 @@ performance analysis of ghcide:
   - Run with `stack bench` or `cabal bench`,
   - Requires a `ghcide-bench` binary in the PATH (usually provided by stack/cabal),
   - Calls `cabal` (or `stack`, configurable) internally to build the project,
-  - Driven by the `hist.yaml` configuration file.
+  - Driven by the `config.yaml` configuration file.
     By default it compares HEAD with "master"
 
-Further details available in the module header comments.
+Further details available in the config file and the module header comments.
