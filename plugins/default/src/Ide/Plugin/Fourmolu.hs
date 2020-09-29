@@ -74,10 +74,12 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
       try @OrmoluException (ormolu conf fp' $ T.unpack cont)
     fp' = fromNormalizedFilePath fp
 
+    formatRegion region = ret <$> (fmt contents =<< mkConf fileOpts region)
+
   case typ of
-    FormatText -> ret <$> (fmt contents =<< mkConf fileOpts fullRegion)
+    FormatText -> formatRegion fullRegion
     FormatRange (Range (Position sl _) (Position el _)) ->
-      ret <$> (fmt contents =<< mkConf fileOpts (rangeRegion sl el))
+      formatRegion $ rangeRegion sl el
  where
   title = T.pack $ "Formatting " <> takeFileName (fromNormalizedFilePath fp)
   ret :: Either OrmoluException T.Text -> Either ResponseError (List TextEdit)
