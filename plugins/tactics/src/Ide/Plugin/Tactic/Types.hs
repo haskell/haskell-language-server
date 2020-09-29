@@ -149,6 +149,8 @@ type Rule      = RuleM (LHsExpr GhcPs)
 data Context = Context
   { ctxDefiningFuncs :: [(OccName, CType)]
     -- ^ The functions currently being defined
+  , ctxModuleFuncs :: [(OccName, CType)]
+    -- ^ Everything defined in the current module
   }
   deriving stock (Eq, Ord)
 

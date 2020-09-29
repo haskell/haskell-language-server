@@ -1,10 +1,11 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic
@@ -220,8 +221,7 @@ judgementForHole state nfp range = runMaybeT $ do
   range' <- liftMaybe $ fromCurrentRange amapping range
 
   (binds, _) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
-  (har, _) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
-  let b2 = bindSites $ refMap har
+  let b2 = bindSites $ refMap asts
 
   (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
       case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
@@ -238,6 +238,7 @@ judgementForHole state nfp range = runMaybeT $ do
   pure (amapping, b2, resulting_range, mkFirstJudgement hyps goal)
 
 
+
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
@@ -247,11 +248,15 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         -- which don't change very often.
         (hscenv, _) <- MaybeT $ runIde state $ useWithStale GhcSession nfp
         range' <- liftMaybe $ toCurrentRange pos range
+        (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
             -- TODO(sandy): unclear if this span is correct; might be
             -- pointing to the wrong version of the file
             dflags = hsc_dflags $ hscEnv hscenv
-            ctx = mkContext $ mapMaybe (sequenceA . (occName *** coerce)) $ getDefiningBindings b2 span
+            tcg = fst $ tm_internals_ $ tmrModule tcmod
+            ctx = mkContext
+                    (mapMaybe (sequenceA . (occName *** coerce)) $ getDefiningBindings b2 span)
+                    tcg
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         case runTactic ctx jdg
               $ tac
