@@ -8,7 +8,7 @@ cabal.project.local
 .vscode
 /.hlint-*
 bench/example/
-bench-hist/
+bench-results/
 bench-temp/
 .shake/
 ghcide

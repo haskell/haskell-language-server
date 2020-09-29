@@ -3378,9 +3378,10 @@ benchmarkTests =
             , Bench.repetitions = Just 3
             , Bench.buildTool = Bench.Stack
             } in
-    withResource Bench.setup id $ \_ -> testGroup "benchmark experiments"
+    withResource Bench.setup Bench.cleanUp $ \getResource -> testGroup "benchmark experiments"
     [ expectFailCabal "Requires stack" $ testCase (Bench.name e) $ do
-        res <- Bench.runBench runInDir e
+        Bench.SetupResult{Bench.benchDir} <- getResource
+        res <- Bench.runBench (runInDir benchDir) e
         assertBool "did not successfully complete 5 repetitions" $ Bench.success res
         | e <- Bench.experiments
         , Bench.name e /= "edit" -- the edit experiment does not ever fail
