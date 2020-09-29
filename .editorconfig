@@ -3,10 +3,13 @@
 
 root = true
 
+[Makefile]
+indent_style = tab
+
 [*]
 end_of_line = LF
 
-[*]
+[*.{hs,lhs}]
 indent_style = space
 indent_size = 4
 trim_trailing_whitespace = true
