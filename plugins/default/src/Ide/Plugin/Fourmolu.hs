@@ -61,6 +61,8 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
   let
     fullRegion = RegionIndices Nothing Nothing
     rangeRegion s e = RegionIndices (Just $ s + 1) (Just $ e + 1)
+
+    mkConf :: [DynOption] -> region -> IO (Config region)
     mkConf o region = do
       printerOpts <- loadConfigFile True (Just fp') defaultPrinterOpts
       return $ defaultConfig
@@ -69,6 +71,7 @@ provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancell
         , cfgDebug = True
         , cfgPrinterOpts = printerOpts
         }
+
     fmt :: T.Text -> Config RegionIndices -> IO (Either OrmoluException T.Text)
     fmt cont conf =
       try @OrmoluException (ormolu conf fp' $ T.unpack cont)
