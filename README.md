@@ -18,6 +18,7 @@ This is *very* early stage software.
   - [Features](#features)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
+    - [ghcup](#ghcup)
     - [Visual Studio Code](#visual-studio-code)
     - [Pre-built binaries](#pre-built-binaries)
     - [Installation from source](#installation-from-source)
@@ -53,7 +54,7 @@ This is *very* early stage software.
 
 ## Features
 
- - Code evaluation (inspired by [Dante](https://github.com/jyp/dante#-reploid)). You can evaluate code by writing it in a comment of the form -- >>>
+ - Code evaluation codelens (inspired by [Dante](https://github.com/jyp/dante#-reploid)). You can evaluate code by writing it in a comment of the form -- >>>
 
    ![Eval](https://i.imgur.com/bh992sT.gif)
 
@@ -92,6 +93,13 @@ This is *very* early stage software.
 - For standalone `.hs`/`.lhs` files, [ghc](https://www.haskell.org/ghc/) must be installed and on the PATH. The easiest way to install it is with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
 - For Cabal based projects, both ghc and [cabal-install](https://www.haskell.org/cabal/) must be installed and on the PATH. It can also be installed with [ghcup](https://www.haskell.org/ghcup/) or [Chocolatey](https://www.haskell.org/platform/windows.html) on Windows.
 - For Stack based projects, [stack](http://haskellstack.org) must be installed and on the PATH.
+
+### ghcup
+
+If you are using [`ghcup`](https://www.haskell.org/ghcup/) to manage your installations, you can install the latest version of `haskell-language-server` with
+```
+ghcup install hls
+```
 
 ### Visual Studio Code
 
@@ -194,6 +202,14 @@ For brevity, only the `stack`-based commands are presented in the following sect
 
 ##### Install specific GHC Version
 
+The script will install the executables `haskell-language-server-wrapper` and `haskell-language-server`.
+
+It will copy the latter appending the used ghc version, needed by the wrapper to choose the suitable version
+for the project at hand.
+
+So installing the executables directly with `stack install` or `cabal v2-install` may not be enough 
+for it to work properly.
+
 Install haskell-language-server for the latest available and supported GHC version (and hoogle docs):
 
 ```bash
@@ -206,6 +222,10 @@ Install haskell-language-server for a specific GHC version (and hoogle docs):
 stack ./install.hs hls-8.8.3
 stack ./install.hs data
 ```
+
+`hls-8.8.3` target will build the project and install `haskell-language-server-wrapper`,
+`haskell-language-server`, `haskell-language-server-8.8.3` and `haskell-language-server-8.8`
+executables.
 
 The Haskell Language Server can also be built with `cabal v2-build` instead of `stack build`.
 This has the advantage that you can decide how the GHC versions have been installed.
@@ -484,16 +504,10 @@ Install HLS along with the following emacs packages:
 
 Make sure to follow the instructions in the README of each of these packages.
 
-Install [use-package](https://github.com/jwiegley/use-package), and add the following to your .emacs
-``` emacs-lisp
-(use-package lsp-haskell
- :ensure t
- :config
- (setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
- ;; Comment/uncomment this line to see interactions between lsp client/server.
- ;;(setq lsp-log-io t)
-)
-```
+The default `lsp-haskell-server-path` is set to `haskell-language-server-wrapper`. In 
+case you would like your editor to use a specific version of the `hls` server, then this
+variable can be updated. Information on other configurations can be found at 
+[lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
 
 ### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
@@ -552,6 +566,13 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 - Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-ide-engine) at `#haskell-ide-engine` on `freenode`.
 - Fork this repo and [ghcide](https://github.com/haskell/ghcide) and hack as much as you can.
 
+### Style guidelines
+
+The project includes a [`.editorconfig`](https://editorconfig.org) [file](https://github.com/haskell/haskell-language-server/blob/master/.editorconfig) with the editor basic settings used by the project.
+However, most editors will need some action to honour those settings automatically. 
+For example vscode needs to have installed a specific [extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
+Please, try to follow those basic settings to keep the codebase as uniform as possible.
+
 ### Building haskell-language-server
 
 The project can be built with both `cabal build` and `stack build`.
@@ -600,4 +621,3 @@ To do every time you changed code and want to test it:
   - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
 - Restart HLS
   - With VS Code: `Haskell: Restart Haskell LSP Server`
-

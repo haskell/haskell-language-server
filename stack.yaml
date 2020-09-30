@@ -61,7 +61,7 @@ extra-deps:
 - these-1.1.1.1
 - type-equality-1
 - topograph-1
-- implicit-hie-cradle-0.2.0.0
+- implicit-hie-cradle-0.2.0.1
 - implicit-hie-0.1.1.0
 
 flags:
