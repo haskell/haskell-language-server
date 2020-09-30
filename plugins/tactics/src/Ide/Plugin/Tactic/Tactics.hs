@@ -111,18 +111,29 @@ apply' func = rule $ \jdg -> do
 
 
 ------------------------------------------------------------------------------
--- | Introduce a data constructor, splitting a goal into the datacon's
--- constituent sub-goals.
+-- | Choose between each of the goal's data constructors.
 split :: TacticsM ()
-split = rule $ \jdg -> do
+split = do
+  jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
-    Just (tc, apps) ->
-      case tyConDataCons tc of
-        [dc] -> buildDataCon jdg dc apps
-        _ -> throwError $ GoalMismatch "split" g
-    Nothing -> throwError $ GoalMismatch "split" g
+    Nothing -> throwError $ GoalMismatch "getGoalTyCon" g
+    Just (tc, _) -> do
+      let dcs = tyConDataCons tc
+      choice $ fmap splitDataCon dcs
 
+
+------------------------------------------------------------------------------
+-- | Attempt to instantiate the given data constructor to solve the goal.
+splitDataCon :: DataCon -> TacticsM ()
+splitDataCon dc = rule $ \jdg -> do
+  let g = jGoal jdg
+  case splitTyConApp_maybe $ unCType g of
+    Just (tc, apps) -> do
+      case elem dc $ tyConDataCons tc of
+        True -> buildDataCon jdg dc apps
+        False -> throwError $ IncorrectDataCon dc
+    Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 
 ------------------------------------------------------------------------------

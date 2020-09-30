@@ -108,7 +108,8 @@ data TacticError
   | NoProgress
   | NoApplicableTactic
   | AlreadyDestructed OccName
-  deriving stock (Eq, Ord)
+  | IncorrectDataCon DataCon
+  deriving stock (Eq)
 
 instance Show TacticError where
     show (UndefinedHypothesis name) =
@@ -134,7 +135,9 @@ instance Show TacticError where
     show NoApplicableTactic =
       "No tactic could be applied"
     show (AlreadyDestructed name) =
-      "Aleady destructed " <> unsafeRender name
+      "Already destructed " <> unsafeRender name
+    show (IncorrectDataCon dcon) =
+      "Data con doesn't align with goal type (" <> unsafeRender dcon <> ")"
 
 
 ------------------------------------------------------------------------------
