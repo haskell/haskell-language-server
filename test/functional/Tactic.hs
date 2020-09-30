@@ -73,6 +73,22 @@ tests = testGroup
       "T2.hs" 8 8
       [ (not, Intros, "")
       ]
+  , mkTest
+      "Produces (homomorphic) lambdacase code actions"
+      "T3.hs" 4 24
+      [ (id, HomomorphismLambdaCase, "")
+      , (id, DestructLambdaCase, "")
+      ]
+  , mkTest
+      "Produces lambdacase code actions"
+      "T3.hs" 7 13
+      [ (id, DestructLambdaCase, "")
+      ]
+  , mkTest
+      "Doesn't suggest lambdacase without -XLambdaCase"
+      "T2.hs" 11 25
+      [ (not, DestructLambdaCase, "")
+      ]
   ]
 
 

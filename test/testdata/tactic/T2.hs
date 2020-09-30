@@ -7,3 +7,6 @@ global = True
 foo :: Int
 foo  = _
 
+dontSuggestLambdaCase :: Either a b -> Int
+dontSuggestLambdaCase = _
+
