@@ -19,7 +19,7 @@ data TacticCommand
 
 -- | Generate a title for the command.
 tacticTitle :: TacticCommand -> T.Text -> T.Text
-tacticTitle Auto _ = "Auto"
+tacticTitle Auto _ = "Attempt to fill hole"
 tacticTitle Intros _ = "Introduce lambda"
 tacticTitle Destruct var = "Case split on " <> var
 tacticTitle Homomorphism var = "Homomorphic case split on " <> var
