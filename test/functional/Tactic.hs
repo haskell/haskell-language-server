@@ -8,21 +8,22 @@ module Tactic
   )
 where
 
-import Data.Foldable
-import Data.Text (Text)
+import           Control.Applicative.Combinators ( skipManyTill )
+import           Control.Monad.IO.Class
+import           Data.Foldable
+import           Data.Maybe
+import           Data.Text (Text)
 import qualified Data.Text as T
-import           Control.Monad.IO.Class         ( MonadIO(liftIO) )
+import qualified Data.Text.IO as T
+import           Ide.Plugin.Tactic.TestTypes
 import           Language.Haskell.LSP.Test
-import           Language.Haskell.LSP.Types     ( Position(..)
-                                                , Range(..)
-                                                , CAResult(..)
-                                                , CodeAction(..)
-                                                )
+import           Language.Haskell.LSP.Types (ApplyWorkspaceEditRequest, Position(..) , Range(..) , CAResult(..) , CodeAction(..))
 import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
-import Data.Maybe (mapMaybe)
-import Ide.Plugin.Tactic.TestTypes (tacticTitle, TacticCommand (..))
+import           System.FilePath
+import System.Directory (doesFileExist)
+import Control.Monad (unless)
 
 
 ------------------------------------------------------------------------------
@@ -89,6 +90,12 @@ tests = testGroup
       "T2.hs" 11 25
       [ (not, DestructLambdaCase, "")
       ]
+  , goldenTest "GoldenIntros.hs"            2 8  Intros ""
+  , goldenTest "GoldenEitherAuto.hs"        2 11 Auto   ""
+  , goldenTest "GoldenJoinCont.hs"          4 12 Auto   ""
+  , goldenTest "GoldenIdentityFunctor.hs"   3 11 Auto   ""
+  , goldenTest "GoldenIdTypeFam.hs"         7 11 Auto   ""
+  , goldenTest "GoldenEitherHomomorphic.hs" 2 15 Auto   ""
   ]
 
 
@@ -116,6 +123,26 @@ mkTest name fp line col ts =
       liftIO $
         f (elem title titles)
           @? ("Expected a code action with title " <> T.unpack title)
+
+
+goldenTest :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
+goldenTest input line col tc occ =
+  testCase (input <> " (golden)") $ do
+    runSession hieCommand fullCaps tacticPath $ do
+      doc <- openDoc input "haskell"
+      actions <- getCodeActions doc $ pointRange line col
+      Just (CACodeAction (CodeAction {_command = Just c}))
+        <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
+      executeCommand c
+      _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+      edited <- documentContents doc
+      let expected_name = tacticPath </> input <.> "expected"
+      -- Write golden tests if they don't already exist
+      liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
+        T.writeFile expected_name edited
+      expected <- liftIO $ T.readFile expected_name
+      liftIO $ edited @?= expected
+
 
 tacticPath :: FilePath
 tacticPath = "test/testdata/tactic"
