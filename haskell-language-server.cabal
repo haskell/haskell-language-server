@@ -156,7 +156,7 @@ executable haskell-language-server
     , transformers
     , unordered-containers
     , ghc-source-gen
-    , refinery
+    , refinery                 >=0.2.0.0
     , ghc-exactprint
     , fingertree
 
