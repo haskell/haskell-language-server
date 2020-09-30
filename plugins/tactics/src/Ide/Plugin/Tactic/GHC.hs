@@ -2,6 +2,7 @@
 
 module Ide.Plugin.Tactic.GHC where
 
+import Data.Maybe (isJust)
 import TcType
 import TyCoRep
 import TyCon
@@ -53,4 +54,16 @@ algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | tycon == funTyCon    = Nothing
   | otherwise = Just tycon
 algebraicTyCon _ = Nothing
+
+------------------------------------------------------------------------------
+-- | Can ths type be lambda-cased?
+--
+-- Return: 'Nothing' if no
+--         @Just False@ if it can't be homomorphic
+--         @Just True@ if it can
+lambdaCaseable :: Type -> Maybe Bool
+lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
+  | isJust (algebraicTyCon arg)
+  = Just $ isJust $ algebraicTyCon res
+lambdaCaseable _ = Nothing
 

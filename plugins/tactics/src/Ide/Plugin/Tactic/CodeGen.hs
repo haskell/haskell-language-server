@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Ide.Plugin.Tactic.CodeGen where
 
 import Control.Monad.Except
@@ -18,35 +19,62 @@ import Name
 import Type hiding (Var)
 
 
+destructMatches
+    :: (DataCon -> Judgement -> Rule)
+       -- ^ How to construct each match
+    -> (Judgement -> Judgement)
+       -- ^ How to derive each match judgement
+    -> CType
+       -- ^ Type being destructed
+    -> Judgement
+    -> RuleM [RawMatch]
+destructMatches f f2 t jdg = do
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
+  case splitTyConApp_maybe $ unCType t of
+    Nothing -> throwError $ GoalMismatch "destruct" g
+    Just (tc, apps) -> do
+      let dcs = tyConDataCons tc
+      case dcs of
+        [] -> throwError $ GoalMismatch "destruct" g
+        _ -> for dcs $ \dc -> do
+          let args = dataConInstArgTys dc apps
+          names <- mkManyGoodNames hy args
+
+          let pat :: Pat GhcPs
+              pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
+                  $ fmap bvar' names
+              j = f2
+                $ introducingPat (zip names $ coerce args)
+                $ withNewGoal g jdg
+          sg <- f dc j
+          pure $ match [pat] $ unLoc sg
+
+
 ------------------------------------------------------------------------------
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
 destruct' f term jdg = do
   let hy = jHypothesis jdg
-      g  = jGoal jdg
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
     Just (_, t) ->
-      case splitTyConApp_maybe $ unCType t of
-        Nothing -> throwError $ GoalMismatch "destruct" g
-        Just (tc, apps) ->
-          fmap noLoc $ case' (var' term) <$> do
-            let dcs = tyConDataCons tc
-            case dcs of
-              [] -> throwError $ GoalMismatch "destruct" g
-              _ -> for dcs $ \dc -> do
-                let args = dataConInstArgTys dc apps
-                names <- mkManyGoodNames hy args
+      fmap noLoc $ case' (var' term) <$>
+        destructMatches f (destructing term) t jdg
 
-                let pat :: Pat GhcPs
-                    pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
-                        $ fmap bvar' names
-                    j = destructing term
-                      $ introducingPat (zip names $ coerce args)
-                      $ withNewGoal g jdg
-                sg <- f dc j
-                pure $ match [pat] $ unLoc sg
+
+------------------------------------------------------------------------------
+-- | Combinator for performign case splitting, and running sub-rules on the
+-- resulting matches.
+destructLambdaCase' :: (DataCon -> Judgement -> Rule) -> Judgement -> Rule
+destructLambdaCase' f jdg = do
+  let g  = jGoal jdg
+  case splitFunTy_maybe (unCType g) of
+    Just (arg, _) | isAlgType arg ->
+      fmap noLoc $ lambdaCase <$>
+        destructMatches f id (CType arg) jdg
+    _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
 
 ------------------------------------------------------------------------------

@@ -110,6 +110,19 @@ homo = rule . destruct' (\dc jdg ->
   buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
+------------------------------------------------------------------------------
+-- | LambdaCase split, and leave holes in the matches.
+destructLambdaCase :: TacticsM ()
+destructLambdaCase = rule $ destructLambdaCase' (const subgoal)
+
+
+------------------------------------------------------------------------------
+-- | LambdaCase split, using the same data constructor in the matches.
+homoLambdaCase :: TacticsM ()
+homoLambdaCase = rule $ destructLambdaCase' (\dc jdg ->
+  buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+
+
 apply' :: OccName -> TacticsM ()
 apply' func = rule $ \jdg -> do
   let hy = jHypothesis jdg
