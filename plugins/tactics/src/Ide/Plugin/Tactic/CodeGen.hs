@@ -30,23 +30,23 @@ destruct' f term jdg = do
     Just (_, t) ->
       case splitTyConApp_maybe $ unCType t of
         Nothing -> throwError $ GoalMismatch "destruct" g
-        Just (tc, apps) -> do
-          fmap noLoc
-              $ case' (var' term)
-              <$> do
-            for (tyConDataCons tc) $ \dc -> do
-              let args = dataConInstArgTys dc apps
-              names <- mkManyGoodNames hy args
+        Just (tc, apps) ->
+          fmap noLoc $ case' (var' term) <$> do
+            let dcs = tyConDataCons tc
+            case dcs of
+              [] -> throwError $ GoalMismatch "destruct" g
+              _ -> for dcs $ \dc -> do
+                let args = dataConInstArgTys dc apps
+                names <- mkManyGoodNames hy args
 
-              let pat :: Pat GhcPs
-                  pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
-                      $ fmap bvar' names
-
-              let j = destructing term
-                    $ introducingPat (zip names $ coerce args)
-                    $ withNewGoal g jdg
-              sg <- f dc j
-              pure $ match [pat] $ unLoc sg
+                let pat :: Pat GhcPs
+                    pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
+                        $ fmap bvar' names
+                    j = destructing term
+                      $ introducingPat (zip names $ coerce args)
+                      $ withNewGoal g jdg
+                sg <- f dc j
+                pure $ match [pat] $ unLoc sg
 
 
 ------------------------------------------------------------------------------
