@@ -34,8 +34,10 @@ import           TcType
 import           Type hiding (Var)
 
 
+
 ------------------------------------------------------------------------------
 -- | Use something in the hypothesis to fill the hole.
+-- TODO(sandy): deprecate this
 assumption :: TacticsM ()
 assumption = rule $ \jdg -> do
   let hy = jHypothesis jdg
@@ -43,6 +45,19 @@ assumption = rule $ \jdg -> do
   case find ((== g) . snd) $ toList hy of
     Just (v, _) -> pure $ noLoc $ var' v
     Nothing -> throwError $ GoalMismatch "assumption" g
+
+
+------------------------------------------------------------------------------
+-- | Use something named in the hypothesis to fill the hole.
+assume :: OccName -> TacticsM ()
+assume name = rule $ \jdg -> do
+  let g  = jGoal jdg
+  case M.lookup name $ jHypothesis jdg of
+    Just ty ->
+      case ty == jGoal jdg of
+        True  -> pure $ noLoc $ var' name
+        False -> throwError $ GoalMismatch "assume" g
+    Nothing -> throwError $ UndefinedHypothesis name
 
 
 ------------------------------------------------------------------------------
@@ -169,14 +184,22 @@ auto' n = do
         progress ((==) `on` jGoal) NoProgress (destruct aname)
         loop
     , split >> loop
-    , assumption >> loop
+    , attemptOn allNames $ \name -> do
+        assume name
+        loop
     ]
+
 
 functionNames :: Judgement -> [OccName]
 functionNames  =
   M.keys . M.filter (isFunction . unCType) . jHypothesis
 
+
 algebraicNames :: Judgement -> [OccName]
 algebraicNames =
   M.keys . M.filter (isJust . algebraicTyCon . unCType) . jHypothesis
+
+
+allNames :: Judgement -> [OccName]
+allNames = M.keys . jHypothesis
 
