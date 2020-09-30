@@ -22,7 +22,7 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import Data.Maybe (mapMaybe)
-import Ide.Plugin.Tactic.Types (tacticTitle, TacticCommand (..))
+import Ide.Plugin.Tactic.TestTypes (tacticTitle, TacticCommand (..))
 
 
 ------------------------------------------------------------------------------

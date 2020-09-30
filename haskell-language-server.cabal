@@ -104,6 +104,7 @@ executable haskell-language-server
     Ide.Plugin.Tactic.Range
     Ide.Plugin.Tactic.Tactics
     Ide.Plugin.Tactic.Types
+    Ide.Plugin.Tactic.TestTypes
     Ide.TreeTransform
 
   ghc-options:
@@ -246,7 +247,8 @@ test-suite func-test
     , tasty-golden
     , tasty-rerun
 
-  hs-source-dirs:     test/functional
+  hs-source-dirs:     test/functional plugins/tactics/src
+
   main-is:            Main.hs
   other-modules:
     Command
@@ -267,7 +269,7 @@ test-suite func-test
     Symbol
     TypeDefinition
     Tactic
-    Ide.Plugin.Tactic.Types
+    Ide.Plugin.Tactic.TestTypes
 
   ghc-options:
     -Wall -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N

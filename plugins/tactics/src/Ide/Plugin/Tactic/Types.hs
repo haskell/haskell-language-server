@@ -3,7 +3,6 @@
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 
 module Ide.Plugin.Tactic.Types
@@ -17,41 +16,18 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
-import           Control.Monad.Reader
-import           Data.Function
-import           Data.Map (Map)
-import           Data.Set (Set)
-import qualified Data.Text as T
-import           Development.IDE.GHC.Compat
-import           Development.IDE.Types.Location
-import           GHC.Generics
-import           Ide.Plugin.Tactic.Debug
-import           OccName
-import           Refinery.Tactic
-import           Type
+import Control.Monad.Reader
+import Data.Function
+import Data.Map (Map)
+import Data.Set (Set)
+import Development.IDE.GHC.Compat
+import Development.IDE.Types.Location
+import GHC.Generics
+import Ide.Plugin.Tactic.Debug
+import OccName
+import Refinery.Tactic
+import Type
 
-
-------------------------------------------------------------------------------
--- | The list of tactics exposed to the outside world. These are attached to
--- actual tactics via 'commandTactic' and are contextually provided to the
--- editor via 'commandProvider'.
-data TacticCommand
-  = Auto
-  | Intros
-  | Destruct
-  | Homomorphism
-  | DestructLambdaCase
-  | HomomorphismLambdaCase
-  deriving (Eq, Ord, Show, Enum, Bounded)
-
--- | Generate a title for the command.
-tacticTitle :: TacticCommand -> T.Text -> T.Text
-tacticTitle Auto _ = "Auto"
-tacticTitle Intros _ = "Introduce lambda"
-tacticTitle Destruct var = "Case split on " <> var
-tacticTitle Homomorphism var = "Homomorphic case split on " <> var
-tacticTitle DestructLambdaCase _ = "Lambda case split"
-tacticTitle HomomorphismLambdaCase _ = "Homomorphic lambda case split"
 
 ------------------------------------------------------------------------------
 -- | A wrapper around 'Type' which supports equality and ordering.
