@@ -45,9 +45,7 @@ extra-deps:
 - ormolu-0.1.2.0
 - parser-combinators-1.2.1
 - primitive-0.7.1.0
-- github: totbwf/refinery
-  commit: 5709a3f10645dd49af20912aec5eb06e72990849
-
+- refinery-0.2.0.0
 - regex-base-0.94.0.0
 - regex-pcre-builtin-0.95.1.1.8.43
 - regex-tdfa-1.3.1.0

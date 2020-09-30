@@ -1,9 +1,10 @@
-{-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DerivingStrategies    #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
+{-# LANGUAGE DeriveFunctor                  #-}
+{-# LANGUAGE DeriveGeneric                  #-}
+{-# LANGUAGE DerivingStrategies             #-}
+{-# LANGUAGE FlexibleInstances              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving     #-}
+{-# LANGUAGE MultiParamTypeClasses          #-}
+{-# LANGUAGE TypeSynonymInstances           #-}
 
 module Ide.Plugin.Tactic.Types
   ( module Ide.Plugin.Tactic.Types
@@ -68,9 +69,12 @@ data Judgement' a = Judgement
 type Judgement = Judgement' CType
 
 
+newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
+    deriving (Functor, Applicative, Monad, MonadReader Context)
+
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
-instance MonadExtract (LHsExpr GhcPs) ProvableM where
+instance MonadExtract (LHsExpr GhcPs) ExtractM where
   hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
 
 
@@ -117,9 +121,8 @@ instance Show TacticError where
 
 
 ------------------------------------------------------------------------------
-type ProvableM = ProvableT Judgement (Reader Context)
-type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
-type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError TacticState ProvableM
+type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError TacticState ExtractM
+type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError TacticState ExtractM
 type Rule      = RuleM (LHsExpr GhcPs)
 
 

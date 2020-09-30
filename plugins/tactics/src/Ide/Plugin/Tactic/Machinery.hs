@@ -55,10 +55,9 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] (LHsExpr GhcPs)
 runTactic ctx jdg t =
-    -- FIXME [Reed] This code does not work
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
         tacticState = mempty { ts_skolems = skolems }
-    in case partitionEithers $ flip runReader ctx $ runProvableT $ runTacticT t jdg tacticState of
+    in case partitionEithers $ flip runReader ctx $ unExtractM $ runTacticT t jdg tacticState of
       (errs, []) -> Left $ errs
       (_, solns) ->
         let soln = listToMaybe $ filter (null . snd) solns

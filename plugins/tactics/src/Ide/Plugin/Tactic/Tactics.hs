@@ -12,7 +12,6 @@ module Ide.Plugin.Tactic.Tactics
 import           Control.Applicative
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State.Strict (StateT(..), runStateT)
-import           Control.Monad.Trans
 import           Data.Function
 import           Data.List
 import qualified Data.Map as M
@@ -179,8 +178,7 @@ attemptOn getNames tac = matching (choice . fmap (\s -> tac s) . getNames)
 -- | Automatically solve a goal.
 auto :: TacticsM ()
 auto = do
-  -- TODO(reed): there is no MonadReader instance for ProvableT
-  current <- TacticT $ lift $ lift $ lift getCurrentDefinitions
+  current <- getCurrentDefinitions
   TacticT $ StateT $ \jdg ->
     runStateT (unTacticT $ auto' 5) $ disallowing current jdg
 
