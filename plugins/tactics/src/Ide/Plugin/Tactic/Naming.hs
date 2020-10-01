@@ -11,7 +11,7 @@ import           Name
 import           TcType
 import           TyCon
 import           Type
-import           TysWiredIn (listTyCon, pairTyCon)
+import           TysWiredIn (listTyCon, pairTyCon, unitTyCon)
 
 
 ------------------------------------------------------------------------------
@@ -41,6 +41,7 @@ mkTyConName :: TyCon -> String
 mkTyConName tc
   | tc == listTyCon = "l_"
   | tc == pairTyCon = "p_"
+  | tc == unitTyCon = "u_"
   | otherwise = fmap toLower . take 1 . occNameString $ getOccName tc
 
 
