@@ -16,16 +16,20 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
+import Control.Applicative
 import Control.Monad.Except (throwError)
 import Control.Monad.Reader
 import Control.Monad.State (gets, modify)
 import Data.Coerce
 import Data.Either
-import Data.Maybe
+import Data.List (sortBy)
+import Data.Ord (comparing)
 import Development.IDE.GHC.Compat
 import Ide.Plugin.Tactic.Judgements
 import Ide.Plugin.Tactic.Types
+import Refinery.ProofState
 import Refinery.Tactic
+import Refinery.Tactic.Internal
 import TcType
 import Type
 import Unify
@@ -57,12 +61,47 @@ runTactic
 runTactic ctx jdg t =
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
         tacticState = mempty { ts_skolems = skolems }
-    in case partitionEithers $ flip runReader ctx $ unExtractM $ runTacticT t jdg tacticState of
+    in case partitionEithers $ flip runReader ctx $ unExtractM $ runTacticTWithState t jdg tacticState of
       (errs, []) -> Left $ errs
       (_, solns) ->
-        let soln = listToMaybe $ filter (null . snd) solns
-        in Right $ fst $ fromMaybe (head solns) soln
+        case sortBy (comparing $ uncurry scoreSolution . snd) solns of
+          (res : _) -> Right $ fst res
+          -- guaranteed to not be empty
+          _ -> Left []
 
+
+scoreSolution :: TacticState -> [Judgement] -> Int
+scoreSolution _ _ = 0
+
+
+runTacticTWithState
+    :: (MonadExtract ext m)
+    => TacticT jdg ext err s m ()
+    -> jdg
+    -> s
+    -> m [Either err (ext, (s, [jdg]))]
+runTacticTWithState t j s = proofs' s $ fmap snd $ proofState t j
+
+
+proofs'
+    :: (MonadExtract ext m)
+    => s
+    -> ProofStateT ext ext err s m goal
+    -> m [(Either err (ext, (s, [goal])))]
+proofs' s p = go s [] p
+    where
+      go s goals (Subgoal goal k) = do
+         h <- hole
+         (go s (goals ++ [goal]) $ k h)
+      go s goals (Effect m) = go s goals =<< m
+      go s goals (Stateful f) =
+          let (s', p) = f s
+          in go s' goals p
+      go s goals (Alt p1 p2) = liftA2 (<>) (go s goals p1) (go s goals p2)
+      go s goals (Interleave p1 p2) = liftA2 (interleave) (go s goals p1) (go s goals p2)
+      go _ _ Empty = pure []
+      go _ _ (Failure err) = pure [throwError err]
+      go s goals (Axiom ext) = pure [Right (ext, (s, goals))]
 
 
 ------------------------------------------------------------------------------
