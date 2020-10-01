@@ -486,13 +486,11 @@ let g:LanguageClient_rootMarkers = ['*.cabal', 'stack.yaml']
 
 ### Using Haskell Language Server with Atom
 
-Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui) and [ide-haskell-hie](https://atom.io/packages/ide-haskell-hie),
+Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui) and [haskell](https://atom.io/packages/haskell),
 
 ```bash
-$ apm install language-haskell atom-ide-ui ide-haskell-hie
+$ apm install language-haskell atom-ide-ui haskell
 ```
-
-The plugin ide-haskell-hie is designed to work with haskell-ide-engine by default, so you will have to put the path to haskell-language-server-wrapper in the configuration option `Absolute path to hie executable`.
 
 ### Using haskell-language-server with Emacs
 
