@@ -41,7 +41,7 @@ mkTyConName :: TyCon -> String
 mkTyConName tc
   | tc == listTyCon = "l_"
   | tc == pairTyCon = "p_"
-  | tc == unitTyCon = "u_"
+  | tc == unitTyCon = "unit"
   | otherwise = fmap toLower . take 1 . occNameString $ getOccName tc
 
 
