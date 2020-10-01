@@ -43,16 +43,27 @@ instance Ord CType where
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
-    { ts_skolems :: [TyVar]
-    , ts_unifier :: TCvSubst
+    { ts_skolems   :: [TyVar]
+    , ts_unifier   :: TCvSubst
+    , ts_used_vals :: Set OccName
     }
 
 instance Semigroup TacticState where
-  TacticState a1 b1 <> TacticState a2 b2
-    = TacticState (a1 <> a2) (unionTCvSubst b1 b2)
+  TacticState a1 b1 c1 <> TacticState a2 b2 c2
+    = TacticState
+        (a1 <> a2)
+        (unionTCvSubst b1 b2)
+        (c1 <> c2)
 
 instance Monoid TacticState where
-  mempty = TacticState mempty emptyTCvSubst
+  mempty = TacticState mempty emptyTCvSubst mempty
+
+
+withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
+withUsedVals f ts = ts
+  { ts_used_vals = f $ ts_used_vals ts
+  }
+
 
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.

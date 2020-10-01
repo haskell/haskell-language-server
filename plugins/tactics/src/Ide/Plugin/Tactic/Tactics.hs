@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
@@ -11,11 +12,13 @@ module Ide.Plugin.Tactic.Tactics
 
 import           Control.Applicative
 import           Control.Monad.Except (throwError)
+import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Function
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
+import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
@@ -54,9 +57,18 @@ assume name = rule $ \jdg -> do
   case M.lookup name $ jHypothesis jdg of
     Just ty ->
       case ty == jGoal jdg of
-        True  -> pure $ noLoc $ var' name
+        True  -> do
+          useOccName jdg name
+          pure $ noLoc $ var' name
         False -> throwError $ GoalMismatch "assume" g
     Nothing -> throwError $ UndefinedHypothesis name
+
+
+useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
+useOccName jdg name =
+  case M.lookup name $ jHypothesis jdg of
+    Just{}  -> modify $ withUsedVals $ S.insert name
+    Nothing -> pure ()
 
 
 ------------------------------------------------------------------------------
