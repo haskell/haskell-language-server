@@ -16,23 +16,24 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
-import Control.Applicative
-import Control.Monad.Except (throwError)
-import Control.Monad.Reader
-import Control.Monad.State (gets, modify)
-import Data.Coerce
-import Data.Either
-import Data.List (sortBy)
-import Data.Ord (comparing)
-import Development.IDE.GHC.Compat
-import Ide.Plugin.Tactic.Judgements
-import Ide.Plugin.Tactic.Types
-import Refinery.ProofState
-import Refinery.Tactic
-import Refinery.Tactic.Internal
-import TcType
-import Type
-import Unify
+import           Control.Applicative
+import           Control.Monad.Except (throwError)
+import           Control.Monad.Reader
+import           Control.Monad.State (gets, modify)
+import           Data.Coerce
+import           Data.Either
+import           Data.List (intercalate, sortBy)
+import           Data.Ord (comparing, Down(..))
+import qualified Data.Set as S
+import           Development.IDE.GHC.Compat
+import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Types
+import           Refinery.ProofState
+import           Refinery.Tactic
+import           Refinery.Tactic.Internal
+import           TcType
+import           Type
+import           Unify
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -63,15 +64,19 @@ runTactic ctx jdg t =
         tacticState = mempty { ts_skolems = skolems }
     in case partitionEithers $ flip runReader ctx $ unExtractM $ runTacticTWithState t jdg tacticState of
       (errs, []) -> Left $ errs
-      (_, solns) ->
-        case sortBy (comparing $ uncurry scoreSolution . snd) solns of
+      (_, solns) -> do
+        -- TODO(sandy): remove this trace sometime
+        traceM $ intercalate "\n" $ fmap (unsafeRender . fst) $ solns
+        case sortBy (comparing $ Down . uncurry scoreSolution . snd) solns of
           (res : _) -> Right $ fst res
           -- guaranteed to not be empty
           _ -> Left []
 
 
 scoreSolution :: TacticState -> [Judgement] -> Int
-scoreSolution _ _ = 0
+scoreSolution TacticState{..} holes
+  -- TODO(sandy): should this be linear?
+  = S.size ts_used_vals - length holes
 
 
 runTacticTWithState

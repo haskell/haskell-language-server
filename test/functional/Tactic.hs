@@ -90,7 +90,9 @@ tests = testGroup
   , goldenTest "GoldenJoinCont.hs"          4 12 Auto   ""
   , goldenTest "GoldenIdentityFunctor.hs"   3 11 Auto   ""
   , goldenTest "GoldenIdTypeFam.hs"         7 11 Auto   ""
-  , goldenTest "GoldenEitherHomomorphic.hs" 2 15 Auto   ""
+  , goldenTest "GoldenEitherHomomorphic.hs" 2 15 Auto ""
+  , goldenTest "GoldenNote.hs"              2 8  Auto ""
+  , goldenTest "GoldenPureList.hs"          2 12 Auto ""
   ]
 
 
