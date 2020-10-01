@@ -3,6 +3,7 @@
 module Ide.Plugin.Tactic.Naming where
 
 import           Control.Monad.State.Strict
+import           Data.Bool (bool)
 import           Data.Char
 import           Data.Map (Map)
 import qualified Data.Map as M
@@ -42,7 +43,19 @@ mkTyConName tc
   | tc == listTyCon = "l_"
   | tc == pairTyCon = "p_"
   | tc == unitTyCon = "unit"
-  | otherwise = fmap toLower . take 1 . occNameString $ getOccName tc
+  | otherwise
+      = filterReplace isSymbol 's'
+      . filterReplace isSymbol 'p'
+      . fmap toLower
+      . take 1
+      . occNameString
+      $ getOccName tc
+
+
+------------------------------------------------------------------------------
+-- | Maybe replace an element in the list if the predicate matches
+filterReplace :: (a -> Bool) -> a -> [a] -> [a]
+filterReplace f r = fmap (\a -> bool a r $ f a)
 
 
 ------------------------------------------------------------------------------
