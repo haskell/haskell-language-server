@@ -62,7 +62,10 @@ runTactic
 runTactic ctx jdg t =
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
         tacticState = mempty { ts_skolems = skolems }
-    in case partitionEithers $ flip runReader ctx $ unExtractM $ runTacticTWithState t jdg tacticState of
+    in case partitionEithers
+          . flip runReader ctx
+          . unExtractM
+          $ runTacticTWithState t jdg tacticState of
       (errs, []) -> Left $ errs
       (_, solns) -> do
         -- TODO(sandy): remove this trace sometime
@@ -76,7 +79,7 @@ runTactic ctx jdg t =
 scoreSolution :: TacticState -> [Judgement] -> Int
 scoreSolution TacticState{..} holes
   -- TODO(sandy): should this be linear?
-  = S.size ts_used_vals - length holes
+  = S.size ts_used_vals - length holes * 5
 
 
 runTacticTWithState
