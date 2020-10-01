@@ -28,10 +28,10 @@ mkTyName (tcSplitFunTys -> ((_:_), b))
 mkTyName (splitTyConApp_maybe -> Just (c, args))
   = mkTyConName c ++ foldMap mkTyName args
 -- eg. mkTyName a = "a"
-mkTyName (getTyVar_maybe-> Just tv)
+mkTyName (getTyVar_maybe -> Just tv)
   = occNameString $ occName tv
 -- eg. mkTyName (forall x. y) = "y"
-mkTyName (tcSplitSigmaTy-> ((_:_), _, t))
+mkTyName (tcSplitSigmaTy -> ((_:_), _, t))
   = mkTyName t
 mkTyName _ = "x"
 
@@ -44,10 +44,10 @@ mkTyConName tc
   | tc == pairTyCon = "p_"
   | tc == unitTyCon = "unit"
   | otherwise
-      = filterReplace isSymbol 's'
-      . filterReplace isSymbol 'p'
+      = take 1
       . fmap toLower
-      . take 1
+      . filterReplace isSymbol      's'
+      . filterReplace isPunctuation 'p'
       . occNameString
       $ getOccName tc
 
