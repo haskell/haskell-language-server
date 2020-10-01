@@ -47,6 +47,8 @@ main = do
 
 launchHaskellLanguageServer :: LspArguments -> IO ()
 launchHaskellLanguageServer LspArguments{..} = do
+  whenJust argsCwd setCurrentDirectory
+
   d <- getCurrentDirectory
 
   -- Get the cabal directory from the cradle
@@ -54,8 +56,6 @@ launchHaskellLanguageServer LspArguments{..} = do
   setCurrentDirectory $ cradleRootDir cradle
 
   when argsProjectGhcVersion $ getRuntimeGhcVersion' cradle >>= putStrLn >> exitSuccess
-
-  whenJust argsCwd setCurrentDirectory
 
   progName <- getProgName
   hPutStrLn stderr $ "Run entered for haskell-language-server-wrapper(" ++ progName ++ ") "
