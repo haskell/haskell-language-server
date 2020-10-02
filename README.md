@@ -29,6 +29,7 @@ This is *very* early stage software.
       - [Building](#building)
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
+  - [HLS LSP Configuration](#hls-lsp-configuration)
   - [Project Configuration](#project-configuration)
   - [Editor Integration](#editor-integration)
     - [VS Code](#using-haskell-language-server-with-vs-code)
@@ -207,7 +208,7 @@ The script will install the executables `haskell-language-server-wrapper` and `h
 It will copy the latter appending the used ghc version, needed by the wrapper to choose the suitable version
 for the project at hand.
 
-So installing the executables directly with `stack install` or `cabal v2-install` may not be enough 
+So installing the executables directly with `stack install` or `cabal v2-install` may not be enough
 for it to work properly.
 
 Install haskell-language-server for the latest available and supported GHC version (and hoogle docs):
@@ -252,6 +253,28 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 ./cabal-hls-install hls-8.6.5
 ./cabal-hls-install data
 ```
+
+## HLS LSP Configuration
+
+haskell-language-server supports some forms of configuration.
+
+This configuration is done via the LSP settings you provide with your editor and/or LSP client.
+Some examples include:
+* in VSCode/VSCodium this is done via the `Settings` tab
+* with `LanguageClient-neovim` you can point the [`g:LanguageClient_settingsPath`](https://github.com/autozimu/LanguageClient-neovim/blob/0e5c9546bfddbaa2b01e5056389c25aefc8bf989/doc/LanguageClient.txt#L221)
+  variable to the file in which you want to keep your LSP settings
+
+### Formatting providers
+##### Raw LSP key name: `haskell.formattingProvider`
+
+By default, haskell-language-server is compiled with support for several different formatters.
+
+These include
+* `floskell`
+* `fourmolu`
+* `ormolu`
+* `stylish-haskell`
+* `brittany` (if compiled with AGPL)
 
 ## Project Configuration
 
@@ -567,7 +590,7 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 ### Style guidelines
 
 The project includes a [`.editorconfig`](https://editorconfig.org) [file](https://github.com/haskell/haskell-language-server/blob/master/.editorconfig) with the editor basic settings used by the project.
-However, most editors will need some action to honour those settings automatically. 
+However, most editors will need some action to honour those settings automatically.
 For example vscode needs to have installed a specific [extension](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig).
 Please, try to follow those basic settings to keep the codebase as uniform as possible.
 
@@ -608,7 +631,7 @@ If you want to test HLS while hacking on it, follow the steps below.
 To do once:
 - Open some codebase on which you want to test your hacked HLS in your favorite editor
 - Configure this editor to use your custom HLS executable
-  - With Cabal: 
+  - With Cabal:
     - On Unix systems: `cabal exec which haskell-language-server`
     - On Windows: `cabal exec where haskell-language-server`
   - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
