@@ -6,6 +6,7 @@ import           Development.Shake.FilePath
 import           Control.Monad
 import           System.Directory                         ( copyFile )
 -- import           System.FilePath                          ( (</>) )
+import           System.Info                              ( os )
 import           Version
 import           Print
 
@@ -32,11 +33,13 @@ stackInstallHls mbVersionNumber args = do
 
   localBinDir <- getLocalBin args
   let hls = "haskell-language-server" <.> exe
-  liftIO $ do
-    copyFile (localBinDir </> hls)
-             (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
-    copyFile (localBinDir </> hls)
-             (localBinDir </> "haskell-language-server-" ++ dropExtension versionNumber <.> exe)
+      copyCmd old new = if os == "mingw32"
+                        then liftIO $ copyFile old new
+                        else command [] "ln" ["-f", old, new]
+  copyCmd (localBinDir </> hls)
+           (localBinDir </> "haskell-language-server-" ++ versionNumber <.> exe)
+  copyCmd (localBinDir </> hls)
+           (localBinDir </> "haskell-language-server-" ++ dropExtension versionNumber <.> exe)
 
 getGhcVersionOfCfgFile :: String -> [String] -> Action VersionNumber
 getGhcVersionOfCfgFile stackFile args = do
