@@ -5,6 +5,7 @@ import           Development.Shake
 import           Development.Shake.FilePath
 import           Control.Monad
 import           System.Directory                         ( copyFile )
+import           System.Info                              ( os )
 
 import           Version
 import           Print
@@ -74,9 +75,11 @@ cabalInstallHls versionNumber args = do
   let minorVerExe = "haskell-language-server-" ++ versionNumber <.> exe
       majorVerExe = "haskell-language-server-" ++ dropExtension versionNumber <.> exe
 
-  liftIO $ do
-    copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> minorVerExe)
-    copyFile (localBin </> "haskell-language-server" <.> exe) (localBin </> majorVerExe)
+  let copyCmd old new = if os == "mingw32"
+                        then liftIO $ copyFile old new
+                        else command [] "ln" ["-f", old, new]
+  copyCmd (localBin </> "haskell-language-server" <.> exe) (localBin </> minorVerExe)
+  copyCmd (localBin </> "haskell-language-server" <.> exe) (localBin </> majorVerExe)
 
   printLine $   "Copied executables "
              ++ ("haskell-language-server-wrapper" <.> exe) ++ ", "
@@ -141,4 +144,3 @@ getVerbosityArg v = "-v" ++ cabalVerbosity
           Chatty ->     "2"
 #endif
           Diagnostic -> "3"
-
