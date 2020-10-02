@@ -265,6 +265,8 @@ Some examples include:
   variable to the file in which you want to keep your LSP settings
 
 ### Formatting providers
+##### Raw LSP key name: `haskell.formattingProvider`
+
 By default, haskell-language-server is compiled with support for several different formatters.
 
 These include
@@ -273,20 +275,6 @@ These include
 * `ormolu`
 * `stylish-haskell`
 * `brittany` (if compiled with AGPL)
-
-To choose one of them, you need to include the name of the one you want to use
-as the value for the `formattingProvider` key in your LSP configuration like so:
-```json
-{
-  ...
-  "haskell": {
-    ...
-    "formattingProvider": "fourmolu"
-    ...
-  }
-  ...
-}
-```
 
 ## Project Configuration
 
