@@ -70,3 +70,15 @@ One caveat is that we need to rename the binaries from
 haskell-language-server/haskell-language-server-wrapper to hls/hls-wrapper due to
 path length limitations on windows. But whenever we upload them to the release,
 we make sure to upload them as their full name variant.
+
+### ghcup
+Ghcup can install hls binaries, provided that there is a tarfile
+called `haskell-language-server-{macOS,Linux}-$HLS_VERSION.gz`
+included in the GitHub release. The `tar` job in the workflow file automates the creation of this.
+
+### Windows
+Currently building HLS with GHC 8.8.x on Windows is very flakey and so
+is not included by default in the GitHub Actions build matrix. Instead
+they need to be built and uploaded manually. See [this
+PR](https://github.com/haskell/haskell-language-server/issues/276) for
+more details
