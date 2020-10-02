@@ -47,6 +47,7 @@ import qualified System.IO.Extra
 import System.Directory
 import System.Exit (ExitCode(ExitSuccess))
 import System.Process.Extra (readCreateProcessWithExitCode, CreateProcess(cwd), proc)
+import System.Info.Extra (isWindows)
 import Test.QuickCheck
 import Test.QuickCheck.Instances ()
 import Test.Tasty
@@ -284,15 +285,16 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
   , testSessionWait "add missing module (non workspace)" $ do
+      tmpDir <- liftIO getTemporaryDirectory
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
             ]
-      _ <- createDoc "/tmp/ModuleB.hs" "haskell" contentB
-      expectDiagnostics [("/tmp/ModuleB.hs", [(DsError, (1, 7), "Could not find module")])]
+      _ <- createDoc (tmpDir </> "ModuleB.hs") "haskell" contentB
+      expectDiagnostics [(tmpDir </> "ModuleB.hs", [(DsError, (1, 7), "Could not find module")])]
       let contentA = T.unlines [ "module ModuleA where" ]
-      _ <- createDoc "/tmp/ModuleA.hs" "haskell" contentA
-      expectDiagnostics [("/tmp/ModuleB.hs", [])]
+      _ <- createDoc (tmpDir </> "ModuleA.hs") "haskell" contentA
+      expectDiagnostics [(tmpDir </> "ModuleB.hs", [])]
   , testSessionWait "cyclic module dependency" $ do
       let contentA = T.unlines
             [ "module ModuleA where"
@@ -586,7 +588,8 @@ watchedFilesTests = testGroup "watched files"
       liftIO $ length watchedFileRegs @?= 1
 
   , testSession' "non workspace file" $ \sessionDir -> do
-      liftIO $ writeFile (sessionDir </> "hie.yaml") "cradle: {direct: {arguments: [\"-i/tmp\", \"A\", \"WatchedFilesMissingModule\"]}}"
+      tmpDir <- liftIO getTemporaryDirectory
+      liftIO $ writeFile (sessionDir </> "hie.yaml") ("cradle: {direct: {arguments: [\"-i" <> tmpDir <> "\", \"A\", \"WatchedFilesMissingModule\"]}}")
       _doc <- createDoc "A.hs" "haskell" "{-# LANGUAGE NoImplicitPrelude#-}\nmodule A where\nimport WatchedFilesMissingModule"
       watchedFileRegs <- getWatchedFilesSubscriptionsUntil @PublishDiagnosticsNotification
 
@@ -2175,7 +2178,7 @@ findDefinitionAndHoverTests = let
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
   dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
   dcL12  = Position 16 11  ;
-  xtcL5  = Position  9 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in 'GHC.Types'"]]
+  xtcL5  = Position  9 11  ;  xtc    = [ExpectExternFail,   ExpectHoverText ["Int", "Defined in ", "GHC.Types"]]
   tcL6   = Position 10 11  ;  tcData = [mkR   7  0    9 16, ExpectHoverText ["TypeConstructor", "GotoHover.hs:8:1"]]
   vvL16  = Position 20 12  ;  vv     = [mkR  20  4   20  6]
   opL16  = Position 20 15  ;  op     = [mkR  21  2   21  4]
@@ -2185,7 +2188,7 @@ findDefinitionAndHoverTests = let
   xvL20  = Position 24  8  ;  xvMsg  = [ExpectExternFail,   ExpectHoverText ["pack", ":: String -> Text", "Data.Text"]]
   clL23  = Position 27 11  ;  cls    = [mkR  25  0   26 20, ExpectHoverText ["MyClass", "GotoHover.hs:26:1"]]
   clL25  = Position 29  9
-  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in 'GHC.Num'"]]
+  eclL15 = Position 19  8  ;  ecls   = [ExpectExternFail, ExpectHoverText ["Num", "Defined in ", "GHC.Num"]]
   dnbL29 = Position 33 18  ;  dnb    = [ExpectHoverText [":: ()"],   mkR  33 12   33 21]
   dnbL30 = Position 34 23
   lcbL33 = Position 37 26  ;  lcb    = [ExpectHoverText [":: Char"], mkR  37 26   37 27]
@@ -2266,7 +2269,7 @@ checkFileCompiles fp =
 
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
-  testSessionWait "simple plugin" $ do
+  ignoreInWindowsAndGHCGreaterThan86 $ testSessionWait "simple plugin" $ do
     let content =
           T.unlines
             [ "{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}"
@@ -2289,7 +2292,7 @@ pluginSimpleTests =
 
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
-  testSessionWait "parsedResultAction plugin" $ do
+  ignoreInWindowsAndGHCGreaterThan86 $ testSessionWait "parsedResultAction plugin" $ do
     let content =
           T.unlines
             [ "{-# LANGUAGE DuplicateRecordFields, TypeApplications, FlexibleContexts, DataKinds, MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}"
@@ -2300,12 +2303,12 @@ pluginParsedResultTests =
             , "display c = c.name"
             ]
     _ <- createDoc "Testing.hs" "haskell" content
-    expectNoMoreDiagnostics 1
+    expectNoMoreDiagnostics 2
 
 cppTests :: TestTree
 cppTests =
   testGroup "cpp"
-    [ testCase "cpp-error" $ do
+    [ ignoreInWindowsBecause "Throw a lsp session time out in windows for ghc-8.8 and is broken for other versions" $ testCase "cpp-error" $ do
         let content =
               T.unlines
                 [ "{-# LANGUAGE CPP #-}",
@@ -2946,6 +2949,17 @@ expectFailCabal :: String -> TestTree -> TestTree
 expectFailCabal _ = id
 #else
 expectFailCabal = expectFailBecause
+#endif
+
+ignoreInWindowsBecause :: String -> TestTree -> TestTree
+ignoreInWindowsBecause = if isWindows then ignoreTestBecause else flip const
+
+ignoreInWindowsAndGHCGreaterThan86 :: TestTree -> TestTree
+#if MIN_GHC_API_VERSION(8,8,1)
+ignoreInWindowsAndGHCGreaterThan86 =
+    ignoreInWindowsBecause "tests are unreliable for windows and ghc greater than 8.6.5"
+#else
+ignoreInWindowsAndGHCGreaterThan86 = id
 #endif
 
 data Expect

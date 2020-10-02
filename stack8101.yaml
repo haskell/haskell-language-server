@@ -5,7 +5,7 @@ packages:
 extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
-- lsp-test-0.11.0.2
+- lsp-test-0.11.0.6
 - ghc-check-0.5.0.1
 - hie-bios-0.7.1
 

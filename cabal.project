@@ -1,7 +1,6 @@
 packages: .
 
-package ghcide
-  test-show-details: direct
+test-show-details: direct
 
 allow-newer:
 	active:base,
