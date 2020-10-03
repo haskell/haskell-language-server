@@ -19,7 +19,7 @@ extra-deps:
 - constrained-dynamic-0.1.0.0
 - extra-1.7.3
 - floskell-0.10.4
-- fourmolu-0.1.0.0@rev:1
+- fourmolu-0.2.0.0
 # - ghcide-0.1.0
 - haskell-src-exts-1.21.1
 - hlint-2.2.8
