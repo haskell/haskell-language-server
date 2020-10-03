@@ -68,12 +68,12 @@ withUsedVals f ts = ts
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis :: Map OccName a
-  , _jDestructed :: Set OccName
+  { _jHypothesis  :: !(Map OccName a)
+  , _jDestructed  :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
-  , _jPatternVals :: Set OccName
+  , _jPatternVals :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
-  , _jGoal       :: a
+  , _jGoal        :: !(a)
   }
   deriving stock (Eq, Ord, Generic, Functor)
 
