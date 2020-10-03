@@ -147,7 +147,7 @@ executable haskell-language-server
     , transformers
     , unordered-containers
     , ghc-source-gen
-    , refinery
+    , refinery                 ^>=0.1
     , ghc-exactprint
 
   if flag(agpl)
