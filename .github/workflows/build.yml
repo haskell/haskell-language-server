@@ -146,7 +146,7 @@ jobs:
       - run: |
           for OS in Linux macOS
           do
-            tar -czf haskell-language-server-$OS-${{ github.event.release.tag_name }}.gz haskell-language-server-$OS-*.gz
+            tar -czf haskell-language-server-$OS-${{ github.event.release.tag_name }}.tar.gz haskell-language-server-$OS-*.gz
           done
 
       - uses: actions/upload-release-asset@v1.0.2
@@ -154,8 +154,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: haskell-language-server-macOS-${{ github.event.release.tag_name }}.gz
-          asset_name: haskell-language-server-macOS-${{ github.event.release.tag_name }}.gz
+          asset_path: haskell-language-server-macOS-${{ github.event.release.tag_name }}.tar.gz
+          asset_name: haskell-language-server-macOS-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
 
       - uses: actions/upload-release-asset@v1.0.2
@@ -163,6 +163,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: haskell-language-server-Linux-${{ github.event.release.tag_name }}.gz
-          asset_name: haskell-language-server-Linux-${{ github.event.release.tag_name }}.gz
+          asset_path: haskell-language-server-Linux-${{ github.event.release.tag_name }}.tar.gz
+          asset_name: haskell-language-server-Linux-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
