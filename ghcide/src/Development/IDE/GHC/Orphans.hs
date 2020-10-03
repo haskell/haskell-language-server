@@ -10,14 +10,14 @@
 --   Note that the 'NFData' instances may not be law abiding.
 module Development.IDE.GHC.Orphans() where
 
-import GHC
-import GhcPlugins
-import Development.IDE.GHC.Compat
-import qualified StringBuffer as SB
-import Control.DeepSeq
-import Data.Hashable
-import Development.IDE.GHC.Util
-import Bag
+import           Bag
+import           Control.DeepSeq
+import           Data.Hashable
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Util
+import           GHC                        ()
+import           GhcPlugins
+import qualified StringBuffer               as SB
 
 
 -- Orphan instances for types from the GHC API.
@@ -30,6 +30,11 @@ instance NFData ModDetails where rnf = rwhnf
 instance NFData SafeHaskellMode where rnf = rwhnf
 instance Show Linkable where show = prettyPrint
 instance NFData Linkable where rnf = rwhnf
+instance Show PackageFlag where show = prettyPrint
+instance Show InteractiveImport where show = prettyPrint
+instance Show ComponentId  where show = prettyPrint
+instance Show PackageName  where show = prettyPrint
+instance Show SourcePackageId  where show = prettyPrint
 
 instance Show InstalledUnitId where
     show = installedUnitIdString
@@ -85,7 +90,7 @@ instance Hashable ModuleName where
 
 instance NFData a => NFData (IdentifierDetails a) where
     rnf (IdentifierDetails a b) = rnf a `seq` rnf (length b)
- 
+
 instance NFData RealSrcSpan where
     rnf = rwhnf
 
