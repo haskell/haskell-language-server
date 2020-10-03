@@ -38,7 +38,7 @@ extra-deps:
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
 - ormolu-0.1.2.0
-- refinery-0.1.0.0
+- refinery-0.2.0.0
 - retrie-0.1.1.1
 - semigroups-0.18.5
 # - github: wz1000/shake

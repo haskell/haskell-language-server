@@ -75,7 +75,7 @@ This is *very* early stage software.
       "$everything": -haddock
     ```
 
-  This will cause compilation errors if a dependency contains invalid Haddock markup, though in a future version of GHC (hopefully 8.12), [these will be demoted to warnings](https://gitlab.haskell.org/ghc/ghc/-/merge_requests/2377).
+  This will cause compilation errors if a dependency contains invalid Haddock markup, though from GHC version 9.0, [these will be demoted to warnings](https://gitlab.haskell.org/ghc/ghc/-/merge_requests/2377).
 
  - Integration with [retrie](https://hackage.haskell.org/package/retrie)
 
