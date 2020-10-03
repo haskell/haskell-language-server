@@ -20,7 +20,7 @@ extra-deps:
 - clock-0.7.2
 - extra-1.7.3
 - floskell-0.10.4
-- fourmolu-0.1.0.0@rev:1
+- fourmolu-0.2.0.0
 - fuzzy-0.1.0.0
 # - ghcide-0.1.0
 - ghc-check-0.5.0.1
