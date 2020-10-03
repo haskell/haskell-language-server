@@ -43,9 +43,9 @@ instance Ord CType where
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
-    { ts_skolems   :: [TyVar]
-    , ts_unifier   :: TCvSubst
-    , ts_used_vals :: Set OccName
+    { ts_skolems   :: !([TyVar])
+    , ts_unifier   :: !(TCvSubst)
+    , ts_used_vals :: !(Set OccName)
     }
 
 instance Semigroup TacticState where
