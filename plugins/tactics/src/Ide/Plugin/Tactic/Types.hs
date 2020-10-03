@@ -1,10 +1,11 @@
-{-# LANGUAGE DeriveFunctor                  #-}
-{-# LANGUAGE DeriveGeneric                  #-}
-{-# LANGUAGE DerivingStrategies             #-}
-{-# LANGUAGE FlexibleInstances              #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving     #-}
-{-# LANGUAGE MultiParamTypeClasses          #-}
-{-# LANGUAGE TypeSynonymInstances           #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
+{-# OPTIONS_GHC -fno-warn-orphans       #-}
 
 module Ide.Plugin.Tactic.Types
   ( module Ide.Plugin.Tactic.Types
@@ -40,28 +41,41 @@ instance Eq CType where
 instance Ord CType where
   compare = nonDetCmpType `on` unCType
 
+instance Show CType where
+  show  = unsafeRender . unCType
+
+instance Show OccName where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
     { ts_skolems   :: !([TyVar])
     , ts_unifier   :: !(TCvSubst)
     , ts_used_vals :: !(Set OccName)
+    , ts_intro_vals :: !(Set OccName)
     }
 
 instance Semigroup TacticState where
-  TacticState a1 b1 c1 <> TacticState a2 b2 c2
+  TacticState a1 b1 c1 d1 <> TacticState a2 b2 c2 d2
     = TacticState
         (a1 <> a2)
         (unionTCvSubst b1 b2)
         (c1 <> c2)
+        (d1 <> d2)
 
 instance Monoid TacticState where
-  mempty = TacticState mempty emptyTCvSubst mempty
+  mempty = TacticState mempty emptyTCvSubst mempty mempty
 
 
 withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
 withUsedVals f ts = ts
   { ts_used_vals = f $ ts_used_vals ts
+  }
+
+withIntroducedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
+withIntroducedVals f ts = ts
+  { ts_intro_vals = f $ ts_intro_vals ts
   }
 
 

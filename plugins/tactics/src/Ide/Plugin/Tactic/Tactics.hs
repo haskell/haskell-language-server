@@ -39,14 +39,8 @@ import           Type hiding (Var)
 
 ------------------------------------------------------------------------------
 -- | Use something in the hypothesis to fill the hole.
--- TODO(sandy): deprecate this
 assumption :: TacticsM ()
-assumption = rule $ \jdg -> do
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
-  case find ((== g) . snd) $ toList hy of
-    Just (v, _) -> pure $ noLoc $ var' v
-    Nothing -> throwError $ GoalMismatch "assumption" g
+assumption = attemptOn allNames assume
 
 
 ------------------------------------------------------------------------------
@@ -72,6 +66,27 @@ useOccName jdg name =
 
 
 ------------------------------------------------------------------------------
+-- | Restrict a tactic to looking only at pattern vals and functions
+simpler :: TacticsM () -> TacticsM ()
+simpler t = do
+  jdg <- goal
+  let funcs = M.filter (isFunction . unCType) $ jHypothesis jdg
+      hy' = jPatHypothesis jdg <> funcs
+  traceM $ mappend "!!! yo: " $ show hy'
+  localTactic t $ withHypothesis $ const hy'
+
+
+recursion :: TacticsM ()
+recursion = do
+  defs <- getCurrentDefinitions
+  traceM $ mappend "!!! recursion: " $ show defs
+  attemptOn (const $ fmap fst defs) $ \name -> do
+    traceM $ mappend "!!! recursing: " $ show name
+    localTactic (apply' name) (introducing defs)
+    simpler assumption
+
+
+------------------------------------------------------------------------------
 -- | Introduce a lambda.
 intro :: TacticsM ()
 intro = rule $ \jdg -> do
@@ -81,6 +96,7 @@ intro = rule $ \jdg -> do
     Just (a, b) -> do
       v <- pure $ mkGoodName (getInScope hy) a
       let jdg' = introducing [(v, CType a)] $ withNewGoal (CType b) jdg
+      modify $ withIntroducedVals $ mappend $ S.singleton v
       sg <- newSubgoal jdg'
       pure $ noLoc $ lambda [bvar' v] $ unLoc sg
     _ -> throwError $ GoalMismatch "intro" g
@@ -97,6 +113,7 @@ intros = rule $ \jdg -> do
     (as, b) -> do
       vs <- mkManyGoodNames hy as
       let jdg' = introducing (zip vs $ coerce as) $ withNewGoal (CType b) jdg
+      modify $ withIntroducedVals $ mappend $ S.fromList vs
       sg <- newSubgoal jdg'
       pure
         . noLoc
@@ -142,6 +159,7 @@ apply' func = rule $ \jdg -> do
     Just (CType ty) -> do
         let (args, ret) = splitFunTys ty
         unify g (CType ret)
+        useOccName jdg func
         sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
         pure . noLoc
              . foldl' (@@) (var' func)
@@ -186,13 +204,20 @@ attemptOn :: (Judgement -> [a]) -> (a -> TacticsM ()) -> TacticsM ()
 attemptOn getNames tac = matching (choice . fmap (\s -> tac s) . getNames)
 
 
+localTactic :: TacticsM a -> (Judgement -> Judgement) -> TacticsM a
+localTactic t f = do
+  TacticT $ StateT $ \jdg ->
+    runStateT (unTacticT t) $ f jdg
+
+
 ------------------------------------------------------------------------------
 -- | Automatically solve a goal.
 auto :: TacticsM ()
 auto = do
   current <- getCurrentDefinitions
-  TacticT $ StateT $ \jdg ->
-    runStateT (unTacticT $ auto' 5) $ disallowing current jdg
+  traceM $ mappend "!!!auto defs:" $ show current
+  localTactic (auto' 4) $ disallowing $ fmap fst current
+
 
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
@@ -207,9 +232,8 @@ auto' n = do
         progress ((==) `on` jGoal) NoProgress (destruct aname)
         loop
     , split >> loop
-    , attemptOn allNames $ \name -> do
-        assume name
-        loop
+    , assumption >> loop
+    , recursion
     ]
 
 

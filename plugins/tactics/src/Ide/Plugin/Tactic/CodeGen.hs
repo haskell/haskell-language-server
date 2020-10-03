@@ -1,22 +1,24 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Ide.Plugin.Tactic.CodeGen where
 
-import Control.Monad.Except
-import Data.List
-import Data.Traversable
-import DataCon
-import Development.IDE.GHC.Compat
-import GHC.Exts
-import GHC.SourceGen.Binds
-import GHC.SourceGen.Expr
-import GHC.SourceGen.Overloaded
-import GHC.SourceGen.Pat
-import Ide.Plugin.Tactic.Judgements
-import Ide.Plugin.Tactic.Machinery
-import Ide.Plugin.Tactic.Naming
-import Ide.Plugin.Tactic.Types
-import Name
-import Type hiding (Var)
+import           Control.Monad.Except
+import           Control.Monad.State.Class (modify)
+import           Data.List
+import qualified Data.Set as S
+import           Data.Traversable
+import           DataCon
+import           Development.IDE.GHC.Compat
+import           GHC.Exts
+import           GHC.SourceGen.Binds
+import           GHC.SourceGen.Expr
+import           GHC.SourceGen.Overloaded
+import           GHC.SourceGen.Pat
+import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Naming
+import           Ide.Plugin.Tactic.Types
+import           Name
+import           Type hiding (Var)
 
 
 destructMatches
@@ -48,6 +50,7 @@ destructMatches f f2 t jdg = do
                 $ introducingPat (zip names $ coerce args)
                 $ withNewGoal g jdg
           sg <- f dc j
+          modify $ withIntroducedVals $ mappend $ S.fromList names
           pure $ match [pat] $ unLoc sg
 
 

@@ -79,7 +79,7 @@ runTactic ctx jdg t =
 scoreSolution :: TacticState -> [Judgement] -> Int
 scoreSolution TacticState{..} holes
   -- TODO(sandy): should this be linear?
-  = S.size ts_used_vals - length holes * 5
+  = negate (traceShowId $ S.size (ts_intro_vals S.\\ ts_used_vals)) - length holes * 5
 
 
 runTacticTWithState

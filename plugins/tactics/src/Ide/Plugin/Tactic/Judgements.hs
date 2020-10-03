@@ -52,6 +52,11 @@ introducing ns jdg@Judgement{..} = jdg
   { _jHypothesis = M.fromList ns <> _jHypothesis
   }
 
+withHypothesis :: (Map OccName a -> Map OccName a) -> Judgement' a -> Judgement' a
+withHypothesis f jdg@Judgement{..} = jdg
+  { _jHypothesis = f _jHypothesis
+  }
+
 ------------------------------------------------------------------------------
 -- | Pattern vals are currently tracked in jHypothesis, with an extra piece of data sitting around in jPatternVals.
 introducingPat :: [(OccName, a)] -> Judgement' a -> Judgement' a
