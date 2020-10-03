@@ -143,14 +143,14 @@ codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right $ List []) $ do
-        (_, _, span, jdg, dflags) <- MaybeT $ judgementForHole state nfp range
+        (_, _, jdg, dflags) <- judgementForHole state nfp range
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound]
             dflags
             plId
             uri
-            span
+            range
             jdg
         pure $ Right $ List actions
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
@@ -226,8 +226,8 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> IO (Maybe (PositionMapping, BindSites, Range, Judgement, DynFlags))
-judgementForHole state nfp range = runMaybeT $ do
+    -> MaybeT IO (BindSites, Range, Judgement, DynFlags)
+judgementForHole state nfp range = do
   (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
   range' <- liftMaybe $ fromCurrentRange amapping range
 
@@ -251,7 +251,7 @@ judgementForHole state nfp range = runMaybeT $ do
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
 
   let hyps = hypothesisFromBindings rss binds
-  pure (amapping, b2, resulting_range, mkFirstJudgement hyps goal, dflags)
+  pure (b2, resulting_range, mkFirstJudgement hyps goal, dflags)
 
 
 
@@ -259,15 +259,13 @@ tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
-        (pos, b2, _, jdg, dflags) <- MaybeT $ judgementForHole state nfp range
-        range' <- liftMaybe $ toCurrentRange pos range
+        (b2, range', jdg, dflags) <- judgementForHole state nfp range
         (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
-            -- TODO(sandy): unclear if this span is correct; might be
-            -- pointing to the wrong version of the file
             tcg = fst $ tm_internals_ $ tmrModule tcmod
             ctx = mkContext
-                    (mapMaybe (sequenceA . (occName *** coerce)) $ getDefiningBindings b2 span)
+                    (mapMaybe (sequenceA . (occName *** coerce))
+                            $ getDefiningBindings b2 span)
                     tcg
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         case runTactic ctx jdg
