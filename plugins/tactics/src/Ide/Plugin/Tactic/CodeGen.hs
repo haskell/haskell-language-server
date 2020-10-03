@@ -52,7 +52,7 @@ destructMatches f f2 t jdg = do
 
 
 ------------------------------------------------------------------------------
--- | Combinator for performign case splitting, and running sub-rules on the
+-- | Combinator for performing case splitting, and running sub-rules on the
 -- resulting matches.
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
 destruct' f term jdg = do
@@ -103,4 +103,3 @@ var' = var . fromString . occNameString
 -- | Like 'bvar', but works over standard GHC 'OccName's.
 bvar' :: BVar a => OccName -> a
 bvar' = bvar . fromString . occNameString
-
