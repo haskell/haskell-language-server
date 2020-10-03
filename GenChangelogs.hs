@@ -22,8 +22,8 @@ main = do
   lastDateStr <- last . lines <$> readProcess "git" ["show", "-s", "--format=%cI", "-1", last tags] ""
   lastDate <- zonedTimeToUTC <$> iso8601ParseM lastDateStr
 
-  prs <- github () $ pullRequestsForR "haskell" "haskell-language-server" stateClosed FetchAll
-  let prsAfterLastTag = either (error "asdf")
+  prs <- github' $ pullRequestsForR "haskell" "haskell-language-server" stateClosed FetchAll
+  let prsAfterLastTag = either (error . show)
                         (foldMap (\pr -> if inRange pr then [pr] else []))
                         prs
       inRange pr
@@ -32,5 +32,5 @@ main = do
 
   forM_ prsAfterLastTag $ \SimplePullRequest{..} ->
     putStrLn $ T.unpack $ "- " <> simplePullRequestTitle <>
-      "\n([#" <> T.pack (show $ unIssueNumber simplePullRequestNumber) <> "](" <> getUrl simplePullRequestUrl <> ")" <>
+      "\n([#" <> T.pack (show $ unIssueNumber simplePullRequestNumber) <> ")](" <> getUrl simplePullRequestHtmlUrl <> ")" <>
       " by @" <> (untagName (simpleUserLogin simplePullRequestUser))

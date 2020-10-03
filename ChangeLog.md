@@ -1,5 +1,92 @@
 # Changelog for haskell-language-server
 
+## 0.5.0
+
+0.5.0 comes with a new tactics plugin which provides case splitting, homomorphic case splitting, and lambda introduction:
+
+![Case splitting](https://user-images.githubusercontent.com/307223/92657198-3d4be400-f2a9-11ea-8ad3-f541c8eea891.gif)
+
+It can even attempt to fully fill a hole!
+
+![Attempt to fill in hole code action](https://user-images.githubusercontent.com/307223/94743611-82a18580-032c-11eb-9f13-8f46bc45f928.gif)
+
+The imports lens plugin also learnt a new code action to make all imports explicit:
+
+![Explicit imports code action](https://user-images.githubusercontent.com/2488460/94994815-1a53dd80-0592-11eb-8a12-ec704ae92385.gif)
+
+There's also plenty of bug fixes, improvements and updates to the underlying tools, including Fourmolu, implicit-hie-cradle and ghcide. [Some of the improvements from ghcide](https://github.com/haskell/ghcide/releases/tag/v0.4.0) include:
+
+* The entire project is typechecked on load
+* Reverse dependencies of a module are typechecked upon saving
+* Code completion includes local terms
+* Import code actions now also suggest open imports
+* Documentation on hover shows for symbols defined in the same module
+
+If you're eager to try all this out, haskell-language-server is now also installable via [ghcup](https://www.haskell.org/ghcup/):
+
+```
+$ ghcup install hls
+```
+
+
+### Pull requests merged
+- Update GHC version 8.12 to 9.0 in README
+([#460)](https://github.com/haskell/haskell-language-server/pull/460) by @maralorn
+- Update Fourmolu to 0.2
+([#455)](https://github.com/haskell/haskell-language-server/pull/455) by @georgefst
+- Generate .gz tars of all the binaries for macOS and Linux in GitHub Actions
+([#454)](https://github.com/haskell/haskell-language-server/pull/454) by @bubba
+- install: create hls hardlinks instead of copies except on Windows
+([#451)](https://github.com/haskell/haskell-language-server/pull/451) by @juhp
+- wrapper: cd to --cwd earlier
+([#448)](https://github.com/haskell/haskell-language-server/pull/448) by @ocharles
+- Update README.md
+([#446)](https://github.com/haskell/haskell-language-server/pull/446) by @moodmosaic
+- Upate Emacs setup notes
+([#440)](https://github.com/haskell/haskell-language-server/pull/440) by @gdevanla
+- Use ghcide master and prepare hls-plugin-api-0.4.1.0
+([#439)](https://github.com/haskell/haskell-language-server/pull/439) by @jneira
+- Add a code action to make all imports explicit
+([#436)](https://github.com/haskell/haskell-language-server/pull/436) by @pepeiborra
+- Add docs on how to choose a formatter
+([#432)](https://github.com/haskell/haskell-language-server/pull/432) by @googleson78
+- Implement 'Attempt to fill hole' code action
+([#431)](https://github.com/haskell/haskell-language-server/pull/431) by @TOTBWF
+- Clarify that eval is a lens
+([#428)](https://github.com/haskell/haskell-language-server/pull/428) by @Anrock
+- Use implicit-hie-cradle-0.2.0.1
+([#427)](https://github.com/haskell/haskell-language-server/pull/427) by @jneira
+- [retrie] Fix uris in workspace edit
+([#424)](https://github.com/haskell/haskell-language-server/pull/424) by @pepeiborra
+- Separate paragraphs
+([#423)](https://github.com/haskell/haskell-language-server/pull/423) by @jneira
+- Include .editorconfig in the contributing section
+([#420)](https://github.com/haskell/haskell-language-server/pull/420) by @jneira
+- Mention the copy of executables wit ghc version
+([#419)](https://github.com/haskell/haskell-language-server/pull/419) by @jneira
+- Eval plugin: proper multilined results handling and command-name abbreviations
+([#413)](https://github.com/haskell/haskell-language-server/pull/413) by @konn
+- Retrie - calculate imports in the command handler
+([#408)](https://github.com/haskell/haskell-language-server/pull/408) by @pepeiborra
+- Progress reporting for Eval plugin
+([#398)](https://github.com/haskell/haskell-language-server/pull/398) by @pepeiborra
+- bump ghcide submodule
+([#396)](https://github.com/haskell/haskell-language-server/pull/396) by @wz1000
+- Fix cradles
+([#393)](https://github.com/haskell/haskell-language-server/pull/393) by @pepeiborra
+- Case splitting and lambda introduction
+([#391)](https://github.com/haskell/haskell-language-server/pull/391) by @isovector
+- Use stale data in explicit imports lens
+([#383)](https://github.com/haskell/haskell-language-server/pull/383) by @pepeiborra
+- Create hls-plugin-api and move plugins to exe
+([#379)](https://github.com/haskell/haskell-language-server/pull/379) by @jneira
+- Rebase on ghcide HEAD
+([#378)](https://github.com/haskell/haskell-language-server/pull/378) by @pepeiborra
+- README clarify how exactly to use code evaluation
+([#377)](https://github.com/haskell/haskell-language-server/pull/377) by @DunetsNM
+- Revise README.md
+([#374)](https://github.com/haskell/haskell-language-server/pull/374) by @gihyeonsung
+
 ## 0.4.0
 
 0.4.0 introduces the import lens plugin, which can convert your import statements into qualified imports, or into an explicit import list:
