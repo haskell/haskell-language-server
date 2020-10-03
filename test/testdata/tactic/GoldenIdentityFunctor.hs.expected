@@ -1,0 +1,3 @@
+data Ident a = Ident a
+instance Functor Ident where
+   fmap = (\ fab ia -> case ia of { (Ident a) -> Ident (fab a) })

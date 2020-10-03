@@ -1,10 +1,11 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE DeriveAnyClass      #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic
@@ -13,14 +14,15 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
+import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
 import qualified Data.Map as M
-import qualified Data.Set as S
 import           Data.Maybe
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
@@ -29,20 +31,25 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.GHC.Util (hscEnv)
+import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
+import           DynFlags (xopt)
+import qualified FastString
 import           GHC.Generics (Generic)
-import           HscTypes (hsc_dflags)
+import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin (mkLspCommand)
-import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Context
+import           Ide.Plugin.Tactic.GHC
+import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
+import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
-import qualified FastString
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -53,7 +60,7 @@ descriptor plId = (defaultPluginDescriptor plId)
               (tcCommandId tc)
               (tacticDesc $ tcCommandName tc)
               (tacticCmd $ commandTactic tc))
-              enabledTactics
+              [minBound .. maxBound]
     , pluginCodeActionProvider = Just codeActionProvider
     }
 
@@ -61,14 +68,9 @@ tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
 
 ------------------------------------------------------------------------------
-
-enabledTactics :: [TacticCommand]
-enabledTactics = [Intros, Destruct, Homomorphism]
-
-------------------------------------------------------------------------------
 -- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
 -- UI.
-type TacticProvider = PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
+type TacticProvider = DynFlags -> PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
 
 
 ------------------------------------------------------------------------------
@@ -87,10 +89,6 @@ tcCommandName = T.pack . show
 -- 'filterGoalType' and 'filterBindingType' for the nitty gritty.
 commandProvider :: TacticCommand -> TacticProvider
 commandProvider Auto  = provide Auto ""
-commandProvider Split = provide Split ""
-commandProvider Intro =
-  filterGoalType isFunction $
-    provide Intro ""
 commandProvider Intros =
   filterGoalType isFunction $
     provide Intros ""
@@ -100,17 +98,25 @@ commandProvider Destruct =
 commandProvider Homomorphism =
   filterBindingType homoFilter $ \occ _ ->
     provide Homomorphism $ T.pack $ occNameString occ
+commandProvider DestructLambdaCase =
+  requireExtension LambdaCase $
+    filterGoalType (isJust . lambdaCaseable) $
+      provide DestructLambdaCase ""
+commandProvider HomomorphismLambdaCase =
+  requireExtension LambdaCase $
+    filterGoalType ((== Just True) . lambdaCaseable) $
+      provide HomomorphismLambdaCase ""
 
 
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
 commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto         = const auto
-commandTactic Split        = const split
-commandTactic Intro        = const intro
 commandTactic Intros       = const intros
 commandTactic Destruct     = destruct
 commandTactic Homomorphism = homo
+commandTactic DestructLambdaCase     = const destructLambdaCase
+commandTactic HomomorphismLambdaCase = const homoLambdaCase
 
 
 ------------------------------------------------------------------------------
@@ -137,13 +143,14 @@ codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right $ List []) $ do
-        (_, span, jdg) <- MaybeT $ judgementForHole state nfp range
+        (_, jdg, _, dflags) <- judgementForHole state nfp range
         actions <- lift $
           -- This foldMap is over the function monoid.
-          foldMap commandProvider enabledTactics
+          foldMap commandProvider [minBound .. maxBound]
+            dflags
             plId
             uri
-            span
+            range
             jdg
         pure $ Right $ List actions
 codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
@@ -157,7 +164,7 @@ codeActions = List . fmap CACodeAction
 -- | Terminal constructor for providing context-sensitive tactics. Tactics
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
-provide tc name plId uri range _ = do
+provide tc name _ plId uri range _ = do
   let title = tacticTitle tc name
       params = TacticParams { file = uri , range = range , var_name = name }
   cmd <- mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
@@ -171,10 +178,20 @@ provide tc name plId uri range _ = do
 ------------------------------------------------------------------------------
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
+requireExtension :: Extension -> TacticProvider -> TacticProvider
+requireExtension ext tp dflags plId uri range jdg =
+  case xopt ext dflags of
+    True  -> tp dflags plId uri range jdg
+    False -> pure []
+
+
+------------------------------------------------------------------------------
+-- | Restrict a 'TacticProvider', making sure it appears only when the given
+-- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp plId uri range jdg@(Judgement _ (CType g)) =
-  case p g of
-    True  -> tp plId uri range jdg
+filterGoalType p tp dflags plId uri range jdg =
+  case p $ unCType $ jGoal jdg of
+    True  -> tp dflags plId uri range jdg
     False -> pure []
 
 
@@ -185,11 +202,13 @@ filterBindingType
     :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
-filterBindingType p tp plId uri range jdg@(Judgement hys (CType g)) =
-  fmap join $ for (M.toList hys) $ \(occ, CType ty) ->
-    case p g ty of
-      True  -> tp occ ty plId uri range jdg
-      False -> pure []
+filterBindingType p tp dflags plId uri range jdg =
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
+   in fmap join $ for (M.toList hy) $ \(occ, CType ty) ->
+        case p (unCType g) ty of
+          True  -> tp occ ty dflags plId uri range jdg
+          False -> pure []
 
 
 data TacticParams = TacticParams
@@ -207,12 +226,17 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> IO (Maybe (PositionMapping, Range, Judgement))
-judgementForHole state nfp range = runMaybeT $ do
+    -> MaybeT IO (Range, Judgement, Context, DynFlags)
+judgementForHole state nfp range = do
   (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
   range' <- liftMaybe $ fromCurrentRange amapping range
 
   (binds, _) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
+
+  -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
+  -- which don't change very often.
+  (modsum, _) <- MaybeT $ runIde state $ useWithStale GetModSummaryWithoutTimestamps nfp
+  let dflags = ms_hspp_opts modsum
 
   (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
       case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
@@ -224,22 +248,25 @@ judgementForHole state nfp range = runMaybeT $ do
           pure (nodeSpan ast', ty)
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
+  (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+  let tcg = fst $ tm_internals_ $ tmrModule tcmod
+      ctx = mkContext
+              (mapMaybe (sequenceA . (occName *** coerce))
+                $ getDefiningBindings binds rss)
+              tcg
+      hyps = hypothesisFromBindings rss binds
+  pure (resulting_range, mkFirstJudgement hyps goal, ctx, dflags)
 
-  let hyps = hypothesisFromBindings rss binds
-  pure (amapping, resulting_range, Judgement hyps $ CType goal)
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
-        (pos, _, jdg) <- MaybeT $ judgementForHole state nfp range
-        -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
-        -- which don't change very often.
-        (hscenv, _) <- MaybeT $ runIde state $ useWithStale GhcSession nfp
-        let dflags = hsc_dflags $ hscEnv hscenv
+        (range', jdg, ctx, dflags) <- judgementForHole state nfp range
+        let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        case runTactic jdg
+        case runTactic ctx jdg
               $ tac
               $ mkVarOcc
               $ T.unpack var_name of
@@ -248,10 +275,8 @@ tacticCmd tac lf state (TacticParams uri range var_name)
               $ Left
               $ ResponseError InvalidRequest (T.pack $ show err) Nothing
           Right res -> do
-            range' <- liftMaybe $ toCurrentRange pos range
-            let span = rangeToSrcSpan (fromNormalizedFilePath nfp) range'
-                g = graft span res
-            let response = transform dflags (clientCapabilities lf) uri g pm
+            let g = graft (RealSrcSpan span) res
+                response = transform dflags (clientCapabilities lf) uri g pm
             pure $ case response of
                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
                Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
