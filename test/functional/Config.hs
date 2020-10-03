@@ -3,6 +3,8 @@
 module Config (tests) where
 
 import           Control.Lens hiding (List)
+import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Default
@@ -24,6 +26,7 @@ tests = testGroup "plugin config" [
       -- Note: because the flag is treated generically in the plugin handler, we
       -- do not have to test each individual plugin
       hlintTests
+    , configTests
     ]
 
 hlintTests :: TestTree
@@ -70,6 +73,26 @@ hlintTests = testGroup "hlint plugin enables" [
         testHlintDiagnostics doc = do
             diags <- waitForDiagnosticsFromSource doc "hlint"
             liftIO $ length diags > 0 @? "There are hlint diagnostics"
+
+configTests :: TestTree
+configTests = testGroup "config parsing" [
+      testCase "empty object as user configuration should not send error logMessage" $ runConfigSession "" $ do
+        let config = object []
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+
+        -- Send custom request so server returns a response to prevent blocking
+        void $ Test.sendRequest (CustomClientMethod "non-existent-method") ()
+
+        logNot <- skipManyTill Test.anyMessage Test.message :: Session LogMessageNotification
+
+        liftIO $ (logNot ^. L.params . L.xtype) > MtError
+                 || "non-existent-method" `T.isInfixOf` (logNot ^. L.params . L.message)
+                    @? "Server sends logMessage with MessageType = Error"
+    ]
+    where
+        runConfigSession :: FilePath -> Session a -> IO a
+        runConfigSession subdir  =
+            failIfSessionTimeout . runSession hlsCommand fullCaps ("test/testdata" </> subdir)
 
 pluginGlobalOn :: Config -> T.Text -> Bool -> Config
 pluginGlobalOn config pid state = config'

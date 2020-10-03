@@ -97,20 +97,22 @@ instance A.FromJSON Config where
   parseJSON = A.withObject "Config" $ \v -> do
     -- Officially, we use "haskell" as the section name but for
     -- backwards compatibility we also accept "languageServerHaskell"
-    s <- v .: "haskell" <|> v .: "languageServerHaskell"
-    flip (A.withObject "Config.settings") s $ \o -> Config
-      <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents def
-      <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject def
-      <*> o .:? "hlintOn"                                 .!= hlintOn def
-      <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange def
-      <*> o .:? "maxNumberOfProblems"                     .!= maxNumberOfProblems def
-      <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration def
-      <*> o .:? "liquidOn"                                .!= liquidOn def
-      <*> o .:? "completionSnippetsOn"                    .!= completionSnippetsOn def
-      <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn def
-      <*> o .:? "formattingProvider"                      .!= formattingProvider def
-      <*> o .:? "maxCompletions"                          .!= maxCompletions def
-      <*> o .:? "plugin"                                  .!= plugins def
+    c <- v .: "haskell" <|> v .:? "languageServerHaskell"
+    case c of
+      Nothing -> return def
+      Just s -> flip (A.withObject "Config.settings") s $ \o -> Config
+        <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents def
+        <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject def
+        <*> o .:? "hlintOn"                                 .!= hlintOn def
+        <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange def
+        <*> o .:? "maxNumberOfProblems"                     .!= maxNumberOfProblems def
+        <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration def
+        <*> o .:? "liquidOn"                                .!= liquidOn def
+        <*> o .:? "completionSnippetsOn"                    .!= completionSnippetsOn def
+        <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn def
+        <*> o .:? "formattingProvider"                      .!= formattingProvider def
+        <*> o .:? "maxCompletions"                          .!= maxCompletions def
+        <*> o .:? "plugin"                                  .!= plugins def
 
 -- 2017-10-09 23:22:00.710515298 [ThreadId 11] - ---> {"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"haskell":{"maxNumberOfProblems":100,"hlintOn":true}}}}
 -- 2017-10-09 23:22:00.710667381 [ThreadId 15] - reactor:got didChangeConfiguration notification:
