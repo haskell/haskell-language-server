@@ -1,51 +1,36 @@
 #!/usr/bin/env cabal
 {- cabal:
-build-depends: base, process, html-conduit, http-conduit, xml-conduit, text, containers
+build-depends: base, process, text, github, time
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
 
 import Control.Monad
-import Data.Char
 import Data.List
-import qualified Data.Map.Lazy as M
-import Network.HTTP.Simple
-import System.Process
+import Data.Maybe
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Text.HTML.DOM
-import Text.XML.Cursor
-import Text.XML (Element(..))
+import Data.Time.Format.ISO8601
+import Data.Time.LocalTime
+import System.Process
+import GitHub
 
 main = do
   callCommand "git fetch --tags"
   tags <- filter (isPrefixOf "0.") . lines <$>
     readProcess "git" ["tag", "--list", "--sort=v:refname"] ""
-  messages <- lines <$> readProcess "git" [ "log"
-                                          , last tags <> "..HEAD"
-                                          , "--merges"
-                                          , "--reverse"
-                                          , "--pretty=format:\"%s\""
-                                          ] ""
 
-  let -- try to get "1334" out of "merge PR #1334"
-      prNums = map (filter isDigit) $
-                map head $
-                filter (not . null) $
-                map (filter (isPrefixOf "#") . words) messages
+  lastDateStr <- last . lines <$> readProcess "git" ["show", "-s", "--format=%cI", "-1", last tags] ""
+  lastDate <- zonedTimeToUTC <$> iso8601ParseM lastDateStr
 
-  (flip mapM_) prNums $ \prNum -> do
-    let url = "https://github.com/haskell/haskell-language-server/pull/" <> prNum
-    body <- getResponseBody <$> httpLBS (parseRequest_ url)
-    let cursor = fromDocument (parseLBS body)
+  prs <- github () $ pullRequestsForR "haskell" "haskell-language-server" stateClosed FetchAll
+  let prsAfterLastTag = either (error "asdf")
+                        (foldMap (\pr -> if inRange pr then [pr] else []))
+                        prs
+      inRange pr
+        | Just mergedDate <- simplePullRequestMergedAt pr = mergedDate > lastDate
+        | otherwise = False
 
-        titles = (descendant >=> attributeIs "class" "js-issue-title" >=> child >=> content) cursor
-        title = T.unpack $ T.strip $ head titles
-
-        checkAuthor :: Element -> Bool
-        checkAuthor e = maybe False (T.isInfixOf "author") (M.lookup "class" (elementAttributes e))
-        authors = (descendant >=> checkElement checkAuthor >=> child >=> content) cursor
-        author = T.unpack $ T.strip $ authors !! 4 -- second author is the pr author
-
-    -- generate markdown
-    putStrLn $ "- " <> title <> "\n([#" <> prNum <> "](" <> url <> ") by @" <> author <> ")"
+  forM_ prsAfterLastTag $ \SimplePullRequest{..} ->
+    putStrLn $ T.unpack $ "- " <> simplePullRequestTitle <>
+      "\n([#" <> T.pack (show $ unIssueNumber simplePullRequestNumber) <> "](" <> getUrl simplePullRequestUrl <> ")" <>
+      " by @" <> (untagName (simpleUserLogin simplePullRequestUser))
