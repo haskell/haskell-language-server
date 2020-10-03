@@ -93,7 +93,6 @@ executable haskell-language-server
     Ide.Plugin.Retrie
     Ide.Plugin.StylishHaskell
     Ide.Plugin.Tactic
-    Ide.Plugin.Tactic.BindSites
     Ide.Plugin.Tactic.CodeGen
     Ide.Plugin.Tactic.Context
     Ide.Plugin.Tactic.Debug

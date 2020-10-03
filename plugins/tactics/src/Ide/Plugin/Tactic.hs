@@ -31,20 +31,20 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
+import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
 import           DynFlags (xopt)
 import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin (mkLspCommand)
-import           Ide.Plugin.Tactic.BindSites
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.Types
 import           Ide.Plugin.Tactic.TestTypes
+import           Ide.Plugin.Tactic.Types
 import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
@@ -143,7 +143,7 @@ codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right $ List []) $ do
-        (_, _, jdg, dflags) <- judgementForHole state nfp range
+        (_, jdg, _, dflags) <- judgementForHole state nfp range
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound]
@@ -226,13 +226,12 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> MaybeT IO (BindSites, Range, Judgement, DynFlags)
+    -> MaybeT IO (Range, Judgement, Context, DynFlags)
 judgementForHole state nfp range = do
   (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
   range' <- liftMaybe $ fromCurrentRange amapping range
 
   (binds, _) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
-  let b2 = bindSites $ refMap asts
 
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
@@ -249,9 +248,14 @@ judgementForHole state nfp range = do
           pure (nodeSpan ast', ty)
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-
-  let hyps = hypothesisFromBindings rss binds
-  pure (b2, resulting_range, mkFirstJudgement hyps goal, dflags)
+  (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+  let tcg = fst $ tm_internals_ $ tmrModule tcmod
+      ctx = mkContext
+              (mapMaybe (sequenceA . (occName *** coerce))
+                $ getDefiningBindings binds rss)
+              tcg
+      hyps = hypothesisFromBindings rss binds
+  pure (resulting_range, mkFirstJudgement hyps goal, ctx, dflags)
 
 
 
@@ -259,14 +263,8 @@ tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
-        (b2, range', jdg, dflags) <- judgementForHole state nfp range
-        (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+        (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
-            tcg = fst $ tm_internals_ $ tmrModule tcmod
-            ctx = mkContext
-                    (mapMaybe (sequenceA . (occName *** coerce))
-                            $ getDefiningBindings b2 span)
-                    tcg
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         case runTactic ctx jdg
               $ tac
