@@ -168,11 +168,11 @@ suggestAction dflags packageExports ideOptions parsedModule text diag = concat
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
     , suggestReplaceIdentifier text diag
-    , suggestConstraint text diag
     , removeRedundantConstraints text diag
     , suggestAddTypeAnnotationToSatisfyContraints text diag
     ] ++ concat
-    [  suggestNewDefinition ideOptions pm text diag
+    [  suggestConstraint pm text diag  
+    ++ suggestNewDefinition ideOptions pm text diag
     ++ suggestRemoveRedundantImport pm text diag
     ++ suggestNewImport packageExports pm diag
     ++ suggestDeleteUnusedBinding pm text diag
@@ -662,14 +662,14 @@ suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
 suggestSignature _ _ = []
 
 -- | Suggests a constraint for a declaration for which a constraint is missing.
-suggestConstraint :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestConstraint mContents diag@Diagnostic {..}
+suggestConstraint :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestConstraint parsedModule mContents diag@Diagnostic {..}
   | Just contents <- mContents
   , Just missingConstraint <- findMissingConstraint _message
   = let codeAction = if _message =~ ("the type signature for:" :: String)
-                        then suggestFunctionConstraint
-                        else suggestInstanceConstraint
-     in codeAction contents diag missingConstraint
+                        then suggestFunctionConstraint parsedModule 
+                        else suggestInstanceConstraint contents
+     in codeAction diag missingConstraint
   | otherwise = []
     where
       findMissingConstraint :: T.Text -> Maybe T.Text
@@ -742,10 +742,9 @@ findTypeSignatureLine :: T.Text -> T.Text -> Int
 findTypeSignatureLine contents typeSignatureName =
   T.splitOn (typeSignatureName <> " :: ") contents & head & T.lines & length
 
--- | Suggests a constraint for a type signature for which a constraint is missing.
-suggestFunctionConstraint :: T.Text -> Diagnostic -> T.Text -> [(T.Text, [TextEdit])]
-suggestFunctionConstraint contents Diagnostic{..} missingConstraint
--- Suggests a constraint for a type signature with any number of existing constraints.
+-- | Suggests a constraint for a type signature with any number of existing constraints.
+suggestFunctionConstraint :: ParsedModule -> Diagnostic -> T.Text -> [(T.Text, [TextEdit])]
+suggestFunctionConstraint ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} Diagnostic{..} missingConstraint
 -- • No instance for (Eq a) arising from a use of ‘==’
 --   Possible fix:
 --     add (Eq a) to the context of
@@ -770,15 +769,28 @@ suggestFunctionConstraint contents Diagnostic{..} missingConstraint
   | Just typeSignatureName <- findTypeSignatureName _message
   = let mExistingConstraints = findExistingConstraints _message
         newConstraint = buildNewConstraints missingConstraint mExistingConstraints
-        typeSignatureLine = findTypeSignatureLine contents typeSignatureName
-        typeSignatureFirstChar = T.length $ typeSignatureName <> " :: "
-        startOfConstraint = Position typeSignatureLine typeSignatureFirstChar
-        endOfConstraint = Position typeSignatureLine $
-          typeSignatureFirstChar + maybe 0 T.length mExistingConstraints
-        range = Range startOfConstraint endOfConstraint
-     in [(actionTitle missingConstraint typeSignatureName, [TextEdit range newConstraint])]
+     in case findRangeOfContextForFunctionNamed typeSignatureName of 
+       Just range -> [(actionTitle missingConstraint typeSignatureName, [TextEdit range newConstraint])]
+       Nothing -> []
   | otherwise = []
     where
+      findRangeOfContextForFunctionNamed :: T.Text -> Maybe Range 
+      findRangeOfContextForFunctionNamed typeSignatureName = do
+          locatedType <- listToMaybe 
+              [ locatedType
+              | L _ (SigD _ (TypeSig _ identifiers (HsWC _ (HsIB _ locatedType)))) <- hsmodDecls
+              , any (`isSameName` T.unpack typeSignatureName) $ fmap unLoc identifiers
+              ]
+          srcSpanToRange $ case splitLHsQualTy locatedType of
+            (L contextSrcSpan _ , _) ->
+              if isGoodSrcSpan contextSrcSpan
+                then contextSrcSpan -- The type signature has explicit context
+                else -- No explicit context, return SrcSpan at the start of type sig where we can write context
+                     let start = srcSpanStart $ getLoc locatedType in mkSrcSpan start start
+
+      isSameName :: IdP GhcPs -> String -> Bool
+      isSameName x name = showSDocUnsafe (ppr x) == name
+
       findExistingConstraints :: T.Text -> Maybe T.Text
       findExistingConstraints message =
         if message =~ ("from the context:" :: String)
