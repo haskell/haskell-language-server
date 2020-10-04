@@ -2,8 +2,10 @@
 module Ide.Plugin.Tactic.CodeGen where
 
 import           Control.Monad.Except
+import           Control.Monad.State (MonadState)
 import           Control.Monad.State.Class (modify)
 import           Data.List
+import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
@@ -19,6 +21,13 @@ import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
 import           Name
 import           Type hiding (Var)
+
+
+useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
+useOccName jdg name =
+  case M.lookup name $ jHypothesis jdg of
+    Just{}  -> modify $ withUsedVals $ S.insert name
+    Nothing -> pure ()
 
 
 destructMatches
@@ -62,7 +71,8 @@ destruct' f term jdg = do
   let hy = jHypothesis jdg
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
-    Just (_, t) ->
+    Just (_, t) -> do
+      useOccName jdg term
       fmap noLoc $ case' (var' term) <$>
         destructMatches f (destructing term) t jdg
 

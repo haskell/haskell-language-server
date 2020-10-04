@@ -58,12 +58,6 @@ assume name = rule $ \jdg -> do
     Nothing -> throwError $ UndefinedHypothesis name
 
 
-useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
-useOccName jdg name =
-  case M.lookup name $ jHypothesis jdg of
-    Just{}  -> modify $ withUsedVals $ S.insert name
-    Nothing -> pure ()
-
 
 ------------------------------------------------------------------------------
 -- | Restrict a tactic to looking only at pattern vals and functions

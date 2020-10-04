@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DerivingVia           #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -76,10 +77,28 @@ runTactic ctx jdg t =
           _ -> Left []
 
 
-scoreSolution :: TacticState -> [Judgement] -> Int
+scoreSolution
+    :: TacticState
+    -> [Judgement]
+    -> ( Penalize Int  -- number of holes
+       , Reward Bool  -- all bindings used
+       , Reward Int   -- number used bindings
+       , Penalize Int   -- number used bindings
+       )
 scoreSolution TacticState{..} holes
-  -- TODO(sandy): should this be linear?
-  = negate (traceShowId $ S.size (ts_intro_vals S.\\ ts_used_vals)) - length holes * 5
+  = traceShowId
+    ( Penalize $ length holes
+    , Reward $ S.null $ traceShowId $ ts_intro_vals S.\\ ts_used_vals
+    , Reward $ S.size ts_used_vals
+    , Penalize $ S.size ts_intro_vals
+    )
+
+
+newtype Penalize a = Penalize a
+  deriving (Eq, Ord, Show) via (Down a)
+
+newtype Reward a = Reward a
+  deriving (Eq, Ord, Show) via a
 
 
 runTacticTWithState
