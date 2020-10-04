@@ -21,7 +21,8 @@ module Development.IDE.Import.DependencyInformation
   , reachableModules
   , processDependencyInformation
   , transitiveDeps
-  , reverseDependencies
+  , transitiveReverseDependencies
+  , immediateReverseDependencies
 
   , BootIdMap
   , insertBootId
@@ -316,8 +317,8 @@ partitionSCC (AcyclicSCC x:rest) = first (x:)   $ partitionSCC rest
 partitionSCC []                  = ([], [])
 
 -- | Transitive reverse dependencies of a file
-reverseDependencies :: NormalizedFilePath -> DependencyInformation -> [NormalizedFilePath]
-reverseDependencies file DependencyInformation{..} =
+transitiveReverseDependencies :: NormalizedFilePath -> DependencyInformation -> [NormalizedFilePath]
+transitiveReverseDependencies file DependencyInformation{..} =
   let FilePathId cur_id = pathToId depPathIdMap file
   in map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
   where
@@ -327,6 +328,12 @@ reverseDependencies file DependencyInformation{..} =
           res = IntSet.union i outwards
           new = IntSet.difference i outwards
       in IntSet.foldr go res new
+
+-- | Immediate reverse dependencies of a file
+immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> [NormalizedFilePath]
+immediateReverseDependencies file DependencyInformation{..} =
+  let FilePathId cur_id = pathToId depPathIdMap file
+  in map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
 
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} file = do
@@ -378,7 +385,7 @@ instance NFData TransitiveDependencies
 data NamedModuleDep = NamedModuleDep {
   nmdFilePath :: !NormalizedFilePath,
   nmdModuleName :: !ModuleName,
-  nmdModLocation :: !ModLocation
+  nmdModLocation :: !(Maybe ModLocation)
   }
   deriving Generic
 

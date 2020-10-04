@@ -15,7 +15,6 @@ import Data.Generics
 import Data.List.Extra as List hiding (stripPrefix)
 import qualified Data.Map  as Map
 import Data.Maybe (fromMaybe, mapMaybe)
-import qualified Data.Maybe as UnsafeMaybe (fromJust)
 import qualified Data.Text as T
 import qualified Text.Fuzzy as Fuzzy
 
@@ -233,13 +232,13 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-cacheDataProducer :: HscEnv -> TypecheckedModule -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer :: HscEnv -> TcModuleResult -> [ParsedModule] -> IO CachedCompletions
 cacheDataProducer packageState tm deps = do
-  let parsedMod = tm_parsed_module tm
+  let parsedMod = tmrParsed tm
       dflags = hsc_dflags packageState
       curMod = ms_mod $ pm_mod_summary parsedMod
       curModName = moduleName curMod
-      (_,limports,_,_) = UnsafeMaybe.fromJust $ tm_renamed_source tm -- safe because we always save the typechecked source
+      (_,limports,_,_) = tmrRenamed tm -- safe because we always save the typechecked source
 
       iDeclToModName :: ImportDecl name -> ModuleName
       iDeclToModName = unLoc . ideclName
@@ -255,8 +254,8 @@ cacheDataProducer packageState tm deps = do
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
 
-      typeEnv = tcg_type_env $ fst $ tm_internals_ tm
-      rdrEnv = tcg_rdr_env $ fst $ tm_internals_ tm
+      typeEnv = tcg_type_env $ tmrTypechecked tm
+      rdrEnv = tcg_rdr_env $ tmrTypechecked tm
       rdrElts = globalRdrEnvElts rdrEnv
 
       foldMapM :: (Foldable f, Monad m, Monoid b) => (a -> m b) -> f a -> m b
@@ -290,12 +289,12 @@ cacheDataProducer packageState tm deps = do
       varToCompl var = do
         let typ = Just $ varType var
             name = Var.varName var
-        docs <- evalGhcEnv packageState $ getDocumentationTryGhc curMod (tm_parsed_module tm : deps) name
+        docs <- evalGhcEnv packageState $ getDocumentationTryGhc curMod (tmrParsed tm : deps) name
         return $ mkNameCompItem name curModName typ Nothing docs
 
       toCompItem :: Module -> ModuleName -> Name -> IO CompItem
       toCompItem m mn n = do
-        docs <- evalGhcEnv packageState $ getDocumentationTryGhc curMod (tm_parsed_module tm : deps) n
+        docs <- evalGhcEnv packageState $ getDocumentationTryGhc curMod (tmrParsed tm : deps) n
         ty <- evalGhcEnv packageState $ catchSrcErrors "completion" $ do
                 name' <- lookupName m n
                 return $ name' >>= safeTyThingType

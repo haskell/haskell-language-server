@@ -284,7 +284,7 @@ diagnosticTests = testGroup "diagnostics"
       let contentA = T.unlines [ "module ModuleA where" ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
-  , testSessionWait "add missing module (non workspace)" $ do
+  , ignoreInWindowsBecause "Broken in windows" $ testSessionWait "add missing module (non workspace)" $ do
       tmpDir <- liftIO getTemporaryDirectory
       let contentB = T.unlines
             [ "module ModuleB where"
@@ -2488,7 +2488,7 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         expectDiagnostics [ ( "B.hs", [(DsWarning, (4, 0), "Top-level binding with no type signature: main :: IO ()")] ) ]
-    , flip xfail "expect broken (#614)" $ testCase "findsTHnewNameConstructor" $ withoutStackEnv $ runWithExtraFiles "THNewName" $ \dir -> do
+    , testCase "findsTHnewNameConstructor" $ withoutStackEnv $ runWithExtraFiles "THNewName" $ \dir -> do
 
     -- This test defines a TH value with the meaning "data A = A" in A.hs
     -- Loads and export the template in B.hs
@@ -3274,8 +3274,6 @@ ifaceErrorTest = testCase "iface-error-test-1" $ withoutStackEnv $ runWithExtraF
       ResponseMessage{_result=Right hidir} -> do
         hi_exists <- doesFileExist $ hidir </> "B.hi"
         assertBool ("Couldn't find B.hi in " ++ hidir) hi_exists
-        hie_exists <- doesFileExist $ hidir </> "B.hie"
-        assertBool ("Couldn't find B.hie in " ++ hidir) hie_exists
       _ -> assertFailure $ "Got malformed response for CustomMessage hidir: " ++ show res
 
     pdoc <- createDoc pPath "haskell" pSource

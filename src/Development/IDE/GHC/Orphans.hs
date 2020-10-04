@@ -102,3 +102,8 @@ instance Show a => Show (Bag a) where
 
 instance NFData HsDocString where
     rnf = rwhnf
+
+instance Show ModGuts where
+    show _ = "modguts"
+instance NFData ModGuts where
+    rnf = rwhnf
