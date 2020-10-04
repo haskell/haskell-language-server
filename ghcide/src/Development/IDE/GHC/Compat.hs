@@ -42,7 +42,6 @@ module Development.IDE.GHC.Compat(
     getLoc,
     upNameCache,
     disableWarningsAsErrors,
-    fixDetailsForTH,
     AvailInfo,
     tcg_exports,
 
@@ -100,14 +99,6 @@ import Data.List (foldl', isSuffixOf)
 #endif
 import ErrUtils (ErrorMessages)
 import FastString (FastString)
-import ConLike   (ConLike (PatSynCon))
-#if MIN_GHC_API_VERSION(8,8,0)
-import InstEnv   (updateClsInstDFun)
-import PatSyn    (PatSyn, updatePatSynIds)
-#else
-import InstEnv   (tidyClsInstDFun)
-import PatSyn    (PatSyn, tidyPatSynIds)
-#endif
 
 import Development.IDE.GHC.HieAst (mkHieFile,enrichHie)
 import Development.IDE.GHC.HieBin
@@ -124,12 +115,10 @@ import Development.IDE.GHC.HieTypes
 import System.FilePath ((-<.>))
 #endif
 
-#if MIN_GHC_API_VERSION(8,8,0)
-import GhcPlugins (Unfolding(BootUnfolding), setIdUnfolding, tidyTopType, setIdType, globaliseId, ppr, pprPanic, isWiredInName, elemNameSet, idName, filterOut)
-# else
+#if !MIN_GHC_API_VERSION(8,8,0)
 import qualified EnumSet
 
-import GhcPlugins (srcErrorMessages, Unfolding(BootUnfolding), setIdUnfolding, tidyTopType, setIdType, globaliseId, isWiredInName, elemNameSet, idName, filterOut)
+import GhcPlugins (srcErrorMessages)
 
 import Control.Exception (catch)
 import System.IO
@@ -147,7 +136,6 @@ hPutStringBuffer hdl (StringBuffer buf len cur)
 noExtField :: NoExt
 noExtField = noExt
 #endif
-
 
 supportsHieFiles :: Bool
 supportsHieFiles = True
@@ -313,78 +301,3 @@ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
   fmap hpm_module $ 
     runHsc env $ withPlugins dflags applyPluginAction 
       (HsParsedModule parsed [] hpm_annotations)
-
--- | This function recalculates the fields md_types and md_insts in the ModDetails.
--- It duplicates logic from GHC mkBootModDetailsTc to keep more ids,
--- because ghc drops ids in tcg_keep, which matters because TH identifiers
--- might be in there.  See the original function for more comments.
-fixDetailsForTH :: TypecheckedModule -> IO TypecheckedModule
-fixDetailsForTH tcm = do
-   keep_ids <- readIORef keep_ids_ptr
-   let
-    keep_it id | isWiredInName id_name           = False
-                 -- See Note [Drop wired-in things]
-               | isExportedId id                 = True
-               | id_name `elemNameSet` exp_names = True
-               | id_name `elemNameSet` keep_ids  = True -- This is the line added in comparison to the original function.
-               | otherwise                       = False
-               where
-                 id_name = idName id
-    final_ids = [ globaliseAndTidyBootId id
-                | id <- typeEnvIds type_env
-                , keep_it id ]
-    final_tcs  = filterOut (isWiredInName . getName) tcs
-    type_env1  = typeEnvFromEntities final_ids final_tcs fam_insts
-    insts'     = mkFinalClsInsts type_env1 insts
-    pat_syns'  = mkFinalPatSyns  type_env1 pat_syns
-    type_env'  = extendTypeEnvWithPatSyns pat_syns' type_env1
-    fixedDetails = details {
-                         md_types         = type_env'
-                       , md_insts         = insts'
-                       }
-   pure $ tcm { tm_internals_ = (tc_gbl_env, fixedDetails) }
- where
-    (tc_gbl_env, details) = tm_internals_ tcm
-    TcGblEnv{ tcg_exports          = exports,
-              tcg_type_env         = type_env,
-              tcg_tcs              = tcs,
-              tcg_patsyns          = pat_syns,
-              tcg_insts            = insts,
-              tcg_fam_insts        = fam_insts,
-              tcg_keep             = keep_ids_ptr
-            } = tc_gbl_env
-    exp_names = availsToNameSet exports
-
--- Functions from here are only pasted from ghc TidyPgm.hs
-
-mkFinalClsInsts :: TypeEnv -> [ClsInst] -> [ClsInst]
-mkFinalPatSyns :: TypeEnv -> [PatSyn] -> [PatSyn]
-#if MIN_GHC_API_VERSION(8,8,0)
-mkFinalClsInsts env = map (updateClsInstDFun (lookupFinalId env))
-mkFinalPatSyns env = map (updatePatSynIds (lookupFinalId env))
-
-lookupFinalId :: TypeEnv -> Id -> Id
-lookupFinalId type_env id
-  = case lookupTypeEnv type_env (idName id) of
-      Just (AnId id') -> id'
-      _ -> pprPanic "lookup_final_id" (ppr id)
-#else
-mkFinalClsInsts _env = map (tidyClsInstDFun globaliseAndTidyBootId)
-mkFinalPatSyns _env = map (tidyPatSynIds globaliseAndTidyBootId)
-#endif
-
-
-extendTypeEnvWithPatSyns :: [PatSyn] -> TypeEnv -> TypeEnv
-extendTypeEnvWithPatSyns tidy_patsyns type_env
-  = extendTypeEnvList type_env [AConLike (PatSynCon ps) | ps <- tidy_patsyns ]
-
-globaliseAndTidyBootId :: Id -> Id
--- For a LocalId with an External Name,
--- makes it into a GlobalId
---     * unchanged Name (might be Internal or External)
---     * unchanged details
---     * VanillaIdInfo (makes a conservative assumption about Caf-hood and arity)
---     * BootUnfolding (see Note [Inlining and hs-boot files] in ToIface)
-globaliseAndTidyBootId id
-  = globaliseId id `setIdType`      tidyTopType (idType id)
-                   `setIdUnfolding` BootUnfolding

@@ -25,14 +25,14 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Text as T
 import Data.Tuple.Extra
 import Development.Shake
+import Control.Monad (void)
 
 import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
-import Data.Maybe (mapMaybe)
-import GhcPlugins (HomeModInfo(hm_iface))
+import Data.Maybe (catMaybes)
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
@@ -90,15 +90,15 @@ modifyFilesOfInterest state f = do
 --   Could be improved
 kick :: DelayedAction ()
 kick = mkDelayedAction "kick" Debug $ do
-    files <- getFilesOfInterest
+    files <- HashMap.keys <$> getFilesOfInterest
     ShakeExtras{progressUpdate} <- getShakeExtras
     liftIO $ progressUpdate KickStarted
 
     -- Update the exports map for the project
-    results <-  uses TypeCheck $ HashMap.keys files
+    (results, ()) <- par (uses GenerateCore files) (void $ uses GetHieAst files)
     ShakeExtras{exportsMap} <- getShakeExtras
-    let modIfaces = mapMaybe (fmap (hm_iface . tmrModInfo)) results
-        !exportsMap' = createExportsMap modIfaces
+    let mguts = catMaybes results
+        !exportsMap' = createExportsMapMg mguts
     liftIO $ modifyVar_ exportsMap $ evaluate . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted

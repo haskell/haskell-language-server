@@ -236,7 +236,7 @@ typecheckParents state nfp = void $ shakeEnqueue (shakeExtras state) parents
 
 typecheckParentsAction :: NormalizedFilePath -> Action ()
 typecheckParentsAction nfp = do
-    revs <- reverseDependencies nfp <$> useNoFile_ GetModuleGraph
+    revs <- transitiveReverseDependencies nfp <$> useNoFile_ GetModuleGraph
     logger <- logger <$> getShakeExtras
     let log = L.logInfo logger . T.pack
     liftIO $ do

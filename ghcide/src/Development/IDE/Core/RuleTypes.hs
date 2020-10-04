@@ -2,7 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DerivingStrategies #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -26,13 +27,14 @@ import           Development.Shake
 import           GHC.Generics                             (Generic)
 
 import Module (InstalledUnitId)
-import HscTypes (hm_iface, CgGuts, Linkable, HomeModInfo, ModDetails)
+import HscTypes (ModGuts, hm_iface, HomeModInfo)
 
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Import.FindImports (ArtifactsLocation)
 import Data.ByteString (ByteString)
 import Language.Haskell.LSP.Types (NormalizedFilePath)
+import TcRnMonad (TcGblEnv)
 
 -- NOTATION
 --   Foo+ means Foo for the dependencies
@@ -52,6 +54,9 @@ type instance RuleResult GetDependencies = TransitiveDependencies
 
 type instance RuleResult GetModuleGraph = DependencyInformation
 
+-- | Does this module need object code?
+type instance RuleResult NeedsObjectCode = Bool
+
 data GetKnownTargets = GetKnownTargets
   deriving (Show, Generic, Eq, Ord)
 instance Hashable GetKnownTargets
@@ -59,41 +64,57 @@ instance NFData   GetKnownTargets
 instance Binary   GetKnownTargets
 type instance RuleResult GetKnownTargets = KnownTargets
 
+-- | Convert to Core, requires TypeCheck*
+type instance RuleResult GenerateCore = ModGuts
+
+data GenerateCore = GenerateCore
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GenerateCore
+instance NFData   GenerateCore
+instance Binary   GenerateCore
+
+data GetImportMap = GetImportMap
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetImportMap
+instance NFData   GetImportMap
+instance Binary   GetImportMap
+
+type instance RuleResult GetImportMap = ImportMap
+newtype ImportMap = ImportMap
+  { importMap :: M.Map ModuleName NormalizedFilePath -- ^ Where are the modules imported by this file located?
+  } deriving stock Show
+    deriving newtype NFData
+
 -- | Contains the typechecked module and the OrigNameCache entry for
 -- that module.
 data TcModuleResult = TcModuleResult
-    { tmrModule     :: TypecheckedModule
-    -- ^ warning, the ModIface in the tm_checked_module_info of the
-    -- TypecheckedModule will always be Nothing, use the ModIface in the
-    -- HomeModInfo instead
-    , tmrModInfo    :: HomeModInfo
+    { tmrParsed :: ParsedModule
+    , tmrRenamed :: RenamedSource
+    , tmrTypechecked :: TcGblEnv
     , tmrDeferedError :: !Bool -- ^ Did we defer any type errors for this module?
-    , tmrHieAsts :: !(Maybe (HieASTs Type)) -- ^ The HieASTs if we computed them
     }
 instance Show TcModuleResult where
-    show = show . pm_mod_summary . tm_parsed_module . tmrModule
+    show = show . pm_mod_summary . tmrParsed
 
 instance NFData TcModuleResult where
     rnf = rwhnf
 
 tmrModSummary :: TcModuleResult -> ModSummary
-tmrModSummary = pm_mod_summary . tm_parsed_module . tmrModule
+tmrModSummary = pm_mod_summary . tmrParsed
 
 data HiFileResult = HiFileResult
     { hirModSummary :: !ModSummary
     -- Bang patterns here are important to stop the result retaining
     -- a reference to a typechecked module
-    , hirModIface :: !ModIface
+    , hirHomeMod :: !HomeModInfo
+    -- ^ Includes the Linkable iff we need object files
     }
-
-tmr_hiFileResult :: TcModuleResult -> HiFileResult
-tmr_hiFileResult tmr = HiFileResult modSummary modIface
-  where
-    modIface = hm_iface . tmrModInfo $ tmr
-    modSummary = tmrModSummary tmr
 
 hiFileFingerPrint :: HiFileResult -> ByteString
 hiFileFingerPrint = fingerprintToBS . getModuleHash . hirModIface
+
+hirModIface :: HiFileResult -> ModIface
+hirModIface = hm_iface . hirHomeMod
 
 instance NFData HiFileResult where
     rnf = rwhnf
@@ -106,12 +127,14 @@ data HieAstResult
   = HAR
   { hieModule :: Module
   , hieAst :: !(HieASTs Type)
-  , refMap :: !RefMap
-  , importMap :: !(M.Map ModuleName NormalizedFilePath) -- ^ Where are the modules imported by this file located?
+  , refMap :: RefMap
+  -- ^ Lazy because its value only depends on the hieAst, which is bundled in this type
+  -- Lazyness can't cause leaks here because the lifetime of `refMap` will be the same
+  -- as that of `hieAst`
   }
  
 instance NFData HieAstResult where
-    rnf (HAR m hf rm im) = rnf m `seq` rwhnf hf `seq` rnf rm `seq` rnf im
+    rnf (HAR m hf _rm) = rnf m `seq` rwhnf hf
  
 instance Show HieAstResult where
     show = show . hieModule
@@ -127,18 +150,12 @@ type instance RuleResult GetBindings = Bindings
 
 data DocAndKindMap = DKMap {getDocMap :: !DocMap, getKindMap :: !KindMap}
 instance NFData DocAndKindMap where
-    rnf (DKMap a b) = rnf a `seq` rnf b
+    rnf (DKMap a b) = rwhnf a `seq` rwhnf b
 
 instance Show DocAndKindMap where
     show = const "docmap"
 
 type instance RuleResult GetDocMap = DocAndKindMap
-
--- | Convert to Core, requires TypeCheck*
-type instance RuleResult GenerateCore = (SafeHaskellMode, CgGuts, ModDetails)
-
--- | Generate byte code for template haskell.
-type instance RuleResult GenerateByteCode = Linkable
 
 -- | A GHC session that we reuse.
 type instance RuleResult GhcSession = HscEnvEq
@@ -196,6 +213,12 @@ instance Hashable GetLocatedImports
 instance NFData   GetLocatedImports
 instance Binary   GetLocatedImports
 
+data NeedsObjectCode = NeedsObjectCode
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable NeedsObjectCode
+instance NFData   NeedsObjectCode
+instance Binary   NeedsObjectCode
+
 data GetDependencyInformation = GetDependencyInformation
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetDependencyInformation
@@ -243,18 +266,6 @@ data GetBindings = GetBindings
 instance Hashable GetBindings
 instance NFData   GetBindings
 instance Binary   GetBindings
-
-data GenerateCore = GenerateCore
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable GenerateCore
-instance NFData   GenerateCore
-instance Binary   GenerateCore
-
-data GenerateByteCode = GenerateByteCode
-   deriving (Eq, Show, Typeable, Generic)
-instance Hashable GenerateByteCode
-instance NFData   GenerateByteCode
-instance Binary   GenerateByteCode
 
 data GhcSession = GhcSession
     deriving (Eq, Show, Typeable, Generic)
