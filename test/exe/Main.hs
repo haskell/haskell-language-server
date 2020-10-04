@@ -1670,20 +1670,18 @@ addInstanceConstraintTests = let
 
 addFunctionConstraintTests :: TestTree
 addFunctionConstraintTests = let
-  missingConstraintSourceCode :: Maybe T.Text -> T.Text
-  missingConstraintSourceCode mConstraint =
-    let constraint = maybe "" (<> " => ") mConstraint
-     in T.unlines
+  missingConstraintSourceCode :: T.Text -> T.Text
+  missingConstraintSourceCode constraint =
+    T.unlines
     [ "module Testing where"
     , ""
     , "eq :: " <> constraint <> "a -> a -> Bool"
     , "eq x y = x == y"
     ]
 
-  incompleteConstraintSourceCode :: Maybe T.Text -> T.Text
-  incompleteConstraintSourceCode mConstraint =
-    let constraint = maybe "Eq a" (\c -> "(Eq a, " <> c <> ")") mConstraint
-     in T.unlines
+  incompleteConstraintSourceCode :: T.Text -> T.Text
+  incompleteConstraintSourceCode constraint =
+    T.unlines
     [ "module Testing where"
     , ""
     , "data Pair a b = Pair a b"
@@ -1692,16 +1690,37 @@ addFunctionConstraintTests = let
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
-  incompleteConstraintSourceCode2 :: Maybe T.Text -> T.Text
-  incompleteConstraintSourceCode2 mConstraint =
-    let constraint = maybe "(Eq a, Eq b)" (\c -> "(Eq a, Eq b, " <> c <> ")") mConstraint
-     in T.unlines
+  incompleteConstraintSourceCode2 :: T.Text -> T.Text
+  incompleteConstraintSourceCode2 constraint =
+    T.unlines
     [ "module Testing where"
     , ""
     , "data Three a b c = Three a b c"
     , ""
     , "eq :: " <> constraint <> " => Three a b c -> Three a b c -> Bool"
     , "eq (Three x y z) (Three x' y' z') = x == x' && y == y' && z == z'"
+    ]
+
+  incompleteConstraintSourceCodeWithExtraCharsInContext :: T.Text -> T.Text
+  incompleteConstraintSourceCodeWithExtraCharsInContext constraint =
+    T.unlines
+    [ "module Testing where"
+    , ""
+    , "data Pair a b = Pair a b"
+    , ""
+    , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
+    , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
+    ]
+  
+  incompleteConstraintSourceCodeWithNewlinesInTypeSignature :: T.Text -> T.Text
+  incompleteConstraintSourceCodeWithNewlinesInTypeSignature constraint =
+    T.unlines
+    [ "module Testing where"
+    , "data Pair a b = Pair a b"
+    , "eq "
+    , "    :: " <> constraint
+    , "    => Pair a b -> Pair a b -> Bool"
+    , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
   check :: T.Text -> T.Text -> T.Text -> TestTree
@@ -1717,16 +1736,24 @@ addFunctionConstraintTests = let
   in testGroup "add function constraint"
   [ check
     "Add `Eq a` to the context of the type signature for `eq`"
-    (missingConstraintSourceCode Nothing)
-    (missingConstraintSourceCode $ Just "Eq a")
+    (missingConstraintSourceCode "")
+    (missingConstraintSourceCode "Eq a => ")
   , check
     "Add `Eq b` to the context of the type signature for `eq`"
-    (incompleteConstraintSourceCode Nothing)
-    (incompleteConstraintSourceCode $ Just "Eq b")
+    (incompleteConstraintSourceCode "Eq a")
+    (incompleteConstraintSourceCode "(Eq a, Eq b)")
   , check
     "Add `Eq c` to the context of the type signature for `eq`"
-    (incompleteConstraintSourceCode2 Nothing)
-    (incompleteConstraintSourceCode2 $ Just "Eq c")
+    (incompleteConstraintSourceCode2 "(Eq a, Eq b)")
+    (incompleteConstraintSourceCode2 "(Eq a, Eq b, Eq c)")
+  , check
+    "Add `Eq b` to the context of the type signature for `eq`"
+    (incompleteConstraintSourceCodeWithExtraCharsInContext "( Eq a )")
+    (incompleteConstraintSourceCodeWithExtraCharsInContext "(Eq a, Eq b)")
+  , check
+    "Add `Eq b` to the context of the type signature for `eq`"
+    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a)")
+    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a, Eq b)")
   ]
 
 removeRedundantConstraintsTests :: TestTree
