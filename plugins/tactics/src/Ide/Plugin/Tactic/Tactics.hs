@@ -34,6 +34,7 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import Control.Monad
 
 
 
@@ -52,33 +53,34 @@ assume name = rule $ \jdg -> do
     Just ty ->
       case ty == jGoal jdg of
         True  -> do
+          when (M.member name $ jPatHypothesis jdg) $ do
+            -- traceM $ "!!!simpler: " <> show name
+            setRecursionFrameData True
           useOccName jdg name
           pure $ noLoc $ var' name
         False -> throwError $ GoalMismatch "assume" g
     Nothing -> throwError $ UndefinedHypothesis name
 
 
-
-------------------------------------------------------------------------------
--- | Restrict a tactic to looking only at pattern vals and functions
-simpler :: TacticsM () -> TacticsM ()
-simpler t = do
-  jdg <- goal
-  let funcs = M.filter (isFunction . unCType) $ jHypothesis jdg
-      hy' = jPatHypothesis jdg <> funcs
-  traceM $ mappend "!!! yo: " $ show hy'
-  localTactic t $ withHypothesis $ const hy'
-
-
 recursion :: TacticsM ()
 recursion = do
   defs <- getCurrentDefinitions
-  traceM $ mappend "!!! recursion: " $ show defs
   attemptOn (const $ fmap fst defs) $ \name -> do
-    traceM $ mappend "!!! recursing: " $ show name
-    localTactic (apply' name) (introducing defs)
-    simpler assumption
+    localTactic (apply' name) $ introducing defs
+    (has_simple, _) <- recursionStackFrame assumption
+    case has_simple of
+      True -> traceM $ mappend "!!!recursion ok: " $ show defs
+      False -> do
+        traceM $ mappend "!!!recursion not ok >: " $ show defs
+        throwError NoProgress
 
+
+foo :: Int -> a -> a -> [[a]]
+foo n i b = map (take n) . take n $ go (i : repeat b)
+  where
+    go [] = [[]]
+    go [x] = [[x]]
+    go l@(x:y:ys) = l : map (y :) (go $ x:ys)
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda.
@@ -146,19 +148,25 @@ homoLambdaCase = rule $ destructLambdaCase' (\dc jdg ->
 
 
 apply' :: OccName -> TacticsM ()
-apply' func = rule $ \jdg -> do
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
-  case M.lookup func hy of
-    Just (CType ty) -> do
-        let (args, ret) = splitFunTys ty
-        unify g (CType ret)
-        useOccName jdg func
-        sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
-        pure . noLoc
-             . foldl' (@@) (var' func)
-             $ fmap unLoc sgs
-    Nothing -> throwError $ GoalMismatch "apply" g
+apply' func = do
+  rule $ \jdg -> do
+    let hy = jHypothesis jdg
+        g  = jGoal jdg
+    case M.lookup func hy of
+      Just (CType ty) -> do
+          let (args, ret) = splitFunTys ty
+          unify g (CType ret)
+          useOccName jdg func
+          sgs <- traverse ( newSubgoal
+                          . blacklistingDestruct
+                          . flip withNewGoal jdg
+                          . CType
+                          ) args
+          pure . noLoc
+              . foldl' (@@) (var' func)
+              $ fmap unLoc sgs
+      Nothing -> throwError $ GoalMismatch "apply" g
+  assumption
 
 
 ------------------------------------------------------------------------------
@@ -209,8 +217,10 @@ localTactic t f = do
 auto :: TacticsM ()
 auto = do
   current <- getCurrentDefinitions
-  traceM $ mappend "!!!auto defs:" $ show current
-  localTactic (auto' 4) $ disallowing $ fmap fst current
+  jdg <- goal
+  traceM $ mappend "!!!auto current:" $ show current
+  traceM $ mappend "!!!auto jdg:" $ show jdg
+  localTactic (auto' 5) $ disallowing $ fmap fst current
 
 
 auto' :: Int -> TacticsM ()

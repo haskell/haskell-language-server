@@ -54,18 +54,18 @@ data TacticState = TacticState
     , ts_unifier   :: !(TCvSubst)
     , ts_used_vals :: !(Set OccName)
     , ts_intro_vals :: !(Set OccName)
+    , ts_recursion_stack :: ![Bool]
     }
 
-instance Semigroup TacticState where
-  TacticState a1 b1 c1 d1 <> TacticState a2 b2 c2 d2
-    = TacticState
-        (a1 <> a2)
-        (unionTCvSubst b1 b2)
-        (c1 <> c2)
-        (d1 <> d2)
+defaultTacticState :: TacticState
+defaultTacticState =
+  TacticState mempty emptyTCvSubst mempty mempty mempty
 
-instance Monoid TacticState where
-  mempty = TacticState mempty emptyTCvSubst mempty mempty
+withRecursionStack
+  :: ([Bool] -> [Bool]) -> TacticState -> TacticState
+withRecursionStack f ts = ts
+  { ts_recursion_stack = f $ ts_recursion_stack ts
+  }
 
 
 withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
@@ -87,9 +87,10 @@ data Judgement' a = Judgement
     -- ^ These should align with keys of _jHypothesis
   , _jPatternVals :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
+  , _jBlacklistDestruct :: !(Bool)
   , _jGoal        :: !(a)
   }
-  deriving stock (Eq, Ord, Generic, Functor)
+  deriving stock (Eq, Ord, Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 

@@ -18,9 +18,9 @@ module Ide.Plugin.Tactic.Machinery
   ) where
 
 import           Control.Applicative
-import           Control.Monad.Except (throwError)
+import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State (gets, modify)
+import           Control.Monad.State.Class (gets, modify, MonadState)
 import           Data.Coerce
 import           Data.Either
 import           Data.List (intercalate, sortBy)
@@ -62,19 +62,53 @@ runTactic
     -> Either [TacticError] (LHsExpr GhcPs)
 runTactic ctx jdg t =
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
-        tacticState = mempty { ts_skolems = skolems }
+        tacticState = defaultTacticState { ts_skolems = skolems }
     in case partitionEithers
           . flip runReader ctx
           . unExtractM
           $ runTacticTWithState t jdg tacticState of
       (errs, []) -> Left $ errs
       (_, solns) -> do
+        let sorted = sortBy (comparing $ Down . uncurry scoreSolution . snd) solns
         -- TODO(sandy): remove this trace sometime
-        traceM $ intercalate "\n" $ fmap (unsafeRender . fst) $ solns
-        case sortBy (comparing $ Down . uncurry scoreSolution . snd) solns of
+        traceM $ mappend "!!!solns: " $ intercalate "\n" $ take 5 $  fmap (unsafeRender . fst) sorted
+        case sorted of
           (res : _) -> Right $ fst res
           -- guaranteed to not be empty
           _ -> Left []
+
+
+recursionStackFrame
+    :: (MonadError TacticError m, MonadState TacticState m)
+    => m a
+    -> m (Bool, a)
+recursionStackFrame ma = do
+  modify $ withRecursionStack (False :)
+  finally
+    ( do
+      a <- ma
+      r <- gets $ head . ts_recursion_stack
+      pure (r, a)
+    )
+    (modify $ withRecursionStack tail)
+
+
+finally :: MonadError e m => m a -> m () -> m a
+finally action cleanup = do
+  a <-
+    action `catchError` \e -> do
+      cleanup
+      throwError e
+  cleanup
+  pure a
+
+
+setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
+setRecursionFrameData b = do
+  modify $ withRecursionStack $ \case
+    (_ : bs) -> b : bs
+    []       -> []
+
 
 
 scoreSolution

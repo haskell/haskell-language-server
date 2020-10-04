@@ -68,6 +68,7 @@ destructMatches f f2 t jdg = do
 -- resulting matches.
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
 destruct' f term jdg = do
+  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let hy = jHypothesis jdg
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
@@ -82,6 +83,7 @@ destruct' f term jdg = do
 -- resulting matches.
 destructLambdaCase' :: (DataCon -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' f jdg = do
+  when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
@@ -99,7 +101,11 @@ buildDataCon
     -> RuleM (LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
   let args = dataConInstArgTys dc apps
-  sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
+  sgs <- traverse ( newSubgoal
+                  . blacklistingDestruct
+                  . flip withNewGoal jdg
+                  . CType
+                  ) args
   pure
     . noLoc
     . foldl' (@@)

@@ -42,6 +42,14 @@ destructing n jdg@Judgement{..} = jdg
   { _jDestructed = _jDestructed <> S.singleton n
   }
 
+blacklistingDestruct :: Judgement -> Judgement
+blacklistingDestruct jdg = jdg
+  { _jBlacklistDestruct = True
+  }
+
+isDestructBlacklisted :: Judgement -> Bool
+isDestructBlacklisted = _jBlacklistDestruct
+
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t jdg = jdg
   { _jGoal = t
@@ -90,5 +98,5 @@ substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
 mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
-mkFirstJudgement hy = Judgement hy mempty mempty . CType
+mkFirstJudgement hy = Judgement hy mempty mempty False . CType
 
