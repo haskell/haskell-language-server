@@ -86,9 +86,8 @@ scoreSolution
        , Penalize Int   -- number used bindings
        )
 scoreSolution TacticState{..} holes
-  = traceShowId
-    ( Penalize $ length holes
-    , Reward $ S.null $ traceShowId $ ts_intro_vals S.\\ ts_used_vals
+  = ( Penalize $ length holes
+    , Reward $ S.null $ ts_intro_vals S.\\ ts_used_vals
     , Reward $ S.size ts_used_vals
     , Penalize $ S.size ts_intro_vals
     )
