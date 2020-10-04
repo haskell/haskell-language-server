@@ -153,7 +153,8 @@ jobs:
           mv haskell-language-server-wrapper-${{ matrix.os }}.gz/haskell-language-server-wrapper.gz bin
           # decompress them
           gzip -d bin/*.gz
-          tar -czf bin/haskell-language-server.tar.gz bin/*
+          cd bin
+          tar -czf haskell-language-server.tar.gz *
 
       - uses: actions/upload-release-asset@v1.0.2
         env:
