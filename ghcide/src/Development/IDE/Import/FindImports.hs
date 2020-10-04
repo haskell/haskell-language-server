@@ -32,6 +32,7 @@ import           Control.Monad.IO.Class
 import           System.FilePath
 import DriverPhases
 import Data.Maybe
+import Data.List (isSuffixOf)
 
 data Import
   = FileImport !ArtifactsLocation
@@ -40,7 +41,7 @@ data Import
 
 data ArtifactsLocation = ArtifactsLocation
   { artifactFilePath    :: !NormalizedFilePath
-  , artifactModLocation :: !ModLocation
+  , artifactModLocation :: !(Maybe ModLocation)
   , artifactIsSource    :: !Bool          -- ^ True if a module is a source input
   }
     deriving (Show)
@@ -55,12 +56,14 @@ instance NFData Import where
   rnf (FileImport x) = rnf x
   rnf (PackageImport x) = rnf x
 
-modSummaryToArtifactsLocation :: NormalizedFilePath -> ModSummary -> ArtifactsLocation
-modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location ms) (isSource (ms_hsc_src ms))
+modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
+modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source
   where
     isSource HsSrcFile = True
     isSource _ = False
-
+    source = case ms of
+      Nothing -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
+      Just ms -> isSource (ms_hsc_src ms)
 
 -- | locate a module in the file system. Where we go from *daml to Haskell
 locateModuleFile :: MonadIO m
@@ -123,7 +126,7 @@ locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
     import_paths = mapMaybe (mkImportDirs dflags) comp_info
     toModLocation file = liftIO $ do
         loc <- mkHomeModLocation dflags (unLoc modName) (fromNormalizedFilePath file)
-        return $ Right $ FileImport $ ArtifactsLocation file loc (not isSource)
+        return $ Right $ FileImport $ ArtifactsLocation file (Just loc) (not isSource)
 
     lookupLocal dirs = do
       mbFile <- locateModuleFile dirs exts doesExist isSource $ unLoc modName

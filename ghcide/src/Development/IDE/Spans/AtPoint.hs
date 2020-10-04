@@ -30,6 +30,7 @@ import SrcLoc
 import TyCoRep
 import TyCon
 import qualified Var
+import NameEnv
 
 import Control.Applicative
 import Control.Monad.Extra
@@ -114,11 +115,13 @@ atPoint IdeOptions{} hf (DKMap dm km) pos = listToMaybe $ pointCommand hf pos ho
         prettyNames :: [T.Text]
         prettyNames = map prettyName names
         prettyName (Right n, dets) = T.unlines $
-          wrapHaskell (showName n <> maybe "" ((" :: " <>) . prettyType) (identType dets <|> M.lookup n km))
+          wrapHaskell (showName n <> maybe "" ((" :: " <>) . prettyType) (identType dets <|> maybeKind))
           : definedAt n
-          : catMaybes [ T.unlines . spanDocToMarkdown <$> M.lookup n dm
+          : catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                       ]
+          where maybeKind = safeTyThingType =<< lookupNameEnv km n
         prettyName (Left m,_) = showName m
+
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = showName t

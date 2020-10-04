@@ -27,7 +27,6 @@ module Development.IDE.Core.Rules(
     highlightAtPoint,
     getDependencies,
     getParsedModule,
-    generateCore,
     ) where
 
 import Fingerprint
@@ -95,6 +94,8 @@ import Data.Time (UTCTime(..))
 import Data.Hashable
 import qualified Data.HashSet as HashSet
 import qualified Data.HashMap.Strict as HM
+import TcRnMonad (tcg_dependent_files)
+import Data.IORef
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -149,7 +150,8 @@ getDefinition :: NormalizedFilePath -> Position -> IdeAction (Maybe Location)
 getDefinition file pos = runMaybeT $ do
     ide <- ask
     opts <- liftIO $ getIdeOptionsIO ide
-    (HAR _ hf _ imports, mapping) <- useE GetHieAst file
+    (HAR _ hf _ , mapping) <- useE GetHieAst file
+    (ImportMap imports, _) <- useE GetImportMap file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     AtPoint.gotoDefinition (getHieFile ide file) opts imports hf pos'
 
@@ -163,7 +165,7 @@ getTypeDefinition file pos = runMaybeT $ do
 
 highlightAtPoint :: NormalizedFilePath -> Position -> IdeAction (Maybe [DocumentHighlight])
 highlightAtPoint file pos = runMaybeT $ do
-    (HAR _ hf rf _,mapping) <- useE GetHieAst file
+    (HAR _ hf rf,mapping) <- useE GetHieAst file
     !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
     AtPoint.documentHighlight hf rf pos'
 
@@ -203,8 +205,8 @@ getHomeHieFile f = do
       wait <- lift $ delayedAction $ mkDelayedAction "OutOfDateHie" L.Info $ do
         hsc <- hscEnv <$> use_ GhcSession f
         pm <- use_ GetParsedModule f
-        source <- getSourceFileSource f
-        typeCheckRuleDefinition hsc pm NotFOI (Just source)
+        (_, mtm)<- typeCheckRuleDefinition hsc pm
+        mapM_ (getHieAstRuleDefinition f hsc) mtm -- Write the HiFile to disk
       _ <- MaybeT $ liftIO $ timeout 1 wait
       ncu <- mkUpdater
       liftIO $ loadHieFile ncu hie_f
@@ -263,6 +265,7 @@ priorityFilesOfInterest = Priority (-2)
 -- and https://github.com/mpickering/ghcide/pull/22#issuecomment-625070490
 getParsedModuleRule :: Rules ()
 getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
+    _ <- use_ GetModSummaryWithoutTimestamps file -- Fail if we can't even parse the ModSummary
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
         -- These packages are used when removing PackageImports from a
@@ -392,7 +395,8 @@ rawDependencyInformation fs = do
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          al <- lift $ modSummaryToArtifactsLocation f <$> use_ GetModSummaryWithoutTimestamps f
+          msum <- lift $ use GetModSummaryWithoutTimestamps f
+          let al =  modSummaryToArtifactsLocation f msum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Adding an edge to the bootmap so we can make sure to
@@ -457,15 +461,14 @@ rawDependencyInformation fs = do
     updateBootMap pm boot_mod_id ArtifactsLocation{..} bm =
       if not artifactIsSource
         then
-          let msource_mod_id = lookupPathToId (rawPathIdMap pm) (toNormalizedFilePath' $ dropBootSuffix artifactModLocation)
+          let msource_mod_id = lookupPathToId (rawPathIdMap pm) (toNormalizedFilePath' $ dropBootSuffix $ fromNormalizedFilePath artifactFilePath)
           in case msource_mod_id of
                Just source_mod_id -> insertBootId source_mod_id (FilePathId boot_mod_id) bm
                Nothing -> bm
         else bm
 
-    dropBootSuffix :: ModLocation -> FilePath
-    dropBootSuffix (ModLocation (Just hs_src) _ _) = reverse . drop (length @[] "-boot") . reverse $ hs_src
-    dropBootSuffix _ = error "dropBootSuffix"
+    dropBootSuffix :: FilePath -> FilePath
+    dropBootSuffix hs_src = reverse . drop (length @[] "-boot") . reverse $ hs_src
 
 getDependencyInformationRule :: Rules ()
 getDependencyInformationRule =
@@ -523,18 +526,29 @@ getHieAstsRule :: Rules ()
 getHieAstsRule =
     define $ \GetHieAst f -> do
       tmr <- use_ TypeCheck f
-      (diags,masts) <- case tmrHieAsts tmr of
-        -- If we already have them from typechecking, return them
-        Just asts -> pure ([], Just asts)
-        -- Compute asts if we haven't already computed them
-        Nothing -> do
-          hsc <- hscEnv <$> use_ GhcSession f
-          (diagsHieGen, masts) <- liftIO $ generateHieAsts hsc (tmrModule tmr)
-          pure (diagsHieGen, masts)
-      let refmap = generateReferencesMap . getAsts <$> masts
-      im <- use GetLocatedImports f
-      let mkImports (fileImports, _) = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp)  fileImports
-      pure (diags, HAR (ms_mod  $ tmrModSummary tmr) <$> masts <*> refmap <*> fmap mkImports im)
+      hsc <- hscEnv <$> use_ GhcSession f
+      getHieAstRuleDefinition f hsc tmr
+
+getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
+getHieAstRuleDefinition f hsc tmr = do
+  (diags, masts) <- liftIO $ generateHieAsts hsc tmr
+ 
+  isFoi <- use_ IsFileOfInterest f
+  diagsWrite <- case isFoi of
+    IsFOI Modified -> pure []
+    _ | Just asts <- masts -> do
+          source <- getSourceFileSource f
+          liftIO $ writeHieFile hsc (tmrModSummary tmr) (tcg_exports $ tmrTypechecked tmr) asts source
+    _ -> pure []
+ 
+  let refmap = generateReferencesMap . getAsts <$> masts
+  pure (diags <> diagsWrite, HAR (ms_mod  $ tmrModSummary tmr) <$> masts <*> refmap)
+
+getImportMapRule :: Rules()
+getImportMapRule = define $ \GetImportMap f -> do
+  im <- use GetLocatedImports f
+  let mkImports (fileImports, _) = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
+  pure ([], ImportMap . mkImports <$> im)
 
 getBindingsRule :: Rules ()
 getBindingsRule =
@@ -545,24 +559,21 @@ getBindingsRule =
 getDocMapRule :: Rules ()
 getDocMapRule =
     define $ \GetDocMap file -> do
-      hmi <- hirModIface <$> use_ GetModIface file
-      hsc <- hscEnv <$> use_ GhcSessionDeps file
-      (refMap -> rf) <- use_ GetHieAst file
-
-      deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
-      let tdeps = transitiveModuleDeps deps
+      (tmrTypechecked -> tc,_) <- useWithStale_ TypeCheck file
+      (hscEnv -> hsc,_) <-useWithStale_ GhcSessionDeps file
+      (refMap -> rf, _) <- useWithStale_ GetHieAst file
 
 -- When possible, rely on the haddocks embedded in our interface files
 -- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
 #if !defined(GHC_LIB)
       let parsedDeps = []
 #else
+      deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
+      let tdeps = transitiveModuleDeps deps
       parsedDeps <- uses_ GetParsedModule tdeps
 #endif
 
-      ifaces <- uses_ GetModIface tdeps
-
-      dkMap <- liftIO $ evalGhcEnv hsc $ mkDocMap parsedDeps rf hmi (map hirModIface ifaces)
+      dkMap <- liftIO $ evalGhcEnv hsc $ mkDocMap parsedDeps rf tc
       return ([],Just dkMap)
 
 -- Typechecks a module.
@@ -570,11 +581,7 @@ typeCheckRule :: Rules ()
 typeCheckRule = define $ \TypeCheck file -> do
     pm <- use_ GetParsedModule file
     hsc  <- hscEnv <$> use_ GhcSessionDeps file
-    -- do not generate interface files as this rule is called
-    -- for files of interest on every keystroke
-    source <- getSourceFileSource file
-    isFoi <- use_ IsFileOfInterest file
-    typeCheckRuleDefinition hsc pm isFoi (Just source)
+    typeCheckRuleDefinition hsc pm
 
 knownFilesRule :: Rules ()
 knownFilesRule = defineEarlyCutOffNoFile $ \GetKnownTargets -> do
@@ -595,70 +602,20 @@ getModuleGraphRule = defineNoFile $ \GetModuleGraph -> do
 typeCheckRuleDefinition
     :: HscEnv
     -> ParsedModule
-    -> IsFileOfInterestResult -- ^ Should generate .hi and .hie files ?
-    -> Maybe BS.ByteString
     -> Action (IdeResult TcModuleResult)
-typeCheckRuleDefinition hsc pm isFoi source = do
+typeCheckRuleDefinition hsc pm = do
   setPriority priorityTypeCheck
   IdeOptions { optDefer = defer } <- getIdeOptions
-
-  addUsageDependencies $ liftIO $ do
-    res <- typecheckModule defer hsc pm
-    case res of
-      (diags, Just (hsc,tcm)) -> do
-        case isFoi of
-          IsFOI Modified -> return (diags, Just tcm)
-          _ -> do -- If the file is saved on disk, or is not a FOI, we write out ifaces
-            let tm = tmrModule tcm
-                ms = tmrModSummary tcm
-                exports = tcg_exports $ fst $ tm_internals_ tm
-            (diagsHieGen, masts) <- generateHieAsts hsc (tmrModule tcm)
-            diagsHieWrite <- case masts of
-              Nothing -> pure mempty
-              Just asts -> writeHieFile hsc ms exports asts $ fromMaybe "" source
-            -- Don't save interface files for modules that compiled due to defering
-            -- type errors, as we won't get proper diagnostics if we load these from
-            -- disk
-            diagsHi  <- if not $ tmrDeferedError tcm
-                        then writeHiFile hsc tcm
-                        else pure mempty
-            return (diags <> diagsHi <> diagsHieGen <> diagsHieWrite, Just tcm{tmrHieAsts = masts})
-      (diags, res) ->
-        return (diags, snd <$> res)
- where
-  addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
-  addUsageDependencies a = do
-    r@(_, mtc) <- a
-    forM_ mtc $ \tc -> do
-      let used_files = mapMaybe udep (mi_usages (hm_iface (tmrModInfo tc)))
-          udep (UsageFile fp _h) = Just fp
-          udep _ = Nothing
-      -- Add a dependency on these files which are added by things like
-      -- qAddDependentFile
-      void $ uses_ GetModificationTime (map toNormalizedFilePath' used_files)
-    return r
-
-
-generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult (SafeHaskellMode, CgGuts, ModDetails))
-generateCore runSimplifier file = do
-    deps <- use_ GetDependencies file
-    (tm:tms) <- uses_ TypeCheck (file:transitiveModuleDeps deps)
-    setPriority priorityGenerateCore
-    packageState <- hscEnv <$> use_ GhcSession file
-    liftIO $ compileModule runSimplifier packageState [(tmrModSummary x, tmrModInfo x) | x <- tms] tm
-
-generateCoreRule :: Rules ()
-generateCoreRule =
-    define $ \GenerateCore -> generateCore (RunSimplifier True)
-
-generateByteCodeRule :: Rules ()
-generateByteCodeRule =
-    define $ \GenerateByteCode file -> do
-      deps <- use_ GetDependencies file
-      (tm : tms) <- uses_ TypeCheck (file: transitiveModuleDeps deps)
-      session <- hscEnv <$> use_ GhcSession file
-      (_, guts, _) <- use_ GenerateCore file
-      liftIO $ generateByteCode session [(tmrModSummary x, tmrModInfo x) | x <- tms] tm guts
+  addUsageDependencies $ fmap (second (fmap snd)) $ liftIO $
+    typecheckModule defer hsc pm
+  where
+    addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
+    addUsageDependencies a = do
+      r@(_, mtc) <- a
+      forM_ mtc $ \tc -> do
+        used_files <- liftIO $ readIORef $ tcg_dependent_files $ tmrTypechecked tc
+        void $ uses_ GetModificationTime (map toNormalizedFilePath' used_files)
+      return r
 
 -- A local rule type to get caching. We want to use newCache, but it has
 -- thread killed exception issues, so we lift it to a full rule.
@@ -709,37 +666,21 @@ loadGhcSession = do
 ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
 ghcSessionDepsDefinition file = do
         hsc <- hscEnv <$> use_ GhcSession file
-        (ms,_) <- useWithStale_ GetModSummaryWithoutTimestamps file
         (deps,_) <- useWithStale_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
         ifaces <- uses_ GetModIface tdeps
 
-        -- Figure out whether we need TemplateHaskell or QuasiQuotes support
-        let graph_needs_th_qq = needsTemplateHaskellOrQQ $ hsc_mod_graph hsc
-            file_uses_th_qq   = uses_th_qq $ ms_hspp_opts ms
-            any_uses_th_qq    = graph_needs_th_qq || file_uses_th_qq
-
-        bytecodes <- if any_uses_th_qq
-            then -- If we use TH or QQ, we must obtain the bytecode
-            fmap Just <$> uses_ GenerateByteCode (transitiveModuleDeps deps)
-            else
-            pure $ repeat Nothing
-
         -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
         -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
         -- Long-term we might just want to change the order returned by GetDependencies
-        let inLoadOrder = reverse (zipWith unpack ifaces bytecodes)
+        let inLoadOrder = reverse (map hirHomeMod ifaces)
 
         (session',_) <- liftIO $ runGhcEnv hsc $ do
             setupFinderCache (map hirModSummary ifaces)
-            mapM_ (uncurry loadDepModule) inLoadOrder
+            mapM_ loadDepModule inLoadOrder
 
         res <- liftIO $ newHscEnvEq "" session' []
         return ([], Just res)
- where
-  unpack HiFileResult{..} bc = (hirModIface, bc)
-  uses_th_qq dflags =
-    xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
 
 getModIfaceFromDiskRule :: Rules ()
 getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
@@ -749,7 +690,8 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
       Nothing -> return (Nothing, (diags_session, Nothing))
       Just session -> do
         sourceModified <- use_ IsHiFileStable f
-        r <- loadInterface (hscEnv session) ms sourceModified (regenerateHiFile session f)
+        needsObj <- use_ NeedsObjectCode f
+        r <- loadInterface (hscEnv session) ms sourceModified needsObj (regenerateHiFile session f)
         case r of
             (diags, Just x) -> do
                 let fp = Just (hiFileFingerPrint x)
@@ -757,7 +699,7 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
             (diags, Nothing) -> return (Nothing, (diags ++ diags_session, Nothing))
 
 isHiFileStableRule :: Rules ()
-isHiFileStableRule = define $ \IsHiFileStable f -> do
+isHiFileStableRule = defineEarlyCutoff $ \IsHiFileStable f -> do
     ms <- use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
                 $ ml_hi_file $ ms_location ms
@@ -775,7 +717,7 @@ isHiFileStableRule = define $ \IsHiFileStable f -> do
                     pure $ if all (== SourceUnmodifiedAndStable) deps
                         then SourceUnmodifiedAndStable
                         else SourceUnmodified
-    return ([], Just sourceModified)
+    return (Just (BS.pack $ show sourceModified), ([], Just sourceModified))
 
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
@@ -820,30 +762,51 @@ getModSummaryRule = do
 
         hashUTC UTCTime{..} = (fromEnum utctDay, fromEnum utctDayTime)
 
+
+generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts)
+generateCore runSimplifier file = do
+    packageState <- hscEnv <$> use_ GhcSessionDeps file
+    tm <- use_ TypeCheck file
+    setPriority priorityGenerateCore
+    liftIO $ compileModule runSimplifier packageState (tmrModSummary tm) (tmrTypechecked tm)
+
+generateCoreRule :: Rules ()
+generateCoreRule =
+    define $ \GenerateCore -> generateCore (RunSimplifier True)
+
 getModIfaceRule :: Rules ()
 getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
 #if !defined(GHC_LIB)
   fileOfInterest <- use_ IsFileOfInterest f
   case fileOfInterest of
-    IsFOI _ -> do
+    IsFOI status -> do
       -- Never load from disk for files of interest
-      tmr <- use TypeCheck f
-      let !hiFile = extractHiFileResult tmr
+      tmr <- use_ TypeCheck f
+      needsObj <- use_ NeedsObjectCode f
+      hsc <- hscEnv <$> use_ GhcSessionDeps f
+      let compile = fmap ([],) $ use GenerateCore f
+      (diags, !hiFile) <- compileToObjCodeIfNeeded hsc needsObj compile tmr
       let fp = hiFileFingerPrint <$> hiFile
-      return (fp, ([], hiFile))
+      hiDiags <- case hiFile of
+        Just hiFile
+          | OnDisk <- status
+          , not (tmrDeferedError tmr) -> liftIO $ writeHiFile hsc hiFile
+        _ -> pure []
+      return (fp, (diags++hiDiags, hiFile))
     NotFOI -> do
       hiFile <- use GetModIfaceFromDisk f
       let fp = hiFileFingerPrint <$> hiFile
       return (fp, ([], hiFile))
 #else
-    tm <- use TypeCheck f
-    let !hiFile = extractHiFileResult tm
+    tm <- use_ TypeCheck f
+    hsc <- hscEnv <$> use_ GhcSessionDeps f
+    (diags, !hiFile) <- liftIO $ compileToObjCodeIfNeeded hsc False (error "can't compile with ghc-lib") tm
     let fp = hiFileFingerPrint <$> hiFile
-    return (fp, ([], tmr_hiFileResult <$> tm))
+    return (fp, (diags, hiFile))
 #endif
 
-regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> Action ([FileDiagnostic], Maybe HiFileResult)
-regenerateHiFile sess f = do
+regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> Bool -> Action ([FileDiagnostic], Maybe HiFileResult)
+regenerateHiFile sess f objNeeded = do
     let hsc = hscEnv sess
         -- After parsing the module remove all package imports referring to
         -- these packages as we have already dealt with what they map to.
@@ -862,25 +825,69 @@ regenerateHiFile sess f = do
     case mb_pm of
         Nothing -> return (diags, Nothing)
         Just pm -> do
-            source <- getSourceFileSource f
             -- Invoke typechecking directly to update it without incurring a dependency
             -- on the parsed module and the typecheck rules
-            (diags', tmr) <- typeCheckRuleDefinition hsc pm NotFOI (Just source)
-            -- Bang pattern is important to avoid leaking 'tmr'
-            let !res = extractHiFileResult tmr
-            return (diags <> diags', res)
+            (diags', mtmr) <- typeCheckRuleDefinition hsc pm
+            case mtmr of
+              Nothing -> pure (diags', Nothing)
+              Just tmr -> do
 
-extractHiFileResult :: Maybe TcModuleResult -> Maybe HiFileResult
-extractHiFileResult Nothing = Nothing
-extractHiFileResult (Just tmr) =
-    -- Bang patterns are important to force the inner fields
-    Just $! tmr_hiFileResult tmr
+                -- compile writes .o file
+                let compile = compileModule (RunSimplifier True) hsc (pm_mod_summary pm) $ tmrTypechecked tmr
+
+                -- Bang pattern is important to avoid leaking 'tmr'
+                (diags'', !res) <- liftIO $ compileToObjCodeIfNeeded hsc objNeeded compile tmr
+
+                -- Write hi file
+                hiDiags <- case res of
+                  Just hiFile
+                    | not $ tmrDeferedError tmr ->
+                      liftIO $ writeHiFile hsc hiFile
+                  _ -> pure []
+
+                -- Write hie file
+                (gDiags, masts) <- liftIO $ generateHieAsts hsc tmr
+                wDiags <- forM masts $ \asts ->
+                  liftIO $ writeHieFile hsc (tmrModSummary tmr) (tcg_exports $ tmrTypechecked tmr) asts $ maybe "" T.encodeUtf8 contents
+
+                return (diags <> diags' <> diags'' <> hiDiags <> gDiags <> concat wDiags, res)
+
+
+type CompileMod m = m (IdeResult ModGuts)
+
+-- | HscEnv should have deps included already
+compileToObjCodeIfNeeded :: MonadIO m => HscEnv -> Bool -> CompileMod m -> TcModuleResult -> m (IdeResult HiFileResult)
+compileToObjCodeIfNeeded hsc False _ tmr = liftIO $ do
+  res <- mkHiFileResultNoCompile hsc tmr
+  pure ([], Just $! res)
+compileToObjCodeIfNeeded hsc True getGuts tmr = do
+  (diags, mguts) <- getGuts
+  case mguts of
+    Nothing -> pure (diags, Nothing)
+    Just guts -> do
+      (diags', !res) <- liftIO $ mkHiFileResultCompile hsc tmr guts
+      pure (diags++diags', res)
 
 getClientSettingsRule :: Rules ()
 getClientSettingsRule = defineEarlyCutOffNoFile $ \GetClientSettings -> do
   alwaysRerun
   settings <- clientSettings <$> getIdeConfiguration
   return (BS.pack . show . hash $ settings, settings)
+
+needsObjectCodeRule :: Rules ()
+needsObjectCodeRule = defineEarlyCutoff $ \NeedsObjectCode file -> do
+  (ms,_) <- useWithStale_ GetModSummaryWithoutTimestamps file
+  -- A file needs object code if it uses TH or any file that depends on it uses TH
+  res <-
+    if uses_th_qq ms
+    then pure True
+    -- Treat as False if some reverse dependency header fails to parse
+    else anyM (fmap (fromMaybe False) . use NeedsObjectCode) . maybe [] (immediateReverseDependencies file)
+           =<< useNoFile GetModuleGraph
+  pure (Just $ BS.pack $ show $ hash res, ([], Just res))
+  where
+    uses_th_qq (ms_hspp_opts -> dflags) =
+      xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
 
 -- | A rule that wires per-file rules together
 mainRule :: Rules ()
@@ -892,8 +899,6 @@ mainRule = do
     getDependenciesRule
     typeCheckRule
     getDocMapRule
-    generateCoreRule
-    generateByteCodeRule
     loadGhcSession
     getModIfaceFromDiskRule
     getModIfaceRule
@@ -904,6 +909,9 @@ mainRule = do
     getClientSettingsRule
     getHieAstsRule
     getBindingsRule
+    needsObjectCodeRule
+    generateCoreRule
+    getImportMapRule
 
 -- | Given the path to a module src file, this rule returns True if the
 -- corresponding `.hi` file is stable, that is, if it is newer

@@ -92,8 +92,8 @@ produceCompletions = do
                                     }
                         tm <- liftIO $ typecheckModule (IdeDefer True) env pm
                         case tm of
-                            (_, Just (_,TcModuleResult{..})) -> do
-                                cdata <- liftIO $ cacheDataProducer env tmrModule parsedDeps
+                            (_, Just (_,tcm)) -> do
+                                cdata <- liftIO $ cacheDataProducer env tcm parsedDeps
                                 -- Do not return diags from parsing as they would duplicate
                                 -- the diagnostics from typechecking
                                 return ([], Just cdata)

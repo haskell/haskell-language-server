@@ -15,6 +15,7 @@ module Development.IDE.Spans.Documentation (
 
 import           Control.Monad
 import           Control.Monad.Extra (findM)
+import           Data.Either
 import           Data.Foldable
 import           Data.List.Extra
 import qualified Data.Map as M
@@ -35,37 +36,39 @@ import           GhcMonad
 import           Packages
 import           Name
 import           Language.Haskell.LSP.Types (getUri, filePathToUri)
-import Data.Either
+import           TcRnTypes
+import           ExtractDocs
+import           NameEnv
 
 mkDocMap
   :: GhcMonad m
   => [ParsedModule]
   -> RefMap
-  -> ModIface
-  -> [ModIface]
+  -> TcGblEnv
   -> m DocAndKindMap
-mkDocMap sources rm hmi deps =
-  do mapM_ (`loadDepModule` Nothing) (reverse deps)
-     loadDepModule hmi Nothing
-     d <- foldrM getDocs M.empty names
-     k <- foldrM getType M.empty names
+mkDocMap sources rm this_mod =
+  do let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
+     d <- foldrM getDocs (mkNameEnv $ M.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
+     k <- foldrM getType (tcg_type_env this_mod) names
      pure $ DKMap d k
   where
-    getDocs n map = do
+    getDocs n map
+      | maybe True (mod ==) $ nameModule_maybe n = pure map -- we already have the docs in this_docs, or they do not exist
+      | otherwise = do
       doc <- getDocumentationTryGhc mod sources n
-      pure $ M.insert n doc map
+      pure $ extendNameEnv map n doc
     getType n map
       | isTcOcc $ occName n = do
         kind <- lookupKind mod n
-        pure $ maybe id (M.insert n) kind map
+        pure $ maybe map (extendNameEnv map n) kind
       | otherwise = pure map
     names = rights $ S.toList idents
     idents = M.keysSet rm
-    mod = mi_module hmi
+    mod = tcg_mod this_mod
 
-lookupKind :: GhcMonad m => Module -> Name -> m (Maybe Type)
+lookupKind :: GhcMonad m => Module -> Name -> m (Maybe TyThing)
 lookupKind mod =
-    fmap (either (const Nothing) (safeTyThingType =<<)) . catchSrcErrors "span" . lookupName mod
+    fmap (either (const Nothing) id) . catchSrcErrors "span" . lookupName mod
 
 getDocumentationTryGhc :: GhcMonad m => Module -> [ParsedModule] -> Name -> m SpanDoc
 getDocumentationTryGhc mod deps n = head <$> getDocumentationsTryGhc mod deps [n]
