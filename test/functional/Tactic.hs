@@ -94,6 +94,7 @@ tests = testGroup
   , goldenTest "GoldenNote.hs"              2 8  Auto ""
   , goldenTest "GoldenPureList.hs"          2 12 Auto ""
   , goldenTest "GoldenListFmap.hs"          2 12 Auto ""
+  , goldenTest "GoldenFromMaybe.hs"         2 13 Auto ""
   ]
 
 

@@ -81,9 +81,9 @@ scoreSolution
     :: TacticState
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
-       , Reward Bool  -- all bindings used
-       , Reward Int   -- number used bindings
-       , Penalize Int   -- number used bindings
+       , Reward Bool   -- all bindings used
+       , Reward Int    -- number used bindings
+       , Penalize Int  -- number of introduced bindings
        )
 scoreSolution TacticState{..} holes
   = ( Penalize $ length holes
