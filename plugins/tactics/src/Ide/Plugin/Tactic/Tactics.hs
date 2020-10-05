@@ -67,9 +67,11 @@ recursion :: TacticsM ()
 recursion = do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
-    localTactic (apply' name) $ introducing defs
     modify $ withRecursionStack (False :)
-    filterT recursiveCleanup (withRecursionStack tail) assumption
+    filterT recursiveCleanup (withRecursionStack tail) $ do
+      localTactic (apply' name) $ introducing defs
+      assumption
+
 
 
 ------------------------------------------------------------------------------

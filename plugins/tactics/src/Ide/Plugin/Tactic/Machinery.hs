@@ -88,25 +88,16 @@ recursiveCleanup s =
         True  -> Nothing
         False -> Just NoProgress
 
-
-filterT
-    :: (Monad m, Show s, Show ext)
-    => (s -> Maybe err)
-    -> (s -> s)
-    -> TacticT jdg ext err s m ()
-    -> TacticT jdg ext err s m ()
-filterT p s' t = do
-  s0 <- get
-  traceMX "state0" s0
-  tactic $ \j -> unRuleT $ do
-    e <- RuleT $ proofState t j
-    s <- get
-    traceMX "state" s
-    traceMX "extract" e
-    modify s'
-    case p s of
-      Just err -> throwError err
-      Nothing -> pure e
+filterT :: (Monad m) => (s -> Maybe err) -> (s -> s) -> TacticT jdg ext err s m () -> TacticT jdg ext err s m ()
+filterT p f t = check >> t
+    where
+      check = rule $ \j -> do
+          e <- subgoal j
+          s <- get
+          modify f
+          case p s of
+            Just err -> throwError err
+            Nothing -> pure e
 
 
 finally :: MonadError e m => m a -> m () -> m a
@@ -132,14 +123,14 @@ scoreSolution
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
        , Reward Bool   -- all bindings used
-       , Reward Int    -- number used bindings
        , Penalize Int  -- number of introduced bindings
+       , Reward Int    -- number used bindings
        )
 scoreSolution TacticState{..} holes
   = ( Penalize $ length holes
     , Reward $ S.null $ ts_intro_vals S.\\ ts_used_vals
-    , Reward $ S.size ts_used_vals
     , Penalize $ S.size ts_intro_vals
+    , Reward $ S.size ts_used_vals
     )
 
 
