@@ -89,24 +89,16 @@ recursiveCleanup s =
         False -> Just NoProgress
 
 
-filterT
-    :: (Monad m, Show s, Show ext)
-    => (s -> Maybe err)
-    -> (s -> s)
-    -> TacticT jdg ext err s m ()
-    -> TacticT jdg ext err s m ()
-filterT p s' t = do
-  s0 <- get
-  traceMX "state0" s0
-  tactic $ \j -> unRuleT $ do
-    e <- RuleT $ proofState t j
-    s <- get
-    traceMX "state" s
-    traceMX "extract" e
-    modify s'
-    case p s of
-      Just err -> throwError err
-      Nothing -> pure e
+filterT :: (Monad m) => (s -> Maybe err) -> (s -> s) -> TacticT jdg ext err s m () -> TacticT jdg ext err s m ()
+filterT p f t = check >> t
+    where
+      check = rule $ \j -> do
+          e <- subgoal j
+          s <- get
+          modify f
+          case p s of
+            Just err -> throwError err
+            Nothing -> pure e
 
 
 finally :: MonadError e m => m a -> m () -> m a
