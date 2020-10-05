@@ -1,5 +1,4 @@
-resolver: lts-16.5
-compiler: ghc-8.8.4
+resolver: lts-16.16
 
 packages:
 - .
@@ -26,7 +25,6 @@ extra-deps:
 - haskell-src-exts-1.21.1
 - hie-bios-0.7.1
 - hlint-2.2.8
-- HsYAML-aeson-0.2.0.0@rev:2
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
@@ -35,7 +33,6 @@ extra-deps:
 - refinery-0.2.0.0
 - retrie-0.1.1.1
 - semigroups-0.18.5
-- stylish-haskell-0.11.0.3
 # - github: wz1000/shake
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - temporary-1.2.1.1

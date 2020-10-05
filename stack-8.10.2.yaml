@@ -1,5 +1,4 @@
-resolver: nightly-2020-08-08
-compiler: ghc-8.10.2
+resolver: nightly-2020-10-03
 
 packages:
 - .
@@ -15,10 +14,8 @@ extra-deps:
   commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - Cabal-3.0.2.0
 - clock-0.7.2
-- data-tree-print-0.1.0.2
 - floskell-0.10.4
 - fourmolu-0.2.0.0
-- HsYAML-aeson-0.2.0.0@rev:2
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
 - refinery-0.2.0.0
