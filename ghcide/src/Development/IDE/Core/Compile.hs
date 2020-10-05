@@ -92,6 +92,7 @@ import System.IO.Extra ( fixIO, newTempFileWithin )
 import Control.Exception (evaluate)
 import TcEnv (tcLookup)
 import Data.Time (UTCTime, getCurrentTime)
+import Bag
 import Linker (unload)
 import qualified GHC.LanguageExtensions as LangExt
 import PrelNames
@@ -428,8 +429,13 @@ atomicFileWrite targetPath write = do
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
 generateHieAsts hscEnv tcm =
-  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $
-    Just <$> GHC.enrichHie (tcg_binds $ tmrTypechecked tcm) (tmrRenamed tcm)
+  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $ do
+    -- These varBinds use unitDataConId but it could be anything as the id name is not used
+    -- during the hie file generation process. It's a workaround for the fact that the hie modules
+    -- don't export an interface which allows for additional information to be added to hie files.
+    let fake_splice_binds = listToBag (map (mkVarBind unitDataConId) (tmrTopLevelSplices tcm))
+        real_binds = tcg_binds $ tmrTypechecked tcm
+    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm)
   where
     dflags = hsc_dflags hscEnv
 
