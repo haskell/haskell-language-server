@@ -71,6 +71,8 @@ import           StringBuffer                   as SB
 import           TcRnMonad
 import           TcIface                        (typecheckIface)
 import           TidyPgm
+import           Hooks
+import           TcSplice
 
 import Control.Exception.Safe
 import Control.Monad.Extra
@@ -85,7 +87,7 @@ import           Data.Maybe
 import qualified Data.Map.Strict                          as Map
 import           System.FilePath
 import           System.Directory
-import           System.IO.Extra
+import System.IO.Extra ( fixIO, newTempFileWithin )
 import Control.Exception (evaluate)
 import TcEnv (tcLookup)
 import Data.Time (UTCTime, getCurrentTime)
@@ -144,21 +146,43 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
+-- | Add a Hook to the DynFlags which captures and returns the
+-- typechecked splices before they are run. This information
+-- is used for hover.
+captureSplices :: DynFlags -> (DynFlags -> IO a) -> IO (a, [LHsExpr GhcTc])
+captureSplices dflags k = do
+  splice_ref <- newIORef []
+  res <- k (dflags { hooks = addSpliceHook splice_ref (hooks dflags)})
+  splices <- readIORef splice_ref
+  return (res, splices)
+  where
+    addSpliceHook :: IORef [LHsExpr GhcTc] -> Hooks -> Hooks
+    addSpliceHook var h = h { runMetaHook = Just (splice_hook var) }
+
+    splice_hook :: IORef [LHsExpr GhcTc] -> MetaRequest -> LHsExpr GhcTc -> TcM MetaResult
+    splice_hook var mr e = do
+      liftIO $ modifyIORef var (e:)
+      pprTraceM "expr" (ppr e)
+      defaultRunMeta mr e
+
 tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
 
   unload hsc_env_tmp keep_lbls
-  (tc_gbl_env, mrn_info) <-
-      hscTypecheckRename hsc_env_tmp ms $
-                HsParsedModule { hpm_module = parsedSource pmod,
-                                 hpm_src_files = pm_extra_src_files pmod,
-                                 hpm_annotations = pm_annotations pmod }
+  
+  ((tc_gbl_env, mrn_info), splices)
+      <- liftIO $ captureSplices (ms_hspp_opts ms) $ \dflags ->
+             do  let hsc_env_tmp = hsc_env { hsc_dflags = dflags }
+                 hscTypecheckRename hsc_env_tmp ms $
+                          HsParsedModule { hpm_module = parsedSource pmod,
+                                           hpm_src_files = pm_extra_src_files pmod,
+                                           hpm_annotations = pm_annotations pmod }
   let rn_info = case mrn_info of
         Just x -> x
         Nothing -> error "no renamed info tcRnModule"
-  pure (TcModuleResult pmod rn_info tc_gbl_env False)
+  pure (TcModuleResult pmod rn_info tc_gbl_env splices False)
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do

@@ -96,6 +96,7 @@ data TcModuleResult = TcModuleResult
     { tmrParsed :: ParsedModule
     , tmrRenamed :: RenamedSource
     , tmrTypechecked :: TcGblEnv
+    , tmrTopLevelSplices :: [LHsExpr GhcTc] -- ^ Typechecked top-level splices from this module
     , tmrDeferedError :: !Bool -- ^ Did we defer any type errors for this module?
     }
 instance Show TcModuleResult where
