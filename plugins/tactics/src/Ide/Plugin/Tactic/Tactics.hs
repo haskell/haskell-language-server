@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -11,6 +12,7 @@ module Ide.Plugin.Tactic.Tactics
   ) where
 
 import           Control.Applicative
+import           Control.Monad
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
@@ -34,7 +36,6 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
-import Control.Monad
 
 
 
@@ -54,7 +55,7 @@ assume name = rule $ \jdg -> do
       case ty == jGoal jdg of
         True  -> do
           when (M.member name $ jPatHypothesis jdg) $ do
-            -- traceM $ "!!!simpler: " <> show name
+            traceM $ "!!!simpler: " <> show name
             setRecursionFrameData True
           useOccName jdg name
           pure $ noLoc $ var' name
@@ -74,13 +75,6 @@ recursion = do
         traceM $ mappend "!!!recursion not ok >: " $ show defs
         throwError NoProgress
 
-
-foo :: Int -> a -> a -> [[a]]
-foo n i b = map (take n) . take n $ go (i : repeat b)
-  where
-    go [] = [[]]
-    go [x] = [[x]]
-    go l@(x:y:ys) = l : map (y :) (go $ x:ys)
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda.
@@ -165,8 +159,8 @@ apply' func = do
           pure . noLoc
               . foldl' (@@) (var' func)
               $ fmap unLoc sgs
-      Nothing -> throwError $ GoalMismatch "apply" g
-  assumption
+      Nothing -> do
+        throwError $ GoalMismatch "apply" g
 
 
 ------------------------------------------------------------------------------

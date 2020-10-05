@@ -47,6 +47,15 @@ instance Show CType where
 instance Show OccName where
   show  = unsafeRender
 
+instance Show Var where
+  show  = unsafeRender
+
+instance Show TCvSubst where
+  show  = unsafeRender
+
+instance Show (LHsExpr GhcPs) where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
@@ -55,7 +64,7 @@ data TacticState = TacticState
     , ts_used_vals :: !(Set OccName)
     , ts_intro_vals :: !(Set OccName)
     , ts_recursion_stack :: ![Bool]
-    }
+    } deriving stock Show
 
 defaultTacticState :: TacticState
 defaultTacticState =
