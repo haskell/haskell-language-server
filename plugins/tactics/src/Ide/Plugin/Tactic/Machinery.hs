@@ -88,7 +88,13 @@ recursiveCleanup s =
         True  -> Nothing
         False -> Just NoProgress
 
-filterT :: (Monad m) => (s -> Maybe err) -> (s -> s) -> TacticT jdg ext err s m () -> TacticT jdg ext err s m ()
+
+filterT
+    :: (Monad m)
+    => (s -> Maybe err)
+    -> (s -> s)
+    -> TacticT jdg ext err s m ()
+    -> TacticT jdg ext err s m ()
 filterT p f t = check >> t
     where
       check = rule $ \j -> do

@@ -73,7 +73,6 @@ recursion = do
       assumption
 
 
-
 ------------------------------------------------------------------------------
 -- | Introduce a lambda.
 intro :: TacticsM ()
