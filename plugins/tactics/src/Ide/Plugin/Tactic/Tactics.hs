@@ -68,12 +68,8 @@ recursion = do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     localTactic (apply' name) $ introducing defs
-    (has_simple, _) <- recursionStackFrame assumption
-    case has_simple of
-      True -> traceM $ mappend "!!!recursion ok: " $ show defs
-      False -> do
-        traceM $ mappend "!!!recursion not ok >: " $ show defs
-        throwError NoProgress
+    modify $ withRecursionStack (False :)
+    filterT recursiveCleanup (withRecursionStack tail) assumption
 
 
 ------------------------------------------------------------------------------

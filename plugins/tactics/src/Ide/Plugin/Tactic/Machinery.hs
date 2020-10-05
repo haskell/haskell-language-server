@@ -79,19 +79,34 @@ runTactic ctx jdg t =
           _ -> Left []
 
 
-recursionStackFrame
-    :: (MonadError TacticError m, MonadState TacticState m)
-    => m a
-    -> m (Bool, a)
-recursionStackFrame ma = do
-  modify $ withRecursionStack (False :)
-  finally
-    ( do
-      a <- ma
-      r <- gets $ head . ts_recursion_stack
-      pure (r, a)
-    )
-    (modify $ withRecursionStack tail)
+recursiveCleanup
+    :: TacticState
+    -> Maybe TacticError
+recursiveCleanup s =
+  let r = head $ ts_recursion_stack s
+   in traceShowId $ case r of
+        True  -> Nothing
+        False -> Just NoProgress
+
+
+filterT
+    :: (Monad m, Show s, Show ext)
+    => (s -> Maybe err)
+    -> (s -> s)
+    -> TacticT jdg ext err s m ()
+    -> TacticT jdg ext err s m ()
+filterT p s' t = do
+  s0 <- get
+  traceMX "state0" s0
+  tactic $ \j -> unRuleT $ do
+    e <- RuleT $ proofState t j
+    s <- get
+    traceMX "state" s
+    traceMX "extract" e
+    modify s'
+    case p s of
+      Just err -> throwError err
+      Nothing -> pure e
 
 
 finally :: MonadError e m => m a -> m () -> m a
