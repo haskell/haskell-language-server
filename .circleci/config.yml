@@ -114,6 +114,11 @@ jobs:
       - STACK_FILE: "stack-8.10.1.yaml"
     <<: *defaults
 
+  ghc-8.10.2:
+    environment:
+      - STACK_FILE: "stack-8.10.2.yaml"
+    <<: *defaults
+
   # ghc-nightly:
   #   environment:
   #     - STACK_FILE: "stack.yaml"
@@ -194,6 +199,7 @@ workflows:
       - ghc-8.8.3
       - ghc-8.8.4
       - ghc-8.10.1
+      - ghc-8.10.2
       # - ghc-nightly
       - cabal
       - nix
