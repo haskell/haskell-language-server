@@ -106,22 +106,11 @@ filterT p f t = check >> t
             Nothing -> pure e
 
 
-finally :: MonadError e m => m a -> m () -> m a
-finally action cleanup = do
-  a <-
-    action `catchError` \e -> do
-      cleanup
-      throwError e
-  cleanup
-  pure a
-
-
 setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
 setRecursionFrameData b = do
   modify $ withRecursionStack $ \case
     (_ : bs) -> b : bs
     []       -> []
-
 
 
 scoreSolution

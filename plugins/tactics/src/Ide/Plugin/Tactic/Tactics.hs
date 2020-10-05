@@ -11,7 +11,6 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
-import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.Except (throwError)
 import           Control.Monad.State.Class
@@ -71,22 +70,6 @@ recursion = do
     filterT recursiveCleanup (withRecursionStack tail) $ do
       localTactic (apply' name) $ introducing defs
       assumption
-
-
-------------------------------------------------------------------------------
--- | Introduce a lambda.
-intro :: TacticsM ()
-intro = rule $ \jdg -> do
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
-  case splitFunTy_maybe $ unCType g of
-    Just (a, b) -> do
-      v <- pure $ mkGoodName (getInScope hy) a
-      let jdg' = introducing [(v, CType a)] $ withNewGoal (CType b) jdg
-      modify $ withIntroducedVals $ mappend $ S.singleton v
-      sg <- newSubgoal jdg'
-      pure $ noLoc $ lambda [bvar' v] $ unLoc sg
-    _ -> throwError $ GoalMismatch "intro" g
 
 
 ------------------------------------------------------------------------------
@@ -218,7 +201,7 @@ auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
   let loop = auto' (n - 1)
-  intros <|> many_ intro
+  try intros
   choice
     [ attemptOn functionNames $ \fname -> do
         apply' fname

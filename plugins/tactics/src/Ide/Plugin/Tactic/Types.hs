@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
@@ -18,6 +20,8 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
+import Control.Lens hiding (Context)
+import Data.Generics.Product (field)
 import Control.Monad.Reader
 import Data.Function
 import Data.Map (Map)
@@ -64,40 +68,43 @@ data TacticState = TacticState
     , ts_used_vals :: !(Set OccName)
     , ts_intro_vals :: !(Set OccName)
     , ts_recursion_stack :: ![Bool]
-    } deriving stock Show
+    } deriving stock (Show, Generic)
+
 
 defaultTacticState :: TacticState
 defaultTacticState =
   TacticState mempty emptyTCvSubst mempty mempty mempty
 
+
 withRecursionStack
   :: ([Bool] -> [Bool]) -> TacticState -> TacticState
-withRecursionStack f ts = ts
-  { ts_recursion_stack = f $ ts_recursion_stack ts
-  }
+withRecursionStack f =
+  field @"ts_recursion_stack" %~ f
 
 
 withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
-withUsedVals f ts = ts
-  { ts_used_vals = f $ ts_used_vals ts
-  }
+withUsedVals f =
+  field @"ts_used_vals" %~ f
+
 
 withIntroducedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
-withIntroducedVals f ts = ts
-  { ts_intro_vals = f $ ts_intro_vals ts
-  }
+withIntroducedVals f =
+  field @"ts_intro_vals" %~ f
+
 
 
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis  :: !(Map OccName a)
-  , _jDestructed  :: !(Set OccName)
+  { _jHypothesis :: !(Map OccName a)
+  , _jDestructed :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jPatternVals :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jBlacklistDestruct :: !(Bool)
-  , _jGoal        :: !(a)
+  , _jPositionMaps :: !(Map OccName [OccName])
+  , _jAncestry     :: !(Map OccName OccName)
+  , _jGoal         :: !(a)
   }
   deriving stock (Eq, Ord, Generic, Functor, Show)
 

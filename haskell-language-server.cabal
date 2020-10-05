@@ -158,6 +158,7 @@ executable haskell-language-server
     , refinery                 ^>=0.2
     , ghc-exactprint
     , fingertree
+    , generic-lens
 
   if flag(agpl)
     build-depends: brittany

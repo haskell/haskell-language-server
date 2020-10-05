@@ -1,8 +1,11 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ViewPatterns    #-}
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns     #-}
 
 module Ide.Plugin.Tactic.Judgements where
 
+import Control.Lens hiding (Context)
 import           Data.Char
 import           Data.Coerce
 import           Data.Map (Map)
@@ -14,6 +17,7 @@ import           Ide.Plugin.Tactic.Types
 import           OccName
 import           SrcLoc
 import           Type
+import Data.Generics.Product (field)
 
 
 ------------------------------------------------------------------------------
@@ -38,46 +42,41 @@ hasDestructed :: Judgement -> OccName -> Bool
 hasDestructed j n = S.member n $ _jDestructed j
 
 destructing :: OccName -> Judgement -> Judgement
-destructing n jdg@Judgement{..} = jdg
-  { _jDestructed = _jDestructed <> S.singleton n
-  }
+destructing n = field @"_jDestructed" <>~ S.singleton n
 
 blacklistingDestruct :: Judgement -> Judgement
-blacklistingDestruct jdg = jdg
-  { _jBlacklistDestruct = True
-  }
+blacklistingDestruct =
+  field @"_jBlacklistDestruct" .~ True
 
 isDestructBlacklisted :: Judgement -> Bool
 isDestructBlacklisted = _jBlacklistDestruct
 
 withNewGoal :: a -> Judgement' a -> Judgement' a
-withNewGoal t jdg = jdg
-  { _jGoal = t
-  }
+withNewGoal t = field @"_jGoal" .~ t
 
 introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducing ns jdg@Judgement{..} = jdg
-  { _jHypothesis = M.fromList ns <> _jHypothesis
-  }
+introducing ns =
+  field @"_jHypothesis" <>~ M.fromList ns
 
-withHypothesis :: (Map OccName a -> Map OccName a) -> Judgement' a -> Judgement' a
-withHypothesis f jdg@Judgement{..} = jdg
-  { _jHypothesis = f _jHypothesis
-  }
+withHypothesis
+    :: (Map OccName a -> Map OccName a)
+    -> Judgement' a
+    -> Judgement' a
+withHypothesis f =
+  field @"_jHypothesis" %~ f
 
 ------------------------------------------------------------------------------
 -- | Pattern vals are currently tracked in jHypothesis, with an extra piece of data sitting around in jPatternVals.
 introducingPat :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducingPat ns jdg@Judgement{..} = jdg
-  { _jHypothesis  = M.fromList ns <> _jHypothesis
-  , _jPatternVals = S.fromList (fmap fst ns) <> _jPatternVals
-  }
+introducingPat ns jdg = jdg
+  & field @"_jHypothesis"  <>~ M.fromList ns
+  & field @"_jPatternVals" <>~ S.fromList (fmap fst ns)
 
 
 disallowing :: [OccName] -> Judgement' a -> Judgement' a
-disallowing ns jdg@Judgement{..} = jdg
-  { _jHypothesis = M.withoutKeys _jHypothesis $ S.fromList ns
-  }
+disallowing ns =
+  field @"_jHypothesis" %~ flip M.withoutKeys (S.fromList ns)
+
 
 jHypothesis :: Judgement' a -> Map OccName a
 jHypothesis = _jHypothesis
@@ -98,5 +97,5 @@ substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
 mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
-mkFirstJudgement hy = Judgement hy mempty mempty False . CType
+mkFirstJudgement hy = Judgement hy mempty mempty False mempty mempty . CType
 
