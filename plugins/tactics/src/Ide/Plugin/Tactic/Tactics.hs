@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -11,8 +13,9 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
-import           Control.Monad
 import           Control.Monad.Except (throwError)
+import           Control.Monad.Reader (asks)
+import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Function
@@ -37,7 +40,6 @@ import           TcType
 import           Type hiding (Var)
 
 
-
 ------------------------------------------------------------------------------
 -- | Use something in the hypothesis to fill the hole.
 assumption :: TacticsM ()
@@ -49,17 +51,32 @@ assumption = attemptOn allNames assume
 assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
+  defn <- asks extremelyStupid__definingFunction
   case M.lookup name $ jHypothesis jdg of
     Just ty ->
       case ty == jGoal jdg of
         True  -> do
-          when (M.member name $ jPatHypothesis jdg) $ do
-            traceM $ "!!!simpler: " <> show name
-            setRecursionFrameData True
+          case _jCurrentPosition jdg of
+            -- If we have a current position (ie, we are in the context of
+            -- a recursive call):
+            Just pos ->
+              case hasPositionalAncestry jdg defn pos name of
+                -- If we are original arg, we're allowed to proceed.
+                Just True -> pure ()
+                -- If we are a descendent of the original arg, we are
+                -- guaranteed to be structurally smaller, and thus the
+                -- recursion won't be bottom.
+                Just False -> setRecursionFrameData True
+                -- Otherwise it doesn't make sense to use this variable,
+                -- because it is unrelated to the current argument in the
+                -- recursive call.
+                Nothing -> throwError $ RecursionOnWrongParam defn pos name
+            Nothing -> pure ()
           useOccName jdg name
           pure $ noLoc $ var' name
         False -> throwError $ GoalMismatch "assume" g
     Nothing -> throwError $ UndefinedHypothesis name
+
 
 
 recursion :: TacticsM ()
@@ -68,7 +85,7 @@ recursion = do
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
     filterT recursiveCleanup (withRecursionStack tail) $ do
-      localTactic (apply' name) $ introducing defs
+      localTactic (apply' withCurrentPosition name) $ introducing defs
       assumption
 
 
@@ -78,11 +95,14 @@ intros :: TacticsM ()
 intros = rule $ \jdg -> do
   let hy = jHypothesis jdg
       g  = jGoal jdg
+  ctx <- ask
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intro" g
     (as, b) -> do
       vs <- mkManyGoodNames hy as
-      let jdg' = introducing (zip vs $ coerce as) $ withNewGoal (CType b) jdg
+      let jdg' = withPositionMapping ctx vs
+               $ introducing (zip vs $ coerce as)
+               $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
       sg <- newSubgoal jdg'
       pure
@@ -121,8 +141,12 @@ homoLambdaCase = rule $ destructLambdaCase' (\dc jdg ->
   buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
-apply' :: OccName -> TacticsM ()
-apply' func = do
+apply :: OccName -> TacticsM ()
+apply = apply' (const id)
+
+
+apply' :: (Int -> Judgement -> Judgement) -> OccName -> TacticsM ()
+apply' f func = do
   rule $ \jdg -> do
     let hy = jHypothesis jdg
         g  = jGoal jdg
@@ -131,11 +155,13 @@ apply' func = do
           let (args, ret) = splitFunTys ty
           unify g (CType ret)
           useOccName jdg func
-          sgs <- traverse ( newSubgoal
+          sgs <- traverse ( \(i, t) ->
+                            newSubgoal
+                          . f i
                           . blacklistingDestruct
                           . flip withNewGoal jdg
-                          . CType
-                          ) args
+                          $ CType t
+                          ) $ zip [0..] args
           pure . noLoc
               . foldl' (@@) (var' func)
               $ fmap unLoc sgs
@@ -204,7 +230,7 @@ auto' n = do
   try intros
   choice
     [ attemptOn functionNames $ \fname -> do
-        apply' fname
+        apply fname
         loop
     , attemptOn algebraicNames $ \aname -> do
         progress ((==) `on` jGoal) NoProgress (destruct aname)

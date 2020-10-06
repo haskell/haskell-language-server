@@ -18,12 +18,15 @@ module Ide.Plugin.Tactic.Machinery
   ) where
 
 import           Control.Applicative
+import           Control.Lens hiding (Context, matching, Empty)
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State.Class (gets, modify, MonadState)
+import           Control.Monad.State (MonadState(..))
+import           Control.Monad.State.Class (gets, modify)
 import           Data.Coerce
 import           Data.Either
 import           Data.List (intercalate, sortBy)
+import qualified Data.Map as M
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
@@ -35,7 +38,6 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
-import Control.Monad.State (MonadState(..))
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -79,12 +81,38 @@ runTactic ctx jdg t =
           _ -> Left []
 
 
+--------------------------------------------------------------------------------
+-- TODO(sandy): this is probably the worst function I've ever written; sorry
+hasPositionalAncestry
+    :: Judgement
+    -> OccName     -- ^ defining fn
+    -> Int         -- ^ position
+    -> OccName     -- ^ thing to check ancestry
+    -> Maybe Bool  -- ^ Just True if the result is the oldest positional ancestor
+                   -- just false if it's a descendent
+                   -- otherwise nothing
+hasPositionalAncestry jdg defn n name
+  | Just ancestor <- preview (_Just . ix n) $ M.lookup defn $ _jPositionMaps jdg
+  = case name == ancestor of
+      True  -> Just True
+      False -> go ancestor name
+  | otherwise = Nothing
+  where
+    go ancestor who =
+      case M.lookup who $ _jAncestry  jdg of
+        Just parent ->
+          case parent == ancestor of
+            True  -> Just False
+            False -> go ancestor parent
+        Nothing -> Nothing
+
+
 recursiveCleanup
     :: TacticState
     -> Maybe TacticError
 recursiveCleanup s =
   let r = head $ ts_recursion_stack s
-   in traceShowId $ case r of
+   in case r of
         True  -> Nothing
         False -> Just NoProgress
 

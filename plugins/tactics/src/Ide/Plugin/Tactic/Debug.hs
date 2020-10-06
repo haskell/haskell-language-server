@@ -4,6 +4,7 @@ module Ide.Plugin.Tactic.Debug
   , traceM
   , traceShowId
   , trace
+  , traceX
   , traceMX
   ) where
 
@@ -21,3 +22,7 @@ unsafeRender' = showSDoc unsafeGlobalDynFlags
 
 traceMX :: (Monad m, Show a) => String -> a -> m ()
 traceMX str a = traceM $ mappend ("!!!" <> str <> ": ") $ show a
+
+traceX :: (Show a) => String -> a -> b -> b
+traceX str a = trace (mappend ("!!!" <> str <> ": ") $ show a)
+

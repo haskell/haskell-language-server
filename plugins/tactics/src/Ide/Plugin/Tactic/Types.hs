@@ -104,6 +104,7 @@ data Judgement' a = Judgement
   , _jBlacklistDestruct :: !(Bool)
   , _jPositionMaps :: !(Map OccName [OccName])
   , _jAncestry     :: !(Map OccName OccName)
+  , _jCurrentPosition :: Maybe Int
   , _jGoal         :: !(a)
   }
   deriving stock (Eq, Ord, Generic, Functor, Show)
@@ -131,6 +132,7 @@ data TacticError
   | NoApplicableTactic
   | AlreadyDestructed OccName
   | IncorrectDataCon DataCon
+  | RecursionOnWrongParam OccName Int OccName
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -160,6 +162,9 @@ instance Show TacticError where
       "Already destructed " <> unsafeRender name
     show (IncorrectDataCon dcon) =
       "Data con doesn't align with goal type (" <> unsafeRender dcon <> ")"
+    show (RecursionOnWrongParam call p arg) =
+      "Recursion on wrong param (" <> show call <> ") on arg"
+        <> show p <> ": " <> show arg
 
 
 ------------------------------------------------------------------------------

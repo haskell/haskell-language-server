@@ -33,7 +33,7 @@ useOccName jdg name =
 destructMatches
     :: (DataCon -> Judgement -> Rule)
        -- ^ How to construct each match
-    -> (Judgement -> Judgement)
+    -> ([(OccName, CType)] -> Judgement -> Judgement)
        -- ^ How to derive each match judgement
     -> CType
        -- ^ Type being destructed
@@ -51,12 +51,13 @@ destructMatches f f2 t jdg = do
         _ -> for dcs $ \dc -> do
           let args = dataConInstArgTys dc apps
           names <- mkManyGoodNames hy args
+          let hy' = zip names $ coerce args
 
           let pat :: Pat GhcPs
               pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
                   $ fmap bvar' names
-              j = f2
-                $ introducingPat (zip names $ coerce args)
+              j = f2 hy'
+                $ introducingPat hy'
                 $ withNewGoal g jdg
           sg <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
@@ -75,7 +76,11 @@ destruct' f term jdg = do
     Just (_, t) -> do
       useOccName jdg term
       fmap noLoc $ case' (var' term) <$>
-        destructMatches f (destructing term) t jdg
+        destructMatches
+          f
+          (\cs -> setParents term (fmap fst cs) . destructing term)
+          t
+          jdg
 
 
 ------------------------------------------------------------------------------
@@ -88,7 +93,7 @@ destructLambdaCase' f jdg = do
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap noLoc $ lambdaCase <$>
-        destructMatches f id (CType arg) jdg
+        destructMatches f (const id) (CType arg) jdg
     _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
 

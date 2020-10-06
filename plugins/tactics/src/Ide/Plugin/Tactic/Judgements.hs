@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE RecordWildCards  #-}
 {-# LANGUAGE TypeApplications #-}
@@ -58,6 +59,51 @@ introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
 introducing ns =
   field @"_jHypothesis" <>~ M.fromList ns
 
+
+setParents
+    :: OccName    -- ^ parent
+    -> [OccName]  -- ^ children
+    -> Judgement
+    -> Judgement
+setParents p cs =
+  field @"_jAncestry" <>~ M.fromList (fmap (, p) cs)
+
+
+
+------------------------------------------------------------------------------
+-- TODO(sandy): THIS THING IS A BIG BIG HACK
+--
+-- Why? Two reasons. It uses extremelyStupid__definingFunction, which is stupid
+-- in and of itself (see the note there.) Additionally, this doesn't check to
+-- make sure we're in the top-level scope, so it will set the recursive
+-- position mapping any time 'intros' is called.
+withPositionMapping :: Context -> [OccName] -> Judgement -> Judgement
+withPositionMapping ctx names j =
+  case M.member  defining (_jPositionMaps j) of
+    True  -> j
+    False ->
+      traceX "withPositionMapping hack" (defining, names)
+        $ j & field @"_jPositionMaps" . at defining ?~ names
+  where
+    defining = extremelyStupid__definingFunction ctx
+
+
+------------------------------------------------------------------------------
+-- TODO(sandy): THIS THING IS A BIG BIG HACK
+--
+-- Why? 'ctxDefiningFuncs' is _all_ of the functions currently beind defined
+-- (eg, we might be in a where block). The head of this list is not guaranteed
+-- to be the one we're interested in.
+extremelyStupid__definingFunction :: Context -> OccName
+extremelyStupid__definingFunction =
+  fst . head . ctxDefiningFuncs
+
+
+withCurrentPosition :: Int -> Judgement -> Judgement
+withCurrentPosition i =
+  field @"_jCurrentPosition" ?~ i
+
+
 withHypothesis
     :: (Map OccName a -> Map OccName a)
     -> Judgement' a
@@ -97,5 +143,5 @@ substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
 mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
-mkFirstJudgement hy = Judgement hy mempty mempty False mempty mempty . CType
+mkFirstJudgement hy = Judgement hy mempty mempty False mempty mempty Nothing . CType
 
