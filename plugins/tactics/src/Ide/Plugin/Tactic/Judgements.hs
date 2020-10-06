@@ -108,15 +108,13 @@ setParents p cs =
 -- in and of itself (see the note there.) Additionally, this doesn't check to
 -- make sure we're in the top-level scope, so it will set the recursive
 -- position mapping any time 'intros' is called.
-withPositionMapping :: Context -> [OccName] -> Judgement -> Judgement
-withPositionMapping ctx names j =
-  case M.member  defining (_jPositionMaps j) of
+withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
+withPositionMapping defn names j =
+  case M.member defn (_jPositionMaps j) of
     True  -> j
     False ->
-      traceX "withPositionMapping hack" (defining, names)
-        $ j & field @"_jPositionMaps" . at defining ?~ names
-  where
-    defining = extremelyStupid__definingFunction ctx
+      traceX "withPositionMapping hack" (defn, names)
+        $ j & field @"_jPositionMaps" . at defn ?~ names
 
 
 ------------------------------------------------------------------------------
@@ -128,11 +126,6 @@ withPositionMapping ctx names j =
 extremelyStupid__definingFunction :: Context -> OccName
 extremelyStupid__definingFunction =
   fst . head . ctxDefiningFuncs
-
-
-withCurrentPosition :: Int -> Judgement -> Judgement
-withCurrentPosition i =
-  field @"_jCurrentPosition" ?~ i
 
 
 withHypothesis
@@ -174,5 +167,5 @@ substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
 mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
-mkFirstJudgement hy = Judgement hy mempty mempty False mempty mempty Nothing . CType
+mkFirstJudgement hy = Judgement hy mempty mempty False mempty mempty . CType
 

@@ -85,7 +85,7 @@ intros = rule $ \jdg -> do
     ([], _) -> throwError $ GoalMismatch "intro" g
     (as, b) -> do
       vs <- mkManyGoodNames hy as
-      let jdg' = withPositionMapping ctx vs
+      let jdg' = withPositionMapping (extremelyStupid__definingFunction ctx) vs
                $ introducing (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs

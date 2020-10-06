@@ -104,7 +104,6 @@ data Judgement' a = Judgement
   , _jBlacklistDestruct :: !(Bool)
   , _jPositionMaps :: !(Map OccName [OccName])
   , _jAncestry     :: !(Map OccName OccName)
-  , _jCurrentPosition :: Maybe Int
   , _jGoal         :: !(a)
   }
   deriving stock (Eq, Ord, Generic, Functor, Show)
