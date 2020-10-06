@@ -111,9 +111,7 @@ withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
 withPositionMapping defn names j =
   case M.member defn (_jPositionMaps j) of
     True  -> j
-    False ->
-      traceX "withPositionMapping hack" (defn, names)
-        $ j & field @"_jPositionMaps" . at defn ?~ names
+    False -> j & field @"_jPositionMaps" . at defn ?~ names
 
 
 ------------------------------------------------------------------------------
