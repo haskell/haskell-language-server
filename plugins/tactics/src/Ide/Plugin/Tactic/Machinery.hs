@@ -70,7 +70,7 @@ runTactic ctx jdg t =
           . flip runReader ctx
           . unExtractM
           $ runTacticTWithState t jdg tacticState of
-      (errs, []) -> Left $ errs
+      (errs, []) -> Left $ take 50 $ errs
       (_, solns) -> do
         let sorted = sortBy (comparing $ Down . uncurry scoreSolution . snd) solns
         -- TODO(sandy): remove this trace sometime

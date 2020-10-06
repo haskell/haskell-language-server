@@ -59,7 +59,7 @@ assume name = rule $ \jdg -> do
           case _jCurrentPosition jdg of
             -- If we have a current position (ie, we are in the context of
             -- a recursive call):
-            Just pos ->
+            Just pos -> do
               case hasPositionalAncestry jdg defn pos name of
                 -- If we are original arg, we're allowed to proceed.
                 Just True -> pure ()
@@ -220,7 +220,7 @@ auto = do
   jdg <- goal
   traceM $ mappend "!!!auto current:" $ show current
   traceM $ mappend "!!!auto jdg:" $ show jdg
-  localTactic (auto' 5) $ disallowing $ fmap fst current
+  localTactic (auto' 4) $ disallowing $ fmap fst current
 
 
 auto' :: Int -> TacticsM ()
