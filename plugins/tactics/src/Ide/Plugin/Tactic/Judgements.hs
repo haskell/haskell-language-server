@@ -59,6 +59,37 @@ introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
 introducing ns =
   field @"_jHypothesis" <>~ M.fromList ns
 
+filterPosition :: OccName -> Int -> Judgement -> Judgement
+filterPosition defn pos jdg =
+    withHypothesis (M.filterWithKey go) jdg
+  where
+    go name _ = isJust $ hasPositionalAncestry jdg defn pos name
+
+--------------------------------------------------------------------------------
+-- TODO(sandy): this is probably the worst function I've ever written; sorry
+hasPositionalAncestry
+    :: Judgement
+    -> OccName     -- ^ defining fn
+    -> Int         -- ^ position
+    -> OccName     -- ^ thing to check ancestry
+    -> Maybe Bool  -- ^ Just True if the result is the oldest positional ancestor
+                   -- just false if it's a descendent
+                   -- otherwise nothing
+hasPositionalAncestry jdg defn n name
+  | Just ancestor <- preview (_Just . ix n) $ M.lookup defn $ _jPositionMaps jdg
+  = case name == ancestor of
+      True  -> Just True
+      False -> go ancestor name
+  | otherwise = Nothing
+  where
+    go ancestor who =
+      case M.lookup who $ _jAncestry  jdg of
+        Just parent ->
+          case parent == ancestor of
+            True  -> Just False
+            False -> go ancestor parent
+        Nothing -> Nothing
+
 
 setParents
     :: OccName    -- ^ parent

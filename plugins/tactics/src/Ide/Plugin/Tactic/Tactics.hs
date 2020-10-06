@@ -14,7 +14,6 @@ module Ide.Plugin.Tactic.Tactics
   ) where
 
 import           Control.Monad.Except (throwError)
-import           Control.Monad.Reader (asks)
 import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
@@ -51,27 +50,13 @@ assumption = attemptOn allNames assume
 assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
-  defn <- asks extremelyStupid__definingFunction
   case M.lookup name $ jHypothesis jdg of
     Just ty ->
       case ty == jGoal jdg of
         True  -> do
-          case _jCurrentPosition jdg of
-            -- If we have a current position (ie, we are in the context of
-            -- a recursive call):
-            Just pos -> do
-              case hasPositionalAncestry jdg defn pos name of
-                -- If we are original arg, we're allowed to proceed.
-                Just True -> pure ()
-                -- If we are a descendent of the original arg, we are
-                -- guaranteed to be structurally smaller, and thus the
-                -- recursion won't be bottom.
-                Just False -> setRecursionFrameData True
-                -- Otherwise it doesn't make sense to use this variable,
-                -- because it is unrelated to the current argument in the
-                -- recursive call.
-                Nothing -> throwError $ RecursionOnWrongParam defn pos name
-            Nothing -> pure ()
+          case M.member name (jPatHypothesis jdg) of
+            True  -> setRecursionFrameData True
+            False -> pure ()
           useOccName jdg name
           pure $ noLoc $ var' name
         False -> throwError $ GoalMismatch "assume" g
@@ -85,8 +70,8 @@ recursion = do
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
     filterT recursiveCleanup (withRecursionStack tail) $ do
-      localTactic (apply' withCurrentPosition name) $ introducing defs
-      assumption
+      (localTactic (apply' (const id) name) $ introducing defs)
+        <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
 ------------------------------------------------------------------------------

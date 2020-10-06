@@ -127,3 +127,4 @@ var' = var . fromString . occNameString
 -- | Like 'bvar', but works over standard GHC 'OccName's.
 bvar' :: BVar a => OccName -> a
 bvar' = bvar . fromString . occNameString
+
