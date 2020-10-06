@@ -76,6 +76,13 @@ recursion = do
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
+--
+-- TODO(sandy): THIS THING IS A BIG BIG HACK
+--
+-- Why? Two reasons. It uses extremelyStupid__definingFunction, which is stupid
+-- in and of itself (see the note there.) Additionally, this doesn't check to
+-- make sure we're in the top-level scope, so it will set the recursive
+-- position mapping any time 'intros' is called.
 intros :: TacticsM ()
 intros = rule $ \jdg -> do
   let hy = jHypothesis jdg

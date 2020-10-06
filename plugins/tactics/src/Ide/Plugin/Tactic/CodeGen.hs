@@ -52,11 +52,13 @@ destructMatches f f2 t jdg = do
           let args = dataConInstArgTys dc apps
           names <- mkManyGoodNames hy args
           let hy' = zip names $ coerce args
+              dcon_name = nameOccName $ dataConName dc
 
           let pat :: Pat GhcPs
-              pat = conP (fromString $ occNameString $ nameOccName $ dataConName dc)
+              pat = conP (fromString $ occNameString dcon_name)
                   $ fmap bvar' names
               j = f2 hy'
+                $ withPositionMapping dcon_name names
                 $ introducingPat hy'
                 $ withNewGoal g jdg
           sg <- f dc j
@@ -106,11 +108,14 @@ buildDataCon
     -> RuleM (LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
   let args = dataConInstArgTys dc apps
-  sgs <- traverse ( newSubgoal
+      dcon_name = nameOccName $ dataConName dc
+  sgs <- traverse ( \(arg, n) ->
+                    newSubgoal
+                  . filterSameTypeFromOtherPositions dcon_name n
                   . blacklistingDestruct
                   . flip withNewGoal jdg
-                  . CType
-                  ) args
+                  $ CType arg
+                  ) $ zip args [0..]
   pure
     . noLoc
     . foldl' (@@)

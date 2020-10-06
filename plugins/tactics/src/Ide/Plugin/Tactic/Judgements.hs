@@ -65,6 +65,12 @@ filterPosition defn pos jdg =
   where
     go name _ = isJust $ hasPositionalAncestry jdg defn pos name
 
+filterSameTypeFromOtherPositions :: OccName -> Int -> Judgement -> Judgement
+filterSameTypeFromOtherPositions defn pos jdg =
+  let hy = jHypothesis $ filterPosition defn pos jdg
+      tys = S.fromList $ fmap snd $ M.toList hy
+   in withHypothesis (\hy2 -> M.filter (not . flip S.member tys) hy2 <> hy) jdg
+
 --------------------------------------------------------------------------------
 -- TODO(sandy): this is probably the worst function I've ever written; sorry
 hasPositionalAncestry
@@ -101,13 +107,6 @@ setParents p cs =
 
 
 
-------------------------------------------------------------------------------
--- TODO(sandy): THIS THING IS A BIG BIG HACK
---
--- Why? Two reasons. It uses extremelyStupid__definingFunction, which is stupid
--- in and of itself (see the note there.) Additionally, this doesn't check to
--- make sure we're in the top-level scope, so it will set the recursive
--- position mapping any time 'intros' is called.
 withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
 withPositionMapping defn names j =
   case M.member defn (_jPositionMaps j) of
