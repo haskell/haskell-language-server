@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
@@ -50,6 +51,7 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
+import           System.Timeout
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -266,20 +268,26 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        case runTactic ctx jdg
-              $ tac
-              $ mkVarOcc
-              $ T.unpack var_name of
-          Left err ->
-            pure $ (, Nothing)
-              $ Left
-              $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-          Right res -> do
-            let g = graft (RealSrcSpan span) res
-                response = transform dflags (clientCapabilities lf) uri g pm
-            pure $ case response of
-               Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
-               Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+        x <- lift $ timeout 2e6 $
+          case runTactic ctx jdg
+                $ tac
+                $ mkVarOcc
+                $ T.unpack var_name of
+            Left err ->
+              pure $ (, Nothing)
+                $ Left
+                $ ResponseError InvalidRequest (T.pack $ show err) Nothing
+            Right res -> do
+              let g = graft (RealSrcSpan span) res
+                  response = transform dflags (clientCapabilities lf) uri g pm
+              pure $ case response of
+                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+                Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+        pure $ case x of
+          Just y -> y
+          Nothing -> (, Nothing)
+                   $ Left
+                   $ ResponseError InvalidRequest "timed out" Nothing
 tacticCmd _ _ _ _ =
   pure ( Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
        , Nothing
