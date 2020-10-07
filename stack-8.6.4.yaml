@@ -29,9 +29,9 @@ extra-deps:
 # - ghcide-0.1.0
 - ghc-check-0.5.0.1
 - ghc-exactprint-0.6.3.2
-- ghc-lib-8.10.1.20200523
-- ghc-lib-parser-8.10.1.20200523
-- ghc-lib-parser-ex-8.10.0.14
+- ghc-lib-8.10.2.20200808
+- ghc-lib-parser-8.10.2.20200808
+- ghc-lib-parser-ex-8.10.0.16
 - ghc-source-gen-0.4.0.0
 - haddock-api-2.22.0@rev:1
 - haddock-library-1.8.0
@@ -41,9 +41,11 @@ extra-deps:
 - hlint-3.1.4
 - HsYAML-0.2.1.0@rev:1
 - HsYAML-aeson-0.2.0.0@rev:2
+- implicit-hie-cradle-0.2.0.1
+- implicit-hie-0.1.2.0
 - indexed-profunctors-0.1
 - lens-4.18
-- lsp-test-0.11.0.5
+- lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
 - optics-core-0.2
@@ -65,8 +67,6 @@ extra-deps:
 - these-1.1.1.1
 - type-equality-1
 - topograph-1
-- implicit-hie-cradle-0.2.0.1
-- implicit-hie-0.1.2.0
 
 flags:
   haskell-language-server:

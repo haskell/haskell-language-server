@@ -18,6 +18,9 @@ extra-deps:
 - data-tree-print-0.1.0.2
 - floskell-0.10.4
 - fourmolu-0.2.0.0
+- implicit-hie-cradle-0.2.0.1
+- implicit-hie-0.1.2.0
+- lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
 - refinery-0.3.0.0
@@ -25,9 +28,6 @@ extra-deps:
 - stylish-haskell-0.12.2.0
 - semigroups-0.18.5
 - temporary-1.2.1.1
-- implicit-hie-cradle-0.2.0.1
-- implicit-hie-0.1.2.0
-- hie-bios-0.7.1
 
 flags:
   haskell-language-server:
