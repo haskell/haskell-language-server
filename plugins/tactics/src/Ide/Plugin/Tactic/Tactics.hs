@@ -105,6 +105,26 @@ intros = rule $ \jdg -> do
 
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
+destructAuto :: OccName -> TacticsM ()
+destructAuto name = do
+  jdg <- goal
+  case hasDestructed jdg name of
+    True -> throwError $ AlreadyDestructed name
+    False ->
+      let subtactic = rule $ destruct' (const subgoal) name
+       in case isPatVal jdg name of
+            True  ->
+              pruning subtactic $ \jdgs ->
+                let getHyTypes = S.fromList . fmap snd . M.toList . jHypothesis
+                    new_hy = foldMap getHyTypes jdgs
+                    old_hy = getHyTypes jdg
+                 in case S.null (traceIdX "newly introduced bindings" $ new_hy S.\\old_hy) of
+                      True  -> Just NoProgress
+                      False -> Nothing
+            False -> subtactic
+
+------------------------------------------------------------------------------
+-- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
 destruct name = do
   jdg <- goal
@@ -225,7 +245,7 @@ auto' n = do
         apply fname
         loop
     , attemptOn algebraicNames $ \aname -> do
-        progress ((==) `on` jGoal) NoProgress (destruct aname)
+        progress ((==) `on` jGoal) NoProgress (destructAuto aname)
         loop
     , split >> loop
     , assumption >> loop

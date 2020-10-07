@@ -107,6 +107,27 @@ filterT p f t = check >> t
             Nothing -> pure e
 
 
+gather
+    :: (MonadExtract ext m)
+    => TacticT jdg ext err s m a
+    -> ([(a, jdg)] -> TacticT jdg ext err s m a)
+    -> TacticT jdg ext err s m a
+gather t f = tactic $ \j -> do
+    s <- get
+    results <- lift $ proofs s $ proofState t j
+    msum $ flip fmap results $ \case
+        Left err -> throwError err
+        Right (_, jdgs) -> proofState (f jdgs) j
+
+
+pruning
+    :: (MonadExtract ext m)
+    => TacticT jdg ext err s m ()
+    -> ([jdg] -> Maybe err)
+    -> TacticT jdg ext err s m ()
+pruning t p = gather t (maybe (pure ()) throwError . p . fmap snd)
+
+
 setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
 setRecursionFrameData b = do
   modify $ withRecursionStack $ \case

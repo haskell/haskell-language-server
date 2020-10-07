@@ -157,6 +157,10 @@ jHypothesis :: Judgement' a -> Map OccName a
 jHypothesis = _jHypothesis
 
 
+isPatVal :: Judgement' a -> OccName -> Bool
+isPatVal j n = S.member n $ _jPatternVals j
+
+
 ------------------------------------------------------------------------------
 -- | Only the hypothesis members which are pattern vals
 jPatHypothesis :: Judgement' a -> Map OccName a
