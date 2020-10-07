@@ -25,6 +25,9 @@ cradle:
             - path: "./plugins/default/src"
               component: "haskell-language-server:exe:haskell-language-server"
 
+            - path: "./plugins/tactics/src"
+              component: "haskell-language-server:exe:haskell-language-server"
+
             - path: "./exe/Wrapper.hs"
               component: "haskell-language-server:exe:haskell-language-server-wrapper"
 
