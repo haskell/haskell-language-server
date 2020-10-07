@@ -14,6 +14,7 @@ extra-deps:
   commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - Cabal-3.0.2.0
 - clock-0.7.2
+- data-tree-print-0.1.0.2
 - floskell-0.10.4
 - fourmolu-0.2.0.0
 - monad-dijkstra-0.1.1.2
