@@ -93,6 +93,8 @@ tests = testGroup
   , goldenTest "GoldenEitherHomomorphic.hs" 2 15 Auto ""
   , goldenTest "GoldenNote.hs"              2 8  Auto ""
   , goldenTest "GoldenPureList.hs"          2 12 Auto ""
+  , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
+  , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
   ]
 
 

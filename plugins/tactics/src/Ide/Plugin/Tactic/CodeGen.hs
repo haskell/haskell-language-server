@@ -38,7 +38,7 @@ destructMatches f f2 t jdg = do
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
         _ -> for dcs $ \dc -> do
-          let args = dataConInstArgTys dc apps
+          let args = dataConInstOrigArgTys' dc apps
           names <- mkManyGoodNames hy args
 
           let pat :: Pat GhcPs
@@ -51,9 +51,19 @@ destructMatches f f2 t jdg = do
           pure $ match [pat] $ unLoc sg
 
 
+-- | Essentially same as 'dataConInstOrigArgTys' in GHC,
+--   but we need some tweaks in GHC >= 8.8.
+--   Since old 'dataConInstArgTys' seems working with >= 8.8,
+--   we just filter out non-class types in the result.
+dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
+dataConInstOrigArgTys' con ty =
+    let tys0 = dataConInstArgTys con ty
+    in filter (maybe True (not . isClassTyCon) . tyConAppTyCon_maybe) tys0
+
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the
 -- resulting matches.
+
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
 destruct' f term jdg = do
   let hy = jHypothesis jdg
@@ -85,7 +95,7 @@ buildDataCon
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
-  let args = dataConInstArgTys dc apps
+  let args = dataConInstOrigArgTys' dc apps
   sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
   pure
     . noLoc
