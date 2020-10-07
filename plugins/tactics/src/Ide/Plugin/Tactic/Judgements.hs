@@ -89,15 +89,19 @@ hasPositionalAncestry
                    -- just false if it's a descendent
                    -- otherwise nothing
 hasPositionalAncestry jdg defn n name
-  | Just ancestor <- preview (_Just . ix n) $ M.lookup defn $ _jPositionMaps jdg
-  = case name == ancestor of
+  | not $ null ancestors
+  = case any (== name) ancestors of
       True  -> Just True
       False ->
         case M.lookup name $ _jAncestry jdg of
           Just ancestry ->
-            bool Nothing (Just False) $ S.member ancestor ancestry
+            bool Nothing (Just False) $ any (flip S.member ancestry) ancestors
           Nothing -> Nothing
   | otherwise = Nothing
+  where
+    ancestors = toListOf (_Just . traversed . ix n)
+              $ M.lookup defn
+              $ _jPositionMaps jdg
 
 
 setParents
@@ -114,10 +118,8 @@ setParents p cs jdg =
 
 
 withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
-withPositionMapping defn names j =
-  case M.member defn (_jPositionMaps j) of
-    True  -> j
-    False -> j & field @"_jPositionMaps" . at defn ?~ names
+withPositionMapping defn names =
+  field @"_jPositionMaps" . at defn <>~ Just [names]
 
 
 ------------------------------------------------------------------------------

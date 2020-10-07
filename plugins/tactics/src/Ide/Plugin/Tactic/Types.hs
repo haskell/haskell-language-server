@@ -102,7 +102,7 @@ data Judgement' a = Judgement
   , _jPatternVals :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jBlacklistDestruct :: !(Bool)
-  , _jPositionMaps :: !(Map OccName [OccName])
+  , _jPositionMaps :: !(Map OccName [[OccName]])
   , _jAncestry     :: !(Map OccName (Set OccName))
   , _jGoal         :: !(a)
   }
