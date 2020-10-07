@@ -38,7 +38,7 @@ destructMatches f f2 t jdg = do
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
         _ -> for dcs $ \dc -> do
-          let args = dataConInstArgTys dc apps
+          let args = dataConInstOrigArgTys dc apps
           names <- mkManyGoodNames hy args
 
           let pat :: Pat GhcPs
