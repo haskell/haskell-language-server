@@ -530,26 +530,17 @@ variable can be updated. Information on other configurations can be found at
 
 ### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
-Install haskell-language-server, and then enable haskell lang module with lsp flag in `.doom.d/init.el`
+Install haskell-language-server, and then enable the lsp module and the haskell lang module with lsp flag in `.doom.d/init.el`:
 
 ``` emacs-lisp
+:tools
+lsp
+;;...
 :lang
 (haskell +lsp)
 ```
 
-in your `.doom.d/config.el` file
-
-``` emacs-lisp
-(use-package lsp-haskell
- :ensure t
- :config
- (setq lsp-haskell-process-path-hie "haskell-language-server-wrapper")
- ;; Comment/uncomment this line to see interactions between lsp client/server.
- ;;(setq lsp-log-io t)
-)
-```
-
-then do `$HOME/.emacs.d/bin/doom refresh`
+then do `$HOME/.emacs.d/bin/doom sync`
 
 ### Using haskell-language-server with [Kakoune](https://github.com/mawww/kakoune)
 
