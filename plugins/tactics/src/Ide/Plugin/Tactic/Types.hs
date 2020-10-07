@@ -103,7 +103,7 @@ data Judgement' a = Judgement
     -- ^ These should align with keys of _jHypothesis
   , _jBlacklistDestruct :: !(Bool)
   , _jPositionMaps :: !(Map OccName [OccName])
-  , _jAncestry     :: !(Map OccName OccName)
+  , _jAncestry     :: !(Map OccName (Set OccName))
   , _jGoal         :: !(a)
   }
   deriving stock (Eq, Ord, Generic, Functor, Show)

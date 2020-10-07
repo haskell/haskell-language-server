@@ -6,9 +6,11 @@
 
 module Ide.Plugin.Tactic.Judgements where
 
-import Control.Lens hiding (Context)
+import           Control.Lens hiding (Context)
+import           Data.Bool
 import           Data.Char
 import           Data.Coerce
+import           Data.Generics.Product (field)
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
@@ -18,7 +20,6 @@ import           Ide.Plugin.Tactic.Types
 import           OccName
 import           SrcLoc
 import           Type
-import Data.Generics.Product (field)
 
 
 ------------------------------------------------------------------------------
@@ -42,22 +43,28 @@ buildHypothesis
 hasDestructed :: Judgement -> OccName -> Bool
 hasDestructed j n = S.member n $ _jDestructed j
 
+
 destructing :: OccName -> Judgement -> Judgement
 destructing n = field @"_jDestructed" <>~ S.singleton n
+
 
 blacklistingDestruct :: Judgement -> Judgement
 blacklistingDestruct =
   field @"_jBlacklistDestruct" .~ True
 
+
 isDestructBlacklisted :: Judgement -> Bool
 isDestructBlacklisted = _jBlacklistDestruct
+
 
 withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
+
 introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
 introducing ns =
   field @"_jHypothesis" <>~ M.fromList ns
+
 
 filterPosition :: OccName -> Int -> Judgement -> Judgement
 filterPosition defn pos jdg =
@@ -65,14 +72,14 @@ filterPosition defn pos jdg =
   where
     go name _ = isJust $ hasPositionalAncestry jdg defn pos name
 
+
 filterSameTypeFromOtherPositions :: OccName -> Int -> Judgement -> Judgement
 filterSameTypeFromOtherPositions defn pos jdg =
   let hy = jHypothesis $ filterPosition defn pos jdg
       tys = S.fromList $ fmap snd $ M.toList hy
    in withHypothesis (\hy2 -> M.filter (not . flip S.member tys) hy2 <> hy) jdg
 
---------------------------------------------------------------------------------
--- TODO(sandy): this is probably the worst function I've ever written; sorry
+
 hasPositionalAncestry
     :: Judgement
     -> OccName     -- ^ defining fn
@@ -85,16 +92,12 @@ hasPositionalAncestry jdg defn n name
   | Just ancestor <- preview (_Just . ix n) $ M.lookup defn $ _jPositionMaps jdg
   = case name == ancestor of
       True  -> Just True
-      False -> go ancestor name
+      False ->
+        case M.lookup name $ _jAncestry jdg of
+          Just ancestry ->
+            bool Nothing (Just False) $ S.member ancestor ancestry
+          Nothing -> Nothing
   | otherwise = Nothing
-  where
-    go ancestor who =
-      case M.lookup who $ _jAncestry  jdg of
-        Just parent ->
-          case parent == ancestor of
-            True  -> Just False
-            False -> go ancestor parent
-        Nothing -> Nothing
 
 
 setParents
@@ -102,9 +105,12 @@ setParents
     -> [OccName]  -- ^ children
     -> Judgement
     -> Judgement
-setParents p cs =
-  field @"_jAncestry" <>~ M.fromList (fmap (, p) cs)
-
+setParents p cs jdg =
+  let ancestry = mappend (S.singleton p)
+               $ fromMaybe mempty
+               $ M.lookup p
+               $ _jAncestry jdg
+   in jdg & field @"_jAncestry" <>~ M.fromList (fmap (, ancestry) cs)
 
 
 withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
