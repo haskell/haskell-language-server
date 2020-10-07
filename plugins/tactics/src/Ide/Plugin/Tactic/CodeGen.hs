@@ -85,7 +85,7 @@ buildDataCon
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
-  let args = dataConInstArgTys dc apps
+  let args = dataConInstOrigArgTys dc apps
   sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
   pure
     . noLoc
