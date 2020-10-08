@@ -40,7 +40,8 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
         - [Sample `~/.vimrc`](#sample-vimrc)
     - [Atom](#using-haskell-language-server-with-atom)
     - [Emacs](#using-haskell-language-server-with-emacs)
-    - [Doom emacs](#using-haskell-language-server-with-doom-emacs)
+        - [Doom emacs](#using-haskell-language-server-with-doom-emacs)
+        - [Spacemacs](#using-haskell-language-server-with-spacemacs)
     - [Kakoune](#using-haskell-language-server-with-kakoune)
   - [Known limitations](#known-limitations)
     - [Preprocessor](#preprocessor)
@@ -515,32 +516,48 @@ $ apm install language-haskell atom-ide-ui haskell
 
 ### Using haskell-language-server with Emacs
 
-Install HLS along with the following emacs packages:
+Emacs support is provided by a combination of the following packages:
 
 [lsp-mode](https://github.com/emacs-lsp/lsp-mode)
 [lsp-ui](https://github.com/emacs-lsp/lsp-ui)
 [lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
 
-Make sure to follow the instructions in the README of each of these packages.
+You can install these manually if you are using plain Emacs; instructions for some specific flavours
+are included below.
 
-The default `lsp-haskell-server-path` is set to `haskell-language-server-wrapper`. In 
-case you would like your editor to use a specific version of the `hls` server, then this
-variable can be updated. Information on other configurations can be found at 
-[lsp-haskell](https://github.com/emacs-lsp/lsp-haskell)
+Make sure to check the READMEs of each of these packages, which explain how to configure the
+various parts of the Emacs integration.
+In particular, `lsp-haskell` provides customization options for the `haskell-language-server`-specific parts,
+such as the path to the server binary.
 
-### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
+#### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
-Install haskell-language-server, and then enable the lsp module and the haskell lang module with lsp flag in `.doom.d/init.el`:
+Manual installation of packages is not required. 
+Enable the lsp module and the haskell lang module with lsp flag in `.doom.d/init.el`:
 
 ``` emacs-lisp
 :tools
 lsp
-;;...
+;; ...
 :lang
 (haskell +lsp)
 ```
 
 then do `$HOME/.emacs.d/bin/doom sync`
+
+#### Using haskell-language-server with [Spacemacs](https://github.com/syl20bnr/spacemacs)
+
+Manual installation of packages is not required.
+Enable the `haskell` layer and the `lsp` layer in your Spacemacs config file:
+
+```emacs-lisp
+dotspacemacs-configuration-layers
+  '(
+    haskell 
+    lsp 
+    ;; ...
+  )
+```
 
 ### Using haskell-language-server with [Kakoune](https://github.com/mawww/kakoune)
 
