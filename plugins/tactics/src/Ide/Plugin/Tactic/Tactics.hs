@@ -88,7 +88,7 @@ intros = rule $ \jdg -> do
       g  = jGoal jdg
   ctx <- ask
   case tcSplitFunTys $ unCType g of
-    ([], _) -> throwError $ GoalMismatch "intro" g
+    ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
       vs <- mkManyGoodNames hy as
       let jdg' = withPositionMapping (extremelyStupid__definingFunction ctx) vs
@@ -187,7 +187,7 @@ split = do
   jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
-    Nothing -> throwError $ GoalMismatch "getGoalTyCon" g
+    Nothing -> throwError $ GoalMismatch "split" g
     Just (tc, _) -> do
       let dcs = tyConDataCons tc
       choice $ fmap splitDataCon dcs
