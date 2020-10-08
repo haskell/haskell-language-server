@@ -39,6 +39,7 @@ import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin (mkLspCommand)
+import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements

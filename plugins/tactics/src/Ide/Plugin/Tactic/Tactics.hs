@@ -21,6 +21,7 @@ import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Set as S
+import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
@@ -32,12 +33,11 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
+import           Name (nameOccName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
-import Name (nameOccName)
-import DataCon
 
 
 ------------------------------------------------------------------------------
@@ -242,27 +242,16 @@ localTactic t f = do
     runStateT (unTacticT t) $ f jdg
 
 
-------------------------------------------------------------------------------
--- | Automatically solve a goal.
-auto :: TacticsM ()
-auto = do
-  current <- getCurrentDefinitions
-  jdg <- goal
-  traceM $ mappend "!!!auto current:" $ show current
-  traceM $ mappend "!!!auto jdg:" $ show jdg
-  localTactic (auto' 5) $ disallowing $ fmap fst current
-
-
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
   let loop = auto' (n - 1)
   try intros
   choice
-    [ attemptOn functionNames $ \fname -> do
+    [ overFunctions $ \fname -> do
         apply fname
         loop
-    , attemptOn algebraicNames $ \aname -> do
+    , overAlgebraicTerms $ \aname -> do
         destructAuto aname
         loop
     , splitAuto >> loop
@@ -270,15 +259,14 @@ auto' n = do
     , recursion
     ]
 
+overFunctions :: (OccName -> TacticsM ()) -> TacticsM ()
+overFunctions =
+  attemptOn $ M.keys . M.filter (isFunction . unCType) . jHypothesis
 
-functionNames :: Judgement -> [OccName]
-functionNames  =
-  M.keys . M.filter (isFunction . unCType) . jHypothesis
-
-
-algebraicNames :: Judgement -> [OccName]
-algebraicNames =
-  M.keys . M.filter (isJust . algebraicTyCon . unCType) . jHypothesis
+overAlgebraicTerms :: (OccName -> TacticsM ()) -> TacticsM ()
+overAlgebraicTerms =
+  attemptOn $
+    M.keys . M.filter (isJust . algebraicTyCon . unCType) . jHypothesis
 
 
 allNames :: Judgement -> [OccName]

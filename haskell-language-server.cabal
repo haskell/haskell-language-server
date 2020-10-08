@@ -93,11 +93,13 @@ executable haskell-language-server
     Ide.Plugin.Retrie
     Ide.Plugin.StylishHaskell
     Ide.Plugin.Tactic
+    Ide.Plugin.Tactic.Auto
     Ide.Plugin.Tactic.CodeGen
     Ide.Plugin.Tactic.Context
     Ide.Plugin.Tactic.Debug
     Ide.Plugin.Tactic.GHC
     Ide.Plugin.Tactic.Judgements
+    Ide.Plugin.Tactic.KnownStrategies
     Ide.Plugin.Tactic.Machinery
     Ide.Plugin.Tactic.Naming
     Ide.Plugin.Tactic.Range
