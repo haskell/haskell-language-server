@@ -268,7 +268,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        x <- lift $ timeout 2e6 $
+        x <- lift $ timeout 2e8 $
           case runTactic ctx jdg
                 $ tac
                 $ mkVarOcc

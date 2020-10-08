@@ -72,7 +72,7 @@ runTactic ctx jdg t =
       (_, solns) -> do
         let sorted = sortBy (comparing $ Down . uncurry scoreSolution . snd) solns
         -- TODO(sandy): remove this trace sometime
-        traceM $ mappend "!!!solns: " $ intercalate "\n" $ take 5 $  fmap (show . fst) sorted
+        traceM $ mappend "!!!solns: " $ intercalate "\n" $ take 50 $  fmap (show . fst) sorted
         case sorted of
           (res : _) -> Right $ fst res
           -- guaranteed to not be empty

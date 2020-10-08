@@ -102,6 +102,7 @@ data Judgement' a = Judgement
   , _jPatternVals :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jBlacklistDestruct :: !(Bool)
+  , _jWhitelistSplit :: !(Bool)
   , _jPositionMaps :: !(Map OccName [[OccName]])
   , _jAncestry     :: !(Map OccName (Set OccName))
   , _jGoal         :: !(a)
@@ -133,6 +134,7 @@ data TacticError
   | IncorrectDataCon DataCon
   | RecursionOnWrongParam OccName Int OccName
   | UnhelpfulDestruct OccName
+  | UnhelpfulSplit OccName
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -167,6 +169,8 @@ instance Show TacticError where
         <> show p <> ": " <> show arg
     show (UnhelpfulDestruct n) =
       "Destructing patval " <> show n <> " leads to no new types"
+    show (UnhelpfulSplit n) =
+      "Splitting constructor " <> show n <> " leads to no new goals"
 
 
 ------------------------------------------------------------------------------

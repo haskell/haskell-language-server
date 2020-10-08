@@ -53,8 +53,17 @@ blacklistingDestruct =
   field @"_jBlacklistDestruct" .~ True
 
 
+unwhitelistingSplit :: Judgement -> Judgement
+unwhitelistingSplit =
+  field @"_jWhitelistSplit" .~ False
+
+
 isDestructBlacklisted :: Judgement -> Bool
 isDestructBlacklisted = _jBlacklistDestruct
+
+
+isSplitWhitelisted :: Judgement -> Bool
+isSplitWhitelisted = _jWhitelistSplit
 
 
 withNewGoal :: a -> Judgement' a -> Judgement' a
@@ -176,5 +185,5 @@ substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
 mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
-mkFirstJudgement hy = Judgement hy mempty mempty False mempty mempty . CType
+mkFirstJudgement hy = Judgement hy mempty mempty False True mempty mempty . CType
 

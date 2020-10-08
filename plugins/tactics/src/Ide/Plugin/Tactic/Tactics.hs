@@ -36,6 +36,8 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import Name (nameOccName)
+import DataCon
 
 
 ------------------------------------------------------------------------------
@@ -192,6 +194,23 @@ split = do
       let dcs = tyConDataCons tc
       choice $ fmap splitDataCon dcs
 
+------------------------------------------------------------------------------
+-- | Choose between each of the goal's data constructors.
+splitAuto :: TacticsM ()
+splitAuto = do
+  jdg <- goal
+  let g = jGoal jdg
+  case splitTyConApp_maybe $ unCType g of
+    Nothing -> throwError $ GoalMismatch "split" g
+    Just (tc, _) -> do
+      let dcs = tyConDataCons tc
+      case isSplitWhitelisted jdg of
+        True -> choice $ fmap splitDataCon dcs
+        False -> choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
+          case any ((/= jGoal jdg)  . jGoal) jdgs of
+            True  -> Nothing
+            False -> Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
+
 
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
@@ -201,7 +220,7 @@ splitDataCon dc = rule $ \jdg -> do
   case splitTyConApp_maybe $ unCType g of
     Just (tc, apps) -> do
       case elem dc $ tyConDataCons tc of
-        True -> buildDataCon jdg dc apps
+        True -> buildDataCon (unwhitelistingSplit jdg) dc apps
         False -> throwError $ IncorrectDataCon dc
     Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
@@ -231,7 +250,7 @@ auto = do
   jdg <- goal
   traceM $ mappend "!!!auto current:" $ show current
   traceM $ mappend "!!!auto jdg:" $ show jdg
-  localTactic (auto' 4) $ disallowing $ fmap fst current
+  localTactic (auto' 5) $ disallowing $ fmap fst current
 
 
 auto' :: Int -> TacticsM ()
@@ -246,7 +265,7 @@ auto' n = do
     , attemptOn algebraicNames $ \aname -> do
         destructAuto aname
         loop
-    , split >> loop
+    , splitAuto >> loop
     , assumption >> loop
     , recursion
     ]
