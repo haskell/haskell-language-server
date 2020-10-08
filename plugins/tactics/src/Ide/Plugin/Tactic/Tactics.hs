@@ -17,7 +17,6 @@ import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
-import           Data.Function
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
@@ -113,13 +112,13 @@ destructAuto name = do
     False ->
       let subtactic = rule $ destruct' (const subgoal) name
        in case isPatVal jdg name of
-            True  ->
+            True ->
               pruning subtactic $ \jdgs ->
                 let getHyTypes = S.fromList . fmap snd . M.toList . jHypothesis
                     new_hy = foldMap getHyTypes jdgs
                     old_hy = getHyTypes jdg
-                 in case S.null (traceIdX "newly introduced bindings" $ new_hy S.\\old_hy) of
-                      True  -> Just NoProgress
+                 in case S.null $ new_hy S.\\ old_hy of
+                      True  -> Just $ UnhelpfulDestruct name
                       False -> Nothing
             False -> subtactic
 
@@ -245,7 +244,7 @@ auto' n = do
         apply fname
         loop
     , attemptOn algebraicNames $ \aname -> do
-        progress ((==) `on` jGoal) NoProgress (destructAuto aname)
+        destructAuto aname
         loop
     , split >> loop
     , assumption >> loop

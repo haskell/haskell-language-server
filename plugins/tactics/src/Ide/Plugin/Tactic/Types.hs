@@ -132,6 +132,7 @@ data TacticError
   | AlreadyDestructed OccName
   | IncorrectDataCon DataCon
   | RecursionOnWrongParam OccName Int OccName
+  | UnhelpfulDestruct OccName
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -164,6 +165,8 @@ instance Show TacticError where
     show (RecursionOnWrongParam call p arg) =
       "Recursion on wrong param (" <> show call <> ") on arg"
         <> show p <> ": " <> show arg
+    show (UnhelpfulDestruct n) =
+      "Destructing patval " <> show n <> " leads to no new types"
 
 
 ------------------------------------------------------------------------------

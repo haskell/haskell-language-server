@@ -125,7 +125,7 @@ pruning
     => TacticT jdg ext err s m ()
     -> ([jdg] -> Maybe err)
     -> TacticT jdg ext err s m ()
-pruning t p = gather t (maybe (pure ()) throwError . p . fmap snd)
+pruning t p = gather t $ maybe t throwError . p . fmap snd
 
 
 setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
