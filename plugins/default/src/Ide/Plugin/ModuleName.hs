@@ -9,7 +9,7 @@
 
 Provide CodeLenses to:
 * Add a module header ('module <moduleName> where") to empty Haskell files
-* Fix the mdule name if incorrect
+* Fix the module name if incorrect
 -}
 module Ide.Plugin.ModuleName
 
