@@ -5,7 +5,12 @@
 {-# LANGUAGE RecordWildCards           #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 
--- |Keep the module name in sync with its file path.
+{-| Keep the module name in sync with its file path.
+
+Provide CodeLenses to:
+* Add a module header ('module <moduleName> where") to empty Haskell files
+* Fix the mdule name if incorrect
+-}
 module Ide.Plugin.ModuleName
 
   ( descriptor
@@ -153,5 +158,5 @@ asTextEdits :: Action -> [TextEdit]
 asTextEdits Action{..} = [TextEdit aRange aCode]
 
 out :: [String] -> IO ()
-out = print . unwords . ("Plugin ModuleName " :)
--- out _ = return ()
+-- out = print . unwords . ("Plugin ModuleName " :)
+out _ = return ()
