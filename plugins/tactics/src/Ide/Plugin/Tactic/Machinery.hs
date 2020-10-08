@@ -24,9 +24,7 @@ import           Control.Monad.State (MonadState(..))
 import           Control.Monad.State.Class (gets, modify)
 import           Data.Coerce
 import           Data.Either
-import           Data.Function (on)
-import           Data.List (groupBy, intercalate, sortBy)
-import           Data.Maybe (listToMaybe, fromMaybe)
+import           Data.List (intercalate, sortBy)
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
@@ -75,12 +73,10 @@ runTactic ctx jdg t =
         let sorted = sortBy (comparing $ Down . uncurry scoreSolution . snd) solns
         -- TODO(sandy): remove this trace sometime
         traceM $ mappend "!!!solns: " $ intercalate "\n" $ take 5 $  fmap (show . fst) sorted
-        traceMX "duplicates" $ countDuplicates solns
         case sorted of
           (res : _) -> Right $ fst res
           -- guaranteed to not be empty
           _ -> Left []
-
 
 
 recursiveCleanup
@@ -136,14 +132,6 @@ setRecursionFrameData b = do
   modify $ withRecursionStack $ \case
     (_ : bs) -> b : bs
     []       -> []
-
-
-countDuplicates :: Show a => [a] -> [Int]
-countDuplicates
-    = sortBy (comparing Down)
-    . fmap length
-    . groupBy ((==) `on` show)
-    . sortBy (comparing show)
 
 
 scoreSolution
