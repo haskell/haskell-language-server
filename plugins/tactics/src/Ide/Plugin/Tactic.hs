@@ -21,8 +21,12 @@ import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
+import           Data.Generics.Aliases (mkQ)
+import           Data.Generics.Schemes (everything)
+import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
+import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
@@ -52,6 +56,7 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
+import           SrcLoc (containsSpan)
 import           System.Timeout
 
 
@@ -252,6 +257,7 @@ judgementForHole state nfp range = do
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+  traceMX "holes!" $ isRhsHole rss $ tm_typechecked_source $ tmrModule tcmod
   let tcg = fst $ tm_internals_ $ tmrModule tcmod
       ctx = mkContext
               (mapMaybe (sequenceA . (occName *** coerce))
@@ -300,4 +306,43 @@ fromMaybeT def = fmap (fromMaybe def) . runMaybeT
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
+
+
+------------------------------------------------------------------------------
+-- | Compute top-level position vals of a function
+isRhsHole :: RealSrcSpan -> TypecheckedSource -> Maybe (OccName, [OccName])
+isRhsHole rss tcs = getFirst $ everything (<>) (mkQ mempty $ \case
+  (Match _
+      (FunRhs (L _ name) _ _)         -- function name
+      ps                              -- patterns
+      (GRHSs _
+        [L _ (GRHS _ []
+               (L (RealSrcSpan span)  -- body with no guards and a single defn
+                  (HsVar _ (L _ hole))))] _)
+          :: Match GhcTc (LHsExpr GhcTc))
+    | containsSpan span rss           -- which contains our span
+    , isHole $ occName hole           -- and the span is a hole
+    -> First $ do
+        patnames <- traverse getPatName ps
+        pure (occName name, patnames)
+  _ -> mempty
+  ) tcs
+
+
+-- TODO(sandy): Make this more robust
+isHole :: OccName -> Bool
+isHole = isPrefixOf "_" . occNameString
+
+
+getPatName :: Pat GhcTc -> Maybe OccName
+getPatName = \case
+   VarPat _ x    -> Just $ occName $ unLoc x
+   LazyPat _ p   -> getPatName p
+   AsPat _ x _   -> Just $ occName $ unLoc x
+   ParPat _ p    -> getPatName p
+   BangPat _ p   -> getPatName p
+   ViewPat _ _ p -> getPatName p
+   SigPat _ p _  -> getPatName p
+   XPat p        -> getPatName $ unLoc p
+   _             -> Nothing
 
