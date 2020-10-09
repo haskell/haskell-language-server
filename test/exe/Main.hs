@@ -2470,6 +2470,7 @@ thTests =
         return ()
     , ignoreInWindowsForGHC88 (thReloadingTest `xfail` "expect broken (#672)")
     -- Regression test for https://github.com/digital-asset/ghcide/issues/614
+    , thLinkingTest `xfail` "expect broken"
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
               T.unlines
@@ -2509,7 +2510,7 @@ thReloadingTest = testCase "reloading-th-test" $ withoutStackEnv $ runWithExtraF
         bPath = dir </> "THB.hs"
         cPath = dir </> "THC.hs"
 
-    aSource <- liftIO $ readFileUtf8 aPath --  th = [d|a :: ()|]
+    aSource <- liftIO $ readFileUtf8 aPath --  th = [d|a = ()|]
     bSource <- liftIO $ readFileUtf8 bPath --  $th
     cSource <- liftIO $ readFileUtf8 cPath --  c = a :: ()
 
@@ -2534,6 +2535,32 @@ thReloadingTest = testCase "reloading-th-test" $ withoutStackEnv $ runWithExtraF
     closeDoc adoc
     closeDoc bdoc
     closeDoc cdoc
+
+thLinkingTest :: TestTree
+thLinkingTest = testCase "th-linking-test" $ withoutStackEnv $ runWithExtraFiles "TH" $ \dir -> do
+
+    let aPath = dir </> "THA.hs"
+        bPath = dir </> "THB.hs"
+
+    aSource <- liftIO $ readFileUtf8 aPath --  th_a = [d|a :: ()|]
+    bSource <- liftIO $ readFileUtf8 bPath --  $th_a
+
+    adoc <- createDoc aPath "haskell" aSource
+    bdoc <- createDoc bPath "haskell" bSource
+
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+
+    let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
+    changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing aSource']
+
+    -- modify b too
+    let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
+    changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing bSource']
+
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+
+    closeDoc adoc
+    closeDoc bdoc
 
 
 completionTests :: TestTree
