@@ -23,7 +23,7 @@ extra-deps:
 - ormolu-0.1.3.0
 - refinery-0.2.0.0
 - retrie-0.1.1.1
-- stylish-haskell-0.11.0.3
+- stylish-haskell-0.12.2.0
 - semigroups-0.18.5
 - temporary-1.2.1.1
 - implicit-hie-cradle-0.2.0.1
