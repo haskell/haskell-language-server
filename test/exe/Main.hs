@@ -1711,7 +1711,7 @@ addFunctionConstraintTests = let
     , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
-  
+
   incompleteConstraintSourceCodeWithNewlinesInTypeSignature :: T.Text -> T.Text
   incompleteConstraintSourceCodeWithNewlinesInTypeSignature constraint =
     T.unlines
@@ -2296,7 +2296,7 @@ checkFileCompiles fp =
 
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
-  ignoreInWindowsAndGHCGreaterThan86 $ testSessionWait "simple plugin" $ do
+  ignoreInWindowsForGHC88And810 $ testSessionWait "simple plugin" $ do
     let content =
           T.unlines
             [ "{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}"
@@ -2319,7 +2319,7 @@ pluginSimpleTests =
 
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
-  ignoreInWindowsAndGHCGreaterThan86 $ testSessionWait "parsedResultAction plugin" $ do
+  ignoreInWindowsForGHC88And810 $ testSessionWait "parsedResultAction plugin" $ do
     let content =
           T.unlines
             [ "{-# LANGUAGE DuplicateRecordFields, TypeApplications, FlexibleContexts, DataKinds, MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}"
@@ -2468,7 +2468,7 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
-    , thReloadingTest `xfail` "expect broken (#672)"
+    , ignoreInWindowsForGHC88 (thReloadingTest `xfail` "expect broken (#672)")
     -- Regression test for https://github.com/digital-asset/ghcide/issues/614
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
@@ -2488,7 +2488,7 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         expectDiagnostics [ ( "B.hs", [(DsWarning, (4, 0), "Top-level binding with no type signature: main :: IO ()")] ) ]
-    , testCase "findsTHnewNameConstructor" $ withoutStackEnv $ runWithExtraFiles "THNewName" $ \dir -> do
+    , ignoreInWindowsForGHC88 $ testCase "findsTHnewNameConstructor" $ withoutStackEnv $ runWithExtraFiles "THNewName" $ \dir -> do
 
     -- This test defines a TH value with the meaning "data A = A" in A.hs
     -- Loads and export the template in B.hs
@@ -2981,12 +2981,20 @@ expectFailCabal = expectFailBecause
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else flip const
 
-ignoreInWindowsAndGHCGreaterThan86 :: TestTree -> TestTree
-#if MIN_GHC_API_VERSION(8,8,1)
-ignoreInWindowsAndGHCGreaterThan86 =
-    ignoreInWindowsBecause "tests are unreliable for windows and ghc greater than 8.6.5"
+ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
+#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(9,0,0)
+ignoreInWindowsForGHC88And810 =
+    ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8 and 8.10"
 #else
-ignoreInWindowsAndGHCGreaterThan86 = id
+ignoreInWindowsForGHC88And810 = id
+#endif
+
+ignoreInWindowsForGHC88 :: TestTree -> TestTree
+#if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(8,10,1)
+ignoreInWindowsForGHC88 =
+    ignoreInWindowsBecause "tests are unreliable in windows for ghc 8.8"
+#else
+ignoreInWindowsForGHC88 = id
 #endif
 
 data Expect
@@ -3095,7 +3103,7 @@ loadCradleOnlyonce = testGroup "load cradle only once"
 
 dependentFileTest :: TestTree
 dependentFileTest = testGroup "addDependentFile"
-    [testGroup "file-changed" [testSession' "test" test]
+    [testGroup "file-changed" [ignoreInWindowsForGHC88 $ testSession' "test" test]
     ]
     where
       test dir = do
@@ -3477,6 +3485,7 @@ clientSettingsTest = testGroup "client settings handling"
             logNot <- skipManyTill anyMessage loggingNotification
             isMessagePresent "Updating Not supported" [getLogMessage logNot]
     ,   testSession "ghcide restarts shake session on config changes" $ do
+            void $ skipManyTill anyMessage $ message @RegisterCapabilityRequest
             sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
             nots <- skipManyTill anyMessage $ count 3 loggingNotification
             isMessagePresent "Restarting build session" (map getLogMessage nots)
