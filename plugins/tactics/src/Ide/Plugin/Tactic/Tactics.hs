@@ -203,12 +203,18 @@ splitAuto = do
     Nothing -> throwError $ GoalMismatch "split" g
     Just (tc, _) -> do
       let dcs = tyConDataCons tc
-      case isSplitWhitelisted jdg of
-        True -> choice $ fmap splitDataCon dcs
-        False -> choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
-          case any ((/= jGoal jdg)  . jGoal) jdgs of
-            True  -> Nothing
-            False -> Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
+      -- TODO(sandy): Figure out the right strategy for pruning splits of
+      -- splits
+      choice $ fmap splitDataCon dcs
+      -- case isSplitWhitelisted jdg of
+      --   True -> choice $ fmap splitDataCon dcs
+      --   False -> do
+      --     choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
+      --       case all ((== jGoal jdg)  . jGoal) jdgs of
+      --         False  -> Nothing
+      --         True -> do
+      --           traceMX "unhelpful split" $ nameOccName $ dataConName dc
+      --           Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
 
 
 ------------------------------------------------------------------------------
