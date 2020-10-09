@@ -1,6 +1,5 @@
 module Ide.Plugin.Tactic.Auto where
 
-import Control.Applicative
 import Ide.Plugin.Tactic.Context
 import Ide.Plugin.Tactic.Judgements
 import Ide.Plugin.Tactic.KnownStrategies

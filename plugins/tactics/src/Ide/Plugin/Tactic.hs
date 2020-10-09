@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -257,14 +258,26 @@ judgementForHole state nfp range = do
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
-  traceMX "holes!" $ isRhsHole rss $ tm_typechecked_source $ tmrModule tcmod
+  -- traceMX "holes!" $ isRhsHole rss $
   let tcg = fst $ tm_internals_ $ tmrModule tcmod
+      tcs = tm_typechecked_source $ tmrModule tcmod
       ctx = mkContext
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ getDefiningBindings binds rss)
               tcg
       hyps = hypothesisFromBindings rss binds
-  pure (resulting_range, mkFirstJudgement hyps goal, ctx, dflags)
+  pure ( resulting_range
+       , mkFirstJudgement
+           hyps
+           (isRhsHole rss tcs)
+           (maybe
+              mempty
+              (uncurry M.singleton . fmap pure)
+                $ getRhsPosVals rss tcs)
+           goal
+       , ctx
+       , dflags
+       )
 
 
 
@@ -309,24 +322,39 @@ liftMaybe a = MaybeT $ pure a
 
 
 ------------------------------------------------------------------------------
+-- | Is this hole immediately to the right of an equals sign?
+isRhsHole :: RealSrcSpan -> TypecheckedSource -> Bool
+isRhsHole rss tcs = everything (||) (mkQ False $ \case
+  TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
+  _ -> False
+  ) tcs
+
+
+------------------------------------------------------------------------------
 -- | Compute top-level position vals of a function
-isRhsHole :: RealSrcSpan -> TypecheckedSource -> Maybe (OccName, [OccName])
-isRhsHole rss tcs = getFirst $ everything (<>) (mkQ mempty $ \case
-  (Match _
-      (FunRhs (L _ name) _ _)         -- function name
-      ps                              -- patterns
-      (GRHSs _
-        [L _ (GRHS _ []
-               (L (RealSrcSpan span)  -- body with no guards and a single defn
-                  (HsVar _ (L _ hole))))] _)
-          :: Match GhcTc (LHsExpr GhcTc))
-    | containsSpan span rss           -- which contains our span
-    , isHole $ occName hole           -- and the span is a hole
+getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Maybe (OccName, [OccName])
+getRhsPosVals rss tcs = getFirst $ everything (<>) (mkQ mempty $ \case
+  TopLevelRHS name ps
+      (L (RealSrcSpan span)  -- body with no guards and a single defn
+         (HsVar _ (L _ hole)))
+    | containsSpan rss span  -- which contains our span
+    , isHole $ occName hole  -- and the span is a hole
     -> First $ do
         patnames <- traverse getPatName ps
         pure (occName name, patnames)
   _ -> mempty
   ) tcs
+
+
+------------------------------------------------------------------------------
+-- | Should make sure it's a fun bind
+pattern TopLevelRHS :: OccName -> [Pat GhcTc] -> LHsExpr GhcTc -> Match GhcTc (LHsExpr GhcTc)
+pattern TopLevelRHS name ps body <-
+  Match _
+    (FunRhs (L _ (occName -> name)) _ _)
+    ps
+    (GRHSs _
+      [L _ (GRHS _ [] body)] _)
 
 
 -- TODO(sandy): Make this more robust

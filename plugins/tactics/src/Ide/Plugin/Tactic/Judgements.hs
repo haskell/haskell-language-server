@@ -184,6 +184,21 @@ jGoal = _jGoal
 substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
-mkFirstJudgement :: M.Map OccName CType -> Type -> Judgement' CType
-mkFirstJudgement hy = Judgement hy mempty mempty False True mempty mempty . CType
+mkFirstJudgement
+    :: M.Map OccName CType
+    -> Bool  -- ^ are we in the top level rhs hole?
+    -> M.Map OccName [[OccName]]  -- ^ existing pos vals
+    -> Type
+    -> Judgement' CType
+mkFirstJudgement hy top posvals goal = Judgement
+  { _jHypothesis        = hy
+  , _jDestructed        = mempty
+  , _jPatternVals       = mempty
+  , _jBlacklistDestruct = False
+  , _jWhitelistSplit    = True
+  , _jPositionMaps      = posvals
+  , _jAncestry          = mempty
+  , _jIsTopHole         = top
+  , _jGoal              = CType goal
+  }
 
