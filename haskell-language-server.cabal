@@ -147,7 +147,7 @@ executable haskell-language-server
     , retrie                   >=0.1.1.0
     , safe-exceptions
     , shake                    >=0.17.5
-    , stylish-haskell          ^>=0.11
+    , stylish-haskell          ^>=0.12
     , temporary
     , text
     , syb

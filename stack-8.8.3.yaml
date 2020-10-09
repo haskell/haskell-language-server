@@ -35,7 +35,7 @@ extra-deps:
 - semigroups-0.18.5
 # - github: wz1000/shake
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
-- stylish-haskell-0.11.0.3
+- stylish-haskell-0.12.2.0
 - temporary-1.2.1.1
 - implicit-hie-cradle-0.2.0.1
 - implicit-hie-0.1.1.0
