@@ -182,6 +182,9 @@ proofs' s p = go s [] p
           in go s' goals p
       go s goals (Alt p1 p2) = liftA2 (<>) (go s goals p1) (go s goals p2)
       go s goals (Interleave p1 p2) = liftA2 (interleave) (go s goals p1) (go s goals p2)
+      go s goals (Commit p1 p2) = go s goals p1 >>= \case
+          (rights -> []) -> go s goals p2
+          solns -> pure solns
       go _ _ Empty = pure []
       go _ _ (Failure err) = pure [throwError err]
       go s goals (Axiom ext) = pure [Right (ext, (s, goals))]
