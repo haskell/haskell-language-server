@@ -169,6 +169,12 @@ jHypothesis = _jHypothesis
 isPatVal :: Judgement' a -> OccName -> Bool
 isPatVal j n = S.member n $ _jPatternVals j
 
+isTopHole :: Judgement' a -> Bool
+isTopHole = _jIsTopHole
+
+unsetIsTopHole :: Judgement' a -> Judgement' a
+unsetIsTopHole = field @"_jIsTopHole" .~ False
+
 
 ------------------------------------------------------------------------------
 -- | Only the hypothesis members which are pattern vals

@@ -50,7 +50,9 @@ newSubgoal
     -> RuleM (LHsExpr GhcPs)
 newSubgoal j = do
     unifier <- gets ts_unifier
-    subgoal $ substJdg unifier j
+    subgoal
+      $ substJdg unifier
+      $ unsetIsTopHole j
 
 
 ------------------------------------------------------------------------------

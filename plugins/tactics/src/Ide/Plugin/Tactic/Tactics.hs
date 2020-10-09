@@ -38,6 +38,7 @@ import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import Data.Bool (bool)
 
 
 ------------------------------------------------------------------------------
@@ -77,13 +78,6 @@ recursion = do
 
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
---
--- TODO(sandy): THIS THING IS A BIG BIG HACK
---
--- Why? Two reasons. It uses extremelyStupid__definingFunction, which is stupid
--- in and of itself (see the note there.) Additionally, this doesn't check to
--- make sure we're in the top-level scope, so it will set the recursive
--- position mapping any time 'intros' is called.
 intros :: TacticsM ()
 intros = rule $ \jdg -> do
   let hy = jHypothesis jdg
@@ -93,11 +87,16 @@ intros = rule $ \jdg -> do
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
       vs <- mkManyGoodNames hy as
-      let jdg' = withPositionMapping (extremelyStupid__definingFunction ctx) vs
-               $ introducing (zip vs $ coerce as)
+      let jdg' = introducing (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
-      sg <- newSubgoal jdg'
+      sg <- newSubgoal
+          $ bool
+              id
+              (withPositionMapping
+                (extremelyStupid__definingFunction ctx) vs)
+              (isTopHole jdg)
+          $ jdg'
       pure
         . noLoc
         . lambda (fmap bvar' vs)
