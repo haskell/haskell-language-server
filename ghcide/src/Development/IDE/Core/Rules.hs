@@ -665,7 +665,8 @@ loadGhcSession = do
 
 ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
 ghcSessionDepsDefinition file = do
-        hsc <- hscEnv <$> use_ GhcSession file
+        env <- use_ GhcSession file
+        let hsc = hscEnv env
         (deps,_) <- useWithStale_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
         ifaces <- uses_ GetModIface tdeps
@@ -679,7 +680,7 @@ ghcSessionDepsDefinition file = do
             setupFinderCache (map hirModSummary ifaces)
             mapM_ loadDepModule inLoadOrder
 
-        res <- liftIO $ newHscEnvEq "" session' []
+        res <- liftIO $ newHscEnvEqWithImportPaths (envImportPaths env) session' []
         return ([], Just res)
 
 getModIfaceFromDiskRule :: Rules ()
