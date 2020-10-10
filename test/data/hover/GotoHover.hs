@@ -55,3 +55,6 @@ outer = undefined inner where
 
 imported :: Bar
 imported = foo
+
+hole :: Int
+hole = _
