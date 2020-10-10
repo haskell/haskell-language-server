@@ -31,7 +31,8 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    newHscEnvEqPreserveImportPaths) where
+    newHscEnvEqPreserveImportPaths,
+    newHscEnvEqWithImportPaths) where
 
 import Control.Concurrent
 import Data.List.Extra
@@ -191,6 +192,11 @@ newHscEnvEq cradlePath hscEnv0 deps = do
     let envImportPaths = Just $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
         relativeToCradle = (takeDirectory cradlePath </>)
         hscEnv = removeImportPaths hscEnv0
+    return HscEnvEq{..}
+
+newHscEnvEqWithImportPaths :: Maybe [String] -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
+    envUnique <- newUnique
     return HscEnvEq{..}
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
