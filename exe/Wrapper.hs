@@ -1,6 +1,4 @@
 {-# LANGUAGE RecordWildCards #-}
--- | This module is based on the hie-wrapper.sh script in
--- https://github.com/alanz/vscode-hie-server
 module Main where
 
 import Control.Monad.Extra
@@ -42,8 +40,24 @@ main = do
       VersionMode PrintNumericVersion ->
           putStrLn haskellLanguageServerNumericVersion
 
+      NixMode nixModeArgs -> loadNixEnv nixArgs
+
       LspMode lspArgs ->
           launchHaskellLanguageServer lspArgs
+
+loadNixEnv :: NixArguments -> IO ()
+loadNixEnv nixModeArgs = do
+  s <- doesFileExist $ "shell.nix"
+  if s then loadNixShell s else do
+    d <- doesFileExist $ "default.nix"
+    if d then loadNixShell d else do
+      die $ "Nix environment requires `shell.nix` or `default.nix`, but none of them was found. Nix environment can be bootstrapped by `cabal2nix --shell . > default.nix`."
+ where
+  loadNixShell nixModeArgs = do
+    nixShell <- findExecutable "nix-shell"
+    case nixShell of
+      Nothing -> die $ "`--nix` option was provided, which requires `nix-shell` to load Nix enviroment, but this executable was not found."
+      Just nsexe -> callProcess nsexe nixModArgs
 
 launchHaskellLanguageServer :: LspArguments -> IO ()
 launchHaskellLanguageServer LspArguments{..} = do
@@ -104,6 +118,7 @@ getRuntimeGhcVersion' cradle = do
   case actionName (cradleOptsProg cradle) of
     Stack   -> checkToolExists "stack"
     Cabal   -> checkToolExists "cabal"
+    Nix     -> checkToolExists "nix"
     Default -> checkToolExists "ghc"
     Direct  -> checkToolExists "ghc"
     _       -> pure ()
@@ -143,4 +158,3 @@ findLocalCradle fp = do
     Nothing -> loadImplicitCradle fp
   hPutStrLn stderr $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
-

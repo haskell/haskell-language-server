@@ -54,6 +54,7 @@ findProgramVersions :: IO ProgramsOfInterest
 findProgramVersions = ProgramsOfInterest
   <$> findVersionOf "cabal"
   <*> findVersionOf "stack"
+  <*> findVersionOf "nix"
   <*> findVersionOf "ghc"
 
 -- | Find the version of the given program.
