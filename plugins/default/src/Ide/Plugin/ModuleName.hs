@@ -28,9 +28,9 @@ import           Data.Maybe                 (listToMaybe)
 import           Data.String                (IsString)
 import           Data.Text                  (Text)
 import qualified Data.Text                  as T
-import           Development.IDE            (GetParsedModule (GetParsedModule),
+import           Development.IDE            (hscEnvWithImportPaths, GetParsedModule (GetParsedModule),
                                              GhcSession (GhcSession),
-                                             HscEnvEq (hscEnv), IdeState,
+                                             HscEnvEq, IdeState,
                                              List (..), NormalizedFilePath,
                                              Position (Position), Range (Range),
                                              evalGhcEnv, realSrcSpanToRange,
@@ -39,12 +39,9 @@ import           Development.IDE            (GetParsedModule (GetParsedModule),
 import           Development.IDE.Plugin     (getPid)
 import           GHC                        (DynFlags (importPaths),
                                              GenLocated (L),
-                                             GhcMonad (getSession),
                                              HsModule (hsmodName),
                                              ParsedModule (pm_parsed_source),
-                                             SrcSpan (RealSrcSpan), unLoc)
-import           GhcPlugins                 (HscEnv (hsc_IC),
-                                             InteractiveContext (ic_dflags))
+                                             SrcSpan (RealSrcSpan), unLoc,getSessionDynFlags)
 import           Ide.Types                  (CommandFunction, CommandId (..),
                                              PluginCommand (..),
                                              PluginDescriptor (..),
@@ -124,11 +121,10 @@ actions convert lsp state uri = do
 pathModuleName :: IdeState -> NormalizedFilePath -> String -> IO (Maybe Text)
 pathModuleName state nfp fp =  do
     session :: HscEnvEq <- runAction "ModuleName.ghcSession" state $ use_ GhcSession nfp
-    paths <- evalGhcEnv (hscEnv session) $ do
-        env <- getSession
-        let df = ic_dflags . hsc_IC  $ env
-        return $ importPaths df
+
+    paths <- evalGhcEnv (hscEnvWithImportPaths session) $ importPaths <$> getSessionDynFlags
     out ["import paths",show paths]
+
     let maybePrefix = listToMaybe .  filter (`isPrefixOf` fp) $ paths
     out ["prefix",show maybePrefix]
     let maybeMdlName = (\prefix -> replace "/" "."  . drop (length prefix+1) $ dropExtension fp) <$> maybePrefix
@@ -158,5 +154,5 @@ asTextEdits :: Action -> [TextEdit]
 asTextEdits Action{..} = [TextEdit aRange aCode]
 
 out :: [String] -> IO ()
--- out = print . unwords . ("Plugin ModuleName " :)
-out _ = return ()
+out = print . unwords . ("Plugin ModuleName " :)
+-- out _ = return ()
