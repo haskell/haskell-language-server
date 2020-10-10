@@ -42,7 +42,6 @@ import           Data.List
 import qualified Data.Text as T
 import qualified Data.Map as M
 
-
 import Data.Either
 import Data.List.Extra (dropEnd1)
 
@@ -115,18 +114,22 @@ atPoint IdeOptions{} hf (DKMap dm km) pos = listToMaybe $ pointCommand hf pos ho
         prettyNames :: [T.Text]
         prettyNames = map prettyName names
         prettyName (Right n, dets) = T.unlines $
-          wrapHaskell (showName n <> maybe "" ((" :: " <>) . prettyType) (identType dets <|> maybeKind))
+          wrapHaskell (showNameWithoutUniques n <> maybe "" ((" :: " <>) . prettyType) (identType dets <|> maybeKind))
           : definedAt n
-          : catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
+          ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                       ]
           where maybeKind = safeTyThingType =<< lookupNameEnv km n
         prettyName (Left m,_) = showName m
 
-
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = showName t
 
-        definedAt name = "*Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "*"
+        definedAt name =
+          -- do not show "at <no location info>" and similar messages
+          -- see the code of 'pprNameDefnLoc' for more information
+          case nameSrcLoc name of
+            UnhelpfulLoc {} | isInternalName name || isSystemName name -> []
+            _ -> ["*Defined " <> T.pack (showSDocUnsafe $ pprNameDefnLoc name) <> "*"]
 
 typeLocationsAtPoint
   :: forall m
