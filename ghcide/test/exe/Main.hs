@@ -1115,7 +1115,7 @@ suggestImportTests = testGroup "suggest import actions"
     test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
           after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
-          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo, GotoHover]}}"
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo]}}"
       liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
       doc <- createDoc "Test.hs" "haskell" before
       void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
@@ -2184,7 +2184,9 @@ findDefinitionAndHoverTests = let
   mkFindTests tests = testGroup "get"
     [ testGroup "definition" $ mapMaybe fst tests
     , testGroup "hover"      $ mapMaybe snd tests
-    , checkFileCompiles sourceFilePath
+    , checkFileCompiles sourceFilePath $
+        expectDiagnostics
+          [ ( "GotoHover.hs", [(DsError, (59, 7), "Found hole: _")]) ]
     , testGroup "type-definition" typeDefinitionTests ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
@@ -2234,6 +2236,7 @@ findDefinitionAndHoverTests = let
   lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
+  holeL60 = Position 59 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   cccL17 = Position 17 11  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
@@ -2279,6 +2282,7 @@ findDefinitionAndHoverTests = let
   , test  no     broken docL41     constr        "type constraint in hover info   #283"
   , test  broken broken outL45     outSig        "top-level signature             #310"
   , test  broken broken innL48     innSig        "inner     signature             #310"
+  , test  no     yes    holeL60    hleInfo       "hole without internal name      #847"
   , test  no     yes    cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
@@ -2288,11 +2292,11 @@ findDefinitionAndHoverTests = let
         broken = Just . (`xfail` "known broken")
         no = const Nothing -- don't run this test at all
 
-checkFileCompiles :: FilePath -> TestTree
-checkFileCompiles fp =
+checkFileCompiles :: FilePath -> Session () -> TestTree
+checkFileCompiles fp diag =
   testSessionWithExtraFiles "hover" ("Does " ++ fp ++ " compile") $ \dir -> do
     void (openTestDataDoc (dir </> fp))
-    expectNoMoreDiagnostics 0.5
+    diag
 
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
