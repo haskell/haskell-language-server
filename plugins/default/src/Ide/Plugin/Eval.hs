@@ -35,13 +35,13 @@ import           Data.Bifunctor             (Bifunctor (first))
 import           Data.Char                  (isSpace)
 import qualified Data.HashMap.Strict        as Map
 import           Data.List                  (find)
-import           Data.Maybe                 (catMaybes)
+import           Data.Maybe                 (fromMaybe, catMaybes)
 import           Data.String                (IsString (fromString))
 import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import           Data.Time                  (getCurrentTime)
 import           Development.IDE
-import           Development.IDE.GHC.Compat (DynFlags, ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+import           Development.IDE.GHC.Compat (DynFlags(..), ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
                                              Ghc, GhcLink (LinkInMemory),
                                              GhcMode (CompManager),
                                              HscTarget (HscInterpreted),
@@ -195,7 +195,11 @@ runEvalCmd lsp state EvalParams {..} = withIndefiniteProgress lsp "Eval" Cancell
     hscEnv' <- ExceptT $
       evalGhcEnv (hscEnv session) $ do
         env <- getSession
+        -- Install the module pragmas and options
         df <- liftIO $ setupDynFlagsForGHCiLike env $ ms_hspp_opts ms
+        -- Restore the cradle import paths
+        df <- return df{importPaths = fromMaybe (importPaths df) $ envImportPaths session}
+        -- Set the modified flags in the session
         _lp <- setSessionDynFlags df
 
         -- copy the package state to the interactive DynFlags
@@ -295,7 +299,7 @@ evalGhciLikeCmd cmd arg = do
   df <- getSessionDynFlags
   case lookup cmd ghciLikeCommands
     <|> snd <$> find (T.isPrefixOf cmd . fst) ghciLikeCommands of
-    Just hndler -> 
+    Just hndler ->
       fmap
         (T.unlines . map ("-- " <>) . T.lines
         )
