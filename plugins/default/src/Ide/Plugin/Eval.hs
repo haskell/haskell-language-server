@@ -41,7 +41,8 @@ import           Data.Text                  (Text)
 import qualified Data.Text                  as T
 import           Data.Time                  (getCurrentTime)
 import           Development.IDE
-import           Development.IDE.GHC.Compat (DynFlags(..), ExecResult (..), GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
+import           Development.IDE.GHC.Compat (DynFlags(importPaths), ExecResult (..),
+                                             GeneralFlag (Opt_IgnoreHpcChanges, Opt_IgnoreOptimChanges, Opt_ImplicitImportQualified),
                                              Ghc, GhcLink (LinkInMemory),
                                              GhcMode (CompManager),
                                              HscTarget (HscInterpreted),
@@ -61,10 +62,9 @@ import           Development.IDE.GHC.Compat (DynFlags(..), ExecResult (..), Gene
                                              setTargets, simpleImportDecl,
                                              typeKind, ways)
 import           DynamicLoading             (initializePlugins)
-import           DynFlags                   (targetPlatform)
 import           GHC.Generics               (Generic)
 import           GhcMonad                   (modifySession)
-import           GhcPlugins                 (defaultLogActionHPutStrDoc,
+import           GhcPlugins                 (targetPlatform, defaultLogActionHPutStrDoc,
                                              gopt_set, gopt_unset, interpWays,
                                              updateWays, wayGeneralFlags,
                                              wayUnsetGeneralFlags)
