@@ -8,7 +8,7 @@
 {-| Keep the module name in sync with its file path.
 
 Provide CodeLenses to:
-* Add a module header ('module <moduleName> where") to empty Haskell files
+* Add a module header ("module /moduleName/ where") to empty Haskell files
 * Fix the module name if incorrect
 -}
 module Ide.Plugin.ModuleName
@@ -85,9 +85,16 @@ import           Language.Haskell.LSP.Types     ( ApplyWorkspaceEditParams(..)
                                                 , uriToNormalizedFilePath
                                                 )
 import           Language.Haskell.LSP.VFS       ( virtualFileText )
-import           System.FilePath                ( dropExtension )
+import           System.FilePath                ( splitDirectories
+                                                , dropExtension
+                                                )
 import           Ide.Plugin                     ( mkLspCmdId )
-
+import           Development.IDE.Types.Logger
+import           Development.IDE.Core.Shake
+import           Data.Text                      ( pack )
+import           System.Directory               ( canonicalizePath )
+import           Data.List
+import           Ide.Plugin.Tactic.Debug        ( unsafeRender )
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
@@ -143,7 +150,6 @@ actions
 actions convert lsp state uri = do
   let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
   let Just fp  = uriToFilePath' uri
-  out ["actions[", fp]
 
   contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri uri
   let emptyModule =
@@ -151,7 +157,7 @@ actions convert lsp state uri = do
 
   correctNameMaybe <- pathModuleName state nfp fp
   statedNameMaybe  <- codeModuleName state nfp
-  out ["correct", show correctNameMaybe, "stated", show statedNameMaybe]
+  out state ["correct", show correctNameMaybe, "stated", show statedNameMaybe]
 
   let act = Action uri
   let
@@ -167,29 +173,35 @@ actions convert lsp state uri = do
         in  [convert $ act (Range (Position 0 0) (Position 0 0)) code code]
       _ -> []
 
-  out ["actions", show actions]
+  out state ["actions", show actions]
   pure . Right . List $ actions
 
 -- | The module name, as derived by the position of the module in its source directory
 pathModuleName :: IdeState -> NormalizedFilePath -> String -> IO (Maybe Text)
-pathModuleName state nfp fp = do
+pathModuleName state normFilePath filePath = do
   session :: HscEnvEq <- runAction "ModuleName.ghcSession" state
-    $ use_ GhcSession nfp
+    $ use_ GhcSession normFilePath
 
-  paths <-
+  srcPaths <-
     evalGhcEnv (hscEnvWithImportPaths session)
     $   importPaths
     <$> getSessionDynFlags
-  out ["import paths", show paths]
+  out state ["import paths", show srcPaths]
+  paths   <- mapM canonicalizePath srcPaths
+  mdlPath <- canonicalizePath filePath
+  out state ["canonic paths", show paths, "mdlPath", mdlPath]
+  let maybePrefix = listToMaybe . filter (`isPrefixOf` mdlPath) $ paths
+  out state ["prefix", show maybePrefix]
 
-  let maybePrefix = listToMaybe . filter (`isPrefixOf` fp) $ paths
-  out ["prefix", show maybePrefix]
   let maybeMdlName =
         (\prefix ->
-            replace "/" "." . drop (length prefix + 1) $ dropExtension fp
+            intercalate "."
+              . splitDirectories
+              . drop (length prefix + 1)
+              $ dropExtension mdlPath
           )
           <$> maybePrefix
-  out ["mdlName", show maybeMdlName]
+  out state ["mdlName", show maybeMdlName]
   return $ T.pack <$> maybeMdlName
 
 -- | The module name, as stated in the module
@@ -226,6 +238,9 @@ asEdit act@Action {..} =
 asTextEdits :: Action -> [TextEdit]
 asTextEdits Action {..} = [TextEdit aRange aCode]
 
-out :: [String] -> IO ()
--- out = print . unwords . ("Plugin ModuleName " :)
-out _ = return ()
+out :: IdeState -> [String] -> IO ()
+out state =
+  logPriority (ideLogger state) Debug
+    . pack
+    . unwords
+    . ("Plugin ModuleName " :)

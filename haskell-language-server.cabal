@@ -263,6 +263,7 @@ test-suite func-test
     FunctionalLiquid
     HieBios
     Highlight
+    ModuleName
     Progress
     Reference
     Rename
