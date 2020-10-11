@@ -202,7 +202,12 @@ newtype Rose a = Rose (Tree a)
   deriving stock (Eq, Functor, Generic)
 
 instance Show (Rose String) where
-  show = drawTree . coerce
+  show = unlines . dropEveryOther . lines . drawTree . coerce
+
+dropEveryOther :: [a] -> [a]
+dropEveryOther []           = []
+dropEveryOther [a]          = [a]
+dropEveryOther (a : _ : as) = a : dropEveryOther as
 
 instance Semigroup a => Semigroup (Rose a) where
   Rose (Node a as) <> Rose (Node b bs) = Rose $ Node (a <> b) (as <> bs)
