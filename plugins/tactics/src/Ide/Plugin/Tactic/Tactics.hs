@@ -80,7 +80,7 @@ recursion = tracing "recursion" $ do
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = tracing "intros" $ rule $ \jdg -> do
+intros = rule $ \jdg -> do
   let hy = jHypothesis jdg
       g  = jGoal jdg
   ctx <- ask
@@ -100,7 +100,7 @@ intros = tracing "intros" $ rule $ \jdg -> do
               (isTopHole jdg)
           $ jdg'
       pure
-        . (tr, )
+        . (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr, )
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg

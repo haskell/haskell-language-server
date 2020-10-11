@@ -64,7 +64,11 @@ destructMatches f f2 t jdg = do
                 $ withNewGoal g jdg
           (tr, sg) <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
-          pure $ (tr, match [pat] $ unLoc sg)
+          pure ( rose ("match " <> show dc <> " {" <>
+                          intercalate ", " (fmap show names) <> "}")
+                    $ pure tr
+               , match [pat] $ unLoc sg
+               )
 
 
 unzipTrace :: [(Trace, a)] -> (Trace, [a])
@@ -84,12 +88,15 @@ destruct' f term jdg = do
     Nothing -> throwError $ UndefinedHypothesis term
     Just (_, t) -> do
       useOccName jdg term
-      fmap (fmap noLoc $ case' (var' term)) <$>
-        destructMatches
-          f
-          (\cs -> setParents term (fmap fst cs) . destructing term)
-          t
-          jdg
+      (tr, ms)
+          <- destructMatches
+               f
+               (\cs -> setParents term (fmap fst cs) . destructing term)
+               t
+               jdg
+      pure ( rose ("destruct " <> show term) $ pure tr
+           , noLoc $ case' (var' term) ms
+           )
 
 
 ------------------------------------------------------------------------------
@@ -126,7 +133,7 @@ buildDataCon jdg dc apps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
-    . (tr,)
+    . (rose (show dc) $ pure tr,)
     . noLoc
     . foldl' (@@)
         (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
