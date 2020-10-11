@@ -399,6 +399,7 @@ executable ghcide-bench
         optparse-applicative,
         process,
         safe-exceptions,
+        shake,
         text
     hs-source-dirs: bench/lib bench/exe
     include-dirs: include

@@ -5,6 +5,9 @@ module Experiments.Types where
 import Data.Aeson
 import Data.Version
 import Numeric.Natural
+import System.FilePath (isPathSeparator)
+import Development.Shake.Classes
+import GHC.Generics
 
 data CabalStack = Cabal | Stack
   deriving (Eq, Show)
@@ -29,7 +32,17 @@ data Config = Config
 data Example
     = GetPackage {exampleName, exampleModule :: String, exampleVersion :: Version}
     | UsePackage {examplePath :: FilePath, exampleModule :: String}
-  deriving (Eq, Show)
+  deriving (Eq, Generic, Show)
+  deriving anyclass (Binary, Hashable, NFData)
+
+getExampleName :: Example -> String
+getExampleName UsePackage{examplePath} = map replaceSeparator examplePath
+  where
+      replaceSeparator x
+        | isPathSeparator x = '_'
+        | otherwise = x
+getExampleName GetPackage{exampleName, exampleVersion} =
+    exampleName <> "-" <> showVersion exampleVersion
 
 instance FromJSON Example where
     parseJSON = withObject "example" $ \x -> do
