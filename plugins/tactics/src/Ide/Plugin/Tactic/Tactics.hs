@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveGeneric         #-}
@@ -17,6 +18,7 @@ import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Data.Bool (bool)
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
@@ -33,12 +35,11 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name (nameOccName)
+import           Name (occNameString)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
-import Data.Bool (bool)
 
 
 ------------------------------------------------------------------------------
@@ -60,14 +61,14 @@ assume name = rule $ \jdg -> do
             True  -> setRecursionFrameData True
             False -> pure ()
           useOccName jdg name
-          pure $ noLoc $ var' name
+          pure $ (tracePrim $ "assume:" <> occNameString name, ) $ noLoc $ var' name
         False -> throwError $ GoalMismatch "assume" g
     Nothing -> throwError $ UndefinedHypothesis name
 
 
 
 recursion :: TacticsM ()
-recursion = do
+recursion = tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
@@ -79,7 +80,7 @@ recursion = do
 ------------------------------------------------------------------------------
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
-intros = rule $ \jdg -> do
+intros = tracing "intros" $ rule $ \jdg -> do
   let hy = jHypothesis jdg
       g  = jGoal jdg
   ctx <- ask
@@ -90,7 +91,8 @@ intros = rule $ \jdg -> do
       let jdg' = introducing (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
-      sg <- newSubgoal
+      (tr, sg)
+        <- newSubgoal
           $ bool
               id
               (withPositionMapping
@@ -98,6 +100,7 @@ intros = rule $ \jdg -> do
               (isTopHole jdg)
           $ jdg'
       pure
+        . (tr, )
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg
@@ -106,7 +109,7 @@ intros = rule $ \jdg -> do
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destructAuto :: OccName -> TacticsM ()
-destructAuto name = do
+destructAuto name = tracing "destruct(auto)" $ do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
@@ -126,7 +129,7 @@ destructAuto name = do
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
-destruct name = do
+destruct name = tracing "destruct(user)" $ do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
@@ -136,20 +139,20 @@ destruct name = do
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
-homo = rule . destruct' (\dc jdg ->
+homo = tracing "homo" . rule . destruct' (\dc jdg ->
   buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
 ------------------------------------------------------------------------------
 -- | LambdaCase split, and leave holes in the matches.
 destructLambdaCase :: TacticsM ()
-destructLambdaCase = rule $ destructLambdaCase' (const subgoal)
+destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (const subgoal)
 
 
 ------------------------------------------------------------------------------
 -- | LambdaCase split, using the same data constructor in the matches.
 homoLambdaCase :: TacticsM ()
-homoLambdaCase = rule $ destructLambdaCase' (\dc jdg ->
+homoLambdaCase = tracing "homoLambdaCase" $ rule $ destructLambdaCase' (\dc jdg ->
   buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
@@ -158,7 +161,7 @@ apply = apply' (const id)
 
 
 apply' :: (Int -> Judgement -> Judgement) -> OccName -> TacticsM ()
-apply' f func = do
+apply' f func = tracing ("apply':" <> show func) $ do
   rule $ \jdg -> do
     let hy = jHypothesis jdg
         g  = jGoal jdg
@@ -167,16 +170,20 @@ apply' f func = do
           let (args, ret) = splitFunTys ty
           unify g (CType ret)
           useOccName jdg func
-          sgs <- traverse ( \(i, t) ->
+          (tr, sgs)
+              <- fmap unzipTrace
+               $ traverse ( \(i, t) ->
                             newSubgoal
                           . f i
                           . blacklistingDestruct
                           . flip withNewGoal jdg
                           $ CType t
                           ) $ zip [0..] args
-          pure . noLoc
-              . foldl' (@@) (var' func)
-              $ fmap unLoc sgs
+          pure
+            . (tr, )
+            . noLoc
+            . foldl' (@@) (var' func)
+            $ fmap unLoc sgs
       Nothing -> do
         throwError $ GoalMismatch "apply" g
 
@@ -184,7 +191,7 @@ apply' f func = do
 ------------------------------------------------------------------------------
 -- | Choose between each of the goal's data constructors.
 split :: TacticsM ()
-split = do
+split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
@@ -196,7 +203,7 @@ split = do
 ------------------------------------------------------------------------------
 -- | Choose between each of the goal's data constructors.
 splitAuto :: TacticsM ()
-splitAuto = do
+splitAuto = tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
@@ -220,7 +227,7 @@ splitAuto = do
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
 splitDataCon :: DataCon -> TacticsM ()
-splitDataCon dc = rule $ \jdg -> do
+splitDataCon dc = tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
     Just (tc, apps) -> do
