@@ -1,5 +1,28 @@
 # Changelog for haskell-language-server
 
+## 0.5.1
+
+0.5.1 is a minor bug fix release, mainly fixing an issue with the eval plugin
+as well as upgrading the ormolu and stylish-haskell dependencies.
+
+### Pull requests merged
+- Minimal fix for eval regression
+([#488)](https://github.com/haskell/haskell-language-server/pull/488) by @pepeiborra
+- Bump stylish-haskell to 0.12.2.0
+([#482)](https://github.com/haskell/haskell-language-server/pull/482) by @maksbotan
+- Improve the emacs instructions a little
+([#479)](https://github.com/haskell/haskell-language-server/pull/479) by @michaelpj
+- Update README: HLS is no longer in *very* early stage
+([#475)](https://github.com/haskell/haskell-language-server/pull/475) by @Anrock
+- Tactic plugin: Excludes Dictionary arguments in GADTs in Destruct Tactic
+([#474)](https://github.com/haskell/haskell-language-server/pull/474) by @konn
+- Update doom emacs install instructions in README
+([#470)](https://github.com/haskell/haskell-language-server/pull/470) by @iyefrat
+- Add ghc-8.10.2 to circleci
+([#464)](https://github.com/haskell/haskell-language-server/pull/464) by @jneira
+- Bump ormolu to 0.1.3.0
+([#422)](https://github.com/haskell/haskell-language-server/pull/422) by @AlistairB
+
 ## 0.5.0
 
 0.5.0 comes with a new tactics plugin which provides case splitting, homomorphic case splitting, and lambda introduction:
