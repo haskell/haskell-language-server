@@ -3,9 +3,6 @@
 
 root = true
 
-[Makefile]
-indent_style = tab
-
 [*]
 end_of_line = LF
 trim_trailing_whitespace = true
