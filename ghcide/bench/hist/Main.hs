@@ -65,6 +65,7 @@ import System.FilePath
 import qualified Text.ParserCombinators.ReadP as P
 import Text.Read (Read (..), get, readMaybe, readP_to_Prec)
 import GHC.Stack (HasCallStack)
+import Data.List (transpose)
 
 config :: FilePath
 config = "bench/config.yaml"
@@ -238,7 +239,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
         header' = "version, " <> header
         results' = zipWith (\v -> map (\l -> v <> ", " <> l)) versions results
 
-    writeFileChanged out $ unlines $ header' : concat results'
+    writeFileChanged out $ unlines $ header' : interleave results'
 
   priority 2 $
     build -/- "*/*/*.diff.svg" %> \out -> do
@@ -481,6 +482,9 @@ unescapeExperiment = Unescaped . map f . escaped
   where
     f '_' = ' '
     f other = other
+
+interleave :: [[a]] -> [a]
+interleave = concat . transpose
 
 myColors :: [E.AlphaColour Double]
 myColors = map E.opaque
