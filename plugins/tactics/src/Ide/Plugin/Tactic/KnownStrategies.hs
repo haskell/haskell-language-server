@@ -8,6 +8,7 @@ import Ide.Plugin.Tactic.Tactics
 import Ide.Plugin.Tactic.Types
 import OccName (mkVarOcc)
 import Refinery.Tactic
+import Ide.Plugin.Tactic.Machinery (tracing)
 
 
 knownStrategies :: TacticsM ()
@@ -19,9 +20,8 @@ knownStrategies = choice
 known :: String -> TacticsM () -> TacticsM ()
 known name t = do
   getCurrentDefinitions >>= \case
-    [(def, _)] | def == mkVarOcc name -> do
-      traceMX "running known strategy" name
-      t
+    [(def, _)] | def == mkVarOcc name ->
+      tracing ("known " <> name) t
     _ -> throwError NoApplicableTactic
 
 

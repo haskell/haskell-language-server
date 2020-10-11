@@ -61,7 +61,7 @@ assume name = rule $ \jdg -> do
             True  -> setRecursionFrameData True
             False -> pure ()
           useOccName jdg name
-          pure $ (tracePrim $ "assume:" <> occNameString name, ) $ noLoc $ var' name
+          pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
         False -> throwError $ GoalMismatch "assume" g
     Nothing -> throwError $ UndefinedHypothesis name
 
@@ -161,7 +161,7 @@ apply = apply' (const id)
 
 
 apply' :: (Int -> Judgement -> Judgement) -> OccName -> TacticsM ()
-apply' f func = tracing ("apply':" <> show func) $ do
+apply' f func = tracing ("apply' " <> show func) $ do
   rule $ \jdg -> do
     let hy = jHypothesis jdg
         g  = jGoal jdg
