@@ -88,6 +88,7 @@ executable haskell-language-server
     Ide.Plugin.Floskell
     Ide.Plugin.Fourmolu
     Ide.Plugin.ImportLens
+    Ide.Plugin.ModuleName
     Ide.Plugin.Ormolu
     Ide.Plugin.Pragmas
     Ide.Plugin.Retrie
@@ -262,6 +263,7 @@ test-suite func-test
     FunctionalLiquid
     HieBios
     Highlight
+    ModuleName
     Progress
     Reference
     Rename

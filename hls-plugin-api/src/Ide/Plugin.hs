@@ -12,6 +12,7 @@ module Ide.Plugin
       asGhcIdePlugin
     , pluginDescToIdePlugins
     , mkLspCommand
+    , mkLspCmdId
     , allLspCmdIds
     , allLspCmdIds'
     , getPid
