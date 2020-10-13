@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Ide.Plugin.Tactic.CodeGen where
 
@@ -38,7 +39,7 @@ destructMatches
     -> CType
        -- ^ Type being destructed
     -> Judgement
-    -> RuleM [RawMatch]
+    -> RuleM (Trace, [RawMatch])
 destructMatches f f2 t jdg = do
   let hy = jHypothesis jdg
       g  = jGoal jdg
@@ -48,7 +49,7 @@ destructMatches f f2 t jdg = do
       let dcs = tyConDataCons tc
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
-        _ -> for dcs $ \dc -> do
+        _ -> fmap unzipTrace $ for dcs $ \dc -> do
           let args = dataConInstArgTys dc apps
           names <- mkManyGoodNames hy args
           let hy' = zip names $ coerce args
@@ -61,9 +62,19 @@ destructMatches f f2 t jdg = do
                 $ withPositionMapping dcon_name names
                 $ introducingPat hy'
                 $ withNewGoal g jdg
-          sg <- f dc j
+          (tr, sg) <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
-          pure $ match [pat] $ unLoc sg
+          pure ( rose ("match " <> show dc <> " {" <>
+                          intercalate ", " (fmap show names) <> "}")
+                    $ pure tr
+               , match [pat] $ unLoc sg
+               )
+
+
+unzipTrace :: [(Trace, a)] -> (Trace, [a])
+unzipTrace l =
+  let (trs, as) = unzip l
+   in (rose mempty trs, as)
 
 
 ------------------------------------------------------------------------------
@@ -77,12 +88,15 @@ destruct' f term jdg = do
     Nothing -> throwError $ UndefinedHypothesis term
     Just (_, t) -> do
       useOccName jdg term
-      fmap noLoc $ case' (var' term) <$>
-        destructMatches
-          f
-          (\cs -> setParents term (fmap fst cs) . destructing term)
-          t
-          jdg
+      (tr, ms)
+          <- destructMatches
+               f
+               (\cs -> setParents term (fmap fst cs) . destructing term)
+               t
+               jdg
+      pure ( rose ("destruct " <> show term) $ pure tr
+           , noLoc $ case' (var' term) ms
+           )
 
 
 ------------------------------------------------------------------------------
@@ -94,7 +108,7 @@ destructLambdaCase' f jdg = do
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
-      fmap noLoc $ lambdaCase <$>
+      fmap (fmap noLoc $ lambdaCase) <$>
         destructMatches f (const id) (CType arg) jdg
     _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
@@ -105,11 +119,13 @@ buildDataCon
     :: Judgement
     -> DataCon            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
-    -> RuleM (LHsExpr GhcPs)
+    -> RuleM (Trace, LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
   let args = dataConInstArgTys dc apps
       dcon_name = nameOccName $ dataConName dc
-  sgs <- traverse ( \(arg, n) ->
+  (tr, sgs)
+      <- fmap unzipTrace
+       $ traverse ( \(arg, n) ->
                     newSubgoal
                   . filterSameTypeFromOtherPositions dcon_name n
                   . blacklistingDestruct
@@ -117,6 +133,7 @@ buildDataCon jdg dc apps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
+    . (rose (show dc) $ pure tr,)
     . noLoc
     . foldl' (@@)
         (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
@@ -127,6 +144,7 @@ buildDataCon jdg dc apps = do
 -- | Like 'var', but works over standard GHC 'OccName's.
 var' :: Var a => OccName -> a
 var' = var . fromString . occNameString
+
 
 ------------------------------------------------------------------------------
 -- | Like 'bvar', but works over standard GHC 'OccName's.

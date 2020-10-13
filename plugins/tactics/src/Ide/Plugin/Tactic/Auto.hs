@@ -6,6 +6,7 @@ import Ide.Plugin.Tactic.KnownStrategies
 import Ide.Plugin.Tactic.Tactics
 import Ide.Plugin.Tactic.Types
 import Refinery.Tactic
+import Ide.Plugin.Tactic.Machinery (tracing)
 
 
 ------------------------------------------------------------------------------
@@ -15,7 +16,9 @@ auto = do
   jdg <- goal
   current <- getCurrentDefinitions
   traceMX "goal" jdg
-  commit
-    knownStrategies
-    (localTactic (auto' 4) $ disallowing $ fmap fst current)
+  commit knownStrategies
+    . tracing "auto"
+    . localTactic (auto' 4)
+    . disallowing
+    $ fmap fst current
 

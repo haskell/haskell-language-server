@@ -258,7 +258,6 @@ judgementForHole state nfp range = do
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
-  -- traceMX "holes!" $ isRhsHole rss $
   let tcg = fst $ tm_internals_ $ tmrModule tcmod
       tcs = tm_typechecked_source $ tmrModule tcmod
       ctx = mkContext
@@ -297,9 +296,10 @@ tacticCmd tac lf state (TacticParams uri range var_name)
               pure $ (, Nothing)
                 $ Left
                 $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-            Right res -> do
-              let g = graft (RealSrcSpan span) res
+            Right (tr, ext) -> do
+              let g = graft (RealSrcSpan span) ext
                   response = transform dflags (clientCapabilities lf) uri g pm
+              traceMX "trace" tr
               pure $ case response of
                 Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
                 Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)

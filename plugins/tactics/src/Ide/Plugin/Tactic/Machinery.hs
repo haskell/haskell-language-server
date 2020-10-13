@@ -36,6 +36,8 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
+import Control.Arrow
+import Control.Monad.State.Strict (StateT (..))
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -47,7 +49,7 @@ substCTy subst = coerce . substTy subst . coerce
 -- goal.
 newSubgoal
     :: Judgement
-    -> RuleM (LHsExpr GhcPs)
+    -> Rule
 newSubgoal j = do
     unifier <- gets ts_unifier
     subgoal
@@ -62,7 +64,7 @@ runTactic
     :: Context
     -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either [TacticError] (LHsExpr GhcPs)
+    -> Either [TacticError] (Trace, LHsExpr GhcPs)
 runTactic ctx jdg t =
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
         tacticState = defaultTacticState { ts_skolems = skolems }
@@ -79,6 +81,20 @@ runTactic ctx jdg t =
           (res : _) -> Right $ fst res
           -- guaranteed to not be empty
           _ -> Left []
+
+
+tracePrim :: String -> Trace
+tracePrim = flip rose []
+
+
+tracing
+    :: Functor m
+    => String
+    -> TacticT jdg (Trace, ext) err s m a
+    -> TacticT jdg (Trace, ext) err s m a
+tracing s (TacticT m)
+  = TacticT $ StateT $ \jdg ->
+      mapExtract' (first $ rose s . pure) $ runStateT m jdg
 
 
 recursiveCleanup

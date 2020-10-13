@@ -26,13 +26,15 @@ import Control.Monad.Reader
 import Data.Function
 import Data.Map (Map)
 import Data.Set (Set)
-import Development.IDE.GHC.Compat
+import Development.IDE.GHC.Compat hiding (Node)
 import Development.IDE.Types.Location
 import GHC.Generics
 import Ide.Plugin.Tactic.Debug
 import OccName
 import Refinery.Tactic
 import Type
+import Data.Tree
+import Data.Coerce
 
 
 ------------------------------------------------------------------------------
@@ -58,6 +60,9 @@ instance Show TCvSubst where
   show  = unsafeRender
 
 instance Show (LHsExpr GhcPs) where
+  show  = unsafeRender
+
+instance Show DataCon where
   show  = unsafeRender
 
 
@@ -118,8 +123,8 @@ newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
-instance MonadExtract (LHsExpr GhcPs) ExtractM where
-  hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
+instance MonadExtract (Trace, LHsExpr GhcPs) ExtractM where
+  hole = pure (mempty, noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_")
 
 
 ------------------------------------------------------------------------------
@@ -175,9 +180,11 @@ instance Show TacticError where
 
 
 ------------------------------------------------------------------------------
-type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError TacticState ExtractM
-type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError TacticState ExtractM
-type Rule      = RuleM (LHsExpr GhcPs)
+type TacticsM  = TacticT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
+type RuleM     = RuleT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
+type Rule      = RuleM (Trace, LHsExpr GhcPs)
+
+type Trace = Rose String
 
 
 ------------------------------------------------------------------------------
@@ -189,4 +196,26 @@ data Context = Context
     -- ^ Everything defined in the current module
   }
   deriving stock (Eq, Ord)
+
+
+newtype Rose a = Rose (Tree a)
+  deriving stock (Eq, Functor, Generic)
+
+instance Show (Rose String) where
+  show = unlines . dropEveryOther . lines . drawTree . coerce
+
+dropEveryOther :: [a] -> [a]
+dropEveryOther []           = []
+dropEveryOther [a]          = [a]
+dropEveryOther (a : _ : as) = a : dropEveryOther as
+
+instance Semigroup a => Semigroup (Rose a) where
+  Rose (Node a as) <> Rose (Node b bs) = Rose $ Node (a <> b) (as <> bs)
+
+instance Monoid a => Monoid (Rose a) where
+  mempty = Rose $ Node mempty mempty
+
+rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
+rose a [Rose (Node a' rs)] | a' == mempty = Rose $ Node a rs
+rose a rs = Rose $ Node a $ coerce rs
 
