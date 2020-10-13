@@ -16,6 +16,7 @@ auto = do
   jdg <- goal
   current <- getCurrentDefinitions
   traceMX "goal" jdg
+  traceMX "ctx" current
   commit knownStrategies
     . tracing "auto"
     . localTactic (auto' 4)

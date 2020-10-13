@@ -296,10 +296,9 @@ tacticCmd tac lf state (TacticParams uri range var_name)
               pure $ (, Nothing)
                 $ Left
                 $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-            Right (tr, ext) -> do
+            Right (_, ext) -> do
               let g = graft (RealSrcSpan span) ext
                   response = transform dflags (clientCapabilities lf) uri g pm
-              traceMX "trace" tr
               pure $ case response of
                 Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
                 Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
