@@ -217,11 +217,9 @@ splitAuto = tracing "split(auto)" $ do
         True -> choice $ fmap splitDataCon dcs
         False -> do
           choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
-            case any (/= jGoal jdg) $ traceIdX "goals" $ fmap jGoal jdgs of
-              False  -> Nothing
-              True -> do
-                traceMX "unhelpful split" $ nameOccName $ dataConName dc
-                Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
+            case any (/= jGoal jdg) $ fmap jGoal jdgs of
+              False -> Nothing
+              True  -> Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
 
 
 ------------------------------------------------------------------------------
