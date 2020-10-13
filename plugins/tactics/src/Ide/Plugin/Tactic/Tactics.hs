@@ -35,7 +35,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name (occNameString)
+import           Name (nameOccName, occNameString)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
@@ -200,8 +200,11 @@ split = tracing "split(user)" $ do
       let dcs = tyConDataCons tc
       choice $ fmap splitDataCon dcs
 
+
 ------------------------------------------------------------------------------
--- | Choose between each of the goal's data constructors.
+-- | Choose between each of the goal's data constructors. Different than
+-- 'split' because it won't split a data con if it doesn't result in any new
+-- goals.
 splitAuto :: TacticsM ()
 splitAuto = tracing "split(auto)" $ do
   jdg <- goal
@@ -210,18 +213,15 @@ splitAuto = tracing "split(auto)" $ do
     Nothing -> throwError $ GoalMismatch "split" g
     Just (tc, _) -> do
       let dcs = tyConDataCons tc
-      -- TODO(sandy): Figure out the right strategy for pruning splits of
-      -- splits
-      choice $ fmap splitDataCon dcs
-      -- case isSplitWhitelisted jdg of
-      --   True -> choice $ fmap splitDataCon dcs
-      --   False -> do
-      --     choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
-      --       case all ((== jGoal jdg)  . jGoal) jdgs of
-      --         False  -> Nothing
-      --         True -> do
-      --           traceMX "unhelpful split" $ nameOccName $ dataConName dc
-      --           Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
+      case isSplitWhitelisted jdg of
+        True -> choice $ fmap splitDataCon dcs
+        False -> do
+          choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
+            case any (/= jGoal jdg) $ traceIdX "goals" $ fmap jGoal jdgs of
+              False  -> Nothing
+              True -> do
+                traceMX "unhelpful split" $ nameOccName $ dataConName dc
+                Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
 
 
 ------------------------------------------------------------------------------
