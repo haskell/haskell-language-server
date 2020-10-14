@@ -56,5 +56,5 @@ jobs:
     - name: Test
       env:
         HLS_TEST_EXE: hls
-      run: cabal test
+      run: cabal test --test-options=-j1
 
