@@ -42,6 +42,7 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - run: cabal update
 
     - name: Shorten binary names
       shell: bash
