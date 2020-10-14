@@ -12,7 +12,7 @@ import Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "highlight" [
-    ignoreTestBecause "Broken" $ testCase "works" $ runSession hieCommand fullCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "works" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Highlight.hs" "haskell"
         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
         highlights <- getHighlights doc (Position 2 2)

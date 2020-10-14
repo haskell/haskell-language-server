@@ -44,7 +44,7 @@ tests = testGroup "code actions" [
 
 hlintTests :: TestTree
 hlintTests = testGroup "hlint suggestions" [
-    ignoreTestBecause "Broken" $ testCase "provides 3.8 code actions" $ runSession hieCommand fullCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "provides 3.8 code actions" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         diags@(reduceDiag:_) <- waitForDiagnostics
 
@@ -67,7 +67,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         noDiagnostics
 
-    , ignoreTestBecause "Broken" $ testCase "falls back to pre 3.8 code actions" $ runSession hieCommand noLiteralCaps "test/testdata" $ do
+    , ignoreTestBecause "Broken" $ testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
 
         _ <- waitForDiagnostics
@@ -84,7 +84,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         noDiagnostics
 
-    , ignoreTestBecause "Broken" $ testCase "runs diagnostics on save" $ runSession hieCommand fullCaps "test/testdata" $ do
+    , ignoreTestBecause "Broken" $ testCase "runs diagnostics on save" $ runSession hlsCommand fullCaps "test/testdata" $ do
         let config = def { diagnosticsOnChange = False }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
@@ -114,7 +114,7 @@ hlintTests = testGroup "hlint suggestions" [
 
 renameTests :: TestTree
 renameTests = testGroup "rename suggestions" [
-    ignoreTestBecause "Broken" $ testCase "works" $ runSession hieCommand noLiteralCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "works" $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
         doc <- openDoc "CodeActionRename.hs" "haskell"
 
         _ <- waitForDiagnosticsSource "bios"
@@ -126,7 +126,7 @@ renameTests = testGroup "rename suggestions" [
         liftIO $ x @?= "main = putStrLn \"hello\""
 
     , ignoreTestBecause "Broken" $ testCase "doesn't give both documentChanges and changes"
-        $ runSession hieCommand noLiteralCaps "test/testdata" $ do
+        $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
             doc <- openDoc "CodeActionRename.hs" "haskell"
 
             _ <- waitForDiagnosticsSource "bios"
@@ -146,7 +146,7 @@ renameTests = testGroup "rename suggestions" [
 
 importTests :: TestTree
 importTests = testGroup "import suggestions" [
-    ignoreTestBecause "Broken" $ testCase "works with 3.8 code action kinds" $ runSession hieCommand fullCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "works with 3.8 code action kinds" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "CodeActionImport.hs" "haskell"
         -- No Formatting:
         let config = def { formattingProvider = "none" }
@@ -181,7 +181,7 @@ packageTests :: TestTree
 packageTests = testGroup "add package suggestions" [
     ignoreTestBecause "Broken" $ testCase "adds to .cabal files" $ do
         flushStackEnvironment
-        runSession hieCommand fullCaps "test/testdata/addPackageTest/cabal-exe" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPackageTest/cabal-exe" $ do
             doc <- openDoc "AddPackage.hs" "haskell"
 
             -- ignore the first empty hlint diagnostic publish
@@ -209,7 +209,7 @@ packageTests = testGroup "add package suggestions" [
                 any (\l -> "text -any" `T.isSuffixOf` l || "text : {} -any" `T.isSuffixOf` l) (T.lines contents) @? "Contains text package"
 
     , ignoreTestBecause "Broken" $ testCase "adds to hpack package.yaml files" $
-        runSession hieCommand fullCaps "test/testdata/addPackageTest/hpack-exe" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPackageTest/hpack-exe" $ do
             doc <- openDoc "app/Asdf.hs" "haskell"
 
             -- ignore the first empty hlint diagnostic publish
@@ -242,7 +242,7 @@ packageTests = testGroup "add package suggestions" [
 redundantImportTests :: TestTree
 redundantImportTests = testGroup "redundant import code actions" [
     ignoreTestBecause "Broken" $ testCase "remove solitary redundant imports" $
-        runSession hieCommand fullCaps "test/testdata/redundantImportTest/" $ do
+        runSession hlsCommand fullCaps "test/testdata/redundantImportTest/" $ do
             doc <- openDoc "src/CodeActionRedundant.hs" "haskell"
 
             -- ignore the first empty hlint diagnostic publish
@@ -272,7 +272,7 @@ redundantImportTests = testGroup "redundant import code actions" [
             contents <- documentContents doc
             liftIO $ contents @?= "module CodeActionRedundant where\nmain :: IO ()\nmain = putStrLn \"hello\""
 
-    , ignoreTestBecause "Broken" $ testCase "doesn't touch other imports" $ runSession hieCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
+    , ignoreTestBecause "Broken" $ testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
         _   <- count 2 waitForDiagnostics
         [CACommand cmd, _] <- getAllCodeActions doc
@@ -289,7 +289,7 @@ redundantImportTests = testGroup "redundant import code actions" [
 typedHoleTests :: TestTree
 typedHoleTests = testGroup "typed hole code actions" [
     ignoreTestBecause "Broken" $ testCase "works" $
-        runSession hieCommand fullCaps "test/testdata" $ do
+        runSession hlsCommand fullCaps "test/testdata" $ do
             doc <- openDoc "TypedHoles.hs" "haskell"
             _ <- waitForDiagnosticsSource "bios"
             cas <- map (\(CACodeAction x)-> x) <$> getAllCodeActions doc
@@ -331,7 +331,7 @@ typedHoleTests = testGroup "typed hole code actions" [
                     ]
 
       , ignoreTestBecause "Broken" $ testCase "shows more suggestions" $
-            runSession hieCommand fullCaps "test/testdata" $ do
+            runSession hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
                 _ <- waitForDiagnosticsSource "bios"
                 cas <- map fromAction <$> getAllCodeActions doc
@@ -387,7 +387,7 @@ typedHoleTests = testGroup "typed hole code actions" [
 signatureTests :: TestTree
 signatureTests = testGroup "missing top level signature code actions" [
     ignoreTestBecause "Broken" $ testCase "Adds top level signature" $
-      runSession hieCommand fullCaps "test/testdata/" $ do
+      runSession hlsCommand fullCaps "test/testdata/" $ do
         doc <- openDoc "TopLevelSignature.hs" "haskell"
 
         _ <- waitForDiagnosticsSource "bios"
@@ -413,7 +413,7 @@ signatureTests = testGroup "missing top level signature code actions" [
 missingPragmaTests :: TestTree
 missingPragmaTests = testGroup "missing pragma warning code actions" [
     ignoreTestBecause "Broken" $ testCase "Adds TypeSynonymInstances pragma" $
-        runSession hieCommand fullCaps "test/testdata/addPragmas" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
             doc <- openDoc "NeedsPragmas.hs" "haskell"
 
             _ <- waitForDiagnosticsSource "bios"
@@ -450,7 +450,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
 unusedTermTests :: TestTree
 unusedTermTests = testGroup "unused term code actions" [
     -- ignoreTestBecause "Broken" $ testCase "Prefixes with '_'" $ pendingWith "removed because of HaRe"
-    --     runSession hieCommand fullCaps "test/testdata/" $ do
+    --     runSession hlsCommand fullCaps "test/testdata/" $ do
     --       doc <- openDoc "UnusedTerm.hs" "haskell"
     --
     --       _ <- waitForDiagnosticsSource "bios"
@@ -474,7 +474,7 @@ unusedTermTests = testGroup "unused term code actions" [
 
     -- See https://microsoft.github.io/language-server-protocol/specifications/specification-3-15/#textDocument_codeAction
     -- `CodeActionContext`
-    ignoreTestBecause "Broken" $ testCase "respect 'only' parameter" $ runSession hieCommand fullCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "respect 'only' parameter" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc   <- openDoc "CodeActionOnly.hs" "haskell"
         _     <- count 2 waitForDiagnostics -- need to wait for both hlint and ghcmod
         diags <- getCurrentDiagnostics doc

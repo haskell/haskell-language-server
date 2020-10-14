@@ -13,7 +13,7 @@ import Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "references" [
-    ignoreTestBecause "Broken" $ testCase "works with definitions" $ runSession hieCommand fullCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "works with definitions" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "References.hs" "haskell"
         let pos = Position 2 7 -- foo = bar <--
         refs <- getReferences doc pos True
@@ -26,7 +26,7 @@ tests = testGroup "references" [
             , mkRange 2 6 2 9
             ] `isInfixOf` refs @? "Contains references"
     -- TODO: Respect withDeclaration parameter
-    -- ignoreTestBecause "Broken" $ testCase "works without definitions" $ runSession hieCommand fullCaps "test/testdata" $ do
+    -- ignoreTestBecause "Broken" $ testCase "works without definitions" $ runSession hlsCommand fullCaps "test/testdata" $ do
     --   doc <- openDoc "References.hs" "haskell"
     --   let pos = Position 2 7 -- foo = bar <--
     --   refs <- getReferences doc pos False

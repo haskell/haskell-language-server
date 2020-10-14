@@ -54,5 +54,7 @@ jobs:
     - name: Build
       run: cabal build
     - name: Test
+      env:
+        HLS_TEST_EXE: hls
       run: cabal test
 
