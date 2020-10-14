@@ -422,6 +422,8 @@ Install from
 [the VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=haskell.haskell), or manually from the repository [vscode-haskell](https://github.com/haskell/vscode-haskell).
 The `haskell-language-server` and `haskell-language-server-wrapper` binaries will be automatically downloaded on an ad-hoc basis, but if you have them already installed on your PATH then it will just use them instead.
 
+Configuration is done via the "Haskell" section of "Settings".
+
 ### Using Haskell Language Server with Sublime Text
 
 - Install [LSP](https://packagecontrol.io/packages/LSP) using [Package Control](https://packagecontrol.io/)
@@ -493,7 +495,7 @@ and issuing a `:PlugInstall` command within Neovim or Vim.
 As an alternative to using [vim-plug](https://github.com/junegunn/vim-plug) shown above, clone [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
 into `~/.vim/pack/XXX/start/`, where `XXX` is just a name for your "plugin suite".
 
-##### Sample `~/.vimrc`
+##### Configuration and sample `~/.vimrc` sections
 
 ```vim
 set rtp+=~/.vim/pack/XXX/start/LanguageClient-neovim
@@ -533,6 +535,9 @@ it may also be helpful to also specify root markers:
 ```vim
 let g:LanguageClient_rootMarkers = ['*.cabal', 'stack.yaml']
 ```
+
+Further configuration can be done by pointing the [`g:LanguageClient_settingsPath`](https://github.com/autozimu/LanguageClient-neovim/blob/0e5c9546bfddbaa2b01e5056389c25aefc8bf989/doc/LanguageClient.txt#L221)
+variable to the file in which you want to keep your LSP settings.
 
 ### Using Haskell Language Server with Atom
 
@@ -681,7 +686,7 @@ To do every time you changed code and want to test it:
 
 Adding support for new editors is fairly easy if the editor already has good support for generic LSP-based extensions.
 In that case, there will likely be an editor-specific support system for this (like `lsp-mode` for Emacs).
-This will typically include instructions for creating a new language server client.
+This will typically provide instructions for how to support new languages.
 
-Additionally, you should expose a way for the user to set the server's [configuration options](#configuring-haskell-language-server), and
+In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](#configuring-haskell-language-server) and
 for them to configure how the server is started.
