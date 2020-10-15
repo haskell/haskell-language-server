@@ -3010,7 +3010,7 @@ expectFailCabal = expectFailBecause
 #endif
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
-ignoreInWindowsBecause = if isWindows then ignoreTestBecause else flip const
+ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
 
 ignoreInWindowsForGHC88And810 :: TestTree -> TestTree
 #if MIN_GHC_API_VERSION(8,8,1) && !MIN_GHC_API_VERSION(9,0,0)
