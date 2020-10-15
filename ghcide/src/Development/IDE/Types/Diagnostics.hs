@@ -89,7 +89,7 @@ type FileDiagnostic = (NormalizedFilePath, ShowDiagnostic, Diagnostic)
 
 prettyRange :: Range -> Doc Terminal.AnsiStyle
 prettyRange Range{..} = f _start <> "-" <> f _end
-    where f Position{..} = pretty (_line+1) <> colon <> pretty _character
+    where f Position{..} = pretty (_line+1) <> colon <> pretty (_character+1)
 
 stringParagraphs :: T.Text -> Doc a
 stringParagraphs = vcat . map (fillSep . map pretty . T.words) . T.lines
