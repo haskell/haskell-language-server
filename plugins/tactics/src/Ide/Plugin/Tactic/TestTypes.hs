@@ -11,6 +11,7 @@ import qualified Data.Text as T
 data TacticCommand
   = Auto
   | Intros
+  | Split
   | Destruct
   | Homomorphism
   | DestructLambdaCase
@@ -21,6 +22,7 @@ data TacticCommand
 tacticTitle :: TacticCommand -> T.Text -> T.Text
 tacticTitle Auto _ = "Attempt to fill hole"
 tacticTitle Intros _ = "Introduce lambda"
+tacticTitle Split cname = "Introduce constructor " <> cname
 tacticTitle Destruct var = "Case split on " <> var
 tacticTitle Homomorphism var = "Homomorphic case split on " <> var
 tacticTitle DestructLambdaCase _ = "Lambda case split"

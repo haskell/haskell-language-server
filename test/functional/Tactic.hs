@@ -21,6 +21,7 @@ import           Language.Haskell.LSP.Types (ApplyWorkspaceEditRequest, Position
 import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import           System.FilePath
 import System.Directory (doesFileExist)
 import Control.Monad (unless)
@@ -80,6 +81,27 @@ tests = testGroup
       "T3.hs" 7 13
       [ (id, DestructLambdaCase, "")
       ]
+  , ignoreTestBecause "Not implemented, see isovector/haskell-language-server#31" $ mkTest
+      "Splits Int with I# when -XMagicHash is enabled"
+      "T3.hs" 10 14
+      [ (id, Split, "I#")
+      ]
+  , mkTest
+      "Produces datatype split action for single-constructor types"
+      "T2.hs" 16 14
+      [ (id, Split, "T")
+      ]
+  , mkTest
+      "Produces datatype split action for multiple constructors"
+      "T2.hs" 21 15
+      [ (id, Split, "T21")
+      , (id, Split, "T22")
+      ]
+  , mkTest
+      "Doesn't suggest MagicHash constructors without -XMagicHash"
+      "T2.hs" 24 14
+      [ (not, Split, "I#")
+      ]
   , mkTest
       "Doesn't suggest lambdacase without -XLambdaCase"
       "T2.hs" 11 25
@@ -101,6 +123,7 @@ tests = testGroup
   , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
   , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
   , goldenTest "GoldenSwapMany.hs"          2 12 Auto ""
+  , goldenTest "GoldenSplitPair.hs"         2 11 Split "(,)"
   ]
 
 
