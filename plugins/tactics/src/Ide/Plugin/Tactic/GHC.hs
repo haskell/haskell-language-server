@@ -6,6 +6,7 @@
 module Ide.Plugin.Tactic.GHC where
 
 import           Control.Monad.State
+import           DataCon
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
 import           Data.Traversable
@@ -147,4 +148,11 @@ getPatName (fromPatCompat -> p0) =
     XPat   p      -> getPatName $ unLoc p
 #endif
     _             -> Nothing
+
+------------------------------------------------------------------------------
+-- | What data-constructor, if any, does the type have?
+tyDataCons :: Type -> Maybe [DataCon]
+tyDataCons g = do
+  (tc, _) <- splitTyConApp_maybe g
+  pure $ tyConDataCons tc
 

@@ -186,10 +186,9 @@ split :: TacticsM ()
 split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
-  case splitTyConApp_maybe $ unCType g of
-    Nothing -> throwError $ GoalMismatch "split" g
-    Just (tc, _) -> do
-      let dcs = tyConDataCons tc
+  case tyDataCons $ unCType g of
+    Nothing -> throwError $ GoalMismatch "split(user)" g
+    Just dcs -> do
       choice $ fmap splitDataCon dcs
 
 
@@ -236,6 +235,22 @@ splitDataCon dc =
           True -> buildDataCon (unwhitelistingSplit jdg) dc apps
           False -> throwError $ IncorrectDataCon dc
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
+
+
+------------------------------------------------------------------------------
+-- | Attempt to instantiate the named data constructor to solve the goal.
+splitDataCon' :: OccName -> TacticsM ()
+splitDataCon' dcn = do
+  let tacname = "splitDataCon'(" ++ unsafeRender dcn ++ ")"
+  jdg <- goal
+  let g = jGoal jdg
+  case tyDataCons $ unCType g of
+    Nothing -> throwError $ GoalMismatch tacname g
+    Just dcs -> do
+      let mdc = find ((== dcn) . getOccName) dcs
+      case mdc of
+        Nothing -> throwError $ GoalMismatch tacname g
+        Just dc -> splitDataCon dc
 
 
 ------------------------------------------------------------------------------
