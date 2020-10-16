@@ -100,11 +100,9 @@ getPatName (fromPatCompat -> p0) =
     ViewPat _ _ p -> getPatName p
 #if __GLASGOW_HASKELL__ >= 808
     SigPat  _ p _ -> getPatName p
-    XPat    p     -> getPatName $
-#if __GLASGOW_HASKELL__ < 810
-      unLoc
 #endif
-            p
+#if __GLASGOW_HASKELL__ == 808
+    XPat   p      -> getPatName $ unLoc p
 #endif
     _             -> Nothing
 
