@@ -72,10 +72,10 @@ lambdaCaseable _ = Nothing
 
 fromPatCompat :: PatCompat pass -> Pat pass
 #if __GLASGOW_HASKELL__ >= 808
-type PatCompat = Pat
+type PatCompat pass = Pat pass
 fromPatCompat = id
 #else
-type PatCompat = LPat
+type PatCompat pass = LPat pass
 fromPatCompat = unLoc
 #endif
 
