@@ -71,10 +71,10 @@ lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
 lambdaCaseable _ = Nothing
 
 fromPatCompat :: PatCompat pass -> Pat pass
-#if __GLASGOW_HASKELL__ <= 808
+#if __GLASGOW_HASKELL__ >= 808
 type PatCompat = Pat
 fromPatCompat = id
-#elif
+#else
 type PatCompat = LPat
 fromPatCompat = unLoc
 #endif
