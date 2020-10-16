@@ -345,31 +345,8 @@ getRhsPosVals rss tcs = getFirst $ everything (<>) (mkQ mempty $ \case
   ) tcs
 
 
-------------------------------------------------------------------------------
--- | Should make sure it's a fun bind
-pattern TopLevelRHS :: OccName -> [Pat GhcTc] -> LHsExpr GhcTc -> Match GhcTc (LHsExpr GhcTc)
-pattern TopLevelRHS name ps body <-
-  Match _
-    (FunRhs (L _ (occName -> name)) _ _)
-    ps
-    (GRHSs _
-      [L _ (GRHS _ [] body)] _)
-
 
 -- TODO(sandy): Make this more robust
 isHole :: OccName -> Bool
 isHole = isPrefixOf "_" . occNameString
-
-
-getPatName :: Pat GhcTc -> Maybe OccName
-getPatName = \case
-   VarPat _ x    -> Just $ occName $ unLoc x
-   LazyPat _ p   -> getPatName p
-   AsPat _ x _   -> Just $ occName $ unLoc x
-   ParPat _ p    -> getPatName p
-   BangPat _ p   -> getPatName p
-   ViewPat _ _ p -> getPatName p
-   SigPat _ p _  -> getPatName p
-   XPat p        -> getPatName $ unLoc p
-   _             -> Nothing
 
