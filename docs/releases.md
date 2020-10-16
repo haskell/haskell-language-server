@@ -73,7 +73,7 @@ we make sure to upload them as their full name variant.
 
 ### ghcup
 Ghcup can install hls binaries, provided that there is a tarfile
-called `haskell-language-server-{macOS,Linux}-$HLS_VERSION.gz`
+called `haskell-language-server-{macOS,Linux}-$HLS_VERSION.tar.gz`
 included in the GitHub release. The `tar` job in the workflow file automates the creation of this.
 
 ### Windows

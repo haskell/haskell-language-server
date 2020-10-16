@@ -1,5 +1,4 @@
-resolver: nightly-2020-08-08
-compiler: ghc-8.10.2
+resolver: nightly-2020-10-03
 
 packages:
 - .
@@ -18,12 +17,11 @@ extra-deps:
 - data-tree-print-0.1.0.2
 - floskell-0.10.4
 - fourmolu-0.2.0.0
-- HsYAML-aeson-0.2.0.0@rev:2
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
 - refinery-0.2.0.0
 - retrie-0.1.1.1
-- stylish-haskell-0.11.0.3
+- stylish-haskell-0.12.2.0
 - semigroups-0.18.5
 - temporary-1.2.1.1
 - implicit-hie-cradle-0.2.0.1

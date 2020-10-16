@@ -140,25 +140,28 @@ jobs:
   tar:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [Linux, macOS]
     steps:
       - uses: actions/download-artifact@v2
 
       - run: |
-          for OS in Linux macOS
-          do
-            tar -czf haskell-language-server-$OS-${{ github.event.release.tag_name }}.gz haskell-language-server-$OS-*.gz
-          done
+          # move the binaries for the specific platform into bin/
+          mkdir bin
+          mv haskell-language-server-${{ matrix.os }}-*.gz/haskell-language-server-*.gz bin
+          mv haskell-language-server-wrapper-${{ matrix.os }}.gz/haskell-language-server-wrapper.gz bin
+          # decompress them
+          gzip -d bin/*.gz
+          cd bin
+          tar -czf haskell-language-server.tar.gz *
 
       - uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: haskell-language-server-macOS-${{ github.event.release.tag_name }}.gz
-          asset_name: haskell-language-server-macOS-${{ github.event.release.tag_name }}.gz
+          asset_path: bin/haskell-language-server.tar.gz
+          asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
 
-      - uses: actions/upload-release-asset@v1.0.2
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: haskell-language-server-Linux-${{ github.event.release.tag_name }}.gz
-          asset_name: haskell-language-server-Linux-${{ github.event.release.tag_name }}.gz
-          asset_content_type: application/gzip

@@ -49,8 +49,8 @@ destructMatches f f2 t jdg = do
       let dcs = tyConDataCons tc
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
-        _ -> fmap unzipTrace $ for dcs $ \dc -> do
-          let args = dataConInstArgTys dc apps
+        _ -> for dcs $ \dc -> do
+          let args = dataConInstOrigArgTys' dc apps
           names <- mkManyGoodNames hy args
           let hy' = zip names $ coerce args
               dcon_name = nameOccName $ dataConName dc
@@ -77,9 +77,19 @@ unzipTrace l =
    in (rose mempty trs, as)
 
 
+-- | Essentially same as 'dataConInstOrigArgTys' in GHC,
+--   but we need some tweaks in GHC >= 8.8.
+--   Since old 'dataConInstArgTys' seems working with >= 8.8,
+--   we just filter out non-class types in the result.
+dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
+dataConInstOrigArgTys' con ty =
+    let tys0 = dataConInstArgTys con ty
+    in filter (maybe True (not . isClassTyCon) . tyConAppTyCon_maybe) tys0
+
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the
 -- resulting matches.
+
 destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
 destruct' f term jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
@@ -121,6 +131,7 @@ buildDataCon
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Trace, LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
+<<<<<<< HEAD
   let args = dataConInstArgTys dc apps
       dcon_name = nameOccName $ dataConName dc
   (tr, sgs)
@@ -132,6 +143,10 @@ buildDataCon jdg dc apps = do
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip args [0..]
+=======
+  let args = dataConInstOrigArgTys' dc apps
+  sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
+>>>>>>> master
   pure
     . (rose (show dc) $ pure tr,)
     . noLoc

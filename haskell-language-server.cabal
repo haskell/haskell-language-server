@@ -1,7 +1,7 @@
 cabal-version:      2.2
 category:           Development
 name:               haskell-language-server
-version:            0.5.0.0
+version:            0.5.1.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -88,6 +88,7 @@ executable haskell-language-server
     Ide.Plugin.Floskell
     Ide.Plugin.Fourmolu
     Ide.Plugin.ImportLens
+    Ide.Plugin.ModuleName
     Ide.Plugin.Ormolu
     Ide.Plugin.Pragmas
     Ide.Plugin.Retrie
@@ -149,7 +150,7 @@ executable haskell-language-server
     , retrie                   >=0.1.1.0
     , safe-exceptions
     , shake                    >=0.17.5
-    , stylish-haskell          ^>=0.11
+    , stylish-haskell          ^>=0.12
     , temporary
     , text
     , syb
@@ -265,6 +266,7 @@ test-suite func-test
     FunctionalLiquid
     HieBios
     Highlight
+    ModuleName
     Progress
     Reference
     Rename

@@ -88,6 +88,8 @@ tests = testGroup
   $ goldenTest "T24.hs"
   , testCase ":kind treats a multilined result properly"
   $ goldenTest "T25.hs"
+  , testCase "local imports"
+  $ goldenTest "T26.hs"
   ]
 
 goldenTest :: FilePath -> IO ()

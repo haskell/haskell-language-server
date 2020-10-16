@@ -98,6 +98,8 @@ tests = testGroup
   , goldenTest "GoldenFoldr.hs"             2 10 Auto ""
   , goldenTest "GoldenSwap.hs"              2 8  Auto ""
   , goldenTest "GoldenFmapTree.hs"          4 11 Auto ""
+  , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
+  , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
   ]
 
 
