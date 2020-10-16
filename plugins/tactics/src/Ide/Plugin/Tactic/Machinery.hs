@@ -17,11 +17,12 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
-import           Control.Applicative
+import           Control.Arrow
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
 import           Control.Monad.State (MonadState(..))
 import           Control.Monad.State.Class (gets, modify)
+import           Control.Monad.State.Strict (StateT (..))
 import           Data.Coerce
 import           Data.Either
 import           Data.List (intercalate, sortBy)
@@ -36,8 +37,6 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
-import Control.Arrow
-import Control.Monad.State.Strict (StateT (..))
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -71,10 +70,10 @@ runTactic ctx jdg t =
     in case partitionEithers
           . flip runReader ctx
           . unExtractM
-          $ runTacticTWithState t jdg tacticState of
+          $ runTacticT t jdg tacticState of
       (errs, []) -> Left $ take 50 $ errs
-      (_, solns) -> do
-        let sorted = sortBy (comparing $ Down . uncurry scoreSolution . snd) solns
+      (_, fmap assoc23 -> solns) -> do
+        let sorted = sortBy (comparing $ Down . uncurry scoreSolution . snd) $ solns
         -- TODO(sandy): remove this trace sometime
         traceM
             $ mappend "!!!solns: "
@@ -86,6 +85,9 @@ runTactic ctx jdg t =
           (res : _) -> Right $ fst res
           -- guaranteed to not be empty
           _ -> Left []
+
+assoc23 :: (a, b, c) -> (a, (b, c))
+assoc23 (a, b, c) = (a, (b, c))
 
 
 tracePrim :: String -> Trace
@@ -110,44 +112,6 @@ recursiveCleanup s =
    in case r of
         True  -> Nothing
         False -> Just NoProgress
-
-
-filterT
-    :: (Monad m)
-    => (s -> Maybe err)
-    -> (s -> s)
-    -> TacticT jdg ext err s m ()
-    -> TacticT jdg ext err s m ()
-filterT p f t = check >> t
-    where
-      check = rule $ \j -> do
-          e <- subgoal j
-          s <- get
-          modify f
-          case p s of
-            Just err -> throwError err
-            Nothing -> pure e
-
-
-gather
-    :: (MonadExtract ext m)
-    => TacticT jdg ext err s m a
-    -> ([(a, jdg)] -> TacticT jdg ext err s m a)
-    -> TacticT jdg ext err s m a
-gather t f = tactic $ \j -> do
-    s <- get
-    results <- lift $ proofs s $ proofState t j
-    msum $ flip fmap results $ \case
-        Left err -> throwError err
-        Right (_, jdgs) -> proofState (f jdgs) j
-
-
-pruning
-    :: (MonadExtract ext m)
-    => TacticT jdg ext err s m ()
-    -> ([jdg] -> Maybe err)
-    -> TacticT jdg ext err s m ()
-pruning t p = gather t $ maybe t throwError . p . fmap snd
 
 
 setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
@@ -179,38 +143,6 @@ newtype Penalize a = Penalize a
 newtype Reward a = Reward a
   deriving (Eq, Ord, Show) via a
 
-
-runTacticTWithState
-    :: (MonadExtract ext m)
-    => TacticT jdg ext err s m ()
-    -> jdg
-    -> s
-    -> m [Either err (ext, (s, [jdg]))]
-runTacticTWithState t j s = proofs' s $ fmap snd $ proofState t j
-
-
-proofs'
-    :: (MonadExtract ext m)
-    => s
-    -> ProofStateT ext ext err s m goal
-    -> m [(Either err (ext, (s, [goal])))]
-proofs' s p = go s [] p
-    where
-      go s goals (Subgoal goal k) = do
-         h <- hole
-         (go s (goals ++ [goal]) $ k h)
-      go s goals (Effect m) = go s goals =<< m
-      go s goals (Stateful f) =
-          let (s', p) = f s
-          in go s' goals p
-      go s goals (Alt p1 p2) = liftA2 (<>) (go s goals p1) (go s goals p2)
-      go s goals (Interleave p1 p2) = liftA2 (interleave) (go s goals p1) (go s goals p2)
-      go s goals (Commit p1 p2) = go s goals p1 >>= \case
-          (rights -> []) -> go s goals p2
-          solns -> pure solns
-      go _ _ Empty = pure []
-      go _ _ (Failure err) = pure [throwError err]
-      go s goals (Axiom ext) = pure [Right (ext, (s, goals))]
 
 
 ------------------------------------------------------------------------------

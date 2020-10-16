@@ -72,7 +72,7 @@ recursion = tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
-    filterT recursiveCleanup (withRecursionStack tail) $ do
+    ensure recursiveCleanup (withRecursionStack tail) $ do
       (localTactic (apply' (const id) name) $ introducing defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 

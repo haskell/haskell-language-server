@@ -49,7 +49,7 @@ destructMatches f f2 t jdg = do
       let dcs = tyConDataCons tc
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
-        _ -> for dcs $ \dc -> do
+        _ -> fmap unzipTrace $ for dcs $ \dc -> do
           let args = dataConInstOrigArgTys' dc apps
           names <- mkManyGoodNames hy args
           let hy' = zip names $ coerce args
@@ -131,8 +131,7 @@ buildDataCon
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Trace, LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
-<<<<<<< HEAD
-  let args = dataConInstArgTys dc apps
+  let args = dataConInstOrigArgTys' dc apps
       dcon_name = nameOccName $ dataConName dc
   (tr, sgs)
       <- fmap unzipTrace
@@ -143,10 +142,6 @@ buildDataCon jdg dc apps = do
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip args [0..]
-=======
-  let args = dataConInstOrigArgTys' dc apps
-  sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
->>>>>>> master
   pure
     . (rose (show dc) $ pure tr,)
     . noLoc
