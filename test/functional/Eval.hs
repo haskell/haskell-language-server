@@ -95,7 +95,6 @@ tests = testGroup
 
 goldenTest :: FilePath -> IO ()
 goldenTest input = do
-  getEnv "LANG" >>= print
   setEnv "LANG" "en_US.UTF-8"
   runSession hlsCommand fullCaps evalPath $ do
     doc                              <- openDoc input "haskell"
