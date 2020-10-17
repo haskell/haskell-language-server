@@ -54,11 +54,11 @@ destructMatches f f2 t jdg = do
 -- | Essentially same as 'dataConInstOrigArgTys' in GHC,
 --   but we need some tweaks in GHC >= 8.8.
 --   Since old 'dataConInstArgTys' seems working with >= 8.8,
---   we just filter out non-class types in the result.
+--   we just filter out class dictionaries anc coercions from the result.
 dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
 dataConInstOrigArgTys' con ty =
     let tys0 = dataConInstArgTys con ty
-    in filter (maybe True (not . isClassTyCon) . tyConAppTyCon_maybe) tys0
+    in filter (not . isPredTy) tys0
 
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the
