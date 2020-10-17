@@ -57,7 +57,7 @@ destructMatches f f2 t jdg = do
 --   we just filter out class dictionaries and coercions from the result.
 dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
 dataConInstOrigArgTys' con ty =
-    let tys0 = dataConInstArgTys con ty
+    let tys0 = dataConInstOrigArgTys con ty
     in filter (not . isPredTy) tys0
 
 ------------------------------------------------------------------------------
