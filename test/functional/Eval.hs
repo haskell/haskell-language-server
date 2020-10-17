@@ -14,6 +14,7 @@ import           Language.Haskell.LSP.Test
 import           Language.Haskell.LSP.Types      (ApplyWorkspaceEditRequest, CodeLens (CodeLens, _command, _range),
                                                   Command (_title),
                                                   Position (..), Range (..))
+import           System.Environment
 import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
@@ -93,14 +94,17 @@ tests = testGroup
   ]
 
 goldenTest :: FilePath -> IO ()
-goldenTest input = runSession hlsCommand fullCaps evalPath $ do
-  doc                              <- openDoc input "haskell"
-  [CodeLens { _command = Just c }] <- getCodeLenses doc
-  executeCommand c
-  _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
-  edited <- documentContents doc
-  expected <- liftIO $ T.readFile $ evalPath </> input <.> "expected"
-  liftIO $ edited @?= expected
+goldenTest input = do
+  getEnv "LANG" >>= print
+  setEnv "LANG" "en_US.UTF-8"
+  runSession hlsCommand fullCaps evalPath $ do
+    doc                              <- openDoc input "haskell"
+    [CodeLens { _command = Just c }] <- getCodeLenses doc
+    executeCommand c
+    _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+    edited <- documentContents doc
+    expected <- liftIO $ T.readFile $ evalPath </> input <.> "expected"
+    liftIO $ edited @?= expected
 
 evalPath :: FilePath
 evalPath = "test/testdata/eval"
