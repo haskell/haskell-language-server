@@ -94,6 +94,7 @@ tests = testGroup
   , goldenTest "GoldenNote.hs"              2 8  Auto ""
   , goldenTest "GoldenPureList.hs"          2 12 Auto ""
   , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
+  , goldenTest "GoldenGADTDestructCoercion.hs" 8 17 Destruct "gadt"
   , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
   ]
 
