@@ -54,7 +54,7 @@ destructMatches f f2 t jdg = do
 -- | Essentially same as 'dataConInstOrigArgTys' in GHC,
 --   but we need some tweaks in GHC >= 8.8.
 --   Since old 'dataConInstArgTys' seems working with >= 8.8,
---   we just filter out class dictionaries anc coercions from the result.
+--   we just filter out class dictionaries and coercions from the result.
 dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
 dataConInstOrigArgTys' con ty =
     let tys0 = dataConInstArgTys con ty
