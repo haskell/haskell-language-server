@@ -35,6 +35,10 @@ import Refinery.Tactic
 import Type
 import Data.Tree
 import Data.Coerce
+import Data.Text (Text)
+import Data.Time (UTCTime)
+import Control.Arrow
+import Data.Ord (comparing)
 
 
 ------------------------------------------------------------------------------
@@ -218,4 +222,27 @@ instance Monoid a => Monoid (Rose a) where
 rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
 rose a [Rose (Node a' rs)] | a' == mempty = Rose $ Node a rs
 rose a rs = Rose $ Node a $ coerce rs
+
+
+------------------------------------------------------------------------------
+
+data Metaprogram = Metaprogram
+  { mp_name             :: !Text
+  , mp_original_path    :: !FilePath
+  , mp_mtime            :: !UTCTime
+  , mp_known_by_auto    :: !Bool
+  , mp_show_code_action :: !Bool
+  , mp_program          :: !(TacticsM ())
+  }
+
+instance Eq Metaprogram where
+  (==) = (==) `on` (mp_original_path &&& mp_mtime)
+
+instance Ord Metaprogram where
+  compare = comparing mp_original_path <> comparing mp_mtime
+
+
+newtype MetaprogramCache = MetaprogramCache
+  { getMetaprogramCache :: Map FilePath Metaprogram
+  }
 
