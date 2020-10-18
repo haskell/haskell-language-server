@@ -102,7 +102,7 @@ tacticRules = do
     (mtime, Just contents) <- getFileContents nfp
     pure
       $ (Just $ BS.pack $ show mtime ,)
-      $ case parseMetaprogram contents of
+      $ case parseMetaprogram (fromNormalizedFilePath nfp) contents of
           Left err ->
             ( [ (nfp
                 , ShowDiag

@@ -104,6 +104,7 @@ executable haskell-language-server
     Ide.Plugin.Tactic.Machinery
     Ide.Plugin.Tactic.Metaprogramming
     Ide.Plugin.Tactic.Naming
+    Ide.Plugin.Tactic.Parser
     Ide.Plugin.Tactic.Range
     Ide.Plugin.Tactic.Tactics
     Ide.Plugin.Tactic.Types
@@ -145,8 +146,10 @@ executable haskell-language-server
     , haskell-lsp              ^>=0.22
     , hls-plugin-api
     , lens
+    , megaparsec               ^>=7
     , mtl
     , ormolu                   ^>=0.1.2
+    , parser-combinators
     , regex-tdfa
     , retrie                   >=0.1.1.0
     , safe-exceptions
