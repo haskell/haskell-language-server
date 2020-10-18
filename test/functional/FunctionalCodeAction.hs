@@ -44,9 +44,9 @@ tests = testGroup "code actions" [
 
 hlintTests :: TestTree
 hlintTests = testGroup "hlint suggestions" [
-    testCase "provides 3.8 code actions" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+    testCase "provides 3.8 code actions including apply all" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags@(reduceDiag:_) <- waitForDiagnostics
+        diags@(reduceDiag:_) <- waitForDiagnosticsSource "hlint"
 
         liftIO $ do
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
@@ -55,11 +55,15 @@ hlintTests = testGroup "hlint suggestions" [
             reduceDiag ^. L.code @?= Just (StringValue "Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
-        (CACodeAction ca:_) <- getAllCodeActions doc
+        cas <- map fromAction <$> getAllCodeActions doc
 
-        liftIO $ "Redundant id" `T.isSuffixOf` (ca ^. L.title) @? "Title contains Redundant id"
+        let applyAll = find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title)) cas
+        let redId = find (\ca -> "Redundant id" `T.isSuffixOf` (ca ^. L.title)) cas
 
-        executeCodeAction ca
+        liftIO $ isJust applyAll @? "There is 'Apply all hints' code action"
+        liftIO $ isJust redId @? "There is 'Redundant id' code action"
+
+        executeCodeAction (fromJust redId)
 
         contents <- getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
@@ -69,39 +73,30 @@ hlintTests = testGroup "hlint suggestions" [
 
         _ <- waitForDiagnostics
 
-        (CACommand cmd:_) <- getAllCodeActions doc
+        (CACommand cmdApplyAll:_) <- getAllCodeActions doc
 
-        -- Evaluate became redundant id in later hlint versions
-        liftIO $ "Redundant id" `T.isSuffixOf` (cmd ^. L.title) @? "Title contains Redundant id"
-
-        executeCommand cmd
+        executeCommand cmdApplyAll
 
         contents <- skipManyTill publishDiagnosticsNotification $ getDocumentEdit doc
-        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
+        liftIO $ contents @?= "main = undefined\nfoo = id\n"
 
-    , testCase "runs diagnostics on save" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
-        let config = def { diagnosticsOnChange = False }
+    , testCase "changing configuration enables or disables hints" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+        let config = def { hlintOn = True }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags@(reduceDiag:_) <- waitForDiagnostics
+        diags <- waitForDiagnosticsSource "hlint"
 
-        liftIO $ do
-            length diags @?= 2
-            reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
-            reduceDiag ^. L.severity @?= Just DsInfo
-            reduceDiag ^. L.code @?= Just (StringValue "Eta reduce")
-            reduceDiag ^. L.source @?= Just "hlint"
+        liftIO $ length diags @?= 2
 
-        (CACodeAction ca:_) <- getAllCodeActions doc
+        let config' = def { hlintOn = False}
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
-        liftIO $ "Redundant id" `T.isSuffixOf` (ca ^. L.title) @? "Title contains Redundant id"
+        _ <- waitForDiagnosticsSource "typecheck"
+        diags' <- getCurrentDiagnostics doc
 
-        executeCodeAction ca
+        liftIO $ length diags' @?= 1 -- typecheck diagnostic "Defined but not used"
 
-        contents <- getDocumentEdit doc
-        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
-        sendNotification TextDocumentDidSave (DidSaveTextDocumentParams doc)
     ]
 
 renameTests :: TestTree
