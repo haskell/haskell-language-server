@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE DerivingStrategies  #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -7,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE ViewPatterns        #-}
 
 -- | A plugin that uses tactics to synthesize code
@@ -34,11 +36,11 @@ import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
+import           Development.IDE.Core.Shake (defineEarlyCutoff, define, use, useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
-import           Development.Shake (Action)
+import           Development.Shake (RuleResult, Rules, Action)
 import           DynFlags (xopt)
 import qualified FastString
 import           GHC.Generics (Generic)
@@ -59,6 +61,13 @@ import           Language.Haskell.LSP.Types
 import           OccName
 import           SrcLoc (containsSpan)
 import           System.Timeout
+import Data.Hashable (Hashable)
+import Control.DeepSeq (NFData)
+import Data.Binary (Binary)
+import Ide.Plugin.Tactic.Metaprogramming
+import Development.IDE (getFileContents)
+import qualified Data.ByteString.Char8 as BS
+import Development.IDE (ShowDiagnostic(ShowDiag))
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -71,7 +80,49 @@ descriptor plId = (defaultPluginDescriptor plId)
               (tacticCmd $ commandTactic tc))
               [minBound .. maxBound]
     , pluginCodeActionProvider = Just codeActionProvider
+    , pluginRules = tacticRules
     }
+
+data GetMetaprogram = GetMetaprogram
+  deriving stock (Show, Generic, Eq, Ord)
+  deriving anyclass (Hashable, NFData, Binary)
+
+type instance RuleResult GetMetaprogram = Metaprogram
+
+data GetMetaprogramCache = GetMetaprogramCache
+  deriving stock (Show, Generic, Eq, Ord)
+  deriving anyclass (Hashable, NFData, Binary)
+
+type instance RuleResult GetMetaprogramCache = MetaprogramCache
+
+tacticRules :: Rules ()
+tacticRules = do
+  defineEarlyCutoff $ \GetMetaprogram nfp -> do
+    (mtime, Just contents) <- getFileContents nfp
+    pure
+      $ (Just $ BS.pack $ show mtime ,)
+      $ case parseMetaprogram contents of
+          Left err ->
+            ( [ (nfp
+                , ShowDiag
+                , Diagnostic
+                    (Range (Position 0 0) (Position 0 0))
+                    Nothing
+                    Nothing
+                    Nothing
+                    (T.pack err)
+                    Nothing
+                    Nothing
+                )
+              ]
+            , Nothing
+            )
+          Right mp -> ([], Just mp)
+  define $ \GetMetaprogramCache _ -> do
+    files <- liftIO getKnownFiles
+    mps <- fmap catMaybes $ traverse (use GetMetaprogram) files
+    pure ([], Just $ buildCache mps)
+
 
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
