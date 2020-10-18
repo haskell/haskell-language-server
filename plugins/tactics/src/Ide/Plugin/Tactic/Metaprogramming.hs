@@ -13,7 +13,7 @@ import           System.FilePath ((</>))
 import qualified Text.Megaparsec as P
 
 import           Ide.Plugin.Tactic.Parser
-import           Ide.Plugin.Tactic.Types
+import Text.Megaparsec (errorBundlePretty)
 
 
 buildCache :: [Metaprogram] -> MetaprogramCache
@@ -37,12 +37,7 @@ getKnownFiles = do
 
 
 parseMetaprogram :: FilePath -> T.Text -> Either String Metaprogram
-parseMetaprogram fp str = case P.runParser tactics fp str of
-  (Left err) -> Left $ show err
-  (Right tac) -> Right $ Metaprogram
-    { mp_name             = "metaprogram" -- TODO [Reed M. 2020-10-18]
-    , mp_known_by_auto    = False -- TODO [Reed M. 2020-10-18]
-    , mp_show_code_action = False -- TODO [Reed M. 2020-10-18]
-    , mp_program          = tac
-    }
+parseMetaprogram fp str = case P.runParser metaprogram fp str of
+  Left err -> trace (errorBundlePretty err) $ Left $ show err
+  Right tac -> Right tac
 

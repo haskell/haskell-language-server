@@ -1,8 +1,13 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Ide.Plugin.Tactic.Parser where
 
+import Data.Generics.Product (field)
+import Control.Lens ((.~))
 import           Control.Applicative
 import           Control.Monad
 import           Data.Functor
@@ -10,6 +15,8 @@ import           Data.Function
 import           Data.List (foldl')
 import           Data.Text (Text)
 import           Data.Void
+import Data.Foldable (asum)
+import qualified Data.Text as T
 
 import qualified Control.Monad.Combinators.Expr as P
 import qualified Text.Megaparsec as P
@@ -57,6 +64,13 @@ variable = lexeme $ do
     cs <- P.many (P.alphaNumChar <|> P.char '\'')
     pure $ mkVarOcc (c:cs)
 
+-- FIXME [Reed M. 2020-10-18] Check to see if the variables are in the reserved list
+name :: Parser Text
+name = lexeme $ do
+    c <- P.alphaNumChar
+    cs <- P.many (P.alphaNumChar <|> P.char '\'' <|> P.char '-')
+    pure $ T.pack (c:cs)
+
 named :: Text -> TacticsM () -> Parser (TacticsM ())
 named name tac = identifier name $> tac
 
@@ -65,6 +79,38 @@ named' name tac = tac <$> (identifier name *> variable)
 
 keyword :: Text -> Parser ()
 keyword = identifier
+
+annotationHeader :: Text -> Parser ()
+annotationHeader ann = lexeme $ do
+  void $ P.char '@'
+  void $ P.string ann
+
+data Annototation
+   = AnnotationName Text
+   | AnnotationAuto
+   deriving (Eq, Ord, Show)
+
+annotation :: Parser Annototation
+annotation = asum
+  [ do
+      annotationHeader "name"
+      n <- name
+      pure $ AnnotationName n
+  , AnnotationAuto <$ annotationHeader "auto"
+  ]
+
+
+metaprogram :: Parser Metaprogram
+metaprogram = do
+  anns <- P.many $ annotation <* symbol ";"
+  t <- tactics
+  pure $
+    foldr
+      (\case
+        AnnotationName name -> field @"mp_name" .~ name
+        AnnotationAuto      -> field @"mp_known_by_auto" .~ True
+      ) emptyMetaprogram { mp_program  = t } anns
+
 
 tactic :: Parser (TacticsM ())
 tactic = flip P.makeExprParser operators $  P.choice

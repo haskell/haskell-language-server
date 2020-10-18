@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
@@ -233,6 +234,10 @@ data Metaprogram = Metaprogram
   , mp_show_code_action :: !Bool
   , mp_program          :: !(TacticsM ())
   }
+  deriving stock Generic
+
+emptyMetaprogram :: Metaprogram
+emptyMetaprogram = Metaprogram "" False False (pure ())
 
 instance NFData Metaprogram where
   rnf (!(Metaprogram !_ !_ !_ !_)) = ()
