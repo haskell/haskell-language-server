@@ -14,6 +14,7 @@ import           Ide.Types                 (IdePlugins)
 import           Ide.Plugin.Eval           as Eval
 import           Ide.Plugin.Example        as Example
 import           Ide.Plugin.Example2       as Example2
+import           Ide.Plugin.RecordSnippets       as RecordSnippets
 import           Ide.Plugin.Floskell       as Floskell
 import           Ide.Plugin.Fourmolu       as Fourmolu
 import           Ide.Plugin.GhcIde         as GhcIde
@@ -60,6 +61,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , Eval.descriptor "eval"
       , ImportLens.descriptor "importLens"
       , ModuleName.descriptor "moduleName"
+      , RecordSnippets.descriptor "recordSnippets"
       ]
     examplePlugins =
       [Example.descriptor  "eg"

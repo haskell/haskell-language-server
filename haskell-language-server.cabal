@@ -106,6 +106,7 @@ executable haskell-language-server
     Ide.Plugin.Tactic.Types
     Ide.Plugin.Tactic.TestTypes
     Ide.TreeTransform
+    Ide.Plugin.RecordSnippets
 
   ghc-options:
     -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
