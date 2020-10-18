@@ -90,7 +90,7 @@ findLocalCompletions ide  _pmod pfix = do
         hsDecls = hsmodDecls _hsmodule
         ctxStr = (T.unpack . VFS.prefixText $ pfix)
         completionData = findFields ctxStr (unLoc <$> hsDecls)
-    x <- sampleCompletion ctxStr completionData
+    x <- buildCompletion ctxStr completionData
     logInfo (ideLogger ide) $ "*****Showing Completion Data\n"
     logInfo (ideLogger ide) $ T.pack $ show completionData
     return x
@@ -128,8 +128,8 @@ findFields  ctxStr decls = name_type
     extract _ = Nothing
 
 
-sampleCompletion :: String -> [(String, String)] -> IO CompletionResponseResult
-sampleCompletion ctxStr completionData = do
+buildCompletion :: String -> [(String, String)] -> IO CompletionResponseResult
+buildCompletion ctxStr completionData = do
   pure $ Completions $ List [r]
   where
     r =
