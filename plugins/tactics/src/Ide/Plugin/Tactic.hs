@@ -18,6 +18,7 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
+import Control.Monad.Error.Class
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans
@@ -106,7 +107,8 @@ tacticRules = do
             ( [ (nfp
                 , ShowDiag
                 , Diagnostic
-                    (Range (Position 0 0) (Position 0 0))
+                    (Range (Position 0 0)
+                           (Position 0 0))
                     Nothing
                     Nothing
                     Nothing
@@ -130,7 +132,14 @@ tacticDesc name = "fill the hole using the " <> name <> " tactic"
 ------------------------------------------------------------------------------
 -- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
 -- UI.
-type TacticProvider = DynFlags -> PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
+type TacticProvider
+    = DynFlags
+   -> MetaprogramCache
+   -> PluginId
+   -> Uri
+   -> Range
+   -> Judgement
+   -> IO [CAResult]
 
 
 ------------------------------------------------------------------------------
@@ -166,17 +175,23 @@ commandProvider HomomorphismLambdaCase =
   requireExtension LambdaCase $
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
+commandProvider RunMetaprogram =
+  allMetaprograms $ \mp ->
+    provide RunMetaprogram mp
 
 
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
-commandTactic :: TacticCommand -> OccName -> TacticsM ()
-commandTactic Auto         = const auto
-commandTactic Intros       = const intros
-commandTactic Destruct     = destruct
-commandTactic Homomorphism = homo
-commandTactic DestructLambdaCase     = const destructLambdaCase
-commandTactic HomomorphismLambdaCase = const homoLambdaCase
+commandTactic :: TacticCommand -> Maybe Metaprogram -> OccName -> TacticsM ()
+commandTactic Auto _ _                   = auto
+commandTactic Intros _ _                 = intros
+commandTactic Destruct _ occ             = destruct occ
+commandTactic Homomorphism _ occ         = homo occ
+commandTactic DestructLambdaCase _ _     = destructLambdaCase
+commandTactic HomomorphismLambdaCase _ _ = homoLambdaCase
+commandTactic RunMetaprogram (Just mp) _ = mp_program mp
+-- TODO(sandy): better error here
+commandTactic RunMetaprogram Nothing _   = throwError NoApplicableTactic
 
 
 ------------------------------------------------------------------------------
@@ -204,10 +219,12 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right $ List []) $ do
         (_, jdg, _, dflags) <- judgementForHole state nfp range
+        mpc <- MaybeT $ runIde state $ use GetMetaprogramCache nfp
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound]
             dflags
+            mpc
             plId
             uri
             range
@@ -224,7 +241,7 @@ codeActions = List . fmap CACodeAction
 -- | Terminal constructor for providing context-sensitive tactics. Tactics
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
-provide tc name _ plId uri range _ = do
+provide tc name _ _ plId uri range _ = do
   let title = tacticTitle tc name
       params = TacticParams { file = uri , range = range , var_name = name }
   cmd <- mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
@@ -239,9 +256,9 @@ provide tc name _ plId uri range _ = do
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 requireExtension :: Extension -> TacticProvider -> TacticProvider
-requireExtension ext tp dflags plId uri range jdg =
+requireExtension ext tp dflags mpc plId uri range jdg =
   case xopt ext dflags of
-    True  -> tp dflags plId uri range jdg
+    True  -> tp dflags mpc plId uri range jdg
     False -> pure []
 
 
@@ -249,9 +266,9 @@ requireExtension ext tp dflags plId uri range jdg =
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp dflags plId uri range jdg =
+filterGoalType p tp dflags mpc plId uri range jdg =
   case p $ unCType $ jGoal jdg of
-    True  -> tp dflags plId uri range jdg
+    True  -> tp dflags mpc plId uri range jdg
     False -> pure []
 
 
@@ -262,13 +279,19 @@ filterBindingType
     :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
-filterBindingType p tp dflags plId uri range jdg =
+filterBindingType p tp dflags mpc plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
    in fmap join $ for (M.toList hy) $ \(occ, CType ty) ->
         case p (unCType g) ty of
-          True  -> tp occ ty dflags plId uri range jdg
+          True  -> tp occ ty dflags mpc plId uri range jdg
           False -> pure []
+
+allMetaprograms
+    :: (T.Text -> TacticProvider)
+    -> TacticProvider
+allMetaprograms f dflags mpc@(MetaprogramCache cache) plId uri range jdg =
+  fmap join $ for (M.keys cache) $ \key -> f key dflags mpc plId uri range jdg
 
 
 data TacticParams = TacticParams
@@ -331,16 +354,20 @@ judgementForHole state nfp range = do
 
 
 
-tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
+tacticCmd :: (Maybe Metaprogram -> OccName -> TacticsM ()) -> CommandFunction TacticParams
+-- TODO(sandy): This is gross; it is reusing var_name as a metaprogram name as well
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
-        pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
+        pm  <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
+        mpc <- MaybeT $ runIde state $ use GetMetaprogramCache nfp
+        let mp = M.lookup var_name $ getMetaprogramCache mpc
+
         x <- lift $ timeout 2e8 $
           case runTactic ctx jdg
-                $ tac
+                $ tac mp
                 $ mkVarOcc
                 $ T.unpack var_name of
             Left err ->
