@@ -18,26 +18,32 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
-import Control.Monad.Error.Class
 import           Control.Arrow
+import           Control.DeepSeq (NFData)
 import           Control.Monad
+import           Control.Monad.Error.Class
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import           Data.Binary (Binary)
+import qualified Data.ByteString.Char8 as BS
 import           Data.Coerce
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
+import           Data.Hashable (Hashable)
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import           Data.Traversable
+import           Development.IDE (ShowDiagnostic(ShowDiag))
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (defineEarlyCutoff, define, use, useWithStale, IdeState (..))
+import           Development.IDE.Core.Shake (GetModificationTime (..), defineEarlyCutoff, define, use, useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
@@ -51,6 +57,7 @@ import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Metaprogramming
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
@@ -62,13 +69,6 @@ import           Language.Haskell.LSP.Types
 import           OccName
 import           SrcLoc (containsSpan)
 import           System.Timeout
-import Data.Hashable (Hashable)
-import Control.DeepSeq (NFData)
-import Data.Binary (Binary)
-import Ide.Plugin.Tactic.Metaprogramming
-import Development.IDE (getFileContents)
-import qualified Data.ByteString.Char8 as BS
-import Development.IDE (ShowDiagnostic(ShowDiag))
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -99,7 +99,8 @@ type instance RuleResult GetMetaprogramCache = MetaprogramCache
 tacticRules :: Rules ()
 tacticRules = do
   defineEarlyCutoff $ \GetMetaprogram nfp -> do
-    (mtime, Just contents) <- getFileContents nfp
+    mtime <- use GetModificationTime nfp
+    contents <- liftIO $ T.readFile $ fromNormalizedFilePath nfp
     pure
       $ (Just $ BS.pack $ show mtime ,)
       $ case parseMetaprogram (fromNormalizedFilePath nfp) contents of
