@@ -20,6 +20,7 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure      (expectFailBecause)
 import           Test.Tasty.HUnit
+import System.IO
 
 tests :: TestTree
 tests = testGroup
@@ -95,7 +96,7 @@ tests = testGroup
 
 goldenTest :: FilePath -> IO ()
 goldenTest input = do
-  setEnv "LANG" "en_US.UTF-8"
+  print localeEncoding
   runSession hlsCommand fullCaps evalPath $ do
     doc                              <- openDoc input "haskell"
     [CodeLens { _command = Just c }] <- getCodeLenses doc
