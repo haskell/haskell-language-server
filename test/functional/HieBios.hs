@@ -16,14 +16,14 @@ tests :: TestTree
 tests = testGroup "hie-bios" [
     ignoreTestBecause "Broken" $ testCase "loads modules inside main-is" $ do
         writeFile (hieBiosErrorPath </> "hie.yaml") ""
-        runSession hieCommand fullCaps "test/testdata/hieBiosMainIs" $ do
+        runSession hlsCommand fullCaps "test/testdata/hieBiosMainIs" $ do
             _ <- openDoc "Main.hs" "haskell"
             _ <- count 2 waitForDiagnostics
             return ()
 
     , ignoreTestBecause "Broken" $ testCase "reports errors in hie.yaml" $ do
         writeFile (hieBiosErrorPath </> "hie.yaml") ""
-        runSession hieCommand fullCaps hieBiosErrorPath $ do
+        runSession hlsCommand fullCaps hieBiosErrorPath $ do
             _ <- openDoc "Foo.hs" "haskell"
             _ <- skipManyTill loggingNotification (satisfy isMessage)
             return ()

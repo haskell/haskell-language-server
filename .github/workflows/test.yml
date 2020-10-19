@@ -1,0 +1,67 @@
+name: Testing
+
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ['8.10.2', '8.10.1', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        exclude:
+          - os: windows-latest
+            ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
+          - os: windows-latest
+            ghc: '8.8.4' # also fails due to segfault :(
+          - os: windows-latest
+            ghc: '8.8.3' # fails due to segfault
+          - os: windows-latest
+            ghc: '8.8.2' # fails due to error with Cabal
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: actions/setup-haskell@v1
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: '3.2'
+        enable-stack: true
+
+    - name: Cache Cabal
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.cabal/
+        key: ${{ runner.os }}-${{ matrix.ghc }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-${{ matrix.ghc }}-build-
+          ${{ runner.os }}-${{ matrix.ghc }}
+
+    - run: cabal update
+
+    # Need this to work around filepath length limits in Windows
+    - name: Shorten binary names
+      shell: bash
+      run: |
+        sed -i.bak -e 's/haskell-language-server/hls/g' \
+                   -e 's/haskell_language_server/hls/g' \
+                   haskell-language-server.cabal
+        sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
+                   src/**/*.hs exe/*.hs
+
+    - name: Build
+      run: cabal build
+    - name: Test
+      env:
+        HLS_TEST_EXE: hls
+        HLS_WRAPPER_TEST_EXE: hls-wrapper
+      # run the tests without parallelism, otherwise tasty will attempt to run
+      # all functional test cases simultaneously which causes way too many hls
+      # instances to be spun up for the poor github actions runner to handle
+      run: cabal test --test-options=-j1
+

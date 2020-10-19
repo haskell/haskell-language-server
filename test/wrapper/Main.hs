@@ -1,9 +1,11 @@
-import Data.List
 import Data.Char
+import Data.List
+import Data.Maybe
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 import System.Process
+import System.Environment
 
 main :: IO ()
 main = do
@@ -25,7 +27,9 @@ projectGhcVersionTests = testGroup "--project-ghc-version"
 testDir :: FilePath -> String -> Assertion
 testDir dir expectedVer =
   withCurrentDirectoryInTmp dir $ do
-    actualVer <- trim <$> readProcess "haskell-language-server-wrapper" ["--project-ghc-version"] ""
+    testExe <- fromMaybe "haskell-language-server-wrapper"
+      <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
+    actualVer <- trim <$> readProcess testExe ["--project-ghc-version"] ""
     actualVer @?= expectedVer
 
 trim :: String -> String

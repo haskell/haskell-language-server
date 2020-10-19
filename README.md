@@ -27,21 +27,14 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
       - [Building](#building)
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
-  - [HLS LSP Configuration](#hls-lsp-configuration)
-  - [Project Configuration](#project-configuration)
-  - [Editor Integration](#editor-integration)
+  - [Configuring haskell-language-server](#configuring-haskell-language-server)
+  - [Configuring your project build](#configuring-your-project-build)
+  - [Configuring your editor](#configuring-your-editor)
     - [VS Code](#using-haskell-language-server-with-vs-code)
     - [Sublime Text](#using-haskell-language-server-with-sublime-text)
     - [Vim or Neovim](#using-haskell-language-server-with-vim-or-neovim)
-      - [Coc](#coc)
-      - [LanguageClient-neovim](#languageclient-neovim)
-        - [vim-plug](#vim-plug)
-        - [Clone the LanguageClient-neovim repo](#clone-the-languageclient-neovim-repo)
-        - [Sample `~/.vimrc`](#sample-vimrc)
     - [Atom](#using-haskell-language-server-with-atom)
     - [Emacs](#using-haskell-language-server-with-emacs)
-        - [Doom emacs](#using-haskell-language-server-with-doom-emacs)
-        - [Spacemacs](#using-haskell-language-server-with-spacemacs)
     - [Kakoune](#using-haskell-language-server-with-kakoune)
   - [Known limitations](#known-limitations)
     - [Preprocessor](#preprocessor)
@@ -253,44 +246,78 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 ./cabal-hls-install data
 ```
 
-## HLS LSP Configuration
+## Configuring `haskell-language-server`
 
-haskell-language-server supports some forms of configuration.
+Language servers like `haskell-language-server` expose most of their configuration via the client (i.e. the editor).
+That means that the way in which you configure the settings will depend on the client.
 
-This configuration is done via the LSP settings you provide with your editor and/or LSP client.
-Some examples include:
-* in VSCode/VSCodium this is done via the `Settings` tab
-* with `LanguageClient-neovim` you can point the [`g:LanguageClient_settingsPath`](https://github.com/autozimu/LanguageClient-neovim/blob/0e5c9546bfddbaa2b01e5056389c25aefc8bf989/doc/LanguageClient.txt#L221)
-  variable to the file in which you want to keep your LSP settings
+Most clients (editors) already have an opinion about how settings should be configured!
+For example, in VS Code you use the graphical Settings tab or `settings.json`, whereas in Emacs you use customization variables.
+In the [editor configuration section](#configuring-your-editor) we give some pointers for popular editors, but you should consult the documentation for your specific editor if you have trouble.
 
-### Formatting providers
-##### Raw LSP key name: `haskell.formattingProvider`
+However, we can say some high-level things about the kinds of configuration `haskell-language-server` uses, and how to use them.
+This can sound a bit confusing, but ultimately the client should present you with these options in a user-friendly way that makes sense for that editor.
 
-By default, haskell-language-server is compiled with support for several different formatters.
+### Generic server options
 
-These include
-* `floskell`
-* `fourmolu`
-* `ormolu`
-* `stylish-haskell`
-* `brittany` (if compiled with AGPL)
+The LSP protocol is designed to support many useful server configuration options generically.
+These are sent to the server by the client, and can be controlled without reference to a specific language.
 
-## Project Configuration
+For example, there are protocol methods for highlighting matching identifiers throughout a document.
+This is a capability which any server can implement, so the client can decide generically whether to ask the server to do it or not.
+So your editor can provide a setting to turn this on or off globally, for any language server you might use.
 
-**For a full explanation of possible configurations, refer to [hie-bios/README](https://github.com/mpickering/hie-bios/blob/master/README.md).**
+Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by `lsp-mode`.
 
-haskell-language-server has some limited support via hie-bios to detect automatically
-your project configuration and set up the environment for GHC.
+### Generic editor options
+
+Your editor may provide some settings that affect how the information from the language server is used.
+For example, whether popups are shown, or whether code lenses appear by default.
+
+Settings like this are typically provided by the generic LSP client support for your editor, for example in Emacs by `lsp-mode`.
+
+### Language-specific server options
+
+A specific language server can also have its own configuration options.
+These are still sent to the server by the client, but they can only be controlled by a specific client that knows about those options.
+
+For example, `haskell-language-server` allows you to choose the formatting provider which will be used for formatting Haskell source.
+This option obviously would not make sense for language servers for other languages, or even for other Haskell language servers (which need not even support formatting).
+
+Here is a list of the additional settings currently supported by `haskell-language-server`, along with their setting key (you may not need to know this) and default:
+- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with AGPL)
+- Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import
+- Maximum number of problems to report (`haskell.maxNumberOfProblems`, default 100): the maximum number of problems the server will send to the client
+- Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused)
+- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets (currently unused until we have snippets to provide)
+- Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again)
+- Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support (currently unused until the Hlint support is functional again)
+
+Settings like this are typically provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
+
+### Client options
+
+A particular client might also have some options of its own, for example to control how the server executable is started.
+
+Settings like this are typically be provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
+
+## Configuring your project build
+
+`haskell-language-server` has to compile your project in order to give you diagnostics, which means that it needs to know how to do so.
+This is handled by the [`hie-bios`](https://github.com/mpickering/hie-bios) project.
+
+**For a full explanation of how `hie-bios` determines the project build configuration, and how to configure it manually, refer to the [`hie-bios` README](https://github.com/mpickering/hie-bios/blob/master/README.md).**
+
+At the moment, `haskell-language-server` has some limited support to automatically detect your project build configuration.
 The plan is to improve it to handle most use cases.
 
-However, for now, the more reliable way is using a `hie.yaml` file in the root
-of the workspace to **explicitly** describe how to setup the environment.
-For that you need to know what *components* have your project and the path
-associated with each one. So you will need some knowledge about
+However, for now, the most reliable way is to manually configure `hie-bios` using a `hie.yaml` file in the root of the workspace.
+A `hie.yaml` file **explicitly** describes how to setup the environment to compile the various parts of your project.
+For that you need to know what *components* your project has, and the path associated with each one.
+So you will need some knowledge about
 [stack](https://docs.haskellstack.org/en/stable/build_command/#components) or [cabal](https://cabal.readthedocs.io/en/latest/cabal-commands.html?#cabal-v2-build) components.
 
-You also can use [this utility](https://github.com/Avi-D-coder/implicit-hie
-) to generate automatically `hie.yaml` files for
+You also can use [this utility](https://github.com/Avi-D-coder/implicit-hie) to automatically generate `hie.yaml` files for
 the most common stack and cabal configurations
 
 For example, to state that you want to use `stack` then the configuration file
@@ -382,17 +409,20 @@ dependencies:
   - someDep
 ```
 
-## Editor Integration
+## Configuring your editor
 
-Note to editor integrators: there is a `haskell-language-server-wrapper` executable, which is installed alongside the `haskell-language-server` executable. When this is invoked in the project root directory, it attempts to work out the GHC version used in the project, and then launch the matching `haskell-language-server` executable.
+Most editors provide a Haskell-specific extension that provides support for launching `haskell-language-server` and talking to it, as well as [exposing configuration options](#configuring-haskell-language-server).
 
-All of the editor integrations assume that you have already installed `haskell-language-server` (see above) and that the installation script put the `haskell-language-server` and `haskell-language-server-wrapper` binaries in your `PATH` (usually `~/.local/bin` or `~/.cabal/bin` on Linux and macOS, `%APPDATA%\local\bin` or `%APPDATA%\cabal\bin` on Windows).
+Editors typically assume that you have already installed `haskell-language-server` (see above) and that the installation script put the `haskell-language-server` and `haskell-language-server-wrapper` binaries in your `PATH` (usually `~/.local/bin` or `~/.cabal/bin` on Linux and macOS, `%APPDATA%\local\bin` or `%APPDATA%\cabal\bin` on Windows).
+The exception is VS Code, which can automatically install the binaries if they are not installed already.
 
 ### Using Haskell Language Server with VS Code
 
 Install from
 [the VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=haskell.haskell), or manually from the repository [vscode-haskell](https://github.com/haskell/vscode-haskell).
 The `haskell-language-server` and `haskell-language-server-wrapper` binaries will be automatically downloaded on an ad-hoc basis, but if you have them already installed on your PATH then it will just use them instead.
+
+Configuration is done via the "Haskell" section of "Settings".
 
 ### Using Haskell Language Server with Sublime Text
 
@@ -465,7 +495,7 @@ and issuing a `:PlugInstall` command within Neovim or Vim.
 As an alternative to using [vim-plug](https://github.com/junegunn/vim-plug) shown above, clone [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
 into `~/.vim/pack/XXX/start/`, where `XXX` is just a name for your "plugin suite".
 
-##### Sample `~/.vimrc`
+##### Configuration and sample `~/.vimrc` sections
 
 ```vim
 set rtp+=~/.vim/pack/XXX/start/LanguageClient-neovim
@@ -506,6 +536,9 @@ it may also be helpful to also specify root markers:
 let g:LanguageClient_rootMarkers = ['*.cabal', 'stack.yaml']
 ```
 
+Further configuration can be done by pointing the [`g:LanguageClient_settingsPath`](https://github.com/autozimu/LanguageClient-neovim/blob/0e5c9546bfddbaa2b01e5056389c25aefc8bf989/doc/LanguageClient.txt#L221)
+variable to the file in which you want to keep your LSP settings.
+
 ### Using Haskell Language Server with Atom
 
 Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui) and [haskell](https://atom.io/packages/haskell),
@@ -532,7 +565,7 @@ such as the path to the server binary.
 
 #### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
-Manual installation of packages is not required. 
+Manual installation of packages is not required.
 Enable the lsp module and the haskell lang module with lsp flag in `.doom.d/init.el`:
 
 ``` emacs-lisp
@@ -553,8 +586,8 @@ Enable the `haskell` layer and the `lsp` layer in your Spacemacs config file:
 ```emacs-lisp
 dotspacemacs-configuration-layers
   '(
-    haskell 
-    lsp 
+    haskell
+    lsp
     ;; ...
   )
 ```
@@ -648,3 +681,12 @@ To do every time you changed code and want to test it:
   - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
 - Restart HLS
   - With VS Code: `Haskell: Restart Haskell LSP Server`
+
+### Adding support for a new editor
+
+Adding support for new editors is fairly easy if the editor already has good support for generic LSP-based extensions.
+In that case, there will likely be an editor-specific support system for this (like `lsp-mode` for Emacs).
+This will typically provide instructions for how to support new languages.
+
+In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](#configuring-haskell-language-server) and
+for them to configure how the server is started.

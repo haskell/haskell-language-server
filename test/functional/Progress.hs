@@ -21,7 +21,7 @@ tests :: TestTree
 tests = testGroup "window/workDoneProgress" [
     ignoreTestBecause "Broken" $ testCase "sends indefinite progress notifications" $
     -- Testing that ghc-mod sends progress notifications
-        runSession hieCommand progressCaps "test/testdata" $ do
+        runSession hlsCommand progressCaps "test/testdata" $ do
             doc <- openDoc "ApplyRefact2.hs" "haskell"
 
             skipMany loggingNotification
@@ -77,7 +77,7 @@ tests = testGroup "window/workDoneProgress" [
 
     , ignoreTestBecause "Broken" $ testCase "sends indefinite progress notifications with liquid" $
         -- Testing that Liquid Haskell sends progress notifications
-        runSession hieCommand progressCaps "test/testdata" $ do
+        runSession hlsCommand progressCaps "test/testdata" $ do
         doc <- openDoc "liquid/Evens.hs" "haskell"
 
         skipMany loggingNotification
