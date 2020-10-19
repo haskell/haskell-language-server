@@ -1,5 +1,7 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections    #-}
+{-# LANGUAGE ViewPatterns     #-}
+
 module Ide.Plugin.Tactic.CodeGen where
 
 import           Control.Monad.Except
@@ -12,6 +14,7 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen (RdrNameStr)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
@@ -75,10 +78,23 @@ mkDestructPat dcon names
   | isTupleDataCon dcon =
       tuple pat_args
   | otherwise =
-      conP (fromString $ occNameString $ nameOccName $ dataConName dcon)
-           pat_args
+      infixifyPatIfNecessary dcon $
+        conP
+          (coerceName $ dataConName dcon)
+          pat_args
   where
     pat_args = fmap bvar' names
+
+
+infixifyPatIfNecessary :: DataCon -> Pat GhcPs -> Pat GhcPs
+infixifyPatIfNecessary dcon x
+  | dataConIsInfix dcon =
+      case x of
+        ConPatIn op (PrefixCon [lhs, rhs]) ->
+          ConPatIn op $ InfixCon lhs rhs
+        y -> y
+  | otherwise = x
+
 
 
 unzipTrace :: [(Trace, a)] -> (Trace, [a])
@@ -154,10 +170,26 @@ buildDataCon jdg dc apps = do
                   ) $ zip args [0..]
   pure
     . (rose (show dc) $ pure tr,)
-    . noLoc
-    $ case isTupleDataCon dc of
-      True  -> tuple $ fmap unLoc sgs
-      False -> foldl' (@@) (bvar' dcon_name) $ fmap unLoc sgs
+    $ mkCon dc sgs
+
+
+mkCon :: DataCon -> [LHsExpr GhcPs] -> LHsExpr GhcPs
+mkCon dcon (fmap unLoc -> args)
+  | isTupleDataCon dcon =
+      noLoc $ tuple args
+  | dataConIsInfix dcon
+  , (lhs : rhs : args') <- args =
+      noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
+  | otherwise =
+      noLoc $ foldl' (@@) (bvar' $ occName $ dcon_name) args
+  where
+    dcon_name = dataConName dcon
+
+
+
+coerceName :: HasOccName a => a -> RdrNameStr
+coerceName = fromString . occNameString . occName
+
 
 
 ------------------------------------------------------------------------------

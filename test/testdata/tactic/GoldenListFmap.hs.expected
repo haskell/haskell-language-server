@@ -2,4 +2,4 @@ fmapList :: (a -> b) -> [a] -> [b]
 fmapList = (\ fab l_a
    -> case l_a of
         [] -> []
-        ((:) a l_a3) -> (:) (fab a) (fmapList fab l_a3))
+        (a : l_a3) -> fab a : fmapList fab l_a3)
