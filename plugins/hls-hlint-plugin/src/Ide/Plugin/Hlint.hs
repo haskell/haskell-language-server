@@ -246,7 +246,7 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
     LSP.List diags = context ^. LSP.diagnostics
 
     mkHlintAction :: LSP.Diagnostic -> IO (Maybe LSP.CodeAction)
-    mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (LSP.StringValue code)) (Just "hlint") m _ _) =
+    mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (LSP.StringValue code)) (Just "hlint") _ _ _) =
       Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
      where
        codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing (Just cmd)
