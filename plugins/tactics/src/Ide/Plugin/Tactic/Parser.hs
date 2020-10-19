@@ -27,6 +27,7 @@ import           Name
 
 import qualified Refinery.Tactic as R
 
+import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.Types
 
@@ -121,7 +122,7 @@ tactic = flip P.makeExprParser operators $  P.choice
     , named' "homo" homo
     , named' "apply" apply
     , named  "split" split
-    , named  "auto" (auto' 4)
+    , named  "auto" auto
     , R.try <$> (keyword "try" *> tactics)
     ]
 
