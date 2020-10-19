@@ -219,8 +219,7 @@ codeActionProvider :: CodeActionProvider
 codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right $ List []) $ do
-        (_, jdg, _, dflags) <- judgementForHole state nfp range
-        mpc <- MaybeT $ runIde state $ use GetMetaprogramCache nfp
+        (_, jdg, _, dflags, mpc) <- judgementForHole state nfp range
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound]
@@ -310,7 +309,7 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
-    -> MaybeT IO (Range, Judgement, Context, DynFlags)
+    -> MaybeT IO (Range, Judgement, Context, DynFlags, MetaprogramCache)
 judgementForHole state nfp range = do
   (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
   range' <- liftMaybe $ fromCurrentRange amapping range
@@ -333,9 +332,11 @@ judgementForHole state nfp range = do
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+  mpc <- MaybeT $ runIde state $ use GetMetaprogramCache nfp
   let tcg = fst $ tm_internals_ $ tmrModule tcmod
       tcs = tm_typechecked_source $ tmrModule tcmod
       ctx = mkContext
+              mpc
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ getDefiningBindings binds rss)
               tcg
@@ -351,6 +352,7 @@ judgementForHole state nfp range = do
            goal
        , ctx
        , dflags
+       , mpc
        )
 
 
@@ -360,11 +362,10 @@ tacticCmd :: (Maybe Metaprogram -> OccName -> TacticsM ()) -> CommandFunction Ta
 tacticCmd tac lf state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       fromMaybeT (Right Null, Nothing) $ do
-        (range', jdg, ctx, dflags) <- judgementForHole state nfp range
+        (range', jdg, ctx, dflags, mpc) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm  <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        mpc <- MaybeT $ runIde state $ use GetMetaprogramCache nfp
-        let mp = M.lookup var_name $ getMetaprogramCache mpc
+        let mp = M.lookup var_name $ unMetaprogramCache mpc
 
         x <- lift $ timeout 2e8 $
           case runTactic ctx jdg

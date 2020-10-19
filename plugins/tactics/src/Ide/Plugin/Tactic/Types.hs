@@ -196,12 +196,12 @@ type Trace = Rose String
 ------------------------------------------------------------------------------
 -- | The Reader context of tactics and rules
 data Context = Context
-  { ctxDefiningFuncs :: [(OccName, CType)]
+  { ctxDefiningFuncs :: ![(OccName, CType)]
     -- ^ The functions currently being defined
-  , ctxModuleFuncs :: [(OccName, CType)]
+  , ctxModuleFuncs :: ![(OccName, CType)]
     -- ^ Everything defined in the current module
+  , ctxMetaprogramCache :: !MetaprogramCache
   }
-  deriving stock (Eq, Ord)
 
 
 newtype Rose a = Rose (Tree a)
@@ -248,7 +248,7 @@ instance Show Metaprogram where
 
 
 newtype MetaprogramCache = MetaprogramCache
-  { getMetaprogramCache :: Map Text Metaprogram
+  { unMetaprogramCache :: Map Text Metaprogram
   }
   deriving stock (Show, Generic)
   deriving newtype (Semigroup, Monoid)

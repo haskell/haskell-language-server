@@ -27,7 +27,6 @@ import           Name
 
 import qualified Refinery.Tactic as R
 
-import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.Types
 
@@ -92,11 +91,11 @@ data Annototation
 
 annotation :: Parser Annototation
 annotation = asum
-  [ do
+  [ P.try $ do
       annotationHeader "name"
       n <- name
       pure $ AnnotationName n
-  , AnnotationAuto <$ annotationHeader "auto"
+  , P.try $ AnnotationAuto <$ annotationHeader "auto"
   ]
 
 
@@ -122,7 +121,7 @@ tactic = flip P.makeExprParser operators $  P.choice
     , named' "homo" homo
     , named' "apply" apply
     , named  "split" split
-    , named  "auto" auto
+    , named  "auto" (auto' 4)
     , R.try <$> (keyword "try" *> tactics)
     ]
 
