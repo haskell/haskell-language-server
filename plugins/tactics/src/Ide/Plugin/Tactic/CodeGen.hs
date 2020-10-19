@@ -153,10 +153,10 @@ buildDataCon jdg dc apps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
-    .  (rose (show dc) $ pure tr,)
+    . (rose (show dc) $ pure tr,)
     . noLoc
     $ case isTupleDataCon dc of
-      True -> tuple $ fmap unLoc sgs
+      True  -> tuple $ fmap unLoc sgs
       False -> foldl' (@@) (bvar' dcon_name) $ fmap unLoc sgs
 
 
