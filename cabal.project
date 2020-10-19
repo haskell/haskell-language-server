@@ -2,6 +2,7 @@ packages:
          ./
          ghcide
          hls-plugin-api
+         ./plugins/tactics
 
 source-repository-package
   type: git

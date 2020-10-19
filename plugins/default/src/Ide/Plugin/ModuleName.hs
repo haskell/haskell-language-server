@@ -94,7 +94,6 @@ import           Development.IDE.Core.Shake
 import           Data.Text                      ( pack )
 import           System.Directory               ( canonicalizePath )
 import           Data.List
-import           Ide.Plugin.Tactic.Debug        ( unsafeRender )
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
