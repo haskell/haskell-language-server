@@ -26,7 +26,7 @@ import           Language.Haskell.LSP.Types     ( ApplyWorkspaceEditRequest
 import           System.FilePath                ( (<.>)
                                                 , (</>)
                                                 )
-import           Test.Hls.Util                  ( hieCommand )
+import           Test.Hls.Util                  ( hlsCommand )
 import           Test.Tasty                     ( TestTree
                                                 , testGroup
                                                 )
@@ -42,7 +42,7 @@ tests = testGroup
   ]
 
 goldenTest :: FilePath -> IO ()
-goldenTest input = runSession hieCommand fullCaps testdataPath $ do
+goldenTest input = runSession hlsCommand fullCaps testdataPath $ do
   doc                              <- openDoc input "haskell"
   -- getCodeLenses doc >>= liftIO . print . length
   [CodeLens { _command = Just c }] <- getCodeLenses doc
