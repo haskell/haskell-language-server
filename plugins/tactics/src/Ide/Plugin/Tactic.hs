@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -20,8 +22,12 @@ import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
+import           Data.Generics.Aliases (mkQ)
+import           Data.Generics.Schemes (everything)
+import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
+import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
@@ -38,6 +44,7 @@ import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin (mkLspCommand)
+import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
@@ -50,6 +57,8 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
+import           SrcLoc (containsSpan)
+import           System.Timeout
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -250,12 +259,24 @@ judgementForHole state nfp range = do
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
   let tcg = fst $ tm_internals_ $ tmrModule tcmod
+      tcs = tm_typechecked_source $ tmrModule tcmod
       ctx = mkContext
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ getDefiningBindings binds rss)
               tcg
       hyps = hypothesisFromBindings rss binds
-  pure (resulting_range, mkFirstJudgement hyps goal, ctx, dflags)
+  pure ( resulting_range
+       , mkFirstJudgement
+           hyps
+           (isRhsHole rss tcs)
+           (maybe
+              mempty
+              (uncurry M.singleton . fmap pure)
+                $ getRhsPosVals rss tcs)
+           goal
+       , ctx
+       , dflags
+       )
 
 
 
@@ -266,20 +287,26 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        case runTactic ctx jdg
-              $ tac
-              $ mkVarOcc
-              $ T.unpack var_name of
-          Left err ->
-            pure $ (, Nothing)
-              $ Left
-              $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-          Right res -> do
-            let g = graft (RealSrcSpan span) res
-                response = transform dflags (clientCapabilities lf) uri g pm
-            pure $ case response of
-               Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
-               Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+        x <- lift $ timeout 2e8 $
+          case runTactic ctx jdg
+                $ tac
+                $ mkVarOcc
+                $ T.unpack var_name of
+            Left err ->
+              pure $ (, Nothing)
+                $ Left
+                $ ResponseError InvalidRequest (T.pack $ show err) Nothing
+            Right (_, ext) -> do
+              let g = graft (RealSrcSpan span) ext
+                  response = transform dflags (clientCapabilities lf) uri g pm
+              pure $ case response of
+                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+                Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+        pure $ case x of
+          Just y -> y
+          Nothing -> (, Nothing)
+                   $ Left
+                   $ ResponseError InvalidRequest "timed out" Nothing
 tacticCmd _ _ _ _ =
   pure ( Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
        , Nothing
@@ -291,4 +318,35 @@ fromMaybeT def = fmap (fromMaybe def) . runMaybeT
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
+
+
+------------------------------------------------------------------------------
+-- | Is this hole immediately to the right of an equals sign?
+isRhsHole :: RealSrcSpan -> TypecheckedSource -> Bool
+isRhsHole rss tcs = everything (||) (mkQ False $ \case
+  TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
+  _ -> False
+  ) tcs
+
+
+------------------------------------------------------------------------------
+-- | Compute top-level position vals of a function
+getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Maybe (OccName, [OccName])
+getRhsPosVals rss tcs = getFirst $ everything (<>) (mkQ mempty $ \case
+  TopLevelRHS name ps
+      (L (RealSrcSpan span)  -- body with no guards and a single defn
+         (HsVar _ (L _ hole)))
+    | containsSpan rss span  -- which contains our span
+    , isHole $ occName hole  -- and the span is a hole
+    -> First $ do
+        patnames <- traverse getPatName ps
+        pure (occName name, patnames)
+  _ -> mempty
+  ) tcs
+
+
+
+-- TODO(sandy): Make this more robust
+isHole :: OccName -> Bool
+isHole = isPrefixOf "_" . occNameString
 

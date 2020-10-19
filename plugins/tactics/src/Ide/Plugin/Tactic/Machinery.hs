@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DerivingVia           #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -16,10 +17,12 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
-import           Control.Applicative
-import           Control.Monad.Except (throwError)
+import           Control.Arrow
+import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State (gets, modify)
+import           Control.Monad.State (MonadState(..))
+import           Control.Monad.State.Class (gets, modify)
+import           Control.Monad.State.Strict (StateT (..))
 import           Data.Coerce
 import           Data.Either
 import           Data.List (intercalate, sortBy)
@@ -45,10 +48,12 @@ substCTy subst = coerce . substTy subst . coerce
 -- goal.
 newSubgoal
     :: Judgement
-    -> RuleM (LHsExpr GhcPs)
+    -> Rule
 newSubgoal j = do
     unifier <- gets ts_unifier
-    subgoal $ substJdg unifier j
+    subgoal
+      $ substJdg unifier
+      $ unsetIsTopHole j
 
 
 ------------------------------------------------------------------------------
@@ -58,58 +63,86 @@ runTactic
     :: Context
     -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either [TacticError] (LHsExpr GhcPs)
+    -> Either [TacticError] (Trace, LHsExpr GhcPs)
 runTactic ctx jdg t =
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
-        tacticState = mempty { ts_skolems = skolems }
+        tacticState = defaultTacticState { ts_skolems = skolems }
     in case partitionEithers
           . flip runReader ctx
           . unExtractM
-          $ runTacticTWithState t jdg tacticState of
-      (errs, []) -> Left $ errs
-      (_, solns) -> do
+          $ runTacticT t jdg tacticState of
+      (errs, []) -> Left $ take 50 $ errs
+      (_, fmap assoc23 -> solns) -> do
+        let sorted = sortBy (comparing $ Down . uncurry scoreSolution . snd) $ solns
         -- TODO(sandy): remove this trace sometime
-        traceM $ intercalate "\n" $ fmap (unsafeRender . fst) $ solns
-        case sortBy (comparing $ Down . uncurry scoreSolution . snd) solns of
+        traceM
+            $ mappend "!!!solns: "
+            $ intercalate "\n"
+            $ reverse
+            $ take 5
+            $ fmap (show . fst) sorted
+        case sorted of
           (res : _) -> Right $ fst res
           -- guaranteed to not be empty
           _ -> Left []
 
+assoc23 :: (a, b, c) -> (a, (b, c))
+assoc23 (a, b, c) = (a, (b, c))
 
-scoreSolution :: TacticState -> [Judgement] -> Int
+
+tracePrim :: String -> Trace
+tracePrim = flip rose []
+
+
+tracing
+    :: Functor m
+    => String
+    -> TacticT jdg (Trace, ext) err s m a
+    -> TacticT jdg (Trace, ext) err s m a
+tracing s (TacticT m)
+  = TacticT $ StateT $ \jdg ->
+      mapExtract' (first $ rose s . pure) $ runStateT m jdg
+
+
+recursiveCleanup
+    :: TacticState
+    -> Maybe TacticError
+recursiveCleanup s =
+  let r = head $ ts_recursion_stack s
+   in case r of
+        True  -> Nothing
+        False -> Just NoProgress
+
+
+setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
+setRecursionFrameData b = do
+  modify $ withRecursionStack $ \case
+    (_ : bs) -> b : bs
+    []       -> []
+
+
+scoreSolution
+    :: TacticState
+    -> [Judgement]
+    -> ( Penalize Int  -- number of holes
+       , Reward Bool   -- all bindings used
+       , Penalize Int  -- number of introduced bindings
+       , Reward Int    -- number used bindings
+       )
 scoreSolution TacticState{..} holes
-  -- TODO(sandy): should this be linear?
-  = S.size ts_used_vals - length holes * 5
+  = ( Penalize $ length holes
+    , Reward $ S.null $ ts_intro_vals S.\\ ts_used_vals
+    , Penalize $ S.size ts_intro_vals
+    , Reward $ S.size ts_used_vals
+    )
 
 
-runTacticTWithState
-    :: (MonadExtract ext m)
-    => TacticT jdg ext err s m ()
-    -> jdg
-    -> s
-    -> m [Either err (ext, (s, [jdg]))]
-runTacticTWithState t j s = proofs' s $ fmap snd $ proofState t j
+newtype Penalize a = Penalize a
+  deriving (Eq, Ord, Show) via (Down a)
 
+newtype Reward a = Reward a
+  deriving (Eq, Ord, Show) via a
 
-proofs'
-    :: (MonadExtract ext m)
-    => s
-    -> ProofStateT ext ext err s m goal
-    -> m [(Either err (ext, (s, [goal])))]
-proofs' s p = go s [] p
-    where
-      go s goals (Subgoal goal k) = do
-         h <- hole
-         (go s (goals ++ [goal]) $ k h)
-      go s goals (Effect m) = go s goals =<< m
-      go s goals (Stateful f) =
-          let (s', p) = f s
-          in go s' goals p
-      go s goals (Alt p1 p2) = liftA2 (<>) (go s goals p1) (go s goals p2)
-      go s goals (Interleave p1 p2) = liftA2 (interleave) (go s goals p1) (go s goals p2)
-      go _ _ Empty = pure []
-      go _ _ (Failure err) = pure [throwError err]
-      go s goals (Axiom ext) = pure [Right (ext, (s, goals))]
 
 
 ------------------------------------------------------------------------------

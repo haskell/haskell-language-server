@@ -19,7 +19,7 @@ extra-deps:
 - fourmolu-0.2.0.0
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
-- refinery-0.2.0.0
+- refinery-0.3.0.0
 - retrie-0.1.1.1
 - stylish-haskell-0.12.2.0
 - semigroups-0.18.5

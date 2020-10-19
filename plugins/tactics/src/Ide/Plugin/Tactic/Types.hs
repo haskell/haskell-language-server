@@ -1,10 +1,13 @@
-{-# LANGUAGE DeriveFunctor                  #-}
-{-# LANGUAGE DeriveGeneric                  #-}
-{-# LANGUAGE DerivingStrategies             #-}
-{-# LANGUAGE FlexibleInstances              #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving     #-}
-{-# LANGUAGE MultiParamTypeClasses          #-}
-{-# LANGUAGE TypeSynonymInstances           #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TypeSynonymInstances       #-}
+{-# OPTIONS_GHC -fno-warn-orphans       #-}
 
 module Ide.Plugin.Tactic.Types
   ( module Ide.Plugin.Tactic.Types
@@ -17,17 +20,21 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
+import Control.Lens hiding (Context)
+import Data.Generics.Product (field)
 import Control.Monad.Reader
 import Data.Function
 import Data.Map (Map)
 import Data.Set (Set)
-import Development.IDE.GHC.Compat
+import Development.IDE.GHC.Compat hiding (Node)
 import Development.IDE.Types.Location
 import GHC.Generics
 import Ide.Plugin.Tactic.Debug
 import OccName
 import Refinery.Tactic
 import Type
+import Data.Tree
+import Data.Coerce
 
 
 ------------------------------------------------------------------------------
@@ -40,42 +47,73 @@ instance Eq CType where
 instance Ord CType where
   compare = nonDetCmpType `on` unCType
 
+instance Show CType where
+  show  = unsafeRender . unCType
+
+instance Show OccName where
+  show  = unsafeRender
+
+instance Show Var where
+  show  = unsafeRender
+
+instance Show TCvSubst where
+  show  = unsafeRender
+
+instance Show (LHsExpr GhcPs) where
+  show  = unsafeRender
+
+instance Show DataCon where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
     { ts_skolems   :: !([TyVar])
     , ts_unifier   :: !(TCvSubst)
     , ts_used_vals :: !(Set OccName)
-    }
+    , ts_intro_vals :: !(Set OccName)
+    , ts_recursion_stack :: ![Bool]
+    } deriving stock (Show, Generic)
 
-instance Semigroup TacticState where
-  TacticState a1 b1 c1 <> TacticState a2 b2 c2
-    = TacticState
-        (a1 <> a2)
-        (unionTCvSubst b1 b2)
-        (c1 <> c2)
 
-instance Monoid TacticState where
-  mempty = TacticState mempty emptyTCvSubst mempty
+defaultTacticState :: TacticState
+defaultTacticState =
+  TacticState mempty emptyTCvSubst mempty mempty mempty
+
+
+withRecursionStack
+  :: ([Bool] -> [Bool]) -> TacticState -> TacticState
+withRecursionStack f =
+  field @"ts_recursion_stack" %~ f
 
 
 withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
-withUsedVals f ts = ts
-  { ts_used_vals = f $ ts_used_vals ts
-  }
+withUsedVals f =
+  field @"ts_used_vals" %~ f
+
+
+withIntroducedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
+withIntroducedVals f =
+  field @"ts_intro_vals" %~ f
+
 
 
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis  :: !(Map OccName a)
-  , _jDestructed  :: !(Set OccName)
+  { _jHypothesis :: !(Map OccName a)
+  , _jDestructed :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jPatternVals :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
-  , _jGoal        :: !(a)
+  , _jBlacklistDestruct :: !(Bool)
+  , _jWhitelistSplit :: !(Bool)
+  , _jPositionMaps :: !(Map OccName [[OccName]])
+  , _jAncestry     :: !(Map OccName (Set OccName))
+  , _jIsTopHole    :: !Bool
+  , _jGoal         :: !(a)
   }
-  deriving stock (Eq, Ord, Generic, Functor)
+  deriving stock (Eq, Ord, Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 
@@ -85,8 +123,8 @@ newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
-instance MonadExtract (LHsExpr GhcPs) ExtractM where
-  hole = pure $ noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_"
+instance MonadExtract (Trace, LHsExpr GhcPs) ExtractM where
+  hole = pure (mempty, noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_")
 
 
 ------------------------------------------------------------------------------
@@ -100,6 +138,9 @@ data TacticError
   | NoApplicableTactic
   | AlreadyDestructed OccName
   | IncorrectDataCon DataCon
+  | RecursionOnWrongParam OccName Int OccName
+  | UnhelpfulDestruct OccName
+  | UnhelpfulSplit OccName
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -129,12 +170,21 @@ instance Show TacticError where
       "Already destructed " <> unsafeRender name
     show (IncorrectDataCon dcon) =
       "Data con doesn't align with goal type (" <> unsafeRender dcon <> ")"
+    show (RecursionOnWrongParam call p arg) =
+      "Recursion on wrong param (" <> show call <> ") on arg"
+        <> show p <> ": " <> show arg
+    show (UnhelpfulDestruct n) =
+      "Destructing patval " <> show n <> " leads to no new types"
+    show (UnhelpfulSplit n) =
+      "Splitting constructor " <> show n <> " leads to no new goals"
 
 
 ------------------------------------------------------------------------------
-type TacticsM  = TacticT Judgement (LHsExpr GhcPs) TacticError TacticState ExtractM
-type RuleM     = RuleT Judgement (LHsExpr GhcPs) TacticError TacticState ExtractM
-type Rule      = RuleM (LHsExpr GhcPs)
+type TacticsM  = TacticT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
+type RuleM     = RuleT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
+type Rule      = RuleM (Trace, LHsExpr GhcPs)
+
+type Trace = Rose String
 
 
 ------------------------------------------------------------------------------
@@ -146,4 +196,26 @@ data Context = Context
     -- ^ Everything defined in the current module
   }
   deriving stock (Eq, Ord)
+
+
+newtype Rose a = Rose (Tree a)
+  deriving stock (Eq, Functor, Generic)
+
+instance Show (Rose String) where
+  show = unlines . dropEveryOther . lines . drawTree . coerce
+
+dropEveryOther :: [a] -> [a]
+dropEveryOther []           = []
+dropEveryOther [a]          = [a]
+dropEveryOther (a : _ : as) = a : dropEveryOther as
+
+instance Semigroup a => Semigroup (Rose a) where
+  Rose (Node a as) <> Rose (Node b bs) = Rose $ Node (a <> b) (as <> bs)
+
+instance Monoid a => Monoid (Rose a) where
+  mempty = Rose $ Node mempty mempty
+
+rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
+rose a [Rose (Node a' rs)] | a' == mempty = Rose $ Node a rs
+rose a rs = Rose $ Node a $ coerce rs
 

@@ -34,8 +34,8 @@ getFunBindId (AbsBinds _ _ _ abes _ _ _)
 getFunBindId _ = []
 
 
-getCurrentDefinitions :: MonadReader Context m => m [OccName]
-getCurrentDefinitions = asks $ fmap fst . ctxDefiningFuncs
+getCurrentDefinitions :: MonadReader Context m => m [(OccName, CType)]
+getCurrentDefinitions = asks $ ctxDefiningFuncs
 
 getModuleHypothesis :: MonadReader Context m => m [(OccName, CType)]
 getModuleHypothesis = asks ctxModuleFuncs
