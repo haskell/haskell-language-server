@@ -71,7 +71,7 @@ hlintTests = testGroup "hlint suggestions" [
     , testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata/hlint" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
 
-        _ <- waitForDiagnostics
+        _ <- waitForDiagnosticsSource "hlint"
 
         (CACommand cmd:_) <- getAllCodeActions doc
 
@@ -85,16 +85,16 @@ hlintTests = testGroup "hlint suggestions" [
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         _ <- openDoc "ApplyRefact2.hs" "haskell"
-        diags <- waitForDiagnostics
+        diags <- waitForDiagnosticsSource "hlint"
 
-        liftIO $ (Just "hlint" `elem` map (^. L.source) diags) @? "There are hlint diagnostics"
+        liftIO $ length diags > 0 @? "There are hlint diagnostics"
 
         let config' = def { hlintOn = False }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
         diags' <- waitForDiagnostics
 
-        liftIO $ (not $ Just "hlint" `elem` map (^. L.source) diags') @? "There are not hlint diagnostics"
+        liftIO $ (not $ Just "hlint" `elem` map (^. L.source) diags') @? "There are no hlint diagnostics"
 
     ]
 
