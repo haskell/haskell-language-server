@@ -90,7 +90,7 @@ produceCompletions = do
                                     , pm_extra_src_files = [] -- src imports not allowed
                                     , pm_annotations = mempty
                                     }
-                        tm <- liftIO $ typecheckModule (IdeDefer True) env pm
+                        tm <- liftIO $ typecheckModule (IdeDefer True) env Nothing pm
                         case tm of
                             (_, Just (_,tcm)) -> do
                                 cdata <- liftIO $ cacheDataProducer env tcm parsedDeps

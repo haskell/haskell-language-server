@@ -26,8 +26,7 @@ module Development.IDE.Core.Compile
   , getModSummaryFromImports
   , loadHieFile
   , loadInterface
-  , loadDepModule
-  , loadModuleHome
+  , loadModulesHome
   , setupFinderCache
   , getDocsBatch
   , lookupName
@@ -71,7 +70,7 @@ import qualified HeaderInfo                     as Hdr
 import           HscMain                        (makeSimpleDetails, hscDesugar, hscTypecheckRename, hscSimplify, hscGenHardCode, hscInteractive)
 import           MkIface
 import           StringBuffer                   as SB
-import           TcRnMonad (finalSafeMode, TcGblEnv, tct_id, TcTyThing(AGlobal, ATcId), initTc, initIfaceLoad, tcg_th_coreplugins, tcg_binds)
+import           TcRnMonad
 import           TcIface                        (typecheckIface)
 import           TidyPgm
 
@@ -92,8 +91,8 @@ import           System.IO.Extra
 import Control.Exception (evaluate)
 import Exception (ExceptionMonad)
 import TcEnv (tcLookup)
-import Data.Time (UTCTime)
-
+import Data.Time (UTCTime, getCurrentTime)
+import Linker (unload)
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -126,9 +125,10 @@ computePackageDeps env pkg = do
 
 typecheckModule :: IdeDefer
                 -> HscEnv
+                -> Maybe [Linkable] -- ^ linkables not to unload, if Nothing don't unload anything
                 -> ParsedModule
                 -> IO (IdeResult (HscEnv, TcModuleResult))
-typecheckModule (IdeDefer defer) hsc pm = do
+typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
     fmap (\(hsc, res) -> case res of Left d -> (d,Nothing); Right (d,res) -> (d,fmap (hsc,) res)) $
       runGhcEnv hsc $
       catchSrcErrors "typecheck" $ do
@@ -138,9 +138,9 @@ typecheckModule (IdeDefer defer) hsc pm = do
 
         modSummary' <- initPlugins modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-            tcRnModule $ enableTopLevelWarnings
-                       $ enableUnnecessaryAndDeprecationWarnings
-                       $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+            tcRnModule keep_lbls $ enableTopLevelWarnings
+                                 $ enableUnnecessaryAndDeprecationWarnings
+                                 $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
@@ -148,13 +148,15 @@ typecheckModule (IdeDefer defer) hsc pm = do
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
-tcRnModule :: GhcMonad m => ParsedModule -> m TcModuleResult
-tcRnModule pmod = do
+tcRnModule :: GhcMonad m => Maybe [Linkable] -> ParsedModule -> m TcModuleResult
+tcRnModule keep_lbls pmod = do
   let ms = pm_mod_summary pmod
   hsc_env <- getSession
   let hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
   (tc_gbl_env, mrn_info)
-        <- liftIO $ hscTypecheckRename hsc_env_tmp ms $
+        <- liftIO $ do
+             whenJust keep_lbls $ unload hsc_env_tmp
+             hscTypecheckRename hsc_env_tmp ms $
                        HsParsedModule { hpm_module = parsedSource pmod,
                                         hpm_src_files = pm_extra_src_files pmod,
                                         hpm_annotations = pm_annotations pmod }
@@ -182,33 +184,28 @@ mkHiFileResultCompile
     :: HscEnv
     -> TcModuleResult
     -> ModGuts
+    -> LinkableType -- ^ use object code or byte code?
     -> IO (IdeResult HiFileResult)
-mkHiFileResultCompile session' tcm simplified_guts = catchErrs $ do
+mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
   let session = session' { hsc_dflags = ms_hspp_opts ms }
       ms = pm_mod_summary $ tmrParsed tcm
   -- give variables unique OccNames
   (guts, details) <- tidyProgram session simplified_guts
 
-  (diags, obj_res) <- generateObjectCode session ms guts
-  case obj_res of
-    Nothing -> do
-#if MIN_GHC_API_VERSION(8,10,0) 
-      let !partial_iface = force (mkPartialIface session details simplified_guts)
-      final_iface <- mkFullIface session partial_iface
-#else
-      (final_iface,_) <- mkIface session Nothing details simplified_guts
-#endif
-      let mod_info = HomeModInfo final_iface details Nothing
-      pure (diags, Just $ HiFileResult ms mod_info)
-    Just linkable -> do
+  let genLinkable = case ltype of
+        ObjectLinkable -> generateObjectCode
+        BCOLinkable -> generateByteCode
+
+  (diags, linkable) <- genLinkable session ms guts
 #if MIN_GHC_API_VERSION(8,10,0)
-      let !partial_iface = force (mkPartialIface session details simplified_guts)
-      final_iface <- mkFullIface session partial_iface
+  let !partial_iface = force (mkPartialIface session details simplified_guts)
+  final_iface <- mkFullIface session partial_iface
 #else
-      (final_iface,_) <- mkIface session Nothing details simplified_guts
+  (final_iface,_) <- mkIface session Nothing details simplified_guts
 #endif
-      let mod_info = HomeModInfo final_iface details (Just linkable)
-      pure (diags, Just $! HiFileResult ms mod_info)
+  let mod_info = HomeModInfo final_iface details linkable
+  pure (diags, Just $! HiFileResult ms mod_info)
+
   where
     dflags = hsc_dflags session'
     source = "compile"
@@ -221,7 +218,7 @@ mkHiFileResultCompile session' tcm simplified_guts = catchErrs $ do
 initPlugins :: GhcMonad m => ModSummary -> m ModSummary
 initPlugins modSummary = do
     session <- getSession
-    dflags <- liftIO $ initializePlugins session (ms_hspp_opts modSummary)
+    dflags <- liftIO $ initializePlugins session $ ms_hspp_opts modSummary
     return modSummary{ms_hspp_opts = dflags}
 
 -- | Whether we should run the -O0 simplifier when generating core.
@@ -261,7 +258,8 @@ generateObjectCode hscEnv summary guts = do
           catchSrcErrors "object" $ do
               session <- getSession
               let dot_o =  ml_obj_file (ms_location summary)
-              let session' = session { hsc_dflags = (hsc_dflags session) { outputFile = Just dot_o }}
+                  mod = ms_mod summary
+                  session' = session { hsc_dflags = (hsc_dflags session) { outputFile = Just dot_o }}
                   fp = replaceExtension dot_o "s"
               liftIO $ createDirectoryIfMissing True (takeDirectory fp)
               (warnings, dot_o_fp) <-
@@ -275,7 +273,10 @@ generateObjectCode hscEnv summary guts = do
                                 fp
                       compileFile session' StopLn (outputFilename, Just (As False))
               let unlinked = DotO dot_o_fp
-              let linkable = LM (ms_hs_date summary) (ms_mod summary) [unlinked]
+              -- Need time to be the modification time for recompilation checking
+              t <- liftIO $ getModificationTime dot_o_fp
+              let linkable = LM t mod [unlinked]
+
               pure (map snd warnings, linkable)
 
 generateByteCode :: HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
@@ -293,7 +294,9 @@ generateByteCode hscEnv summary guts = do
                                 (_tweak summary)
 #endif
               let unlinked = BCOs bytecode sptEntries
-              let linkable = LM (ms_hs_date summary) (ms_mod summary) [unlinked]
+              time <- liftIO getCurrentTime
+              let linkable = LM time (ms_mod summary) [unlinked]
+
               pure (map snd warnings, linkable)
 
 demoteTypeErrorsToWarnings :: ParsedModule -> ParsedModule
@@ -443,56 +446,44 @@ handleGenerationErrors' dflags source action =
 
 -- | Initialise the finder cache, dependencies should be topologically
 -- sorted.
-setupFinderCache :: GhcMonad m => [ModSummary] -> m ()
-setupFinderCache mss = do
-    session <- getSession
-
-    -- set the target and module graph in the session
-    let graph = mkModuleGraph mss
-    setSession session { hsc_mod_graph = graph }
+setupFinderCache :: [ModSummary] -> HscEnv -> IO HscEnv
+setupFinderCache mss session = do
 
     -- Make modules available for others that import them,
     -- by putting them in the finder cache.
     let ims  = map (InstalledModule (thisInstalledUnitId $ hsc_dflags session) . moduleName . ms_mod) mss
         ifrs = zipWith (\ms -> InstalledFound (ms_location ms)) mss ims
+    -- set the target and module graph in the session
+        graph = mkModuleGraph mss
+
     -- We have to create a new IORef here instead of modifying the existing IORef as
     -- it is shared between concurrent compilations.
-    prevFinderCache <- liftIO $ readIORef $ hsc_FC session
+    prevFinderCache <- readIORef $ hsc_FC session
     let newFinderCache =
             foldl'
                 (\fc (im, ifr) -> GHC.extendInstalledModuleEnv fc im ifr) prevFinderCache
                 $ zip ims ifrs
-    newFinderCacheVar <- liftIO $ newIORef $! newFinderCache
-    modifySession $ \s -> s { hsc_FC = newFinderCacheVar }
+    newFinderCacheVar <- newIORef $! newFinderCache
+
+    pure $ session { hsc_FC = newFinderCacheVar, hsc_mod_graph = graph }
 
 
--- | Load a module, quickly. Input doesn't need to be desugared.
+-- | Load modules, quickly. Input doesn't need to be desugared.
 -- A module must be loaded before dependent modules can be typechecked.
 -- This variant of loadModuleHome will *never* cause recompilation, it just
 -- modifies the session.
---
 -- The order modules are loaded is important when there are hs-boot files.
 -- In particular you should make sure to load the .hs version of a file after the
 -- .hs-boot version.
-loadModuleHome
-    :: HomeModInfo
+loadModulesHome
+    :: [HomeModInfo]
     -> HscEnv
     -> HscEnv
-loadModuleHome mod_info e =
-    e { hsc_HPT = addToHpt (hsc_HPT e) mod_name mod_info }
+loadModulesHome mod_infos e =
+    e { hsc_HPT = addListToHpt (hsc_HPT e) [(mod_name x, x) | x <- mod_infos]
+      , hsc_type_env_var = Nothing }
     where
-      mod_name = moduleName $ mi_module $ hm_iface mod_info
-
--- | Load module interface.
-loadDepModuleIO :: HomeModInfo -> HscEnv -> IO HscEnv
-loadDepModuleIO mod_info hsc = do
-    return $ loadModuleHome mod_info hsc
-
-loadDepModule :: GhcMonad m => HomeModInfo -> m ()
-loadDepModule mod_info = do
-  e <- getSession
-  e' <- liftIO $ loadDepModuleIO mod_info e
-  setSession e'
+      mod_name = moduleName . mi_module . hm_iface
 
 -- | GhcMonad function to chase imports of a module given as a StringBuffer. Returns given module's
 -- name and its imports.
@@ -717,10 +708,10 @@ loadInterface
   :: MonadIO m => HscEnv
   -> ModSummary
   -> SourceModified
-  -> Bool
-  -> (Bool -> m ([FileDiagnostic], Maybe HiFileResult)) -- ^ Action to regenerate an interface
+  -> Maybe LinkableType
+  -> (Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult)) -- ^ Action to regenerate an interface
   -> m ([FileDiagnostic], Maybe HiFileResult)
-loadInterface session ms sourceMod objNeeded regen = do
+loadInterface session ms sourceMod linkableNeeded regen = do
     res <- liftIO $ checkOldIface session ms sourceMod Nothing
     case res of
           (UpToDate, Just iface)
@@ -740,19 +731,20 @@ loadInterface session ms sourceMod objNeeded regen = do
             -- one-shot mode.
             | not (mi_used_th iface) || SourceUnmodifiedAndStable == sourceMod
             -> do
-             linkable <-
-               if objNeeded
-               then liftIO $ findObjectLinkableMaybe (ms_mod ms) (ms_location ms)
-               else pure Nothing
-             let objUpToDate = not objNeeded || case linkable of
+             linkable <- case linkableNeeded of
+               Just ObjectLinkable -> liftIO $ findObjectLinkableMaybe (ms_mod ms) (ms_location ms)
+               _ -> pure Nothing
+
+             -- We don't need to regenerate if the object is up do date, or we don't need one
+             let objUpToDate = isNothing linkableNeeded || case linkable of
                    Nothing -> False
                    Just (LM obj_time _ _) -> obj_time > ms_hs_date ms
              if objUpToDate
              then do
                hmi <- liftIO $ mkDetailsFromIface session iface linkable
                return ([], Just $ HiFileResult ms hmi)
-             else regen objNeeded
-          (_reason, _) -> regen objNeeded
+             else regen linkableNeeded
+          (_reason, _) -> regen linkableNeeded
 
 mkDetailsFromIface :: HscEnv -> ModIface -> Maybe Linkable -> IO HomeModInfo
 mkDetailsFromIface session iface linkable = do
