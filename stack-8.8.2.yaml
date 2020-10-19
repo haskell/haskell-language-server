@@ -25,8 +25,8 @@ extra-deps:
 # - ghcide-0.1.0
 - ghc-check-0.5.0.1
 - ghc-exactprint-0.6.3.2
-- ghc-lib-8.10.2.20200808
-- ghc-lib-parser-8.10.2.20200808
+- ghc-lib-8.10.2.20200916
+- ghc-lib-parser-8.10.2.20200916
 - ghc-lib-parser-ex-8.10.0.16
 - haddock-library-1.8.0
 - haskell-lsp-0.22.0.0
