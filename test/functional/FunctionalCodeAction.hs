@@ -88,18 +88,17 @@ hlintTests = testGroup "hlint suggestions" [
         let config = def { hlintOn = True }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
-        doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags <- waitForDiagnosticsSource "hlint"
+        _ <- openDoc "ApplyRefact2.hs" "haskell"
+        diags <- waitForDiagnostics
 
-        liftIO $ length diags @?= 2
+        liftIO $ (Just "hlint" `elem` map (^. L.source) diags) @? "There are hlint diagnostics"
 
         let config' = def { hlintOn = False }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
-        _ <- waitForDiagnosticsSource "typecheck"
-        diags' <- getCurrentDiagnostics doc
+        diags' <- waitForDiagnostics
 
-        liftIO $ length diags' @?= 1 -- typecheck diagnostic "Defined but not used"
+        liftIO $ (not $ Just "hlint" `elem` map (^. L.source) diags') @? "There are not hlint diagnostics"
 
     ]
 
