@@ -55,10 +55,7 @@ destructMatches f f2 t jdg = do
           let hy' = zip names $ coerce args
               dcon_name = nameOccName $ dataConName dc
 
-          let pat :: Pat GhcPs
-              pat = conP (fromString $ occNameString dcon_name)
-                  $ fmap bvar' names
-              j = f2 hy'
+          let j = f2 hy'
                 $ withPositionMapping dcon_name names
                 $ introducingPat hy'
                 $ withNewGoal g jdg
@@ -67,8 +64,21 @@ destructMatches f f2 t jdg = do
           pure ( rose ("match " <> show dc <> " {" <>
                           intercalate ", " (fmap show names) <> "}")
                     $ pure tr
-               , match [pat] $ unLoc sg
+               , match [mkDestructPat dc names] $ unLoc sg
                )
+
+
+------------------------------------------------------------------------------
+-- | Produces a pattern for a data con and the names of its fields.
+mkDestructPat :: DataCon -> [OccName] -> Pat GhcPs
+mkDestructPat dcon names
+  | isTupleDataCon dcon =
+      tuple pat_args
+  | otherwise =
+      conP (fromString $ occNameString $ nameOccName $ dataConName dcon)
+           pat_args
+  where
+    pat_args = fmap bvar' names
 
 
 unzipTrace :: [(Trace, a)] -> (Trace, [a])
@@ -143,11 +153,11 @@ buildDataCon jdg dc apps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
-    . (rose (show dc) $ pure tr,)
+    .  (rose (show dc) $ pure tr,)
     . noLoc
-    . foldl' (@@)
-        (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
-    $ fmap unLoc sgs
+    $ case isTupleDataCon dc of
+      True -> tuple $ fmap unLoc sgs
+      False -> foldl' (@@) (bvar' dcon_name) $ fmap unLoc sgs
 
 
 ------------------------------------------------------------------------------
