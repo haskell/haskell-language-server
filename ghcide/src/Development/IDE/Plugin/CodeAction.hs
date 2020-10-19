@@ -205,15 +205,15 @@ caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -
 caRemoveRedundantImports m contents digs ctxDigs uri
   | Just pm <- m,
     r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) digs,
-    not $ null r,
     allEdits <- [ e | (_, (_, edits)) <- r, e <- edits],
     caRemoveAll <- removeAll allEdits,
     ctxEdits <- [ x | x@(d, _) <- r, d `elem` ctxDigs],
-    caRemoveCtx <- join $ map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
-      = caRemoveCtx ++ caRemoveAll
+    not $ null ctxEdits,
+    caRemoveCtx <- map (\(d, (title, tedit)) -> removeSingle title tedit d) ctxEdits
+      = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = [CACodeAction CodeAction{..}] where
+    removeSingle title tedit diagnostic = CACodeAction CodeAction{..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _title = title
         _kind = Just CodeActionQuickFix
@@ -221,7 +221,7 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
-    removeAll tedit = [CACodeAction CodeAction {..}] where
+    removeAll tedit = CACodeAction CodeAction {..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _title = "Remove all redundant imports"
         _kind = Just CodeActionQuickFix
