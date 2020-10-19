@@ -73,12 +73,16 @@ hlintTests = testGroup "hlint suggestions" [
 
         _ <- waitForDiagnostics
 
-        (CACommand cmdApplyAll:_) <- getAllCodeActions doc
+        (CACommand cmd:_) <- getAllCodeActions doc
 
-        executeCommand cmdApplyAll
+        executeCommand cmd
+
+        let expectedContent = if "Apply all hints" `T.isSuffixOf` (cmd ^. L.title)
+                                then "main = undefined\nfoo = id\n"
+                                else "main = undefined\nfoo x = x\n" -- only redundant id
 
         contents <- skipManyTill publishDiagnosticsNotification $ getDocumentEdit doc
-        liftIO $ contents @?= "main = undefined\nfoo = id\n"
+        liftIO $ contents @?= expectedContent
 
     , testCase "changing configuration enables or disables hints" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
         let config = def { hlintOn = True }
@@ -89,7 +93,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         liftIO $ length diags @?= 2
 
-        let config' = def { hlintOn = False}
+        let config' = def { hlintOn = False }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
         _ <- waitForDiagnosticsSource "typecheck"
