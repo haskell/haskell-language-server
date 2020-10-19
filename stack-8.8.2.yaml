@@ -4,6 +4,7 @@ packages:
 - .
 - ./ghcide/
 - ./hls-plugin-api
+- ./plugins/tactics
 
 ghc-options:
   "$everything": -haddock
