@@ -250,7 +250,7 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
       Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
      where
        codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing (Just cmd)
-       title = "Apply hint:" <> head (T.lines m)
+       title = "Apply hint: " <> code
        -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
        args = [toJSON (AOP (docId ^. LSP.uri) start code)]
     mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = return Nothing
@@ -371,4 +371,3 @@ writeFileUTF8NoNewLineTranslation file txt =
     hSetEncoding h utf8
     hSetNewlineMode h noNewlineTranslation
     hPutStr h (T.unpack txt)
-    
