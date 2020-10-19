@@ -47,9 +47,11 @@ module Development.IDE.GHC.Compat(
 
 #if MIN_GHC_API_VERSION(8,10,0)
     module GHC.Hs.Extension,
+    module LinkerTypes,
 #else
     module HsExtension,
     noExtField,
+    linkableTime,
 #endif
 
     module GHC,
@@ -64,6 +66,10 @@ module Development.IDE.GHC.Compat(
 #endif
 
     ) where
+
+#if MIN_GHC_API_VERSION(8,10,0)
+import LinkerTypes
+#endif
 
 import StringBuffer
 import DynFlags

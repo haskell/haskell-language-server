@@ -2504,9 +2504,9 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
-    , ignoreInWindowsForGHC88 (thReloadingTest `xfail` "expect broken (#672)")
+    , thReloadingTest
     -- Regression test for https://github.com/digital-asset/ghcide/issues/614
-    , thLinkingTest `xfail` "expect broken"
+    , thLinkingTest
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
               T.unlines
@@ -2566,6 +2566,7 @@ thReloadingTest = testCase "reloading-th-test" $ withoutStackEnv $ runWithExtraF
     expectDiagnostics
         [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
         ,("THC.hs", [(DsWarning, (6,0), "Top-level binding")])
+        ,("THB.hs", [(DsWarning, (4,0), "Top-level binding")])
         ]
 
     closeDoc adoc
