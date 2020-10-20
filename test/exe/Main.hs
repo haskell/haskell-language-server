@@ -30,6 +30,7 @@ import Data.Typeable
 import Development.IDE.Spans.Common
 import Development.IDE.Test
 import Development.IDE.Test.Runfiles
+import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import Development.IDE.Types.Location
 import Development.Shake (getDirectoryFilesIO)
 import qualified Experiments as Bench
@@ -3706,6 +3707,23 @@ unitTests = do
          uriToFilePath' uri @?= Just ""
      , testCase "Key with empty file path roundtrips via Binary"  $
          Binary.decode (Binary.encode (Q ((), emptyFilePath))) @?= Q ((), emptyFilePath)
+     , testCase "showDiagnostics prints ranges 1-based (like vscode)" $ do
+         let diag = ("", Diagnostics.ShowDiag, Diagnostic
+               { _range = Range
+                   { _start = Position{_line = 0, _character = 1}
+                   , _end = Position{_line = 2, _character = 3}
+                   }
+               , _severity = Nothing
+               , _code = Nothing
+               , _source = Nothing
+               , _message = ""
+               , _relatedInformation = Nothing
+               , _tags = Nothing
+               })
+         let shown = T.unpack (Diagnostics.showDiagnostics [diag])
+         let expected = "1:2-3:4"
+         assertBool (unwords ["expected to find range", expected, "in diagnostic", shown]) $
+             expected `isInfixOf` shown
      ]
 
 positionMappingTests :: TestTree
