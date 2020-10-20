@@ -9,7 +9,7 @@ For more information see https://gitlab.haskell.org/ghc/ghc/wikis/hie-files
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Development.IDE.GHC.HieTypes where
+module Compat.HieTypes where
 
 import Config
 import Binary

@@ -1,6 +1,7 @@
 resolver: nightly-2019-09-16
 packages:
 - .
+- ./hie-compat/
 extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
@@ -20,6 +21,8 @@ nix:
   packages: [zlib]
 flags:
   ghcide:
+    ghc-lib: True
+  hie-compat:
     ghc-lib: True
 ghc-options:
   ghc-lib-parser: -O0
