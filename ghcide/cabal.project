@@ -1,4 +1,4 @@
-packages: .
+packages: . ./hie-compat/
 
 test-show-details: direct
 

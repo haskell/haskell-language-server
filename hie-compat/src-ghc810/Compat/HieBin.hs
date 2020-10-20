@@ -3,7 +3,9 @@ Binary serialization for .hie files.
 -}
 {- HLINT ignore -}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Development.IDE.GHC.HieBin ( readHieFile, readHieFileWithVersion, HieHeader, writeHieFile, HieName(..), toHieName, HieFileResult(..), hieMagic,NameCacheUpdater(..)) where
+module Compat.HieBin ( readHieFile, readHieFileWithVersion, HieHeader, writeHieFile, HieName(..), toHieName, HieFileResult(..), hieMagic, hieNameOcc,NameCacheUpdater(..)) where
+
+import GHC.Settings               ( maybeRead )
 
 import Config                     ( cProjectVersion )
 import Binary
@@ -17,7 +19,6 @@ import Outputable
 import PrelInfo
 import SrcLoc
 import UniqSupply                 ( takeUniqFromSupply )
-import Util                       ( maybeRead )
 import Unique
 import UniqFM
 import IfaceEnv
@@ -58,6 +59,15 @@ instance Outputable HieName where
   ppr (ExternalName m n sp) = text "ExternalName" <+> ppr m <+> ppr n <+> ppr sp
   ppr (LocalName n sp) = text "LocalName" <+> ppr n <+> ppr sp
   ppr (KnownKeyName u) = text "KnownKeyName" <+> ppr u
+
+hieNameOcc :: HieName -> OccName
+hieNameOcc (ExternalName _ occ _) = occ
+hieNameOcc (LocalName occ _) = occ
+hieNameOcc (KnownKeyName u) =
+  case lookupKnownKeyName u of
+    Just n -> nameOccName n
+    Nothing -> pprPanic "hieNameOcc:unknown known-key unique"
+                        (ppr (unpkUnique u))
 
 
 data HieSymbolTable = HieSymbolTable

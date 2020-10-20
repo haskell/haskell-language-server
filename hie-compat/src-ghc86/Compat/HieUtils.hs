@@ -2,7 +2,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Development.IDE.GHC.HieUtils where
+module Compat.HieUtils where
 
 import CoreMap
 import DynFlags                   ( DynFlags )
@@ -18,7 +18,7 @@ import Type
 import Var
 import VarEnv
 
-import Development.IDE.GHC.HieTypes
+import Compat.HieTypes
 
 import qualified Data.Map as M
 import qualified Data.Set as S

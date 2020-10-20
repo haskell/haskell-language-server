@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
-
 {-
-Forked from GHC v8.10.1 to work around the readFile side effect in mkHiefile
+Forked from GHC v8.8.1 to work around the readFile side effect in mkHiefile
 
 Main functions for .hie file generation
 -}
@@ -17,9 +16,7 @@ Main functions for .hie file generation
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-module Development.IDE.GHC.HieAst ( mkHieFile, enrichHie ) where
-
-import GhcPrelude
+module Compat.HieAst ( mkHieFile, enrichHie ) where
 
 import Avail                      ( Avails )
 import Bag                        ( Bag, bagToList )
@@ -30,20 +27,18 @@ import CoreUtils                  ( exprType )
 import ConLike                    ( conLikeName )
 import Desugar                    ( deSugarExpr )
 import FieldLabel
-import GHC.Hs
+import HsSyn
 import HscTypes
 import Module                     ( ModuleName, ml_hs_file )
 import MonadUtils                 ( concatMapM, liftIO )
 import Name                       ( Name, nameSrcSpan )
-import NameEnv                    ( NameEnv, emptyNameEnv, extendNameEnv, lookupNameEnv )
 import SrcLoc
 import TcHsSyn                    ( hsLitType, hsPatType )
-import Type                       ( mkVisFunTys, Type )
+import Type                       ( mkFunTys, Type )
 import TysWiredIn                 ( mkListTy, mkSumTy )
 import Var                        ( Id, Var, setVarName, varName, varType )
 import TcRnTypes
 import MkIface                    ( mkIfaceExports )
-import Panic
 
 import HieTypes
 import HieUtils
@@ -53,138 +48,10 @@ import qualified Data.ByteString as BS
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Data                  ( Data, Typeable )
-import Data.List                  ( foldl1' )
+import Data.List                  (foldl',  foldl1' )
 import Data.Maybe                 ( listToMaybe )
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class  ( lift )
-
-{- Note [Updating HieAst for changes in the GHC AST]
-
-When updating the code in this file for changes in the GHC AST, you
-need to pay attention to the following things:
-
-1) Symbols (Names/Vars/Modules) in the following categories:
-
-   a) Symbols that appear in the source file that directly correspond to
-   something the user typed
-   b) Symbols that don't appear in the source, but should be in some sense
-   "visible" to a user, particularly via IDE tooling or the like. This
-   includes things like the names introduced by RecordWildcards (We record
-   all the names introduced by a (..) in HIE files), and will include implicit
-   parameters and evidence variables after one of my pending MRs lands.
-
-2) Subtrees that may contain such symbols, or correspond to a SrcSpan in
-   the file. This includes all `Located` things
-
-For 1), you need to call `toHie` for one of the following instances
-
-instance ToHie (Context (Located Name)) where ...
-instance ToHie (Context (Located Var)) where ...
-instance ToHie (IEContext (Located ModuleName)) where ...
-
-`Context` is a data type that looks like:
-
-data Context a = C ContextInfo a -- Used for names and bindings
-
-`ContextInfo` is defined in `HieTypes`, and looks like
-
-data ContextInfo
-  = Use                -- ^ regular variable
-  | MatchBind
-  | IEThing IEType     -- ^ import/export
-  | TyDecl
-  -- | Value binding
-  | ValBind
-      BindType     -- ^ whether or not the binding is in an instance
-      Scope        -- ^ scope over which the value is bound
-      (Maybe Span) -- ^ span of entire binding
-  ...
-
-It is used to annotate symbols in the .hie files with some extra information on
-the context in which they occur and should be fairly self explanatory. You need
-to select one that looks appropriate for the symbol usage. In very rare cases,
-you might need to extend this sum type if none of the cases seem appropriate.
-
-So, given a `Located Name` that is just being "used", and not defined at a
-particular location, you would do the following:
-
-   toHie $ C Use located_name
-
-If you select one that corresponds to a binding site, you will need to
-provide a `Scope` and a `Span` for your binding. Both of these are basically
-`SrcSpans`.
-
-The `SrcSpan` in the `Scope` is supposed to span over the part of the source
-where the symbol can be legally allowed to occur. For more details on how to
-calculate this, see Note [Capturing Scopes and other non local information]
-in HieAst.
-
-The binding `Span` is supposed to be the span of the entire binding for
-the name.
-
-For a function definition `foo`:
-
-foo x = x + y
-  where y = x^2
-
-The binding `Span` is the span of the entire function definition from `foo x`
-to `x^2`.  For a class definition, this is the span of the entire class, and
-so on.  If this isn't well defined for your bit of syntax (like a variable
-bound by a lambda), then you can just supply a `Nothing`
-
-There is a test that checks that all symbols in the resulting HIE file
-occur inside their stated `Scope`. This can be turned on by passing the
--fvalidate-ide-info flag to ghc along with -fwrite-ide-info to generate the
-.hie file.
-
-You may also want to provide a test in testsuite/test/hiefile that includes
-a file containing your new construction, and tests that the calculated scope
-is valid (by using -fvalidate-ide-info)
-
-For subtrees in the AST that may contain symbols, the procedure is fairly
-straightforward.  If you are extending the GHC AST, you will need to provide a
-`ToHie` instance for any new types you may have introduced in the AST.
-
-Here are is an extract from the `ToHie` instance for (LHsExpr (GhcPass p)):
-
-  toHie e@(L mspan oexpr) = concatM $ getTypeNode e : case oexpr of
-      HsVar _ (L _ var) ->
-        [ toHie $ C Use (L mspan var)
-             -- Patch up var location since typechecker removes it
-        ]
-      HsConLikeOut _ con ->
-        [ toHie $ C Use $ L mspan $ conLikeName con
-        ]
-      ...
-      HsApp _ a b ->
-        [ toHie a
-        , toHie b
-        ]
-
-If your subtree is `Located` or has a `SrcSpan` available, the output list
-should contain a HieAst `Node` corresponding to the subtree. You can use
-either `makeNode` or `getTypeNode` for this purpose, depending on whether it
-makes sense to assign a `Type` to the subtree. After this, you just need
-to concatenate the result of calling `toHie` on all subexpressions and
-appropriately annotated symbols contained in the subtree.
-
-The code above from the ToHie instance of `LhsExpr (GhcPass p)` is supposed
-to work for both the renamed and typechecked source. `getTypeNode` is from
-the `HasType` class defined in this file, and it has different instances
-for `GhcTc` and `GhcRn` that allow it to access the type of the expression
-when given a typechecked AST:
-
-class Data a => HasType a where
-  getTypeNode :: a -> HieM [HieAST Type]
-instance HasType (LHsExpr GhcTc) where
-  getTypeNode e@(L spn e') = ... -- Actually get the type for this expression
-instance HasType (LHsExpr GhcRn) where
-  getTypeNode (L spn e) = makeNode e spn -- Fallback to a regular `makeNode` without recording the type
-
-If your subtree doesn't have a span available, you can omit the `makeNode`
-call and just recurse directly in to the subexpressions.
-
--}
 
 -- These synonyms match those defined in main/GHC.hs
 type RenamedSource     = ( HsGroup GhcRn, [LImportDecl GhcRn]
@@ -199,11 +66,11 @@ We don't care about the distinction between mono and poly bindings,
 so we replace all occurrences of the mono name with the poly name.
 -}
 newtype HieState = HieState
-  { name_remapping :: NameEnv Id
+  { name_remapping :: M.Map Name Id
   }
 
 initState :: HieState
-initState = HieState emptyNameEnv
+initState = HieState M.empty
 
 class ModifyState a where -- See Note [Name Remapping]
   addSubstitution :: a -> a -> HieState -> HieState
@@ -213,7 +80,7 @@ instance ModifyState Name where
 
 instance ModifyState Id where
   addSubstitution mono poly hs =
-    hs{name_remapping = extendNameEnv (name_remapping hs) (varName mono) poly}
+    hs{name_remapping = M.insert (varName mono) poly (name_remapping hs)}
 
 modifyState :: ModifyState (IdP p) => [ABExport p] -> HieState -> HieState
 modifyState = foldr go id
@@ -227,7 +94,8 @@ type HieM = ReaderT HieState Hsc
 mkHieFile :: ModSummary
           -> TcGblEnv
           -> RenamedSource
-          -> BS.ByteString -> Hsc HieFile
+          -> BS.ByteString
+          -> Hsc HieFile
 mkHieFile ms ts rs src = do
   let tc_binds = tcg_binds ts
   (asts', arr) <- getCompressedAsts tc_binds rs
@@ -295,7 +163,7 @@ getRealSpan _ = Nothing
 
 grhss_span :: GRHSs p body -> SrcSpan
 grhss_span (GRHSs _ xs bs) = foldl' combineSrcSpans (getLoc bs) (map getLoc xs)
-grhss_span (XGRHSs _) = panic "XGRHS has no span"
+grhss_span (XGRHSs _) = error "XGRHS has no span"
 
 bindingsOnly :: [Context Name] -> [HieAST a]
 bindingsOnly [] = []
@@ -379,7 +247,7 @@ patScopes
   -> [LPat (GhcPass p)]
   -> [PScoped (LPat (GhcPass p))]
 patScopes rsp useScope patScope xs =
-  map (\(RS sc a) -> PS rsp useScope sc (composeSrcSpan a)) $
+  map (\(RS sc a) -> PS rsp useScope sc (unLoc a)) $
     listScopes patScope (map dL xs)
 
 -- | 'listScopes' specialised to 'TVScoped' things
@@ -417,7 +285,7 @@ type family ProtectedSig a where
   ProtectedSig GhcRn = HsWildCardBndrs GhcRn (HsImplicitBndrs
                                                 GhcRn
                                                 (Shielded (LHsType GhcRn)))
-  ProtectedSig GhcTc = NoExtField
+  ProtectedSig GhcTc = NoExt
 
 class ProtectSig a where
   protectSig :: Scope -> LHsSigWcType (NoGhcTc a) -> ProtectedSig a
@@ -429,13 +297,12 @@ instance (ToHie (TScoped a)) => ToHie (TScoped (Shielded a)) where
   toHie (TS _ (SH sc a)) = toHie (TS (ResolvedScopes [sc]) a)
 
 instance ProtectSig GhcTc where
-  protectSig _ _ = noExtField
+  protectSig _ _ = NoExt
 
 instance ProtectSig GhcRn where
   protectSig sc (HsWC a (HsIB b sig)) =
     HsWC a (HsIB b (SH sc sig))
-  protectSig _ (HsWC _ (XHsImplicitBndrs nec)) = noExtCon nec
-  protectSig _ (XHsWildCardBndrs nec) = noExtCon nec
+  protectSig _ _ = error "protectSig not given HsWC (HsIB)"
 
 class HasLoc a where
   -- ^ defined so that HsImplicitBndrs and HsWildCardBndrs can
@@ -467,7 +334,7 @@ instance HasLoc a => HasLoc [a] where
   loc [] = noSrcSpan
   loc xs = foldl1' combineSrcSpans $ map loc xs
 
-instance HasLoc a => HasLoc (FamEqn s a) where
+instance (HasLoc a, HasLoc b) => HasLoc (FamEqn s a b) where
   loc (FamEqn _ a Nothing b _ c) = foldl1' combineSrcSpans [loc a, loc b, loc c]
   loc (FamEqn _ a (Just tvs) b _ c) = foldl1' combineSrcSpans
                                               [loc a, loc tvs, loc b, loc c]
@@ -483,24 +350,10 @@ instance HasLoc (HsDataDefn GhcRn) where
     -- Most probably the rest will be unhelpful anyway
   loc _ = noSrcSpan
 
-{- Note [Real DataCon Name]
-The typechecker subtitutes the conLikeWrapId for the name, but we don't want
-this showing up in the hieFile, so we replace the name in the Id with the
-original datacon name
-See also Note [Data Constructor Naming]
--}
-class HasRealDataConName p where
-  getRealDataCon :: XRecordCon p -> Located (IdP p) -> Located (IdP p)
-
-instance HasRealDataConName GhcRn where
-  getRealDataCon _ n = n
-instance HasRealDataConName GhcTc where
-  getRealDataCon RecordConTc{rcon_con_like = con} (L sp var) =
-    L sp (setVarName var (conLikeName con))
+instance HasLoc (Pat (GhcPass a)) where
+  loc (dL -> L l _) = l
 
 -- | The main worker class
--- See Note [Updating HieAst for changes in the GHC AST] for more information
--- on how to add/modify instances for this.
 class ToHie a where
   toHie :: a -> HieM [HieAST Type]
 
@@ -517,10 +370,10 @@ instance (ToHie a) => ToHie (Bag a) where
 instance (ToHie a) => ToHie (Maybe a) where
   toHie = maybe (pure []) toHie
 
-instance ToHie (Context (Located NoExtField)) where
+instance ToHie (Context (Located NoExt)) where
   toHie _ = pure []
 
-instance ToHie (TScoped NoExtField) where
+instance ToHie (TScoped NoExt) where
   toHie _ = pure []
 
 instance ToHie (IEContext (Located ModuleName)) where
@@ -535,9 +388,7 @@ instance ToHie (Context (Located Var)) where
       C context (L (RealSrcSpan span) name')
         -> do
         m <- asks name_remapping
-        let name = case lookupNameEnv m (varName name') of
-              Just var -> var
-              Nothing-> name'
+        let name = M.findWithDefault name' (varName name') m
         pure
           [Node
             (NodeInfo S.empty [] $
@@ -552,7 +403,7 @@ instance ToHie (Context (Located Name)) where
   toHie c = case c of
       C context (L (RealSrcSpan span) name') -> do
         m <- asks name_remapping
-        let name = case lookupNameEnv m name' of
+        let name = case M.lookup name' m of
               Just var -> varName var
               Nothing -> name'
         pure
@@ -583,10 +434,10 @@ instance HasType (LHsBind GhcTc) where
       FunBind{fun_id = name} -> makeTypeNode bind spn (varType $ unLoc name)
       _ -> makeNode bind spn
 
-instance HasType (Located (Pat GhcRn)) where
+instance HasType (LPat GhcRn) where
   getTypeNode (dL -> L spn pat) = makeNode pat spn
 
-instance HasType (Located (Pat GhcTc)) where
+instance HasType (LPat GhcTc) where
   getTypeNode (dL -> L spn opat) = makeTypeNode opat spn (hsPatType opat)
 
 instance HasType (LHsExpr GhcRn) where
@@ -627,9 +478,7 @@ instance HasType (LHsExpr GhcTc) where
 
     in
     case tyOpt of
-      Just t -> makeTypeNode e' spn t
-      Nothing
-        | skipDesugaring e' -> fallback
+      _ | skipDesugaring e' -> fallback
         | otherwise -> do
             hs_env <- Hsc $ \e w -> return (e,w)
             (_,mbe) <- liftIO $ deSugarExpr hs_env e
@@ -638,7 +487,7 @@ instance HasType (LHsExpr GhcTc) where
       fallback = makeNode e' spn
 
       matchGroupType :: MatchGroupTc -> Type
-      matchGroupType (MatchGroupTc args res) = mkVisFunTys args res
+      matchGroupType (MatchGroupTc args res) = mkFunTys args res
 
       -- | Skip desugaring of these expressions for performance reasons.
       --
@@ -770,7 +619,7 @@ instance ( a ~ GhcPass p
          , ToHie (TScoped (ProtectedSig a))
          , HasType (LPat a)
          , Data (HsSplice a)
-         ) => ToHie (PScoped (Located (Pat (GhcPass p)))) where
+         ) => ToHie (PScoped (LPat (GhcPass p))) where
   toHie (PS rsp scope pscope lpat@(dL -> L ospan opat)) =
     concatM $ getTypeNode lpat : case opat of
       WildPat _ ->
@@ -886,7 +735,6 @@ instance ( a ~ GhcPass p
          , Data (HsSplice a)
          , Data (HsTupArg a)
          , Data (AmbiguousFieldOcc a)
-         , (HasRealDataConName a)
          ) => ToHie (LHsExpr (GhcPass p)) where
   toHie e@(L mspan oexpr) = concatM $ getTypeNode e : case oexpr of
       HsVar _ (L _ var) ->
@@ -967,9 +815,8 @@ instance ( a ~ GhcPass p
       ExplicitList _ _ exprs ->
         [ toHie exprs
         ]
-      RecordCon {rcon_ext = mrealcon, rcon_con_name = name, rcon_flds = binds} ->
-        [ toHie $ C Use (getRealDataCon @a mrealcon name)
-            -- See Note [Real DataCon Name]
+      RecordCon {rcon_con_name = name, rcon_flds = binds}->
+        [ toHie $ C Use name
         , toHie $ RC RecFieldAssign $ binds
         ]
       RecordUpd {rupd_expr = expr, rupd_flds = upds}->
@@ -996,6 +843,14 @@ instance ( a ~ GhcPass p
       HsStatic _ expr ->
         [ toHie expr
         ]
+      HsArrApp _ a b _ _ ->
+        [ toHie a
+        , toHie b
+        ]
+      HsArrForm _ expr _ cmds ->
+        [ toHie expr
+        , toHie cmds
+        ]
       HsTick _ _ expr ->
         [ toHie expr
         ]
@@ -1021,6 +876,18 @@ instance ( a ~ GhcPass p
         ]
       HsSpliceE _ x ->
         [ toHie $ L mspan x
+        ]
+      EWildPat _ -> []
+      EAsPat _ a b ->
+        [ toHie $ C Use a
+        , toHie b
+        ]
+      EViewPat _ a b ->
+        [ toHie a
+        , toHie b
+        ]
+      ELazyPat _ a ->
+        [ toHie a
         ]
       XExpr _ -> []
 
@@ -1176,7 +1043,7 @@ instance ( a ~ GhcPass p
          , Data (StmtLR a a (Located (HsExpr a)))
          , Data (HsLocalBinds a)
          ) => ToHie (RScoped (ApplicativeArg (GhcPass p))) where
-  toHie (RS sc (ApplicativeArgOne _ pat expr _ _)) = concatM
+  toHie (RS sc (ApplicativeArgOne _ pat expr _)) = concatM
     [ toHie $ PS Nothing sc NoScope pat
     , toHie expr
     ]
@@ -1253,13 +1120,8 @@ instance ( a ~ GhcPass p
       XCmd _ -> []
 
 instance ToHie (TyClGroup GhcRn) where
-  toHie TyClGroup{ group_tyclds = classes
-                 , group_roles  = roles
-                 , group_kisigs = sigs
-                 , group_instds = instances } =
-    concatM
+  toHie (TyClGroup _ classes roles instances) = concatM
     [ toHie classes
-    , toHie sigs
     , toHie roles
     , toHie instances
     ]
@@ -1303,12 +1165,18 @@ instance ToHie (LTyClDecl GhcRn) where
         , toHie $ fmap (BC InstanceBind ModuleScope) meths
         , toHie typs
         , concatMapM (pure . locOnly . getLoc) deftyps
-        , toHie deftyps
+        , toHie $ map (go . unLoc) deftyps
         ]
         where
           context_scope = mkLScope context
           rhs_scope = foldl1' combineScopes $ map mkScope
             [ loc deps, loc sigs, loc (bagToList meths), loc typs, loc deftyps]
+
+          go :: TyFamDefltEqn GhcRn
+             -> FamEqn GhcRn (TScoped (LHsQTyVars GhcRn)) (LHsType GhcRn)
+          go (FamEqn a var bndrs pat b rhs) =
+             FamEqn a var bndrs (TS (ResolvedScopes [mkLScope rhs]) pat) b rhs
+          go (XFamEqn NoExt) = XFamEqn NoExt
       XTyClDecl _ -> []
 
 instance ToHie (LFamilyDecl GhcRn) where
@@ -1354,12 +1222,15 @@ instance ToHie (Located (FunDep (Located Name))) where
     , toHie $ map (C Use) rhs
     ]
 
-instance (ToHie rhs, HasLoc rhs)
-    => ToHie (TScoped (FamEqn GhcRn rhs)) where
+instance (ToHie pats, ToHie rhs, HasLoc pats, HasLoc rhs)
+    => ToHie (TScoped (FamEqn GhcRn pats rhs)) where
   toHie (TS _ f) = toHie f
 
-instance (ToHie rhs, HasLoc rhs)
-    => ToHie (FamEqn GhcRn rhs) where
+instance ( ToHie pats
+         , ToHie rhs
+         , HasLoc pats
+         , HasLoc rhs
+         ) => ToHie (FamEqn GhcRn pats rhs) where
   toHie fe@(FamEqn _ var tybndrs pats _ rhs) = concatM $
     [ toHie $ C (Decl InstDec $ getRealSpan $ loc fe) var
     , toHie $ fmap (tvScopes (ResolvedScopes []) scope) tybndrs
@@ -1470,17 +1341,6 @@ instance ( HasLoc thing
     where span = loc a
   toHie (TS _ (XHsWildCardBndrs _)) = pure []
 
-instance ToHie (LStandaloneKindSig GhcRn) where
-  toHie (L sp sig) = concatM [makeNode sig sp, toHie sig]
-
-instance ToHie (StandaloneKindSig GhcRn) where
-  toHie sig = concatM $ case sig of
-    StandaloneKindSig _ name typ ->
-      [ toHie $ C TyDecl name
-      , toHie $ TS (ResolvedScopes []) typ
-      ]
-    XStandaloneKindSig _ -> []
-
 instance ToHie (SigContext (LSig GhcRn)) where
   toHie (SC (SI styp msp) (L sp sig)) = concatM $ makeNode sig sp : case sig of
       TypeSig _ names typ ->
@@ -1530,7 +1390,7 @@ instance ToHie (LHsType GhcRn) where
 
 instance ToHie (TScoped (LHsType GhcRn)) where
   toHie (TS tsc (L span t)) = concatM $ makeNode t span : case t of
-      HsForAllTy _ _ bndrs body ->
+      HsForAllTy _ bndrs body ->
         [ toHie $ tvScopes tsc (mkScope $ getLoc body) bndrs
         , toHie body
         ]
@@ -1618,7 +1478,7 @@ instance ToHie (TVScoped (LHsTyVarBndr GhcRn)) where
       XTyVarBndr _ -> []
 
 instance ToHie (TScoped (LHsQTyVars GhcRn)) where
-  toHie (TS sc (HsQTvs implicits vars)) = concatM $
+  toHie (TS sc (HsQTvs (HsQTvsRn implicits _) vars)) = concatM $
     [ pure $ bindingsOnly bindings
     , toHie $ tvScopes sc NoScope vars
     ]
@@ -1923,3 +1783,4 @@ instance ToHie (IEContext (Located (FieldLbl Name))) where
       FieldLabel _ _ n ->
         [ toHie $ C (IEThing c) $ L span n
         ]
+
