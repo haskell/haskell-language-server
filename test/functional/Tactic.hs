@@ -100,6 +100,7 @@ tests = testGroup
   , goldenTest "GoldenFmapTree.hs"          4 11 Auto ""
   , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
   , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
+  , goldenTest "GoldenBigTuple.hs"          4 12 Auto ""
   ]
 
 

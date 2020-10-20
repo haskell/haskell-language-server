@@ -75,6 +75,28 @@ library
     , syb
     , text
     , transformers
+    , deepseq
 
+  default-language: Haskell2010
+
+test-suite tests
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+    AutoTupleSpec
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      QuickCheck
+    , base
+    , checkers
+    , hspec
+    , mtl
+    , hls-tactics-plugin
+    , hls-plugin-api
+    , hie-bios
+    , ghc
+    , containers
   default-language: Haskell2010
 
