@@ -7,6 +7,7 @@ import qualified Data.Map as M
 import           Ide.Plugin.Tactic.Debug
 import           Ide.Plugin.Tactic.Judgements (mkFirstJudgement)
 import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Tactics (auto')
 import           Ide.Plugin.Tactic.Types
 import           OccName (mkVarOcc)
 import           Test.Hspec
@@ -14,7 +15,6 @@ import           Test.QuickCheck
 import           Type (mkTyVarTy)
 import           TysPrim (alphaTyVars)
 import           TysWiredIn (mkBoxedTupleTy)
-import Ide.Plugin.Tactic.Tactics (auto')
 
 
 instance Show Type where
