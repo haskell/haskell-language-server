@@ -1,4 +1,5 @@
 {-# LANGUAGE NamedFieldPuns      #-}
+{-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns        #-}
@@ -25,6 +26,7 @@ import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import           System.FilePath
 import System.Directory (doesFileExist)
 import Control.Monad (unless)
+import Control.Concurrent (threadDelay)
 
 
 ------------------------------------------------------------------------------
@@ -157,6 +159,7 @@ goldenTest :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
 goldenTest input line col tc occ =
   testCase (input <> " (golden)") $ do
     runSession hlsCommand fullCaps tacticPath $ do
+      liftIO $ threadDelay (length input * 1e6)
       doc <- openDoc input "haskell"
       actions <- getCodeActions doc $ pointRange line col
       Just (CACodeAction (CodeAction {_command = Just c}))
