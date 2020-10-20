@@ -2,6 +2,7 @@ resolver: nightly-2020-06-19
 allow-newer: true
 packages:
 - .
+- ./hie-compat/
 extra-deps:
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0

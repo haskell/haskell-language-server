@@ -57,13 +57,8 @@ module Development.IDE.GHC.Compat(
     module GHC,
     initializePlugins,
     applyPluginsParsedResultAction,
-#if MIN_GHC_API_VERSION(8,8,0)
-    module HieTypes,
-    module HieUtils,
-#else
-    module Development.IDE.GHC.HieTypes,
-    module Development.IDE.GHC.HieUtils,
-#endif
+    module Compat.HieTypes,
+    module Compat.HieUtils,
 
     ) where
 
@@ -82,6 +77,10 @@ import NameCache
 import qualified Data.ByteString as BS
 import MkIface
 import TcRnTypes
+import Compat.HieAst (mkHieFile,enrichHie)
+import Compat.HieBin
+import Compat.HieTypes
+import Compat.HieUtils
 
 #if MIN_GHC_API_VERSION(8,10,0)
 import GHC.Hs.Extension
@@ -106,18 +105,11 @@ import Data.List (foldl', isSuffixOf)
 import ErrUtils (ErrorMessages)
 import FastString (FastString)
 
-import Development.IDE.GHC.HieAst (mkHieFile,enrichHie)
-import Development.IDE.GHC.HieBin
 import DynamicLoading
 import Plugins (Plugin(parsedResultAction), withPlugins)
 import Data.Map.Strict (Map)
 
-#if MIN_GHC_API_VERSION(8,8,0)
-import HieUtils
-import HieTypes
-#else
-import Development.IDE.GHC.HieUtils
-import Development.IDE.GHC.HieTypes
+#if !MIN_GHC_API_VERSION(8,8,0)
 import System.FilePath ((-<.>))
 #endif
 

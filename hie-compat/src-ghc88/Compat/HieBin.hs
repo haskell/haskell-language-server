@@ -1,8 +1,9 @@
 {-
 Binary serialization for .hie files.
 -}
+{- HLINT ignore -}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Development.IDE.GHC.HieBin ( readHieFile, readHieFileWithVersion, HieHeader, writeHieFile, HieName(..), toHieName, HieFileResult(..), hieMagic,NameCacheUpdater(..)) where
+module Compat.HieBin ( readHieFile, readHieFileWithVersion, HieHeader, writeHieFile, HieName(..), toHieName, HieFileResult(..), hieMagic,NameCacheUpdater(..)) where
 
 import Config                     ( cProjectVersion )
 import Binary
@@ -32,7 +33,7 @@ import Control.Monad              ( replicateM, when )
 import System.Directory           ( createDirectoryIfMissing )
 import System.FilePath            ( takeDirectory )
 
-import Development.IDE.GHC.HieTypes
+import HieTypes
 
 -- | `Name`'s get converted into `HieName`'s before being written into @.hie@
 -- files. See 'toHieName' and 'fromHieName' for logic on how to convert between

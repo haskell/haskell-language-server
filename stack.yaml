@@ -1,6 +1,7 @@
 resolver: nightly-2019-09-21
 packages:
 - .
+- ./hie-compat/
 extra-deps:
 - aeson-1.4.6.0
 - haskell-lsp-0.22.0.0

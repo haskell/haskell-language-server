@@ -1,11 +1,8 @@
 {-
 Binary serialization for .hie files.
 -}
-{- HLINT ignore -}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Development.IDE.GHC.HieBin ( readHieFile, readHieFileWithVersion, HieHeader, writeHieFile, HieName(..), toHieName, HieFileResult(..), hieMagic, hieNameOcc,NameCacheUpdater(..)) where
-
-import GHC.Settings               ( maybeRead )
+module Compat.HieBin ( readHieFile, readHieFileWithVersion, HieHeader, writeHieFile, HieName(..), toHieName, HieFileResult(..), hieMagic,NameCacheUpdater(..)) where
 
 import Config                     ( cProjectVersion )
 import Binary
@@ -19,6 +16,7 @@ import Outputable
 import PrelInfo
 import SrcLoc
 import UniqSupply                 ( takeUniqFromSupply )
+import Util                       ( maybeRead )
 import Unique
 import UniqFM
 import IfaceEnv
@@ -34,7 +32,7 @@ import Control.Monad              ( replicateM, when )
 import System.Directory           ( createDirectoryIfMissing )
 import System.FilePath            ( takeDirectory )
 
-import HieTypes
+import Compat.HieTypes
 
 -- | `Name`'s get converted into `HieName`'s before being written into @.hie@
 -- files. See 'toHieName' and 'fromHieName' for logic on how to convert between
@@ -59,15 +57,6 @@ instance Outputable HieName where
   ppr (ExternalName m n sp) = text "ExternalName" <+> ppr m <+> ppr n <+> ppr sp
   ppr (LocalName n sp) = text "LocalName" <+> ppr n <+> ppr sp
   ppr (KnownKeyName u) = text "KnownKeyName" <+> ppr u
-
-hieNameOcc :: HieName -> OccName
-hieNameOcc (ExternalName _ occ _) = occ
-hieNameOcc (LocalName occ _) = occ
-hieNameOcc (KnownKeyName u) =
-  case lookupKnownKeyName u of
-    Just n -> nameOccName n
-    Nothing -> pprPanic "hieNameOcc:unknown known-key unique"
-                        (ppr (unpkUnique u))
 
 
 data HieSymbolTable = HieSymbolTable
