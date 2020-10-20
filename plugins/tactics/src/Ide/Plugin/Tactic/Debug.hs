@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns     #-}
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Ide.Plugin.Tactic.Debug
@@ -17,8 +18,15 @@ import Control.Exception
 import Debug.Trace
 import DynFlags (unsafeGlobalDynFlags)
 import Outputable hiding ((<>))
-import PlainPanic (PlainGhcException)
 import System.IO.Unsafe (unsafePerformIO)
+
+#if __GLASGOW_HASKELL__ >= 808
+import PlainPanic (PlainGhcException)
+type GHC_EXCEPTION = PlainGhcException
+#else
+import Panic (GhcException)
+type GHC_EXCEPTION = GhcException
+#endif
 
 
 ------------------------------------------------------------------------------
@@ -32,7 +40,7 @@ unsafeRender' sdoc = unsafePerformIO $ do
   let z = showSDoc unsafeGlobalDynFlags sdoc
   -- We might not have unsafeGlobalDynFlags (like during testing), in which
   -- case GHC panics. Instead of crashing, let's just fail to print.
-  !res <- try @PlainGhcException $ evaluate $ deepseq z z
+  !res <- try @GHC_EXCEPTION $ evaluate $ deepseq z z
   pure $ either (const "<unsafeRender'>") id res
 {-# NOINLINE unsafeRender' #-}
 
