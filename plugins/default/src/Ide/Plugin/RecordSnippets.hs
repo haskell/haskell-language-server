@@ -193,8 +193,8 @@ cachedSnippetsProducer extras@ShakeExtras{logger} packageState tm deps = do
       getComplsForOne (GRE n _ True _) = return [] -- this should be covered in LocalCompletions
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
-          logInfo logger $ T.pack $ "*******Resolving prov***************************"
-          logInfo logger $ T.pack $ (showGhc prov)
+          --logInfo logger $ T.pack $ "*******Resolving prov***************************"
+          --logInfo logger $ T.pack $ (showGhc prov)
           compItem <- toCompItem curMod (is_mod spec) n
           --logInfo logger $ T.pack $ show (compItem)
           case compItem of
@@ -275,7 +275,7 @@ getNonLocalCompletionsLSP lsp ide
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        _snippets <- runIdeAction "RecordSnippetsNonLocal" (shakeExtras ide) $ do
+        all_snippets <- runIdeAction "RecordSnippetsNonLocal" (shakeExtras ide) $ do
             -- opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             -- result <- getNonLocalSnippets npath
             result <- useWithStaleFast ProduceRecordSnippets npath
@@ -287,7 +287,7 @@ getNonLocalCompletionsLSP lsp ide
                     liftIO $ logInfo (ideLogger ide) $ T.pack $ show compls
                     pure compls
                 Nothing -> return (Completions $ List [])
-        return (Completions $ List [])
+        return $ all_snippets
       _ -> return (Completions $ List [])
 
 
