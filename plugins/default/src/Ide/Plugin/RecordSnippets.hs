@@ -59,13 +59,14 @@ import GHC.Generics
 import Data.Hashable
 import Control.DeepSeq (NFData)
 import Data.Binary (Binary)
+import Development.IDE.Core.PositionMapping (PositionMapping)
 --import Development.IDE.Plugin.Completions
 
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = mempty
+  { pluginRules = produceRecordSnippets
   , pluginCommands = []
   , pluginCodeActionProvider = Nothing
   , pluginCodeLensProvider   = Nothing
@@ -74,7 +75,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginCompletionProvider = Just getNonLocalCompletionsLSP
   }
 
-type CachedSnippets = [(String, String)]
+type CachedSnippets = [(String, [(String, String)])]
 
 -- | Produce completions info for a file
 type instance RuleResult ProduceRecordSnippets = CachedSnippets
@@ -104,12 +105,15 @@ produceRecordSnippets = do
     define $ \ProduceRecordSnippets file -> do
         local <- useWithStale LocalSnippets file
         nonLocal <- useWithStale NonLocalSnippets file
-        return ([], Just [])
+        let extract = fmap fst
+        return ([], extract nonLocal)
     define $ \LocalSnippets file -> do
         return ([], Just [])
     define $ \NonLocalSnippets file -> do
-        return ([], Just [])
+        nonLocal <- getNonLocalSnippets file
+        return ([], nonLocal)
 
+getNonLocalSnippets :: NormalizedFilePath -> Action (Maybe CachedSnippets)
 getNonLocalSnippets file = do
     -- Adopted from ghcide Development.IDE..Plugins.Completions
     ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
@@ -143,11 +147,11 @@ getNonLocalSnippets file = do
                             -- Do not return diags from parsing as they would duplicate
                             -- the diagnostics from typechecking
                             --return ([], Just cdata)
-                            return ([], Just cdata)
+                            return $ Just cdata
                         (_diag, _) ->
-                            return ([], Nothing)
-                Left _diag -> return ([], Nothing)
-        _ -> return ([], Nothing)
+                            return Nothing
+                Left _diag -> return Nothing
+        _ -> return Nothing
 
 showModName :: ModuleName -> T.Text
 showModName = T.pack . moduleNameString
@@ -189,22 +193,15 @@ cachedSnippetsProducer extras@ShakeExtras{logger} packageState tm deps = do
       getComplsForOne (GRE n _ True _) = return [] -- this should be covered in LocalCompletions
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
-          --logInfo logger $ T.pack $ "*******Resolving prov***************************"
-          --logInfo logger $ T.pack $ (showGhc prov)
+          logInfo logger $ T.pack $ "*******Resolving prov***************************"
+          logInfo logger $ T.pack $ (showGhc prov)
           compItem <- toCompItem curMod (is_mod spec) n
           --logInfo logger $ T.pack $ show (compItem)
           case compItem of
-              Just match -> logInfo logger $ T.pack $ show (match)
-              Nothing -> return ()
-          -- let unqual
-          --       | is_qual spec = return []
-          --       | otherwise = (\x -> [x]) <$> compItem
-          --     qual
-          --       | is_qual spec = Map.singleton asMod [compItem]
-          --       | otherwise = Map.fromList [(asMod,[compItem]),(origMod,[compItem])]
-          --     asMod = showModName (is_as spec)
-          --     origMod = showModName (is_mod spec)
-          return []
+              Just match -> do
+                  logInfo logger $ T.pack $ show (match)
+                  return [match]
+              Nothing -> return []
 
       toCompItem :: Module -> ModuleName -> Name -> IO (Maybe (String , [(String, String)]))
       toCompItem m mn n = do
@@ -278,13 +275,18 @@ getNonLocalCompletionsLSP lsp ide
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        pm <- runAction "RecordsSnippets" ide $ do
-            --opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-            --compls <- useWithStaleFast ProduceCompletions npath
-              extras <- getShakeExtras
-              -- x <- getTypeCheckModule lsp extras uri
-              result <- getNonLocalSnippets npath
-              pure []
+        _snippets <- runIdeAction "RecordSnippetsNonLocal" (shakeExtras ide) $ do
+            -- opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
+            -- result <- getNonLocalSnippets npath
+            result <- useWithStaleFast ProduceRecordSnippets npath
+            case result of
+                Just (snippets, _) -> do
+                    liftIO $ logInfo (ideLogger ide) $ T.pack $ "Snippets show here ------->"
+                    liftIO $ logInfo (ideLogger ide) $ T.pack $ show snippets
+                    let compls = buildCompletions snippets
+                    liftIO $ logInfo (ideLogger ide) $ T.pack $ show compls
+                    pure compls
+                Nothing -> return (Completions $ List [])
         return (Completions $ List [])
       _ -> return (Completions $ List [])
 
@@ -295,7 +297,7 @@ findLocalCompletions ide  pmod pfix = do
         hsDecls = hsmodDecls _hsmodule
         ctxStr = (T.unpack . VFS.prefixText $ pfix)
         completionData = findFields ctxStr (unLoc <$> hsDecls)
-    x <- buildCompletion ctxStr completionData
+        x = buildCompletions [(ctxStr, completionData)]
     logInfo (ideLogger ide) $ "*****Showing Completion Data\n"
     logInfo (ideLogger ide) $ T.pack $ show completionData
     return x
@@ -333,9 +335,8 @@ findFields  ctxStr decls = name_type
     extract _ = Nothing
 
 
-buildCompletion :: String -> [(String, String)] -> IO CompletionResponseResult
-buildCompletion ctxStr completionData = do
-  pure $ Completions $ List [r]
+buildCompletionItem :: String -> [(String, String)] -> CompletionItem
+buildCompletionItem ctxStr completionData = r
   where
     r =
       CompletionItem
@@ -378,8 +379,11 @@ buildCompletion ctxStr completionData = do
     buildSnippet = T.pack $ ctxStr <> " {" <> snippet <> "}"
 
 
-
-
+buildCompletions :: CachedSnippets -> CompletionResponseResult
+buildCompletions snippets = let
+    result = (uncurry buildCompletionItem) <$> snippets
+    in
+    Completions $ List result
 
 ----- old code ----
 
