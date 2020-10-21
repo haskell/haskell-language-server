@@ -83,24 +83,21 @@ intro :: OccName -> TacticsM ()
 intro name = rule $ \jdg -> do
   let g  = jGoal jdg
   ctx <- ask
-  case unCType g of
-    (FunTy a b) -> do
-        let jdg' = introducing [(name, coerce a)]
-                 $ withNewGoal (CType b) jdg
-        modify $ withIntroducedVals $ mappend $ S.singleton name
-        (tr, sg)
-          <- newSubgoal
-            $ bool
-                id
-                (withPositionMapping
-                 (extremelyStupid__definingFunction ctx) [name])
-                (isTopHole jdg)
-            $ jdg'
-        pure
-            . (rose ("intro {" <> show name <> "}") $ pure tr, )
-            . noLoc
-            . lambda [bvar' name]
-            $ unLoc sg
+  case tacticsSplitFunTy $ unCType g of
+    ([], [], (a : as), res) -> do
+      let b = mkFunTys as res
+      let jdg' = introducing [(name, coerce a)]
+               $ withNewGoal (CType b) jdg
+      modify $ withIntroducedVals $ mappend $ S.singleton name
+      (tr, sg)
+        <- newSubgoal
+          -- TODO(sandy): Position mapping doesn't work for a single intro
+          $ jdg'
+      pure
+          . (rose ("intro {" <> show name <> "}") $ pure tr, )
+          . noLoc
+          . lambda [bvar' name]
+          $ unLoc sg
     _ -> throwError $ GoalMismatch "intro" g
 
 

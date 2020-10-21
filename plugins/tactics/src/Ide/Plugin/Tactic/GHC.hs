@@ -43,8 +43,16 @@ cloneTyVar t =
 ------------------------------------------------------------------------------
 -- | Is this a function type?
 isFunction :: Type -> Bool
-isFunction (tcSplitFunTys -> ((_:_), _)) = True
-isFunction _ = False
+isFunction (tacticsSplitFunTy -> (_, _, [], _)) = False
+isFunction _ = True
+
+
+tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Type], Type)
+tacticsSplitFunTy t
+  = let (vars, theta, t') = tcSplitSigmaTy t
+        (args, res) = tcSplitFunTys t'
+     in (vars, theta, args, res)
+
 
 ------------------------------------------------------------------------------
 -- | Is this an algebraic type?
