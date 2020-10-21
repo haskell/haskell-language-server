@@ -34,7 +34,7 @@ import qualified Language.Haskell.LSP.VFS as VFS
 import Development.IDE.GHC.Compat
 import GHC
 import Data.Maybe (catMaybes)
-import GhcPlugins (GlobalRdrElt (..), liftIO, listVisibleModuleNames, occNameString, rdrNameOcc, flLabel, unpackFS)
+import GhcPlugins (GlobalRdrElt (..), liftIO, listVisibleModuleNames, occNameString, rdrNameOcc, flLabel, unpackFS, occName)
 --import Language.Haskell.GHC.ExactPrint.Utils (showGhc)
 import Data.List (intercalate)
 import RdrName
@@ -54,6 +54,11 @@ import Var
 import Development.IDE.Spans.Common
 import Development.IDE.Import.DependencyInformation (transitiveModuleDeps, TransitiveDependencies(TransitiveDependencies))
 import ConLike
+import Data.Data
+import GHC.Generics
+import Data.Hashable
+import Control.DeepSeq (NFData)
+import Data.Binary (Binary)
 --import Development.IDE.Plugin.Completions
 
 -- ---------------------------------------------------------------------
@@ -69,60 +74,90 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginCompletionProvider = Just getNonLocalCompletionsLSP
   }
 
+type CachedSnippets = [(String, String)]
 
-getTypeCheckModule _lsp ide _uri = do
-    contents <- liftIO $ LSP.getVirtualFileFunc _lsp $ toNormalizedUri _uri
-    fmap Right $ case (contents, uriToFilePath' _uri) of
-        (Just _cnts, Just _path) -> do
-            let file = toNormalizedFilePath' _path
-            --pm' <- runIdeAction "RecordsSnippets" (shakeExtras ide) $ do
+-- | Produce completions info for a file
+type instance RuleResult ProduceRecordSnippets = CachedSnippets
+type instance RuleResult LocalSnippets = CachedSnippets
+type instance RuleResult NonLocalSnippets = CachedSnippets
 
-            ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
-            sess <- fmap fst <$> useWithStale GhcSessionDeps file
-            _deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
-            parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps _deps)
-            case (ms, sess) of
-                (Just ms, Just sess) -> do
-                    -- After parsing the module remove all package imports referring to
-                    -- these packages as we have already dealt with what they map to.
-                    let env = hscEnv sess
-                        buf = fromJust $ ms_hspp_buf ms
-                        f = fromNormalizedFilePath file
-                        dflags = hsc_dflags env
-                    pm <- liftIO $ evalGhcEnv env $ runExceptT $ Compile.parseHeader dflags f buf
-                    case pm of
-                        Right (_diags, hsMod) -> do
-                            let hsModNoExports = hsMod <&> \x -> x{hsmodExports = Nothing}
-                                pm = ParsedModule
-                                     { pm_mod_summary = ms
-                                     , pm_parsed_source = hsModNoExports
-                                     , pm_extra_src_files = [] -- src imports not allowed
-                                     , pm_annotations = mempty
-                                     }
-                            tm <- liftIO $ Compile.typecheckModule (IdeDefer True) env pm
-                            case tm of
-                                (_, Just (_,TcModuleResult{..})) -> do
-                                    cdata <- liftIO $ cacheDataProducer ide env tmrModule parsedDeps
-                                    -- Do not return diags from parsing as they would duplicate
-                                    -- the diagnostics from typechecking
-                                    --return ([], Just cdata)
-                                    return ([], Nothing)
-                                (_diag, _) ->
-                                    return ([], Nothing)
-                        Left _diag -> return ([], Nothing)
-                _ -> return ([], Nothing)
+data ProduceRecordSnippets = ProduceRecordSnippets
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable ProduceRecordSnippets
+instance NFData   ProduceRecordSnippets
+instance Binary   ProduceRecordSnippets
+
+data LocalSnippets = LocalSnippets
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable LocalSnippets
+instance NFData   LocalSnippets
+instance Binary   LocalSnippets
+
+data NonLocalSnippets = NonLocalSnippets
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable NonLocalSnippets
+instance NFData   NonLocalSnippets
+instance Binary   NonLocalSnippets
+
+produceRecordSnippets :: Rules ()
+produceRecordSnippets = do
+    define $ \ProduceRecordSnippets file -> do
+        local <- useWithStale LocalSnippets file
+        nonLocal <- useWithStale NonLocalSnippets file
+        return ([], Just [])
+    define $ \LocalSnippets file -> do
+        return ([], Just [])
+    define $ \NonLocalSnippets file -> do
+        return ([], Just [])
+
+getNonLocalSnippets file = do
+    -- Adopted from ghcide Development.IDE..Plugins.Completions
+    ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
+    sess <- fmap fst <$> useWithStale GhcSessionDeps file
+    deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
+    parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps deps)
+    case (ms, sess) of
+        (Just ms, Just sess) -> do
+            -- After parsing the module remove all package imports referring to
+            -- these packages as we have already dealt with what they map to.
+            let env = hscEnv sess
+                buf = fromJust $ ms_hspp_buf ms
+                f = fromNormalizedFilePath file
+                dflags = hsc_dflags env
+            pm <- liftIO $ evalGhcEnv env $ runExceptT $ Compile.parseHeader dflags f buf
+            case pm of
+                Right (_diags, hsMod) -> do
+                    let hsModNoExports = hsMod <&> \x -> x{hsmodExports = Nothing}
+                        pm = ParsedModule
+                             { pm_mod_summary = ms
+                             , pm_parsed_source = hsModNoExports
+                             , pm_extra_src_files = [] -- src imports not allowed
+                             , pm_annotations = mempty
+                             }
+                    tm <- liftIO $ Compile.typecheckModule (IdeDefer True) env pm
+                    extras <- getShakeExtras
+                    liftIO $ logInfo (logger extras) $ "----Non Local Snippet Called---"
+                    case tm of
+                        (_, Just (_,TcModuleResult{..})) -> do
+                            cdata <- liftIO $ cachedSnippetsProducer extras env tmrModule parsedDeps
+                            -- Do not return diags from parsing as they would duplicate
+                            -- the diagnostics from typechecking
+                            --return ([], Just cdata)
+                            return ([], Just cdata)
+                        (_diag, _) ->
+                            return ([], Nothing)
+                Left _diag -> return ([], Nothing)
         _ -> return ([], Nothing)
-
 
 showModName :: ModuleName -> T.Text
 showModName = T.pack . moduleNameString
 
-cacheDataProducer :: IdeState -> HscEnv -> TypecheckedModule -> [ParsedModule] -> IO [(String, String)]
-cacheDataProducer ide packageState tm deps = do
+cachedSnippetsProducer :: ShakeExtras -> HscEnv -> TypecheckedModule -> [ParsedModule] -> IO [(String, [(String, String)])]
+cachedSnippetsProducer extras@ShakeExtras{logger} packageState tm deps = do
   let parsedMod = tm_parsed_module tm
       dflags = hsc_dflags packageState
       curMod = ms_mod $ pm_mod_summary parsedMod
-      curModName = moduleName curMod
+      curModName = GHC.moduleName curMod
       (_,limports,_,_) = UnsafeMaybe.fromJust $ tm_renamed_source tm -- safe because we always save the typechecked source
 
       iDeclToModName :: ImportDecl name -> ModuleName
@@ -147,28 +182,19 @@ cacheDataProducer ide packageState tm deps = do
       foldMapM f xs = foldr step return xs mempty where
         step x r z = f x >>= \y -> r $! z `mappend` y
 
-      getCompls :: [GlobalRdrElt] -> IO [(String, String)]
+      getCompls :: [GlobalRdrElt] -> IO [(String, [(String, String)])]
       getCompls = foldMapM getComplsForOne
 
-      getComplsForOne :: GlobalRdrElt -> IO [(String, String)]
-      getComplsForOne (GRE n _ True _) =
-        case lookupTypeEnv typeEnv n of
-          Just tt -> case safeTyThingId tt of
-            Just var -> do
-                --logInfo (ideLogger ide) $ T.pack $ "*******Resolving tt***************************"
-                --logInfo (ideLogger ide) $ T.pack $ (showGhc tt)
-                --(\x -> [x]) <$> varToCompl var
-                return []
-            Nothing -> return [] -- (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
-          Nothing -> return [] -- (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
+      getComplsForOne :: GlobalRdrElt -> IO [(String, [(String, String)])]
+      getComplsForOne (GRE n _ True _) = return [] -- this should be covered in LocalCompletions
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
-          --logInfo (ideLogger ide) $ T.pack $ "*******Resolving prov***************************"
-          --logInfo (ideLogger ide) $ T.pack $ (showGhc prov)
+          --logInfo logger $ T.pack $ "*******Resolving prov***************************"
+          --logInfo logger $ T.pack $ (showGhc prov)
           compItem <- toCompItem curMod (is_mod spec) n
-          --logInfo (ideLogger ide) $ T.pack $ show (compItem)
+          --logInfo logger $ T.pack $ show (compItem)
           case compItem of
-              Just match -> logInfo (ideLogger ide) $ T.pack $ show (match)
+              Just match -> logInfo logger $ T.pack $ show (match)
               Nothing -> return ()
           -- let unqual
           --       | is_qual spec = return []
@@ -180,37 +206,25 @@ cacheDataProducer ide packageState tm deps = do
           --     origMod = showModName (is_mod spec)
           return []
 
-      varToCompl :: Var -> IO [(String, String)]
-      varToCompl var = do
-        let typ = Just $ varType var
-            name = Var.varName var
-        return [(showGhc name, showGhc typ)]
-        --docs <- evalGhcEnv packageState $ getDocumentationTryGhc curMod (tm_parsed_module tm : deps) name
-        --return $ mkNameCompItem name curModName typ Nothing docs
-
-      toCompItem :: Module -> ModuleName -> Name -> IO (Maybe [(String, String)])
-      toCompItem m mn n = go
-          where
-          go
-              | (showGhc n) == "SessionConfig" = do
-                    ty <- evalGhcEnv packageState $ catchSrcErrors "completion" $ do
-                        name' <- Compile.lookupName m n
-                        liftIO $ logInfo (ideLogger ide) $ T.pack $ "here"
-                        liftIO $ logInfo (ideLogger ide) $ T.pack $ showGhc name'
-                        return $ name' >>= safeTyThing_
-                    return $ (either (const Nothing) id ty)
-              | otherwise = return Nothing
-        --return $ mkNameCompItem n mn (either (const Nothing) id ty) Nothing docs
+      toCompItem :: Module -> ModuleName -> Name -> IO (Maybe (String , [(String, String)]))
+      toCompItem m mn n = do
+          flds <- evalGhcEnv packageState $ catchSrcErrors "completion" $ do
+              name' <- Compile.lookupName m n
+              --liftIO $ logInfo logger $ T.pack $ "here"
+              --liftIO $ logInfo logger $ T.pack $ showGhc name'
+              return $ name' >>= safeTyThing_
+          return $ (either (const Nothing) id flds)
   compls <- getCompls rdrElts
   return $ compls
 
-safeTyThing_ :: TyThing -> Maybe [(String, String)]
+safeTyThing_ :: TyThing -> Maybe (String, [(String, String)])
 safeTyThing_ (AnId i) = Nothing
 safeTyThing_ (AConLike dc) =
     let flds = conLikeFieldLabels $ dc
+        name = occName . conLikeName $ dc
         types = map ((conLikeFieldType dc) . (flLabel)) flds
     in
-        Just $ [(unpackFS . flLabel $ x, showGhc y) | x <- flds | y <- types]
+        Just $ (showGhc name, [(unpackFS . flLabel $ x, showGhc y) | x <- flds | y <- types])
 safeTyThing_ _ = Nothing
 
 getCompletionsLSP
@@ -267,8 +281,10 @@ getNonLocalCompletionsLSP lsp ide
         pm <- runAction "RecordsSnippets" ide $ do
             --opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             --compls <- useWithStaleFast ProduceCompletions npath
-              x <- getTypeCheckModule lsp ide uri
-              pure x
+              extras <- getShakeExtras
+              -- x <- getTypeCheckModule lsp extras uri
+              result <- getNonLocalSnippets npath
+              pure []
         return (Completions $ List [])
       _ -> return (Completions $ List [])
 
@@ -360,3 +376,52 @@ buildCompletion ctxStr completionData = do
     snippet = intercalate ", " $
         map (\(x, i) -> ((fst x) <> "=${" <> show i <> ":" <> (fst x) <> "}")) t
     buildSnippet = T.pack $ ctxStr <> " {" <> snippet <> "}"
+
+
+
+
+
+----- old code ----
+
+-- getTypeCheckModule _lsp extras _uri = do
+--     contents <- liftIO $ LSP.getVirtualFileFunc _lsp $ toNormalizedUri _uri
+--     fmap Right $ case (contents, uriToFilePath' _uri) of
+--         (Just _cnts, Just _path) -> do
+--             let file = toNormalizedFilePath' _path
+--             --pm' <- runIdeAction "RecordsSnippets" (shakeExtras ide) $ do
+
+--             ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
+--             sess <- fmap fst <$> useWithStale GhcSessionDeps file
+--             _deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
+--             parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps _deps)
+--             case (ms, sess) of
+--                 (Just ms, Just sess) -> do
+--                     -- After parsing the module remove all package imports referring to
+--                     -- these packages as we have already dealt with what they map to.
+--                     let env = hscEnv sess
+--                         buf = fromJust $ ms_hspp_buf ms
+--                         f = fromNormalizedFilePath file
+--                         dflags = hsc_dflags env
+--                     pm <- liftIO $ evalGhcEnv env $ runExceptT $ Compile.parseHeader dflags f buf
+--                     case pm of
+--                         Right (_diags, hsMod) -> do
+--                             let hsModNoExports = hsMod <&> \x -> x{hsmodExports = Nothing}
+--                                 pm = ParsedModule
+--                                      { pm_mod_summary = ms
+--                                      , pm_parsed_source = hsModNoExports
+--                                      , pm_extra_src_files = [] -- src imports not allowed
+--                                      , pm_annotations = mempty
+--                                      }
+--                             tm <- liftIO $ Compile.typecheckModule (IdeDefer True) env pm
+--                             case tm of
+--                                 (_, Just (_,TcModuleResult{..})) -> do
+--                                     cdata <- liftIO $ cachedSnippetsProducer extras env tmrModule parsedDeps
+--                                     -- Do not return diags from parsing as they would duplicate
+--                                     -- the diagnostics from typechecking
+--                                     --return ([], Just cdata)
+--                                     return ([], Nothing)
+--                                 (_diag, _) ->
+--                                     return ([], Nothing)
+--                         Left _diag -> return ([], Nothing)
+--                 _ -> return ([], Nothing)
+--         _ -> return ([], Nothing)
