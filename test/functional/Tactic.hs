@@ -100,6 +100,7 @@ tests = testGroup
   , goldenTest "GoldenFmapTree.hs"          4 11 Auto ""
   , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
   , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
+  , goldenTest "GoldenSwapMany.hs"          2 12 Auto ""
   ]
 
 
@@ -118,7 +119,7 @@ mkTest
     -> TestTree
 mkTest name fp line col ts =
   testCase name $ do
-  runSession hieCommand fullCaps tacticPath $ do
+  runSession hlsCommand fullCaps tacticPath $ do
     doc <- openDoc fp "haskell"
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
@@ -132,7 +133,7 @@ mkTest name fp line col ts =
 goldenTest :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
 goldenTest input line col tc occ =
   testCase (input <> " (golden)") $ do
-    runSession hieCommand fullCaps tacticPath $ do
+    runSession hlsCommand fullCaps tacticPath $ do
       doc <- openDoc input "haskell"
       actions <- getCodeActions doc $ pointRange line col
       Just (CACodeAction (CodeAction {_command = Just c}))

@@ -1,5 +1,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections    #-}
+{-# LANGUAGE ViewPatterns     #-}
+
 module Ide.Plugin.Tactic.CodeGen where
 
 import           Control.Monad.Except
@@ -12,6 +15,7 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
+import           GHC.SourceGen (RdrNameStr)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
@@ -55,10 +59,7 @@ destructMatches f f2 t jdg = do
           let hy' = zip names $ coerce args
               dcon_name = nameOccName $ dataConName dc
 
-          let pat :: Pat GhcPs
-              pat = conP (fromString $ occNameString dcon_name)
-                  $ fmap bvar' names
-              j = f2 hy'
+          let j = f2 hy'
                 $ withPositionMapping dcon_name names
                 $ introducingPat hy'
                 $ withNewGoal g jdg
@@ -67,8 +68,34 @@ destructMatches f f2 t jdg = do
           pure ( rose ("match " <> show dc <> " {" <>
                           intercalate ", " (fmap show names) <> "}")
                     $ pure tr
-               , match [pat] $ unLoc sg
+               , match [mkDestructPat dc names] $ unLoc sg
                )
+
+
+------------------------------------------------------------------------------
+-- | Produces a pattern for a data con and the names of its fields.
+mkDestructPat :: DataCon -> [OccName] -> Pat GhcPs
+mkDestructPat dcon names
+  | isTupleDataCon dcon =
+      tuple pat_args
+  | otherwise =
+      infixifyPatIfNecessary dcon $
+        conP
+          (coerceName $ dataConName dcon)
+          pat_args
+  where
+    pat_args = fmap bvar' names
+
+
+infixifyPatIfNecessary :: DataCon -> Pat GhcPs -> Pat GhcPs
+infixifyPatIfNecessary dcon x
+  | dataConIsInfix dcon =
+      case x of
+        ConPatIn op (PrefixCon [lhs, rhs]) ->
+          ConPatIn op $ InfixCon lhs rhs
+        y -> y
+  | otherwise = x
+
 
 
 unzipTrace :: [(Trace, a)] -> (Trace, [a])
@@ -144,10 +171,25 @@ buildDataCon jdg dc apps = do
                   ) $ zip args [0..]
   pure
     . (rose (show dc) $ pure tr,)
-    . noLoc
-    . foldl' (@@)
-        (HsVar noExtField $ noLoc $ Unqual $ nameOccName $ dataConName dc)
-    $ fmap unLoc sgs
+    $ mkCon dc sgs
+
+
+mkCon :: DataCon -> [LHsExpr GhcPs] -> LHsExpr GhcPs
+mkCon dcon (fmap unLoc -> args)
+  | isTupleDataCon dcon =
+      noLoc $ tuple args
+  | dataConIsInfix dcon
+  , (lhs : rhs : args') <- args =
+      noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
+  | otherwise =
+      noLoc $ foldl' (@@) (bvar' $ occName $ dcon_name) args
+  where
+    dcon_name = dataConName dcon
+
+
+
+coerceName :: HasOccName a => a -> RdrNameStr
+coerceName = fromString . occNameString . occName
 
 
 ------------------------------------------------------------------------------

@@ -23,6 +23,7 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
+import           Control.DeepSeq
 import           Control.Lens hiding (Context)
 import           Control.Monad.Reader
 import           Data.Coerce
@@ -40,7 +41,6 @@ import           Ide.Plugin.Tactic.Debug
 import           OccName
 import           Refinery.Tactic
 import           Type
-import Control.DeepSeq
 
 
 ------------------------------------------------------------------------------

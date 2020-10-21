@@ -18,7 +18,7 @@ import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 tests :: TestTree
 tests = testGroup "commands" [
     testCase "are prefixed" $
-        runSession hieCommand fullCaps "test/testdata/" $ do
+        runSession hlsCommand fullCaps "test/testdata/" $ do
             ResponseMessage _ _ (Right res) <- initializeResponse
             let List cmds = res ^. LSP.capabilities . executeCommandProvider . _Just . commands
                 f x = (T.length (T.takeWhile isNumber x) >= 1) && (T.count ":" x >= 2)
@@ -27,7 +27,7 @@ tests = testGroup "commands" [
                 not (null cmds) @? "Commands aren't empty"
     , ignoreTestBecause "Broken: Plugin package doesn't exist" $
       testCase "get de-prefixed" $
-        runSession hieCommand fullCaps "test/testdata/" $ do
+        runSession hlsCommand fullCaps "test/testdata/" $ do
             ResponseMessage _ _ (Left err) <- request
                 WorkspaceExecuteCommand
                 (ExecuteCommandParams "1234:package:add" (Just (List [])) Nothing) :: Session ExecuteCommandResponse

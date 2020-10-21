@@ -1,0 +1,88 @@
+cabal-version:      2.2
+category:           Development
+name:               hls-tactics-plugin
+version:            0.5.1.0
+synopsis:           LSP server for GHC
+description:
+  Please see the README on GitHub at <https://github.com/isovector/hls-tactics-plugin#readme>
+
+homepage:           https://github.com/isovector/hls-tactics-plugin#readme
+bug-reports:        https://github.com/isovector/hls-tactics-plugin/issues
+author:             Sandy Maguire, Reed Mullanix
+maintainer:         sandy@sandymaguire.me
+copyright:          Sandy Maguire, Reed Mullanix
+-- license:            Apache-2.0
+-- license-file:       LICENSE
+build-type:         Simple
+-- extra-source-files:
+--   README.md
+--   ChangeLog.md
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/isovector/hls-tactics-plugin
+
+library
+  hs-source-dirs:   src
+  exposed-modules:
+    Ide.Plugin.Tactic
+    Ide.Plugin.Tactic.Auto
+    Ide.Plugin.Tactic.CodeGen
+    Ide.Plugin.Tactic.Context
+    Ide.Plugin.Tactic.Debug
+    Ide.Plugin.Tactic.GHC
+    Ide.Plugin.Tactic.Judgements
+    Ide.Plugin.Tactic.KnownStrategies
+    Ide.Plugin.Tactic.Machinery
+    Ide.Plugin.Tactic.Metaprogramming
+    Ide.Plugin.Tactic.Naming
+    Ide.Plugin.Tactic.Parser
+    Ide.Plugin.Tactic.Range
+    Ide.Plugin.Tactic.Tactics
+    Ide.Plugin.Tactic.Types
+    Ide.Plugin.Tactic.TestTypes
+    Ide.TreeTransform
+
+  ghc-options:
+    -Wno-name-shadowing -Wredundant-constraints
+  if flag(pedantic)
+    ghc-options: -Werror
+
+  build-depends:
+    , aeson
+    , base           >=4.12 && <5
+    , binary
+    , bytestring
+    , containers
+    , deepseq
+    , directory
+    , extra
+    , filepath
+    , fingertree
+    , generic-lens
+    , ghc
+    , ghc-boot-th
+    , ghc-exactprint
+    , ghc-source-gen
+    , ghcide         >=0.1
+    , hashable
+    , haskell-lsp    ^>=0.22
+    , hls-plugin-api
+    , lens
+    , megaparsec               ^>=7
+    , mtl
+    , parser-combinators
+    , refinery       ^>=0.3
+    , retrie         >=0.1.1.0
+    , shake          >=0.17.5
+    , syb
+    , text
+    , transformers
+
+  default-language: Haskell2010
+

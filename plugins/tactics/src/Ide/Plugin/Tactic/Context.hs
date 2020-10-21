@@ -44,6 +44,7 @@ getCurrentDefinitions = asks ctxDefiningFuncs
 getModuleHypothesis :: MonadReader Context m => m [(OccName, CType)]
 getModuleHypothesis = asks ctxModuleFuncs
 
+
 getMetaprogramCache :: MonadReader Context m => m MetaprogramCache
 getMetaprogramCache = asks ctxMetaprogramCache
 

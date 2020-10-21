@@ -67,7 +67,6 @@ assume name = rule $ \jdg -> do
     Nothing -> throwError $ UndefinedHypothesis name
 
 
-
 recursion :: TacticsM ()
 recursion = tracing "recursion" $ do
   defs <- getCurrentDefinitions

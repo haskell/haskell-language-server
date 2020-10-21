@@ -12,7 +12,7 @@ tests :: TestTree
 tests = testGroup "rename" [
   testCase "works" $ True @?= True
   --  pendingWith "removed because of HaRe"
-  -- runSession hieCommand fullCaps "test/testdata" $ do
+  -- runSession hlsCommand fullCaps "test/testdata" $ do
   --   doc <- openDoc "Rename.hs" "haskell"
   --   rename doc (Position 3 1) "baz" -- foo :: Int -> Int
   --   documentContents doc >>= liftIO . flip shouldBe expected

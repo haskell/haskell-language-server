@@ -15,7 +15,7 @@ tests :: TestTree
 tests = testGroup "definitions" [
 
     ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/References.hs" $
-       testCase "goto's symbols" $ runSession hieCommand fullCaps "test/testdata" $ do
+       testCase "goto's symbols" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "References.hs" "haskell"
         defs <- getDefinitions doc (Position 7 8)
         let expRange = Range (Position 4 0) (Position 4 3)
@@ -24,7 +24,7 @@ tests = testGroup "definitions" [
   -- -----------------------------------
 
   , ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/Bar.hs" $
-    testCase "goto's imported modules" $ runSession hieCommand fullCaps "test/testdata/definition" $ do
+    testCase "goto's imported modules" $ runSession hlsCommand fullCaps "test/testdata/definition" $ do
         doc <- openDoc "Foo.hs" "haskell"
         defs <- getDefinitions doc (Position 2 8)
         liftIO $ do
@@ -32,7 +32,7 @@ tests = testGroup "definitions" [
             defs @?= [Location (filePathToUri fp) zeroRange]
 
   , ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/Bar.hs" $
-    testCase "goto's exported modules" $ runSession hieCommand fullCaps "test/testdata/definition" $ do
+    testCase "goto's exported modules" $ runSession hlsCommand fullCaps "test/testdata/definition" $ do
         doc <- openDoc "Foo.hs" "haskell"
         defs <- getDefinitions doc (Position 0 15)
         liftIO $ do
@@ -40,7 +40,7 @@ tests = testGroup "definitions" [
             defs @?= [Location (filePathToUri fp) zeroRange]
 
   , ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/Bar.hs" $
-    testCase "goto's imported modules that are loaded" $ runSession hieCommand fullCaps "test/testdata/definition" $ do
+    testCase "goto's imported modules that are loaded" $ runSession hlsCommand fullCaps "test/testdata/definition" $ do
         doc <- openDoc "Foo.hs" "haskell"
         _ <- openDoc "Bar.hs" "haskell"
         defs <- getDefinitions doc (Position 2 8)
@@ -50,7 +50,7 @@ tests = testGroup "definitions" [
 
   , ignoreTestBecause "Broken: file:///Users/jwindsor/src/haskell-language-server/test/testdata/Bar.hs" $
     testCase "goto's imported modules that are loaded, and then closed" $
-        runSession hieCommand fullCaps "test/testdata/definition" $ do
+        runSession hlsCommand fullCaps "test/testdata/definition" $ do
             doc <- openDoc "Foo.hs" "haskell"
             otherDoc <- openDoc "Bar.hs" "haskell"
             closeDoc otherDoc

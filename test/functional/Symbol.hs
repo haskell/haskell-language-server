@@ -19,7 +19,7 @@ tests = testGroup "document symbols" [
 
 v310Tests :: TestTree
 v310Tests = testGroup "3.10 hierarchical document symbols" [
-    ignoreTestBecause "Broken" $ testCase "provides nested data types and constructors" $ runSession hieCommand fullCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "provides nested data types and constructors" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
@@ -29,7 +29,7 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
 
         liftIO $ myData `elem` symbs @? "Contains symbol"
 
-    ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hieCommand fullCaps "test/testdata" $ do
+    ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
@@ -40,7 +40,7 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
 
         liftIO $ foo `elem` symbs @? "Contains symbol"
 
-    , ignoreTestBecause "Broken" $ testCase "provides pattern synonyms" $ runSession hieCommand fullCaps "test/testdata" $ do
+    , ignoreTestBecause "Broken" $ testCase "provides pattern synonyms" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
@@ -54,7 +54,7 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
 
 pre310Tests :: TestTree
 pre310Tests = testGroup "pre 3.10 symbol information" [
-    ignoreTestBecause "Broken" $ testCase "provides nested data types and constructors" $ runSession hieCommand oldCaps "test/testdata" $ do
+    ignoreTestBecause "Broken" $ testCase "provides nested data types and constructors" $ runSession hlsCommand oldCaps "test/testdata" $ do
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 
@@ -64,7 +64,7 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
 
         liftIO $ [myData, a, b] `isInfixOf` symbs @? "Contains symbols"
 
-    ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hieCommand oldCaps "test/testdata" $ do
+    ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hlsCommand oldCaps "test/testdata" $ do
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 
