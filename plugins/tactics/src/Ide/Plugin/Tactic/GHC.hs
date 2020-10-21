@@ -53,7 +53,7 @@ tacticsSplitFunTy t
         (args, res) = tcSplitFunTys t'
      in (vars, theta, args, res)
 
-#if __GLASGOW_HASKELL__ <= 810
+#if __GLASGOW_HASKELL__ < 810
 mkVisFunTys :: [Type] -> Type -> Type
 mkVisFunTys = mkFunTys
 #endif
