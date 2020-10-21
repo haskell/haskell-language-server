@@ -1,3 +1,5 @@
+{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 -- TODO1 added by Example Plugin directly
@@ -32,7 +34,7 @@ import qualified Language.Haskell.LSP.VFS as VFS
 import Development.IDE.GHC.Compat
 import GHC
 import Data.Maybe (catMaybes)
-import GhcPlugins (occNameString, rdrNameOcc, GlobalRdrElt(..), liftIO, listVisibleModuleNames)
+import GhcPlugins (GlobalRdrElt (..), liftIO, listVisibleModuleNames, occNameString, rdrNameOcc, flLabel, unpackFS)
 --import Language.Haskell.GHC.ExactPrint.Utils (showGhc)
 import Data.List (intercalate)
 import RdrName
@@ -51,6 +53,7 @@ import qualified Data.Map as Map
 import Var
 import Development.IDE.Spans.Common
 import Development.IDE.Import.DependencyInformation (transitiveModuleDeps, TransitiveDependencies(TransitiveDependencies))
+import ConLike
 --import Development.IDE.Plugin.Completions
 
 -- ---------------------------------------------------------------------
@@ -66,42 +69,6 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginCompletionProvider = Just getNonLocalCompletionsLSP
   }
 
--- ---------------------------------------------------------------------
-
--- -- | Parse only the module header taben from GHCIDE.Compile.
--- -- | We could move this to Util maybe
--- parseHeader
---        :: GhcMonad m
---        => DynFlags -- ^ flags to use
---        -> FilePath  -- ^ the filename (for source locations)
---        -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
---        -> ExceptT [FileDiagnostic] m ([FileDiagnostic], Located(HsModule GhcPs))
--- parseHeader dflags filename contents = do
---    let loc  = CompilmkRealSrcLoc (mkFastString filename) 1 1
---    case unP Parser.parseHeader (mkPState dflags contents loc) of
--- #if MIN_GHC_API_VERSION(8,10,0)
---      PFailed pst ->
---         throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
--- #else
---      PFailed _ locErr msgErr ->
---         throwE $ diagFromErrMsg "parser" dflags $ mkPlainErrMsg dflags locErr msgErr
--- #endif
---      POk pst rdr_module -> do
---         let (warns, errs) = getMessages pst dflags
---         -- Just because we got a `POk`, it doesn't mean there
---         -- weren't errors! To clarify, the GHC parser
---         -- distinguishes between fatal and non-fatal
---         -- errors. Non-fatal errors are the sort that don't
---         -- prevent parsing from continuing (that is, a parse
---         -- tree can still be produced despite the error so that
---         -- further errors/warnings can be collected). Fatal
---         -- errors are those from which a parse tree just can't
---         -- be produced.
---         unless (null errs) $
---             throwE $ diagFromErrMsgs "parser" dflags errs
-
---         let warnings = diagFromErrMsgs "parser" dflags warns
---         return (warnings, rdr_module)
 
 getTypeCheckModule _lsp ide _uri = do
     contents <- liftIO $ LSP.getVirtualFileFunc _lsp $ toNormalizedUri _uri
@@ -188,44 +155,63 @@ cacheDataProducer ide packageState tm deps = do
         case lookupTypeEnv typeEnv n of
           Just tt -> case safeTyThingId tt of
             Just var -> do
-                logInfo (ideLogger ide) $ T.pack $ "*******Resolving tt***************************"
-                logInfo (ideLogger ide) $ T.pack $ (showGhc tt)
-                (\x -> [x]) <$> varToCompl var
+                --logInfo (ideLogger ide) $ T.pack $ "*******Resolving tt***************************"
+                --logInfo (ideLogger ide) $ T.pack $ (showGhc tt)
+                --(\x -> [x]) <$> varToCompl var
+                return []
             Nothing -> return [] -- (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
           Nothing -> return [] -- (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
+          --logInfo (ideLogger ide) $ T.pack $ "*******Resolving prov***************************"
+          --logInfo (ideLogger ide) $ T.pack $ (showGhc prov)
           compItem <- toCompItem curMod (is_mod spec) n
-          let unqual
-                | is_qual spec = []
-                | otherwise = [] -- [compItem]
-              qual
-                | is_qual spec = Map.singleton asMod [compItem]
-                | otherwise = Map.fromList [(asMod,[compItem]),(origMod,[compItem])]
-              asMod = showModName (is_as spec)
-              origMod = showModName (is_mod spec)
+          --logInfo (ideLogger ide) $ T.pack $ show (compItem)
+          case compItem of
+              Just match -> logInfo (ideLogger ide) $ T.pack $ show (match)
+              Nothing -> return ()
+          -- let unqual
+          --       | is_qual spec = return []
+          --       | otherwise = (\x -> [x]) <$> compItem
+          --     qual
+          --       | is_qual spec = Map.singleton asMod [compItem]
+          --       | otherwise = Map.fromList [(asMod,[compItem]),(origMod,[compItem])]
+          --     asMod = showModName (is_as spec)
+          --     origMod = showModName (is_mod spec)
           return []
 
-      varToCompl :: Var -> IO (String, String)
+      varToCompl :: Var -> IO [(String, String)]
       varToCompl var = do
         let typ = Just $ varType var
             name = Var.varName var
-        return (showGhc name, showGhc typ)
+        return [(showGhc name, showGhc typ)]
         --docs <- evalGhcEnv packageState $ getDocumentationTryGhc curMod (tm_parsed_module tm : deps) name
         --return $ mkNameCompItem name curModName typ Nothing docs
 
-      toCompItem :: Module -> ModuleName -> Name -> IO [(String, String)]
-      toCompItem m mn n = do
-        --docs <- evalGhcEnv packageState $ getDocumentationTryGhc curMod (tm_parsed_module tm : deps) n
-        ty <- evalGhcEnv packageState $ catchSrcErrors "completion" $ do
-                name' <- Compile.lookupName m n
-                return $ name' >>= safeTyThingType
-        return []
+      toCompItem :: Module -> ModuleName -> Name -> IO (Maybe [(String, String)])
+      toCompItem m mn n = go
+          where
+          go
+              | (showGhc n) == "SessionConfig" = do
+                    ty <- evalGhcEnv packageState $ catchSrcErrors "completion" $ do
+                        name' <- Compile.lookupName m n
+                        liftIO $ logInfo (ideLogger ide) $ T.pack $ "here"
+                        liftIO $ logInfo (ideLogger ide) $ T.pack $ showGhc name'
+                        return $ name' >>= safeTyThing_
+                    return $ (either (const Nothing) id ty)
+              | otherwise = return Nothing
         --return $ mkNameCompItem n mn (either (const Nothing) id ty) Nothing docs
-
   compls <- getCompls rdrElts
   return $ compls
 
+safeTyThing_ :: TyThing -> Maybe [(String, String)]
+safeTyThing_ (AnId i) = Nothing
+safeTyThing_ (AConLike dc) =
+    let flds = conLikeFieldLabels $ dc
+        types = map ((conLikeFieldType dc) . (flLabel)) flds
+    in
+        Just $ [(unpackFS . flLabel $ x, showGhc y) | x <- flds | y <- types]
+safeTyThing_ _ = Nothing
 
 getCompletionsLSP
     :: LSP.LspFuncs cofd
