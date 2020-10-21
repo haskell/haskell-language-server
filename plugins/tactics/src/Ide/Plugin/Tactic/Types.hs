@@ -227,7 +227,6 @@ rose a rs = Rose $ Node a $ coerce rs
 
 
 ------------------------------------------------------------------------------
-
 data Metaprogram = Metaprogram
   { mp_name             :: !Text
   , mp_known_by_auto    :: !Bool
@@ -253,4 +252,11 @@ newtype MetaprogramCache = MetaprogramCache
   deriving stock (Show, Generic)
   deriving newtype (Semigroup, Monoid)
   deriving anyclass (NFData)
+
+-- | The results of 'Ide.Plugin.Tactic.Machinery.runTactic'
+data RunTacticResults = RunTacticResults
+  { rtr_trace       :: Trace
+  , rtr_extract     :: LHsExpr GhcPs
+  , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
+  } deriving Show
 
