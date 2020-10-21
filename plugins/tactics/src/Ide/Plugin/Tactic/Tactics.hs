@@ -85,7 +85,7 @@ intro name = rule $ \jdg -> do
   ctx <- ask
   case tacticsSplitFunTy $ unCType g of
     ([], [], (a : as), res) -> do
-      let b = mkFunTys as res
+      let b = mkVisFunTys as res
       let jdg' = introducing [(name, coerce a)]
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.singleton name
