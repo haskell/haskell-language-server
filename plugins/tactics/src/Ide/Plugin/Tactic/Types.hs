@@ -219,3 +219,12 @@ rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
 rose a [Rose (Node a' rs)] | a' == mempty = Rose $ Node a rs
 rose a rs = Rose $ Node a $ coerce rs
 
+
+------------------------------------------------------------------------------
+-- | The results of 'Ide.Plugin.Tactic.Machinery.runTactic'
+data RunTacticResults = RunTacticResults
+  { rtr_trace       :: Trace
+  , rtr_extract     :: LHsExpr GhcPs
+  , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
+  } deriving Show
+
