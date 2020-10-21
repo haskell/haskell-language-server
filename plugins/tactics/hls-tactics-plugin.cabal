@@ -74,7 +74,7 @@ library
     , haskell-lsp    ^>=0.22
     , hls-plugin-api
     , lens
-    , megaparsec               ^>=7
+    , megaparsec     ^>=9
     , mtl
     , parser-combinators
     , refinery       ^>=0.3
