@@ -62,8 +62,6 @@ library
       , ghc-lib-parser-ex  ^>= 8.10
 
     cpp-options:   -DGHC_LIB
-    mixins:
-      ghc (GHC as RealGHC, HscTypes as RealGHC.HscTypes, EnumSet as RealGHC.EnumSet)
 
   ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
 

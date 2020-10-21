@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports    #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
@@ -38,16 +39,17 @@ import Development.IDE.Core.Shake hiding (withIndefiniteProgress)
 import Development.IDE.Types.Diagnostics as D
 import Development.IDE.Types.Location
 import Development.Shake
--- import Development.Shake hiding ( Diagnostic )
-import GHC hiding (DynFlags(..))
 
 #ifdef GHC_LIB
 import Development.IDE.Core.RuleTypes (GhcSession(..))
 import Development.IDE.GHC.Util (hscEnv)
-import RealGHC (DynFlags(..))
-import RealGHC.HscTypes (hsc_dflags)
-import qualified RealGHC.EnumSet as EnumSet
+import "ghc-lib" GHC hiding (DynFlags(..))
+import "ghc" GHC as RealGHC (DynFlags(..))
+import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
+import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
+#else
+import GHC hiding (DynFlags(..))
 #endif
 
 import Ide.Logger
