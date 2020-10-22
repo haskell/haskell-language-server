@@ -224,43 +224,6 @@ safeTyThing_ (AConLike dc) =
         Just $ (showGhc name, [(unpackFS . flLabel $ x, showGhc y) | x <- flds | y <- types])
 safeTyThing_ _ = Nothing
 
-getCompletionsLSP
-    :: LSP.LspFuncs cofd
-    -> IdeState
-    -> CompletionParams
-    -> IO (Either ResponseError CompletionResponseResult)
-getCompletionsLSP lsp ide
-  CompletionParams{_textDocument=TextDocumentIdentifier uri
-                  ,_position=position
-                  ,_context=completionContext} = do
-    contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
-    fmap Right $ case (contents, uriToFilePath' uri) of
-      (Just cnts, Just path) -> do
-        let npath = toNormalizedFilePath' path
-        pm <- runIdeAction "RecordsSnippets" (shakeExtras ide) $ do
-            --opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-            --compls <- useWithStaleFast ProduceCompletions npath
-            pm <- useWithStaleFast GetParsedModule npath
-            --binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-            pure pm
-        case pm of
-          Just (parsedMod, _) -> do
-            pfix <- VFS.getCompletionPrefix position cnts
-            case (pfix, completionContext) of
-              (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
-                -> return (Completions $ List [])
-              (Just pfix', _) -> do
-                  -- TODO pass the real capabilities here (or remove the logic for snippets)
-                --let fakeClientCapabilities = ClientCapabilities Nothing Nothing Nothing Nothing
-                --Completions . List <$> getCompletions ideOpts cci' parsedMod bindMap pfix' fakeClientCapabilities (WithSnippets True)
-                  logInfo (ideLogger ide) $ T.pack $ "**********************************"
-                  logInfo (ideLogger ide) $ T.pack $ show completionContext
-                  logInfo (ideLogger ide) $ T.pack $ show pfix'
-                  findLocalCompletions ide parsedMod pfix'
-              _ -> return (Completions $ List [])
-          _ -> return (Completions $ List [])
-      _ -> return (Completions $ List [])
-
 
 getNonLocalCompletionsLSP
     :: LSP.LspFuncs cofd
@@ -291,50 +254,142 @@ getNonLocalCompletionsLSP lsp ide
       _ -> return (Completions $ List [])
 
 
+
+--- Gather local completions
+
+
+-- getLocalSnippets :: NormalizedFilePath -> Action (Maybe CachedSnippets)
+-- getLocalSnippets file = do
+--     pm <- useWithStale GetParsedModule file
+--     extras <- getShakeExtras
+--     case pm of
+--       Just (parsedMod, _) -> do
+--           return $ Just $ cachedLocalSnippetProducer extras parsedMod
+--       _ -> return Nothing
+
+-- getcompletionslsp
+--     :: lsp.lspfuncs cofd
+--     -> idestate
+--     -> completionparams
+--     -> io (either responseerror completionresponseresult)
+-- getcompletionslsp lsp ide
+--   completionparams{_textdocument=textdocumentidentifier uri
+--                   ,_position=position
+--                   ,_context=completioncontext} = do
+--     contents <- lsp.getvirtualfilefunc lsp $ tonormalizeduri uri
+--     fmap right $ case (contents, uritofilepath' uri) of
+--       (just cnts, just path) -> do
+--         let npath = tonormalizedfilepath' path
+--         pm <- runideaction "recordssnippets" (shakeextras ide) $ do
+--             pm <- usewithstalefast getparsedmodule npath
+--             pure pm
+--         case pm of
+--           just (parsedmod, _) -> do
+--             pfix <- vfs.getcompletionprefix position cnts
+--             case (pfix, completioncontext) of
+--               (just (vfs.posprefixinfo _ "" _ _), just completioncontext { _triggercharacter = just "."})
+--                 -> return (completions $ list [])
+--               (just pfix', _) -> do
+--                   -- loginfo (idelogger ide) $ t.pack $ "**********************************"
+--                   -- loginfo (idelogger ide) $ t.pack $ show completioncontext
+--                   -- loginfo (idelogger ide) $ t.pack $ show pfix'
+--                   findlocalcompletions  parsedmod pfix'
+--               _ -> return (completions $ list [])
+--           _ -> return (completions $ list [])
+--       _ -> return (completions $ list [])
+
+
+cachedLocalSnippetProducer :: ShakeExtras -> ParsedModule -> IO CachedSnippets
+cachedLocalSnippetProducer extras@ShakeExtras{logger} pmod = do
+  let _hsmodule = unLoc (parsedSource pmod)
+      hsDecls = hsmodDecls _hsmodule
+      --ctxStr = (T.unpack . VFS.prefixText $ pfix)
+      completionData = findFields (unLoc <$> hsDecls)
+      -- compls = buildCompletions completionData
+  logInfo logger $ "*****Showing Completion Data\n"
+  logInfo logger $ T.pack $ show completionData
+  return completionData
+
+
+findFields :: [HsDecl GhcPs] -> CachedSnippets
+findFields _ = []
+
+-- findFields decls = name_type
+--   where
+--     dataDefns = catMaybes $ findDataDefns <$> decls
+--     findDataDefns decl =
+--       case decl of
+--         TyClD _ (DataDecl{tcdDataDefn}) -> Just tcdDataDefn
+--         _ -> Nothing
+--     conDecls = concat [ unLoc <$> dd_cons dataDefn | dataDefn <- dataDefns]
+--     h98 = catMaybes $ findH98 <$> conDecls
+--     findH98 conDecl = case conDecl of
+--       ConDeclH98{..} -> Just (unLoc con_name, con_args)
+--       ConDeclGADT{} -> Nothing  -- TODO: Expand this out later
+--       _ -> Nothing
+
+--     --conName = (occNameString . rdrNameOcc)
+--     -- conArgs = [(conName . fst $ x, snd x) | x  <- h98]
+--     flds = concat . catMaybes $ getFlds <$> h98
+--     getFlds conArg = case conArg of
+--       (y, RecCon rec) -> Just $ (y, unLoc <$> (unLoc rec))
+--       _ -> Nothing
+--     name_type = map (\x -> ((showGhc . fst $ x), (showGhc . snd $ x))) (catMaybes $ extract <$> flds)
+
+--     extract ConDeclField{..} = let
+--       fld_type = unLoc cd_fld_type
+--       fld_name = rdrNameFieldOcc $ unLoc . head $ cd_fld_names --TODO: Why is cd_fld_names a list?
+--         in
+--         Just (fld_name, fld_type)
+--     extract _ = Nothing
+
+
 findLocalCompletions :: IdeState -> ParsedModule -> VFS.PosPrefixInfo -> IO CompletionResponseResult
 findLocalCompletions ide  pmod pfix = do
     let _hsmodule = unLoc (parsedSource pmod)
         hsDecls = hsmodDecls _hsmodule
         ctxStr = (T.unpack . VFS.prefixText $ pfix)
-        completionData = findFields ctxStr (unLoc <$> hsDecls)
-        x = buildCompletions [(ctxStr, completionData)]
+        completionData = findFields (unLoc <$> hsDecls)
+        compls = buildCompletions completionData
     logInfo (ideLogger ide) $ "*****Showing Completion Data\n"
     logInfo (ideLogger ide) $ T.pack $ show completionData
-    return x
+    return compls
 
 
-findFields :: String -> [HsDecl GhcPs] -> [(String, String)]
-findFields  ctxStr decls = name_type
-  where
-    dataDefns = catMaybes $ findDataDefns <$> decls
-    findDataDefns decl =
-      case decl of
-        TyClD _ (DataDecl{tcdDataDefn}) -> Just tcdDataDefn
-        _ -> Nothing
-    conDecls = concat [ unLoc <$> dd_cons dataDefn | dataDefn <- dataDefns]
-    h98 = catMaybes $ findH98 <$> conDecls
+-- findFields :: String -> [HsDecl GhcPs] -> [(String, String)]
+-- findFields  ctxStr decls = name_type
+--   where
+--     dataDefns = catMaybes $ findDataDefns <$> decls
+--     findDataDefns decl =
+--       case decl of
+--         TyClD _ (DataDecl{tcdDataDefn}) -> Just tcdDataDefn
+--         _ -> Nothing
+--     conDecls = concat [ unLoc <$> dd_cons dataDefn | dataDefn <- dataDefns]
+--     h98 = catMaybes $ findH98 <$> conDecls
 
 
-    findH98 conDecl = case conDecl of
-      ConDeclH98{..} -> Just (unLoc con_name, con_args)
-      ConDeclGADT{} -> Nothing  -- TODO: Expand this out later
-      _ -> Nothing
+--     findH98 conDecl = case conDecl of
+--       ConDeclH98{..} -> Just (unLoc con_name, con_args)
+--       ConDeclGADT{} -> Nothing  -- TODO: Expand this out later
+--       _ -> Nothing
 
-    conArgs = [snd x | x  <- h98, (occNameString . rdrNameOcc . fst $ x) == ctxStr]
-    flds = concat . catMaybes $ getFlds <$> conArgs
-    getFlds conArg = case conArg of
-      RecCon rec -> Just $ unLoc <$> (unLoc rec)
-      _ -> Nothing
-    name_type = map (\x -> ((showGhc . fst $ x), (showGhc . snd $ x))) (catMaybes $ extract <$> flds)
+--     conArgs = [snd x | x  <- h98, (occNameString . rdrNameOcc . fst $ x) == ctxStr]
+--     flds = concat . catMaybes $ getFlds <$> conArgs
+--     getFlds conArg = case conArg of
+--       RecCon rec -> Just $ unLoc <$> (unLoc rec)
+--       _ -> Nothing
+--     name_type = map (\x -> ((showGhc . fst $ x), (showGhc . snd $ x))) (catMaybes $ extract <$> flds)
 
-    extract ConDeclField{..} = let
-      fld_type = unLoc cd_fld_type
-      fld_name = rdrNameFieldOcc $ unLoc . head $ cd_fld_names --TODO: Why is cd_fld_names a list?
-        in
-        Just (fld_name, fld_type)
-    extract _ = Nothing
+--     extract ConDeclField{..} = let
+--       fld_type = unLoc cd_fld_type
+--       fld_name = rdrNameFieldOcc $ unLoc . head $ cd_fld_names --TODO: Why is cd_fld_names a list?
+--         in
+--         Just (fld_name, fld_type)
+--     extract _ = Nothing
 
 
+
+--- Functions that build the final code snippets
 buildCompletionItem :: String -> [(String, String)] -> CompletionItem
 buildCompletionItem ctxStr completionData = r
   where
@@ -384,48 +439,3 @@ buildCompletions snippets = let
     result = (uncurry buildCompletionItem) <$> snippets
     in
     Completions $ List result
-
------ old code ----
-
--- getTypeCheckModule _lsp extras _uri = do
---     contents <- liftIO $ LSP.getVirtualFileFunc _lsp $ toNormalizedUri _uri
---     fmap Right $ case (contents, uriToFilePath' _uri) of
---         (Just _cnts, Just _path) -> do
---             let file = toNormalizedFilePath' _path
---             --pm' <- runIdeAction "RecordsSnippets" (shakeExtras ide) $ do
-
---             ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
---             sess <- fmap fst <$> useWithStale GhcSessionDeps file
---             _deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
---             parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps _deps)
---             case (ms, sess) of
---                 (Just ms, Just sess) -> do
---                     -- After parsing the module remove all package imports referring to
---                     -- these packages as we have already dealt with what they map to.
---                     let env = hscEnv sess
---                         buf = fromJust $ ms_hspp_buf ms
---                         f = fromNormalizedFilePath file
---                         dflags = hsc_dflags env
---                     pm <- liftIO $ evalGhcEnv env $ runExceptT $ Compile.parseHeader dflags f buf
---                     case pm of
---                         Right (_diags, hsMod) -> do
---                             let hsModNoExports = hsMod <&> \x -> x{hsmodExports = Nothing}
---                                 pm = ParsedModule
---                                      { pm_mod_summary = ms
---                                      , pm_parsed_source = hsModNoExports
---                                      , pm_extra_src_files = [] -- src imports not allowed
---                                      , pm_annotations = mempty
---                                      }
---                             tm <- liftIO $ Compile.typecheckModule (IdeDefer True) env pm
---                             case tm of
---                                 (_, Just (_,TcModuleResult{..})) -> do
---                                     cdata <- liftIO $ cachedSnippetsProducer extras env tmrModule parsedDeps
---                                     -- Do not return diags from parsing as they would duplicate
---                                     -- the diagnostics from typechecking
---                                     --return ([], Just cdata)
---                                     return ([], Nothing)
---                                 (_diag, _) ->
---                                     return ([], Nothing)
---                         Left _diag -> return ([], Nothing)
---                 _ -> return ([], Nothing)
---         _ -> return ([], Nothing)
