@@ -159,7 +159,7 @@ cachedSnippetsProducer ShakeExtras{logger} packageState tm = do
       getCompls = foldMapM getComplsForOne
 
       getComplsForOne :: GlobalRdrElt -> IO [(String, [(String, String)])]
-      getComplsForOne (GRE _ _ True _) = return [] -- this should be covered in LocalCompletions
+      getComplsForOne (GRE _ _ True _) = return [] -- this should be covered in LocalSnippets
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \_spec -> do
           --logInfo logger $ T.pack $ "*******Resolving prov***************************"
@@ -215,7 +215,7 @@ getSnippets lsp ide
                 Just (snippets, _) -> do
                     liftIO $ logInfo (ideLogger ide) $ T.pack $ "Snippets show here ------->"
                     liftIO $ logInfo (ideLogger ide) $ T.pack $ show snippets
-                    let compls = buildCompletions snippets
+                    let compls = buildSnippetCompletions snippets
                     liftIO $ logInfo (ideLogger ide) $ T.pack $ show compls
                     pure compls
                 Nothing -> return (Completions $ List [])
@@ -339,8 +339,8 @@ buildCompletionItem ctxStr completionData = r
     buildSnippet = T.pack $ ctxStr <> " {" <> snippet <> "}"
 
 
-buildCompletions :: CachedSnippets -> CompletionResponseResult
-buildCompletions snippets = let
+buildSnippetCompletions :: CachedSnippets -> CompletionResponseResult
+buildSnippetCompletions snippets = let
     result = (uncurry buildCompletionItem) <$> snippets
     in
     Completions $ List result
