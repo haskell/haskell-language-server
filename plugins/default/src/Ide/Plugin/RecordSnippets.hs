@@ -20,21 +20,6 @@ module Ide.Plugin.RecordSnippets
     descriptor
   ) where
 
---import Control.Applicative
---import Control.Monad.Trans.Except (runExceptT)
---import qualified Language.Haskell.LSP.VFS as VFS
---import GHC
---import Data.Maybe (catMaybes)
---import Language.Haskell.GHC.ExactPrint.Utils (showGhc)
---import Development.IDE.Core.Service
---import qualified Parser
---import StringBuffer as SB
---import qualified Data.Maybe as UnsafeMaybe (fromJust)
---import qualified Data.Map as Map
---import Var
---import Development.IDE.Import.DependencyInformation (transitiveModuleDeps, TransitiveDependencies(TransitiveDependencies))
---import Development.IDE.Core.PositionMapping (PositionMapping)
-
 import Data.Maybe
 import qualified Data.Text as T
 import Development.IDE as D
