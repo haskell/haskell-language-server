@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -312,36 +313,50 @@ cachedLocalSnippetProducer extras@ShakeExtras{logger} pmod = do
 
 
 findFields :: [HsDecl GhcPs] -> CachedSnippets
-findFields _ = []
+findFields decls = name_type''
+  where
+    dataDefns = catMaybes $ findDataDefns <$> decls
+    findDataDefns decl =
+      case decl of
+        TyClD _ (DataDecl{tcdDataDefn}) -> Just tcdDataDefn
+        _ -> Nothing
+    conDecls = concat [ unLoc <$> dd_cons dataDefn | dataDefn <- dataDefns]
+    h98 = catMaybes $ findH98 <$> conDecls
+    findH98 conDecl = case conDecl of
+      ConDeclH98{..} -> Just (unLoc con_name, con_args)
+      ConDeclGADT{} -> Nothing  -- TODO: Expand this out later
+      _ -> Nothing
 
--- findFields decls = name_type
---   where
---     dataDefns = catMaybes $ findDataDefns <$> decls
---     findDataDefns decl =
---       case decl of
---         TyClD _ (DataDecl{tcdDataDefn}) -> Just tcdDataDefn
---         _ -> Nothing
---     conDecls = concat [ unLoc <$> dd_cons dataDefn | dataDefn <- dataDefns]
---     h98 = catMaybes $ findH98 <$> conDecls
---     findH98 conDecl = case conDecl of
---       ConDeclH98{..} -> Just (unLoc con_name, con_args)
---       ConDeclGADT{} -> Nothing  -- TODO: Expand this out later
---       _ -> Nothing
+    name_flds :: [(RdrName, [ConDeclField GhcPs])]
+    name_flds = catMaybes $ decompose <$> h98
 
---     --conName = (occNameString . rdrNameOcc)
---     -- conArgs = [(conName . fst $ x, snd x) | x  <- h98]
---     flds = concat . catMaybes $ getFlds <$> h98
---     getFlds conArg = case conArg of
---       (y, RecCon rec) -> Just $ (y, unLoc <$> (unLoc rec))
---       _ -> Nothing
---     name_type = map (\x -> ((showGhc . fst $ x), (showGhc . snd $ x))) (catMaybes $ extract <$> flds)
+    decompose x = case getFlds $ (snd x) of
+                      Just con_details -> Just (fst x, con_details)
+                      Nothing -> Nothing
 
---     extract ConDeclField{..} = let
---       fld_type = unLoc cd_fld_type
---       fld_name = rdrNameFieldOcc $ unLoc . head $ cd_fld_names --TODO: Why is cd_fld_names a list?
---         in
---         Just (fld_name, fld_type)
---     extract _ = Nothing
+    getFlds :: HsConDetails arg (Located [LConDeclField GhcPs]) -> Maybe [SrcSpanLess (LConDeclField GhcPs)]
+    getFlds conArg = case conArg of
+                         RecCon rec -> Just $ unLoc <$> (unLoc rec)
+                         _ -> Nothing
+
+    --name_type :: [(RdrName, (Located RdrName, HsType GhcPs))]
+
+    name_type = decompose' <$> name_flds
+    decompose' x = (fst x, catMaybes $ extract <$> (snd x))
+
+    extract ConDeclField{..} = let
+        fld_type = unLoc cd_fld_type
+        fld_name = rdrNameFieldOcc $ unLoc . head $ cd_fld_names --TODO: Why is cd_fld_names a list?
+        in
+            Just (fld_name, fld_type)
+    extract _ = Nothing
+
+    name_type'' = decompose'' <$> name_type
+    decompose'' :: (RdrName, [(Located RdrName, HsType GhcPs)]) -> (String, [(String, String)])
+    decompose'' x = (showGhc . fst $ x,
+                     (\(x', y') -> (showGhc . unLoc $ x', showGhc y'))  <$> (snd x)
+                    )
+
 
 
 findLocalCompletions :: IdeState -> ParsedModule -> VFS.PosPrefixInfo -> IO CompletionResponseResult
