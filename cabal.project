@@ -26,6 +26,9 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-10-16T04:00:00Z
+index-state: 2020-10-16T03:50:06Z
 
 allow-newer: data-tree-print:base
+
+-- To ensure the build get the version with the fix for #498
+constraints: implicit-hie >= 0.1.2.0
