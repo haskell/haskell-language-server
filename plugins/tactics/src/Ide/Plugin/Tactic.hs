@@ -265,6 +265,7 @@ judgementForHole state nfp range = do
                 $ getDefiningBindings binds rss)
               tcg
       hyps = hypothesisFromBindings rss binds
+          <> M.fromList (contextMethodHypothesis ctx)
   pure ( resulting_range
        , mkFirstJudgement
            hyps

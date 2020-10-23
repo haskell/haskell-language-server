@@ -6,7 +6,6 @@
 module Ide.Plugin.Tactic.GHC where
 
 import           Control.Monad.State
-import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
 import           Data.Traversable
@@ -59,6 +58,9 @@ tacticsSplitFunTy t
   = let (vars, theta, t') = tcSplitSigmaTy t
         (args, res) = tcSplitFunTys t'
      in (vars, theta, args, res)
+
+tacticsThetaTy :: Type -> ThetaType
+tacticsThetaTy (tacticsSplitFunTy -> (_, theta, _, _)) = theta
 
 
 freshTyvars :: MonadState TacticState m => Type -> m Type

@@ -225,6 +225,10 @@ data Context = Context
   deriving stock (Eq, Ord)
 
 
+emptyContext :: Context
+emptyContext  = Context mempty mempty
+
+
 newtype Rose a = Rose (Tree a)
   deriving stock (Eq, Functor, Generic)
 

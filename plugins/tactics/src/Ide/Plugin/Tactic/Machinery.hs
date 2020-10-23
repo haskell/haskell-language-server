@@ -17,6 +17,8 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
+import qualified Data.Map as M
+import Data.Map (Map)
 import           Control.Arrow
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
@@ -37,6 +39,11 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
+import Data.Maybe (mapMaybe)
+import Data.Tuple (swap)
+import Class (Class(classTyVars))
+import Data.Functor ((<&>))
+import OccName (HasOccName(occName))
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -170,4 +177,19 @@ unify goal inst = do
       modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
     Nothing -> throwError (UnificationError inst goal)
 
+
+methodHypothesis :: PredType -> Maybe [(OccName, CType)]
+methodHypothesis ty = do
+  traceMX "pred ty " $ unsafeRender ty
+  (tc, apps) <- splitTyConApp_maybe ty
+  traceMX "got a tycon" $ unsafeRender tc
+  cls <- tyConClass_maybe tc
+  traceMX "got a cls" $ unsafeRender cls
+  let methods = classMethods cls
+      tvs = classTyVars cls
+      subst = zipTvSubst tvs apps
+  -- TODO(sandy): strip out the theta type from the result
+  traceMX "methods" $ unsafeRender methods
+  pure $ methods <&> \method ->
+    (occName method,  CType $ substTy subst $ idType method)
 
