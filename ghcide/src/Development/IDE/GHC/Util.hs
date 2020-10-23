@@ -10,7 +10,6 @@ module Development.IDE.GHC.Util(
     envImportPaths,
     modifyDynFlags,
     evalGhcEnv,
-    runGhcEnv,
     deps,
     -- * GHC wrappers
     prettyPrint,

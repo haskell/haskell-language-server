@@ -49,7 +49,6 @@ import           Development.IDE.Types.Diagnostics as Diag
 import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile, TargetModule, TargetFile)
 import Development.IDE.GHC.Util
-import Development.IDE.GHC.WithDynFlags
 import Data.Either.Extra
 import qualified Development.IDE.Types.Logger as L
 import Data.Maybe
@@ -575,7 +574,7 @@ getDocMapRule =
       parsedDeps <- uses_ GetParsedModule tdeps
 #endif
 
-      dkMap <- liftIO $ evalGhcEnv hsc $ mkDocMap parsedDeps rf tc
+      dkMap <- liftIO $ mkDocMap hsc parsedDeps rf tc
       return ([],Just dkMap)
 
 -- Typechecks a module.
@@ -611,7 +610,7 @@ typeCheckRuleDefinition hsc pm = do
 
   linkables_to_keep <- currentLinkables
 
-  addUsageDependencies $ fmap (second (fmap snd)) $ liftIO $
+  addUsageDependencies $ liftIO $
     typecheckModule defer hsc (Just linkables_to_keep) pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
@@ -746,7 +745,7 @@ getModSummaryRule = do
         let dflags = hsc_dflags session
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
-        modS <- liftIO $ evalWithDynFlags dflags $ runExceptT $
+        modS <- liftIO $ runExceptT $
                 getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
             Right ms -> do

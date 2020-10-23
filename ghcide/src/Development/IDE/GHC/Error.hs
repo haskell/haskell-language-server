@@ -33,13 +33,11 @@ import Development.IDE.GHC.Orphans()
 import qualified FastString as FS
 import           GHC
 import           Bag
-import DynFlags
 import HscTypes
 import Panic
 import           ErrUtils
 import           SrcLoc
 import qualified Outputable                 as Out
-import Exception (ExceptionMonad)
 
 
 
@@ -137,14 +135,14 @@ realSpan = \case
   UnhelpfulSpan _ -> Nothing
 
 
--- | Run something in a Ghc monad and catch the errors (SourceErrors and
--- compiler-internal exceptions like Panic or InstallationError).
-catchSrcErrors :: (HasDynFlags m, ExceptionMonad m) => T.Text -> m a -> m (Either [FileDiagnostic] a)
-catchSrcErrors fromWhere ghcM = do
-      dflags <- getDynFlags
-      handleGhcException (ghcExceptionToDiagnostics dflags) $
-        handleSourceError (sourceErrorToDiagnostics dflags) $
-        Right <$> ghcM
+-- | Catch the errors thrown by GHC (SourceErrors and
+-- compiler-internal exceptions like Panic or InstallationError), and turn them into
+-- diagnostics
+catchSrcErrors :: DynFlags -> T.Text -> IO a -> IO (Either [FileDiagnostic] a)
+catchSrcErrors dflags fromWhere ghcM = do
+    handleGhcException (ghcExceptionToDiagnostics dflags) $
+      handleSourceError (sourceErrorToDiagnostics dflags) $
+      Right <$> ghcM
     where
         ghcExceptionToDiagnostics dflags = return . Left . diagFromGhcException fromWhere dflags
         sourceErrorToDiagnostics dflags = return . Left . diagFromErrMsgs fromWhere dflags . srcErrorMessages
