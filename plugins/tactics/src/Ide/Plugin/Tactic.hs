@@ -61,6 +61,7 @@ import           Language.Haskell.LSP.Types
 import           OccName
 import           SrcLoc (containsSpan)
 import           System.Timeout
+import           TcRnTypes (tcg_binds)
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -260,8 +261,8 @@ judgementForHole state nfp range = do
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
-  let tcg = fst $ tm_internals_ $ tmrModule tcmod
-      tcs = tm_typechecked_source $ tmrModule tcmod
+  let tcg  = tmrTypechecked tcmod
+      tcs = tcg_binds tcg
       ctx = mkContext
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ getDefiningBindings binds rss)
