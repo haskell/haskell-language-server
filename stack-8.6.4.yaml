@@ -3,6 +3,7 @@ compiler: ghc-8.6.4
 
 packages:
 - .
+- ./ghcide/hie-compat
 - ./ghcide/
 - ./hls-plugin-api
 - ./plugins/tactics

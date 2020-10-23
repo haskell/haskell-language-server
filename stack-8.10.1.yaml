@@ -2,6 +2,7 @@ resolver: nightly-2020-08-16 # Last 8.10.1
 
 packages:
 - .
+- ./ghcide/hie-compat
 - ./ghcide/
 - ./hls-plugin-api
 - ./plugins/tactics

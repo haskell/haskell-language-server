@@ -2,6 +2,7 @@ resolver: lts-16.19
 
 packages:
 - .
+- ./ghcide/hie-compat
 - ./ghcide/
 - ./hls-plugin-api
 - ./plugins/tactics
