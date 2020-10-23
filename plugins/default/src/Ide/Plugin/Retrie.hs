@@ -368,8 +368,8 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
                           Just (stringToStringBuffer contents)
                       }
               logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
-              (_, parsed) <-
-                runGhcEnv session (parseModule ms')
+              parsed <-
+                evalGhcEnv session (parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
               (fixities, parsed) <- fixFixities f (fixAnns parsed)
               return (fixities, parsed)
