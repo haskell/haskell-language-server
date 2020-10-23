@@ -144,22 +144,18 @@ newtype Reward a = Reward a
 
 
 
-------------------------------------------------------------------------------
--- | We need to make sure that we don't try to unify any skolems.
--- To see why, consider the case:
---
--- uhh :: (Int -> Int) -> a
--- uhh f = _
---
--- If we were to apply 'f', then we would try to unify 'Int' and 'a'.
--- This is fine from the perspective of 'tcUnifyTy', but will cause obvious
--- type errors in our use case. Therefore, we need to ensure that our
--- 'TCvSubst' doesn't try to unify skolems.
-checkSkolemUnification :: CType -> CType -> TCvSubst -> RuleM ()
-checkSkolemUnification t1 t2 subst = do
-    skolems <- gets ts_skolems
-    unless (all (flip notElemTCvSubst subst) skolems) $
-      throwError (UnificationError t1 t2)
+tryUnifyUnivarsButNotSkolems :: [TyVar] -> CType -> CType -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolems skolems goal inst =
+  case tcUnifyTysFG (skolemsOf skolems) [unCType inst] [unCType goal] of
+    Unifiable subst -> pure subst
+    _ -> Nothing
+
+
+skolemsOf :: [TyVar] -> TyVar -> BindFlag
+skolemsOf tvs tv =
+  case elem tv tvs of
+    True  -> Skolem
+    False -> BindMe
 
 
 ------------------------------------------------------------------------------
@@ -167,10 +163,10 @@ checkSkolemUnification t1 t2 subst = do
 unify :: CType -- ^ The goal type
       -> CType -- ^ The type we are trying unify the goal type with
       -> RuleM ()
-unify goal inst =
-    case tcUnifyTy (unCType inst) (unCType goal) of
-      Just subst -> do
-          checkSkolemUnification inst goal subst
-          modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
-      Nothing -> throwError (UnificationError inst goal)
+unify goal inst = do
+  skolems <- gets ts_skolems
+  case tryUnifyUnivarsButNotSkolems skolems goal inst of
+    Just subst ->
+      modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
+    Nothing -> throwError (UnificationError inst goal)
 
