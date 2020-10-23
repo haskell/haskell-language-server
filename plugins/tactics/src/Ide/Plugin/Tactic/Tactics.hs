@@ -54,15 +54,13 @@ assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
   case M.lookup name $ jHypothesis jdg of
-    Just ty ->
-      case ty == jGoal jdg of
-        True  -> do
-          case M.member name (jPatHypothesis jdg) of
-            True  -> setRecursionFrameData True
-            False -> pure ()
-          useOccName jdg name
-          pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
-        False -> throwError $ GoalMismatch "assume" g
+    Just ty -> do
+      unify ty $ jGoal jdg
+      case M.member name (jPatHypothesis jdg) of
+        True  -> setRecursionFrameData True
+        False -> pure ()
+      useOccName jdg name
+      pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
 
 
@@ -167,7 +165,8 @@ apply' f func = tracing ("apply' " <> show func) $ do
         g  = jGoal jdg
     case M.lookup func hy of
       Just (CType ty) -> do
-          let (args, ret) = splitFunTys ty
+          let (_tvs, _, args, ret) = tacticsSplitFunTy ty
+          -- Instantiate fresh univars for _tvs
           unify g (CType ret)
           useOccName jdg func
           (tr, sgs)
