@@ -1,18 +1,25 @@
-{-# LANGUAGE CPP             #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ViewPatterns    #-}
+{-# LANGUAGE CPP              #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE PatternSynonyms  #-}
+{-# LANGUAGE ViewPatterns     #-}
 
 module Ide.Plugin.Tactic.GHC where
 
-import Data.Maybe (isJust)
-import Development.IDE.GHC.Compat
-import OccName
-import TcType
-import TyCoRep
-import Type
-import TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
-import Unique
-import Var
+import           Control.Monad.State
+import           Data.Map (Map)
+import qualified Data.Map as M
+import           Data.Maybe (isJust)
+import           Data.Traversable
+import           Development.IDE.GHC.Compat
+import           Generics.SYB (mkT, everywhere)
+import           Ide.Plugin.Tactic.Types
+import           OccName
+import           TcType
+import           TyCoRep
+import           Type
+import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import           Unique
+import           Var
 
 
 tcTyVar_maybe :: Type -> Maybe Var
@@ -52,6 +59,23 @@ tacticsSplitFunTy t
   = let (vars, theta, t') = tcSplitSigmaTy t
         (args, res) = tcSplitFunTys t'
      in (vars, theta, args, res)
+
+
+freshTyvars :: MonadState TacticState m => Type -> m Type
+freshTyvars t = do
+  let (tvs, _, _, _) = tacticsSplitFunTy t
+  reps <- fmap M.fromList
+        $ for tvs $ \tv -> do
+            uniq <- freshUnique
+            pure $ (tv, setTyVarUnique tv uniq)
+  pure $
+    everywhere
+      (mkT $ \tv ->
+        case M.lookup tv reps of
+          Just tv' -> tv'
+          Nothing -> tv
+      ) t
+
 
 ------------------------------------------------------------------------------
 -- | Is this an algebraic type?

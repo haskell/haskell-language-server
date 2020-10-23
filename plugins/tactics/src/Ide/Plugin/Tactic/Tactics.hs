@@ -64,14 +64,13 @@ assume name = rule $ \jdg -> do
     Nothing -> throwError $ UndefinedHypothesis name
 
 
-
 recursion :: TacticsM ()
 recursion = tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
     ensure recursiveCleanup (withRecursionStack tail) $ do
-      (localTactic (apply' (const id) name) $ introducing defs)
+      (localTactic (apply name) $ introducing defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -155,34 +154,29 @@ homoLambdaCase = tracing "homoLambdaCase" $ rule $ destructLambdaCase' (\dc jdg 
 
 
 apply :: OccName -> TacticsM ()
-apply = apply' (const id)
-
-
-apply' :: (Int -> Judgement -> Judgement) -> OccName -> TacticsM ()
-apply' f func = tracing ("apply' " <> show func) $ do
+apply func = tracing ("apply' " <> show func) $ do
   rule $ \jdg -> do
     let hy = jHypothesis jdg
         g  = jGoal jdg
     case M.lookup func hy of
       Just (CType ty) -> do
-          let (_tvs, _, args, ret) = tacticsSplitFunTy ty
-          -- Instantiate fresh univars for _tvs
-          unify g (CType ret)
-          useOccName jdg func
-          (tr, sgs)
-              <- fmap unzipTrace
-               $ traverse ( \(i, t) ->
-                            newSubgoal
-                          . f i
-                          . blacklistingDestruct
-                          . flip withNewGoal jdg
-                          $ CType t
-                          ) $ zip [0..] args
-          pure
-            . (tr, )
-            . noLoc
-            . foldl' (@@) (var' func)
-            $ fmap unLoc sgs
+        ty' <- freshTyvars ty
+        let (_, _, args, ret) = tacticsSplitFunTy ty'
+        unify g (CType ret)
+        useOccName jdg func
+        (tr, sgs)
+            <- fmap unzipTrace
+             $ traverse ( \(i, t) ->
+                          newSubgoal
+                        . blacklistingDestruct
+                        . flip withNewGoal jdg
+                        $ CType t
+                        ) $ zip [0..] args
+        pure
+          . (tr, )
+          . noLoc
+          . foldl' (@@) (var' func)
+          $ fmap unLoc sgs
       Nothing -> do
         throwError $ GoalMismatch "apply" g
 

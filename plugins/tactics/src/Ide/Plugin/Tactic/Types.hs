@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveFunctor              #-}
@@ -35,6 +36,10 @@ import Refinery.Tactic
 import Type
 import Data.Tree
 import Data.Coerce
+import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
+import System.IO.Unsafe (unsafePerformIO)
+import Control.Monad.State
+import Unique (Unique)
 
 
 ------------------------------------------------------------------------------
@@ -73,12 +78,34 @@ data TacticState = TacticState
     , ts_used_vals :: !(Set OccName)
     , ts_intro_vals :: !(Set OccName)
     , ts_recursion_stack :: ![Bool]
+    , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
 
+instance Show UniqSupply where
+  show _ = "<uniqsupply>"
+
+unsafeDefaultUniqueSupply :: UniqSupply
+unsafeDefaultUniqueSupply =
+  unsafePerformIO $ mkSplitUniqSupply '🚒'
+{-# NOINLINE unsafeDefaultUniqueSupply #-}
 
 defaultTacticState :: TacticState
 defaultTacticState =
-  TacticState mempty emptyTCvSubst mempty mempty mempty
+  TacticState
+    { ts_skolems         = mempty
+    , ts_unifier         = emptyTCvSubst
+    , ts_used_vals       = mempty
+    , ts_intro_vals      = mempty
+    , ts_recursion_stack = mempty
+    , ts_unique_gen      = unsafeDefaultUniqueSupply
+    }
+
+
+freshUnique :: MonadState TacticState m => m Unique
+freshUnique = do
+  (uniq, supply) <- gets $ takeUniqFromSupply . ts_unique_gen
+  modify' $! field @"ts_unique_gen" .~ supply
+  pure uniq
 
 
 withRecursionStack
