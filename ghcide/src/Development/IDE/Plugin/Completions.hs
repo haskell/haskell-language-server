@@ -80,7 +80,7 @@ produceCompletions = do
                     buf = fromJust $ ms_hspp_buf ms
                     f = fromNormalizedFilePath file
                     dflags = hsc_dflags env
-                pm <- liftIO $ evalGhcEnv env $ runExceptT $ parseHeader dflags f buf
+                pm <- liftIO $ runExceptT $ parseHeader dflags f buf
                 case pm of
                     Right (_diags, hsMod) -> do
                         let hsModNoExports = hsMod <&> \x -> x{hsmodExports = Nothing}
@@ -92,7 +92,7 @@ produceCompletions = do
                                     }
                         tm <- liftIO $ typecheckModule (IdeDefer True) env Nothing pm
                         case tm of
-                            (_, Just (_,tcm)) -> do
+                            (_, Just tcm) -> do
                                 cdata <- liftIO $ cacheDataProducer env tcm parsedDeps
                                 -- Do not return diags from parsing as they would duplicate
                                 -- the diagnostics from typechecking

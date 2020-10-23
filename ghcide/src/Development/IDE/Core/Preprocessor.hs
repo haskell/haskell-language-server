@@ -31,18 +31,17 @@ import qualified Data.Text as T
 import Outputable (showSDoc)
 import Control.DeepSeq (NFData(rnf))
 import Control.Exception (evaluate)
-import Control.Monad.IO.Class (MonadIO)
-import Exception (ExceptionMonad)
+import HscTypes (HscEnv(hsc_dflags))
 
 
 -- | Given a file and some contents, apply any necessary preprocessors,
 --   e.g. unlit/cpp. Return the resulting buffer and the DynFlags it implies.
-preprocessor :: (ExceptionMonad m, HasDynFlags m, MonadIO m) => HscEnv -> FilePath -> Maybe StringBuffer -> ExceptT [FileDiagnostic] m (StringBuffer, DynFlags)
+preprocessor :: HscEnv -> FilePath -> Maybe StringBuffer -> ExceptT [FileDiagnostic] IO (StringBuffer, DynFlags)
 preprocessor env filename mbContents = do
     -- Perform unlit
     (isOnDisk, contents) <-
         if isLiterate filename then do
-            dflags <- getDynFlags
+            let dflags = hsc_dflags env
             newcontent <- liftIO $ runLhs dflags filename mbContents
             return (False, newcontent)
         else do
@@ -58,7 +57,6 @@ preprocessor env filename mbContents = do
         else do
             cppLogs <- liftIO $ newIORef []
             contents <- ExceptT
-                        $ liftIO
                         $ (Right <$> (runCpp dflags {log_action = logAction cppLogs} filename
                                        $ if isOnDisk then Nothing else Just contents))
                             `catch`
@@ -133,21 +131,20 @@ isLiterate x = takeExtension x `elem` [".lhs",".lhs-boot"]
 
 -- | This reads the pragma information directly from the provided buffer.
 parsePragmasIntoDynFlags
-    :: (ExceptionMonad m, HasDynFlags m, MonadIO m)
-    => HscEnv
+    :: HscEnv
     -> FilePath
     -> SB.StringBuffer
-    -> m (Either [FileDiagnostic] DynFlags)
-parsePragmasIntoDynFlags env fp contents = catchSrcErrors "pragmas" $ do
-    dflags0  <- getDynFlags
+    -> IO (Either [FileDiagnostic] DynFlags)
+parsePragmasIntoDynFlags env fp contents = catchSrcErrors dflags0 "pragmas" $ do
     let opts = Hdr.getOptions dflags0 contents fp
 
     -- Force bits that might keep the dflags and stringBuffer alive unnecessarily
-    liftIO $ evaluate $ rnf opts
+    evaluate $ rnf opts
 
     (dflags, _, _) <- parseDynamicFilePragma dflags0 opts
-    dflags' <- liftIO $ initializePlugins env dflags
+    dflags' <- initializePlugins env dflags
     return $ disableWarningsAsErrors dflags'
+  where dflags0 = hsc_dflags env
 
 -- | Run (unlit) literate haskell preprocessor on a file, or buffer if set
 runLhs :: DynFlags -> FilePath -> Maybe SB.StringBuffer -> IO SB.StringBuffer

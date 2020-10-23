@@ -89,7 +89,6 @@ import           System.FilePath
 import           System.Directory
 import           System.IO.Extra
 import Control.Exception (evaluate)
-import Exception (ExceptionMonad)
 import TcEnv (tcLookup)
 import Data.Time (UTCTime, getCurrentTime)
 import Linker (unload)
@@ -105,7 +104,7 @@ parseModule
     -> IO (IdeResult (StringBuffer, ParsedModule))
 parseModule IdeOptions{..} env comp_pkgs filename modTime mbContents =
     fmap (either (, Nothing) id) $
-    evalGhcEnv env $ runExceptT $ do
+    runExceptT $ do
         (contents, dflags) <- preprocessor env filename mbContents
         (diag, modu) <- parseFileContents env optPreprocessor dflags comp_pkgs filename modTime contents
         return (diag, Just (contents, modu))
@@ -127,20 +126,19 @@ typecheckModule :: IdeDefer
                 -> HscEnv
                 -> Maybe [Linkable] -- ^ linkables not to unload, if Nothing don't unload anything
                 -> ParsedModule
-                -> IO (IdeResult (HscEnv, TcModuleResult))
+                -> IO (IdeResult TcModuleResult)
 typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
-    fmap (\(hsc, res) -> case res of Left d -> (d,Nothing); Right (d,res) -> (d,fmap (hsc,) res)) $
-      runGhcEnv hsc $
-      catchSrcErrors "typecheck" $ do
+    fmap (either (,Nothing) id) $
+      catchSrcErrors (hsc_dflags hsc) "typecheck" $ do
 
         let modSummary = pm_mod_summary pm
             dflags = ms_hspp_opts modSummary
 
-        modSummary' <- initPlugins modSummary
+        modSummary' <- initPlugins hsc modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-            tcRnModule keep_lbls $ enableTopLevelWarnings
-                                 $ enableUnnecessaryAndDeprecationWarnings
-                                 $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+            tcRnModule hsc keep_lbls $ enableTopLevelWarnings
+                                     $ enableUnnecessaryAndDeprecationWarnings
+                                     $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
@@ -148,18 +146,17 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
-tcRnModule :: GhcMonad m => Maybe [Linkable] -> ParsedModule -> m TcModuleResult
-tcRnModule keep_lbls pmod = do
+tcRnModule :: HscEnv -> Maybe [Linkable] -> ParsedModule -> IO TcModuleResult
+tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
-  hsc_env <- getSession
-  let hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
-  (tc_gbl_env, mrn_info)
-        <- liftIO $ do
-             whenJust keep_lbls $ unload hsc_env_tmp
-             hscTypecheckRename hsc_env_tmp ms $
-                       HsParsedModule { hpm_module = parsedSource pmod,
-                                        hpm_src_files = pm_extra_src_files pmod,
-                                        hpm_annotations = pm_annotations pmod }
+      hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
+
+  whenJust keep_lbls $ unload hsc_env_tmp
+  (tc_gbl_env, mrn_info) <-
+      hscTypecheckRename hsc_env_tmp ms $
+                HsParsedModule { hpm_module = parsedSource pmod,
+                                 hpm_src_files = pm_extra_src_files pmod,
+                                 hpm_annotations = pm_annotations pmod }
   let rn_info = case mrn_info of
         Just x -> x
         Nothing -> error "no renamed info tcRnModule"
@@ -215,9 +212,8 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
       . (("Error during " ++ T.unpack source) ++) . show @SomeException
       ]
 
-initPlugins :: GhcMonad m => ModSummary -> m ModSummary
-initPlugins modSummary = do
-    session <- getSession
+initPlugins :: HscEnv -> ModSummary -> IO ModSummary
+initPlugins session modSummary = do
     dflags <- liftIO $ initializePlugins session $ ms_hspp_opts modSummary
     return modSummary{ms_hspp_opts = dflags}
 
@@ -235,40 +231,37 @@ compileModule
     -> ModSummary
     -> TcGblEnv
     -> IO (IdeResult ModGuts)
-compileModule (RunSimplifier simplify) packageState ms tcg =
+compileModule (RunSimplifier simplify) session ms tcg =
     fmap (either (, Nothing) (second Just)) $
-    evalGhcEnv packageState $
-        catchSrcErrors "compile" $ do
-            session <- getSession
-            (warnings,desugar) <- withWarnings "compile" $ \tweak -> do
+        catchSrcErrors (hsc_dflags session) "compile" $ do
+            (warnings,desugared_guts) <- withWarnings "compile" $ \tweak -> do
                let ms' = tweak ms
-               liftIO $ hscDesugar session{ hsc_dflags = ms_hspp_opts ms'} ms' tcg
-            desugared_guts <-
-                if simplify
-                    then do
-                        plugins <- liftIO $ readIORef (tcg_th_coreplugins tcg)
-                        liftIO $ hscSimplify session plugins desugar
-                    else pure desugar
+                   session' = session{ hsc_dflags = ms_hspp_opts ms'}
+               desugar <- hscDesugar session' ms' tcg
+               if simplify
+               then do
+                 plugins <- readIORef (tcg_th_coreplugins tcg)
+                 hscSimplify session' plugins desugar
+               else pure desugar
             return (map snd warnings, desugared_guts)
 
 generateObjectCode :: HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
-generateObjectCode hscEnv summary guts = do
+generateObjectCode session summary guts = do
     fmap (either (, Nothing) (second Just)) $
-        evalGhcEnv hscEnv $
-          catchSrcErrors "object" $ do
-              session <- getSession
+          catchSrcErrors (hsc_dflags session) "object" $ do
               let dot_o =  ml_obj_file (ms_location summary)
                   mod = ms_mod summary
-                  session' = session { hsc_dflags = (hsc_dflags session) { outputFile = Just dot_o }}
                   fp = replaceExtension dot_o "s"
-              liftIO $ createDirectoryIfMissing True (takeDirectory fp)
+              createDirectoryIfMissing True (takeDirectory fp)
               (warnings, dot_o_fp) <-
-                withWarnings "object" $ \_tweak -> liftIO $ do
+                withWarnings "object" $ \_tweak -> do
+                      let summary' = _tweak summary
+                          session' = session { hsc_dflags = (ms_hspp_opts summary') { outputFile = Just dot_o }}
                       (outputFilename, _mStub, _foreign_files) <- hscGenHardCode session' guts
 #if MIN_GHC_API_VERSION(8,10,0)
-                                (ms_location summary)
+                                (ms_location summary')
 #else
-                                (_tweak summary)
+                                summary'
 #endif
                                 fp
                       compileFile session' StopLn (outputFilename, Just (As False))
@@ -282,16 +275,16 @@ generateObjectCode hscEnv summary guts = do
 generateByteCode :: HscEnv -> ModSummary -> CgGuts -> IO (IdeResult Linkable)
 generateByteCode hscEnv summary guts = do
     fmap (either (, Nothing) (second Just)) $
-        evalGhcEnv hscEnv $
-          catchSrcErrors "bytecode" $ do
-              session <- getSession
+          catchSrcErrors (hsc_dflags hscEnv) "bytecode" $ do
               (warnings, (_, bytecode, sptEntries)) <-
-                withWarnings "bytecode" $ \_tweak -> liftIO $
+                withWarnings "bytecode" $ \_tweak -> do
+                      let summary' = _tweak summary
+                          session = hscEnv { hsc_dflags = ms_hspp_opts summary' }
                       hscInteractive session guts
 #if MIN_GHC_API_VERSION(8,10,0)
-                                (ms_location summary)
+                                (ms_location summary')
 #else
-                                (_tweak summary)
+                                summary'
 #endif
               let unlinked = BCOs bytecode sptEntries
               time <- liftIO getCurrentTime
@@ -510,13 +503,12 @@ withBootSuffix _ = id
 
 -- | Produce a module summary from a StringBuffer.
 getModSummaryFromBuffer
-    :: GhcMonad m
-    => FilePath
+    :: FilePath
     -> UTCTime
     -> DynFlags
     -> GHC.ParsedSource
     -> StringBuffer
-    -> ExceptT [FileDiagnostic] m ModSummary
+    -> ExceptT [FileDiagnostic] IO ModSummary
 getModSummaryFromBuffer fp modTime dflags parsed contents = do
   (modName, imports) <- liftEither $ getImportsParsed dflags parsed
 
@@ -553,12 +545,11 @@ getModSummaryFromBuffer fp modTime dflags parsed contents = do
 -- | Given a buffer, env and filepath, produce a module summary by parsing only the imports.
 --   Runs preprocessors as needed.
 getModSummaryFromImports
-  :: (HasDynFlags m, ExceptionMonad m, MonadIO m)
-  => HscEnv
+  :: HscEnv
   -> FilePath
   -> UTCTime
   -> Maybe SB.StringBuffer
-  -> ExceptT [FileDiagnostic] m ModSummary
+  -> ExceptT [FileDiagnostic] IO ModSummary
 getModSummaryFromImports env fp modTime contents = do
     (contents, dflags) <- preprocessor env fp contents
     (srcImports, textualImports, L _ moduleName) <-
@@ -595,7 +586,7 @@ getModSummaryFromImports env fp modTime contents = do
 
 -- | Parse only the module header
 parseHeader
-       :: GhcMonad m
+       :: Monad m
        => DynFlags -- ^ flags to use
        -> FilePath  -- ^ the filename (for source locations)
        -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
@@ -630,15 +621,14 @@ parseHeader dflags filename contents = do
 -- | Given a buffer, flags, and file path, produce a
 -- parsed module (or errors) and any parse warnings. Does not run any preprocessors
 parseFileContents
-       :: GhcMonad m
-       => HscEnv
+       :: HscEnv
        -> (GHC.ParsedSource -> IdePreprocessedSource)
        -> DynFlags -- ^ flags to use
        -> [PackageName] -- ^ The package imports to ignore
        -> FilePath  -- ^ the filename (for source locations)
        -> UTCTime   -- ^ the modification timestamp
        -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
-       -> ExceptT [FileDiagnostic] m ([FileDiagnostic], ParsedModule)
+       -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
 parseFileContents env customPreprocessor dflags comp_pkgs filename modTime contents = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
    case unP Parser.parseModule (mkPState dflags contents loc) of
@@ -756,12 +746,12 @@ mkDetailsFromIface session iface linkable = do
 -- | Non-interactive, batch version of 'InteractiveEval.getDocs'.
 --   The interactive paths create problems in ghc-lib builds
 --- and leads to fun errors like "Cannot continue after interface file error".
-getDocsBatch :: GhcMonad m
-        => Module  -- ^ a moudle where the names are in scope
-        -> [Name]
-        -> m [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
-getDocsBatch _mod _names =
-  withSession $ \hsc_env -> liftIO $ do
+getDocsBatch
+  :: HscEnv
+  -> Module  -- ^ a moudle where the names are in scope
+  -> [Name]
+  -> IO [Either String (Maybe HsDocString, Map.Map Int HsDocString)]
+getDocsBatch hsc_env _mod _names = do
     ((_warns,errs), res) <- initTc hsc_env HsSrcFile False _mod fakeSpan $ forM _names $ \name ->
         case nameModule_maybe name of
             Nothing -> return (Left $ NameHasNoModule name)
@@ -791,11 +781,11 @@ fakeSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<ghcide>") 1 1
 -- | Non-interactive, batch version of 'InteractiveEval.lookupNames'.
 --   The interactive paths create problems in ghc-lib builds
 --- and leads to fun errors like "Cannot continue after interface file error".
-lookupName :: GhcMonad m
-           => Module -- ^ A module where the Names are in scope
+lookupName :: HscEnv
+           -> Module -- ^ A module where the Names are in scope
            -> Name
-           -> m (Maybe TyThing)
-lookupName mod name = withSession $ \hsc_env -> liftIO $ do
+           -> IO (Maybe TyThing)
+lookupName hsc_env mod name = do
     (_messages, res) <- initTc hsc_env HsSrcFile False mod fakeSpan $ do
         tcthing <- tcLookup name
         case tcthing of
