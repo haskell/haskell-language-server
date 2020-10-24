@@ -53,16 +53,25 @@ isFunction (tacticsSplitFunTy -> (_, _, [], _)) = False
 isFunction _ = True
 
 
+------------------------------------------------------------------------------
+-- | Split a function, also splitting out its quantified variables and theta
+-- context.
 tacticsSplitFunTy :: Type -> ([TyVar], ThetaType, [Type], Type)
 tacticsSplitFunTy t
   = let (vars, theta, t') = tcSplitSigmaTy t
         (args, res) = tcSplitFunTys t'
      in (vars, theta, args, res)
 
+
+------------------------------------------------------------------------------
+-- | Rip the theta context out of a regular type.
 tacticsThetaTy :: Type -> ThetaType
-tacticsThetaTy (tacticsSplitFunTy -> (_, theta, _, _)) = theta
+tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 
 
+------------------------------------------------------------------------------
+-- | Instantiate all of the quantified type variables in a type with fresh
+-- skolems.
 freshTyvars :: MonadState TacticState m => Type -> m Type
 freshTyvars t = do
   let (tvs, _, _, _) = tacticsSplitFunTy t

@@ -22,23 +22,23 @@ module Ide.Plugin.Tactic.Types
   ) where
 
 import Control.Lens hiding (Context)
-import Data.Generics.Product (field)
 import Control.Monad.Reader
+import Control.Monad.State
+import Data.Coerce
 import Data.Function
+import Data.Generics.Product (field)
 import Data.Map (Map)
 import Data.Set (Set)
+import Data.Tree
 import Development.IDE.GHC.Compat hiding (Node)
 import Development.IDE.Types.Location
 import GHC.Generics
 import Ide.Plugin.Tactic.Debug
 import OccName
 import Refinery.Tactic
-import Type
-import Data.Tree
-import Data.Coerce
-import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import System.IO.Unsafe (unsafePerformIO)
-import Control.Monad.State
+import Type
+import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (Unique)
 
 
@@ -84,10 +84,14 @@ data TacticState = TacticState
 instance Show UniqSupply where
   show _ = "<uniqsupply>"
 
+
+------------------------------------------------------------------------------
+-- | A 'UniqSupply' to use in 'defaultTacticState'
 unsafeDefaultUniqueSupply :: UniqSupply
 unsafeDefaultUniqueSupply =
   unsafePerformIO $ mkSplitUniqSupply '🚒'
 {-# NOINLINE unsafeDefaultUniqueSupply #-}
+
 
 defaultTacticState :: TacticState
 defaultTacticState =
@@ -101,6 +105,8 @@ defaultTacticState =
     }
 
 
+------------------------------------------------------------------------------
+-- | Generate a new 'Unique'
 freshUnique :: MonadState TacticState m => m Unique
 freshUnique = do
   (uniq, supply) <- gets $ takeUniqFromSupply . ts_unique_gen
@@ -228,6 +234,8 @@ data Context = Context
   deriving stock (Eq, Ord)
 
 
+------------------------------------------------------------------------------
+-- | An empty context
 emptyContext :: Context
 emptyContext  = Context mempty mempty
 

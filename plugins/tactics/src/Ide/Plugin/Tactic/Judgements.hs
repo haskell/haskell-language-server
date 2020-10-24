@@ -162,9 +162,15 @@ disallowing ns =
   field @"_jHypothesis" %~ flip M.withoutKeys (S.fromList ns)
 
 
+------------------------------------------------------------------------------
+-- | The hypothesis, consisting of local terms and the ambient environment
+-- (includes and class methods.)
 jHypothesis :: Judgement' a -> Map OccName a
 jHypothesis = _jHypothesis <> _jAmbientHypothesis
 
+
+------------------------------------------------------------------------------
+-- | Just the local hypothesis.
 jLocalHypothesis :: Judgement' a -> Map OccName a
 jLocalHypothesis = _jHypothesis
 

@@ -3,21 +3,21 @@
 
 module UnificationSpec where
 
-import           Control.Arrow
-import           Data.Bool (bool)
-import           Data.Functor ((<&>))
-import           Data.Traversable
-import           Data.Tuple (swap)
-import           Ide.Plugin.Tactic.Debug
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Types
-import           TcType (tcGetTyVar_maybe, substTy)
-import           Test.Hspec
-import           Test.QuickCheck
-import           Type (mkTyVarTy)
-import           TysPrim (alphaTyVars)
-import           TysWiredIn (mkBoxedTupleTy)
+import Control.Arrow
+import Data.Bool (bool)
+import Data.Functor ((<&>))
 import Data.Maybe (mapMaybe)
+import Data.Traversable
+import Data.Tuple (swap)
+import Ide.Plugin.Tactic.Debug
+import Ide.Plugin.Tactic.Machinery
+import Ide.Plugin.Tactic.Types
+import TcType (tcGetTyVar_maybe, substTy)
+import Test.Hspec
+import Test.QuickCheck
+import Type (mkTyVarTy)
+import TysPrim (alphaTyVars)
+import TysWiredIn (mkBoxedTupleTy)
 
 
 instance Show Type where
