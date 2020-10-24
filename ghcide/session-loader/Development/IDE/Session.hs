@@ -680,10 +680,11 @@ cacheDir = "ghcide"
 notifyUserImplicitCradle:: FilePath -> FromServerMessage
 notifyUserImplicitCradle fp =
     NotShowMessage $
-    NotificationMessage "2.0" WindowShowMessage $ ShowMessageParams MtWarning $
+    NotificationMessage "2.0" WindowShowMessage $ ShowMessageParams MtInfo $
       "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
       <> T.pack fp <>
-      ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie)"
+      ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n\
+      \You should ignore this message, unless you see a 'Multi Cradle: No prefixes matched' error."
 
 notifyCradleLoaded :: FilePath -> FromServerMessage
 notifyCradleLoaded fp =
