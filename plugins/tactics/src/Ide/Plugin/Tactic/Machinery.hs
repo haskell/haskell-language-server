@@ -201,7 +201,10 @@ methodHypothesis ty = do
   let methods = classMethods cls
       tvs     = classTyVars cls
       subst   = zipTvSubst tvs apps
-  pure $ methods <&> \method ->
+  sc_methods <- fmap join
+              $ traverse (methodHypothesis . substTy subst)
+              $ classSCTheta cls
+  pure $ mappend sc_methods $ methods <&> \method ->
     let (_, _, ty) = tcSplitSigmaTy $ idType method
     in (occName method,  CType $ substTy subst ty)
 

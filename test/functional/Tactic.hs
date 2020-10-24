@@ -105,6 +105,7 @@ tests = testGroup
   , goldenTest "GoldenShow.hs"              2 10 Auto ""
   , goldenTest "GoldenShowCompose.hs"       2 15 Auto ""
   , goldenTest "GoldenShowMapChar.hs"       2 8  Auto ""
+  , goldenTest "GoldenSuperclass.hs"        7 8  Auto ""
   ]
 
 
