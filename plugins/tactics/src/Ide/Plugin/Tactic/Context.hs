@@ -13,6 +13,9 @@ import TcRnTypes
 import Ide.Plugin.Tactic.GHC (tacticsThetaTy)
 import Ide.Plugin.Tactic.Machinery (methodHypothesis)
 import Data.Maybe (mapMaybe)
+import Data.List
+import TcType (substTy, tcSplitSigmaTy)
+import Unify (tcUnifyTy)
 
 
 mkContext :: [(OccName, CType)] -> TcGblEnv -> Context
@@ -26,22 +29,31 @@ mkContext locals tcg = Context
   }
 
 
+------------------------------------------------------------------------------
+-- | Find all of the class methods that exist from the givens in the context.
 contextMethodHypothesis :: Context -> [(OccName, CType)]
-contextMethodHypothesis
+contextMethodHypothesis ctx
   = join
   . concatMap
       ( mapMaybe methodHypothesis
-      . fmap unCType
-      . traceIdX "tacticsTheta"
-      . fmap CType
       . tacticsThetaTy
       . unCType
-      . traceIdX "method hypothesis"
-      -- TODO(sandy): unify the poly type with the defined type
-      . snd
       )
-  -- TODO(sandy): use the defining funcs to find the poly type in module funcs
-  . ctxModuleFuncs
+  . mapMaybe (definedThetaType ctx)
+  . fmap fst
+  $ ctxDefiningFuncs ctx
+
+
+------------------------------------------------------------------------------
+-- | Given the name of a function that exists in 'ctxDefiningFuncs', get its
+-- theta type.
+definedThetaType :: Context -> OccName -> Maybe CType
+definedThetaType ctx name = do
+  (_, CType mono) <- find ((== name) . fst) $ ctxDefiningFuncs ctx
+  (_, CType poly) <- find ((== name) . fst) $ ctxModuleFuncs ctx
+  let (_, _, poly') = tcSplitSigmaTy poly
+  subst <- tcUnifyTy poly' mono
+  pure $ CType $ substTy subst $ snd $ splitForAllTys poly
 
 
 splitId :: Id -> (OccName, CType)

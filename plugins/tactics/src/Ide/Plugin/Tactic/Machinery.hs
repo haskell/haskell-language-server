@@ -180,16 +180,13 @@ unify goal inst = do
 
 methodHypothesis :: PredType -> Maybe [(OccName, CType)]
 methodHypothesis ty = do
-  traceMX "pred ty " $ unsafeRender ty
   (tc, apps) <- splitTyConApp_maybe ty
-  traceMX "got a tycon" $ unsafeRender tc
   cls <- tyConClass_maybe tc
-  traceMX "got a cls" $ unsafeRender cls
   let methods = classMethods cls
-      tvs = classTyVars cls
-      subst = zipTvSubst tvs apps
-  -- TODO(sandy): strip out the theta type from the result
+      tvs     = classTyVars cls
+      subst   = zipTvSubst tvs apps
   traceMX "methods" $ unsafeRender methods
   pure $ methods <&> \method ->
-    (occName method,  CType $ substTy subst $ idType method)
+    let (_, _, ty) = tcSplitSigmaTy $ idType method
+    in (occName method,  CType $ substTy subst ty)
 
