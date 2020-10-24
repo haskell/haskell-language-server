@@ -102,6 +102,9 @@ tests = testGroup
   , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
   , goldenTest "GoldenSwapMany.hs"          2 12 Auto ""
   , goldenTest "GoldenBigTuple.hs"          4 12 Auto ""
+  , goldenTest "GoldenShow.hs"              2 10 Auto ""
+  , goldenTest "GoldenShowCompose.hs"       2 15 Auto ""
+  , goldenTest "GoldenShowMapChar.hs"       2 8  Auto ""
   ]
 
 
