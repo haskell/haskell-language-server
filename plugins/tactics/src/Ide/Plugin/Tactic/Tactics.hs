@@ -14,6 +14,7 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
+import           Control.Monad (when)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
@@ -56,9 +57,8 @@ assume name = rule $ \jdg -> do
   case M.lookup name $ jHypothesis jdg of
     Just ty -> do
       unify ty $ jGoal jdg
-      case M.member name (jPatHypothesis jdg) of
-        True  -> setRecursionFrameData True
-        False -> pure ()
+      when (M.member name $ jPatHypothesis jdg) $
+        setRecursionFrameData True
       useOccName jdg name
       pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
     Nothing -> throwError $ UndefinedHypothesis name

@@ -129,6 +129,9 @@ withIntroducedVals f =
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
   { _jHypothesis :: !(Map OccName a)
+  , _jAmbientHypothesis :: !(Map OccName a)
+    -- ^ Things in the hypothesis that were imported. Solutions don't get
+    -- points for using the ambient hypothesis.
   , _jDestructed :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jPatternVals :: !(Set OccName)

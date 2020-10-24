@@ -163,7 +163,10 @@ disallowing ns =
 
 
 jHypothesis :: Judgement' a -> Map OccName a
-jHypothesis = _jHypothesis
+jHypothesis = _jHypothesis <> _jAmbientHypothesis
+
+jLocalHypothesis :: Judgement' a -> Map OccName a
+jLocalHypothesis = _jHypothesis
 
 
 isPatVal :: Judgement' a -> OccName -> Bool
@@ -191,13 +194,15 @@ substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
 
 mkFirstJudgement
-    :: M.Map OccName CType
+    :: M.Map OccName CType  -- ^ local hypothesis
+    -> M.Map OccName CType  -- ^ ambient hypothesis
     -> Bool  -- ^ are we in the top level rhs hole?
     -> M.Map OccName [[OccName]]  -- ^ existing pos vals
     -> Type
     -> Judgement' CType
-mkFirstJudgement hy top posvals goal = Judgement
+mkFirstJudgement hy ambient top posvals goal = Judgement
   { _jHypothesis        = hy
+  , _jAmbientHypothesis = ambient
   , _jDestructed        = mempty
   , _jPatternVals       = mempty
   , _jBlacklistDestruct = False

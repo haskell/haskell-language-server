@@ -142,9 +142,9 @@ scoreSolution
        )
 scoreSolution ext TacticState{..} holes
   = ( Penalize $ length holes
-    , Reward $ S.null $ ts_intro_vals S.\\ ts_used_vals
+    , Reward   $ S.null $ ts_intro_vals S.\\ ts_used_vals
     , Penalize $ S.size ts_intro_vals
-    , Reward $ S.size ts_used_vals
+    , Reward   $ S.size ts_used_vals
     , Penalize $ solutionSize ext
     )
 
@@ -196,7 +196,6 @@ methodHypothesis ty = do
   let methods = classMethods cls
       tvs     = classTyVars cls
       subst   = zipTvSubst tvs apps
-  traceMX "methods" $ unsafeRender methods
   pure $ methods <&> \method ->
     let (_, _, ty) = tcSplitSigmaTy $ idType method
     in (occName method,  CType $ substTy subst ty)
