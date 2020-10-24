@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
@@ -44,6 +45,7 @@ import Data.Tuple (swap)
 import Class (Class(classTyVars))
 import Data.Functor ((<&>))
 import OccName (HasOccName(occName))
+import Data.Generics (mkQ, everything, gcount)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -81,7 +83,8 @@ runTactic ctx jdg t =
       (errs, []) -> Left $ take 50 $ errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
-              sortBy (comparing $ Down . uncurry scoreSolution . snd) solns
+              flip sortBy solns $ comparing $ \((_, ext), (jdg, holes)) ->
+                Down $ scoreSolution ext jdg holes
         case sorted of
           (((tr, ext), _) : _) ->
             Right
@@ -128,19 +131,27 @@ setRecursionFrameData b = do
 
 
 scoreSolution
-    :: TacticState
+    :: LHsExpr GhcPs
+    -> TacticState
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
        , Reward Bool   -- all bindings used
        , Penalize Int  -- number of introduced bindings
        , Reward Int    -- number used bindings
+       , Penalize Int  -- size of extract
        )
-scoreSolution TacticState{..} holes
+scoreSolution ext TacticState{..} holes
   = ( Penalize $ length holes
     , Reward $ S.null $ ts_intro_vals S.\\ ts_used_vals
     , Penalize $ S.size ts_intro_vals
     , Reward $ S.size ts_used_vals
+    , Penalize $ solutionSize ext
     )
+
+
+solutionSize :: LHsExpr GhcPs -> Int
+solutionSize = everything (+) $ gcount $ mkQ False $ \case
+  (_ :: LHsExpr GhcPs) -> True
 
 
 newtype Penalize a = Penalize a
