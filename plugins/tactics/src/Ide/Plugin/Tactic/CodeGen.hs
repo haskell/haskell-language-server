@@ -1,6 +1,7 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TupleSections    #-}
-{-# LANGUAGE ViewPatterns     #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module Ide.Plugin.Tactic.CodeGen where
 
@@ -191,6 +192,16 @@ mkCon dcon (fmap unLoc -> args)
 coerceName :: HasOccName a => a -> RdrNameStr
 coerceName = fromString . occNameString . occName
 
+
+------------------------------------------------------------------------------
+-- | Converts a function application into applicative form
+idiomize :: LHsExpr GhcPs -> LHsExpr GhcPs
+idiomize x = noLoc $ case unLoc x of
+   HsApp _ (L _ (HsVar _ (L _ x))) gshgp3 ->
+     op (bvar' $ occName x) "<$>" (unLoc gshgp3)
+   HsApp _ gsigp gshgp3 ->
+     op (unLoc $ idiomize gsigp) "<*>" (unLoc gshgp3)
+   y -> y
 
 
 ------------------------------------------------------------------------------

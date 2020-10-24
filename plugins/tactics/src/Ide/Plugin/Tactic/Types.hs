@@ -40,6 +40,8 @@ import System.IO.Unsafe (unsafePerformIO)
 import Type
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (Unique)
+import InstEnv (emptyInstEnv, InstEnv)
+import HscTypes (emptyTypeEnv, TypeEnv)
 
 
 ------------------------------------------------------------------------------
@@ -230,14 +232,15 @@ data Context = Context
     -- ^ The functions currently being defined
   , ctxModuleFuncs :: [(OccName, CType)]
     -- ^ Everything defined in the current module
+  , ctxTypeEnv :: TypeEnv
+  , ctxInstEnv :: InstEnv
   }
-  deriving stock (Eq, Ord)
 
 
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty
+emptyContext  = Context mempty mempty emptyTypeEnv emptyInstEnv
 
 
 newtype Rose a = Rose (Tree a)

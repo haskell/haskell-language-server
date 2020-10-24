@@ -26,6 +26,8 @@ mkContext locals tcg = Context
                    . fmap unLoc
                    . bagToList
                    $ tcg_binds tcg
+  , ctxTypeEnv = tcg_type_env tcg
+  , ctxInstEnv = tcg_inst_env tcg
   }
 
 

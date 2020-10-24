@@ -70,6 +70,13 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
+------------------------------------------------------------------------------
+-- | Like 'withNewGoal' but allows you to modify the goal rather than replacing
+-- it.
+withModifiedGoal :: (a -> a) -> Judgement' a -> Judgement' a
+withModifiedGoal f = field @"_jGoal" %~ f
+
+
 introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
 introducing ns =
   field @"_jHypothesis" <>~ M.fromList ns

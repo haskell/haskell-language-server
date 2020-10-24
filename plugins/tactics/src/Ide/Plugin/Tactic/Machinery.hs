@@ -33,8 +33,11 @@ import           Data.List (sortBy)
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
+import           HscTypes (lookupTypeEnv)
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Types
+import           InstEnv (emptyInstEnv, lookupInstEnv, InstEnvs(InstEnvs))
+import           Module (emptyModuleSet)
 import           OccName (HasOccName(occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
@@ -207,4 +210,27 @@ methodHypothesis ty = do
   pure $ mappend sc_methods $ methods <&> \method ->
     let (_, _, ty) = tcSplitSigmaTy $ idType method
     in (occName method,  CType $ substTy subst ty)
+
+
+------------------------------------------------------------------------------
+-- | Lookup the given class.
+lookupClass :: MonadReader Context m => Name -> m (Maybe Class)
+lookupClass nm = do
+  tenv <- asks ctxTypeEnv
+  pure $ case lookupTypeEnv tenv nm of
+    Just (ATyCon tc) -> tyConClass_maybe tc
+    Just x -> traceX "found some class" (unsafeRender x) Nothing
+    Nothing          -> trace "NOTHING" Nothing
+
+
+------------------------------------------------------------------------------
+-- | Check if the types have a MPTC instance for the given clas name.;
+hasInstance :: MonadReader Context m => Name -> [Type] -> m Bool
+hasInstance nm tys = do
+  insts <- asks ctxInstEnv
+  lookupClass nm >>= \case
+    Just cls ->
+      case lookupInstEnv False (InstEnvs insts emptyInstEnv emptyModuleSet) cls tys of
+        (matches, _, _) -> pure $ not $ null matches
+    Nothing  -> error $ "hasInstance: CANT FIND CLASS " <> show (occName nm)
 

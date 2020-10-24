@@ -14,11 +14,14 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
+import           Control.Applicative (Alternative((<|>)))
+import           Control.Arrow
 import           Control.Monad (when)
 import           Control.Monad.Except (throwError)
+import           Control.Monad.Extra (unlessM)
 import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
-import           Control.Monad.State.Strict (StateT(..), runStateT)
+import           Control.Monad.State.Strict (execStateT, StateT(..), runStateT)
 import           Data.Bool (bool)
 import           Data.List
 import qualified Data.Map as M
@@ -37,6 +40,7 @@ import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
 import           Name (occNameString)
+import           PrelNames (applicativeClassName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
@@ -261,6 +265,45 @@ localTactic t f = do
     runStateT (unTacticT t) $ f jdg
 
 
+------------------------------------------------------------------------------
+-- | Attempt to run the given tactic in "idiom bracket" mode. For example, if
+-- the current goal is
+--
+--    (_ :: [r])
+--
+-- then @idiom apply@ will remove the applicative context, resulting in a hole:
+--
+--    (_ :: r)
+--
+-- and then use @apply@ to solve it. Let's say this results in:
+--
+--    (f (_ :: a) (_ :: b))
+--
+-- Finally, @idiom@ lifts this back into the original applicative:
+--
+--    (f <$> (_ :: [a]) <*> (_ :: [b]))
+--
+-- Idiom will fail fast if the current goal doesn't have an applicative
+-- instance.
+idiom :: TacticsM () -> TacticsM ()
+idiom m = do
+  jdg <- goal
+  case splitAppTy_maybe $ unCType $ jGoal jdg of
+    Just (applic, ty) -> do
+      -- TODO(sandy): make sure this check works
+      -- unlessM (hasInstance applicativeClassName [applic]) $
+      --   throwError $ GoalMismatch "idiom" $ CType applic
+      rule $ fmap (second idiomize) . flip subgoalWith m . withNewGoal (CType ty)
+      rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
+    Nothing -> throwError $ GoalMismatch "idiom" $ jGoal jdg
+
+
+
+
+subgoalWith :: Judgement -> TacticsM () -> RuleM (Trace, LHsExpr GhcPs)
+subgoalWith jdg t = RuleT $ flip execStateT jdg $ unTacticT t
+
+
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
@@ -268,12 +311,14 @@ auto' n = do
   try intros
   choice
     [ overFunctions $ \fname -> do
-        apply fname
+        idiom (apply fname) <|> apply fname
         loop
     , overAlgebraicTerms $ \aname -> do
         destructAuto aname
         loop
-    , splitAuto >> loop
+    , do
+        idiom splitAuto <|> splitAuto
+        loop
     , assumption >> loop
     , recursion
     ]
