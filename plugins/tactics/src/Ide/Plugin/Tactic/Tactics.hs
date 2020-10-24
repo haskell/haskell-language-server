@@ -36,7 +36,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name (nameOccName, occNameString)
+import           Name (occNameString)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
@@ -149,36 +149,42 @@ destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (
 ------------------------------------------------------------------------------
 -- | LambdaCase split, using the same data constructor in the matches.
 homoLambdaCase :: TacticsM ()
-homoLambdaCase = tracing "homoLambdaCase" $ rule $ destructLambdaCase' (\dc jdg ->
-  buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+homoLambdaCase =
+  tracing "homoLambdaCase" $
+    rule $ destructLambdaCase' $ \dc jdg ->
+      buildDataCon jdg dc
+        . snd
+        . splitAppTys
+        . unCType
+        $ jGoal jdg
 
 
 apply :: OccName -> TacticsM ()
 apply func = tracing ("apply' " <> show func) $ do
-  rule $ \jdg -> do
-    let hy = jHypothesis jdg
-        g  = jGoal jdg
-    case M.lookup func hy of
-      Just (CType ty) -> do
-        ty' <- freshTyvars ty
-        let (_, _, args, ret) = tacticsSplitFunTy ty'
+  jdg <- goal
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
+  case M.lookup func hy of
+    Just (CType ty) -> do
+      ty' <- freshTyvars ty
+      let (_, _, args, ret) = tacticsSplitFunTy ty'
+      requireNewHoles $ rule $ \jdg -> do
         unify g (CType ret)
         useOccName jdg func
         (tr, sgs)
             <- fmap unzipTrace
-             $ traverse ( \(i, t) ->
-                          newSubgoal
+            $ traverse ( newSubgoal
                         . blacklistingDestruct
                         . flip withNewGoal jdg
-                        $ CType t
-                        ) $ zip [0..] args
+                        . CType
+                        ) args
         pure
           . (tr, )
           . noLoc
           . foldl' (@@) (var' func)
           $ fmap unLoc sgs
-      Nothing -> do
-        throwError $ GoalMismatch "apply" g
+    Nothing -> do
+      throwError $ GoalMismatch "apply" g
 
 
 ------------------------------------------------------------------------------
@@ -209,10 +215,20 @@ splitAuto = tracing "split(auto)" $ do
       case isSplitWhitelisted jdg of
         True -> choice $ fmap splitDataCon dcs
         False -> do
-          choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
-            case null jdgs || any (/= jGoal jdg) (fmap jGoal jdgs) of
-              True  -> Nothing
-              False -> Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
+          choice $ flip fmap dcs $ \dc -> requireNewHoles $
+            splitDataCon dc
+
+
+------------------------------------------------------------------------------
+-- | Allow the given tactic to proceed if and only if it introduces holes that
+-- have a different goal than current goal.
+requireNewHoles :: TacticsM () -> TacticsM ()
+requireNewHoles m = do
+  jdg <- goal
+  pruning m $ \jdgs ->
+    case null jdgs || any (/= jGoal jdg) (fmap jGoal jdgs) of
+      True  -> Nothing
+      False -> Just NoProgress
 
 
 ------------------------------------------------------------------------------
