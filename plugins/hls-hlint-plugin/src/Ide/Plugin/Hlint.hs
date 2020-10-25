@@ -32,12 +32,7 @@ import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Typeable
-import Development.IDE.Core.FileStore
-import Development.IDE.Core.OfInterest
-import Development.IDE.Core.Rules
-import Development.IDE.Core.Shake hiding (withIndefiniteProgress)
-import Development.IDE.Types.Diagnostics as D
-import Development.IDE.Types.Location
+import Development.IDE
 import Development.Shake
 
 #ifdef GHC_LIB
