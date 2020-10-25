@@ -69,7 +69,7 @@ assume name = rule $ \jdg -> do
 
 
 recursion :: TacticsM ()
-recursion = tracing "recursion" $ do
+recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
@@ -110,7 +110,7 @@ intros = rule $ \jdg -> do
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destructAuto :: OccName -> TacticsM ()
-destructAuto name = tracing "destruct(auto)" $ do
+destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
@@ -130,7 +130,7 @@ destructAuto name = tracing "destruct(auto)" $ do
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
-destruct name = tracing "destruct(user)" $ do
+destruct name = requireConcreteHole $ tracing "destruct(user)" $ do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
@@ -140,7 +140,7 @@ destruct name = tracing "destruct(user)" $ do
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
-homo = tracing "homo" . rule . destruct' (\dc jdg ->
+homo = requireConcreteHole . tracing "homo" . rule . destruct' (\dc jdg ->
   buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
@@ -164,7 +164,7 @@ homoLambdaCase =
 
 
 apply :: OccName -> TacticsM ()
-apply func = tracing ("apply' " <> show func) $ do
+apply func = requireConcreteHole $ tracing ("apply' " <> show func) $ do
   jdg <- goal
   let hy = jHypothesis jdg
       g  = jGoal jdg
@@ -209,7 +209,7 @@ split = tracing "split(user)" $ do
 -- 'split' because it won't split a data con if it doesn't result in any new
 -- goals.
 splitAuto :: TacticsM ()
-splitAuto = tracing "split(auto)" $ do
+splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
@@ -238,14 +238,15 @@ requireNewHoles m = do
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
 splitDataCon :: DataCon -> TacticsM ()
-splitDataCon dc = tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
-  let g = jGoal jdg
-  case splitTyConApp_maybe $ unCType g of
-    Just (tc, apps) -> do
-      case elem dc $ tyConDataCons tc of
-        True -> buildDataCon (unwhitelistingSplit jdg) dc apps
-        False -> throwError $ IncorrectDataCon dc
-    Nothing -> throwError $ GoalMismatch "splitDataCon" g
+splitDataCon dc =
+  requireConcreteHole $ tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
+    let g = jGoal jdg
+    case splitTyConApp_maybe $ unCType g of
+      Just (tc, apps) -> do
+        case elem dc $ tyConDataCons tc of
+          True -> buildDataCon (unwhitelistingSplit jdg) dc apps
+          False -> throwError $ IncorrectDataCon dc
+      Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 
 ------------------------------------------------------------------------------

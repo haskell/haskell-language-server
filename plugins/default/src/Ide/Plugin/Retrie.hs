@@ -313,7 +313,8 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
             )
     backwardsRewrite ruleName restrictToOriginatingFile =
           let rewrites = [RuleBackward (qualify ms_mod ruleName)]
-              description = "Apply rule " <> T.pack ruleName <> " backwards"
+              description = "Apply rule " <> T.pack ruleName <> " backwards" <>
+                              describeRestriction restrictToOriginatingFile
            in ( description,
                 CodeActionRefactor,
                 RunRetrieParams {..}
