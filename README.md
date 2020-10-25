@@ -38,6 +38,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
     - [Kakoune](#using-haskell-language-server-with-kakoune)
   - [Known limitations](#known-limitations)
     - [Preprocessor](#preprocessor)
+  - [Troubleshooting](#troubleshooting)
   - [Contributing](#contributing)
     - [Building haskell-language-server](#building-haskell-language-server)
       - [Using Cabal](#using-cabal)
@@ -561,7 +562,7 @@ are included below.
 Make sure to check the READMEs of each of these packages, which explain how to configure the
 various parts of the Emacs integration.
 In particular, `lsp-haskell` provides customization options for the `haskell-language-server`-specific parts,
-such as the path to the server binary.
+such as the path to the server executable.
 
 #### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
@@ -618,6 +619,45 @@ Example with `tasty-discover`:
 {-# OPTIONS_GHC -F -pgmF tasty-discover #-}
 ```
 This returns an error in HLS if 'tasty-discover' is not in the path: `could not execute: tasty-discover`.
+
+## Troubleshooting
+
+### Common issues
+
+#### Difficulties with Stack and `Paths_` modules
+
+These are known to be somewhat buggy at the moment: https://github.com/haskell/haskell-language-server/issues/478.
+This issue should be fixed in Stack versions >= 2.5.
+
+### Troubleshooting the server
+
+#### Diagnostic mode
+
+The `haskell-language-server` executable can be run in diagnostic mode, where it will just try to load modules from your project, printing all of its output to stdout.
+This makes it much easier to see what's going on and to diagnose build-related problems.
+
+To do this, simply run the executable directly from your shell in the project root.
+You can either run it without an argument, in which case it will load random modules, or with a path, in which case it will load modules in that file or directory.
+
+#### Examining the log
+
+Most clients will launch `haskell-language-server` with `--logfile` to make it write a log file.
+Please consult the documentation for your client to find out where this is (or how to set it).
+
+The log will contain all the messages that are sent to the server and its responses.
+This is helpful for low-level debugging: if you expect a certain action to happen, you can look in the log to see if the corresponding messages are
+sent, or if there are any errors.
+
+To get a more verbose, also pass `--debug` to the executable.
+
+### Troubleshooting the client
+
+Many clients provide diagnostic information about a LSP session.
+In particular, look for a way to get the status of the server, the server stderr, or a log of the messages that the client has sent to the server.
+For example, `lsp-mode` provides all of these (see its [troubleshooting page](https://emacs-lsp.github.io/lsp-mode/page/troubleshooting/) for details).
+
+The most common client-related problem is the client simply not finding the server executable, so make sure that you have the right `PATH` and you have configured
+it to look for the right executable.
 
 ## Contributing
 

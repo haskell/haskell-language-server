@@ -127,6 +127,7 @@ mkTest name fp line col ts =
   testCase name $ do
   runSession hlsCommand fullCaps tacticPath $ do
     doc <- openDoc fp "haskell"
+    _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
     for_ ts $ \(f, tc, var) -> do
@@ -141,6 +142,7 @@ goldenTest input line col tc occ =
   testCase (input <> " (golden)") $ do
     runSession hlsCommand fullCaps tacticPath $ do
       doc <- openDoc input "haskell"
+      _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
       Just (CACodeAction (CodeAction {_command = Just c}))
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
