@@ -205,11 +205,11 @@ type instance RuleResult IsFileOfInterest = IsFileOfInterestResult
 
 -- | Generate a ModSummary that has enough information to be used to get .hi and .hie files.
 -- without needing to parse the entire source
-type instance RuleResult GetModSummary = ModSummary
+type instance RuleResult GetModSummary = (ModSummary,[LImportDecl GhcPs])
 
 -- | Generate a ModSummary with the timestamps elided,
 --   for more successful early cutoff
-type instance RuleResult GetModSummaryWithoutTimestamps = ModSummary
+type instance RuleResult GetModSummaryWithoutTimestamps = (ModSummary,[LImportDecl GhcPs])
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)

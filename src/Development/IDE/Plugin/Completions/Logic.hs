@@ -21,9 +21,7 @@ import qualified Text.Fuzzy as Fuzzy
 import HscTypes
 import Name
 import RdrName
-import TcRnTypes
 import Type
-import Var
 import Packages
 import DynFlags
 #if MIN_GHC_API_VERSION(8,10,0)
@@ -232,13 +230,10 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-cacheDataProducer :: HscEnv -> TcModuleResult -> [ParsedModule] -> IO CachedCompletions
-cacheDataProducer packageState tm deps = do
-  let parsedMod = tmrParsed tm
-      dflags = hsc_dflags packageState
-      curMod = ms_mod $ pm_mod_summary parsedMod
+cacheDataProducer :: HscEnv -> Module -> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer packageState curMod rdrEnv limports deps = do
+  let dflags = hsc_dflags packageState
       curModName = moduleName curMod
-      (_,limports,_,_) = tmrRenamed tm -- safe because we always save the typechecked source
 
       iDeclToModName :: ImportDecl name -> ModuleName
       iDeclToModName = unLoc . ideclName
@@ -254,8 +249,6 @@ cacheDataProducer packageState tm deps = do
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
 
-      typeEnv = tcg_type_env $ tmrTypechecked tm
-      rdrEnv = tcg_rdr_env $ tmrTypechecked tm
       rdrElts = globalRdrEnvElts rdrEnv
 
       foldMapM :: (Foldable f, Monad m, Monoid b) => (a -> m b) -> f a -> m b
@@ -267,11 +260,7 @@ cacheDataProducer packageState tm deps = do
 
       getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
       getComplsForOne (GRE n _ True _) =
-        case lookupTypeEnv typeEnv n of
-          Just tt -> case safeTyThingId tt of
-            Just var -> (\x -> ([x],mempty)) <$> varToCompl var
-            Nothing -> (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
-          Nothing -> (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
+        (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
           compItem <- toCompItem curMod (is_mod spec) n
@@ -285,16 +274,9 @@ cacheDataProducer packageState tm deps = do
               origMod = showModName (is_mod spec)
           return (unqual,QualCompls qual)
 
-      varToCompl :: Var -> IO CompItem
-      varToCompl var = do
-        let typ = Just $ varType var
-            name = Var.varName var
-        docs <- getDocumentationTryGhc packageState curMod (tmrParsed tm : deps) name
-        return $ mkNameCompItem name curModName typ Nothing docs
-
       toCompItem :: Module -> ModuleName -> Name -> IO CompItem
       toCompItem m mn n = do
-        docs <- getDocumentationTryGhc packageState curMod (tmrParsed tm : deps) n
+        docs <- getDocumentationTryGhc packageState curMod deps n
         ty <- catchSrcErrors (hsc_dflags packageState) "completion" $ do
                 name' <- lookupName packageState m n
                 return $ name' >>= safeTyThingType

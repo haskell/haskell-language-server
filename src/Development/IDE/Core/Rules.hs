@@ -186,7 +186,7 @@ getHieFile ide file mod = do
 
 getHomeHieFile :: NormalizedFilePath -> MaybeT IdeAction HieFile
 getHomeHieFile f = do
-  ms <- fst <$> useE GetModSummaryWithoutTimestamps f
+  ms <- fst . fst <$> useE GetModSummaryWithoutTimestamps f
   let normal_hie_f = toNormalizedFilePath' hie_f
       hie_f = ml_hie_file $ ms_location ms
 
@@ -339,7 +339,7 @@ getParsedModuleDefinition packageState opt comp_pkgs file modTime contents = do
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
     define $ \GetLocatedImports file -> do
-        ms <- use_ GetModSummaryWithoutTimestamps file
+        (ms,_) <- use_ GetModSummaryWithoutTimestamps file
         targets <- useNoFile_ GetKnownTargets
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
@@ -396,7 +396,7 @@ rawDependencyInformation fs = do
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          msum <- lift $ use GetModSummaryWithoutTimestamps f
+          msum <- lift $ fmap fst <$> use GetModSummaryWithoutTimestamps f
           let al =  modSummaryToArtifactsLocation f msum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
@@ -507,7 +507,7 @@ reportImportCyclesRule =
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
-           ms <- use_ GetModSummaryWithoutTimestamps file
+           ms <- fst <$> use_ GetModSummaryWithoutTimestamps file
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
@@ -611,7 +611,7 @@ typeCheckRuleDefinition hsc pm = do
   linkables_to_keep <- currentLinkables
 
   addUsageDependencies $ liftIO $
-    typecheckModule defer hsc (Just linkables_to_keep) pm
+    typecheckModule defer hsc linkables_to_keep pm
   where
     addUsageDependencies :: Action (a, Maybe TcModuleResult) -> Action (a, Maybe TcModuleResult)
     addUsageDependencies a = do
@@ -681,7 +681,7 @@ ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
 ghcSessionDepsDefinition file = do
         env <- use_ GhcSession file
         let hsc = hscEnv env
-        (ms,_) <- useWithStale_ GetModSummaryWithoutTimestamps file
+        ((ms,_),_) <- useWithStale_ GetModSummaryWithoutTimestamps file
         (deps,_) <- useWithStale_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
             uses_th_qq =
@@ -703,7 +703,7 @@ ghcSessionDepsDefinition file = do
 
 getModIfaceFromDiskRule :: Rules ()
 getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
-  ms <- use_ GetModSummary f
+  (ms,_) <- use_ GetModSummary f
   (diags_session, mb_session) <- ghcSessionDepsDefinition f
   case mb_session of
       Nothing -> return (Nothing, (diags_session, Nothing))
@@ -719,7 +719,7 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
 
 isHiFileStableRule :: Rules ()
 isHiFileStableRule = defineEarlyCutoff $ \IsHiFileStable f -> do
-    ms <- use_ GetModSummaryWithoutTimestamps f
+    (ms,_) <- use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
                 $ ml_hi_file $ ms_location ms
     mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
@@ -748,20 +748,20 @@ getModSummaryRule = do
         modS <- liftIO $ runExceptT $
                 getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
-            Right ms -> do
+            Right res@(ms,_) -> do
                 let fingerPrint = hash (computeFingerprint f dflags ms, hashUTC modTime)
-                return ( Just (BS.pack $ show fingerPrint) , ([], Just ms))
+                return ( Just (BS.pack $ show fingerPrint) , ([], Just res))
             Left diags -> return (Nothing, (diags, Nothing))
 
     defineEarlyCutoff $ \GetModSummaryWithoutTimestamps f -> do
         ms <- use GetModSummary f
         case ms of
-            Just msWithTimestamps -> do
+            Just res@(msWithTimestamps,_) -> do
                 let ms = msWithTimestamps { ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps" }
                 dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
                 -- include the mod time in the fingerprint
                 let fp = BS.pack $ show $ hash (computeFingerprint f dflags ms)
-                return (Just fp, ([], Just ms))
+                return (Just fp, ([], Just res))
             Nothing -> return (Nothing, ([], Nothing))
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
@@ -914,7 +914,7 @@ getLinkableType f = do
 
 needsCompilationRule :: Rules ()
 needsCompilationRule = defineEarlyCutoff $ \NeedsCompilation file -> do
-  (ms,_) <- useWithStale_ GetModSummaryWithoutTimestamps file
+  ((ms,_),_) <- useWithStale_ GetModSummaryWithoutTimestamps file
   -- A file needs object code if it uses TH or any file that depends on it uses TH
   res <-
     if uses_th_qq ms
