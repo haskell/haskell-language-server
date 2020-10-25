@@ -33,6 +33,8 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Typeable
 import Development.IDE
+import Development.IDE.Core.Rules (defineNoFile)
+import Development.IDE.Core.Shake (getDiagnostics)
 import Development.Shake
 
 #ifdef GHC_LIB
