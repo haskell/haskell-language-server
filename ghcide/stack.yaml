@@ -8,7 +8,7 @@ extra-deps:
 - haskell-lsp-types-0.22.0.0
 - lsp-test-0.11.0.6
 - hie-bios-0.7.1@rev:2
-- implicit-hie-0.1.1.0
+- implicit-hie-0.1.2.0
 - implicit-hie-cradle-0.2.0.1
 - fuzzy-0.1.0.0
 - regex-pcre-builtin-0.95.1.1.8.43
