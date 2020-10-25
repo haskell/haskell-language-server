@@ -326,6 +326,9 @@ applyHint ide nfp mhint =
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents nfp
     oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
+    -- We need to save a file with last edited contents cause `apply-refact`
+    -- doesn't expose a function taking directly contents instead a file path.
+    -- Ideally we should try to expose that function upstream and remove this.
     res <- liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
             writeFileUTF8NoNewLineTranslation temp oldContent
