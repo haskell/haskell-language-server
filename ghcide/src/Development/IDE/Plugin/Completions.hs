@@ -22,18 +22,14 @@ import Development.IDE.Core.Service
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Plugin.Completions.Logic
 import Development.IDE.Types.Location
-import Development.IDE.Types.Options
-import Development.IDE.Core.Compile
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat (hsmodExports, ParsedModule(..), ModSummary (ms_hspp_buf))
+import Development.IDE.GHC.Compat
 
 import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
-import Control.Monad.Trans.Except (runExceptT)
-import HscTypes (HscEnv(hsc_dflags))
+import TcRnDriver (tcRnImportDecls)
 import Data.Maybe
-import Data.Functor ((<&>))
 
 #if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
@@ -73,34 +69,15 @@ produceCompletions = do
 #endif
 
         case (ms, sess) of
-            (Just ms, Just sess) -> do
-                -- After parsing the module remove all package imports referring to
-                -- these packages as we have already dealt with what they map to.
-                let env = hscEnv sess
-                    buf = fromJust $ ms_hspp_buf ms
-                    f = fromNormalizedFilePath file
-                    dflags = hsc_dflags env
-                pm <- liftIO $ runExceptT $ parseHeader dflags f buf
-                case pm of
-                    Right (_diags, hsMod) -> do
-                        let hsModNoExports = hsMod <&> \x -> x{hsmodExports = Nothing}
-                            pm = ParsedModule
-                                    { pm_mod_summary = ms
-                                    , pm_parsed_source = hsModNoExports
-                                    , pm_extra_src_files = [] -- src imports not allowed
-                                    , pm_annotations = mempty
-                                    }
-                        tm <- liftIO $ typecheckModule (IdeDefer True) env Nothing pm
-                        case tm of
-                            (_, Just tcm) -> do
-                                cdata <- liftIO $ cacheDataProducer env tcm parsedDeps
-                                -- Do not return diags from parsing as they would duplicate
-                                -- the diagnostics from typechecking
-                                return ([], Just cdata)
-                            (_diag, _) ->
-                                return ([], Nothing)
-                    Left _diag ->
-                        return ([], Nothing)
+            (Just (ms,imps), Just sess) -> do
+              let env = hscEnv sess
+              res <- liftIO $ tcRnImportDecls env imps
+              case res of
+                  (_, Just rdrEnv) -> do
+                      cdata <- liftIO $ cacheDataProducer env (ms_mod ms) rdrEnv imps parsedDeps
+                      return ([], Just cdata)
+                  (_diag, _) ->
+                      return ([], Nothing)
             _ -> return ([], Nothing)
 
 -- | Produce completions info for a file

@@ -10,7 +10,6 @@
 
 -- | Attempt at hiding the GHC version differences we can.
 module Development.IDE.GHC.Compat(
-    getHeaderImports,
     HieFileResult(..),
     HieFile(..),
     NameCacheUpdater(..),
@@ -95,15 +94,12 @@ import GHC hiding (
       lookupName,
       getLoc
     )
-import qualified HeaderInfo as Hdr
 import Avail
 #if MIN_GHC_API_VERSION(8,8,0)
 import Data.List (foldl')
 #else
 import Data.List (foldl', isSuffixOf)
 #endif
-import ErrUtils (ErrorMessages)
-import FastString (FastString)
 
 import DynamicLoading
 import Plugins (Plugin(parsedResultAction), withPlugins)
@@ -116,9 +112,6 @@ import System.FilePath ((-<.>))
 #if !MIN_GHC_API_VERSION(8,8,0)
 import qualified EnumSet
 
-import GhcPlugins (srcErrorMessages)
-
-import Control.Exception (catch)
 import System.IO
 import Foreign.ForeignPtr
 
@@ -230,21 +223,7 @@ nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
 nameListFromAvails as =
   map (\n -> (nameSrcSpan n, n)) (concatMap availNames as)
 
-getHeaderImports
-  :: DynFlags
-  -> StringBuffer
-  -> FilePath
-  -> FilePath
-  -> IO
-       ( Either
-           ErrorMessages
-           ( [(Maybe FastString, Located ModuleName)]
-           , [(Maybe FastString, Located ModuleName)]
-           , Located ModuleName
-           )
-       )
 #if MIN_GHC_API_VERSION(8,8,0)
-getHeaderImports = Hdr.getImports
 
 type HasSrcSpan = GHC.HasSrcSpan
 getLoc :: HasSrcSpan a => a -> SrcSpan
@@ -258,10 +237,6 @@ instance HasSrcSpan Name where
     getLoc = nameSrcSpan
 instance HasSrcSpan (GenLocated SrcSpan a) where
     getLoc = GHC.getLoc
-
-getHeaderImports a b c d =
-    catch (Right <$> Hdr.getImports a b c d)
-          (return . Left . srcErrorMessages)
 
 -- | Add the @-boot@ suffix to all output file paths associated with the
 -- module, not including the input file itself
