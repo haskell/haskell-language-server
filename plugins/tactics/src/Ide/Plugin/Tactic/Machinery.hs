@@ -208,3 +208,16 @@ methodHypothesis ty = do
     let (_, _, ty) = tcSplitSigmaTy $ idType method
     in (occName method,  CType $ substTy subst ty)
 
+
+------------------------------------------------------------------------------
+-- | Run the given tactic iff the current hole contains no univars. Skolems and
+-- already decided univars are OK though.
+requireConcreteHole :: TacticsM a -> TacticsM a
+requireConcreteHole m = do
+  jdg     <- goal
+  skolems <- gets $ S.fromList . ts_skolems
+  let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
+  case S.size $ vars S.\\ skolems of
+    0 -> m
+    _ -> throwError TooPolymorphic
+

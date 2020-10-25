@@ -177,6 +177,7 @@ data TacticError
   | RecursionOnWrongParam OccName Int OccName
   | UnhelpfulDestruct OccName
   | UnhelpfulSplit OccName
+  | TooPolymorphic
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -213,6 +214,8 @@ instance Show TacticError where
       "Destructing patval " <> show n <> " leads to no new types"
     show (UnhelpfulSplit n) =
       "Splitting constructor " <> show n <> " leads to no new goals"
+    show TooPolymorphic =
+      "The tactic isn't applicable because the goal is too polymorphic"
 
 
 ------------------------------------------------------------------------------
