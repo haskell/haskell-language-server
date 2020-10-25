@@ -23,7 +23,7 @@ cradle:
               component: "haskell-language-server:exe:haskell-language-server"
 
             - path: "./plugins/tactics/src"
-              component: "hls-tactics-plugin:lib:hls-tactics-plugin"
+              component: "hls-tactics-plugin:lib"
 
             - path: "./plugins/tactics/test"
               component: "hls-tactics-plugin:test:tests"
