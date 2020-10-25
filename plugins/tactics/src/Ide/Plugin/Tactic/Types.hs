@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveFunctor              #-}
@@ -21,20 +22,24 @@ module Ide.Plugin.Tactic.Types
   ) where
 
 import Control.Lens hiding (Context)
-import Data.Generics.Product (field)
 import Control.Monad.Reader
+import Control.Monad.State
+import Data.Coerce
 import Data.Function
+import Data.Generics.Product (field)
 import Data.Map (Map)
 import Data.Set (Set)
+import Data.Tree
 import Development.IDE.GHC.Compat hiding (Node)
 import Development.IDE.Types.Location
 import GHC.Generics
 import Ide.Plugin.Tactic.Debug
 import OccName
 import Refinery.Tactic
+import System.IO.Unsafe (unsafePerformIO)
 import Type
-import Data.Tree
-import Data.Coerce
+import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
+import Unique (Unique)
 
 
 ------------------------------------------------------------------------------
@@ -73,12 +78,40 @@ data TacticState = TacticState
     , ts_used_vals :: !(Set OccName)
     , ts_intro_vals :: !(Set OccName)
     , ts_recursion_stack :: ![Bool]
+    , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
+
+instance Show UniqSupply where
+  show _ = "<uniqsupply>"
+
+
+------------------------------------------------------------------------------
+-- | A 'UniqSupply' to use in 'defaultTacticState'
+unsafeDefaultUniqueSupply :: UniqSupply
+unsafeDefaultUniqueSupply =
+  unsafePerformIO $ mkSplitUniqSupply '🚒'
+{-# NOINLINE unsafeDefaultUniqueSupply #-}
 
 
 defaultTacticState :: TacticState
 defaultTacticState =
-  TacticState mempty emptyTCvSubst mempty mempty mempty
+  TacticState
+    { ts_skolems         = mempty
+    , ts_unifier         = emptyTCvSubst
+    , ts_used_vals       = mempty
+    , ts_intro_vals      = mempty
+    , ts_recursion_stack = mempty
+    , ts_unique_gen      = unsafeDefaultUniqueSupply
+    }
+
+
+------------------------------------------------------------------------------
+-- | Generate a new 'Unique'
+freshUnique :: MonadState TacticState m => m Unique
+freshUnique = do
+  (uniq, supply) <- gets $ takeUniqFromSupply . ts_unique_gen
+  modify' $! field @"ts_unique_gen" .~ supply
+  pure uniq
 
 
 withRecursionStack
@@ -102,6 +135,9 @@ withIntroducedVals f =
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
   { _jHypothesis :: !(Map OccName a)
+  , _jAmbientHypothesis :: !(Map OccName a)
+    -- ^ Things in the hypothesis that were imported. Solutions don't get
+    -- points for using the ambient hypothesis.
   , _jDestructed :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jPatternVals :: !(Set OccName)
@@ -141,6 +177,7 @@ data TacticError
   | RecursionOnWrongParam OccName Int OccName
   | UnhelpfulDestruct OccName
   | UnhelpfulSplit OccName
+  | TooPolymorphic
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -177,6 +214,8 @@ instance Show TacticError where
       "Destructing patval " <> show n <> " leads to no new types"
     show (UnhelpfulSplit n) =
       "Splitting constructor " <> show n <> " leads to no new goals"
+    show TooPolymorphic =
+      "The tactic isn't applicable because the goal is too polymorphic"
 
 
 ------------------------------------------------------------------------------
@@ -196,6 +235,12 @@ data Context = Context
     -- ^ Everything defined in the current module
   }
   deriving stock (Eq, Ord)
+
+
+------------------------------------------------------------------------------
+-- | An empty context
+emptyContext :: Context
+emptyContext  = Context mempty mempty
 
 
 newtype Rose a = Rose (Tree a)

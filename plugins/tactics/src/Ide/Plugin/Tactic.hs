@@ -265,9 +265,11 @@ judgementForHole state nfp range = do
                 $ getDefiningBindings binds rss)
               tcg
       hyps = hypothesisFromBindings rss binds
+      ambient = M.fromList $ contextMethodHypothesis ctx
   pure ( resulting_range
        , mkFirstJudgement
            hyps
+           ambient
            (isRhsHole rss tcs)
            (maybe
               mempty

@@ -14,6 +14,7 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
+import           Control.Monad (when)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
@@ -35,7 +36,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name (nameOccName, occNameString)
+import           Name (occNameString)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
@@ -54,26 +55,22 @@ assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
   case M.lookup name $ jHypothesis jdg of
-    Just ty ->
-      case ty == jGoal jdg of
-        True  -> do
-          case M.member name (jPatHypothesis jdg) of
-            True  -> setRecursionFrameData True
-            False -> pure ()
-          useOccName jdg name
-          pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
-        False -> throwError $ GoalMismatch "assume" g
+    Just ty -> do
+      unify ty $ jGoal jdg
+      when (M.member name $ jPatHypothesis jdg) $
+        setRecursionFrameData True
+      useOccName jdg name
+      pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
 
 
-
 recursion :: TacticsM ()
-recursion = tracing "recursion" $ do
+recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
     ensure recursiveCleanup (withRecursionStack tail) $ do
-      (localTactic (apply' (const id) name) $ introducing defs)
+      (localTactic (apply name) $ introducing defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -109,7 +106,7 @@ intros = rule $ \jdg -> do
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destructAuto :: OccName -> TacticsM ()
-destructAuto name = tracing "destruct(auto)" $ do
+destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
@@ -129,7 +126,7 @@ destructAuto name = tracing "destruct(auto)" $ do
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
-destruct name = tracing "destruct(user)" $ do
+destruct name = requireConcreteHole $ tracing "destruct(user)" $ do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
@@ -139,7 +136,7 @@ destruct name = tracing "destruct(user)" $ do
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
-homo = tracing "homo" . rule . destruct' (\dc jdg ->
+homo = requireConcreteHole . tracing "homo" . rule . destruct' (\dc jdg ->
   buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
@@ -152,40 +149,42 @@ destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (
 ------------------------------------------------------------------------------
 -- | LambdaCase split, using the same data constructor in the matches.
 homoLambdaCase :: TacticsM ()
-homoLambdaCase = tracing "homoLambdaCase" $ rule $ destructLambdaCase' (\dc jdg ->
-  buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+homoLambdaCase =
+  tracing "homoLambdaCase" $
+    rule $ destructLambdaCase' $ \dc jdg ->
+      buildDataCon jdg dc
+        . snd
+        . splitAppTys
+        . unCType
+        $ jGoal jdg
 
 
 apply :: OccName -> TacticsM ()
-apply = apply' (const id)
-
-
-apply' :: (Int -> Judgement -> Judgement) -> OccName -> TacticsM ()
-apply' f func = tracing ("apply' " <> show func) $ do
-  rule $ \jdg -> do
-    let hy = jHypothesis jdg
-        g  = jGoal jdg
-    case M.lookup func hy of
-      Just (CType ty) -> do
-          let (args, ret) = splitFunTys ty
-          unify g (CType ret)
-          useOccName jdg func
-          (tr, sgs)
-              <- fmap unzipTrace
-               $ traverse ( \(i, t) ->
-                            newSubgoal
-                          . f i
-                          . blacklistingDestruct
-                          . flip withNewGoal jdg
-                          $ CType t
-                          ) $ zip [0..] args
-          pure
-            . (tr, )
-            . noLoc
-            . foldl' (@@) (var' func)
-            $ fmap unLoc sgs
-      Nothing -> do
-        throwError $ GoalMismatch "apply" g
+apply func = requireConcreteHole $ tracing ("apply' " <> show func) $ do
+  jdg <- goal
+  let hy = jHypothesis jdg
+      g  = jGoal jdg
+  case M.lookup func hy of
+    Just (CType ty) -> do
+      ty' <- freshTyvars ty
+      let (_, _, args, ret) = tacticsSplitFunTy ty'
+      requireNewHoles $ rule $ \jdg -> do
+        unify g (CType ret)
+        useOccName jdg func
+        (tr, sgs)
+            <- fmap unzipTrace
+            $ traverse ( newSubgoal
+                        . blacklistingDestruct
+                        . flip withNewGoal jdg
+                        . CType
+                        ) args
+        pure
+          . (tr, )
+          . noLoc
+          . foldl' (@@) (var' func)
+          $ fmap unLoc sgs
+    Nothing -> do
+      throwError $ GoalMismatch "apply" g
 
 
 ------------------------------------------------------------------------------
@@ -206,7 +205,7 @@ split = tracing "split(user)" $ do
 -- 'split' because it won't split a data con if it doesn't result in any new
 -- goals.
 splitAuto :: TacticsM ()
-splitAuto = tracing "split(auto)" $ do
+splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
@@ -216,23 +215,34 @@ splitAuto = tracing "split(auto)" $ do
       case isSplitWhitelisted jdg of
         True -> choice $ fmap splitDataCon dcs
         False -> do
-          choice $ flip fmap dcs $ \dc -> pruning (splitDataCon dc) $ \jdgs ->
-            case null jdgs || any (/= jGoal jdg) (fmap jGoal jdgs) of
-              True  -> Nothing
-              False -> Just $ UnhelpfulSplit $ nameOccName $ dataConName dc
+          choice $ flip fmap dcs $ \dc -> requireNewHoles $
+            splitDataCon dc
+
+
+------------------------------------------------------------------------------
+-- | Allow the given tactic to proceed if and only if it introduces holes that
+-- have a different goal than current goal.
+requireNewHoles :: TacticsM () -> TacticsM ()
+requireNewHoles m = do
+  jdg <- goal
+  pruning m $ \jdgs ->
+    case null jdgs || any (/= jGoal jdg) (fmap jGoal jdgs) of
+      True  -> Nothing
+      False -> Just NoProgress
 
 
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
 splitDataCon :: DataCon -> TacticsM ()
-splitDataCon dc = tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
-  let g = jGoal jdg
-  case splitTyConApp_maybe $ unCType g of
-    Just (tc, apps) -> do
-      case elem dc $ tyConDataCons tc of
-        True -> buildDataCon (unwhitelistingSplit jdg) dc apps
-        False -> throwError $ IncorrectDataCon dc
-    Nothing -> throwError $ GoalMismatch "splitDataCon" g
+splitDataCon dc =
+  requireConcreteHole $ tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
+    let g = jGoal jdg
+    case splitTyConApp_maybe $ unCType g of
+      Just (tc, apps) -> do
+        case elem dc $ tyConDataCons tc of
+          True -> buildDataCon (unwhitelistingSplit jdg) dc apps
+          False -> throwError $ IncorrectDataCon dc
+      Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 
 ------------------------------------------------------------------------------

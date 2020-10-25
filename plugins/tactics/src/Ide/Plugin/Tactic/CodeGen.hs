@@ -29,7 +29,8 @@ import           Type hiding (Var)
 
 useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
 useOccName jdg name =
-  case M.lookup name $ jHypothesis jdg of
+  -- Only score points if this is in the local hypothesis
+  case M.lookup name $ jLocalHypothesis jdg of
     Just{}  -> modify $ withUsedVals $ S.insert name
     Nothing -> pure ()
 

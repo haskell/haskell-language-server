@@ -43,6 +43,7 @@ spec = describe "auto for tuple" $ do
             (Context [] [])
             (mkFirstJudgement
               (M.singleton (mkVarOcc "x") $ CType in_type)
+              mempty
               True
               mempty
               out_type)

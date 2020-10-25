@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
@@ -17,6 +18,7 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
+import           Class (Class(classTyVars))
 import           Control.Arrow
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
@@ -25,12 +27,15 @@ import           Control.Monad.State.Class (gets, modify)
 import           Control.Monad.State.Strict (StateT (..))
 import           Data.Coerce
 import           Data.Either
-import           Data.List (intercalate, sortBy)
+import           Data.Functor ((<&>))
+import           Data.Generics (mkQ, everything, gcount)
+import           Data.List (sortBy)
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Types
+import           OccName (HasOccName(occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -74,7 +79,8 @@ runTactic ctx jdg t =
       (errs, []) -> Left $ take 50 $ errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
-              sortBy (comparing $ Down . uncurry scoreSolution . snd) solns
+              flip sortBy solns $ comparing $ \((_, ext), (jdg, holes)) ->
+                Down $ scoreSolution ext jdg holes
         case sorted of
           (((tr, ext), _) : _) ->
             Right
@@ -121,19 +127,30 @@ setRecursionFrameData b = do
 
 
 scoreSolution
-    :: TacticState
+    :: LHsExpr GhcPs
+    -> TacticState
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
        , Reward Bool   -- all bindings used
        , Penalize Int  -- number of introduced bindings
        , Reward Int    -- number used bindings
+       , Penalize Int  -- size of extract
        )
-scoreSolution TacticState{..} holes
+scoreSolution ext TacticState{..} holes
   = ( Penalize $ length holes
-    , Reward $ S.null $ ts_intro_vals S.\\ ts_used_vals
+    , Reward   $ S.null $ ts_intro_vals S.\\ ts_used_vals
     , Penalize $ S.size ts_intro_vals
-    , Reward $ S.size ts_used_vals
+    , Reward   $ S.size ts_used_vals
+    , Penalize $ solutionSize ext
     )
+
+
+------------------------------------------------------------------------------
+-- | Compute the number of 'LHsExpr' nodes; used as a rough metric for code
+-- size.
+solutionSize :: LHsExpr GhcPs -> Int
+solutionSize = everything (+) $ gcount $ mkQ False $ \case
+  (_ :: LHsExpr GhcPs) -> True
 
 
 newtype Penalize a = Penalize a
@@ -143,23 +160,22 @@ newtype Reward a = Reward a
   deriving (Eq, Ord, Show) via a
 
 
+------------------------------------------------------------------------------
+-- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
+tryUnifyUnivarsButNotSkolems :: [TyVar] -> CType -> CType -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolems skolems goal inst =
+  case tcUnifyTysFG (skolemsOf skolems) [unCType inst] [unCType goal] of
+    Unifiable subst -> pure subst
+    _ -> Nothing
+
 
 ------------------------------------------------------------------------------
--- | We need to make sure that we don't try to unify any skolems.
--- To see why, consider the case:
---
--- uhh :: (Int -> Int) -> a
--- uhh f = _
---
--- If we were to apply 'f', then we would try to unify 'Int' and 'a'.
--- This is fine from the perspective of 'tcUnifyTy', but will cause obvious
--- type errors in our use case. Therefore, we need to ensure that our
--- 'TCvSubst' doesn't try to unify skolems.
-checkSkolemUnification :: CType -> CType -> TCvSubst -> RuleM ()
-checkSkolemUnification t1 t2 subst = do
-    skolems <- gets ts_skolems
-    unless (all (flip notElemTCvSubst subst) skolems) $
-      throwError (UnificationError t1 t2)
+-- | Helper method for 'tryUnifyUnivarsButNotSkolems'
+skolemsOf :: [TyVar] -> TyVar -> BindFlag
+skolemsOf tvs tv =
+  case elem tv tvs of
+    True  -> Skolem
+    False -> BindMe
 
 
 ------------------------------------------------------------------------------
@@ -167,10 +183,41 @@ checkSkolemUnification t1 t2 subst = do
 unify :: CType -- ^ The goal type
       -> CType -- ^ The type we are trying unify the goal type with
       -> RuleM ()
-unify goal inst =
-    case tcUnifyTy (unCType inst) (unCType goal) of
-      Just subst -> do
-          checkSkolemUnification inst goal subst
-          modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
-      Nothing -> throwError (UnificationError inst goal)
+unify goal inst = do
+  skolems <- gets ts_skolems
+  case tryUnifyUnivarsButNotSkolems skolems goal inst of
+    Just subst ->
+      modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
+    Nothing -> throwError (UnificationError inst goal)
+
+
+------------------------------------------------------------------------------
+-- | Get the class methods of a 'PredType', correctly dealing with
+-- instantiation of quantified class types.
+methodHypothesis :: PredType -> Maybe [(OccName, CType)]
+methodHypothesis ty = do
+  (tc, apps) <- splitTyConApp_maybe ty
+  cls <- tyConClass_maybe tc
+  let methods = classMethods cls
+      tvs     = classTyVars cls
+      subst   = zipTvSubst tvs apps
+  sc_methods <- fmap join
+              $ traverse (methodHypothesis . substTy subst)
+              $ classSCTheta cls
+  pure $ mappend sc_methods $ methods <&> \method ->
+    let (_, _, ty) = tcSplitSigmaTy $ idType method
+    in (occName method,  CType $ substTy subst ty)
+
+
+------------------------------------------------------------------------------
+-- | Run the given tactic iff the current hole contains no univars. Skolems and
+-- already decided univars are OK though.
+requireConcreteHole :: TacticsM a -> TacticsM a
+requireConcreteHole m = do
+  jdg     <- goal
+  skolems <- gets $ S.fromList . ts_skolems
+  let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
+  case S.size $ vars S.\\ skolems of
+    0 -> m
+    _ -> throwError TooPolymorphic
 

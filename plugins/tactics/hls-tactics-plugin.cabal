@@ -84,6 +84,7 @@ test-suite tests
   main-is: Main.hs
   other-modules:
     AutoTupleSpec
+    UnificationSpec
   hs-source-dirs:
       test
   ghc-options: -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
