@@ -294,7 +294,11 @@ idiom m = do
       -- TODO(sandy): make sure this check works
       -- unlessM (hasInstance applicativeClassName [applic]) $
       --   throwError $ GoalMismatch "idiom" $ CType applic
-      rule $ fmap (second idiomize) . flip subgoalWith m . withNewGoal (CType ty)
+      rule $ \jdg -> do
+        (tr, expr) <- subgoalWith (withNewGoal (CType ty) jdg) m
+        case unLoc expr of
+          HsApp{} -> pure (tr, idiomize expr)
+          _       -> throwError $ GoalMismatch "idiom" $ jGoal jdg
       rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
     Nothing -> throwError $ GoalMismatch "idiom" $ jGoal jdg
 
