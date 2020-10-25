@@ -44,7 +44,7 @@ import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
 import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 #else
-import GHC hiding (DynFlags(..))
+import Development.IDE.GHC.Compat hiding (DynFlags(..))
 #endif
 
 import Ide.Logger
