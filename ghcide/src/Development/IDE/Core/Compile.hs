@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 
@@ -92,6 +93,10 @@ import Control.Exception (evaluate)
 import TcEnv (tcLookup)
 import Data.Time (UTCTime, getCurrentTime)
 import Linker (unload)
+import qualified GHC.LanguageExtensions as LangExt
+import PrelNames
+import HeaderInfo
+import Maybes (orElse)
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -124,7 +129,7 @@ computePackageDeps env pkg = do
 
 typecheckModule :: IdeDefer
                 -> HscEnv
-                -> Maybe [Linkable] -- ^ linkables not to unload, if Nothing don't unload anything
+                -> [Linkable] -- ^ linkables not to unload
                 -> ParsedModule
                 -> IO (IdeResult TcModuleResult)
 typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
@@ -146,12 +151,12 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
-tcRnModule :: HscEnv -> Maybe [Linkable] -> ParsedModule -> IO TcModuleResult
+tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
 
-  whenJust keep_lbls $ unload hsc_env_tmp
+  unload hsc_env_tmp keep_lbls
   (tc_gbl_env, mrn_info) <-
       hscTypecheckRename hsc_env_tmp ms $
                 HsParsedModule { hpm_module = parsedSource pmod,
@@ -549,23 +554,48 @@ getModSummaryFromImports
   -> FilePath
   -> UTCTime
   -> Maybe SB.StringBuffer
-  -> ExceptT [FileDiagnostic] IO ModSummary
+  -> ExceptT [FileDiagnostic] IO (ModSummary,[LImportDecl GhcPs])
 getModSummaryFromImports env fp modTime contents = do
     (contents, dflags) <- preprocessor env fp contents
-    (srcImports, textualImports, L _ moduleName) <-
-        ExceptT $ liftIO $ first (diagFromErrMsgs "parser" dflags) <$> GHC.getHeaderImports dflags contents fp fp
+
+    -- The warns will hopefully be reported when we actually parse the module
+    (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
+
+    -- Copied from `HeaderInfo.getImports`, but we also need to keep the parsed imports
+    let mb_mod = hsmodName hsmod
+        imps = hsmodImports hsmod
+
+        mod = fmap unLoc mb_mod `orElse` mAIN_NAME
+
+        (src_idecls, ord_idecls) = partition (ideclSource.unLoc) imps
+
+        -- GHC.Prim doesn't exist physically, so don't go looking for it.
+        ordinary_imps = filter ((/= moduleName gHC_PRIM) . unLoc
+                                . ideclName . unLoc)
+                               ord_idecls
+
+        implicit_prelude = xopt LangExt.ImplicitPrelude dflags
+        implicit_imports = mkPrelImports mod main_loc
+                                         implicit_prelude imps
+        convImport (L _ i) = (fmap sl_fs (ideclPkgQual i)
+                                         , ideclName i)
+
+        srcImports = map convImport src_idecls
+        textualImports = map convImport (implicit_imports ++ ordinary_imps)
+
+        allImps = implicit_imports ++ imps
 
     -- Force bits that might keep the string buffer and DynFlags alive unnecessarily
     liftIO $ evaluate $ rnf srcImports
     liftIO $ evaluate $ rnf textualImports
 
-    modLoc <- liftIO $ mkHomeModLocation dflags moduleName fp
+    modLoc <- liftIO $ mkHomeModLocation dflags mod fp
 
-    let mod = mkModule (thisPackage dflags) moduleName
+    let modl = mkModule (thisPackage dflags) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
         summary =
             ModSummary
-                { ms_mod          = mod
+                { ms_mod          = modl
 #if MIN_GHC_API_VERSION(8,8,0)
                 , ms_hie_date     = Nothing
 #endif
@@ -582,7 +612,7 @@ getModSummaryFromImports env fp modTime contents = do
                 , ms_srcimps      = srcImports
                 , ms_textual_imps = textualImports
                 }
-    return summary
+    return (summary, allImps)
 
 -- | Parse only the module header
 parseHeader
