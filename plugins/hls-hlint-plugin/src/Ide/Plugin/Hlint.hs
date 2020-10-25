@@ -103,8 +103,9 @@ rules = do
       diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
       diagnostics file (Right ideas) =
         [(file, ShowDiag, ideaToDiagnostic i) | i <- ideas, ideaSeverity i /= Ignore]
-      diagnostics file (Left parseErr) =
-        [(file, ShowDiag, parseErrorToDiagnostic parseErr)]
+      -- We don't return parse errors as diagnostics cause they match the emitted ones
+      -- by ghc and they would be duplicated
+      diagnostics file (Left parseErr) = []
 
       ideaToDiagnostic :: Idea -> Diagnostic
       ideaToDiagnostic idea =
@@ -118,17 +119,6 @@ rules = do
           , _tags     = Nothing
         }
 
-      parseErrorToDiagnostic :: ParseError -> Diagnostic
-      parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
-        LSP.Diagnostic {
-            _range    = srcSpanToRange l
-          , _severity = Just LSP.DsInfo
-          , _code     = Just (LSP.StringValue "parser")
-          , _source   = Just "hlint"
-          , _message  = T.unlines [T.pack msg,T.pack contents]
-          , _relatedInformation = Nothing
-          , _tags     = Nothing
-        }
       -- This one is defined in Development.IDE.GHC.Error but here
       -- the types could come from ghc-lib or ghc
       srcSpanToRange :: SrcSpan -> LSP.Range
