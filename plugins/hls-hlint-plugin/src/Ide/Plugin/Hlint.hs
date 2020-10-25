@@ -89,7 +89,6 @@ rules :: Rules ()
 rules = do
   define $ \GetHlintDiagnostics file -> do
     hlintOn' <- hlintOn <$> getClientConfigAction
-    logm $ "hlint:rules:hlintOn=" <> show hlintOn'
     ideas <- if hlintOn' then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
