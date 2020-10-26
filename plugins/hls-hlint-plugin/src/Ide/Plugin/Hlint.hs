@@ -87,6 +87,14 @@ instance Binary   GetHlintDiagnostics
 
 type instance RuleResult GetHlintDiagnostics = ()
 
+-- | Hlint rules to generate file diagnostics based on hlint hints
+-- | This rule is recomputed when:
+-- | - The files of interest have changed via `getFilesOfInterest`
+-- | - One of those files has been edited via
+-- |    - `getIdeas` -> `getParsedModule`, if the hls ghc matches the hlint default ghc
+-- |    - `getIdeas` -> `getFileContents` otherwise (hlint is using ghc-lib)
+-- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
+-- | - The hlint specific settings have changed, via `getHlintSettingsRule`
 rules :: Rules ()
 rules = do
   define $ \GetHlintDiagnostics file -> do
