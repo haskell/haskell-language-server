@@ -34,7 +34,7 @@ cradle:
             - path: "./src"
               component: "lib:haskell-language-server"
 
-           - path: "./dist-newstyle/"
+            - path: "./dist-newstyle/"
               component: "lib:haskell-language-server"
 
             - path: "./ghcide/src"
