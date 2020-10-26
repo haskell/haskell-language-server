@@ -119,7 +119,7 @@ rules = do
         LSP.Diagnostic {
             _range    = srcSpanToRange $ ideaSpan idea
           , _severity = Just LSP.DsInfo
-          , _code     = Just $ (LSP.StringValue $ T.pack $ codePre ++ ideaHint idea)
+          , _code     = Just (LSP.StringValue $ T.pack $ codePre ++ ideaHint idea)
           , _source   = Just "hlint"
           , _message  = T.pack $ show idea
           , _relatedInformation = Nothing
@@ -265,9 +265,10 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
       Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
      where
        codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing (Just cmd)
-       title = T.replace "refact:" "Apply hint: " code
+       ideaHint = T.replace "refact:" "" code
+       title = "Apply hint: " <> ideaHint
        -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
-       args = [toJSON (AOP (docId ^. LSP.uri) start code)]
+       args = [toJSON (AOP (docId ^. LSP.uri) start ideaHint)]
     mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = return Nothing
 
 -- ---------------------------------------------------------------------
