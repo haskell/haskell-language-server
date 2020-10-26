@@ -122,12 +122,13 @@ rules = do
         LSP.Diagnostic {
             _range    = srcSpanToRange $ ideaSpan idea
           , _severity = Just LSP.DsInfo
-          , _code     = Just (LSP.StringValue $ T.pack $ ideaHint idea)
+          , _code     = Just $ (LSP.StringValue $ T.pack $ codePre ++ ideaHint idea)
           , _source   = Just "hlint"
           , _message  = T.pack $ show idea
           , _relatedInformation = Nothing
           , _tags     = Nothing
         }
+        where codePre = if null $ ideaRefactoring idea then "" else "refact:"
 
       -- This one is defined in Development.IDE.GHC.Error but here
       -- the types could come from ghc-lib or ghc
@@ -217,12 +218,12 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
         let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
             numHintsInDoc = length
               [d | (nfp, _, d) <- diags
-                 , d ^. LSP.source == Just "hlint"
+                 , validCommand d
                  , Just nfp == docNfp
               ]
         -- We only want to show the applyAll code action if there is more than 1
         -- hint in the current document
-        if numHintsInDoc >= 2 then do
+        if numHintsInDoc > 1 then do
           applyAll <- applyAllAction
           pure $ applyAll:applyOne
         else
@@ -238,8 +239,9 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
 
     -- |Some hints do not have an associated refactoring
     validCommand (LSP.Diagnostic _ _ (Just (LSP.StringValue code)) (Just "hlint") _ _ _) =
-      code /= "Eta reduce"
-    validCommand _ = False
+        "refact:" `T.isPrefixOf` code
+    validCommand _ =
+        False
 
     LSP.List diags = context ^. LSP.diagnostics
 
@@ -248,7 +250,7 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
       Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
      where
        codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing (Just cmd)
-       title = "Apply hint: " <> code
+       title = T.replace code "refact:" "Apply hint: "
        -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
        args = [toJSON (AOP (docId ^. LSP.uri) start code)]
     mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = return Nothing
