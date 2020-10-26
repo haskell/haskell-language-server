@@ -77,6 +77,8 @@ descriptor plId = (defaultPluginDescriptor plId)
     , pluginCodeActionProvider = Just codeActionProvider
   }
 
+-- This rule only exists for generating file diagnostics
+-- so the RuleResult is empty
 data GetHlintDiagnostics = GetHlintDiagnostics
     deriving (Eq, Show, Typeable, Generic)
 instance Hashable GetHlintDiagnostics
