@@ -37,8 +37,7 @@ import Development.IDE.Core.Rules (defineNoFile)
 import Development.IDE.Core.Shake (getDiagnostics)
 
 #ifdef GHC_LIB
-import Development.IDE.Core.RuleTypes (GhcSession(..))
-import Development.IDE.GHC.Util (hscEnv)
+import Data.List (nub)
 import "ghc-lib" GHC hiding (DynFlags(..))
 import "ghc" GHC as RealGHC (DynFlags(..))
 import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
@@ -182,7 +181,8 @@ getIdeas nfp = do
           hsc <- hscEnv <$> use_ GhcSession nfp
           let dflags = hsc_dflags hsc
           let hscExts = EnumSet.toList (extensionFlags dflags)
-          let hlintExts = mapMaybe (GhclibParserEx.readExtension . show) hscExts
+          let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
+          let hlintExts = nub $ enabledExtensions flags ++ hscExts'
           logm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 #else
