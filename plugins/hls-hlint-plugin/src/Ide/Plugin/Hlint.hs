@@ -35,7 +35,6 @@ import Data.Typeable
 import Development.IDE
 import Development.IDE.Core.Rules (defineNoFile)
 import Development.IDE.Core.Shake (getDiagnostics)
-import Development.Shake
 
 #ifdef GHC_LIB
 import Development.IDE.Core.RuleTypes (GhcSession(..))
@@ -113,9 +112,8 @@ rules = do
       diagnostics :: NormalizedFilePath -> Either ParseError [Idea] -> [FileDiagnostic]
       diagnostics file (Right ideas) =
         [(file, ShowDiag, ideaToDiagnostic i) | i <- ideas, ideaSeverity i /= Ignore]
-      -- We don't return parse errors as diagnostics cause they match the emitted ones
-      -- by ghc and they would be duplicated
-      diagnostics file (Left parseErr) = []
+      diagnostics file (Left parseErr) =
+        [(file, ShowDiag, parseErrorToDiagnostic parseErr)]
 
       ideaToDiagnostic :: Idea -> Diagnostic
       ideaToDiagnostic idea =
@@ -129,6 +127,18 @@ rules = do
           , _tags     = Nothing
         }
         where codePre = if null $ ideaRefactoring idea then "" else "refact:"
+
+      parseErrorToDiagnostic :: ParseError -> Diagnostic
+      parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
+        LSP.Diagnostic {
+            _range    = srcSpanToRange l
+          , _severity = Just LSP.DsInfo
+          , _code     = Just (LSP.StringValue "parser")
+          , _source   = Just "hlint"
+          , _message  = T.unlines [T.pack msg,T.pack contents]
+          , _relatedInformation = Nothing
+          , _tags     = Nothing
+        }
 
       -- This one is defined in Development.IDE.GHC.Error but here
       -- the types could come from ghc-lib or ghc
@@ -157,11 +167,16 @@ getIdeas nfp = do
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
 #ifdef GHC_LIB
         moduleEx flags = do
-          flags' <- setExtensions flags
-          (_, contents) <- getFileContents nfp
-          let fp = fromNormalizedFilePath nfp
-          let contents' = T.unpack <$> contents
-          Just <$> (liftIO $ parseModuleEx flags' fp contents')
+          mbpm <- getParsedModule nfp
+          -- If ghc was not able to parse the module, we disable hlint diagnostics
+          if isNothing mbpm
+              then return Nothing
+              else do
+                     flags' <- setExtensions flags
+                     (_, contents) <- getFileContents nfp
+                     let fp = fromNormalizedFilePath nfp
+                     let contents' = T.unpack <$> contents
+                     Just <$> (liftIO $ parseModuleEx flags' fp contents')
 
         setExtensions flags = do
           hsc <- hscEnv <$> use_ GhcSession nfp
