@@ -282,31 +282,31 @@ typedHoleTests = testGroup "typed hole code actions" [
             _ <- waitForDiagnosticsSource "bios"
             cas <- map (\(CACodeAction x)-> x) <$> getAllCodeActions doc
 
-            suggestion <-
-                case ghcVersion of
-                GHC88 -> do
-                    liftIO $ map (^. L.title) cas `matchList`
-                        [ "Substitute hole (Int) with x ([Int])"
-                        , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
-                        , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
-                        , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
-                        ] @? "Contains substitutions"
-                    return "x"
-                GHC86 -> do
-                    liftIO $ map (^. L.title) cas `matchList`
-                        [ "Substitute hole (Int) with x ([Int])"
-                        , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
-                        , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
-                        , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
-                        ] @? "Contains substitutions"
-                    return "x"
-                GHC84 -> do
-                    liftIO $ map (^. L.title) cas `matchList`
-                        [ "Substitute hole (Int) with maxBound (forall a. Bounded a => a)"
-                        , "Substitute hole (Int) with minBound (forall a. Bounded a => a)"
-                        , "Substitute hole (Int) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
-                        ] @? "Contains substitutions"
-                    return "maxBound"
+            let substitutions GHC810 = substitutions GHC88
+                substitutions GHC88 =
+                    [ "Substitute hole (Int) with x ([Int])"
+                    , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
+                    , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
+                    , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
+                    ]
+                substitutions GHC86 =
+                    [ "Substitute hole (Int) with x ([Int])"
+                    , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
+                    , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
+                    , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
+                    ]
+                substitutions GHC84 =
+                    [ "Substitute hole (Int) with maxBound (forall a. Bounded a => a)"
+                    , "Substitute hole (Int) with minBound (forall a. Bounded a => a)"
+                    , "Substitute hole (Int) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
+                    ]
+
+            liftIO $ map (^. L.title) cas `matchList`
+                        substitutions ghcVersion @? "Contains substitutions"
+
+            let suggestion = case ghcVersion of
+                                GHC84 -> "maxBound"
+                                _     -> "x"
 
             executeCodeAction $ head cas
 
@@ -324,30 +324,30 @@ typedHoleTests = testGroup "typed hole code actions" [
                 _ <- waitForDiagnosticsSource "bios"
                 cas <- map fromAction <$> getAllCodeActions doc
 
-                suggestion <-
-                    case ghcVersion of
-                    GHC88 -> do
-                        liftIO $ map (^. L.title) cas `matchList`
-                            [ "Substitute hole (A) with stuff (A -> A)"
-                            , "Substitute hole (A) with x ([A])"
-                            , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ] @? "Contains substitutions"
-                        return "stuff"
-                    GHC86 -> do
-                        liftIO $ map (^. L.title) cas `matchList`
-                            [ "Substitute hole (A) with stuff (A -> A)"
-                            , "Substitute hole (A) with x ([A])"
-                            , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ] @? "Contains substituions"
-                        return "stuff"
-                    GHC84 -> do
-                        liftIO $ map (^. L.title) cas `matchList`
-                            [ "Substitute hole (A) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
-                            , "Substitute hole (A) with stuff (A -> A)"
-                            , "Substitute hole (A) with x ([A])"
-                            , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ] @? "Contains substitutions"
-                        return "undefined"
+                let substitutions GHC810 = substitutions GHC88
+                    substitutions GHC88 =
+                        [ "Substitute hole (A) with stuff (A -> A)"
+                        , "Substitute hole (A) with x ([A])"
+                        , "Substitute hole (A) with foo2 ([A] -> A)"
+                        ]
+                    substitutions GHC86 =
+                        [ "Substitute hole (A) with stuff (A -> A)"
+                        , "Substitute hole (A) with x ([A])"
+                        , "Substitute hole (A) with foo2 ([A] -> A)"
+                        ]
+                    substitutions GHC84 =
+                        [ "Substitute hole (A) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
+                        , "Substitute hole (A) with stuff (A -> A)"
+                        , "Substitute hole (A) with x ([A])"
+                        , "Substitute hole (A) with foo2 ([A] -> A)"
+                        ]
+
+                liftIO $ map (^. L.title) cas `matchList`
+                            substitutions ghcVersion @? "Contains substitutions"
+
+                let suggestion = case ghcVersion of
+                                    GHC84 -> "undefined"
+                                    _     -> "stuff"
 
                 executeCodeAction $ head cas
 
