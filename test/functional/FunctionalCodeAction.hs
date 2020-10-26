@@ -52,16 +52,18 @@ hlintTests = testGroup "hlint suggestions" [
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
             reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
             reduceDiag ^. L.severity @?= Just DsInfo
-            reduceDiag ^. L.code @?= Just (StringValue "Eta reduce")
+            reduceDiag ^. L.code @?= Just (StringValue "refact:Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
         cas <- map fromAction <$> getAllCodeActions doc
 
         let applyAll = find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title)) cas
         let redId = find (\ca -> "Redundant id" `T.isSuffixOf` (ca ^. L.title)) cas
+        let redEta = find (\ca -> "Eta reduce" `T.isSuffixOf` (ca ^. L.title)) cas
 
         liftIO $ isJust applyAll @? "There is 'Apply all hints' code action"
         liftIO $ isJust redId @? "There is 'Redundant id' code action"
+        liftIO $ isJust redEta @? "There is 'Eta reduce' code action"
 
         executeCodeAction (fromJust redId)
 
