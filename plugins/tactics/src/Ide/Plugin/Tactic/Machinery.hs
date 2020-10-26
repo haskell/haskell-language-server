@@ -46,6 +46,10 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
+import TcEnv (tcLookupGlobal)
+import Ide.Plugin.Tactic.GHC (generateDictionary)
+import TcEvidence (TcEvBinds(EvBinds))
+import Bag (isEmptyBag)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -72,14 +76,14 @@ runTactic
     :: Context
     -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either [TacticError] RunTacticResults
-runTactic ctx jdg t =
+    -> IO (Either [TacticError] RunTacticResults)
+runTactic ctx jdg t = do
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
         tacticState = defaultTacticState { ts_skolems = skolems }
-    in case partitionEithers
-          . flip runReader ctx
+    res <- flip runReaderT ctx
           . unExtractM
-          $ runTacticT t jdg tacticState of
+          $ runTacticT t jdg tacticState
+    pure $ case partitionEithers res of
       (errs, []) -> Left $ take 50 $ errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
@@ -214,26 +218,19 @@ methodHypothesis ty = do
 
 
 ------------------------------------------------------------------------------
--- | Lookup the given class.
-lookupClass :: MonadReader Context m => Name -> m (Maybe Class)
-lookupClass nm = do
-  tenv <- asks ctxTypeEnv
-  pure $ case lookupTypeEnv tenv nm of
-    Just (ATyCon tc) -> tyConClass_maybe tc
-    Just x -> traceX "found some class" (unsafeRender x) Nothing
-    Nothing          -> trace "NOTHING" Nothing
-
-
-------------------------------------------------------------------------------
 -- | Check if the types have a MPTC instance for the given clas name.;
-hasInstance :: MonadReader Context m => Name -> [Type] -> m Bool
+hasInstance :: MonadTc m => Name -> [Type] -> m Bool
 hasInstance nm tys = do
-  insts <- asks ctxInstEnv
-  lookupClass nm >>= \case
-    Just cls ->
-      case lookupInstEnv False (InstEnvs insts emptyInstEnv emptyModuleSet) cls tys of
-        (matches, _, _) -> pure $ not $ null matches
-    Nothing  -> error $ "hasInstance: CANT FIND CLASS " <> show (occName nm)
+  traceMX "looking for an instance" $ unsafeRender (nm, tys)
+  liftTc (generateDictionary nm tys) >>= \case
+    Just (_, ev) -> do
+      case ev of
+        EvBinds bag -> do
+          pure $ not $ isEmptyBag bag
+        _ -> pure False
+    Nothing -> do
+      traceMX "no instance" $ unsafeRender nm
+      pure False
 
 
 --------------------------------------------------------------------------------
@@ -258,7 +255,6 @@ disallowWhenDeriving
     -> TacticsM a
 disallowWhenDeriving what m = do
   defs <- asks $ S.fromList . fmap fst . ctxDefiningFuncs
-  case S.null $ defs S.\\ S.map mkVarOcc what of
+  case S.null $ S.intersection defs $ S.map mkVarOcc what of
     True  -> m
     False -> throwError NoProgress
-

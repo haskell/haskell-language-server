@@ -287,11 +287,10 @@ localTactic t f = do
 -- Idiom will fail fast if the current goal doesn't have an applicative
 -- instance.
 idiom :: TacticsM () -> TacticsM ()
-idiom m = disallowWhenDeriving (S.fromList ["fmap", "<*>", "liftA2"]) $ do
+idiom m = do -- disallowWhenDeriving (S.fromList ["fmap", "<*>", "liftA2"]) $ do
   jdg <- goal
   case splitAppTy_maybe $ unCType $ jGoal jdg of
     Just (applic, ty) -> do
-      -- TODO(sandy): make sure this check works
       -- unlessM (hasInstance applicativeClassName [applic]) $
       --   throwError $ GoalMismatch "idiom" $ CType applic
       rule $ \jdg -> do
@@ -301,8 +300,6 @@ idiom m = disallowWhenDeriving (S.fromList ["fmap", "<*>", "liftA2"]) $ do
           _       -> throwError $ GoalMismatch "idiom" $ jGoal jdg
       rule $ newSubgoal . withModifiedGoal (CType . mkAppTy applic . unCType)
     Nothing -> throwError $ GoalMismatch "idiom" $ jGoal jdg
-
-
 
 
 subgoalWith :: Judgement -> TacticsM () -> RuleM (Trace, LHsExpr GhcPs)

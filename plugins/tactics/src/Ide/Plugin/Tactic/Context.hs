@@ -16,19 +16,24 @@ import Data.Maybe (mapMaybe)
 import Data.List
 import TcType (substTy, tcSplitSigmaTy)
 import Unify (tcUnifyTy)
+import TcRnMonad (initTcWithGbl)
+import SrcLoc
+import FastString (fsLit)
 
 
-mkContext :: [(OccName, CType)] -> TcGblEnv -> Context
-mkContext locals tcg = Context
+mkContext :: [(OccName, CType)] -> HscEnv -> TcGblEnv -> Context
+mkContext locals env tcg = Context
   { ctxDefiningFuncs = locals
   , ctxModuleFuncs = fmap splitId
                    . (getFunBindId =<<)
                    . fmap unLoc
                    . bagToList
                    $ tcg_binds tcg
-  , ctxTypeEnv = tcg_type_env tcg
-  , ctxInstEnv = tcg_inst_env tcg
+  , ctxRunTcM = \tcr -> do
+      let loc = mkRealSrcLoc (fsLit "generated") 0 0
+      fmap snd $ initTcWithGbl env tcg (mkRealSrcSpan loc loc) tcr
   }
+
 
 
 ------------------------------------------------------------------------------

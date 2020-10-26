@@ -31,6 +31,7 @@ import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
+import           Development.IDE (HscEnvEq(hscEnv))
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
@@ -258,11 +259,13 @@ judgementForHole state nfp range = do
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+  (hsc, _) <- MaybeT $ runIde state $ useWithStale GhcSession nfp
   let tcg = fst $ tm_internals_ $ tmrModule tcmod
       tcs = tm_typechecked_source $ tmrModule tcmod
       ctx = mkContext
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ getDefiningBindings binds rss)
+              (hscEnv hsc)
               tcg
       hyps = hypothesisFromBindings rss binds
       ambient = M.fromList $ contextMethodHypothesis ctx
@@ -289,11 +292,12 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        x <- lift $ timeout 2e6 $
-          case runTactic ctx jdg
-                $ tac
-                $ mkVarOcc
-                $ T.unpack var_name of
+        x <- lift $ timeout 2e6 $ do
+          res <- runTactic ctx jdg
+               $ tac
+               $ mkVarOcc
+               $ T.unpack var_name
+          case res of
             Left err ->
               pure $ (, Nothing)
                 $ Left

@@ -5,6 +5,7 @@
 
 module Ide.Plugin.Tactic.GHC where
 
+import Control.Arrow
 import           Control.Monad.State
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
@@ -16,9 +17,15 @@ import           OccName
 import           TcType
 import           TyCoRep
 import           Type
-import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import           TysWiredIn (unitTy, intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unique
 import           Var
+import TcRnMonad
+import TcEvidence (TcEvBinds (..), evBindMapBinds, TcEvBinds(TcEvBinds))
+import TcEnv (tcLookupTyCon)
+import Id (mkVanillaGlobal)
+import TcSMonad (runTcS)
+import TcSimplify (solveWanteds)
 
 
 tcTyVar_maybe :: Type -> Maybe Var
@@ -147,4 +154,34 @@ getPatName (fromPatCompat -> p0) =
     XPat   p      -> getPatName $ unLoc p
 #endif
     _             -> Nothing
+
+
+-- Generates the evidence for `Show ()`.
+generateDictionary :: Name -> [Type] -> TcM (Var, TcEvBinds)
+generateDictionary cls tys = do
+  traceMX "generating a dict for" $ unsafeRender (cls, tys)
+  showTyCon <- tcLookupTyCon cls
+  dictName <- newName $ mkDictOcc $ mkVarOcc "magic"
+  let dict_ty  = mkTyConApp showTyCon tys
+      dict_var = mkVanillaGlobal dictName dict_ty
+  traceMX "looking for a dict: " $ CType dict_ty
+  ev <- getDictionaryBindings dict_var
+  return (dict_var, ev)
+
+
+-- Pass in a variable `x` which has type `Show ()` (for example) to generate
+-- evidence for `Show ()` which will be bound to `x`.
+getDictionaryBindings :: Var -> TcM TcEvBinds
+getDictionaryBindings dict_var = do
+    loc <- getCtLocM (GivenOrigin UnkSkol) Nothing
+    let nonC = mkNonCanonical CtWanted
+            { ctev_pred = varType dict_var
+            , ctev_nosh = WDeriv
+            , ctev_dest = EvVarDest dict_var
+            , ctev_loc = loc
+            }
+        wCs = mkSimpleWC [cc_ev nonC]
+    traceMX "looking for a wanted: " $ unsafeRender wCs
+    (_, evBinds) <- second evBindMapBinds <$> runTcS (solveWanteds wCs)
+    return (EvBinds evBinds)
 

@@ -1,12 +1,13 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE DerivingStrategies         #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# LANGUAGE TypeSynonymInstances       #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
 
@@ -42,6 +43,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Type
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (Unique)
+import TcRnMonad (TcM)
 
 
 ------------------------------------------------------------------------------
@@ -156,7 +158,7 @@ data Judgement' a = Judgement
 type Judgement = Judgement' CType
 
 
-newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
+newtype ExtractM a = ExtractM { unExtractM :: ReaderT Context IO a }
     deriving (Functor, Applicative, Monad, MonadReader Context)
 
 ------------------------------------------------------------------------------
@@ -235,15 +237,31 @@ data Context = Context
     -- ^ The functions currently being defined
   , ctxModuleFuncs :: [(OccName, CType)]
     -- ^ Everything defined in the current module
-  , ctxTypeEnv :: TypeEnv
-  , ctxInstEnv :: InstEnv
+  , ctxRunTcM  :: forall x. TcM x -> IO (Maybe x)
   }
+
+
+------------------------------------------------------------------------------
+-- | Allows us to run TcM without directly exposing MonadIO.
+class Monad m => MonadTc m where
+  liftTc :: TcM a -> m (Maybe a)
+
+instance MonadTc ExtractM where
+  liftTc tcm = do
+    runtc <- asks ctxRunTcM
+    ExtractM $ liftIO $ runtc tcm
+
+instance MonadTc RuleM where
+  liftTc = lift . liftTc
+
+instance MonadTc TacticsM where
+  liftTc = lift . liftTc
 
 
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty emptyTypeEnv emptyInstEnv
+emptyContext  = Context mempty mempty (error "can't runTcM")
 
 
 newtype Rose a = Rose (Tree a)
