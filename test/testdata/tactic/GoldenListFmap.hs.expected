@@ -1,2 +1,5 @@
-fmapList :: (a -> b) -> [a] -> [b]
-fmapList = (\ fab l_a -> fab <$> l_a)
+fmap :: (a -> b) -> [a] -> [b]
+fmap = (\ fab l_a
+   -> case l_a of
+        [] -> []
+        (a : l_a3) -> fab a : fmap fab l_a3)

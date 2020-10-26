@@ -31,6 +31,7 @@ import           Data.Functor ((<&>))
 import           Data.Generics (mkQ, everything, gcount)
 import           Data.List (sortBy)
 import           Data.Ord (comparing, Down(..))
+import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           HscTypes (lookupTypeEnv)
@@ -38,7 +39,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Types
 import           InstEnv (emptyInstEnv, lookupInstEnv, InstEnvs(InstEnvs))
 import           Module (emptyModuleSet)
-import           OccName (HasOccName(occName))
+import           OccName (mkVarOcc, HasOccName(occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -246,4 +247,18 @@ requireConcreteHole m = do
   case S.size $ vars S.\\ skolems of
     0 -> m
     _ -> throwError TooPolymorphic
+
+
+------------------------------------------------------------------------------
+-- | Prevent the tactic from running when deriving a function with a name in
+-- the given set. Useful for preventing bottoms.
+disallowWhenDeriving
+    :: Set String
+    -> TacticsM a
+    -> TacticsM a
+disallowWhenDeriving what m = do
+  defs <- asks $ S.fromList . fmap fst . ctxDefiningFuncs
+  case S.null $ defs S.\\ S.map mkVarOcc what of
+    True  -> m
+    False -> throwError NoProgress
 

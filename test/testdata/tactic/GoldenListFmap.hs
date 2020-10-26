@@ -1,2 +1,2 @@
-fmapList :: (a -> b) -> [a] -> [b]
-fmapList = _
+fmap :: (a -> b) -> [a] -> [b]
+fmap = _

@@ -287,7 +287,7 @@ localTactic t f = do
 -- Idiom will fail fast if the current goal doesn't have an applicative
 -- instance.
 idiom :: TacticsM () -> TacticsM ()
-idiom m = do
+idiom m = disallowWhenDeriving (S.fromList ["fmap", "<*>", "liftA2"]) $ do
   jdg <- goal
   case splitAppTy_maybe $ unCType $ jGoal jdg of
     Just (applic, ty) -> do

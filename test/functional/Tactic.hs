@@ -93,7 +93,7 @@ tests = testGroup
   , goldenTest "GoldenEitherHomomorphic.hs" 2 15 Auto ""
   , goldenTest "GoldenNote.hs"              2 8  Auto ""
   , goldenTest "GoldenPureList.hs"          2 12 Auto ""
-  , goldenTest "GoldenListFmap.hs"          2 12 Auto ""
+  , goldenTest "GoldenListFmap.hs"          2 8  Auto ""
   , goldenTest "GoldenFromMaybe.hs"         2 13 Auto ""
   , goldenTest "GoldenFoldr.hs"             2 10 Auto ""
   , goldenTest "GoldenSwap.hs"              2 8  Auto ""
