@@ -82,7 +82,7 @@ hlintTests = testGroup "hlint suggestions" [
         contents <- skipManyTill publishDiagnosticsNotification $ getDocumentEdit doc
         liftIO $ contents `elem` ["main = undefined\nfoo = id\n", "main = undefined\nfoo x = x\n"] @? "Command is applied"
 
-    , testCase "changing configuration enables or disables hints" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+    , testCase "changing configuration enables or disables hlint diagnostics" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
         let config = def { hlintOn = True }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
@@ -98,6 +98,31 @@ hlintTests = testGroup "hlint suggestions" [
 
         liftIO $ Just "hlint" `notElem` map (^. L.source) diags' @? "There are no hlint diagnostics"
 
+    , testCase "changing document contents updates hlint diagnostics" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        diags <- waitForDiagnosticsSource "hlint"
+
+        liftIO $ length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
+
+        let change = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "x"
+
+        changeDoc doc [change]
+
+        diags' <- waitForDiagnostics
+
+        liftIO $ (not $ Just "hlint" `elem` map (^. L.source) diags') @? "There are no hlint diagnostics"
+
+        let change' = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "id x"
+
+        changeDoc doc [change']
+
+        diags'' <- waitForDiagnosticsSource "hlint"
+
+        liftIO $ length diags'' @?= 2
     ]
 
 renameTests :: TestTree
