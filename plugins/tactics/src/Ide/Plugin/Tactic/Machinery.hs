@@ -27,9 +27,10 @@ import           Control.Monad.State.Class (gets, modify)
 import           Control.Monad.State.Strict (StateT (..))
 import           Data.Coerce
 import           Data.Either
+import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics (mkQ, everything, gcount)
-import           Data.List (sortBy)
+import           Data.List (nub, sortBy)
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
@@ -71,7 +72,12 @@ runTactic
     -> Either [TacticError] RunTacticResults
 runTactic ctx jdg t =
     let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
-        tacticState = defaultTacticState { ts_skolems = skolems }
+        unused_topvals = nub $ join $ join $ toList $ _jPositionMaps jdg
+        tacticState =
+          defaultTacticState
+            { ts_skolems = skolems
+            , ts_unused_top_vals = S.fromList unused_topvals
+            }
     in case partitionEithers
           . flip runReader ctx
           . unExtractM
@@ -126,21 +132,31 @@ setRecursionFrameData b = do
     []       -> []
 
 
+------------------------------------------------------------------------------
+-- | Given the results of running a tactic, score the solutions by
+-- desirability.
+--
+-- TODO(sandy): This function is completely unprincipled and was just hacked
+-- together to produce the right test results.
 scoreSolution
     :: LHsExpr GhcPs
     -> TacticState
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
        , Reward Bool   -- all bindings used
+       , Penalize Int  -- unused top-level bindings
        , Penalize Int  -- number of introduced bindings
        , Reward Int    -- number used bindings
+       , Penalize Int  -- number of recursive calls
        , Penalize Int  -- size of extract
        )
 scoreSolution ext TacticState{..} holes
   = ( Penalize $ length holes
     , Reward   $ S.null $ ts_intro_vals S.\\ ts_used_vals
+    , Penalize $ S.size ts_unused_top_vals
     , Penalize $ S.size ts_intro_vals
     , Reward   $ S.size ts_used_vals
+    , Penalize $ ts_recursion_penality
     , Penalize $ solutionSize ext
     )
 

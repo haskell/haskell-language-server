@@ -1,0 +1,5 @@
+safeHead :: [x] -> Maybe x
+safeHead = (\ l_x
+   -> case l_x of
+        [] -> Nothing
+        (x : l_x2) -> Just x)
