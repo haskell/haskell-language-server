@@ -27,9 +27,10 @@ import           Control.Monad.State.Class (gets, modify)
 import           Control.Monad.State.Strict (StateT (..))
 import           Data.Coerce
 import           Data.Either
+import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics (mkQ, everything, gcount)
-import           Data.List (sortBy)
+import           Data.List (nub, sortBy)
 import           Data.Ord (comparing, Down(..))
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
@@ -70,7 +71,10 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] RunTacticResults
 runTactic ctx jdg t =
-    let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
+    let skolems = nub
+                $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
+                $ jGoal jdg
+                : (toList $ jHypothesis jdg)
         tacticState = defaultTacticState { ts_skolems = skolems }
     in case partitionEithers
           . flip runReader ctx
