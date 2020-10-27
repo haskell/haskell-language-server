@@ -35,7 +35,7 @@ useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
 useOccName jdg name =
   -- Only score points if this is in the local hypothesis
   case M.lookup name $ jLocalHypothesis jdg of
-    Just{}  -> traceX "using occname " name $ modify
+    Just{}  -> modify
              $ (withUsedVals $ S.insert name)
              . (field @"ts_unused_top_vals" %~ S.delete name)
     Nothing -> pure ()
