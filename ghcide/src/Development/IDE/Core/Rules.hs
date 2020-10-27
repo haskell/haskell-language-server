@@ -69,7 +69,6 @@ import           Language.Haskell.LSP.Types (DocumentHighlight (..))
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes hiding (TargetModule, TargetFile)
-import PackageConfig
 import DynFlags (gopt_set, xopt)
 import GHC.Generics(Generic)
 
@@ -266,24 +265,20 @@ priorityFilesOfInterest = Priority (-2)
 -- and https://github.com/mpickering/ghcide/pull/22#issuecomment-625070490
 getParsedModuleRule :: Rules ()
 getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
-    _ <- use_ GetModSummaryWithoutTimestamps file -- Fail if we can't even parse the ModSummary
+    (ms, _) <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
-        -- These packages are used when removing PackageImports from a
-        -- parsed module
-        comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
     opt <- getIdeOptions
-    (modTime, contents) <- getFileContents file
 
-    let dflags    = hsc_dflags hsc
-        mainParse = getParsedModuleDefinition hsc opt comp_pkgs file modTime contents
+    let dflags    = ms_hspp_opts ms
+        mainParse = getParsedModuleDefinition hsc opt file ms
 
     -- Parse again (if necessary) to capture Haddock parse errors
-    if gopt Opt_Haddock dflags
+    res@(_, (_,pmod)) <- if gopt Opt_Haddock dflags
         then
             liftIO mainParse
         else do
-            let haddockParse = getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs file modTime contents
+            let haddockParse = getParsedModuleDefinition hsc opt file (withOptHaddock ms)
 
             -- parse twice, with and without Haddocks, concurrently
             -- we cannot ignore Haddock parse errors because files of
@@ -305,10 +300,12 @@ getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
               -- This seems to be the correct behaviour because the Haddock flag is added
               -- by us and not the user, so our IDE shouldn't stop working because of it.
               _ -> pure (fp, (diagsM, res))
+    -- Add dependencies on included files
+    _ <- uses GetModificationTime $ map toNormalizedFilePath' (maybe [] pm_extra_src_files pmod)
+    pure res
 
-
-withOptHaddock :: HscEnv -> HscEnv
-withOptHaddock hsc = hsc{hsc_dflags = gopt_set (hsc_dflags hsc) Opt_Haddock}
+withOptHaddock :: ModSummary -> ModSummary
+withOptHaddock ms = ms{ms_hspp_opts= gopt_set (ms_hspp_opts ms) Opt_Haddock}
 
 
 -- | Given some normal parse errors (first) and some from Haddock (second), merge them.
@@ -323,17 +320,14 @@ mergeParseErrorsHaddock normal haddock = normal ++
     fixMessage x | "parse error " `T.isPrefixOf` x = "Haddock " <> x
                  | otherwise = "Haddock: " <> x
 
-getParsedModuleDefinition :: HscEnv -> IdeOptions -> [PackageName] -> NormalizedFilePath -> UTCTime -> Maybe T.Text -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
-getParsedModuleDefinition packageState opt comp_pkgs file modTime contents = do
+getParsedModuleDefinition :: HscEnv -> IdeOptions -> NormalizedFilePath -> ModSummary -> IO (Maybe ByteString, ([FileDiagnostic], Maybe ParsedModule))
+getParsedModuleDefinition packageState opt file ms = do
     let fp = fromNormalizedFilePath file
-        buffer = textToStringBuffer <$> contents
-    (diag, res) <- parseModule opt packageState comp_pkgs fp modTime buffer
+    (diag, res) <- parseModule opt packageState fp ms
     case res of
         Nothing -> pure (Nothing, (diag, Nothing))
-        Just (contents, modu) -> do
-            mbFingerprint <- if isNothing $ optShakeFiles opt
-                then pure Nothing
-                else Just . fingerprintToBS <$> fingerprintFromStringBuffer contents
+        Just modu -> do
+            mbFingerprint <- traverse (fmap fingerprintToBS . fingerprintFromStringBuffer) (ms_hspp_buf ms)
             pure (mbFingerprint, (diag, Just modu))
 
 getLocatedImportsRule :: Rules ()
@@ -710,7 +704,7 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
       Just session -> do
         sourceModified <- use_ IsHiFileStable f
         linkableType <- getLinkableType f
-        r <- loadInterface (hscEnv session) ms sourceModified linkableType (regenerateHiFile session f)
+        r <- loadInterface (hscEnv session) ms sourceModified linkableType (regenerateHiFile session f ms)
         case r of
             (diags, Just x) -> do
                 let fp = Just (hiFileFingerPrint x)
@@ -837,22 +831,18 @@ getModIfaceWithoutLinkableRule = defineEarlyCutoff $ \GetModIfaceWithoutLinkable
       msg = "tried to look at linkable for GetModIfaceWithoutLinkable for " ++ show f
   pure (fingerprintToBS . getModuleHash . hirModIface <$> mhfr', ([],mhfr'))
 
-regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
-regenerateHiFile sess f compNeeded = do
+regenerateHiFile :: HscEnvEq -> NormalizedFilePath -> ModSummary -> Maybe LinkableType -> Action ([FileDiagnostic], Maybe HiFileResult)
+regenerateHiFile sess f ms compNeeded = do
     let hsc = hscEnv sess
-        -- After parsing the module remove all package imports referring to
-        -- these packages as we have already dealt with what they map to.
-        comp_pkgs = mapMaybe (fmap fst . mkImportDirs (hsc_dflags hsc)) (deps sess)
     opt <- getIdeOptions
-    (modTime, contents) <- getFileContents f
 
     -- Embed haddocks in the interface file
-    (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition (withOptHaddock hsc) opt comp_pkgs f modTime contents
+    (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
     (diags, mb_pm) <- case mb_pm of
         Just _ -> return (diags, mb_pm)
         Nothing -> do
             -- if parsing fails, try parsing again with Haddock turned off
-            (_, (diagsNoHaddock, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt comp_pkgs f modTime contents
+            (_, (diagsNoHaddock, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt f ms
             return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
     case mb_pm of
         Nothing -> return (diags, Nothing)
@@ -879,8 +869,9 @@ regenerateHiFile sess f compNeeded = do
 
                 -- Write hie file
                 (gDiags, masts) <- liftIO $ generateHieAsts hsc tmr
+                source <- getSourceFileSource f
                 wDiags <- forM masts $ \asts ->
-                  liftIO $ writeHieFile hsc (tmrModSummary tmr) (tcg_exports $ tmrTypechecked tmr) asts $ maybe "" T.encodeUtf8 contents
+                  liftIO $ writeHieFile hsc (tmrModSummary tmr) (tcg_exports $ tmrTypechecked tmr) asts source
 
                 return (diags <> diags' <> diags'' <> hiDiags <> gDiags <> concat wDiags, res)
 
