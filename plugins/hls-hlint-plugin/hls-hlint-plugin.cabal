@@ -41,7 +41,7 @@ library
     , ghcide
     , hashable
     , haskell-lsp
-    , hlint                    >=3.0
+    , hlint                    >=3.2
     , hls-plugin-api
     , hslogger
     , lens

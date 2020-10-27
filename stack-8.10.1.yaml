@@ -21,6 +21,7 @@ extra-deps:
 - ghc-lib-8.10.2.20200916
 - ghc-lib-parser-8.10.2.20200916
 - hie-bios-0.7.1
+- hlint-3.2
 - HsYAML-aeson-0.2.0.0@rev:2
 - implicit-hie-cradle-0.2.0.1
 - implicit-hie-0.1.2.0
