@@ -13,7 +13,6 @@ module Development.IDE.Core.Compile
   , RunSimplifier(..)
   , compileModule
   , parseModule
-  , parseHeader
   , typecheckModule
   , computePackageDeps
   , addRelativeImport
@@ -41,7 +40,6 @@ import Development.IDE.GHC.Warnings
 import Development.IDE.Types.Diagnostics
 import Development.IDE.GHC.Orphans()
 import Development.IDE.GHC.Util
-import qualified GHC.LanguageExtensions.Type as GHC
 import Development.IDE.Types.Options
 import Development.IDE.Types.Location
 
@@ -67,7 +65,6 @@ import qualified Development.IDE.GHC.Compat     as GHC
 import qualified Development.IDE.GHC.Compat     as Compat
 import           GhcMonad
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
-import qualified HeaderInfo                     as Hdr
 import           HscMain                        (makeSimpleDetails, hscDesugar, hscTypecheckRename, hscSimplify, hscGenHardCode, hscInteractive)
 import           MkIface
 import           StringBuffer                   as SB
@@ -102,17 +99,14 @@ import Maybes (orElse)
 parseModule
     :: IdeOptions
     -> HscEnv
-    -> [PackageName]
     -> FilePath
-    -> UTCTime
-    -> Maybe SB.StringBuffer
-    -> IO (IdeResult (StringBuffer, ParsedModule))
-parseModule IdeOptions{..} env comp_pkgs filename modTime mbContents =
+    -> ModSummary
+    -> IO (IdeResult ParsedModule)
+parseModule IdeOptions{..} env filename ms =
     fmap (either (, Nothing) id) $
     runExceptT $ do
-        (contents, dflags) <- preprocessor env filename mbContents
-        (diag, modu) <- parseFileContents env optPreprocessor dflags comp_pkgs filename modTime contents
-        return (diag, Just (contents, modu))
+        (diag, modu) <- parseFileContents env optPreprocessor filename ms
+        return (diag, Just modu)
 
 
 -- | Given a package identifier, what packages does it depend on
@@ -483,69 +477,9 @@ loadModulesHome mod_infos e =
     where
       mod_name = moduleName . mi_module . hm_iface
 
--- | GhcMonad function to chase imports of a module given as a StringBuffer. Returns given module's
--- name and its imports.
-getImportsParsed ::  DynFlags ->
-               GHC.ParsedSource ->
-               Either [FileDiagnostic] (GHC.ModuleName, [(Bool, (Maybe FastString, Located GHC.ModuleName))])
-getImportsParsed dflags (L loc parsed) = do
-  let modName = maybe (GHC.mkModuleName "Main") GHC.unLoc $ GHC.hsmodName parsed
-
-  -- most of these corner cases are also present in https://hackage.haskell.org/package/ghc-8.6.1/docs/src/HeaderInfo.html#getImports
-  -- but we want to avoid parsing the module twice
-  let implicit_prelude = xopt GHC.ImplicitPrelude dflags
-      implicit_imports = Hdr.mkPrelImports modName loc implicit_prelude $ GHC.hsmodImports parsed
-
-  -- filter out imports that come from packages
-  return (modName, [(ideclSource i, (fmap sl_fs $ ideclPkgQual i, ideclName i))
-    | i <- map GHC.unLoc $ implicit_imports ++ GHC.hsmodImports parsed
-    , GHC.moduleNameString (GHC.unLoc $ ideclName i) /= "GHC.Prim"
-    ])
-
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
 withBootSuffix HsBootFile = addBootSuffixLocnOut
 withBootSuffix _ = id
-
--- | Produce a module summary from a StringBuffer.
-getModSummaryFromBuffer
-    :: FilePath
-    -> UTCTime
-    -> DynFlags
-    -> GHC.ParsedSource
-    -> StringBuffer
-    -> ExceptT [FileDiagnostic] IO ModSummary
-getModSummaryFromBuffer fp modTime dflags parsed contents = do
-  (modName, imports) <- liftEither $ getImportsParsed dflags parsed
-
-  modLoc <- liftIO $ mkHomeModLocation dflags modName fp
-  let InstalledUnitId unitId = thisInstalledUnitId dflags
-  return $ ModSummary
-    { ms_mod          = mkModule (fsToUnitId unitId) modName
-    , ms_location     = withBootSuffix sourceType modLoc
-    , ms_hs_date      = modTime
-    , ms_textual_imps = [imp | (False, imp) <- imports]
-    , ms_hspp_file    = fp
-    , ms_hspp_opts    = dflags
-        -- NOTE: It's /vital/ we set the 'StringBuffer' here, to give any
-        -- registered GHC plugins access to the /updated/ in-memory content
-        -- of a module being edited. Without this line, any plugin wishing to
-        -- parse an input module and perform operations on the /current/ state
-        -- of a file wouldn't work properly, as it would \"see\" a stale view of
-        -- the file (i.e., the on-disk content of the latter).
-    , ms_hspp_buf     = Just contents
-
-    -- defaults:
-    , ms_hsc_src      = sourceType
-    , ms_obj_date     = Nothing
-    , ms_iface_date   = Nothing
-#if MIN_GHC_API_VERSION(8,8,0)
-    , ms_hie_date     = Nothing
-#endif
-    , ms_srcimps      = [imp | (True, imp) <- imports]
-    , ms_parsed_mod   = Nothing
-    }
-    where
-      sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
 
 -- | Given a buffer, env and filepath, produce a module summary by parsing only the imports.
 --   Runs preprocessors as needed.
@@ -650,17 +584,17 @@ parseHeader dflags filename contents = do
 
 -- | Given a buffer, flags, and file path, produce a
 -- parsed module (or errors) and any parse warnings. Does not run any preprocessors
+-- ModSummary must contain the (preprocessed) contents of the buffer
 parseFileContents
        :: HscEnv
        -> (GHC.ParsedSource -> IdePreprocessedSource)
-       -> DynFlags -- ^ flags to use
-       -> [PackageName] -- ^ The package imports to ignore
        -> FilePath  -- ^ the filename (for source locations)
-       -> UTCTime   -- ^ the modification timestamp
-       -> SB.StringBuffer -- ^ Haskell module source text (full Unicode is supported)
+       -> ModSummary
        -> ExceptT [FileDiagnostic] IO ([FileDiagnostic], ParsedModule)
-parseFileContents env customPreprocessor dflags comp_pkgs filename modTime contents = do
+parseFileContents env customPreprocessor filename ms = do
    let loc  = mkRealSrcLoc (mkFastString filename) 1 1
+       dflags = ms_hspp_opts ms
+       contents = fromJust $ ms_hspp_buf ms
    case unP Parser.parseModule (mkPState dflags contents loc) of
 #if MIN_GHC_API_VERSION(8,10,0)
      PFailed pst -> throwE $ diagFromErrMsgs "parser" dflags $ getErrorMessages pst dflags
@@ -690,32 +624,48 @@ parseFileContents env customPreprocessor dflags comp_pkgs filename modTime conte
 
                -- Ok, we got here. It's safe to continue.
                let IdePreprocessedSource preproc_warns errs parsed = customPreprocessor rdr_module
-               unless (null errs) $ throwE $ diagFromStrings "parser" DsError errs
-               let parsed' = removePackageImports comp_pkgs parsed
+
+               unless (null errs) $
+                  throwE $ diagFromStrings "parser" DsError errs
+
                let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               ms <- getModSummaryFromBuffer filename modTime dflags parsed' contents
-               parsed'' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
+               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
+
+               -- To get the list of extra source files, we take the list
+               -- that the parser gave us,
+               --   - eliminate files beginning with '<'.  gcc likes to use
+               --     pseudo-filenames like "<built-in>" and "<command-line>"
+               --   - normalise them (eliminate differences between ./f and f)
+               --   - filter out the preprocessed source file
+               --   - filter out anything beginning with tmpdir
+               --   - remove duplicates
+               --   - filter out the .hs/.lhs source filename if we have one
+               --
+               let n_hspp  = normalise filename
+                   srcs0 = nubOrd $ filter (not . (tmpDir dflags `isPrefixOf`))
+                                  $ filter (/= n_hspp)
+                                  $ map normalise
+                                  $ filter (not . isPrefixOf "<")
+                                  $ map unpackFS
+                                  $ srcfiles pst
+                   srcs1 = case ml_hs_file (ms_location ms) of
+                             Just f  -> filter (/= normalise f) srcs0
+                             Nothing -> srcs0
+
+               -- sometimes we see source files from earlier
+               -- preprocessing stages that cannot be found, so just
+               -- filter them out:
+               srcs2 <- liftIO $ filterM doesFileExist srcs1
+
                let pm =
                      ParsedModule {
                          pm_mod_summary = ms
-                       , pm_parsed_source = parsed''
-                       , pm_extra_src_files=[] -- src imports not allowed
+                       , pm_parsed_source = parsed'
+                       , pm_extra_src_files = srcs2
                        , pm_annotations = hpm_annotations
                       }
                    warnings = diagFromErrMsgs "parser" dflags warns
                pure (warnings ++ preproc_warnings, pm)
-
--- | After parsing the module remove all package imports referring to
--- these packages as we have already dealt with what they map to.
-removePackageImports :: [PackageName] -> GHC.ParsedSource -> GHC.ParsedSource
-removePackageImports pkgs (L l h@HsModule {hsmodImports} ) = L l (h { hsmodImports = imports' })
-  where
-    imports' = map do_one_import hsmodImports
-    do_one_import (L l i@ImportDecl{ideclPkgQual}) =
-      case PackageName . sl_fs <$> ideclPkgQual of
-        Just pn | pn `elem` pkgs -> L l (i { ideclPkgQual = Nothing })
-        _ -> L l i
-    do_one_import l = l
 
 loadHieFile :: Compat.NameCacheUpdater -> FilePath -> IO GHC.HieFile
 loadHieFile ncu f = do
