@@ -48,15 +48,11 @@ hlintTests = testGroup "hlint suggestions" [
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         diags@(reduceDiag:_) <- waitForDiagnosticsSource "hlint"
 
-        let etaReduceCode = case ghcVersion of
-                                GHC810 -> "refact:Eta reduce"
-                                _      -> "Eta reduce"
-
         liftIO $ do
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
             reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
             reduceDiag ^. L.severity @?= Just DsInfo
-            reduceDiag ^. L.code @?= Just (StringValue etaReduceCode)
+            reduceDiag ^. L.code @?= Just (StringValue "refact:Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
         cas <- map fromAction <$> getAllCodeActions doc
@@ -100,7 +96,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         diags' <- waitForDiagnostics
 
-        liftIO $ (not $ Just "hlint" `elem` map (^. L.source) diags') @? "There are no hlint diagnostics"
+        liftIO $ Just "hlint" `notElem` map (^. L.source) diags' @? "There are no hlint diagnostics"
 
     ]
 
