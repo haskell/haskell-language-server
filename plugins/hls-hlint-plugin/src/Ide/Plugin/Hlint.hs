@@ -89,8 +89,8 @@ type instance RuleResult GetHlintDiagnostics = ()
 -- | This rule is recomputed when:
 -- | - The files of interest have changed via `getFilesOfInterest`
 -- | - One of those files has been edited via
--- |    - `getIdeas` -> `getParsedModule`, if the hls ghc matches the hlint default ghc
--- |    - `getIdeas` -> `getFileContents` otherwise (hlint is using ghc-lib)
+-- |    - `getIdeas` -> `getParsedModule` in any case
+-- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
 -- | - The hlint specific settings have changed, via `getHlintSettingsRule`
 rules :: Rules ()
@@ -119,6 +119,7 @@ rules = do
         LSP.Diagnostic {
             _range    = srcSpanToRange $ ideaSpan idea
           , _severity = Just LSP.DsInfo
+          -- we are encoding the fact that idea has refactorings in diagnostic code
           , _code     = Just (LSP.StringValue $ T.pack $ codePre ++ ideaHint idea)
           , _source   = Just "hlint"
           , _message  = T.pack $ show idea
@@ -265,6 +266,7 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
       Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
      where
        codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing (Just cmd)
+       -- we have to recover the original ideaHint removing the prefix
        ideaHint = T.replace "refact:" "" code
        title = "Apply hint: " <> ideaHint
        -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
