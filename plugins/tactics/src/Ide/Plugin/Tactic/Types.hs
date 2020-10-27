@@ -261,7 +261,11 @@ instance MonadTc TacticsM where
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty (error "can't runTcM")
+emptyContext
+  = Context mempty mempty
+  $ trace "using empty context; TcM operations will always fail"
+  $ const
+  $ pure Nothing
 
 
 newtype Rose a = Rose (Tree a)

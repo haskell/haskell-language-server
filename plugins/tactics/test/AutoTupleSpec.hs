@@ -2,6 +2,7 @@
 
 module AutoTupleSpec where
 
+import           Control.Monad.IO.Class (MonadIO(liftIO))
 import           Data.Either (isRight)
 import qualified Data.Map as M
 import           Ide.Plugin.Tactic.Debug
@@ -37,17 +38,19 @@ spec = describe "auto for tuple" $ do
       out_type <- mkBoxedTupleTy
                 . fmap mkBoxedTupleTy
               <$> randomGroups vars
-      pure $
-          -- We should always be able to find a solution
-          runTactic
-            emptyContext
-            (mkFirstJudgement
-              (M.singleton (mkVarOcc "x") $ CType in_type)
-              mempty
-              True
-              mempty
-              out_type)
-            (auto' $ n * 2) `shouldSatisfy` isRight
+      pure $ do
+        -- We should always be able to find a solution
+        res <- liftIO
+            $ runTactic
+                emptyContext
+                (mkFirstJudgement
+                  (M.singleton (mkVarOcc "x") $ CType in_type)
+                  mempty
+                  True
+                  mempty
+                  out_type)
+                (auto' $ n * 2)
+        res `shouldSatisfy` isRight
 
 
 randomGroups :: [a] -> Gen [[a]]
