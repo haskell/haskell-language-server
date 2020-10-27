@@ -159,12 +159,10 @@ getPatName (fromPatCompat -> p0) =
 -- Generates the evidence for `Show ()`.
 generateDictionary :: Name -> [Type] -> TcM (Var, TcEvBinds)
 generateDictionary cls tys = do
-  traceMX "generating a dict for" $ unsafeRender (cls, tys)
   showTyCon <- tcLookupTyCon cls
   dictName <- newName $ mkDictOcc $ mkVarOcc "magic"
   let dict_ty  = mkTyConApp showTyCon tys
       dict_var = mkVanillaGlobal dictName dict_ty
-  traceMX "looking for a dict: " $ CType dict_ty
   ev <- getDictionaryBindings dict_var
   return (dict_var, ev)
 

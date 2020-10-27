@@ -115,7 +115,7 @@ destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
     False ->
-      let subtactic = rule $ destruct' (const subgoal) name
+      let subtactic = rule $ destruct' (const $ newSubgoal . disallowing [name]) name
        in case isPatVal jdg name of
             True ->
               pruning subtactic $ \jdgs ->
@@ -134,7 +134,7 @@ destruct name = requireConcreteHole $ tracing "destruct(user)" $ do
   jdg <- goal
   case hasDestructed jdg name of
     True -> throwError $ AlreadyDestructed name
-    False -> rule $ \jdg -> destruct' (const subgoal) name jdg
+    False -> rule $ \jdg -> destruct' (const newSubgoal) name jdg
 
 
 ------------------------------------------------------------------------------
@@ -289,10 +289,13 @@ localTactic t f = do
 idiom :: TacticsM () -> TacticsM ()
 idiom m = do -- disallowWhenDeriving (S.fromList ["fmap", "<*>", "liftA2"]) $ do
   jdg <- goal
-  case splitAppTy_maybe $ unCType $ jGoal jdg of
+  let hole = unCType $ jGoal jdg
+  when (isFunction hole) $
+    throwError $ GoalMismatch "idiom" $ jGoal jdg
+  case splitAppTy_maybe hole of
     Just (applic, ty) -> do
-      -- unlessM (hasInstance applicativeClassName [applic]) $
-      --   throwError $ GoalMismatch "idiom" $ CType applic
+      unlessM (hasInstance applicativeClassName [applic]) $
+        throwError $ GoalMismatch "idiom" $ CType applic
       rule $ \jdg -> do
         (tr, expr) <- subgoalWith (withNewGoal (CType ty) jdg) m
         case unLoc expr of
@@ -313,14 +316,18 @@ auto' n = do
   try intros
   choice
     [ overFunctions $ \fname -> do
-        idiom (apply fname) <|> apply fname
-        loop
+        choice
+          [ idiom (apply fname) >> assumption
+          , apply fname >> loop
+          ]
     , overAlgebraicTerms $ \aname -> do
         destructAuto aname
         loop
     , do
-        idiom splitAuto <|> splitAuto
-        loop
+        choice
+          [ idiom splitAuto >> assumption
+          , splitAuto >> loop
+          ]
     , assumption >> loop
     , recursion
     ]

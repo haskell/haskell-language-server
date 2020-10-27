@@ -3,6 +3,8 @@
 
 module Ide.Plugin.Tactic.Context where
 
+import qualified Data.Set as S
+import Data.Set (Set)
 import Bag
 import Control.Arrow
 import Control.Monad.Reader
@@ -40,7 +42,8 @@ mkContext locals env tcg = Context
 -- | Find all of the class methods that exist from the givens in the context.
 contextMethodHypothesis :: Context -> [(OccName, CType)]
 contextMethodHypothesis ctx
-  = join
+  = excludeForbiddenMethods
+  . join
   . concatMap
       ( mapMaybe methodHypothesis
       . tacticsThetaTy
@@ -49,6 +52,44 @@ contextMethodHypothesis ctx
   . mapMaybe (definedThetaType ctx)
   . fmap fst
   $ ctxDefiningFuncs ctx
+
+
+------------------------------------------------------------------------------
+-- | Many operations are defined in typeclasses for performance reasons, rather
+-- than being a true part of the class. This function filters out those, in
+-- order to keep our hypothesis space small.
+excludeForbiddenMethods :: [(OccName, CType)] -> [(OccName, CType)]
+excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods  . fst)
+  where
+    forbiddenMethods :: Set OccName
+    forbiddenMethods = S.map mkVarOcc $ S.fromList
+      [ -- applicative methods
+        "<*"
+      , "<$"
+        -- monad methods
+      , ">>"
+      , "return"
+        -- foldable methods
+      , "foldMap'"
+      , "foldr"
+      , "foldl"
+      , "foldr'"
+      , "foldl'"
+      , "foldr1"
+      , "foldl1"
+      , "maximum"
+      , "minimum"
+      , "sum"
+      , "product"
+      , "elem"
+      , "null"
+      , "mapM"
+        -- traversable methods
+      , "sequence"
+      , "pass"
+      , "censor"
+      , "state"
+      ]
 
 
 ------------------------------------------------------------------------------

@@ -1,2 +1,2 @@
 useThen :: Applicative f => f Int -> f a -> f a
-useThen = (\ x x8 -> (*>) x x8)
+useThen = (\ x x6 -> (*>) x x6)

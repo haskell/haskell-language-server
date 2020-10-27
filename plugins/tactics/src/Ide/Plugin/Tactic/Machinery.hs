@@ -221,7 +221,6 @@ methodHypothesis ty = do
 -- | Check if the types have a MPTC instance for the given clas name.;
 hasInstance :: MonadTc m => Name -> [Type] -> m Bool
 hasInstance nm tys = do
-  traceMX "looking for an instance" $ unsafeRender (nm, tys)
   liftTc (generateDictionary nm tys) >>= \case
     Just (_, ev) -> do
       case ev of
@@ -229,7 +228,6 @@ hasInstance nm tys = do
           pure $ not $ isEmptyBag bag
         _ -> pure False
     Nothing -> do
-      traceMX "no instance" $ unsafeRender nm
       pure False
 
 
