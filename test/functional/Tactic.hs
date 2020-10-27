@@ -9,6 +9,7 @@ module Tactic
 where
 
 import           Control.Applicative.Combinators ( skipManyTill )
+import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Foldable
 import           Data.Maybe
@@ -18,12 +19,12 @@ import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic.TestTypes
 import           Language.Haskell.LSP.Test
 import           Language.Haskell.LSP.Types (ApplyWorkspaceEditRequest, Position(..) , Range(..) , CAResult(..) , CodeAction(..))
+import           System.Directory (doesFileExist)
+import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
+import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import           Test.Tasty.HUnit
-import           System.FilePath
-import System.Directory (doesFileExist)
-import Control.Monad (unless)
 
 
 ------------------------------------------------------------------------------
@@ -106,8 +107,8 @@ tests = testGroup
   , goldenTest "GoldenShowCompose.hs"       2 15 Auto ""
   , goldenTest "GoldenShowMapChar.hs"       2 8  Auto ""
   , goldenTest "GoldenSuperclass.hs"        7 8  Auto ""
-  -- TODO(sandy): ignored, as it's slow and flakey in CI
-  -- , goldenTest "GoldenApplicativeThen.hs"   2 11 Auto ""
+  , ignoreTestBecause "It is unreliable in circleci builds"
+      $ goldenTest "GoldenApplicativeThen.hs"   2 11 Auto ""
   ]
 
 
