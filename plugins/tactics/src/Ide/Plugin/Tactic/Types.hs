@@ -34,16 +34,14 @@ import Data.Tree
 import Development.IDE.GHC.Compat hiding (Node)
 import Development.IDE.Types.Location
 import GHC.Generics
-import HscTypes (emptyTypeEnv, TypeEnv)
 import Ide.Plugin.Tactic.Debug
-import InstEnv (emptyInstEnv, InstEnv)
 import OccName
 import Refinery.Tactic
 import System.IO.Unsafe (unsafePerformIO)
+import TcRnMonad (TcM)
 import Type
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (Unique)
-import TcRnMonad (TcM)
 
 
 ------------------------------------------------------------------------------

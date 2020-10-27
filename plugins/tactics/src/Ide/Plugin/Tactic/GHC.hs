@@ -5,27 +5,31 @@
 
 module Ide.Plugin.Tactic.GHC where
 
-import Control.Arrow
+import           Control.Arrow
 import           Control.Monad.State
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
 import           Data.Traversable
 import           Development.IDE.GHC.Compat
 import           Generics.SYB (mkT, everywhere)
+import           Id (mkVanillaGlobal)
 import           Ide.Plugin.Tactic.Types
 import           OccName
+import           TcEnv (tcLookupTyCon)
+import           TcEvidence (TcEvBinds (..), evBindMapBinds)
+import           TcRnMonad
+import           TcSMonad (runTcS)
+import           TcSimplify (solveWanteds)
 import           TcType
 import           TyCoRep
 import           Type
-import           TysWiredIn (unitTy, intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unique
 import           Var
-import TcRnMonad
-import TcEvidence (TcEvBinds (..), evBindMapBinds, TcEvBinds(TcEvBinds))
-import TcEnv (tcLookupTyCon)
-import Id (mkVanillaGlobal)
-import TcSMonad (runTcS)
-import TcSimplify (solveWanteds)
+
+#if __GLASGOW_HASKELL__ >= 810
+import Constraint
+#endif
 
 
 tcTyVar_maybe :: Type -> Maybe Var
