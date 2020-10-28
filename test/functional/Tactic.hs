@@ -13,6 +13,7 @@ import           Control.Lens hiding ((<.>))
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
+import           Data.Either (isLeft)
 import           Data.Foldable
 import           Data.Maybe
 import           Data.Text (Text)
@@ -152,7 +153,7 @@ goldenTest input line col tc occ =
       actions <- getCodeActions doc $ pointRange line col
       Just (CACodeAction (CodeAction {_command = Just c}))
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
-      executeCommand c
+      resp <- executeCommandWithResp c
       _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
       edited <- documentContents doc
       let expected_name = tacticPath </> input <.> "expected"
@@ -173,11 +174,8 @@ expectFail input line col tc occ =
       Just (CACodeAction (CodeAction {_command = Just c}))
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       resp <- executeCommandWithResp c
-      liftIO $
-        either
-          (const $ pure ())
-          (const $ assertFailure "didn't fail, but expected one")
-            $ _result resp
+      liftIO $ unless (isLeft $ _result resp) $
+        assertFailure "didn't fail, but expected one"
 
 
 tacticPath :: FilePath
