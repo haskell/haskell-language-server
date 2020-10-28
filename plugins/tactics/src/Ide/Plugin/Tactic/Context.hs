@@ -3,19 +3,21 @@
 
 module Ide.Plugin.Tactic.Context where
 
-import Bag
-import Control.Arrow
-import Control.Monad.Reader
-import Development.IDE.GHC.Compat
-import Ide.Plugin.Tactic.Types
-import OccName
-import TcRnTypes
-import Ide.Plugin.Tactic.GHC (tacticsThetaTy)
-import Ide.Plugin.Tactic.Machinery (methodHypothesis)
-import Data.Maybe (mapMaybe)
-import Data.List
-import TcType (substTy, tcSplitSigmaTy)
-import Unify (tcUnifyTy)
+import           Bag
+import           Control.Arrow
+import           Control.Monad.Reader
+import           Data.List
+import           Data.Maybe (mapMaybe)
+import           Data.Set (Set)
+import qualified Data.Set as S
+import           Development.IDE.GHC.Compat
+import           Ide.Plugin.Tactic.GHC (tacticsThetaTy)
+import           Ide.Plugin.Tactic.Machinery (methodHypothesis)
+import           Ide.Plugin.Tactic.Types
+import           OccName
+import           TcRnTypes
+import           TcType (substTy, tcSplitSigmaTy)
+import           Unify (tcUnifyTy)
 
 
 mkContext :: [(OccName, CType)] -> TcGblEnv -> Context
@@ -33,7 +35,8 @@ mkContext locals tcg = Context
 -- | Find all of the class methods that exist from the givens in the context.
 contextMethodHypothesis :: Context -> [(OccName, CType)]
 contextMethodHypothesis ctx
-  = join
+  = excludeForbiddenMethods
+  . join
   . concatMap
       ( mapMaybe methodHypothesis
       . tacticsThetaTy
@@ -42,6 +45,20 @@ contextMethodHypothesis ctx
   . mapMaybe (definedThetaType ctx)
   . fmap fst
   $ ctxDefiningFuncs ctx
+
+
+------------------------------------------------------------------------------
+-- | Many operations are defined in typeclasses for performance reasons, rather
+-- than being a true part of the class. This function filters out those, in
+-- order to keep our hypothesis space small.
+excludeForbiddenMethods :: [(OccName, CType)] -> [(OccName, CType)]
+excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods  . fst)
+  where
+    forbiddenMethods :: Set OccName
+    forbiddenMethods = S.map mkVarOcc $ S.fromList
+      [ -- monadfail
+        "fail"
+      ]
 
 
 ------------------------------------------------------------------------------

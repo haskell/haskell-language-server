@@ -71,7 +71,10 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] RunTacticResults
 runTactic ctx jdg t =
-    let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
+    let skolems = nub
+                $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
+                $ jGoal jdg
+                : (toList $ jHypothesis jdg)
         unused_topvals = nub $ join $ join $ toList $ _jPositionMaps jdg
         tacticState =
           defaultTacticState
