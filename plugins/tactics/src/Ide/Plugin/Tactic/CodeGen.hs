@@ -1,12 +1,16 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE ViewPatterns     #-}
 
 module Ide.Plugin.Tactic.CodeGen where
 
+import           Control.Lens ((+~), (%~), (<>~))
 import           Control.Monad.Except
 import           Control.Monad.State (MonadState)
 import           Control.Monad.State.Class (modify)
+import           Data.Generics.Product (field)
 import           Data.List
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -31,8 +35,23 @@ useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
 useOccName jdg name =
   -- Only score points if this is in the local hypothesis
   case M.lookup name $ jLocalHypothesis jdg of
-    Just{}  -> modify $ withUsedVals $ S.insert name
+    Just{}  -> modify
+             $ (withUsedVals $ S.insert name)
+             . (field @"ts_unused_top_vals" %~ S.delete name)
     Nothing -> pure ()
+
+
+------------------------------------------------------------------------------
+-- | Doing recursion incurs a small penalty in the score.
+penalizeRecursion :: MonadState TacticState m => m ()
+penalizeRecursion = modify $ field @"ts_recursion_penality" +~ 1
+
+
+------------------------------------------------------------------------------
+-- | Insert some values into the unused top values field. These are
+-- subsequently removed via 'useOccName'.
+addUnusedTopVals :: MonadState TacticState m => S.Set OccName -> m ()
+addUnusedTopVals vals = modify $ field @"ts_unused_top_vals" <>~ vals
 
 
 destructMatches

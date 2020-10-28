@@ -74,10 +74,21 @@ instance Show DataCon where
 ------------------------------------------------------------------------------
 data TacticState = TacticState
     { ts_skolems   :: !([TyVar])
+      -- ^ The known skolems.
     , ts_unifier   :: !(TCvSubst)
+      -- ^ The current substitution of univars.
     , ts_used_vals :: !(Set OccName)
+      -- ^ Set of values used by tactics.
     , ts_intro_vals :: !(Set OccName)
+      -- ^ Set of values introduced by tactics.
+    , ts_unused_top_vals :: !(Set OccName)
+      -- ^ Set of currently unused arguments to the function being defined.
     , ts_recursion_stack :: ![Bool]
+      -- ^ Stack for tracking whether or not the current recursive call has
+      -- used at least one smaller pat val. Recursive calls for which this
+      -- value is 'False' are guaranteed to loop, and must be pruned.
+    , ts_recursion_penality :: !Int
+      -- ^ Number of calls to recursion. We penalize each.
     , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
 
@@ -100,7 +111,9 @@ defaultTacticState =
     , ts_unifier         = emptyTCvSubst
     , ts_used_vals       = mempty
     , ts_intro_vals      = mempty
+    , ts_unused_top_vals = mempty
     , ts_recursion_stack = mempty
+    , ts_recursion_penality = 0
     , ts_unique_gen      = unsafeDefaultUniqueSupply
     }
 

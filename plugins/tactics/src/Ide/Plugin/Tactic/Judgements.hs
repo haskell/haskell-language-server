@@ -75,6 +75,13 @@ introducing ns =
   field @"_jHypothesis" <>~ M.fromList ns
 
 
+------------------------------------------------------------------------------
+-- | Add some terms to the ambient hypothesis
+introducingAmbient :: [(OccName, a)] -> Judgement' a -> Judgement' a
+introducingAmbient ns =
+  field @"_jAmbientHypothesis" <>~ M.fromList ns
+
+
 filterPosition :: OccName -> Int -> Judgement -> Judgement
 filterPosition defn pos jdg =
     withHypothesis (M.filterWithKey go) jdg
