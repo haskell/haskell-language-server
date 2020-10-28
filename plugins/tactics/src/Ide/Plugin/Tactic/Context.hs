@@ -3,24 +3,24 @@
 
 module Ide.Plugin.Tactic.Context where
 
+import           Bag
+import           Control.Arrow
+import           Control.Monad.Reader
+import           Data.List
+import           Data.Maybe (mapMaybe)
+import           Data.Set (Set)
 import qualified Data.Set as S
-import Data.Set (Set)
-import Bag
-import Control.Arrow
-import Control.Monad.Reader
-import Development.IDE.GHC.Compat
-import Ide.Plugin.Tactic.Types
-import OccName
-import TcRnTypes
-import Ide.Plugin.Tactic.GHC (tacticsThetaTy)
-import Ide.Plugin.Tactic.Machinery (methodHypothesis)
-import Data.Maybe (mapMaybe)
-import Data.List
-import TcType (substTy, tcSplitSigmaTy)
-import Unify (tcUnifyTy)
-import TcRnMonad (initTcWithGbl)
-import SrcLoc
-import FastString (fsLit)
+import           Development.IDE.GHC.Compat
+import           FastString (fsLit)
+import           Ide.Plugin.Tactic.GHC (tacticsThetaTy)
+import           Ide.Plugin.Tactic.Machinery (methodHypothesis)
+import           Ide.Plugin.Tactic.Types
+import           OccName
+import           SrcLoc
+import           TcRnMonad (initTcWithGbl)
+import           TcRnTypes
+import           TcType (substTy, tcSplitSigmaTy)
+import           Unify (tcUnifyTy)
 
 
 mkContext :: [(OccName, CType)] -> HscEnv -> TcGblEnv -> Context
