@@ -129,6 +129,7 @@ library
         Development.IDE.Core.IdeConfiguration
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
+        Development.IDE.Core.Preprocessor
         Development.IDE.Core.Rules
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
@@ -170,7 +171,6 @@ library
         Development.IDE.Session.VersionCheck
     other-modules:
         Development.IDE.Core.Compile
-        Development.IDE.Core.Preprocessor
         Development.IDE.Core.FileExists
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Orphans
