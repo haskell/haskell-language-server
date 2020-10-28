@@ -276,6 +276,7 @@ test-suite wrapper-test
     , process
     , tasty
     , tasty-ant-xml  >=1.1.6
+    , tasty-rerun
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs

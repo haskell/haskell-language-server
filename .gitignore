@@ -6,6 +6,8 @@ cabal.project.local
 *~
 *.lock
 
+.tasty-rerun-log
+
 # shake build information
 _build/
 
