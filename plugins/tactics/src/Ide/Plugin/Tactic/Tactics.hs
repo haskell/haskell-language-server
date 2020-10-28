@@ -73,8 +73,9 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ withRecursionStack (False :)
+    penalizeRecursion
     ensure recursiveCleanup (withRecursionStack tail) $ do
-      (localTactic (apply name) $ introducing defs)
+      (localTactic (apply name) $ introducingAmbient defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -92,6 +93,7 @@ intros = rule $ \jdg -> do
       let jdg' = introducing (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
+      when (isTopHole jdg) $ addUnusedTopVals $ S.fromList vs
       (tr, sg)
         <- newSubgoal
           $ bool

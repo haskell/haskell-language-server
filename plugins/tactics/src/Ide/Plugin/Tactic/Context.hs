@@ -89,6 +89,8 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods  . fst)
       , "pass"
       , "censor"
       , "state"
+        -- monadfail methods
+      , "fail"
       ]
 
 
