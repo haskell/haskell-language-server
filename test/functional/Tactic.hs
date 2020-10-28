@@ -113,6 +113,7 @@ tests = testGroup
   , goldenTest "GoldenSuperclass.hs"        7 8  Auto ""
   , ignoreTestBecause "It is unreliable in circleci builds"
       $ goldenTest "GoldenApplicativeThen.hs"   2 11 Auto ""
+  , goldenTest "GoldenSafeHead.hs"          2 12 Auto ""
   , expectFail "GoldenFish.hs"              5 18 Auto ""
   ]
 
