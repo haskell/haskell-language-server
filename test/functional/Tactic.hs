@@ -153,7 +153,7 @@ goldenTest input line col tc occ =
       actions <- getCodeActions doc $ pointRange line col
       Just (CACodeAction (CodeAction {_command = Just c}))
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
-      resp <- executeCommandWithResp c
+      executeCommand c
       _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
       edited <- documentContents doc
       let expected_name = tacticPath </> input <.> "expected"
