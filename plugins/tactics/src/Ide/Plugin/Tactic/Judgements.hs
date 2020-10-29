@@ -1,11 +1,13 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE LambdaCase       #-}
 {-# LANGUAGE RecordWildCards  #-}
+{-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns     #-}
 
 module Ide.Plugin.Tactic.Judgements where
 
+import           Control.Applicative
 import           Control.Lens hiding (Context)
 import           Data.Bool
 import           Data.Char
@@ -14,13 +16,14 @@ import           Data.Generics.Product (field)
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
+import           Data.Set (Set)
 import qualified Data.Set as S
+import           DataCon (dataConName, DataCon)
 import           Development.IDE.Spans.LocalBindings
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           SrcLoc
 import           Type
-import DataCon (DataCon)
 
 
 ------------------------------------------------------------------------------
@@ -79,7 +82,7 @@ introducingLambda
 introducingLambda func ns =
   field @"_jHypothesis" <>~ M.fromList (zip [0..] ns <&> \(pos, (name, ty)) ->
     -- TODO(sandy): cleanup
-    (name, HyInfo (maybe LocalHypothesis (\x -> TopLevelArgPrv x pos) func) ty))
+    (name, HyInfo (maybe UserPrv (\x -> TopLevelArgPrv x pos) func) ty))
 
 
 ------------------------------------------------------------------------------
@@ -105,6 +108,24 @@ filterSameTypeFromOtherPositions defn pos jdg =
       tys = S.fromList $ fmap snd $ M.toList hy
    in withHypothesis (\hy2 -> M.filter (not . flip S.member tys) hy2 <> hy) jdg
 
+getAncestry :: Judgement' a -> OccName -> Set OccName
+getAncestry jdg name =
+  case M.lookup name $ jHypothesis jdg of
+    Just hi ->
+      case hi_provenance hi of
+        PatternMatchPrv _ ancestry _ _ -> ancestry
+        _                              -> mempty
+    Nothing -> mempty
+
+
+-- getPositionalBindings :: Judgement -> [(OccName, [IntMap OccName])]
+-- getPositionalBindings jdg = _ $ do
+--   (name, hi_provenance -> hi) <- M.toList $ jHypothesis jdg
+--   case hi of
+--     TopLevelArgPrv o i -> pure (name, (o, i))
+--     PatternMatchPrv _ ud i -> pure (name, (occName $ dataConName $ getViaUnique ud, i))
+--     _ -> empty
+
 
 hasPositionalAncestry
     :: Judgement
@@ -119,7 +140,7 @@ hasPositionalAncestry jdg defn n name
   = case any (== name) ancestors of
       True  -> Just True
       False ->
-        case M.lookup name $ _jAncestry jdg of
+        case M.lookup name $ jAncestryMap jdg of
           Just ancestry ->
             bool Nothing (Just False) $ any (flip S.member ancestry) ancestors
           Nothing -> Nothing
@@ -130,17 +151,12 @@ hasPositionalAncestry jdg defn n name
               $ _jPositionMaps jdg
 
 
-setParents
-    :: OccName    -- ^ parent
-    -> [OccName]  -- ^ children
-    -> Judgement
-    -> Judgement
-setParents p cs jdg =
-  let ancestry = mappend (S.singleton p)
-               $ fromMaybe mempty
-               $ M.lookup p
-               $ _jAncestry jdg
-   in jdg & field @"_jAncestry" <>~ M.fromList (fmap (, ancestry) cs)
+jAncestryMap :: Judgement' a -> Map OccName (Set OccName)
+jAncestryMap jdg =
+  flip M.mapMaybe (jHypothesis jdg) $ \hi ->
+    case hi_provenance hi of
+      PatternMatchPrv _ ancestry _ _ -> Just ancestry
+      _                              -> Nothing
 
 
 withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
@@ -167,11 +183,27 @@ withHypothesis f =
   field @"_jHypothesis" %~ f
 
 ------------------------------------------------------------------------------
--- | Pattern vals are currently tracked in jHypothesis, with an extra piece of data sitting around in jPatternVals.
-introducingPat :: Maybe OccName -> DataCon -> [(OccName, a)] -> Judgement' a -> Judgement' a
+-- | Pattern vals are currently tracked in jHypothesis, with an extra piece of
+-- data sitting around in jPatternVals.
+introducingPat
+    :: Maybe OccName
+    -> DataCon
+    -> [(OccName, a)]
+    -> Judgement' a
+    -> Judgement' a
 introducingPat scrutinee dc ns jdg = jdg
   & field @"_jHypothesis"  <>~ (M.fromList $ zip [0..] ns <&> \(pos, (name, ty)) ->
-      (name, HyInfo (PatternMatchPrv scrutinee (Uniquely dc) pos) ty))
+      ( name
+      , HyInfo
+          (PatternMatchPrv
+              scrutinee
+              (maybe
+                  mempty
+                  (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
+                  scrutinee)
+              (Uniquely dc)
+              pos)
+          ty))
 
 
 disallowing :: [OccName] -> Judgement' a -> Judgement' a
@@ -212,6 +244,8 @@ jGoal = _jGoal
 
 substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
+
+
 mkFirstJudgement
     :: M.Map OccName CType  -- ^ local hypothesis
     -> M.Map OccName CType  -- ^ ambient hypothesis
@@ -226,14 +260,13 @@ mkFirstJudgement hy ambient top posvals goal = Judgement
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
   , _jPositionMaps      = posvals
-  , _jAncestry          = mempty
   , _jIsTopHole         = top
   , _jGoal              = CType goal
   }
 
 
 mkLocalHypothesisInfo :: a -> HyInfo a
-mkLocalHypothesisInfo = HyInfo LocalHypothesis
+mkLocalHypothesisInfo = HyInfo UserPrv
 
 
 mkAmbientHypothesisInfo :: a -> HyInfo a
@@ -241,7 +274,7 @@ mkAmbientHypothesisInfo = HyInfo ImportPrv
 
 
 isLocalHypothesis :: Provenance -> Bool
-isLocalHypothesis LocalHypothesis{} = True
+isLocalHypothesis UserPrv{} = True
 isLocalHypothesis PatternMatchPrv{} = True
 isLocalHypothesis TopLevelArgPrv{} = True
 isLocalHypothesis _ = False

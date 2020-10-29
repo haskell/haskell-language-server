@@ -149,7 +149,7 @@ destruct' f term jdg = do
       (tr, ms)
           <- destructMatches
                f
-               (\cs -> setParents term (fmap fst cs) . destructing term)
+               (const $ destructing term)
                (Just term)
                t
                jdg

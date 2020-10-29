@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
@@ -158,19 +159,19 @@ data Provenance
       Int       -- ^ Position
   | PatternMatchPrv
       (Maybe OccName)   -- ^ Scrutinee. Nothing, for lambda case.
+      (Set OccName)     -- ^ Ancestry
       (Uniquely DataCon)   -- ^ Matching datacon
       Int       -- ^ Position
   | ClassMethodPrv
       (Uniquely Class)     -- ^ Class
-    -- TODO(sandy): delete this asap
-  | LocalHypothesis
+  | UserPrv
   | ImportPrv
   | RecursivePrv
   deriving stock (Eq, Show, Generic, Ord)
 
 
 newtype Uniquely a = Uniquely { getViaUnique :: a }
-  deriving stock Show
+  deriving Show via a
 
 instance Uniquable a => Eq (Uniquely a) where
   (==) = (==) `on` getUnique . getViaUnique
@@ -195,7 +196,6 @@ data Judgement' a = Judgement
   , _jBlacklistDestruct :: !(Bool)
   , _jWhitelistSplit :: !(Bool)
   , _jPositionMaps :: !(Map OccName [[OccName]])
-  , _jAncestry     :: !(Map OccName (Set OccName))
   , _jIsTopHole    :: !Bool
   , _jGoal         :: !(a)
   }
