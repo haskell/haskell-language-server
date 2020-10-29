@@ -197,6 +197,11 @@ data HyInfo a = HyInfo
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
   { _jHypothesis :: !(Map OccName (HyInfo a))
+  , _jDestructed :: !(Set OccName)
+    -- ^ Set of names we've already destructed. These should align with keys of
+    -- _jHypothesis. You might think we could just inspect the hypothesis and
+    -- find any PatVals whose scrutinee is the name in question, but this fails
+    -- for nullary data constructors.
   , _jBlacklistDestruct :: !(Bool)
   , _jWhitelistSplit :: !(Bool)
   , _jPositionMaps :: !(Map OccName [[OccName]])

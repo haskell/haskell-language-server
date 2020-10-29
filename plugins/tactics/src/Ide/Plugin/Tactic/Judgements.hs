@@ -45,8 +45,7 @@ buildHypothesis
 
 
 hasDestructed :: Judgement' a -> OccName -> Bool
-hasDestructed jdg n = flip any (jPatHypothesis jdg) $
-  (== Just n) . pv_scrutinee
+hasDestructed jdg n = S.member n $ _jDestructed jdg
 
 
 blacklistingDestruct :: Judgement -> Judgement
@@ -188,6 +187,7 @@ introducingPat scrutinee dc ns jdg = jdg
               (Uniquely dc)
               pos)
           ty))
+  & maybe id (\scrut -> field @"_jDestructed" <>~ S.singleton scrut) scrutinee
 
 
 disallowing :: [OccName] -> Judgement' a -> Judgement' a
@@ -249,6 +249,7 @@ mkFirstJudgement hy ambient top posvals goal = Judgement
                        <> M.map mkAmbientHypothesisInfo ambient
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
+  , _jDestructed        = mempty
   , _jPositionMaps      = posvals
   , _jIsTopHole         = top
   , _jGoal              = CType goal
