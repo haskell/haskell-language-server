@@ -87,7 +87,7 @@ data TacticState = TacticState
       -- ^ Stack for tracking whether or not the current recursive call has
       -- used at least one smaller pat val. Recursive calls for which this
       -- value is 'False' are guaranteed to loop, and must be pruned.
-    , ts_recursion_penality :: !Int
+    , ts_recursion_count :: !Int
       -- ^ Number of calls to recursion. We penalize each.
     , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
@@ -113,7 +113,7 @@ defaultTacticState =
     , ts_intro_vals      = mempty
     , ts_unused_top_vals = mempty
     , ts_recursion_stack = mempty
-    , ts_recursion_penality = 0
+    , ts_recursion_count = 0
     , ts_unique_gen      = unsafeDefaultUniqueSupply
     }
 
@@ -131,6 +131,12 @@ withRecursionStack
   :: ([Bool] -> [Bool]) -> TacticState -> TacticState
 withRecursionStack f =
   field @"ts_recursion_stack" %~ f
+
+pushRecursionStack :: TacticState -> TacticState
+pushRecursionStack = withRecursionStack (False :)
+
+popRecursionStack :: TacticState -> TacticState
+popRecursionStack = withRecursionStack tail
 
 
 withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState

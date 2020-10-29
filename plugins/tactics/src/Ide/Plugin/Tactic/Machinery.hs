@@ -118,20 +118,29 @@ tracing s (TacticT m)
       mapExtract' (first $ rose s . pure) $ runStateT m jdg
 
 
-recursiveCleanup
+------------------------------------------------------------------------------
+-- | Recursion is allowed only when we can prove it is on a structurally
+-- smaller argument. The top of the 'ts_recursion_stack' is set to 'True' iff
+-- one of the recursive arguments is a pattern val (ie. came from a pattern
+-- match.)
+guardStructurallySmallerRecursion
     :: TacticState
     -> Maybe TacticError
-recursiveCleanup s =
-  let r = head $ ts_recursion_stack s
-   in case r of
-        True  -> Nothing
-        False -> Just NoProgress
+guardStructurallySmallerRecursion s =
+  case head $ ts_recursion_stack s of
+     True  -> Nothing
+     False -> Just NoProgress
 
 
-setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
-setRecursionFrameData b = do
+------------------------------------------------------------------------------
+-- | Mark that the current recursive call is structurally smaller, due to
+-- having been matched on a pattern value.
+--
+-- Implemented by setting the top of the 'ts_recursion_stack'.
+markStructuralySmallerRecursion :: MonadState TacticState m => m ()
+markStructuralySmallerRecursion = do
   modify $ withRecursionStack $ \case
-    (_ : bs) -> b : bs
+    (_ : bs) -> True : bs
     []       -> []
 
 
@@ -159,7 +168,7 @@ scoreSolution ext TacticState{..} holes
     , Penalize $ S.size ts_unused_top_vals
     , Penalize $ S.size ts_intro_vals
     , Reward   $ S.size ts_used_vals
-    , Penalize $ ts_recursion_penality
+    , Penalize $ ts_recursion_count
     , Penalize $ solutionSize ext
     )
 

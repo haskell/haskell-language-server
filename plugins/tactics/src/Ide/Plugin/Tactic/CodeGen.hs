@@ -43,8 +43,8 @@ useOccName jdg name =
 
 ------------------------------------------------------------------------------
 -- | Doing recursion incurs a small penalty in the score.
-penalizeRecursion :: MonadState TacticState m => m ()
-penalizeRecursion = modify $ field @"ts_recursion_penality" +~ 1
+countRecursiveCall :: TacticState -> TacticState
+countRecursiveCall = field @"ts_recursion_count" +~ 1
 
 
 ------------------------------------------------------------------------------

@@ -57,8 +57,7 @@ assume name = rule $ \jdg -> do
   case M.lookup name $ jHypothesis jdg of
     Just ty -> do
       unify ty $ jGoal jdg
-      when (M.member name $ jPatHypothesis jdg) $
-        setRecursionFrameData True
+      when (M.member name $ jPatHypothesis jdg) markStructuralySmallerRecursion
       useOccName jdg name
       pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
@@ -68,9 +67,8 @@ recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
-    modify $ withRecursionStack (False :)
-    penalizeRecursion
-    ensure recursiveCleanup (withRecursionStack tail) $ do
+    modify $ pushRecursionStack .  countRecursiveCall
+    ensure guardStructurallySmallerRecursion popRecursionStack $ do
       (localTactic (apply name) $ introducingAmbient defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
