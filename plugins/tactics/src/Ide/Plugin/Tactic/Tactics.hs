@@ -55,7 +55,7 @@ assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
   case M.lookup name $ jHypothesis jdg of
-    Just ty -> do
+    Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
       when (M.member name $ jPatHypothesis jdg) markStructuralySmallerRecursion
       useOccName jdg name
@@ -84,17 +84,18 @@ intros = rule $ \jdg -> do
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
       vs <- mkManyGoodNames hy as
-      let jdg' = introducing (zip vs $ coerce as)
+      let top_hole = isTopHole ctx jdg
+      let jdg' = introducingLambda top_hole (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
-      when (isTopHole jdg) $ addUnusedTopVals $ S.fromList vs
+      when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
       (tr, sg)
         <- newSubgoal
           $ bool
               id
               (withPositionMapping
                 (extremelyStupid__definingFunction ctx) vs)
-              (isTopHole jdg)
+              (isJust top_hole)
           $ jdg'
       pure
         . (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr, )
@@ -165,7 +166,7 @@ apply func = requireConcreteHole $ tracing ("apply' " <> show func) $ do
   let hy = jHypothesis jdg
       g  = jGoal jdg
   case M.lookup func hy of
-    Just (CType ty) -> do
+    Just (hi_type -> CType ty) -> do
       ty' <- freshTyvars ty
       let (_, _, args, ret) = tacticsSplitFunTy ty'
       requireNewHoles $ rule $ \jdg -> do
@@ -281,12 +282,12 @@ auto' n = do
 
 overFunctions :: (OccName -> TacticsM ()) -> TacticsM ()
 overFunctions =
-  attemptOn $ M.keys . M.filter (isFunction . unCType) . jHypothesis
+  attemptOn $ M.keys . M.filter (isFunction . unCType . hi_type) . jHypothesis
 
 overAlgebraicTerms :: (OccName -> TacticsM ()) -> TacticsM ()
 overAlgebraicTerms =
   attemptOn $
-    M.keys . M.filter (isJust . algebraicTyCon . unCType) . jHypothesis
+    M.keys . M.filter (isJust . algebraicTyCon . unCType . hi_type) . jHypothesis
 
 
 allNames :: Judgement -> [OccName]

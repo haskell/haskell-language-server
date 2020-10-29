@@ -74,7 +74,7 @@ runTactic ctx jdg t =
     let skolems = nub
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
                 $ jGoal jdg
-                : (toList $ jHypothesis jdg)
+                : (fmap hi_type $ toList $ jHypothesis jdg)
         unused_topvals = nub $ join $ join $ toList $ _jPositionMaps jdg
         tacticState =
           defaultTacticState

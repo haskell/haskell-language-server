@@ -20,6 +20,7 @@ import           Ide.Plugin.Tactic.Types
 import           OccName
 import           SrcLoc
 import           Type
+import DataCon (DataCon)
 
 
 ------------------------------------------------------------------------------
@@ -70,16 +71,25 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
-introducing :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducing ns =
-  field @"_jHypothesis" <>~ M.fromList ns
+introducingLambda
+    :: Maybe OccName   -- ^ top level function, or Nothing for any other function
+    -> [(OccName, a)]
+    -> Judgement' a
+    -> Judgement' a
+introducingLambda func ns =
+  field @"_jHypothesis" <>~ M.fromList (zip [0..] ns <&> \(pos, (name, ty)) ->
+    -- TODO(sandy): cleanup
+    (name, HyInfo (maybe LocalHypothesis (\x -> TopLevelArgPrv x pos) func) ty))
 
 
 ------------------------------------------------------------------------------
 -- | Add some terms to the ambient hypothesis
 introducingAmbient :: [(OccName, a)] -> Judgement' a -> Judgement' a
 introducingAmbient ns =
-  field @"_jAmbientHypothesis" <>~ M.fromList ns
+  field @"_jHypothesis" <>~ M.fromList (ns <&> \(name, ty) ->
+    -- TODO(sandy): cleanup
+    (name, HyInfo (ClassMethodPrv undefined) ty
+    ))
 
 
 filterPosition :: OccName -> Int -> Judgement -> Judgement
@@ -150,7 +160,7 @@ extremelyStupid__definingFunction =
 
 
 withHypothesis
-    :: (Map OccName a -> Map OccName a)
+    :: (Map OccName (HyInfo a) -> Map OccName (HyInfo a))
     -> Judgement' a
     -> Judgement' a
 withHypothesis f =
@@ -158,9 +168,10 @@ withHypothesis f =
 
 ------------------------------------------------------------------------------
 -- | Pattern vals are currently tracked in jHypothesis, with an extra piece of data sitting around in jPatternVals.
-introducingPat :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducingPat ns jdg = jdg
-  & field @"_jHypothesis"  <>~ M.fromList ns
+introducingPat :: Maybe OccName -> DataCon -> [(OccName, a)] -> Judgement' a -> Judgement' a
+introducingPat scrutinee dc ns jdg = jdg
+  & field @"_jHypothesis"  <>~ (M.fromList $ zip [0..] ns <&> \(pos, (name, ty)) ->
+      (name, HyInfo (PatternMatchPrv scrutinee (Uniquely dc) pos) ty))
   & field @"_jPatternVals" <>~ S.fromList (fmap fst ns)
 
 
@@ -172,21 +183,22 @@ disallowing ns =
 ------------------------------------------------------------------------------
 -- | The hypothesis, consisting of local terms and the ambient environment
 -- (includes and class methods.)
-jHypothesis :: Judgement' a -> Map OccName a
-jHypothesis = _jHypothesis <> _jAmbientHypothesis
+jHypothesis :: Judgement' a -> Map OccName (HyInfo a)
+jHypothesis = _jHypothesis
 
 
 ------------------------------------------------------------------------------
 -- | Just the local hypothesis.
-jLocalHypothesis :: Judgement' a -> Map OccName a
-jLocalHypothesis = _jHypothesis
+jLocalHypothesis :: Judgement' a -> Map OccName (HyInfo a)
+jLocalHypothesis = M.filter (isLocalHypothesis . hi_provenance) . _jHypothesis
 
 
 isPatVal :: Judgement' a -> OccName -> Bool
 isPatVal j n = S.member n $ _jPatternVals j
 
-isTopHole :: Judgement' a -> Bool
-isTopHole = _jIsTopHole
+isTopHole :: Context -> Judgement' a -> Maybe OccName
+isTopHole ctx =
+  bool Nothing (Just $ extremelyStupid__definingFunction ctx) . _jIsTopHole
 
 unsetIsTopHole :: Judgement' a -> Judgement' a
 unsetIsTopHole = field @"_jIsTopHole" .~ False
@@ -194,9 +206,11 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 
 ------------------------------------------------------------------------------
 -- | Only the hypothesis members which are pattern vals
-jPatHypothesis :: Judgement' a -> Map OccName a
+jPatHypothesis :: Judgement' a -> Map OccName (HyInfo a)
 jPatHypothesis jdg
-  = M.restrictKeys (jHypothesis jdg) $ _jPatternVals jdg
+  = mappend
+      (M.restrictKeys (jHypothesis jdg) $ _jPatternVals jdg)
+      (M.filter (isPatternMatch . hi_provenance) $ _jHypothesis jdg)
 
 
 jGoal :: Judgement' a -> a
@@ -205,7 +219,6 @@ jGoal = _jGoal
 
 substJdg :: TCvSubst -> Judgement -> Judgement
 substJdg subst = fmap $ coerce . substTy subst . coerce
-
 mkFirstJudgement
     :: M.Map OccName CType  -- ^ local hypothesis
     -> M.Map OccName CType  -- ^ ambient hypothesis
@@ -214,8 +227,8 @@ mkFirstJudgement
     -> Type
     -> Judgement' CType
 mkFirstJudgement hy ambient top posvals goal = Judgement
-  { _jHypothesis        = hy
-  , _jAmbientHypothesis = ambient
+  { _jHypothesis        = M.map mkLocalHypothesisInfo hy
+                       <> M.map mkAmbientHypothesisInfo ambient
   , _jDestructed        = mempty
   , _jPatternVals       = mempty
   , _jBlacklistDestruct = False
@@ -225,4 +238,24 @@ mkFirstJudgement hy ambient top posvals goal = Judgement
   , _jIsTopHole         = top
   , _jGoal              = CType goal
   }
+
+
+mkLocalHypothesisInfo :: a -> HyInfo a
+mkLocalHypothesisInfo = HyInfo LocalHypothesis
+
+
+mkAmbientHypothesisInfo :: a -> HyInfo a
+mkAmbientHypothesisInfo = HyInfo ImportPrv
+
+
+isLocalHypothesis :: Provenance -> Bool
+isLocalHypothesis LocalHypothesis{} = True
+isLocalHypothesis PatternMatchPrv{} = True
+isLocalHypothesis TopLevelArgPrv{} = True
+isLocalHypothesis _ = False
+
+
+isPatternMatch :: Provenance -> Bool
+isPatternMatch PatternMatchPrv{} = True
+isPatternMatch _ = False
 

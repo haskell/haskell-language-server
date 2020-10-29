@@ -39,7 +39,7 @@ import Refinery.Tactic
 import System.IO.Unsafe (unsafePerformIO)
 import Type
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
-import Unique (Unique)
+import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 
 
 ------------------------------------------------------------------------------
@@ -68,6 +68,9 @@ instance Show (LHsExpr GhcPs) where
   show  = unsafeRender
 
 instance Show DataCon where
+  show  = unsafeRender
+
+instance Show Class where
   show  = unsafeRender
 
 
@@ -149,14 +152,44 @@ withIntroducedVals f =
   field @"ts_intro_vals" %~ f
 
 
+data Provenance
+  = TopLevelArgPrv
+      OccName   -- ^ Function name
+      Int       -- ^ Position
+  | PatternMatchPrv
+      (Maybe OccName)   -- ^ Scrutinee. Nothing, for lambda case.
+      (Uniquely DataCon)   -- ^ Matching datacon
+      Int       -- ^ Position
+  | ClassMethodPrv
+      (Uniquely Class)     -- ^ Class
+    -- TODO(sandy): delete this asap
+  | LocalHypothesis
+  | ImportPrv
+  | RecursivePrv
+  deriving stock (Eq, Show, Generic, Ord)
+
+
+newtype Uniquely a = Uniquely { getViaUnique :: a }
+  deriving stock Show
+
+instance Uniquable a => Eq (Uniquely a) where
+  (==) = (==) `on` getUnique . getViaUnique
+
+instance Uniquable a => Ord (Uniquely a) where
+  compare = nonDetCmpUnique `on` getUnique . getViaUnique
+
+
+data HyInfo a = HyInfo
+  { hi_provenance :: Provenance
+  , hi_type       :: a
+  }
+  deriving stock (Functor, Eq, Show, Generic, Ord)
+
 
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis :: !(Map OccName a)
-  , _jAmbientHypothesis :: !(Map OccName a)
-    -- ^ Things in the hypothesis that were imported. Solutions don't get
-    -- points for using the ambient hypothesis.
+  { _jHypothesis :: !(Map OccName (HyInfo a))
   , _jDestructed :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
   , _jPatternVals :: !(Set OccName)
@@ -168,7 +201,7 @@ data Judgement' a = Judgement
   , _jIsTopHole    :: !Bool
   , _jGoal         :: !(a)
   }
-  deriving stock (Eq, Ord, Generic, Functor, Show)
+  deriving stock (Eq, Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 

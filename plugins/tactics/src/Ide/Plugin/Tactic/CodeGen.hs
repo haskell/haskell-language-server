@@ -59,11 +59,13 @@ destructMatches
        -- ^ How to construct each match
     -> ([(OccName, CType)] -> Judgement -> Judgement)
        -- ^ How to derive each match judgement
+    -> Maybe OccName
+       -- ^ Scrutinee
     -> CType
        -- ^ Type being destructed
     -> Judgement
     -> RuleM (Trace, [RawMatch])
-destructMatches f f2 t jdg = do
+destructMatches f f2 scrut t jdg = do
   let hy = jHypothesis jdg
       g  = jGoal jdg
   case splitTyConApp_maybe $ unCType t of
@@ -80,7 +82,7 @@ destructMatches f f2 t jdg = do
 
           let j = f2 hy'
                 $ withPositionMapping dcon_name names
-                $ introducingPat hy'
+                $ introducingPat scrut dc hy'
                 $ withNewGoal g jdg
           (tr, sg) <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
@@ -142,12 +144,13 @@ destruct' f term jdg = do
   let hy = jHypothesis jdg
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
-    Just (_, t) -> do
+    Just (_, hi_type -> t) -> do
       useOccName jdg term
       (tr, ms)
           <- destructMatches
                f
                (\cs -> setParents term (fmap fst cs) . destructing term)
+               (Just term)
                t
                jdg
       pure ( rose ("destruct " <> show term) $ pure tr
@@ -165,7 +168,7 @@ destructLambdaCase' f jdg = do
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap (fmap noLoc $ lambdaCase) <$>
-        destructMatches f (const id) (CType arg) jdg
+        destructMatches f (const id) Nothing (CType arg) jdg
     _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
 
