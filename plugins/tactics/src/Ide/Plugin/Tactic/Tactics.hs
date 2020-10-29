@@ -68,6 +68,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ pushRecursionStack .  countRecursiveCall
+    jdg <- goal
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
       (localTactic (apply name) $ introducingRecursively defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
@@ -126,6 +127,7 @@ destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
                           True  -> Just $ UnhelpfulDestruct name
                           False -> Nothing
                 False -> subtactic
+
 
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.

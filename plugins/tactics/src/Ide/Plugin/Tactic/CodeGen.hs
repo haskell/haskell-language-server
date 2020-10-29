@@ -57,15 +57,13 @@ addUnusedTopVals vals = modify $ field @"ts_unused_top_vals" <>~ vals
 destructMatches
     :: (DataCon -> Judgement -> Rule)
        -- ^ How to construct each match
-    -> ([(OccName, CType)] -> Judgement -> Judgement)
-       -- ^ How to derive each match judgement
     -> Maybe OccName
        -- ^ Scrutinee
     -> CType
        -- ^ Type being destructed
     -> Judgement
     -> RuleM (Trace, [RawMatch])
-destructMatches f f2 scrut t jdg = do
+destructMatches f scrut t jdg = do
   let hy = jHypothesis jdg
       g  = jGoal jdg
   case splitTyConApp_maybe $ unCType t of
@@ -80,8 +78,7 @@ destructMatches f f2 scrut t jdg = do
           let hy' = zip names $ coerce args
               dcon_name = nameOccName $ dataConName dc
 
-          let j = f2 hy'
-                $ withPositionMapping dcon_name names
+          let j = withPositionMapping dcon_name names
                 $ introducingPat scrut dc hy'
                 $ withNewGoal g jdg
           (tr, sg) <- f dc j
@@ -149,7 +146,6 @@ destruct' f term jdg = do
       (tr, ms)
           <- destructMatches
                f
-               (const $ destructing term)
                (Just term)
                t
                jdg
@@ -168,7 +164,7 @@ destructLambdaCase' f jdg = do
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap (fmap noLoc $ lambdaCase) <$>
-        destructMatches f (const id) Nothing (CType arg) jdg
+        destructMatches f Nothing (CType arg) jdg
     _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
 
