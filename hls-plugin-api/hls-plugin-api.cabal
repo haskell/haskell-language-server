@@ -44,6 +44,7 @@ library
     , ghc-boot-th
     , ghcide                >=0.4
     , haskell-lsp           ^>=0.22
+    , hashable
     , hslogger
     , lens
     , process

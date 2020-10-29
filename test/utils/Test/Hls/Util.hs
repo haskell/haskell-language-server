@@ -96,13 +96,16 @@ files =
   ]
 
 data GhcVersion
-  = GHC88
+  = GHC810
+  | GHC88
   | GHC86
   | GHC84
   deriving (Eq,Show)
 
 ghcVersion :: GhcVersion
-#if (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)))
+#if (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,10,0,0)))
+ghcVersion = GHC810
+#elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,8,0,0)))
 ghcVersion = GHC88
 #elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,6,0,0)))
 ghcVersion = GHC86

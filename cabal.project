@@ -3,6 +3,7 @@ packages:
          ghcide
          hls-plugin-api
          ./plugins/tactics
+         ./plugins/hls-hlint-plugin
 
 source-repository-package
   type: git

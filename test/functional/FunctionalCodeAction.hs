@@ -44,72 +44,85 @@ tests = testGroup "code actions" [
 
 hlintTests :: TestTree
 hlintTests = testGroup "hlint suggestions" [
-    ignoreTestBecause "Broken" $ testCase "provides 3.8 code actions" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "provides 3.8 code actions including apply all" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags@(reduceDiag:_) <- waitForDiagnostics
+        diags@(reduceDiag:_) <- waitForDiagnosticsSource "hlint"
 
         liftIO $ do
-            length diags @?= 2
+            length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
             reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
             reduceDiag ^. L.severity @?= Just DsInfo
-            reduceDiag ^. L.code @?= Just (StringValue "Eta reduce")
+            reduceDiag ^. L.code @?= Just (StringValue "refact:Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
-        (CACodeAction ca:_) <- getAllCodeActions doc
+        cas <- map fromAction <$> getAllCodeActions doc
 
-        -- Evaluate became redundant id in later hlint versions
-        liftIO $ (ca ^. L.title) `elem` ["Apply hint:Redundant id", "Apply hint:Evaluate"] @? "Title contains evaluate"
+        let applyAll = find (\ca -> "Apply all hints" `T.isSuffixOf` (ca ^. L.title)) cas
+        let redId = find (\ca -> "Redundant id" `T.isSuffixOf` (ca ^. L.title)) cas
+        let redEta = find (\ca -> "Eta reduce" `T.isSuffixOf` (ca ^. L.title)) cas
 
-        executeCodeAction ca
+        liftIO $ isJust applyAll @? "There is 'Apply all hints' code action"
+        liftIO $ isJust redId @? "There is 'Redundant id' code action"
+        liftIO $ isJust redEta @? "There is 'Eta reduce' code action"
+
+        executeCodeAction (fromJust redId)
 
         contents <- getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
-        noDiagnostics
-
-    , ignoreTestBecause "Broken" $ testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
+    , testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata/hlint" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
 
-        _ <- waitForDiagnostics
+        _ <- waitForDiagnosticsSource "hlint"
 
         (CACommand cmd:_) <- getAllCodeActions doc
-
-        -- Evaluate became redundant id in later hlint versions
-        liftIO $ (cmd ^. L.title) `elem` ["Apply hint:Redundant id", "Apply hint:Evaluate"] @? "Title contains evaluate"
 
         executeCommand cmd
 
         contents <- skipManyTill publishDiagnosticsNotification $ getDocumentEdit doc
-        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
+        liftIO $ contents `elem` ["main = undefined\nfoo = id\n", "main = undefined\nfoo x = x\n"] @? "Command is applied"
 
-        noDiagnostics
-
-    , ignoreTestBecause "Broken" $ testCase "runs diagnostics on save" $ runSession hlsCommand fullCaps "test/testdata" $ do
-        let config = def { diagnosticsOnChange = False }
+    , testCase "changing configuration enables or disables hlint diagnostics" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+        let config = def { hlintOn = True }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
+        _ <- openDoc "ApplyRefact2.hs" "haskell"
+        diags <- waitForDiagnosticsSource "hlint"
+
+        liftIO $ length diags > 0 @? "There are hlint diagnostics"
+
+        let config' = def { hlintOn = False }
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+
+        diags' <- waitForDiagnostics
+
+        liftIO $ Just "hlint" `notElem` map (^. L.source) diags' @? "There are no hlint diagnostics"
+
+    , testCase "changing document contents updates hlint diagnostics" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags@(reduceDiag:_) <- waitForDiagnostics
+        diags <- waitForDiagnosticsSource "hlint"
 
-        liftIO $ do
-            length diags @?= 2
-            reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
-            reduceDiag ^. L.severity @?= Just DsInfo
-            reduceDiag ^. L.code @?= Just (StringValue "Eta reduce")
-            reduceDiag ^. L.source @?= Just "hlint"
+        liftIO $ length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
 
-        (CACodeAction ca:_) <- getAllCodeActions doc
+        let change = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "x"
 
-        -- Evaluate became redundant id in later hlint versions
-        liftIO $ (ca ^. L.title) `elem` ["Apply hint:Redundant id", "Apply hint:Evaluate"] @? "Title contains evaluate"
+        changeDoc doc [change]
 
-        executeCodeAction ca
+        diags' <- waitForDiagnostics
 
-        contents <- getDocumentEdit doc
-        liftIO $ contents @?= "main = undefined\nfoo x = x\n"
-        sendNotification TextDocumentDidSave (DidSaveTextDocumentParams doc)
+        liftIO $ (not $ Just "hlint" `elem` map (^. L.source) diags') @? "There are no hlint diagnostics"
 
-        noDiagnostics
+        let change' = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "id x"
+
+        changeDoc doc [change']
+
+        diags'' <- waitForDiagnosticsSource "hlint"
+
+        liftIO $ length diags'' @?= 2
     ]
 
 renameTests :: TestTree
@@ -294,31 +307,31 @@ typedHoleTests = testGroup "typed hole code actions" [
             _ <- waitForDiagnosticsSource "bios"
             cas <- map (\(CACodeAction x)-> x) <$> getAllCodeActions doc
 
-            suggestion <-
-                case ghcVersion of
-                GHC88 -> do
-                    liftIO $ map (^. L.title) cas `matchList`
-                        [ "Substitute hole (Int) with x ([Int])"
-                        , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
-                        , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
-                        , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
-                        ] @? "Contains substitutions"
-                    return "x"
-                GHC86 -> do
-                    liftIO $ map (^. L.title) cas `matchList`
-                        [ "Substitute hole (Int) with x ([Int])"
-                        , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
-                        , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
-                        , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
-                        ] @? "Contains substitutions"
-                    return "x"
-                GHC84 -> do
-                    liftIO $ map (^. L.title) cas `matchList`
-                        [ "Substitute hole (Int) with maxBound (forall a. Bounded a => a)"
-                        , "Substitute hole (Int) with minBound (forall a. Bounded a => a)"
-                        , "Substitute hole (Int) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
-                        ] @? "Contains substitutions"
-                    return "maxBound"
+            let substitutions GHC810 = substitutions GHC88
+                substitutions GHC88 =
+                    [ "Substitute hole (Int) with x ([Int])"
+                    , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
+                    , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
+                    , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
+                    ]
+                substitutions GHC86 =
+                    [ "Substitute hole (Int) with x ([Int])"
+                    , "Substitute hole (Int) with foo ([Int] -> Int Valid hole fits include)"
+                    , "Substitute hole (Int) with maxBound (forall a. Bounded a => a with maxBound @Int)"
+                    , "Substitute hole (Int) with minBound (forall a. Bounded a => a with minBound @Int)"
+                    ]
+                substitutions GHC84 =
+                    [ "Substitute hole (Int) with maxBound (forall a. Bounded a => a)"
+                    , "Substitute hole (Int) with minBound (forall a. Bounded a => a)"
+                    , "Substitute hole (Int) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
+                    ]
+
+            liftIO $ map (^. L.title) cas `matchList`
+                        substitutions ghcVersion @? "Contains substitutions"
+
+            let suggestion = case ghcVersion of
+                                GHC84 -> "maxBound"
+                                _     -> "x"
 
             executeCodeAction $ head cas
 
@@ -336,30 +349,30 @@ typedHoleTests = testGroup "typed hole code actions" [
                 _ <- waitForDiagnosticsSource "bios"
                 cas <- map fromAction <$> getAllCodeActions doc
 
-                suggestion <-
-                    case ghcVersion of
-                    GHC88 -> do
-                        liftIO $ map (^. L.title) cas `matchList`
-                            [ "Substitute hole (A) with stuff (A -> A)"
-                            , "Substitute hole (A) with x ([A])"
-                            , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ] @? "Contains substitutions"
-                        return "stuff"
-                    GHC86 -> do
-                        liftIO $ map (^. L.title) cas `matchList`
-                            [ "Substitute hole (A) with stuff (A -> A)"
-                            , "Substitute hole (A) with x ([A])"
-                            , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ] @? "Contains substituions"
-                        return "stuff"
-                    GHC84 -> do
-                        liftIO $ map (^. L.title) cas `matchList`
-                            [ "Substitute hole (A) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
-                            , "Substitute hole (A) with stuff (A -> A)"
-                            , "Substitute hole (A) with x ([A])"
-                            , "Substitute hole (A) with foo2 ([A] -> A)"
-                            ] @? "Contains substitutions"
-                        return "undefined"
+                let substitutions GHC810 = substitutions GHC88
+                    substitutions GHC88 =
+                        [ "Substitute hole (A) with stuff (A -> A)"
+                        , "Substitute hole (A) with x ([A])"
+                        , "Substitute hole (A) with foo2 ([A] -> A)"
+                        ]
+                    substitutions GHC86 =
+                        [ "Substitute hole (A) with stuff (A -> A)"
+                        , "Substitute hole (A) with x ([A])"
+                        , "Substitute hole (A) with foo2 ([A] -> A)"
+                        ]
+                    substitutions GHC84 =
+                        [ "Substitute hole (A) with undefined (forall (a :: TYPE r). GHC.Stack.Types.HasCallStack => a)"
+                        , "Substitute hole (A) with stuff (A -> A)"
+                        , "Substitute hole (A) with x ([A])"
+                        , "Substitute hole (A) with foo2 ([A] -> A)"
+                        ]
+
+                liftIO $ map (^. L.title) cas `matchList`
+                            substitutions ghcVersion @? "Contains substitutions"
+
+                let suggestion = case ghcVersion of
+                                    GHC84 -> "undefined"
+                                    _     -> "stuff"
 
                 executeCodeAction $ head cas
 

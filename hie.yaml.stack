@@ -48,3 +48,6 @@ cradle:
 
             - path: "./hls-plugin-api/src"
               component: "hls-plugin-api:lib:hls-plugin-api"
+
+            - path: "./plugins/hls-hlint-plugin/src"
+              component: "hls-hlint-plugin:lib:hls-hlint-plugin"

@@ -1,21 +1,21 @@
-resolver: lts-16.16
+resolver: lts-16.19
 
 packages:
 - .
 - ./ghcide/
 - ./hls-plugin-api
 - ./plugins/tactics
+- ./plugins/hls-hlint-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
 - aeson-1.5.2.0
-- apply-refact-0.7.0.0
+- apply-refact-0.8.2.1
 - github: bubba/brittany
   commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - bytestring-trie-0.2.5.0
-- cabal-helper-1.1.0.0
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - constrained-dynamic-0.1.0.0
@@ -23,13 +23,17 @@ extra-deps:
 - floskell-0.10.4
 - fourmolu-0.2.0.0
 # - ghcide-0.1.0
+- ghc-exactprint-0.6.3.2
 - haskell-src-exts-1.21.1
 - hie-bios-0.7.1
-- hlint-2.2.8
+- hlint-3.2
+- HsYAML-aeson-0.2.0.0@rev:2
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - ilist-0.3.1.0
-- lsp-test-0.11.0.5
+- implicit-hie-cradle-0.2.0.1
+- implicit-hie-0.1.2.0
+- lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
 - refinery-0.3.0.0
 - retrie-0.1.1.1
@@ -38,9 +42,6 @@ extra-deps:
 #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
 - stylish-haskell-0.12.2.0
 - temporary-1.2.1.1
-- ghc-exactprint-0.6.3.2
-- implicit-hie-cradle-0.2.0.1
-- implicit-hie-0.1.2.0
 
 flags:
   haskell-language-server:
