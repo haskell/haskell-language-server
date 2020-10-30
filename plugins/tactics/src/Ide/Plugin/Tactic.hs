@@ -16,8 +16,6 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
-import qualified Data.Map as M
-import Data.Map (Map)
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans
@@ -28,6 +26,7 @@ import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
 import           Data.List
+import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
