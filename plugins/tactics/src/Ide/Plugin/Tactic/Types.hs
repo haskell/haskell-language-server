@@ -87,7 +87,7 @@ data TacticState = TacticState
       -- ^ Set of values introduced by tactics.
     , ts_unused_top_vals :: !(Set OccName)
       -- ^ Set of currently unused arguments to the function being defined.
-    , ts_recursion_stack :: ![Bool]
+    , ts_recursion_stack :: ![Maybe PatVal]
       -- ^ Stack for tracking whether or not the current recursive call has
       -- used at least one smaller pat val. Recursive calls for which this
       -- value is 'False' are guaranteed to loop, and must be pruned.
@@ -132,12 +132,12 @@ freshUnique = do
 
 
 withRecursionStack
-  :: ([Bool] -> [Bool]) -> TacticState -> TacticState
+  :: ([Maybe PatVal] -> [Maybe PatVal]) -> TacticState -> TacticState
 withRecursionStack f =
   field @"ts_recursion_stack" %~ f
 
 pushRecursionStack :: TacticState -> TacticState
-pushRecursionStack = withRecursionStack (False :)
+pushRecursionStack = withRecursionStack (Nothing :)
 
 popRecursionStack :: TacticState -> TacticState
 popRecursionStack = withRecursionStack tail

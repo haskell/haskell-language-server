@@ -20,6 +20,7 @@ import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Bool (bool)
+import           Data.Foldable
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
@@ -57,7 +58,7 @@ assume name = rule $ \jdg -> do
   case M.lookup name $ jHypothesis jdg of
     Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
-      when (M.member name $ jPatHypothesis jdg) markStructuralySmallerRecursion
+      for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
       useOccName jdg name
       pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
     Nothing -> throwError $ UndefinedHypothesis name

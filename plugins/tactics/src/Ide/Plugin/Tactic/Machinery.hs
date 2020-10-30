@@ -128,8 +128,8 @@ guardStructurallySmallerRecursion
     -> Maybe TacticError
 guardStructurallySmallerRecursion s =
   case head $ ts_recursion_stack s of
-     True  -> Nothing
-     False -> Just NoProgress
+     Just _  -> Nothing
+     Nothing -> Just NoProgress
 
 
 ------------------------------------------------------------------------------
@@ -137,10 +137,10 @@ guardStructurallySmallerRecursion s =
 -- having been matched on a pattern value.
 --
 -- Implemented by setting the top of the 'ts_recursion_stack'.
-markStructuralySmallerRecursion :: MonadState TacticState m => m ()
-markStructuralySmallerRecursion = do
+markStructuralySmallerRecursion :: MonadState TacticState m => PatVal -> m ()
+markStructuralySmallerRecursion pv = do
   modify $ withRecursionStack $ \case
-    (_ : bs) -> True : bs
+    (_ : bs) -> Just pv : bs
     []       -> []
 
 
