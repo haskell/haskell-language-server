@@ -23,6 +23,6 @@ auto = do
   commit knownStrategies
     . tracing "auto"
     . localTactic (auto' 4)
-    . disallowing
+    . disallowing RecursiveCall
     $ fmap fst current
 

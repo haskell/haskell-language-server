@@ -177,12 +177,11 @@ buildDataCon
     -> RuleM (Trace, LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
   let args = dataConInstOrigArgTys' dc apps
-      dcon_name = nameOccName $ dataConName dc
   (tr, sgs)
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
-                  . filterSameTypeFromOtherPositions dcon_name n
+                  . filterSameTypeFromOtherPositions''' dc n
                   . blacklistingDestruct
                   . flip withNewGoal jdg
                   $ CType arg

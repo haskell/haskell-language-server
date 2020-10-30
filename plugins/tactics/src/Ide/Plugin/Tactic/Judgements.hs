@@ -93,16 +93,103 @@ introducingRecursively ns =
 
 filterPosition :: OccName -> Int -> Judgement -> Judgement
 filterPosition defn pos jdg =
-    withHypothesis (M.filterWithKey go) jdg
+    disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
   where
-    go name _ = isJust $ hasPositionalAncestry jdg defn pos name
+    go name _ = not . isJust $ hasPositionalAncestry jdg defn pos name
+
+hasPositionalAncestry'
+    :: Foldable t
+    => t OccName
+    -> Judgement
+    -> OccName     -- ^ thing to check ancestry
+    -> Maybe Bool  -- ^ Just True if the result is the oldest positional ancestor
+                   -- just false if it's a descendent
+                   -- otherwise nothing
+hasPositionalAncestry' ancestors jdg name
+  | not $ null ancestors
+  = case any (== name) ancestors of
+      True  -> Just True
+      False ->
+        case M.lookup name $ traceIdX "ancestry" $ jAncestryMap jdg of
+          Just ancestry ->
+            bool Nothing (Just False) $ any (flip S.member ancestry) ancestors
+          Nothing -> Nothing
+  | otherwise = Nothing
+
+filterPosition' :: OccName -> Int -> Judgement -> Judgement
+filterPosition' defn pos jdg =
+    disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
+  where
+    go name _
+      = not
+      . isJust
+      $ hasPositionalAncestry' (findPositionVal' jdg defn pos) jdg name
+
+filterPosition''' :: OccName -> Int -> Judgement -> Judgement
+filterPosition''' defn pos jdg =
+  let broken_ancestors = findPositionVal' jdg defn pos
+      ancestors = toListOf (_Just . traversed . ix pos)
+              $ M.lookup defn
+              $ _jPositionMaps jdg
+      working = filterPosition defn pos jdg
+   in case maybeToList broken_ancestors == ancestors of
+        True -> working
+        -- TODO(sandy): THE BUG IS THAT WE FILTER OUT FROM THE HYPOTHESIS
+        -- WHICH REMOVES THE EQUIVALENT OF A POSITION MAPPING; BUT THAT _USED_
+        -- TO BE THERE.
+        False -> error $ show (broken_ancestors, ancestors, defn, pos, jHypothesis jdg)
+      -- broken = filterPosition' defn pos jdg
+   -- in case working == broken of
+      --   True -> working
+      --   False -> error $ show (working, broken)
+
+filterDconPosition' :: DataCon -> Int -> Judgement -> Judgement
+filterDconPosition' dcon pos jdg =
+    disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
+  where
+    go name _
+      = not
+      . isJust
+      $ hasPositionalAncestry' (findDconPositionVals' jdg dcon pos) jdg name
+
+findPositionVal' :: Judgement' a -> OccName -> Int -> Maybe OccName
+findPositionVal' jdg defn pos = listToMaybe $ do
+  (name, hi) <- M.toList $ M.map (overProvenance expandDisallowed) $ jEntireHypothesis jdg
+  case hi_provenance hi of
+    TopLevelArgPrv defn' pos'
+      | defn == defn'
+      , pos  == pos' -> pure name
+    PatternMatchPrv pv
+      | pv_scrutinee pv == Just defn
+      , pv_position pv  == pos -> pure name
+    _ -> []
+
+findDconPositionVals' :: Judgement' a -> DataCon -> Int -> [OccName]
+findDconPositionVals' jdg dcon pos = do
+  (name, hi) <- M.toList $ jHypothesis jdg
+  case hi_provenance hi of
+    PatternMatchPrv pv
+      | pv_datacon  pv == Uniquely dcon
+      , pv_position pv == pos -> pure name
+    _ -> []
+
+filterSameTypeFromOtherPositions''' :: DataCon -> Int -> Judgement -> Judgement
+filterSameTypeFromOtherPositions''' dcon pos jdg = filterSameTypeFromOtherPositions' dcon pos jdg
+
+filterSameTypeFromOtherPositions' :: DataCon -> Int -> Judgement -> Judgement
+filterSameTypeFromOtherPositions' dcon pos jdg =
+  let hy = jHypothesis $ filterDconPosition' dcon pos jdg
+      tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
+      to_remove = M.filter (flip S.member tys . hi_type) (jHypothesis jdg) M.\\ hy
+   in disallowing (WrongBranch pos) (M.keys to_remove) jdg
 
 
 filterSameTypeFromOtherPositions :: OccName -> Int -> Judgement -> Judgement
 filterSameTypeFromOtherPositions defn pos jdg =
   let hy = jHypothesis $ filterPosition defn pos jdg
       tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
-   in withHypothesis (\hy2 -> M.filter (not . flip S.member tys . hi_type) hy2 <> hy) jdg
+      to_remove = M.filter (flip S.member tys . hi_type) (jHypothesis jdg) M.\\ hy
+   in disallowing (WrongBranch pos) (M.keys to_remove) jdg
 
 
 getAncestry :: Judgement' a -> OccName -> Set OccName
@@ -190,22 +277,32 @@ introducingPat scrutinee dc ns jdg = jdg
   & maybe id (\scrut -> field @"_jDestructed" <>~ S.singleton scrut) scrutinee
 
 
-disallowing :: [OccName] -> Judgement' a -> Judgement' a
-disallowing ns =
-  field @"_jHypothesis" %~ flip M.withoutKeys (S.fromList ns)
+disallowing :: DisallowReason -> [OccName] -> Judgement' a -> Judgement' a
+disallowing reason (S.fromList -> ns) =
+  field @"_jHypothesis" %~ (M.mapWithKey $ \name hi ->
+    case S.member name ns of
+      True -> overProvenance (DisallowedPrv reason) hi
+      False -> hi
+                           )
 
 
 ------------------------------------------------------------------------------
 -- | The hypothesis, consisting of local terms and the ambient environment
 -- (includes and class methods.)
 jHypothesis :: Judgement' a -> Map OccName (HyInfo a)
-jHypothesis = _jHypothesis
+jHypothesis = M.filter (not . isDisallowed . hi_provenance) . jEntireHypothesis
+
+
+------------------------------------------------------------------------------
+-- | The whole hypothesis, including things disallowed.
+jEntireHypothesis :: Judgement' a -> Map OccName (HyInfo a)
+jEntireHypothesis = _jHypothesis
 
 
 ------------------------------------------------------------------------------
 -- | Just the local hypothesis.
 jLocalHypothesis :: Judgement' a -> Map OccName (HyInfo a)
-jLocalHypothesis = M.filter (isLocalHypothesis . hi_provenance) . _jHypothesis
+jLocalHypothesis = M.filter (isLocalHypothesis . hi_provenance) . jHypothesis
 
 
 isTopHole :: Context -> Judgement' a -> Maybe OccName
@@ -219,7 +316,7 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 ------------------------------------------------------------------------------
 -- | Only the hypothesis members which are pattern vals
 jPatHypothesis :: Judgement' a -> Map OccName PatVal
-jPatHypothesis = M.mapMaybe (getPatVal . hi_provenance) . _jHypothesis
+jPatHypothesis = M.mapMaybe (getPatVal . hi_provenance) . jHypothesis
 
 
 getPatVal :: Provenance-> Maybe PatVal
@@ -274,4 +371,12 @@ isLocalHypothesis _ = False
 isPatternMatch :: Provenance -> Bool
 isPatternMatch PatternMatchPrv{} = True
 isPatternMatch _ = False
+
+isDisallowed :: Provenance -> Bool
+isDisallowed DisallowedPrv{} = True
+isDisallowed _ = False
+
+expandDisallowed :: Provenance -> Provenance
+expandDisallowed (DisallowedPrv _ prv) = expandDisallowed prv
+expandDisallowed prv = prv
 

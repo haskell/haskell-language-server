@@ -163,6 +163,13 @@ data Provenance
   | UserPrv
   | ImportPrv
   | RecursivePrv
+  | DisallowedPrv DisallowReason Provenance
+  deriving stock (Eq, Show, Generic, Ord)
+
+
+data DisallowReason
+  = WrongBranch Int
+  | RecursiveCall
   deriving stock (Eq, Show, Generic, Ord)
 
 
@@ -191,6 +198,9 @@ data HyInfo a = HyInfo
   , hi_type       :: a
   }
   deriving stock (Functor, Eq, Show, Generic, Ord)
+
+overProvenance :: (Provenance -> Provenance) -> HyInfo a -> HyInfo a
+overProvenance f (HyInfo prv ty) = HyInfo (f prv) ty
 
 
 ------------------------------------------------------------------------------
