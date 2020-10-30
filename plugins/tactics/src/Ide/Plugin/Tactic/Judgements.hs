@@ -28,6 +28,7 @@ module Ide.Plugin.Tactic.Judgements
   , disallowing
   , mkFirstJudgement
   , hypothesisFromBindings
+  , isTopLevel
   ) where
 
 import           Control.Lens hiding (Context)
@@ -312,6 +313,10 @@ mkFirstJudgement hy top goal = Judgement
   }
 
 
+isTopLevel :: Provenance -> Bool
+isTopLevel TopLevelArgPrv{} = True
+isTopLevel _                = False
+
 isLocalHypothesis :: Provenance -> Bool
 isLocalHypothesis UserPrv{}         = True
 isLocalHypothesis PatternMatchPrv{} = True
@@ -323,9 +328,11 @@ isPatternMatch :: Provenance -> Bool
 isPatternMatch PatternMatchPrv{} = True
 isPatternMatch _                 = False
 
+
 isDisallowed :: Provenance -> Bool
 isDisallowed DisallowedPrv{} = True
 isDisallowed _               = False
+
 
 expandDisallowed :: Provenance -> Provenance
 expandDisallowed (DisallowedPrv _ prv) = expandDisallowed prv

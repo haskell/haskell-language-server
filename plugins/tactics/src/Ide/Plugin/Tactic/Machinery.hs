@@ -32,6 +32,7 @@ import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics (mkQ, everything, gcount)
 import           Data.List (sortBy)
+import qualified Data.Map as M
 import           Data.Ord (comparing, Down(..))
 import           Data.Set (Set)
 import qualified Data.Set as S
@@ -77,11 +78,13 @@ runTactic ctx jdg t =
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
                 $ jGoal jdg
                 : (fmap hi_type $ toList $ jHypothesis jdg)
-        unused_topvals = [] -- nub $ join $ join $ toList $ _jPositionMaps jdg
+        unused_topvals = M.keysSet
+                       $ M.filter (isTopLevel . hi_provenance)
+                       $ jHypothesis jdg
         tacticState =
           defaultTacticState
             { ts_skolems = skolems
-            , ts_unused_top_vals = S.fromList unused_topvals
+            , ts_unused_top_vals = unused_topvals
             }
     in case partitionEithers
           . flip runReader ctx
@@ -122,9 +125,8 @@ tracing s (TacticT m)
 
 ------------------------------------------------------------------------------
 -- | Recursion is allowed only when we can prove it is on a structurally
--- smaller argument. The top of the 'ts_recursion_stack' is set to 'True' iff
--- one of the recursive arguments is a pattern val (ie. came from a pattern
--- match.)
+-- smaller argument. The top of the 'ts_recursion_stack' witnesses the smaller
+-- pattern val.
 guardStructurallySmallerRecursion
     :: TacticState
     -> Maybe TacticError
