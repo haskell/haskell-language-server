@@ -153,20 +153,35 @@ withIntroducedVals f =
   field @"ts_intro_vals" %~ f
 
 
+------------------------------------------------------------------------------
+-- | Describes where hypotheses came from. Used extensively to prune stupid
+-- solutions from the search space.
 data Provenance
-  = TopLevelArgPrv
-      OccName   -- ^ Function name
-      Int       -- ^ Position
+  = -- | An argument given to the topmost function that contains the current
+    -- hole. Recursive calls are restricted to values whose provenance lines up
+    -- with the same argument.
+    TopLevelArgPrv
+      OccName   -- ^ Binding function
+      Int       -- ^ Argument Position
+    -- | A binding created in a pattern match.
   | PatternMatchPrv PatVal
+    -- | A class method from the given context.
   | ClassMethodPrv
       (Uniquely Class)     -- ^ Class
+    -- | A binding explicitly written by the user.
   | UserPrv
-  | ImportPrv
+    -- | The recursive hypothesis. Present only in the context of the recursion
+    -- tactic.
   | RecursivePrv
+    -- | A hypothesis which has been disallowed for some reason. It's important
+    -- to keep these in the hypothesis set, rather than filtering it, in order
+    -- to continue tracking downstream provenance.
   | DisallowedPrv DisallowReason Provenance
   deriving stock (Eq, Show, Generic, Ord)
 
 
+------------------------------------------------------------------------------
+-- | Why was a hypothesis disallowed?
 data DisallowReason
   = WrongBranch Int
   | Shadowed
@@ -174,16 +189,25 @@ data DisallowReason
   deriving stock (Eq, Show, Generic, Ord)
 
 
+------------------------------------------------------------------------------
+-- | Provenance of a pattern value.
 data PatVal = PatVal
   { pv_scrutinee :: Maybe OccName
     -- ^ Original scrutinee which created this PatVal. Nothing, for lambda
     -- case.
   , pv_ancestry  :: Set OccName
+    -- ^ The set of values which had to be destructed to discover this term.
+    -- Always contains the scrutinee.
   , pv_datacon   :: Uniquely DataCon
+    -- ^ The datacon which introduced this term.
   , pv_position  :: Int
+    -- ^ The position of this binding in the datacon's arguments.
   } deriving stock (Eq, Show, Generic, Ord)
 
 
+------------------------------------------------------------------------------
+-- | A wrapper which uses a 'Uniquable' constraint for providing 'Eq' and 'Ord'
+-- instances.
 newtype Uniquely a = Uniquely { getViaUnique :: a }
   deriving Show via a
 
@@ -194,12 +218,17 @@ instance Uniquable a => Ord (Uniquely a) where
   compare = nonDetCmpUnique `on` getUnique . getViaUnique
 
 
+------------------------------------------------------------------------------
+-- | The provenance and type of a hypothesis term.
 data HyInfo a = HyInfo
   { hi_provenance :: Provenance
   , hi_type       :: a
   }
   deriving stock (Functor, Eq, Show, Generic, Ord)
 
+
+------------------------------------------------------------------------------
+-- | Map a function over the provenance.
 overProvenance :: (Provenance -> Provenance) -> HyInfo a -> HyInfo a
 overProvenance f (HyInfo prv ty) = HyInfo (f prv) ty
 

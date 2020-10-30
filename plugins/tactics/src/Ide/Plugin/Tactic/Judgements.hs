@@ -68,6 +68,8 @@ buildHypothesis
       | otherwise = Nothing
 
 
+------------------------------------------------------------------------------
+-- | Has the given 'OccName' already been destructed?
 hasDestructed :: Judgement' a -> OccName -> Bool
 hasDestructed jdg n = S.member n $ _jDestructed jdg
 
@@ -94,8 +96,11 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
+------------------------------------------------------------------------------
+-- | Helper function for implementing functions which introduce new hypotheses.
 introducing
-    :: (Int -> Provenance)
+    :: (Int -> Provenance)  -- ^ A function from the position of the arg to its
+                            -- provenance.
     -> [(OccName, a)]
     -> Judgement' a
     -> Judgement' a
@@ -104,8 +109,11 @@ introducing f ns =
     \(pos, (name, ty)) -> (name, HyInfo (f pos) ty))
 
 
+------------------------------------------------------------------------------
+-- | Introduce bindings in the context of a lamba.
 introducingLambda
-    :: Maybe OccName   -- ^ top level function, or Nothing for any other function
+    :: Maybe OccName   -- ^ The name of the top level function. For any other
+                       -- function, this should be 'Nothing'.
     -> [(OccName, a)]
     -> Judgement' a
     -> Judgement' a
@@ -113,15 +121,19 @@ introducingLambda func = introducing $ \pos ->
   maybe UserPrv (\x -> TopLevelArgPrv x pos) func
 
 
+------------------------------------------------------------------------------
+-- | Introduce a binding in a recursive context.
 introducingRecursively :: [(OccName, a)] -> Judgement' a -> Judgement' a
 introducingRecursively = introducing $ const RecursivePrv
 
 
+------------------------------------------------------------------------------
+-- | Check whether any of the given occnames are an ancestor of the term.
 hasPositionalAncestry
     :: Foldable t
-    => t OccName
+    => t OccName   -- ^ Desired ancestors.
     -> Judgement
-    -> OccName     -- ^ thing to check ancestry
+    -> OccName     -- ^ Potential child
     -> Maybe Bool  -- ^ Just True if the result is the oldest positional ancestor
                    -- just false if it's a descendent
                    -- otherwise nothing
@@ -137,6 +149,8 @@ hasPositionalAncestry ancestors jdg name
   | otherwise = Nothing
 
 
+------------------------------------------------------------------------------
+-- | Helper function for disallowing hypotheses that have the wrong ancestry.
 filterAncestry
     :: Foldable t
     => t OccName
@@ -151,11 +165,18 @@ filterAncestry ancestry reason jdg =
       . isJust
       $ hasPositionalAncestry ancestry jdg name
 
+
+------------------------------------------------------------------------------
+-- | @filter defn pos@ removes any hypotheses which are bound in @defn@ to
+-- a position other than @pos@. Any terms whose ancestry doesn't include @defn@
+-- remain.
 filterPosition :: OccName -> Int -> Judgement -> Judgement
 filterPosition defn pos jdg =
   filterAncestry (findPositionVal jdg defn pos) (WrongBranch pos) jdg
 
 
+------------------------------------------------------------------------------
+-- | Helper function for determining the ancestry list for 'filterPosition'.
 findPositionVal :: Judgement' a -> OccName -> Int -> Maybe OccName
 findPositionVal jdg defn pos = listToMaybe $ do
   -- It's important to inspect the entire hypothesis here, as we need to trace
@@ -170,6 +191,10 @@ findPositionVal jdg defn pos = listToMaybe $ do
       , pv_position pv  == pos -> pure name
     _ -> []
 
+
+------------------------------------------------------------------------------
+-- | Helper function for determining the ancestry list for
+-- 'filterSameTypeFromOtherPositions'.
 findDconPositionVals :: Judgement' a -> DataCon -> Int -> [OccName]
 findDconPositionVals jdg dcon pos = do
   (name, hi) <- M.toList $ jHypothesis jdg
@@ -180,6 +205,11 @@ findDconPositionVals jdg dcon pos = do
     _ -> []
 
 
+------------------------------------------------------------------------------
+-- | Disallow any hypotheses who have the same type as anything bound by the
+-- given position for the datacon. Used to ensure recursive functions like
+-- 'fmap' preserve the relative ordering of their arguments by eliminating any
+-- other term which might match.
 filterSameTypeFromOtherPositions :: DataCon -> Int -> Judgement -> Judgement
 filterSameTypeFromOtherPositions dcon pos jdg =
   let hy = jHypothesis
@@ -194,7 +224,8 @@ filterSameTypeFromOtherPositions dcon pos jdg =
    in disallowing Shadowed (M.keys to_remove) jdg
 
 
-
+------------------------------------------------------------------------------
+-- | Return the ancestry of a 'PatVal', or 'mempty' otherwise.
 getAncestry :: Judgement' a -> OccName -> Set OccName
 getAncestry jdg name =
   case M.lookup name $ jPatHypothesis jdg of
@@ -241,6 +272,9 @@ introducingPat scrutinee dc ns jdg
     ) ns jdg
 
 
+------------------------------------------------------------------------------
+-- | Prevent some occnames from being used in the hypothesis. This will hide
+-- them from 'jHypothesis', but not from 'jEntireHypothesis'.
 disallowing :: DisallowReason -> [OccName] -> Judgement' a -> Judgement' a
 disallowing reason (S.fromList -> ns) =
   field @"_jHypothesis" %~ (M.mapWithKey $ \name hi ->
@@ -252,7 +286,7 @@ disallowing reason (S.fromList -> ns) =
 
 ------------------------------------------------------------------------------
 -- | The hypothesis, consisting of local terms and the ambient environment
--- (includes and class methods.)
+-- (impors and class methods.) Hides disallowed values.
 jHypothesis :: Judgement' a -> Map OccName (HyInfo a)
 jHypothesis = M.filter (not . isDisallowed . hi_provenance) . jEntireHypothesis
 
@@ -269,9 +303,12 @@ jLocalHypothesis :: Judgement' a -> Map OccName (HyInfo a)
 jLocalHypothesis = M.filter (isLocalHypothesis . hi_provenance) . jHypothesis
 
 
+------------------------------------------------------------------------------
+-- | If we're in a top hole, the name of the defining function.
 isTopHole :: Context -> Judgement' a -> Maybe OccName
 isTopHole ctx =
   bool Nothing (Just $ extremelyStupid__definingFunction ctx) . _jIsTopHole
+
 
 unsetIsTopHole :: Judgement' a -> Judgement' a
 unsetIsTopHole = field @"_jIsTopHole" .~ False
@@ -313,10 +350,15 @@ mkFirstJudgement hy top goal = Judgement
   }
 
 
+------------------------------------------------------------------------------
+-- | Is this a top level function binding?
 isTopLevel :: Provenance -> Bool
 isTopLevel TopLevelArgPrv{} = True
 isTopLevel _                = False
 
+
+------------------------------------------------------------------------------
+-- | Is this a local function argument, pattern match or user val?
 isLocalHypothesis :: Provenance -> Bool
 isLocalHypothesis UserPrv{}         = True
 isLocalHypothesis PatternMatchPrv{} = True
@@ -324,16 +366,22 @@ isLocalHypothesis TopLevelArgPrv{}  = True
 isLocalHypothesis _                 = False
 
 
+------------------------------------------------------------------------------
+-- | Is this a pattern match?
 isPatternMatch :: Provenance -> Bool
 isPatternMatch PatternMatchPrv{} = True
 isPatternMatch _                 = False
 
 
+------------------------------------------------------------------------------
+-- | Was this term ever disallowed?
 isDisallowed :: Provenance -> Bool
 isDisallowed DisallowedPrv{} = True
 isDisallowed _               = False
 
 
+------------------------------------------------------------------------------
+-- | Eliminates 'DisallowedPrv' provenances.
 expandDisallowed :: Provenance -> Provenance
 expandDisallowed (DisallowedPrv _ prv) = expandDisallowed prv
 expandDisallowed prv = prv
