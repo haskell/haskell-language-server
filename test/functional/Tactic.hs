@@ -53,45 +53,44 @@ codeActionTitle (CACodeAction(CodeAction title _ _ _ _)) = Just title
 tests :: TestTree
 tests = testGroup
   "tactic"
-  [
-    -- mkTest
-    --   "Produces intros code action"
-    --   "T1.hs" 2 14
-    --   [ (id, Intros, "")
-    --   ]
-  -- , mkTest
-    --   "Produces destruct and homomorphism code actions"
-    --   "T2.hs" 2 21
-    --   [ (id, Destruct, "eab")
-    --   , (id, Homomorphism, "eab")
-    --   ]
-  -- , mkTest
-    --   "Won't suggest homomorphism on the wrong type"
-    --   "T2.hs" 8 8
-    --   [ (not, Homomorphism, "global")
-    --   ]
-  -- , mkTest
-    --   "Won't suggest intros on the wrong type"
-    --   "T2.hs" 8 8
-    --   [ (not, Intros, "")
-    --   ]
-  -- , mkTest
-    --   "Produces (homomorphic) lambdacase code actions"
-    --   "T3.hs" 4 24
-    --   [ (id, HomomorphismLambdaCase, "")
-    --   , (id, DestructLambdaCase, "")
-    --   ]
-  -- , mkTest
-    --   "Produces lambdacase code actions"
-    --   "T3.hs" 7 13
-    --   [ (id, DestructLambdaCase, "")
-    --   ]
-  -- , mkTest
-    --   "Doesn't suggest lambdacase without -XLambdaCase"
-    --   "T2.hs" 11 25
-    --   [ (not, DestructLambdaCase, "")
-    --   ]
-    goldenTest "GoldenIntros.hs"            2 8  Intros ""
+  [ mkTest
+      "Produces intros code action"
+      "T1.hs" 2 14
+      [ (id, Intros, "")
+      ]
+  , mkTest
+      "Produces destruct and homomorphism code actions"
+      "T2.hs" 2 21
+      [ (id, Destruct, "eab")
+      , (id, Homomorphism, "eab")
+      ]
+  , mkTest
+      "Won't suggest homomorphism on the wrong type"
+      "T2.hs" 8 8
+      [ (not, Homomorphism, "global")
+      ]
+  , mkTest
+      "Won't suggest intros on the wrong type"
+      "T2.hs" 8 8
+      [ (not, Intros, "")
+      ]
+  , mkTest
+      "Produces (homomorphic) lambdacase code actions"
+      "T3.hs" 4 24
+      [ (id, HomomorphismLambdaCase, "")
+      , (id, DestructLambdaCase, "")
+      ]
+  , mkTest
+      "Produces lambdacase code actions"
+      "T3.hs" 7 13
+      [ (id, DestructLambdaCase, "")
+      ]
+  , mkTest
+      "Doesn't suggest lambdacase without -XLambdaCase"
+      "T2.hs" 11 25
+      [ (not, DestructLambdaCase, "")
+      ]
+  , goldenTest "GoldenIntros.hs"            2 8  Intros ""
   , goldenTest "GoldenEitherAuto.hs"        2 11 Auto ""
   , goldenTest "GoldenJoinCont.hs"          4 12 Auto ""
   , goldenTest "GoldenIdentityFunctor.hs"   3 11 Auto ""
