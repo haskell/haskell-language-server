@@ -5,7 +5,30 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns     #-}
 
-module Ide.Plugin.Tactic.Judgements where
+module Ide.Plugin.Tactic.Judgements
+  ( blacklistingDestruct
+  , unwhitelistingSplit
+  , introducingLambda
+  , introducingRecursively
+  , introducingPat
+  , jGoal
+  , jHypothesis
+  , jPatHypothesis
+  , substJdg
+  , unsetIsTopHole
+  , filterSameTypeFromOtherPositions
+  , isDestructBlacklisted
+  , withNewGoal
+  , jLocalHypothesis
+  , hasDestructed
+  , isSplitWhitelisted
+  , isPatternMatch
+  , filterPosition
+  , isTopHole
+  , disallowing
+  , mkFirstJudgement
+  , hypothesisFromBindings
+  ) where
 
 import           Control.Lens hiding (Context)
 import           Data.Bool
@@ -70,25 +93,27 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
+introducing
+    :: (Int -> Provenance)
+    -> [(OccName, a)]
+    -> Judgement' a
+    -> Judgement' a
+introducing f ns =
+  field @"_jHypothesis" <>~ M.fromList (zip [0..] ns <&>
+    \(pos, (name, ty)) -> (name, HyInfo (f pos) ty))
+
+
 introducingLambda
     :: Maybe OccName   -- ^ top level function, or Nothing for any other function
     -> [(OccName, a)]
     -> Judgement' a
     -> Judgement' a
-introducingLambda func ns =
-  field @"_jHypothesis" <>~ M.fromList (zip [0..] ns <&> \(pos, (name, ty)) ->
-    -- TODO(sandy): cleanup
-    (name, HyInfo (maybe UserPrv (\x -> TopLevelArgPrv x pos) func) ty))
+introducingLambda func = introducing $ \pos ->
+  maybe UserPrv (\x -> TopLevelArgPrv x pos) func
 
 
-------------------------------------------------------------------------------
--- | Add some terms to the ambient hypothesis
 introducingRecursively :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducingRecursively ns =
-  field @"_jHypothesis" <>~ M.fromList (ns <&> \(name, ty) ->
-    -- TODO(sandy): cleanup
-    (name, HyInfo RecursivePrv ty
-    ))
+introducingRecursively = introducing $ const RecursivePrv
 
 
 hasPositionalAncestry
@@ -110,26 +135,30 @@ hasPositionalAncestry ancestors jdg name
           Nothing -> Nothing
   | otherwise = Nothing
 
+
+filterAncestry
+    :: Foldable t
+    => t OccName
+    -> DisallowReason
+    -> Judgement
+    -> Judgement
+filterAncestry ancestry reason jdg =
+    disallowing reason (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
+  where
+    go name _
+      = not
+      . isJust
+      $ hasPositionalAncestry ancestry jdg name
+
 filterPosition :: OccName -> Int -> Judgement -> Judgement
 filterPosition defn pos jdg =
-    disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
-  where
-    go name _
-      = not
-      . isJust
-      $ hasPositionalAncestry (findPositionVal jdg defn pos) jdg name
+  filterAncestry (findPositionVal jdg defn pos) (WrongBranch pos) jdg
 
-filterDconPosition :: DataCon -> Int -> Judgement -> Judgement
-filterDconPosition dcon pos jdg =
-    disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
-  where
-    go name _
-      = not
-      . isJust
-      $ hasPositionalAncestry (findDconPositionVals jdg dcon pos) jdg name
 
 findPositionVal :: Judgement' a -> OccName -> Int -> Maybe OccName
 findPositionVal jdg defn pos = listToMaybe $ do
+  -- It's important to inspect the entire hypothesis here, as we need to trace
+  -- ancstry through potentially disallowed terms in the hypothesis.
   (name, hi) <- M.toList $ M.map (overProvenance expandDisallowed) $ jEntireHypothesis jdg
   case hi_provenance hi of
     TopLevelArgPrv defn' pos'
@@ -149,12 +178,19 @@ findDconPositionVals jdg dcon pos = do
       , pv_position pv == pos -> pure name
     _ -> []
 
+
 filterSameTypeFromOtherPositions :: DataCon -> Int -> Judgement -> Judgement
 filterSameTypeFromOtherPositions dcon pos jdg =
-  let hy = jHypothesis $ filterDconPosition dcon pos jdg
+  let hy = jHypothesis
+         $ filterAncestry
+             (findDconPositionVals jdg dcon pos)
+             (WrongBranch pos)
+             jdg
       tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
-      to_remove = M.filter (flip S.member tys . hi_type) (jHypothesis jdg) M.\\ hy
-   in disallowing (WrongBranch pos) (M.keys to_remove) jdg
+      to_remove =
+        M.filter (flip S.member tys . hi_type) (jHypothesis jdg)
+          M.\\ hy
+   in disallowing Shadowed (M.keys to_remove) jdg
 
 
 
@@ -190,20 +226,18 @@ introducingPat
     -> [(OccName, a)]
     -> Judgement' a
     -> Judgement' a
-introducingPat scrutinee dc ns jdg = jdg
-  & field @"_jHypothesis"  <>~ (M.fromList $ zip [0..] ns <&> \(pos, (name, ty)) ->
-      ( name
-      , HyInfo
-          (PatternMatchPrv $ PatVal
-              scrutinee
-              (maybe
-                  mempty
-                  (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
-                  scrutinee)
-              (Uniquely dc)
-              pos)
-          ty))
-  & maybe id (\scrut -> field @"_jDestructed" <>~ S.singleton scrut) scrutinee
+introducingPat scrutinee dc ns jdg
+  = maybe id (\scrut -> field @"_jDestructed" <>~ S.singleton scrut) scrutinee
+  $ introducing (\pos ->
+      PatternMatchPrv $
+        PatVal
+          scrutinee
+          (maybe mempty
+                (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
+                scrutinee)
+          (Uniquely dc)
+          pos
+    ) ns jdg
 
 
 disallowing :: DisallowReason -> [OccName] -> Judgement' a -> Judgement' a
@@ -271,8 +305,8 @@ mkFirstJudgement
     -> Type
     -> Judgement' CType
 mkFirstJudgement hy ambient top _posvals goal = Judgement
-  { _jHypothesis        = M.map mkLocalHypothesisInfo hy
-                       <> M.map mkAmbientHypothesisInfo ambient
+  { _jHypothesis        = M.map (HyInfo UserPrv) hy
+                       <> M.map (HyInfo ImportPrv) ambient
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
   , _jDestructed        = mempty
@@ -281,28 +315,20 @@ mkFirstJudgement hy ambient top _posvals goal = Judgement
   }
 
 
-mkLocalHypothesisInfo :: a -> HyInfo a
-mkLocalHypothesisInfo = HyInfo UserPrv
-
-
-mkAmbientHypothesisInfo :: a -> HyInfo a
-mkAmbientHypothesisInfo = HyInfo ImportPrv
-
-
 isLocalHypothesis :: Provenance -> Bool
-isLocalHypothesis UserPrv{} = True
+isLocalHypothesis UserPrv{}         = True
 isLocalHypothesis PatternMatchPrv{} = True
-isLocalHypothesis TopLevelArgPrv{} = True
-isLocalHypothesis _ = False
+isLocalHypothesis TopLevelArgPrv{}  = True
+isLocalHypothesis _                 = False
 
 
 isPatternMatch :: Provenance -> Bool
 isPatternMatch PatternMatchPrv{} = True
-isPatternMatch _ = False
+isPatternMatch _                 = False
 
 isDisallowed :: Provenance -> Bool
 isDisallowed DisallowedPrv{} = True
-isDisallowed _ = False
+isDisallowed _               = False
 
 expandDisallowed :: Provenance -> Provenance
 expandDisallowed (DisallowedPrv _ prv) = expandDisallowed prv

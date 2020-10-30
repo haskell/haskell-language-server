@@ -169,6 +169,7 @@ data Provenance
 
 data DisallowReason
   = WrongBranch Int
+  | Shadowed
   | RecursiveCall
   deriving stock (Eq, Show, Generic, Ord)
 
