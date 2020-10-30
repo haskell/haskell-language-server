@@ -78,8 +78,7 @@ destructMatches f scrut t jdg = do
           let hy' = zip names $ coerce args
               dcon_name = nameOccName $ dataConName dc
 
-          let j = withPositionMapping dcon_name names
-                $ introducingPat scrut dc hy'
+          let j = introducingPat scrut dc hy'
                 $ withNewGoal g jdg
           (tr, sg) <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names

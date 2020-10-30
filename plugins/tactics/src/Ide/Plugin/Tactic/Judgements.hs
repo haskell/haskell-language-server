@@ -91,7 +91,7 @@ introducingRecursively ns =
     ))
 
 
-hasPositionalAncestry'
+hasPositionalAncestry
     :: Foldable t
     => t OccName
     -> Judgement
@@ -99,7 +99,7 @@ hasPositionalAncestry'
     -> Maybe Bool  -- ^ Just True if the result is the oldest positional ancestor
                    -- just false if it's a descendent
                    -- otherwise nothing
-hasPositionalAncestry' ancestors jdg name
+hasPositionalAncestry ancestors jdg name
   | not $ null ancestors
   = case any (== name) ancestors of
       True  -> Just True
@@ -117,7 +117,7 @@ filterPosition defn pos jdg =
     go name _
       = not
       . isJust
-      $ hasPositionalAncestry' (findPositionVal jdg defn pos) jdg name
+      $ hasPositionalAncestry (findPositionVal jdg defn pos) jdg name
 
 filterDconPosition :: DataCon -> Int -> Judgement -> Judgement
 filterDconPosition dcon pos jdg =
@@ -126,7 +126,7 @@ filterDconPosition dcon pos jdg =
     go name _
       = not
       . isJust
-      $ hasPositionalAncestry' (findDconPositionVals jdg dcon pos) jdg name
+      $ hasPositionalAncestry (findDconPositionVals jdg dcon pos) jdg name
 
 findPositionVal :: Judgement' a -> OccName -> Int -> Maybe OccName
 findPositionVal jdg defn pos = listToMaybe $ do
@@ -165,38 +165,9 @@ getAncestry jdg name =
     Nothing -> mempty
 
 
-hasPositionalAncestry
-    :: Judgement
-    -> OccName     -- ^ defining fn
-    -> Int         -- ^ position
-    -> OccName     -- ^ thing to check ancestry
-    -> Maybe Bool  -- ^ Just True if the result is the oldest positional ancestor
-                   -- just false if it's a descendent
-                   -- otherwise nothing
-hasPositionalAncestry jdg defn n name
-  | not $ null ancestors
-  = case any (== name) ancestors of
-      True  -> Just True
-      False ->
-        case M.lookup name $ jAncestryMap jdg of
-          Just ancestry ->
-            bool Nothing (Just False) $ any (flip S.member ancestry) ancestors
-          Nothing -> Nothing
-  | otherwise = Nothing
-  where
-    ancestors = toListOf (_Just . traversed . ix n)
-              $ M.lookup defn
-              $ _jPositionMaps jdg
-
-
 jAncestryMap :: Judgement' a -> Map OccName (Set OccName)
 jAncestryMap jdg =
   flip M.map (jPatHypothesis jdg) pv_ancestry
-
-
-withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
-withPositionMapping defn names =
-  field @"_jPositionMaps" . at defn <>~ Just [names]
 
 
 ------------------------------------------------------------------------------
@@ -299,13 +270,12 @@ mkFirstJudgement
     -> M.Map OccName [[OccName]]  -- ^ existing pos vals
     -> Type
     -> Judgement' CType
-mkFirstJudgement hy ambient top posvals goal = Judgement
+mkFirstJudgement hy ambient top _posvals goal = Judgement
   { _jHypothesis        = M.map mkLocalHypothesisInfo hy
                        <> M.map mkAmbientHypothesisInfo ambient
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
   , _jDestructed        = mempty
-  , _jPositionMaps      = posvals
   , _jIsTopHole         = top
   , _jGoal              = CType goal
   }

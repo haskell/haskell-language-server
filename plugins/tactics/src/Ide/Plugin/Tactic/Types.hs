@@ -214,7 +214,6 @@ data Judgement' a = Judgement
     -- for nullary data constructors.
   , _jBlacklistDestruct :: !(Bool)
   , _jWhitelistSplit :: !(Bool)
-  , _jPositionMaps :: !(Map OccName [[OccName]])
   , _jIsTopHole    :: !Bool
   , _jGoal         :: !(a)
   }

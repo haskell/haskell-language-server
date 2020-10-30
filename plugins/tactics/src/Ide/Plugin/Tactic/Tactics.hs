@@ -91,14 +91,7 @@ intros = rule $ \jdg -> do
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
       when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
-      (tr, sg)
-        <- newSubgoal
-          $ bool
-              id
-              (withPositionMapping
-                (extremelyStupid__definingFunction ctx) vs)
-              (isJust top_hole)
-          $ jdg'
+      (tr, sg) <- newSubgoal jdg'
       pure
         . (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr, )
         . noLoc
