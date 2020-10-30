@@ -76,8 +76,10 @@ runTactic
 runTactic ctx jdg t =
     let skolems = S.fromList
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
-                $ jGoal jdg
-                : (fmap hi_type $ toList $ jHypothesis jdg)
+                $ (:) (jGoal jdg)
+                $ fmap hi_type
+                $ toList
+                $ jHypothesis jdg
         unused_topvals = M.keysSet
                        $ M.filter (isTopLevel . hi_provenance)
                        $ jHypothesis jdg

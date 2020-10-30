@@ -280,14 +280,13 @@ judgementForHole state nfp range = do
        )
 
 
-spliceProvenance :: Map OccName Provenance -> Map OccName (HyInfo a) -> Map OccName (HyInfo a)
-spliceProvenance provs hy =
-  M.mapWithKey
-    (\name hi ->
-      overProvenance
-        (maybe id const $ M.lookup name provs)
-        hi)
-    hy
+spliceProvenance
+    :: Map OccName Provenance
+    -> Map OccName (HyInfo a)
+    -> Map OccName (HyInfo a)
+spliceProvenance provs =
+  M.mapWithKey $ \name hi ->
+    overProvenance (maybe id const $ M.lookup name provs) hi
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
