@@ -68,7 +68,6 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ pushRecursionStack .  countRecursiveCall
-    jdg <- goal
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
       (localTactic (apply name) $ introducingRecursively defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
@@ -86,8 +85,7 @@ intros = rule $ \jdg -> do
     (as, b) -> do
       vs <- mkManyGoodNames hy as
       let top_hole = isTopHole ctx jdg
-      let jdg' = traceIdX "introduced lambda"
-               $ introducingLambda top_hole (zip vs $ coerce as)
+          jdg' = introducingLambda top_hole (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
       when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
