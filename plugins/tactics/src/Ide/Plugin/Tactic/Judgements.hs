@@ -102,8 +102,8 @@ filterPosition defn pos jdg =
 filterSameTypeFromOtherPositions :: OccName -> Int -> Judgement -> Judgement
 filterSameTypeFromOtherPositions defn pos jdg =
   let hy = jHypothesis $ filterPosition defn pos jdg
-      tys = S.fromList $ fmap snd $ M.toList hy
-   in withHypothesis (\hy2 -> M.filter (not . flip S.member tys) hy2 <> hy) jdg
+      tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
+   in withHypothesis (\hy2 -> M.filter (not . flip S.member tys . hi_type) hy2 <> hy) jdg
 
 
 hasPositionalAncestry
@@ -208,8 +208,8 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 -- | Only the hypothesis members which are pattern vals
 jPatHypothesis :: Judgement' a -> Map OccName (HyInfo a)
 jPatHypothesis jdg
-  = mappend
-      (M.restrictKeys (jHypothesis jdg) $ _jPatternVals jdg)
+  =
+      -- (M.restrictKeys (jHypothesis jdg) $ _jPatternVals jdg)
       (M.filter (isPatternMatch . hi_provenance) $ _jHypothesis jdg)
 
 

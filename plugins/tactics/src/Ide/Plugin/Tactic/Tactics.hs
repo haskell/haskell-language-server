@@ -116,7 +116,7 @@ destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
        in case isPatVal jdg name of
             True ->
               pruning subtactic $ \jdgs ->
-                let getHyTypes = S.fromList . fmap snd . M.toList . jHypothesis
+                let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
                     new_hy = foldMap getHyTypes jdgs
                     old_hy = getHyTypes jdg
                  in case S.null $ new_hy S.\\ old_hy of
