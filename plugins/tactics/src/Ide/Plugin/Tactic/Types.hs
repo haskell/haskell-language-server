@@ -186,6 +186,7 @@ data DisallowReason
   = WrongBranch Int
   | Shadowed
   | RecursiveCall
+  | AlreadyDestructed
   deriving stock (Eq, Show, Generic, Ord)
 
 
@@ -237,11 +238,6 @@ overProvenance f (HyInfo prv ty) = HyInfo (f prv) ty
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
   { _jHypothesis :: !(Map OccName (HyInfo a))
-  , _jDestructed :: !(Set OccName)
-    -- ^ Set of names we've already destructed. These should align with keys of
-    -- _jHypothesis. You might think we could just inspect the hypothesis and
-    -- find any PatVals whose scrutinee is the name in question, but this fails
-    -- for nullary data constructors.
   , _jBlacklistDestruct :: !(Bool)
   , _jWhitelistSplit :: !(Bool)
   , _jIsTopHole    :: !Bool
@@ -270,7 +266,6 @@ data TacticError
   | UnificationError CType CType
   | NoProgress
   | NoApplicableTactic
-  | AlreadyDestructed OccName
   | IncorrectDataCon DataCon
   | RecursionOnWrongParam OccName Int OccName
   | UnhelpfulDestruct OccName
@@ -302,8 +297,6 @@ instance Show TacticError where
       "Unable to make progress"
     show NoApplicableTactic =
       "No tactic could be applied"
-    show (AlreadyDestructed name) =
-      "Already destructed " <> unsafeRender name
     show (IncorrectDataCon dcon) =
       "Data con doesn't align with goal type (" <> unsafeRender dcon <> ")"
     show (RecursionOnWrongParam call p arg) =

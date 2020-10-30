@@ -64,7 +64,7 @@ destructMatches
     -> Judgement
     -> RuleM (Trace, [RawMatch])
 destructMatches f scrut t jdg = do
-  let hy = jHypothesis jdg
+  let hy = jEntireHypothesis jdg
       g  = jGoal jdg
   case splitTyConApp_maybe $ unCType t of
     Nothing -> throwError $ GoalMismatch "destruct" g
@@ -76,9 +76,7 @@ destructMatches f scrut t jdg = do
           let args = dataConInstOrigArgTys' dc apps
           names <- mkManyGoodNames hy args
           let hy' = zip names $ coerce args
-              dcon_name = nameOccName $ dataConName dc
-
-          let j = introducingPat scrut dc hy'
+              j = introducingPat scrut dc hy'
                 $ withNewGoal g jdg
           (tr, sg) <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
@@ -147,7 +145,7 @@ destruct' f term jdg = do
                f
                (Just term)
                t
-               jdg
+               $ disallowing AlreadyDestructed [term] jdg
       pure ( rose ("destruct " <> show term) $ pure tr
            , noLoc $ case' (var' term) ms
            )

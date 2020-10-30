@@ -13,6 +13,7 @@ module Ide.Plugin.Tactic.Judgements
   , introducingPat
   , jGoal
   , jHypothesis
+  , jEntireHypothesis
   , jPatHypothesis
   , substJdg
   , unsetIsTopHole
@@ -20,7 +21,6 @@ module Ide.Plugin.Tactic.Judgements
   , isDestructBlacklisted
   , withNewGoal
   , jLocalHypothesis
-  , hasDestructed
   , isSplitWhitelisted
   , isPatternMatch
   , filterPosition
@@ -66,12 +66,6 @@ buildHypothesis
       | Just ty <- t
       , isAlpha . head . occNameString $ occ = Just (occ, HyInfo UserPrv $ CType ty)
       | otherwise = Nothing
-
-
-------------------------------------------------------------------------------
--- | Has the given 'OccName' already been destructed?
-hasDestructed :: Judgement' a -> OccName -> Bool
-hasDestructed jdg n = S.member n $ _jDestructed jdg
 
 
 blacklistingDestruct :: Judgement -> Judgement
@@ -259,8 +253,7 @@ introducingPat
     -> Judgement' a
     -> Judgement' a
 introducingPat scrutinee dc ns jdg
-  = maybe id (\scrut -> field @"_jDestructed" <>~ S.singleton scrut) scrutinee
-  $ introducing (\pos ->
+  = introducing (\pos ->
       PatternMatchPrv $
         PatVal
           scrutinee
@@ -344,7 +337,6 @@ mkFirstJudgement hy top goal = Judgement
   { _jHypothesis        = hy
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
-  , _jDestructed        = mempty
   , _jIsTopHole         = top
   , _jGoal              = CType goal
   }

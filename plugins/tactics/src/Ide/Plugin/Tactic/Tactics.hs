@@ -84,7 +84,7 @@ intros = rule $ \jdg -> do
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      vs <- mkManyGoodNames hy as
+      vs <- mkManyGoodNames (jEntireHypothesis jdg) as
       let top_hole = isTopHole ctx jdg
           jdg' = introducingLambda top_hole (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
@@ -106,30 +106,24 @@ destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   case M.lookup name $ jHypothesis jdg of
     Nothing -> throwError $ NotInScope name
     Just hi ->
-      case hasDestructed jdg name of
-        True -> throwError $ AlreadyDestructed name
-        False ->
-          let subtactic = rule $ destruct' (const subgoal) name
-          in case isPatternMatch $ hi_provenance hi of
-                True ->
-                  pruning subtactic $ \jdgs ->
-                    let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
-                        new_hy = foldMap getHyTypes jdgs
-                        old_hy = getHyTypes jdg
-                    in case S.null $ new_hy S.\\ old_hy of
-                          True  -> Just $ UnhelpfulDestruct name
-                          False -> Nothing
-                False -> subtactic
+      let subtactic = rule $ destruct' (const subgoal) name
+      in case isPatternMatch $ hi_provenance hi of
+            True ->
+              pruning subtactic $ \jdgs ->
+                let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
+                    new_hy = foldMap getHyTypes jdgs
+                    old_hy = getHyTypes jdg
+                in case S.null $ new_hy S.\\ old_hy of
+                      True  -> Just $ UnhelpfulDestruct name
+                      False -> Nothing
+            False -> subtactic
 
 
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
-destruct name = requireConcreteHole $ tracing "destruct(user)" $ do
-  jdg <- goal
-  case hasDestructed jdg name of
-    True -> throwError $ AlreadyDestructed name
-    False -> rule $ \jdg -> destruct' (const subgoal) name jdg
+destruct name = requireConcreteHole $ tracing "destruct(user)" $
+  rule $ destruct' (const subgoal) name
 
 
 ------------------------------------------------------------------------------
