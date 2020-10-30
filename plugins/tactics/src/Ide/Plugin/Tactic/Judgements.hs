@@ -50,20 +50,20 @@ import           Type
 
 ------------------------------------------------------------------------------
 -- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
-hypothesisFromBindings :: RealSrcSpan -> Bindings -> Map OccName CType
+hypothesisFromBindings :: RealSrcSpan -> Bindings -> Map OccName (HyInfo CType)
 hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
 
 
 ------------------------------------------------------------------------------
 -- | Convert a @Set Id@ into a hypothesis.
-buildHypothesis :: [(Name, Maybe Type)] -> Map OccName CType
+buildHypothesis :: [(Name, Maybe Type)] -> Map OccName (HyInfo CType)
 buildHypothesis
   = M.fromList
   . mapMaybe go
   where
     go (occName -> occ, t)
       | Just ty <- t
-      , isAlpha . head . occNameString $ occ = Just (occ, CType ty)
+      , isAlpha . head . occNameString $ occ = Just (occ, HyInfo UserPrv $ CType ty)
       | otherwise = Nothing
 
 
@@ -129,7 +129,7 @@ hasPositionalAncestry ancestors jdg name
   = case any (== name) ancestors of
       True  -> Just True
       False ->
-        case M.lookup name $ traceIdX "ancestry" $ jAncestryMap jdg of
+        case M.lookup name $ jAncestryMap jdg of
           Just ancestry ->
             bool Nothing (Just False) $ any (flip S.member ancestry) ancestors
           Nothing -> Nothing
@@ -298,15 +298,12 @@ substJdg subst = fmap $ coerce . substTy subst . coerce
 
 
 mkFirstJudgement
-    :: M.Map OccName CType  -- ^ local hypothesis
-    -> M.Map OccName CType  -- ^ ambient hypothesis
+    :: M.Map OccName (HyInfo CType)
     -> Bool  -- ^ are we in the top level rhs hole?
-    -> M.Map OccName [[OccName]]  -- ^ existing pos vals
     -> Type
     -> Judgement' CType
-mkFirstJudgement hy ambient top _posvals goal = Judgement
-  { _jHypothesis        = M.map (HyInfo UserPrv) hy
-                       <> M.map (HyInfo ImportPrv) ambient
+mkFirstJudgement hy top goal = Judgement
+  { _jHypothesis        = hy
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
   , _jDestructed        = mempty
