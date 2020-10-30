@@ -77,7 +77,7 @@ instance Show Class where
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
-    { ts_skolems   :: !([TyVar])
+    { ts_skolems   :: !(Set TyVar)
       -- ^ The known skolems.
     , ts_unifier   :: !(TCvSubst)
       -- ^ The current substitution of univars.

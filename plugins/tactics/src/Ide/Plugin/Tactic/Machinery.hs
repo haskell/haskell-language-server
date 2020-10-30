@@ -25,13 +25,15 @@ import           Control.Monad.Reader
 import           Control.Monad.State (MonadState(..))
 import           Control.Monad.State.Class (gets, modify)
 import           Control.Monad.State.Strict (StateT (..))
+import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Either
 import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics (mkQ, everything, gcount)
-import           Data.List (nub, sortBy)
+import           Data.List (sortBy)
 import           Data.Ord (comparing, Down(..))
+import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.Judgements
@@ -71,7 +73,7 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] RunTacticResults
 runTactic ctx jdg t =
-    let skolems = nub
+    let skolems = S.fromList
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
                 $ jGoal jdg
                 : (fmap hi_type $ toList $ jHypothesis jdg)
@@ -190,20 +192,15 @@ newtype Reward a = Reward a
 
 ------------------------------------------------------------------------------
 -- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
-tryUnifyUnivarsButNotSkolems :: [TyVar] -> CType -> CType -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
 tryUnifyUnivarsButNotSkolems skolems goal inst =
-  case tcUnifyTysFG (skolemsOf skolems) [unCType inst] [unCType goal] of
+  case tcUnifyTysFG
+         (bool BindMe Skolem . flip S.member skolems)
+         [unCType inst]
+         [unCType goal] of
     Unifiable subst -> pure subst
     _ -> Nothing
 
-
-------------------------------------------------------------------------------
--- | Helper method for 'tryUnifyUnivarsButNotSkolems'
-skolemsOf :: [TyVar] -> TyVar -> BindFlag
-skolemsOf tvs tv =
-  case elem tv tvs of
-    True  -> Skolem
-    False -> BindMe
 
 
 ------------------------------------------------------------------------------
@@ -245,7 +242,7 @@ methodHypothesis ty = do
 requireConcreteHole :: TacticsM a -> TacticsM a
 requireConcreteHole m = do
   jdg     <- goal
-  skolems <- gets $ S.fromList . ts_skolems
+  skolems <- gets ts_skolems
   let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
   case S.size $ vars S.\\ skolems of
     0 -> m
