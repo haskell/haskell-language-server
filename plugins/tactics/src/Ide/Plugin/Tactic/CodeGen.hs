@@ -181,7 +181,7 @@ buildDataCon jdg dc apps = do
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
-                  . filterSameTypeFromOtherPositions''' dc n
+                  . filterSameTypeFromOtherPositions dc n
                   . blacklistingDestruct
                   . flip withNewGoal jdg
                   $ CType arg

@@ -71,7 +71,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
     jdg <- goal
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
       (localTactic (apply name) $ introducingRecursively defs)
-        <@> fmap (localTactic assumption . filterPosition''' name) [0..]
+        <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
 ------------------------------------------------------------------------------

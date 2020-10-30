@@ -91,12 +91,6 @@ introducingRecursively ns =
     ))
 
 
-filterPosition :: OccName -> Int -> Judgement -> Judgement
-filterPosition defn pos jdg =
-    disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
-  where
-    go name _ = not . isJust $ hasPositionalAncestry jdg defn pos name
-
 hasPositionalAncestry'
     :: Foldable t
     => t OccName
@@ -116,44 +110,26 @@ hasPositionalAncestry' ancestors jdg name
           Nothing -> Nothing
   | otherwise = Nothing
 
-filterPosition' :: OccName -> Int -> Judgement -> Judgement
-filterPosition' defn pos jdg =
+filterPosition :: OccName -> Int -> Judgement -> Judgement
+filterPosition defn pos jdg =
     disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
   where
     go name _
       = not
       . isJust
-      $ hasPositionalAncestry' (findPositionVal' jdg defn pos) jdg name
+      $ hasPositionalAncestry' (findPositionVal jdg defn pos) jdg name
 
-filterPosition''' :: OccName -> Int -> Judgement -> Judgement
-filterPosition''' defn pos jdg =
-  let broken_ancestors = findPositionVal' jdg defn pos
-      ancestors = toListOf (_Just . traversed . ix pos)
-              $ M.lookup defn
-              $ _jPositionMaps jdg
-      working = filterPosition defn pos jdg
-   in case maybeToList broken_ancestors == ancestors of
-        True -> working
-        -- TODO(sandy): THE BUG IS THAT WE FILTER OUT FROM THE HYPOTHESIS
-        -- WHICH REMOVES THE EQUIVALENT OF A POSITION MAPPING; BUT THAT _USED_
-        -- TO BE THERE.
-        False -> error $ show (broken_ancestors, ancestors, defn, pos, jHypothesis jdg)
-      -- broken = filterPosition' defn pos jdg
-   -- in case working == broken of
-      --   True -> working
-      --   False -> error $ show (working, broken)
-
-filterDconPosition' :: DataCon -> Int -> Judgement -> Judgement
-filterDconPosition' dcon pos jdg =
+filterDconPosition :: DataCon -> Int -> Judgement -> Judgement
+filterDconPosition dcon pos jdg =
     disallowing (WrongBranch pos) (M.keys $ M.filterWithKey go $ jHypothesis jdg) jdg
   where
     go name _
       = not
       . isJust
-      $ hasPositionalAncestry' (findDconPositionVals' jdg dcon pos) jdg name
+      $ hasPositionalAncestry' (findDconPositionVals jdg dcon pos) jdg name
 
-findPositionVal' :: Judgement' a -> OccName -> Int -> Maybe OccName
-findPositionVal' jdg defn pos = listToMaybe $ do
+findPositionVal :: Judgement' a -> OccName -> Int -> Maybe OccName
+findPositionVal jdg defn pos = listToMaybe $ do
   (name, hi) <- M.toList $ M.map (overProvenance expandDisallowed) $ jEntireHypothesis jdg
   case hi_provenance hi of
     TopLevelArgPrv defn' pos'
@@ -164,8 +140,8 @@ findPositionVal' jdg defn pos = listToMaybe $ do
       , pv_position pv  == pos -> pure name
     _ -> []
 
-findDconPositionVals' :: Judgement' a -> DataCon -> Int -> [OccName]
-findDconPositionVals' jdg dcon pos = do
+findDconPositionVals :: Judgement' a -> DataCon -> Int -> [OccName]
+findDconPositionVals jdg dcon pos = do
   (name, hi) <- M.toList $ jHypothesis jdg
   case hi_provenance hi of
     PatternMatchPrv pv
@@ -173,23 +149,13 @@ findDconPositionVals' jdg dcon pos = do
       , pv_position pv == pos -> pure name
     _ -> []
 
-filterSameTypeFromOtherPositions''' :: DataCon -> Int -> Judgement -> Judgement
-filterSameTypeFromOtherPositions''' dcon pos jdg = filterSameTypeFromOtherPositions' dcon pos jdg
-
-filterSameTypeFromOtherPositions' :: DataCon -> Int -> Judgement -> Judgement
-filterSameTypeFromOtherPositions' dcon pos jdg =
-  let hy = jHypothesis $ filterDconPosition' dcon pos jdg
+filterSameTypeFromOtherPositions :: DataCon -> Int -> Judgement -> Judgement
+filterSameTypeFromOtherPositions dcon pos jdg =
+  let hy = jHypothesis $ filterDconPosition dcon pos jdg
       tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
       to_remove = M.filter (flip S.member tys . hi_type) (jHypothesis jdg) M.\\ hy
    in disallowing (WrongBranch pos) (M.keys to_remove) jdg
 
-
-filterSameTypeFromOtherPositions :: OccName -> Int -> Judgement -> Judgement
-filterSameTypeFromOtherPositions defn pos jdg =
-  let hy = jHypothesis $ filterPosition defn pos jdg
-      tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
-      to_remove = M.filter (flip S.member tys . hi_type) (jHypothesis jdg) M.\\ hy
-   in disallowing (WrongBranch pos) (M.keys to_remove) jdg
 
 
 getAncestry :: Judgement' a -> OccName -> Set OccName
@@ -242,14 +208,6 @@ withPositionMapping defn names =
 extremelyStupid__definingFunction :: Context -> OccName
 extremelyStupid__definingFunction =
   fst . head . ctxDefiningFuncs
-
-
-withHypothesis
-    :: (Map OccName (HyInfo a) -> Map OccName (HyInfo a))
-    -> Judgement' a
-    -> Judgement' a
-withHypothesis f =
-  field @"_jHypothesis" %~ f
 
 
 ------------------------------------------------------------------------------
