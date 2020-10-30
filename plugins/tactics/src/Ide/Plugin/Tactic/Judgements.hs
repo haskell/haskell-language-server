@@ -7,7 +7,6 @@
 
 module Ide.Plugin.Tactic.Judgements where
 
-import           Control.Applicative
 import           Control.Lens hiding (Context)
 import           Data.Bool
 import           Data.Char
@@ -18,7 +17,7 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
-import           DataCon (dataConName, DataCon)
+import           DataCon (DataCon)
 import           Development.IDE.Spans.LocalBindings
 import           Ide.Plugin.Tactic.Types
 import           OccName
@@ -30,6 +29,7 @@ import           Type
 -- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
 hypothesisFromBindings :: RealSrcSpan -> Bindings -> Map OccName CType
 hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
+
 
 ------------------------------------------------------------------------------
 -- | Convert a @Set Id@ into a hypothesis.
@@ -44,12 +44,9 @@ buildHypothesis
       | otherwise = Nothing
 
 
-hasDestructed :: Judgement -> OccName -> Bool
-hasDestructed j n = S.member n $ _jDestructed j
-
-
-destructing :: OccName -> Judgement -> Judgement
-destructing n = field @"_jDestructed" <>~ S.singleton n
+hasDestructed :: Judgement' a -> OccName -> Bool
+hasDestructed jdg n = flip any (jPatHypothesis jdg) $
+  (== Just n) . pv_scrutinee
 
 
 blacklistingDestruct :: Judgement -> Judgement
@@ -108,23 +105,12 @@ filterSameTypeFromOtherPositions defn pos jdg =
       tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
    in withHypothesis (\hy2 -> M.filter (not . flip S.member tys . hi_type) hy2 <> hy) jdg
 
+
 getAncestry :: Judgement' a -> OccName -> Set OccName
 getAncestry jdg name =
-  case M.lookup name $ jHypothesis jdg of
-    Just hi ->
-      case hi_provenance hi of
-        PatternMatchPrv _ ancestry _ _ -> ancestry
-        _                              -> mempty
+  case M.lookup name $ jPatHypothesis jdg of
+    Just pv -> pv_ancestry pv
     Nothing -> mempty
-
-
--- getPositionalBindings :: Judgement -> [(OccName, [IntMap OccName])]
--- getPositionalBindings jdg = _ $ do
---   (name, hi_provenance -> hi) <- M.toList $ jHypothesis jdg
---   case hi of
---     TopLevelArgPrv o i -> pure (name, (o, i))
---     PatternMatchPrv _ ud i -> pure (name, (occName $ dataConName $ getViaUnique ud, i))
---     _ -> empty
 
 
 hasPositionalAncestry
@@ -153,10 +139,7 @@ hasPositionalAncestry jdg defn n name
 
 jAncestryMap :: Judgement' a -> Map OccName (Set OccName)
 jAncestryMap jdg =
-  flip M.mapMaybe (jHypothesis jdg) $ \hi ->
-    case hi_provenance hi of
-      PatternMatchPrv _ ancestry _ _ -> Just ancestry
-      _                              -> Nothing
+  flip M.map (jPatHypothesis jdg) pv_ancestry
 
 
 withPositionMapping :: OccName -> [OccName] -> Judgement -> Judgement
@@ -182,6 +165,7 @@ withHypothesis
 withHypothesis f =
   field @"_jHypothesis" %~ f
 
+
 ------------------------------------------------------------------------------
 -- | Pattern vals are currently tracked in jHypothesis, with an extra piece of
 -- data sitting around in jPatternVals.
@@ -195,7 +179,7 @@ introducingPat scrutinee dc ns jdg = jdg
   & field @"_jHypothesis"  <>~ (M.fromList $ zip [0..] ns <&> \(pos, (name, ty)) ->
       ( name
       , HyInfo
-          (PatternMatchPrv
+          (PatternMatchPrv $ PatVal
               scrutinee
               (maybe
                   mempty
@@ -234,8 +218,15 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 
 ------------------------------------------------------------------------------
 -- | Only the hypothesis members which are pattern vals
-jPatHypothesis :: Judgement' a -> Map OccName (HyInfo a)
-jPatHypothesis = M.filter (isPatternMatch . hi_provenance) . _jHypothesis
+jPatHypothesis :: Judgement' a -> Map OccName PatVal
+jPatHypothesis = M.mapMaybe (getPatVal . hi_provenance) . _jHypothesis
+
+
+getPatVal :: Provenance-> Maybe PatVal
+getPatVal prov =
+  case prov of
+    PatternMatchPrv pv -> Just pv
+    _                  -> Nothing
 
 
 jGoal :: Judgement' a -> a
@@ -256,7 +247,6 @@ mkFirstJudgement
 mkFirstJudgement hy ambient top posvals goal = Judgement
   { _jHypothesis        = M.map mkLocalHypothesisInfo hy
                        <> M.map mkAmbientHypothesisInfo ambient
-  , _jDestructed        = mempty
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
   , _jPositionMaps      = posvals

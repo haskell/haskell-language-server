@@ -157,17 +157,23 @@ data Provenance
   = TopLevelArgPrv
       OccName   -- ^ Function name
       Int       -- ^ Position
-  | PatternMatchPrv
-      (Maybe OccName)   -- ^ Scrutinee. Nothing, for lambda case.
-      (Set OccName)     -- ^ Ancestry
-      (Uniquely DataCon)   -- ^ Matching datacon
-      Int       -- ^ Position
+  | PatternMatchPrv PatVal
   | ClassMethodPrv
       (Uniquely Class)     -- ^ Class
   | UserPrv
   | ImportPrv
   | RecursivePrv
   deriving stock (Eq, Show, Generic, Ord)
+
+
+data PatVal = PatVal
+  { pv_scrutinee :: Maybe OccName
+    -- ^ Original scrutinee which created this PatVal. Nothing, for lambda
+    -- case.
+  , pv_ancestry  :: Set OccName
+  , pv_datacon   :: Uniquely DataCon
+  , pv_position  :: Int
+  } deriving stock (Eq, Show, Generic, Ord)
 
 
 newtype Uniquely a = Uniquely { getViaUnique :: a }
@@ -191,8 +197,6 @@ data HyInfo a = HyInfo
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
   { _jHypothesis :: !(Map OccName (HyInfo a))
-  , _jDestructed :: !(Set OccName)
-    -- ^ These should align with keys of _jHypothesis
   , _jBlacklistDestruct :: !(Bool)
   , _jWhitelistSplit :: !(Bool)
   , _jPositionMaps :: !(Map OccName [[OccName]])
