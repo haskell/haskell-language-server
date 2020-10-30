@@ -69,7 +69,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
   attemptOn (const $ fmap fst defs) $ \name -> do
     modify $ pushRecursionStack .  countRecursiveCall
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
-      (localTactic (apply name) $ introducingAmbient defs)
+      (localTactic (apply name) $ introducingRecursively defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -109,20 +109,23 @@ intros = rule $ \jdg -> do
 destructAuto :: OccName -> TacticsM ()
 destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   jdg <- goal
-  case hasDestructed jdg name of
-    True -> throwError $ AlreadyDestructed name
-    False ->
-      let subtactic = rule $ destruct' (const subgoal) name
-       in case isPatVal jdg name of
-            True ->
-              pruning subtactic $ \jdgs ->
-                let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
-                    new_hy = foldMap getHyTypes jdgs
-                    old_hy = getHyTypes jdg
-                 in case S.null $ new_hy S.\\ old_hy of
-                      True  -> Just $ UnhelpfulDestruct name
-                      False -> Nothing
-            False -> subtactic
+  case M.lookup name $ jHypothesis jdg of
+    Nothing -> throwError $ NotInScope name
+    Just hi ->
+      case hasDestructed jdg name of
+        True -> throwError $ AlreadyDestructed name
+        False ->
+          let subtactic = rule $ destruct' (const subgoal) name
+          in case isPatternMatch $ hi_provenance hi of
+                True ->
+                  pruning subtactic $ \jdgs ->
+                    let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
+                        new_hy = foldMap getHyTypes jdgs
+                        old_hy = getHyTypes jdg
+                    in case S.null $ new_hy S.\\ old_hy of
+                          True  -> Just $ UnhelpfulDestruct name
+                          False -> Nothing
+                False -> subtactic
 
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.

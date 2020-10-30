@@ -84,11 +84,11 @@ introducingLambda func ns =
 
 ------------------------------------------------------------------------------
 -- | Add some terms to the ambient hypothesis
-introducingAmbient :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducingAmbient ns =
+introducingRecursively :: [(OccName, a)] -> Judgement' a -> Judgement' a
+introducingRecursively ns =
   field @"_jHypothesis" <>~ M.fromList (ns <&> \(name, ty) ->
     -- TODO(sandy): cleanup
-    (name, HyInfo (ClassMethodPrv undefined) ty
+    (name, HyInfo RecursivePrv ty
     ))
 
 
@@ -172,7 +172,6 @@ introducingPat :: Maybe OccName -> DataCon -> [(OccName, a)] -> Judgement' a -> 
 introducingPat scrutinee dc ns jdg = jdg
   & field @"_jHypothesis"  <>~ (M.fromList $ zip [0..] ns <&> \(pos, (name, ty)) ->
       (name, HyInfo (PatternMatchPrv scrutinee (Uniquely dc) pos) ty))
-  & field @"_jPatternVals" <>~ S.fromList (fmap fst ns)
 
 
 disallowing :: [OccName] -> Judgement' a -> Judgement' a
@@ -193,9 +192,6 @@ jLocalHypothesis :: Judgement' a -> Map OccName (HyInfo a)
 jLocalHypothesis = M.filter (isLocalHypothesis . hi_provenance) . _jHypothesis
 
 
-isPatVal :: Judgement' a -> OccName -> Bool
-isPatVal j n = S.member n $ _jPatternVals j
-
 isTopHole :: Context -> Judgement' a -> Maybe OccName
 isTopHole ctx =
   bool Nothing (Just $ extremelyStupid__definingFunction ctx) . _jIsTopHole
@@ -207,10 +203,7 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 ------------------------------------------------------------------------------
 -- | Only the hypothesis members which are pattern vals
 jPatHypothesis :: Judgement' a -> Map OccName (HyInfo a)
-jPatHypothesis jdg
-  =
-      -- (M.restrictKeys (jHypothesis jdg) $ _jPatternVals jdg)
-      (M.filter (isPatternMatch . hi_provenance) $ _jHypothesis jdg)
+jPatHypothesis = M.filter (isPatternMatch . hi_provenance) . _jHypothesis
 
 
 jGoal :: Judgement' a -> a
@@ -230,7 +223,6 @@ mkFirstJudgement hy ambient top posvals goal = Judgement
   { _jHypothesis        = M.map mkLocalHypothesisInfo hy
                        <> M.map mkAmbientHypothesisInfo ambient
   , _jDestructed        = mempty
-  , _jPatternVals       = mempty
   , _jBlacklistDestruct = False
   , _jWhitelistSplit    = True
   , _jPositionMaps      = posvals

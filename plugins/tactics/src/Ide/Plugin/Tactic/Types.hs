@@ -192,8 +192,6 @@ data Judgement' a = Judgement
   { _jHypothesis :: !(Map OccName (HyInfo a))
   , _jDestructed :: !(Set OccName)
     -- ^ These should align with keys of _jHypothesis
-  , _jPatternVals :: !(Set OccName)
-    -- ^ These should align with keys of _jHypothesis
   , _jBlacklistDestruct :: !(Bool)
   , _jWhitelistSplit :: !(Bool)
   , _jPositionMaps :: !(Map OccName [[OccName]])
@@ -230,6 +228,7 @@ data TacticError
   | UnhelpfulDestruct OccName
   | UnhelpfulSplit OccName
   | TooPolymorphic
+  | NotInScope OccName
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -268,6 +267,8 @@ instance Show TacticError where
       "Splitting constructor " <> show n <> " leads to no new goals"
     show TooPolymorphic =
       "The tactic isn't applicable because the goal is too polymorphic"
+    show (NotInScope name) =
+      "Tried to do something with the out of scope name " <> show name
 
 
 ------------------------------------------------------------------------------
