@@ -3,21 +3,22 @@
 
 module UnificationSpec where
 
-import Control.Arrow
-import Data.Bool (bool)
-import Data.Functor ((<&>))
-import Data.Maybe (mapMaybe)
-import Data.Traversable
-import Data.Tuple (swap)
-import Ide.Plugin.Tactic.Debug
-import Ide.Plugin.Tactic.Machinery
-import Ide.Plugin.Tactic.Types
-import TcType (tcGetTyVar_maybe, substTy)
-import Test.Hspec
-import Test.QuickCheck
-import Type (mkTyVarTy)
-import TysPrim (alphaTyVars)
-import TysWiredIn (mkBoxedTupleTy)
+import           Control.Arrow
+import           Data.Bool (bool)
+import           Data.Functor ((<&>))
+import           Data.Maybe (mapMaybe)
+import qualified Data.Set as S
+import           Data.Traversable
+import           Data.Tuple (swap)
+import           Ide.Plugin.Tactic.Debug
+import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Types
+import           TcType (tcGetTyVar_maybe, substTy)
+import           Test.Hspec
+import           Test.QuickCheck
+import           Type (mkTyVarTy)
+import           TysPrim (alphaTyVars)
+import           TysWiredIn (mkBoxedTupleTy)
 
 
 instance Show Type where
@@ -42,7 +43,7 @@ spec = describe "unification" $ do
         counterexample (show lhs) $
         counterexample (show rhs) $
           case tryUnifyUnivarsButNotSkolems
-                 (mapMaybe tcGetTyVar_maybe skolems)
+                 (S.fromList $ mapMaybe tcGetTyVar_maybe skolems)
                  (CType lhs)
                  (CType rhs) of
             Just subst ->

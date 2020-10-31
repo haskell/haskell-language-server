@@ -40,12 +40,10 @@ spec = describe "auto for tuple" $ do
       pure $
           -- We should always be able to find a solution
           runTactic
-            (Context [] [])
+            emptyContext
             (mkFirstJudgement
-              (M.singleton (mkVarOcc "x") $ CType in_type)
-              mempty
+              (M.singleton (mkVarOcc "x") $ HyInfo UserPrv $ CType in_type)
               True
-              mempty
               out_type)
             (auto' $ n * 2) `shouldSatisfy` isRight
 

@@ -20,6 +20,7 @@ import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Bool (bool)
+import           Data.Foldable
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
@@ -55,10 +56,9 @@ assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
   case M.lookup name $ jHypothesis jdg of
-    Just ty -> do
+    Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
-      when (M.member name $ jPatHypothesis jdg) $
-        setRecursionFrameData True
+      for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
       useOccName jdg name
       pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
@@ -68,10 +68,9 @@ recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const $ fmap fst defs) $ \name -> do
-    modify $ withRecursionStack (False :)
-    penalizeRecursion
-    ensure recursiveCleanup (withRecursionStack tail) $ do
-      (localTactic (apply name) $ introducingAmbient defs)
+    modify $ pushRecursionStack .  countRecursiveCall
+    ensure guardStructurallySmallerRecursion popRecursionStack $ do
+      (localTactic (apply name) $ introducingRecursively defs)
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -85,19 +84,13 @@ intros = rule $ \jdg -> do
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      vs <- mkManyGoodNames hy as
-      let jdg' = introducing (zip vs $ coerce as)
+      vs <- mkManyGoodNames (jEntireHypothesis jdg) as
+      let top_hole = isTopHole ctx jdg
+          jdg' = introducingLambda top_hole (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
-      when (isTopHole jdg) $ addUnusedTopVals $ S.fromList vs
-      (tr, sg)
-        <- newSubgoal
-          $ bool
-              id
-              (withPositionMapping
-                (extremelyStupid__definingFunction ctx) vs)
-              (isTopHole jdg)
-          $ jdg'
+      when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
+      (tr, sg) <- newSubgoal jdg'
       pure
         . (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr, )
         . noLoc
@@ -110,29 +103,27 @@ intros = rule $ \jdg -> do
 destructAuto :: OccName -> TacticsM ()
 destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   jdg <- goal
-  case hasDestructed jdg name of
-    True -> throwError $ AlreadyDestructed name
-    False ->
+  case M.lookup name $ jHypothesis jdg of
+    Nothing -> throwError $ NotInScope name
+    Just hi ->
       let subtactic = rule $ destruct' (const subgoal) name
-       in case isPatVal jdg name of
+      in case isPatternMatch $ hi_provenance hi of
             True ->
               pruning subtactic $ \jdgs ->
-                let getHyTypes = S.fromList . fmap snd . M.toList . jHypothesis
+                let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
                     new_hy = foldMap getHyTypes jdgs
                     old_hy = getHyTypes jdg
-                 in case S.null $ new_hy S.\\ old_hy of
+                in case S.null $ new_hy S.\\ old_hy of
                       True  -> Just $ UnhelpfulDestruct name
                       False -> Nothing
             False -> subtactic
 
+
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: OccName -> TacticsM ()
-destruct name = requireConcreteHole $ tracing "destruct(user)" $ do
-  jdg <- goal
-  case hasDestructed jdg name of
-    True -> throwError $ AlreadyDestructed name
-    False -> rule $ \jdg -> destruct' (const subgoal) name jdg
+destruct name = requireConcreteHole $ tracing "destruct(user)" $
+  rule $ destruct' (const subgoal) name
 
 
 ------------------------------------------------------------------------------
@@ -167,7 +158,7 @@ apply func = requireConcreteHole $ tracing ("apply' " <> show func) $ do
   let hy = jHypothesis jdg
       g  = jGoal jdg
   case M.lookup func hy of
-    Just (CType ty) -> do
+    Just (hi_type -> CType ty) -> do
       ty' <- freshTyvars ty
       let (_, _, args, ret) = tacticsSplitFunTy ty'
       requireNewHoles $ rule $ \jdg -> do
@@ -283,12 +274,12 @@ auto' n = do
 
 overFunctions :: (OccName -> TacticsM ()) -> TacticsM ()
 overFunctions =
-  attemptOn $ M.keys . M.filter (isFunction . unCType) . jHypothesis
+  attemptOn $ M.keys . M.filter (isFunction . unCType . hi_type) . jHypothesis
 
 overAlgebraicTerms :: (OccName -> TacticsM ()) -> TacticsM ()
 overAlgebraicTerms =
   attemptOn $
-    M.keys . M.filter (isJust . algebraicTyCon . unCType) . jHypothesis
+    M.keys . M.filter (isJust . algebraicTyCon . unCType . hi_type) . jHypothesis
 
 
 allNames :: Judgement -> [OccName]

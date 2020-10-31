@@ -43,8 +43,8 @@ useOccName jdg name =
 
 ------------------------------------------------------------------------------
 -- | Doing recursion incurs a small penalty in the score.
-penalizeRecursion :: MonadState TacticState m => m ()
-penalizeRecursion = modify $ field @"ts_recursion_penality" +~ 1
+countRecursiveCall :: TacticState -> TacticState
+countRecursiveCall = field @"ts_recursion_count" +~ 1
 
 
 ------------------------------------------------------------------------------
@@ -57,14 +57,14 @@ addUnusedTopVals vals = modify $ field @"ts_unused_top_vals" <>~ vals
 destructMatches
     :: (DataCon -> Judgement -> Rule)
        -- ^ How to construct each match
-    -> ([(OccName, CType)] -> Judgement -> Judgement)
-       -- ^ How to derive each match judgement
+    -> Maybe OccName
+       -- ^ Scrutinee
     -> CType
        -- ^ Type being destructed
     -> Judgement
     -> RuleM (Trace, [RawMatch])
-destructMatches f f2 t jdg = do
-  let hy = jHypothesis jdg
+destructMatches f scrut t jdg = do
+  let hy = jEntireHypothesis jdg
       g  = jGoal jdg
   case splitTyConApp_maybe $ unCType t of
     Nothing -> throwError $ GoalMismatch "destruct" g
@@ -76,11 +76,7 @@ destructMatches f f2 t jdg = do
           let args = dataConInstOrigArgTys' dc apps
           names <- mkManyGoodNames hy args
           let hy' = zip names $ coerce args
-              dcon_name = nameOccName $ dataConName dc
-
-          let j = f2 hy'
-                $ withPositionMapping dcon_name names
-                $ introducingPat hy'
+              j = introducingPat scrut dc hy'
                 $ withNewGoal g jdg
           (tr, sg) <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
@@ -142,14 +138,14 @@ destruct' f term jdg = do
   let hy = jHypothesis jdg
   case find ((== term) . fst) $ toList hy of
     Nothing -> throwError $ UndefinedHypothesis term
-    Just (_, t) -> do
+    Just (_, hi_type -> t) -> do
       useOccName jdg term
       (tr, ms)
           <- destructMatches
                f
-               (\cs -> setParents term (fmap fst cs) . destructing term)
+               (Just term)
                t
-               jdg
+               $ disallowing AlreadyDestructed [term] jdg
       pure ( rose ("destruct " <> show term) $ pure tr
            , noLoc $ case' (var' term) ms
            )
@@ -165,7 +161,7 @@ destructLambdaCase' f jdg = do
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
       fmap (fmap noLoc $ lambdaCase) <$>
-        destructMatches f (const id) (CType arg) jdg
+        destructMatches f Nothing (CType arg) jdg
     _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
 
@@ -178,12 +174,11 @@ buildDataCon
     -> RuleM (Trace, LHsExpr GhcPs)
 buildDataCon jdg dc apps = do
   let args = dataConInstOrigArgTys' dc apps
-      dcon_name = nameOccName $ dataConName dc
   (tr, sgs)
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
-                  . filterSameTypeFromOtherPositions dcon_name n
+                  . filterSameTypeFromOtherPositions dc n
                   . blacklistingDestruct
                   . flip withNewGoal jdg
                   $ CType arg

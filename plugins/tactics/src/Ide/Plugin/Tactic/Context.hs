@@ -7,6 +7,8 @@ import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.List
+import           Data.Map (Map)
+import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
@@ -33,9 +35,10 @@ mkContext locals tcg = Context
 
 ------------------------------------------------------------------------------
 -- | Find all of the class methods that exist from the givens in the context.
-contextMethodHypothesis :: Context -> [(OccName, CType)]
+contextMethodHypothesis :: Context -> Map OccName (HyInfo CType)
 contextMethodHypothesis ctx
-  = excludeForbiddenMethods
+  = M.fromList
+  . excludeForbiddenMethods
   . join
   . concatMap
       ( mapMaybe methodHypothesis
@@ -51,7 +54,7 @@ contextMethodHypothesis ctx
 -- | Many operations are defined in typeclasses for performance reasons, rather
 -- than being a true part of the class. This function filters out those, in
 -- order to keep our hypothesis space small.
-excludeForbiddenMethods :: [(OccName, CType)] -> [(OccName, CType)]
+excludeForbiddenMethods :: [(OccName, a)] -> [(OccName, a)]
 excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods  . fst)
   where
     forbiddenMethods :: Set OccName

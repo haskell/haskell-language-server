@@ -25,13 +25,16 @@ import           Control.Monad.Reader
 import           Control.Monad.State (MonadState(..))
 import           Control.Monad.State.Class (gets, modify)
 import           Control.Monad.State.Strict (StateT (..))
+import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Either
 import           Data.Foldable
 import           Data.Functor ((<&>))
 import           Data.Generics (mkQ, everything, gcount)
-import           Data.List (nub, sortBy)
+import           Data.List (sortBy)
+import qualified Data.Map as M
 import           Data.Ord (comparing, Down(..))
+import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.Judgements
@@ -71,15 +74,19 @@ runTactic
     -> TacticsM ()       -- ^ Tactic to use
     -> Either [TacticError] RunTacticResults
 runTactic ctx jdg t =
-    let skolems = nub
+    let skolems = S.fromList
                 $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
-                $ jGoal jdg
-                : (toList $ jHypothesis jdg)
-        unused_topvals = nub $ join $ join $ toList $ _jPositionMaps jdg
+                $ (:) (jGoal jdg)
+                $ fmap hi_type
+                $ toList
+                $ jHypothesis jdg
+        unused_topvals = M.keysSet
+                       $ M.filter (isTopLevel . hi_provenance)
+                       $ jHypothesis jdg
         tacticState =
           defaultTacticState
             { ts_skolems = skolems
-            , ts_unused_top_vals = S.fromList unused_topvals
+            , ts_unused_top_vals = unused_topvals
             }
     in case partitionEithers
           . flip runReader ctx
@@ -118,20 +125,28 @@ tracing s (TacticT m)
       mapExtract' (first $ rose s . pure) $ runStateT m jdg
 
 
-recursiveCleanup
+------------------------------------------------------------------------------
+-- | Recursion is allowed only when we can prove it is on a structurally
+-- smaller argument. The top of the 'ts_recursion_stack' witnesses the smaller
+-- pattern val.
+guardStructurallySmallerRecursion
     :: TacticState
     -> Maybe TacticError
-recursiveCleanup s =
-  let r = head $ ts_recursion_stack s
-   in case r of
-        True  -> Nothing
-        False -> Just NoProgress
+guardStructurallySmallerRecursion s =
+  case head $ ts_recursion_stack s of
+     Just _  -> Nothing
+     Nothing -> Just NoProgress
 
 
-setRecursionFrameData :: MonadState TacticState m => Bool -> m ()
-setRecursionFrameData b = do
+------------------------------------------------------------------------------
+-- | Mark that the current recursive call is structurally smaller, due to
+-- having been matched on a pattern value.
+--
+-- Implemented by setting the top of the 'ts_recursion_stack'.
+markStructuralySmallerRecursion :: MonadState TacticState m => PatVal -> m ()
+markStructuralySmallerRecursion pv = do
   modify $ withRecursionStack $ \case
-    (_ : bs) -> b : bs
+    (_ : bs) -> Just pv : bs
     []       -> []
 
 
@@ -159,7 +174,7 @@ scoreSolution ext TacticState{..} holes
     , Penalize $ S.size ts_unused_top_vals
     , Penalize $ S.size ts_intro_vals
     , Reward   $ S.size ts_used_vals
-    , Penalize $ ts_recursion_penality
+    , Penalize $ ts_recursion_count
     , Penalize $ solutionSize ext
     )
 
@@ -181,20 +196,15 @@ newtype Reward a = Reward a
 
 ------------------------------------------------------------------------------
 -- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
-tryUnifyUnivarsButNotSkolems :: [TyVar] -> CType -> CType -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
 tryUnifyUnivarsButNotSkolems skolems goal inst =
-  case tcUnifyTysFG (skolemsOf skolems) [unCType inst] [unCType goal] of
+  case tcUnifyTysFG
+         (bool BindMe Skolem . flip S.member skolems)
+         [unCType inst]
+         [unCType goal] of
     Unifiable subst -> pure subst
     _ -> Nothing
 
-
-------------------------------------------------------------------------------
--- | Helper method for 'tryUnifyUnivarsButNotSkolems'
-skolemsOf :: [TyVar] -> TyVar -> BindFlag
-skolemsOf tvs tv =
-  case elem tv tvs of
-    True  -> Skolem
-    False -> BindMe
 
 
 ------------------------------------------------------------------------------
@@ -213,7 +223,7 @@ unify goal inst = do
 ------------------------------------------------------------------------------
 -- | Get the class methods of a 'PredType', correctly dealing with
 -- instantiation of quantified class types.
-methodHypothesis :: PredType -> Maybe [(OccName, CType)]
+methodHypothesis :: PredType -> Maybe [(OccName, HyInfo CType)]
 methodHypothesis ty = do
   (tc, apps) <- splitTyConApp_maybe ty
   cls <- tyConClass_maybe tc
@@ -225,7 +235,9 @@ methodHypothesis ty = do
               $ classSCTheta cls
   pure $ mappend sc_methods $ methods <&> \method ->
     let (_, _, ty) = tcSplitSigmaTy $ idType method
-    in (occName method,  CType $ substTy subst ty)
+    in ( occName method
+       , HyInfo (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
+       )
 
 
 ------------------------------------------------------------------------------
@@ -234,7 +246,7 @@ methodHypothesis ty = do
 requireConcreteHole :: TacticsM a -> TacticsM a
 requireConcreteHole m = do
   jdg     <- goal
-  skolems <- gets $ S.fromList . ts_skolems
+  skolems <- gets ts_skolems
   let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
   case S.size $ vars S.\\ skolems of
     0 -> m

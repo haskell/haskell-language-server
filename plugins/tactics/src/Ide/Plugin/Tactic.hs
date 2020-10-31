@@ -22,9 +22,11 @@ import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
+import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
 import           Data.List
+import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
@@ -214,7 +216,7 @@ filterBindingType
 filterBindingType p tp dflags plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
-   in fmap join $ for (M.toList hy) $ \(occ, CType ty) ->
+   in fmap join $ for (M.toList hy) $ \(occ, hi_type -> CType ty) ->
         case p (unCType g) ty of
           True  -> tp occ ty dflags plId uri range jdg
           False -> pure []
@@ -264,22 +266,27 @@ judgementForHole state nfp range = do
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ getDefiningBindings binds rss)
               tcg
-      hyps = hypothesisFromBindings rss binds
-      ambient = M.fromList $ contextMethodHypothesis ctx
+      top_provs = getRhsPosVals rss tcs
+      local_hy = spliceProvenance top_provs
+               $ hypothesisFromBindings rss binds
+      cls_hy = contextMethodHypothesis ctx
   pure ( resulting_range
        , mkFirstJudgement
-           hyps
-           ambient
+           (local_hy <> cls_hy)
            (isRhsHole rss tcs)
-           (maybe
-              mempty
-              (uncurry M.singleton . fmap pure)
-                $ getRhsPosVals rss tcs)
            goal
        , ctx
        , dflags
        )
 
+
+spliceProvenance
+    :: Map OccName Provenance
+    -> Map OccName (HyInfo a)
+    -> Map OccName (HyInfo a)
+spliceProvenance provs =
+  M.mapWithKey $ \name hi ->
+    overProvenance (maybe id const $ M.lookup name provs) hi
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
@@ -334,17 +341,22 @@ isRhsHole rss tcs = everything (||) (mkQ False $ \case
 
 ------------------------------------------------------------------------------
 -- | Compute top-level position vals of a function
-getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Maybe (OccName, [OccName])
-getRhsPosVals rss tcs = getFirst $ everything (<>) (mkQ mempty $ \case
-  TopLevelRHS name ps
-      (L (RealSrcSpan span)  -- body with no guards and a single defn
-         (HsVar _ (L _ hole)))
-    | containsSpan rss span  -- which contains our span
-    , isHole $ occName hole  -- and the span is a hole
-    -> First $ do
-        patnames <- traverse getPatName ps
-        pure (occName name, patnames)
-  _ -> mempty
+getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Map OccName Provenance
+getRhsPosVals rss tcs
+  = M.fromList
+  $ join
+  $ maybeToList
+  $ getFirst
+  $ everything (<>) (mkQ mempty $ \case
+      TopLevelRHS name ps
+          (L (RealSrcSpan span)  -- body with no guards and a single defn
+            (HsVar _ (L _ hole)))
+        | containsSpan rss span  -- which contains our span
+        , isHole $ occName hole  -- and the span is a hole
+        -> First $ do
+            patnames <- traverse getPatName ps
+            pure $ zip patnames $ [0..] <&> TopLevelArgPrv name
+      _ -> mempty
   ) tcs
 
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
@@ -39,7 +40,7 @@ import Refinery.Tactic
 import System.IO.Unsafe (unsafePerformIO)
 import Type
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
-import Unique (Unique)
+import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 
 
 ------------------------------------------------------------------------------
@@ -70,10 +71,13 @@ instance Show (LHsExpr GhcPs) where
 instance Show DataCon where
   show  = unsafeRender
 
+instance Show Class where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
-    { ts_skolems   :: !([TyVar])
+    { ts_skolems   :: !(Set TyVar)
       -- ^ The known skolems.
     , ts_unifier   :: !(TCvSubst)
       -- ^ The current substitution of univars.
@@ -83,11 +87,11 @@ data TacticState = TacticState
       -- ^ Set of values introduced by tactics.
     , ts_unused_top_vals :: !(Set OccName)
       -- ^ Set of currently unused arguments to the function being defined.
-    , ts_recursion_stack :: ![Bool]
+    , ts_recursion_stack :: ![Maybe PatVal]
       -- ^ Stack for tracking whether or not the current recursive call has
       -- used at least one smaller pat val. Recursive calls for which this
       -- value is 'False' are guaranteed to loop, and must be pruned.
-    , ts_recursion_penality :: !Int
+    , ts_recursion_count :: !Int
       -- ^ Number of calls to recursion. We penalize each.
     , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
@@ -113,7 +117,7 @@ defaultTacticState =
     , ts_intro_vals      = mempty
     , ts_unused_top_vals = mempty
     , ts_recursion_stack = mempty
-    , ts_recursion_penality = 0
+    , ts_recursion_count = 0
     , ts_unique_gen      = unsafeDefaultUniqueSupply
     }
 
@@ -128,9 +132,15 @@ freshUnique = do
 
 
 withRecursionStack
-  :: ([Bool] -> [Bool]) -> TacticState -> TacticState
+  :: ([Maybe PatVal] -> [Maybe PatVal]) -> TacticState -> TacticState
 withRecursionStack f =
   field @"ts_recursion_stack" %~ f
+
+pushRecursionStack :: TacticState -> TacticState
+pushRecursionStack = withRecursionStack (Nothing :)
+
+popRecursionStack :: TacticState -> TacticState
+popRecursionStack = withRecursionStack tail
 
 
 withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
@@ -143,26 +153,97 @@ withIntroducedVals f =
   field @"ts_intro_vals" %~ f
 
 
+------------------------------------------------------------------------------
+-- | Describes where hypotheses came from. Used extensively to prune stupid
+-- solutions from the search space.
+data Provenance
+  = -- | An argument given to the topmost function that contains the current
+    -- hole. Recursive calls are restricted to values whose provenance lines up
+    -- with the same argument.
+    TopLevelArgPrv
+      OccName   -- ^ Binding function
+      Int       -- ^ Argument Position
+    -- | A binding created in a pattern match.
+  | PatternMatchPrv PatVal
+    -- | A class method from the given context.
+  | ClassMethodPrv
+      (Uniquely Class)     -- ^ Class
+    -- | A binding explicitly written by the user.
+  | UserPrv
+    -- | The recursive hypothesis. Present only in the context of the recursion
+    -- tactic.
+  | RecursivePrv
+    -- | A hypothesis which has been disallowed for some reason. It's important
+    -- to keep these in the hypothesis set, rather than filtering it, in order
+    -- to continue tracking downstream provenance.
+  | DisallowedPrv DisallowReason Provenance
+  deriving stock (Eq, Show, Generic, Ord)
+
+
+------------------------------------------------------------------------------
+-- | Why was a hypothesis disallowed?
+data DisallowReason
+  = WrongBranch Int
+  | Shadowed
+  | RecursiveCall
+  | AlreadyDestructed
+  deriving stock (Eq, Show, Generic, Ord)
+
+
+------------------------------------------------------------------------------
+-- | Provenance of a pattern value.
+data PatVal = PatVal
+  { pv_scrutinee :: Maybe OccName
+    -- ^ Original scrutinee which created this PatVal. Nothing, for lambda
+    -- case.
+  , pv_ancestry  :: Set OccName
+    -- ^ The set of values which had to be destructed to discover this term.
+    -- Always contains the scrutinee.
+  , pv_datacon   :: Uniquely DataCon
+    -- ^ The datacon which introduced this term.
+  , pv_position  :: Int
+    -- ^ The position of this binding in the datacon's arguments.
+  } deriving stock (Eq, Show, Generic, Ord)
+
+
+------------------------------------------------------------------------------
+-- | A wrapper which uses a 'Uniquable' constraint for providing 'Eq' and 'Ord'
+-- instances.
+newtype Uniquely a = Uniquely { getViaUnique :: a }
+  deriving Show via a
+
+instance Uniquable a => Eq (Uniquely a) where
+  (==) = (==) `on` getUnique . getViaUnique
+
+instance Uniquable a => Ord (Uniquely a) where
+  compare = nonDetCmpUnique `on` getUnique . getViaUnique
+
+
+------------------------------------------------------------------------------
+-- | The provenance and type of a hypothesis term.
+data HyInfo a = HyInfo
+  { hi_provenance :: Provenance
+  , hi_type       :: a
+  }
+  deriving stock (Functor, Eq, Show, Generic, Ord)
+
+
+------------------------------------------------------------------------------
+-- | Map a function over the provenance.
+overProvenance :: (Provenance -> Provenance) -> HyInfo a -> HyInfo a
+overProvenance f (HyInfo prv ty) = HyInfo (f prv) ty
+
 
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis :: !(Map OccName a)
-  , _jAmbientHypothesis :: !(Map OccName a)
-    -- ^ Things in the hypothesis that were imported. Solutions don't get
-    -- points for using the ambient hypothesis.
-  , _jDestructed :: !(Set OccName)
-    -- ^ These should align with keys of _jHypothesis
-  , _jPatternVals :: !(Set OccName)
-    -- ^ These should align with keys of _jHypothesis
+  { _jHypothesis :: !(Map OccName (HyInfo a))
   , _jBlacklistDestruct :: !(Bool)
   , _jWhitelistSplit :: !(Bool)
-  , _jPositionMaps :: !(Map OccName [[OccName]])
-  , _jAncestry     :: !(Map OccName (Set OccName))
   , _jIsTopHole    :: !Bool
   , _jGoal         :: !(a)
   }
-  deriving stock (Eq, Ord, Generic, Functor, Show)
+  deriving stock (Eq, Generic, Functor, Show)
 
 type Judgement = Judgement' CType
 
@@ -185,12 +266,12 @@ data TacticError
   | UnificationError CType CType
   | NoProgress
   | NoApplicableTactic
-  | AlreadyDestructed OccName
   | IncorrectDataCon DataCon
   | RecursionOnWrongParam OccName Int OccName
   | UnhelpfulDestruct OccName
   | UnhelpfulSplit OccName
   | TooPolymorphic
+  | NotInScope OccName
   deriving stock (Eq)
 
 instance Show TacticError where
@@ -216,8 +297,6 @@ instance Show TacticError where
       "Unable to make progress"
     show NoApplicableTactic =
       "No tactic could be applied"
-    show (AlreadyDestructed name) =
-      "Already destructed " <> unsafeRender name
     show (IncorrectDataCon dcon) =
       "Data con doesn't align with goal type (" <> unsafeRender dcon <> ")"
     show (RecursionOnWrongParam call p arg) =
@@ -229,6 +308,8 @@ instance Show TacticError where
       "Splitting constructor " <> show n <> " leads to no new goals"
     show TooPolymorphic =
       "The tactic isn't applicable because the goal is too polymorphic"
+    show (NotInScope name) =
+      "Tried to do something with the out of scope name " <> show name
 
 
 ------------------------------------------------------------------------------
