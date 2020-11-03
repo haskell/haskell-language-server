@@ -69,7 +69,7 @@ defaults: &defaults
         # work ok, but given that these CircleCI runners aren't the beefiest
         # machine can cause some flakiness. So pass -j1 to Tasty (NOT Stack) to
         # tell it to go slow and steady.
-        command: stack --stack-yaml=${STACK_FILE} test haskell-language-server --dump-logs --test-arguments="-j1"
+        command: stack --stack-yaml=${STACK_FILE} test haskell-language-server --dump-logs --test-arguments="-j1 --rerun-update" || stack --stack-yaml=${STACK_FILE} test haskell-language-server --dump-logs --test-arguments="-j1 --rerun" || stack --stack-yaml=${STACK_FILE} test haskell-language-server --dump-logs --test-arguments="-j1 --rerun"
         no_output_timeout: 120m
 
     - run:
