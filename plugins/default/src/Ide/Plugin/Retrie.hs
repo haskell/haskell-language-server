@@ -53,15 +53,14 @@ import           Development.IDE.GHC.Compat     (GenLocated (L), GhcRn,
                                                  RuleDecls (HsRules),
                                                  SrcSpan (..),
                                                  TyClDecl (SynDecl),
-                                                 TyClGroup (..),
-                                                 TypecheckedModule (..), fun_id,
+                                                 TyClGroup (..), fun_id,
                                                  mi_fixities, moduleNameString,
                                                  parseModule, rds_rules,
                                                  srcSpanFile)
 import           GHC.Generics                   (Generic)
 import           GhcPlugins                     (Outputable,
                                                  SourceText (NoSourceText),
-                                                 isQual, isQual_maybe,
+                                                 hm_iface, isQual, isQual_maybe,
                                                  nameModule_maybe, nameRdrName,
                                                  occNameFS, occNameString,
                                                  rdrNameOcc, unpackFS)
@@ -213,7 +212,7 @@ getBinds nfp = runMaybeT $ do
   -- we use the typechecked source instead of the parsed source
   -- to be able to extract module names from the Ids,
   -- so that we can include adding the required imports in the retrie command
-  let TypecheckedModule {tm_renamed_source = Just rn} = tmrModule tm
+  let rn = tmrRenamed tm
       ( HsGroup
           { hs_valds =
               XValBindsLR
@@ -369,8 +368,8 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
                           Just (stringToStringBuffer contents)
                       }
               logPriority (ideLogger state) Info $ T.pack $ "Parsing module: " <> t
-              (_, parsed) <-
-                runGhcEnv session (parseModule ms')
+              parsed <-
+                evalGhcEnv session (parseModule ms')
                   `catch` \e -> throwIO (GHCParseError nt (show @SomeException e))
               (fixities, parsed) <- fixFixities f (fixAnns parsed)
               return (fixities, parsed)
@@ -454,9 +453,9 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
             let fs = occNameFS n
         ]
     fixFixities f pm = do
-      HiFileResult {hirModIface} <-
+      HiFileResult {hirHomeMod} <-
         useOrFail "GetModIface" NoTypeCheck GetModIface f
-      let fixities = fixityEnvFromModIface hirModIface
+      let fixities = fixityEnvFromModIface $ hm_iface hirHomeMod
       res <- transformA pm (fix fixities)
       return (fixities, res)
     fixAnns ParsedModule {..} =

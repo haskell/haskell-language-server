@@ -1,7 +1,8 @@
 packages:
          ./
-         ghcide
-         hls-plugin-api
+         ./ghcide/hie-compat
+         ./ghcide
+         ./hls-plugin-api
          ./plugins/tactics
          ./plugins/hls-hlint-plugin
 

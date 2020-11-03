@@ -172,7 +172,7 @@ runEvalCmd lsp state EvalParams {..} = withIndefiniteProgress lsp "Eval" Cancell
   session <-
     liftIO $
       runAction "runEvalCmd.ghcSession" state $
-        use_ GhcSessionDeps $
+        use_ GhcSession $
           toNormalizedFilePath' $
             fp
 

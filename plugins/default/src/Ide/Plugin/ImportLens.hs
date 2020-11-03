@@ -192,11 +192,11 @@ extractMinimalImports ::
   Maybe (HscEnvEq) ->
   Maybe (TcModuleResult) ->
   IO ([LImportDecl GhcRn], Maybe [LImportDecl GhcRn])
-extractMinimalImports (Just (hsc)) (Just (tmrModule -> TypecheckedModule {..})) = do
+extractMinimalImports (Just (hsc)) (Just (TcModuleResult {..})) = do
   -- extract the original imports and the typechecking environment
-  let (tcEnv, _) = tm_internals_
-      Just (_, imports, _, _) = tm_renamed_source
-      ParsedModule {pm_parsed_source = L loc _} = tm_parsed_module
+  let tcEnv = tmrTypechecked
+      (_, imports, _, _) = tmrRenamed
+      ParsedModule {pm_parsed_source = L loc _} = tmrParsed
       span = fromMaybe (error "expected real") $ realSpan loc
 
   -- GHC is secretly full of mutable state

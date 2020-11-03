@@ -2,6 +2,7 @@ resolver: lts-15.3 # Last 8.8.2
 
 packages:
 - .
+- ./ghcide/hie-compat
 - ./ghcide/
 - ./hls-plugin-api
 - ./plugins/tactics
