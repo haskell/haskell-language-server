@@ -247,7 +247,7 @@ judgementForHole state nfp range = do
 
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  (modsum, _) <- MaybeT $ runIde state $ useWithStale GetModSummaryWithoutTimestamps nfp
+  ((modsum,_), _) <- MaybeT $ runIde state $ useWithStale GetModSummaryWithoutTimestamps nfp
   let dflags = ms_hspp_opts modsum
 
   (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->

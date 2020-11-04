@@ -65,7 +65,7 @@ instance Show Var where
 instance Show TCvSubst where
   show  = unsafeRender
 
-instance Show (LHsExpr GhcPs) where
+instance {-# OVERLAPPING #-} Show (LHsExpr GhcPs) where
   show  = unsafeRender
 
 instance Show DataCon where

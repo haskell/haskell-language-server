@@ -176,7 +176,7 @@ runEvalCmd lsp state EvalParams {..} = withIndefiniteProgress lsp "Eval" Cancell
           toNormalizedFilePath' $
             fp
 
-  ms <-
+  (ms, _) <-
     liftIO $
       runAction "runEvalCmd.getModSummary" state $
         use_ GetModSummary $
