@@ -74,7 +74,7 @@ defaults: &defaults
 
     - run:
         name: Test haskell-language-server wrapper-test suite
-        command: stack --stack-yaml=${STACK_FILE} test haskell-language-server:wrapper-test --dump-logs --test-arguments="-j1"
+        command: stack --stack-yaml=${STACK_FILE} test haskell-language-server:wrapper-test --dump-logs --test-arguments="-j1" || stack --stack-yaml=${STACK_FILE} test haskell-language-server:wrapper-test --dump-logs --test-arguments="-j1"
         no_output_timeout: 30m
 
     - run:
