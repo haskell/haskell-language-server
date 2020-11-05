@@ -129,10 +129,10 @@ jobs:
       - STACK_FILE: "stack-8.10.2.yaml"
     <<: *defaults
 
-  # ghc-nightly:
-  #   environment:
-  #     - STACK_FILE: "stack.yaml"
-  #   <<: *defaults
+  ghc-nightly:
+    environment:
+      - STACK_FILE: "stack.yaml"
+    <<: *defaults
 
   cabal:
     working_directory: ~/build
