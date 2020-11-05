@@ -29,8 +29,8 @@ extra-deps:
 # - ghcide-0.1.0
 - ghc-check-0.5.0.1
 - ghc-exactprint-0.6.3.2
-- ghc-lib-8.10.2.20200808
-- ghc-lib-parser-8.10.2.20200808
+- ghc-lib-8.10.2.20200916
+- ghc-lib-parser-8.10.2.20200916
 - ghc-lib-parser-ex-8.10.0.16
 - ghc-source-gen-0.4.0.0
 - haddock-api-2.22.0@rev:1
@@ -42,7 +42,7 @@ extra-deps:
 - HsYAML-0.2.1.0@rev:1
 - HsYAML-aeson-0.2.0.0@rev:2
 - implicit-hie-cradle-0.2.0.1
-- implicit-hie-0.1.1.0
+- implicit-hie-0.1.2.0
 - indexed-profunctors-0.1
 - lens-4.18
 - lsp-test-0.11.0.6
