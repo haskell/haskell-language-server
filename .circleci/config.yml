@@ -190,7 +190,7 @@ jobs:
             - cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
       - run:
           name: Build
-          command: nix-shell -j4 --run "cabal new-update && cabal new-build -j1 --enable-tests"
+          command: nix-shell -j4 --run "cabal new-update && (cabal new-build -j1 --enable-tests || cabal new-build -j1 --enable-tests) "
           no_output_timeout: 30m
       - save_cache:
           key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}

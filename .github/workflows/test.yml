@@ -58,7 +58,7 @@ jobs:
       shell: bash
       # Retry it three times to workaround compiler segfaults in windows
       run: cabal build || cabal build || cabal build
-    
+
     - name: Test func-test suite
       shell: bash
       env:
