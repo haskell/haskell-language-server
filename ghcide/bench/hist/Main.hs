@@ -149,7 +149,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
       liftIO $ createDirectoryIfMissing True $ dropFileName out
       need =<< getDirectoryFiles "." ["src//*.hs", "exe//*.hs", "ghcide.cabal"]
       cmd_ $ buildGhcide buildSystem (takeDirectory out)
-      ghcLoc <- findGhc buildSystem
+      ghcLoc <- findGhc "." buildSystem
       writeFile' ghcpath ghcLoc
 
   [ build -/- "*/ghcide",
@@ -161,7 +161,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
       commitid <- readFile' $ b </> ver </> "commitid"
       cmd_ $ "git worktree add bench-temp " ++ commitid
       flip actionFinally (cmd_ (s "git worktree remove bench-temp --force")) $ do
-        ghcLoc <- findGhc buildSystem
+        ghcLoc <- findGhc "bench-temp" buildSystem
         cmd_ [Cwd "bench-temp"] $ buildGhcide buildSystem (".." </> takeDirectory out)
         writeFile' ghcpath ghcLoc
 
@@ -290,11 +290,11 @@ buildGhcide Stack out =
         <> " build ghcide:ghcide --copy-bins --ghc-options -rtsopts"
 
 
-findGhc :: BuildSystem -> Action FilePath
-findGhc Cabal =
+findGhc :: FilePath -> BuildSystem -> Action FilePath
+findGhc _cwd Cabal =
     liftIO $ fromMaybe (error "ghc is not in the PATH") <$> findExecutable "ghc"
-findGhc Stack = do
-    Stdout ghcLoc <- cmd (s "stack exec which ghc")
+findGhc cwd Stack = do
+    Stdout ghcLoc <- cmd [Cwd cwd] (s "stack exec which ghc")
     return ghcLoc
 
 --------------------------------------------------------------------------------
