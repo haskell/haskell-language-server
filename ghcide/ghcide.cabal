@@ -136,6 +136,7 @@ library
         Development.IDE.Core.Shake
         Development.IDE.GHC.Compat
         Development.IDE.GHC.Error
+        Development.IDE.GHC.Orphans
         Development.IDE.GHC.Util
         Development.IDE.Import.DependencyInformation
         Development.IDE.LSP.HoverDefinition
@@ -173,7 +174,6 @@ library
         Development.IDE.Core.Compile
         Development.IDE.Core.FileExists
         Development.IDE.GHC.CPP
-        Development.IDE.GHC.Orphans
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
         Development.IDE.LSP.Notifications
