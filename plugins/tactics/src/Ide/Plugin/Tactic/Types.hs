@@ -32,6 +32,7 @@ import Data.Map (Map)
 import Data.Set (Set)
 import Data.Tree
 import Development.IDE.GHC.Compat hiding (Node)
+import Development.IDE.GHC.Orphans ()
 import Development.IDE.Types.Location
 import GHC.Generics
 import Ide.Plugin.Tactic.Debug
@@ -63,9 +64,6 @@ instance Show Var where
   show  = unsafeRender
 
 instance Show TCvSubst where
-  show  = unsafeRender
-
-instance {-# OVERLAPPING #-} Show (LHsExpr GhcPs) where
   show  = unsafeRender
 
 instance Show DataCon where
