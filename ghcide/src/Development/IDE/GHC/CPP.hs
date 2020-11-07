@@ -26,7 +26,6 @@ import Development.IDE.GHC.Compat
 import Packages
 import SysTools
 import Module
-import DynFlags
 import Panic
 import FileCleanup
 #if MIN_GHC_API_VERSION(8,8,2)
