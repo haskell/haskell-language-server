@@ -28,8 +28,6 @@ module Development.IDE.GHC.Compat(
     addBootSuffixLocnOut,
 #endif
     hPutStringBuffer,
-    includePathsGlobal,
-    includePathsQuote,
     addIncludePathsQuote,
     getModuleHash,
     getPackageName,
@@ -37,6 +35,7 @@ module Development.IDE.GHC.Compat(
     GHC.ModLocation,
     Module.addBootSuffix,
     pattern ModLocation,
+    pattern ExposePackage,
     HasSrcSpan,
     getLoc,
     upNameCache,
@@ -54,6 +53,7 @@ module Development.IDE.GHC.Compat(
 #endif
 
     module GHC,
+    module DynFlags,
     initializePlugins,
     applyPluginsParsedResultAction,
     module Compat.HieTypes,
@@ -66,7 +66,8 @@ import LinkerTypes
 #endif
 
 import StringBuffer
-import DynFlags
+import qualified DynFlags
+import DynFlags hiding (ExposePackage)
 import Fingerprint (Fingerprint)
 import qualified Module
 import Packages
@@ -271,6 +272,14 @@ applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> ApiAnns ->
 applyPluginsParsedResultAction env dflags ms hpm_annotations parsed = do
   -- Apply parsedResultAction of plugins
   let applyPluginAction p opts = parsedResultAction p opts ms
-  fmap hpm_module $ 
-    runHsc env $ withPlugins dflags applyPluginAction 
+  fmap hpm_module $
+    runHsc env $ withPlugins dflags applyPluginAction
       (HsParsedModule parsed [] hpm_annotations)
+
+pattern ExposePackage :: String -> PackageArg -> ModRenaming -> PackageFlag
+-- https://github.com/facebook/fbghc
+#ifdef __FACEBOOK_HASKELL__
+pattern ExposePackage s a mr <- DynFlags.ExposePackage s a _ mr
+#else
+pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
+#endif

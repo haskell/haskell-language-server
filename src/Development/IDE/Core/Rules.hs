@@ -69,7 +69,6 @@ import           Language.Haskell.LSP.Types (DocumentHighlight (..))
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes hiding (TargetModule, TargetFile)
-import DynFlags (gopt_set, xopt)
 import GHC.Generics(Generic)
 
 import qualified Development.IDE.Spans.AtPoint as AtPoint
@@ -527,7 +526,7 @@ getHieAstsRule =
 getHieAstRuleDefinition :: NormalizedFilePath -> HscEnv -> TcModuleResult -> Action (IdeResult HieAstResult)
 getHieAstRuleDefinition f hsc tmr = do
   (diags, masts) <- liftIO $ generateHieAsts hsc tmr
- 
+
   isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
     IsFOI Modified -> pure []
@@ -535,7 +534,7 @@ getHieAstRuleDefinition f hsc tmr = do
           source <- getSourceFileSource f
           liftIO $ writeHieFile hsc (tmrModSummary tmr) (tcg_exports $ tmrTypechecked tmr) asts source
     _ -> pure []
- 
+
   let refmap = generateReferencesMap . getAsts <$> masts
   pure (diags <> diagsWrite, HAR (ms_mod  $ tmrModSummary tmr) <$> masts <*> refmap)
 

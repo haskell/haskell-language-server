@@ -23,7 +23,6 @@ import Name
 import RdrName
 import Type
 import Packages
-import DynFlags
 #if MIN_GHC_API_VERSION(8,10,0)
 import Predicate (isDictTy)
 import GHC.Platform
@@ -474,9 +473,9 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
 -- The supported languages and extensions
 languagesAndExts :: [T.Text]
 #if MIN_GHC_API_VERSION(8,10,0)
-languagesAndExts = map T.pack $ DynFlags.supportedLanguagesAndExtensions ( PlatformMini ArchUnknown OSUnknown )
+languagesAndExts = map T.pack $ GHC.supportedLanguagesAndExtensions ( PlatformMini ArchUnknown OSUnknown )
 #else
-languagesAndExts = map T.pack DynFlags.supportedLanguagesAndExtensions
+languagesAndExts = map T.pack GHC.supportedLanguagesAndExtensions
 #endif
 
 -- ---------------------------------------------------------------------
