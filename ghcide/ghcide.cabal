@@ -2,7 +2,7 @@ cabal-version:      1.20
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            0.4.0
+version:            0.5.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -13,7 +13,7 @@ description:
     A library for building Haskell IDE's on top of the GHC API.
 homepage:           https://github.com/haskell/ghcide#readme
 bug-reports:        https://github.com/haskell/ghcide/issues
-tested-with:        GHC>=8.4.4
+tested-with:        GHC>=8.6.5
 extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
                     test/data/hover/*.hs
                     test/data/multi/cabal.project
@@ -83,7 +83,7 @@ library
       build-depends:
         ghc-boot-th,
         ghc-boot,
-        ghc >= 8.4,
+        ghc >= 8.6,
         -- These dependencies are used by Development.IDE.Session and are
         -- Haskell specific. So don't use them when building with -fghc-lib!
         ghc-check >=0.5.0.1,
