@@ -2,7 +2,7 @@
 # At least 100 is recommended in order to observe space leaks
 samples: 100
 
-buildTool: stack
+buildTool: cabal
 
 # Path to the ghcide-bench binary to use for experiments
 ghcideBench: ghcide-bench
