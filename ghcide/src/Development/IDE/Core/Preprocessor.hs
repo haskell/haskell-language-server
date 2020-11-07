@@ -15,7 +15,6 @@ import Data.List.Extra
 import System.FilePath
 import System.IO.Extra
 import Data.Char
-import DynFlags
 import qualified HeaderInfo as Hdr
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location

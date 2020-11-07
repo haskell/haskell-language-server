@@ -26,7 +26,6 @@ import GHC.Generics
 
 import GHC
 import Outputable hiding ((<>))
-import DynFlags
 import ConLike
 import DataCon
 import Var
@@ -34,6 +33,7 @@ import NameEnv
 
 import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types as H
+import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Orphans ()
 
 type DocMap = NameEnv SpanDoc

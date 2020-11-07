@@ -59,7 +59,6 @@ import System.Info
 import System.IO
 
 import GHCi
-import DynFlags
 import HscTypes (ic_dflags, hsc_IC, hsc_dflags, hsc_NC)
 import Linker
 import Module
