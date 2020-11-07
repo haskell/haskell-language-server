@@ -16,6 +16,3 @@ pr:
 jobs:
   - template: ./.azure/linux-stack.yml
   - template: ./.azure/windows-stack.yml
-
-# Disable benchmarks until we can figure out why they get stuck
-  # - template: ./.azure/linux-bench.yml

@@ -1,0 +1,62 @@
+name: Benchmark
+
+on: [push, pull_request]
+jobs:
+  bench:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ['8.10.2', '8.8.4', '8.6.5']
+        os: [ubuntu-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+    - run: git fetch origin master # check the master branch for benchmarking
+    - uses: actions/setup-haskell@v1.1.3
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: '3.2'
+        enable-stack: false
+
+    - name: Cache Cabal
+      uses: actions/cache@v2
+      env:
+        cache-name: cache-cabal
+      with:
+        path: ~/.cabal/
+        key: ${{ runner.os }}-${{ matrix.ghc }}-build-${{ env.cache-name }}-${{ hashFiles('ghcide.cabal', 'cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.ghc }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-${{ matrix.ghc }}-build-
+          ${{ runner.os }}-${{ matrix.ghc }}
+
+    - run: cabal update
+
+    - run: cabal configure --enable-benchmarks
+
+    - name: Build
+      shell: bash
+      # Retry it three times to workaround compiler segfaults in windows
+      run: cabal build || cabal build || cabal build
+
+    - name: Bench
+      shell: bash
+      # run the tests without parallelism, otherwise tasty will attempt to run
+      # all test cases simultaneously which causes way too many hls
+      # instances to be spun up for the poor github actions runner to handle
+      run: cabal bench
+
+    - name: Display results
+      shell: bash
+      run: |
+        column -s, -t < bench-results/results.csv | tee bench-results/results.txt
+
+    - name: Archive benchmarking artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
+        path: |
+           bench-results/results.*
+           bench-results/*.svg
