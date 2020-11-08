@@ -360,7 +360,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
       getCPPmodule t = do
         nt <- toNormalizedFilePath' <$> makeAbsolute t
         let getParsedModule f contents = do
-              modSummary <-
+              (modSummary, _) <-
                 useOrFail "GetModSummary" (CallRetrieInternalError "file not found") GetModSummary nt
               let ms' =
                     modSummary
