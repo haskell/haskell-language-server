@@ -286,7 +286,8 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       expectDiagnostics [("ModuleB.hs", [])]
   , ignoreInWindowsBecause "Broken in windows" $ testSessionWait "add missing module (non workspace)" $ do
-      tmpDir <- liftIO getTemporaryDirectory
+      -- need to canonicalize in Mac Os
+      tmpDir <- liftIO $ canonicalizePath =<< getTemporaryDirectory
       let contentB = T.unlines
             [ "module ModuleB where"
             , "import ModuleA ()"
@@ -2270,7 +2271,7 @@ findDefinitionAndHoverTests = let
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
   holeL60 = Position 59 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
-  cccL17 = Position 17 11  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
+  cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
   in
@@ -2333,40 +2334,29 @@ checkFileCompiles fp diag =
 
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
-  ignoreInWindowsForGHC88And810 $ testSessionWait "simple plugin" $ do
-    let content =
-          T.unlines
-            [ "{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}"
-            , "{-# LANGUAGE DataKinds, ScopedTypeVariables, TypeOperators #-}"
-            , "module Testing where"
-            , "import Data.Proxy"
-            , "import GHC.TypeLits"
-            -- This function fails without plugins being initialized.
-            , "f :: forall n. KnownNat n => Proxy n -> Integer"
-            , "f _ = natVal (Proxy :: Proxy n) + natVal (Proxy :: Proxy (n+2))"
-            , "foo :: Int -> Int -> Int"
-            , "foo a _b = a + c"
-            ]
-    _ <- createDoc "Testing.hs" "haskell" content
+  ignoreTest8101 "GHC #18070" $
+  ignoreInWindowsForGHC88And810 $
+  testSessionWithExtraFiles "plugin" "simple plugin" $ \dir -> do
+    _ <- openDoc (dir </> "KnownNat.hs") "haskell"
+    liftIO $ writeFile (dir</>"hie.yaml")
+#ifdef STACK
+      "cradle: {direct: {arguments: []}}"
+#else
+      "cradle: {cabal: [{path: '.', component: 'lib:plugin'}]}"
+#endif
+
     expectDiagnostics
-      [ ( "Testing.hs",
-          [(DsError, (8, 15), "Variable not in scope: c")]
+      [ ( "KnownNat.hs",
+          [(DsError, (9, 15), "Variable not in scope: c")]
           )
       ]
 
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
-  ignoreInWindowsForGHC88And810 $ testSessionWait "parsedResultAction plugin" $ do
-    let content =
-          T.unlines
-            [ "{-# LANGUAGE DuplicateRecordFields, TypeApplications, FlexibleContexts, DataKinds, MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-}"
-            , "{-# OPTIONS_GHC -fplugin=RecordDotPreprocessor #-}"
-            , "module Testing (Company(..), display) where"
-            , "data Company = Company {name :: String}"
-            , "display :: Company -> String"
-            , "display c = c.name"
-            ]
-    _ <- createDoc "Testing.hs" "haskell" content
+  ignoreTest8101 "GHC #18070" $
+  ignoreInWindowsForGHC88And810 $
+  testSessionWithExtraFiles "plugin" "parsedResultAction plugin" $ \dir -> do
+    _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
 
 cppTests :: TestTree
@@ -3042,6 +3032,11 @@ expectFailCabal _ = id
 #else
 expectFailCabal = expectFailBecause
 #endif
+
+ignoreTest8101 :: String -> TestTree -> TestTree
+ignoreTest8101
+  | GHC_API_VERSION == ("8.10.1" :: String) = ignoreTestBecause
+  | otherwise = const id
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
