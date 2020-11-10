@@ -6,7 +6,11 @@
 
 * [Hlint Plugin](https://github.com/haskell/haskell-language-server/pull/166): it integrates hlint diagnostics and lets you apply suggestions to fix them.
 
+![hls-hlint-demo](https://user-images.githubusercontent.com/54035/98731058-6ff38500-239d-11eb-8176-e4f69ef76fc2.gif)
+
 * [Module Name Plugin](https://github.com/haskell/haskell-language-server/pull/480): it makes easier create new modules and modify them, suggesting the appropiate module name as a code lens.
+
+![module-name-demo](https://user-images.githubusercontent.com/54035/98731198-a7623180-239d-11eb-8af0-73bd32b9b0b2.gif)
 
 This release also includes many improvements and bug fixes for the tactic plugin (see pull requests authored by @isovector for more details).
 
