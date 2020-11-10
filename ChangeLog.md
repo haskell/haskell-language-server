@@ -1,5 +1,75 @@
 # Changelog for haskell-language-server
 
+## 0.6.0
+
+0.6.0 includes two brand new plugins!
+
+* [Hlint Plugin](https://github.com/haskell/haskell-language-server/pull/166): it integrates hlint diagnostics and lets you apply suggestions to fix them.
+
+* [Module Name Plugin](https://github.com/haskell/haskell-language-server/pull/480): it makes easier create new modules and modify them, suggesting the appropiate module name as a code lens.
+
+This release also includes many improvements and bug fixes for the tactic plugin (see pull requests authored by @isovector for more details).
+
+We have updated two essential tools used by the ide:
+
+* `implicit-hie`: [to fix a bug](https://github.com/haskell/haskell-language-server/issues/498) present when loading cabal based projects with executables containing `other-modules`
+
+* `ghcide`: the ide uses [the just released version 0.5](https://github.com/haskell/ghcide/blob/master/CHANGELOG.md#050-2020-10-08) with many bug fixes and improvements, including:
+  * code action to remove *all* redundant imports
+  * improved support for Template Haskell
+  * emit desugarer warnings
+
+### Pull requests merged
+
+- Fix tasty rerun
+([#570)](https://github.com/haskell/haskell-language-server/pull/570) by @jneira
+- Bump up ghcide submodule to version 0.5.0
+([#568)](https://github.com/haskell/haskell-language-server/pull/568) by @jneira
+- Refactor tactics to track hypothesis provenance
+([#557)](https://github.com/haskell/haskell-language-server/pull/557) by @isovector
+- Use bash shell to allow its idioms
+([#552)](https://github.com/haskell/haskell-language-server/pull/552) by @jneira
+- Ignore flakey tactics test
+([#546)](https://github.com/haskell/haskell-language-server/pull/546) by @isovector
+- Better scoring metric for deriving safeHead
+([#545)](https://github.com/haskell/haskell-language-server/pull/545) by @isovector
+- Discover skolems in the hypothesis, not just goal
+([#542)](https://github.com/haskell/haskell-language-server/pull/542) by @isovector
+- [retrie] Fix code action title
+([#538)](https://github.com/haskell/haskell-language-server/pull/538) by @pepeiborra
+- Tactics support for using given constraints
+([#534)](https://github.com/haskell/haskell-language-server/pull/534) by @isovector
+- Add missing tactic subpackage in default stack.yaml
+([#529)](https://github.com/haskell/haskell-language-server/pull/529) by @jneira
+- Use implicit-hie-0.1.2.0
+([#528)](https://github.com/haskell/haskell-language-server/pull/528) by @jneira
+- Wait for diagnostics in tactics tests
+([#525)](https://github.com/haskell/haskell-language-server/pull/525) by @isovector
+- Fix a bug in tactics preventing split of split
+([#520)](https://github.com/haskell/haskell-language-server/pull/520) by @isovector
+- Use infix notation for destructing and splitting infix data cons
+([#519)](https://github.com/haskell/haskell-language-server/pull/519) by @isovector
+- Retry the build three times
+([#518)](https://github.com/haskell/haskell-language-server/pull/518) by @jneira
+- Separate tactics into its own package
+([#516)](https://github.com/haskell/haskell-language-server/pull/516) by @isovector
+- Add a Troubleshooting section to the README
+([#507)](https://github.com/haskell/haskell-language-server/pull/507) by @michaelpj
+- Add GitHub Actions CI for testing
+([#504)](https://github.com/haskell/haskell-language-server/pull/504) by @bubba
+- Fix stack build for ghc-8.8.3 failing on some machines
+([#503)](https://github.com/haskell/haskell-language-server/pull/503) by @luntain
+- Expand explanation of how to configure HLS
+([#497)](https://github.com/haskell/haskell-language-server/pull/497) by @michaelpj
+- Module Name Plugin
+([#480)](https://github.com/haskell/haskell-language-server/pull/480) by @tittoassini
+- Allow hole filling to deal with recursion
+([#472)](https://github.com/haskell/haskell-language-server/pull/472) by @isovector
+- Restrict editor config to Haskell file, to avoid affecting Makefiles or other tab-based formats
+([#442)](https://github.com/haskell/haskell-language-server/pull/442) by @tittoassini
+- Hlint plugin using ghc-lib
+([#166)](https://github.com/haskell/haskell-language-server/pull/166) by @jneira
+
 ## 0.5.1
 
 0.5.1 is a minor bug fix release, mainly fixing an issue with the eval plugin
