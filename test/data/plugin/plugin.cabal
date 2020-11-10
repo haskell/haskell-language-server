@@ -1,0 +1,10 @@
+cabal-version:  1.18
+name: plugin
+version: 1.0.0
+build-type: Simple
+
+library
+  build-depends: base, ghc-typelits-knownnat, record-dot-preprocessor,
+          record-hasfield
+  exposed-modules: KnownNat, RecordDot
+  hs-source-dirs: .
