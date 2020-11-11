@@ -1,7 +1,7 @@
 cabal-version:      2.2
 category:           Development
 name:               haskell-language-server
-version:            0.5.1.0
+version:            0.6.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -59,11 +59,11 @@ library
     , containers
     , data-default
     , ghc
-    , ghcide
+    , ghcide                >=0.5
     , gitrev
     , haskell-lsp           ^>=0.22
     , hie-bios              >=0.6.1 && <0.8
-    , hls-plugin-api
+    , hls-plugin-api        >=0.5
     , hslogger
     , optparse-applicative
     , optparse-simple
@@ -116,7 +116,7 @@ executable haskell-language-server
     , fourmolu                 ^>=0.2
     , ghc
     , ghc-boot-th
-    , ghcide                   >=0.1
+    , ghcide
     , hashable
     , haskell-language-server
     , haskell-lsp              ^>=0.22
