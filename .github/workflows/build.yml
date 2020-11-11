@@ -153,7 +153,7 @@ jobs:
           # decompress them
           gzip -d bin/*.gz
           cd bin
-          tar -czf haskell-language-server.tar.gz *
+          tar -czpf haskell-language-server.tar.gz *
 
       - uses: actions/upload-release-asset@v1.0.2
         env:
