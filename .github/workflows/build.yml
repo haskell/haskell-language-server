@@ -47,13 +47,11 @@ jobs:
 
     - name: Set some window specific things
       if: matrix.os == 'windows-latest'
-      run: |
-        echo '::set-env name=EXE_EXT::.exe'
+      run: echo "EXE_EXT=.exe" >> $GITHUB_ENV
 
     - name: Set some linux specific things
       if: matrix.os == 'ubuntu-latest'
-      run: |
-        echo '::set-env name=LINUX_CABAL_ARGS::--enable-executable-static --ghc-options=-split-sections'
+      run: echo "LINUX_CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
 
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows
