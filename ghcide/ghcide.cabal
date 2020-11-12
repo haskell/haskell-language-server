@@ -90,7 +90,7 @@ library
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.7.1 && < 0.8.0,
-        implicit-hie-cradle >= 0.2.0.1 && < 0.3,
+        implicit-hie-cradle >= 0.2.0.1 && < 0.4,
         base16-bytestring >=0.1.1 && <0.2
     if os(windows)
       build-depends:
