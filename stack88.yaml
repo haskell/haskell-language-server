@@ -9,8 +9,8 @@ extra-deps:
 - ghc-check-0.5.0.1
 - hie-bios-0.7.1
 - extra-1.7.2
-- implicit-hie-0.1.2.0
-- implicit-hie-cradle-0.2.0.1
+- implicit-hie-0.1.2.3
+- implicit-hie-cradle-0.3.0.0
 
 nix:
   packages: [zlib]

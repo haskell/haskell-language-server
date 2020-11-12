@@ -17,4 +17,5 @@ allow-newer:
 
 -- To ensure the build get the version with the fix for
 -- https://github.com/Avi-D-coder/implicit-hie/issues/17
-constraints: implicit-hie >= 0.1.2.0
+constraints: implicit-hie >= 0.1.2.3
+constraints: implicit-hie-cradle >= 0.3.0.0
