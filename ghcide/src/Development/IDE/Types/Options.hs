@@ -95,7 +95,7 @@ data IdeOptions = IdeOptions
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
   , optCustomDynFlags :: DynFlags -> DynFlags
-    -- ^ If given, it will be called right after setting up a new cradle,
+    -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   }
 
