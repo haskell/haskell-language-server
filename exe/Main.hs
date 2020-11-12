@@ -50,6 +50,7 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Aeson as J
 
 import HIE.Bios.Cradle
+import Development.IDE (action)
 
 ghcideVersion :: IO String
 ghcideVersion = do
@@ -113,7 +114,7 @@ main = do
                     }
                 logLevel = if argsVerbose then minBound else Info
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins)
+            initialise caps (mainRule >> pluginRules plugins >> action kick)
                 getLspId event wProg wIndefProg (logger logLevel) debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error

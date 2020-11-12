@@ -88,8 +88,8 @@ modifyFilesOfInterest state f = do
 
 -- | Typecheck all the files of interest.
 --   Could be improved
-kick :: DelayedAction ()
-kick = mkDelayedAction "kick" Debug $ do
+kick :: Action ()
+kick = do
     files <- HashMap.keys <$> getFilesOfInterest
     ShakeExtras{progressUpdate} <- getShakeExtras
     liftIO $ progressUpdate KickStarted
