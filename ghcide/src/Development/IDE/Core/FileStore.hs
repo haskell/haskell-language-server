@@ -36,7 +36,7 @@ import System.IO.Error
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
-import Development.IDE.Core.OfInterest (getFilesOfInterest, kick)
+import Development.IDE.Core.OfInterest (getFilesOfInterest)
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Types.Options
 import qualified Data.Rope.UTF16 as Rope
@@ -226,7 +226,7 @@ setFileModified state saved nfp = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"
-    shakeRestart state [kick]
+    shakeRestart state []
     when checkParents $
       typecheckParents state nfp
 
@@ -252,4 +252,4 @@ setSomethingModified state = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
-    void $ shakeRestart state [kick]
+    void $ shakeRestart state []

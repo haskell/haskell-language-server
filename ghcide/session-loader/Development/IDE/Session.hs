@@ -31,7 +31,6 @@ import Data.IORef
 import Data.Maybe
 import Data.Time.Clock
 import Data.Version
-import Development.IDE.Core.OfInterest
 import Development.IDE.Core.Shake
 import Development.IDE.Core.RuleTypes
 import Development.IDE.GHC.Compat hiding (Target, TargetModule, TargetFile)
@@ -245,7 +244,7 @@ loadSession dir = do
 
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
           invalidateShakeCache
-          restartShakeSession [kick]
+          restartShakeSession []
 
           -- Typecheck all files in the project on startup
           unless (null cs || not checkProject) $ do
