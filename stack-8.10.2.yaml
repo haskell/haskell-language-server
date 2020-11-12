@@ -19,8 +19,8 @@ extra-deps:
 - data-tree-print-0.1.0.2
 - floskell-0.10.4
 - fourmolu-0.2.0.0
-- implicit-hie-cradle-0.2.0.1
-- implicit-hie-0.1.2.0
+- implicit-hie-cradle-0.3.0.0
+- implicit-hie-0.1.2.3
 - lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
