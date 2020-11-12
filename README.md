@@ -292,7 +292,7 @@ Here is a list of the additional settings currently supported by `haskell-langua
 - Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused)
 - Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets (currently unused until we have snippets to provide)
 - Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again)
-- Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support (currently unused until the Hlint support is functional again)
+- Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support
 
 Settings like this are typically provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
 
