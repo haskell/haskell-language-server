@@ -2075,6 +2075,84 @@ exportUnusedTests = testGroup "export unused actions"
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A (f) where"
               , "a `f` b = ()"])
+   , testSession "function operator" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A () where"
+              , "(<|) = ($)"])
+        (R 2 0 2 9)
+        "Export ‘<|’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "module A ((<|)) where"
+              , "(<|) = ($)"])
+    , testSession "type synonym operator" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A () where"
+              , "type (:<) = ()"])
+        (R 3 0 3 13)
+        "Export ‘:<’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A ((:<)) where"
+              , "type (:<) = ()"])    
+    , testSession "type family operator" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeFamilies #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A () where"
+              , "type family (:<)"])
+        (R 4 0 4 15)
+        "Export ‘:<’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeFamilies #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A (type (:<)(..)) where"
+              , "type family (:<)"])
+    , testSession "typeclass operator" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A () where"
+              , "class (:<) a"])
+        (R 3 0 3 11)
+        "Export ‘:<’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A (type (:<)(..)) where"
+              , "class (:<) a"])
+    , testSession "newtype operator" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A () where"
+              , "newtype (:<) = Foo ()"])
+        (R 3 0 3 20)
+        "Export ‘:<’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A (type (:<)(..)) where"
+              , "newtype (:<) = Foo ()"])
+    , testSession "data type operator" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A () where"
+              , "data (:<) = Foo ()"])
+        (R 3 0 3 17)
+        "Export ‘:<’"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
+              , "{-# LANGUAGE TypeOperators #-}"
+              , "module A (type (:<)(..)) where"
+              , "data (:<) = Foo ()"])
     ]
   ]
     where
