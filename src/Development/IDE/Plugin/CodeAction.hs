@@ -377,6 +377,14 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
         _ -> False
     needsComma _ _ = False
 
+    opLetter :: String
+    opLetter = ":!#$%&*+./<=>?@\\^|-~"
+
+    parenthesizeIfNeeds :: Bool -> T.Text -> T.Text
+    parenthesizeIfNeeds needsTypeKeyword x 
+      | T.head x `elem` opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <>")"
+      | otherwise = x
+
     getLocatedRange :: Located a -> Maybe Range
     getLocatedRange = srcSpanToRange . getLoc
 
@@ -386,9 +394,9 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
        in loc >= Just l && loc <= Just r
 
     printExport :: ExportsAs -> T.Text -> T.Text
-    printExport ExportName x = x
+    printExport ExportName x = parenthesizeIfNeeds False x
     printExport ExportPattern x = "pattern " <> x
-    printExport ExportAll x = x <> "(..)"
+    printExport ExportAll x = parenthesizeIfNeeds True x <> "(..)"
 
     isTopLevel :: Range -> Bool
     isTopLevel l = (_character . _start) l == 0
