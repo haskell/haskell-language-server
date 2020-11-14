@@ -122,11 +122,21 @@ rules = do
           -- we are encoding the fact that idea has refactorings in diagnostic code
           , _code     = Just (LSP.StringValue $ T.pack $ codePre ++ ideaHint idea)
           , _source   = Just "hlint"
-          , _message  = T.pack $ show idea
+          , _message  = idea2Message idea
           , _relatedInformation = Nothing
           , _tags     = Nothing
         }
         where codePre = if null $ ideaRefactoring idea then "" else "refact:"
+
+      idea2Message :: Idea -> T.Text
+      idea2Message idea = T.unlines $ [T.pack $ ideaHint idea, "Found:", "  " <> T.pack (ideaFrom idea)]
+                                     <> toIdea <> map (T.pack . show) (ideaNote idea)
+        where
+          toIdea :: [T.Text]
+          toIdea = case ideaTo idea of
+            Nothing -> []
+            Just i  -> [T.pack "Why not:", T.pack $ "  " ++ i]
+
 
       parseErrorToDiagnostic :: ParseError -> Diagnostic
       parseErrorToDiagnostic (Hlint.ParseError l msg contents) =
