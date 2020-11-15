@@ -1,4 +1,4 @@
-resolver: nightly-2020-09-02
+resolver: nightly-2020-06-19
 allow-newer: true
 packages:
 - .
@@ -30,6 +30,3 @@ extra-deps:
 
 nix:
   packages: [zlib]
-
-ghc-options:
-  ghcide: -DSTACK
