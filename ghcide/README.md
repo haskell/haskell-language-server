@@ -46,6 +46,10 @@ a simple reproduction of the bug.
 
 ### Install `ghcide`
 
+[We recommend](https://neilmitchell.blogspot.com/2020/09/dont-use-ghcide-anymore-directly.html) installing and using the Haskell extension in VS Code, or the prebuilt binaries provided by https://github.com/haskell/haskell-language-server
+
+If you still wish to install `ghcide` direcly, the instructions below might prove useful *but you are on your own*.
+
 #### With Nix
 
 Note that you need to compile `ghcide` with the same `ghc` as the project you are working on.
@@ -317,13 +321,15 @@ args = ["--lsp"]
 
 ## Hacking on ghcide
 
-To build and work on `ghcide` itself, you can use Stack or cabal, e.g.,
-running `stack test` will execute the test suite.
+To build and work on `ghcide` itself, you should use cabal, e.g.,
+running `cabal test` will execute the test suite. You can use `stack test` too, but
+note that some tests will fail, and none of the maintainers are currently using `stack`.
+
 If you are using Windows, you should disable the `auto.crlf` setting and configure your editor to use LF line endings, directly or making it use the existing `.editor-config`.
 
 If you are chasing down test failures, you can use the tasty-rerun feature by running tests as
 
-    stack --stack-yaml=stack84.yaml test --test-arguments "--rerun"
+    cabal test --test-options"--rerun"
 
 This writes a log file called `.tasty-rerun-log` of the failures, and only runs those.
 See the [tasty-rerun](https://hackage.haskell.org/package/tasty-rerun-1.1.17/docs/Test-Tasty-Ingredients-Rerun.html) documentation for other options.
@@ -332,12 +338,9 @@ If you are touching performance sensitive code, take the time to run a different
 benchmark between HEAD and master using the benchHist script. This assumes that
 "master" points to the upstream master.
 
-Run the benchmarks with `stack`:
+Run the benchmarks with `cabal bench`.
 
-    export STACK_YAML=...
-    stack bench
-
-It should take around 15 minutes and the results will be stored in the `bench-hist` folder. To interpret the results, see the comments in the `bench/hist/Main.hs` module.
+It should take around 15 minutes and the results will be stored in the `bench-results` folder. To interpret the results, see the comments in the `bench/hist/Main.hs` module.
 
 More details in [bench/README](bench/README.md)
 
