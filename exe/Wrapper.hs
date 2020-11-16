@@ -4,6 +4,7 @@
 module Main where
 
 import Control.Monad.Extra
+import Main.Utf8
 import Data.Foldable
 import Data.List
 import Data.Void
@@ -23,7 +24,7 @@ import System.Process
 -- ---------------------------------------------------------------------
 
 main :: IO ()
-main = do
+main = withUtf8 $ do
   -- WARNING: If you write to stdout before runLanguageServer
   --          then the language server will not work
   args <- getArguments "haskell-language-server-wrapper"

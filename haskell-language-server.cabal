@@ -144,6 +144,7 @@ executable haskell-language-server
     , time
     , transformers
     , unordered-containers
+    , with-utf8
 
   if flag(agpl)
     build-depends: brittany
@@ -177,6 +178,7 @@ executable haskell-language-server-wrapper
     , hie-bios
     , optparse-applicative
     , optparse-simple
+    , with-utf8
     , process
 
   default-language: Haskell2010

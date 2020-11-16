@@ -5,6 +5,8 @@
 {-# LANGUAGE RecordWildCards   #-}
 module Main(main) where
 
+import           Main.Utf8                 (withUtf8)
+
 import           Ide.Arguments             (Arguments (..), LspArguments (..),
                                             getArguments)
 import           Ide.Main                  (defaultMain)
@@ -72,7 +74,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 -- ---------------------------------------------------------------------
 
 main :: IO ()
-main = do
+main = withUtf8 $ do
     args <- getArguments "haskell-language-server"
 
     let withExamples =
