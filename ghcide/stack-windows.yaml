@@ -1,5 +1,5 @@
 resolver: nightly-2020-06-19
-allow-newer: true
+
 packages:
 - .
 - ./hie-compat/
