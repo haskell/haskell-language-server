@@ -331,14 +331,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
-      expectDiagnosticsWithTags
-        [ ( "ModuleA.hs"
-          , [(DsInfo, (1, 0), "The import of 'ModuleB'", Just DtUnnecessary)]
-          )
-        , ( "ModuleB.hs"
-          , [(DsInfo, (1, 0), "The import of 'ModuleA'", Just DtUnnecessary)]
-          )
-        ]
+      expectDiagnostics []
   , testSessionWait "correct reference used with hs-boot" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
@@ -387,11 +380,7 @@ diagnosticTests = testGroup "diagnostics"
             ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      expectDiagnosticsWithTags
-        [ ( "ModuleB.hs"
-          , [(DsInfo, (2, 0), "The import of 'ModuleA' is redundant", Just DtUnnecessary)]
-          )
-        ]
+      expectDiagnostics []
   , testSessionWait "package imports" $ do
       let thisDataListContent = T.unlines
             [ "module Data.List where"
@@ -538,11 +527,8 @@ diagnosticTests = testGroup "diagnostics"
 
     bdoc <- createDoc bPath "haskell" bSource
     _pdoc <- createDoc pPath "haskell" pSource
-    expectDiagnosticsWithTags
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding", Nothing)]) -- So that we know P has been loaded
-      ,("P.hs", [(DsInfo,(2,0), "The import of", Just DtUnnecessary)])
-      ,("P.hs", [(DsInfo,(4,0), "Defined but not used", Just DtUnnecessary)])
-      ]
+    expectDiagnostics
+      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
 
     -- Change y from Int to B which introduces a type error in A (imported from P)
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $
@@ -2855,57 +2841,58 @@ highlightTests = testGroup "highlight"
   [ testSessionWait "value" $ do
     doc <- createDoc "A.hs" "haskell" source
     _ <- waitForDiagnostics
-    highlights <- getHighlights doc (Position 2 2)
+    highlights <- getHighlights doc (Position 3 2)
     liftIO $ highlights @?=
-            [ DocumentHighlight (R 1 0 1 3) (Just HkRead)
-            , DocumentHighlight (R 2 0 2 3) (Just HkWrite)
-            , DocumentHighlight (R 3 6 3 9) (Just HkRead)
-            , DocumentHighlight (R 4 22 4 25) (Just HkRead)
+            [ DocumentHighlight (R 2 0 2 3) (Just HkRead)
+            , DocumentHighlight (R 3 0 3 3) (Just HkWrite)
+            , DocumentHighlight (R 4 6 4 9) (Just HkRead)
+            , DocumentHighlight (R 5 22 5 25) (Just HkRead)
             ]
   , testSessionWait "type" $ do
     doc <- createDoc "A.hs" "haskell" source
     _ <- waitForDiagnostics
-    highlights <- getHighlights doc (Position 1 8)
+    highlights <- getHighlights doc (Position 2 8)
     liftIO $ highlights @?=
-            [ DocumentHighlight (R 1 7 1 10) (Just HkRead)
-            , DocumentHighlight (R 2 11 2 14) (Just HkRead)
+            [ DocumentHighlight (R 2 7 2 10) (Just HkRead)
+            , DocumentHighlight (R 3 11 3 14) (Just HkRead)
             ]
   , testSessionWait "local" $ do
     doc <- createDoc "A.hs" "haskell" source
     _ <- waitForDiagnostics
-    highlights <- getHighlights doc (Position 5 5)
+    highlights <- getHighlights doc (Position 6 5)
     liftIO $ highlights @?=
-            [ DocumentHighlight (R 5 4 5 7) (Just HkWrite)
-            , DocumentHighlight (R 5 10 5 13) (Just HkRead)
-            , DocumentHighlight (R 6 12 6 15) (Just HkRead)
+            [ DocumentHighlight (R 6 4 6 7) (Just HkWrite)
+            , DocumentHighlight (R 6 10 6 13) (Just HkRead)
+            , DocumentHighlight (R 7 12 7 15) (Just HkRead)
             ]
   , testSessionWait "record" $ do
     doc <- createDoc "A.hs" "haskell" recsource
     _ <- waitForDiagnostics
-    highlights <- getHighlights doc (Position 3 15)
+    highlights <- getHighlights doc (Position 4 15)
     liftIO $ highlights @?=
       -- Span is just the .. on 8.10, but Rec{..} before
 #if MIN_GHC_API_VERSION(8,10,0)
-            [ DocumentHighlight (R 3 8 3 10) (Just HkWrite)
+            [ DocumentHighlight (R 4 8 4 10) (Just HkWrite)
 #else
-            [ DocumentHighlight (R 3 4 3 11) (Just HkWrite)
+            [ DocumentHighlight (R 4 4 4 11) (Just HkWrite)
 #endif
-            , DocumentHighlight (R 3 14 3 20) (Just HkRead)
+            , DocumentHighlight (R 4 14 4 20) (Just HkRead)
             ]
-    highlights <- getHighlights doc (Position 2 17)
+    highlights <- getHighlights doc (Position 3 17)
     liftIO $ highlights @?=
-            [ DocumentHighlight (R 2 17 2 23) (Just HkWrite)
+            [ DocumentHighlight (R 3 17 3 23) (Just HkWrite)
       -- Span is just the .. on 8.10, but Rec{..} before
 #if MIN_GHC_API_VERSION(8,10,0)
-            , DocumentHighlight (R 3 8 3 10) (Just HkRead)
+            , DocumentHighlight (R 4 8 4 10) (Just HkRead)
 #else
-            , DocumentHighlight (R 3 4 3 11) (Just HkRead)
+            , DocumentHighlight (R 4 4 4 11) (Just HkRead)
 #endif
             ]
   ]
   where
     source = T.unlines
-      ["module Highlight where"
+      ["{-# OPTIONS_GHC -Wunused-binds #-}"
+      ,"module Highlight () where"
       ,"foo :: Int"
       ,"foo = 3 :: Int"
       ,"bar = foo"
@@ -2915,7 +2902,8 @@ highlightTests = testGroup "highlight"
       ]
     recsource = T.unlines
       ["{-# LANGUAGE RecordWildCards #-}"
-      ,"module Highlight where"
+      ,"{-# OPTIONS_GHC -Wunused-binds #-}"
+      ,"module Highlight () where"
       ,"data Rec = Rec { field1 :: Int, field2 :: Char }"
       ,"foo Rec{..} = field2 + field1"
       ]
@@ -3369,11 +3357,8 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
 
     bdoc <- createDoc bPath "haskell" bSource
-    expectDiagnosticsWithTags
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding", Nothing)]) -- So what we know P has been loaded
-      ,("P.hs", [(DsInfo,(2,0), "The import of", Just DtUnnecessary)])
-      ,("P.hs", [(DsInfo,(4,0), "Defined but not used", Just DtUnnecessary)])
-      ]
+    expectDiagnostics
+      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So what we know P has been loaded
 
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
@@ -3404,11 +3389,9 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
     -- This is clearly inconsistent, and the expected outcome a bit surprising:
     --   - The diagnostic for A has already been received. Ghcide does not repeat diagnostics
     --   - P is being typechecked with the last successful artifacts for A.
-    expectDiagnosticsWithTags
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding", Nothing)])
-      ,("P.hs", [(DsWarning,(6,0), "Top-level binding", Nothing)])
-      ,("P.hs", [(DsInfo,(4,0), "Defined but not used", Just DtUnnecessary)])
-      ,("P.hs", [(DsInfo,(6,0), "Defined but not used", Just DtUnnecessary)])
+    expectDiagnostics
+      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])
+      ,("P.hs", [(DsWarning,(6,0), "Top-level binding")])
       ]
     expectNoMoreDiagnostics 2
 
@@ -3422,11 +3405,8 @@ ifaceErrorTest2 = testCase "iface-error-test-2" $ runWithExtraFiles "recomp" $ \
 
     bdoc <- createDoc bPath "haskell" bSource
     pdoc <- createDoc pPath "haskell" pSource
-    expectDiagnosticsWithTags
-      [("P.hs", [(DsWarning,(4,0), "Top-level binding", Nothing)]) -- So that we know P has been loaded
-      ,("P.hs", [(DsInfo,(2,0), "The import of", Just DtUnnecessary)])
-      ,("P.hs", [(DsInfo,(4,0), "Defined but not used", Just DtUnnecessary)])
-      ]
+    expectDiagnostics
+      [("P.hs", [(DsWarning,(4,0), "Top-level binding")])] -- So that we know P has been loaded
 
     -- Change y from Int to B
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines ["module B where", "y :: Bool", "y = undefined"]]
@@ -3438,14 +3418,12 @@ ifaceErrorTest2 = testCase "iface-error-test-2" $ runWithExtraFiles "recomp" $ \
     -- foo = y :: Bool
     -- HOWEVER, in A...
     -- x = y  :: Int
-    expectDiagnosticsWithTags
+    expectDiagnostics
     -- As in the other test, P is being typechecked with the last successful artifacts for A
     -- (ot thanks to -fdeferred-type-errors)
-      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Nothing)])
-      ,("P.hs", [(DsWarning, (4, 0), "Top-level binding", Nothing)])
-      ,("P.hs", [(DsInfo, (4,0), "Defined but not used", Just DtUnnecessary)])
-      ,("P.hs", [(DsWarning, (6, 0), "Top-level binding", Nothing)])
-      ,("P.hs", [(DsInfo, (6,0), "Defined but not used", Just DtUnnecessary)])
+      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
+      ,("P.hs", [(DsWarning, (4, 0), "Top-level binding")])
+      ,("P.hs", [(DsWarning, (6, 0), "Top-level binding")])
       ]
 
     expectNoMoreDiagnostics 2
@@ -3468,11 +3446,9 @@ ifaceErrorTest3 = testCase "iface-error-test-3" $ runWithExtraFiles "recomp" $ \
 
     -- In this example the interface file for A should not exist (modulo the cache folder)
     -- Despite that P still type checks, as we can generate an interface file for A thanks to -fdeferred-type-errors
-    expectDiagnosticsWithTags
-      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'", Nothing)])
-      ,("P.hs", [(DsWarning,(4,0), "Top-level binding", Nothing)])
-      ,("P.hs", [(DsInfo,(2,0), "The import of", Just DtUnnecessary)])
-      ,("P.hs", [(DsInfo,(4,0), "Defined but not used", Just DtUnnecessary)])
+    expectDiagnostics
+      [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
+      ,("P.hs", [(DsWarning,(4,0), "Top-level binding")])
       ]
     expectNoMoreDiagnostics 2
 

@@ -136,7 +136,6 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
         modSummary' <- initPlugins hsc modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
             tcRnModule hsc keep_lbls $ enableTopLevelWarnings
-                                     $ enableUnnecessaryAndDeprecationWarnings
                                      $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
@@ -332,18 +331,10 @@ upgradeWarningToError (nfp, sh, fd) =
   warn2err = T.intercalate ": error:" . T.splitOn ": warning:"
 
 hideDiag :: DynFlags -> (WarnReason, FileDiagnostic) -> (WarnReason, FileDiagnostic)
-hideDiag originalFlags (Reason warning, (nfp, sh, fd))
+hideDiag originalFlags (Reason warning, (nfp, _sh, fd))
   | not (wopt warning originalFlags)
-  = if null (_tags fd)
-       then (Reason warning, (nfp, HideDiag, fd))
-            -- keep the diagnostic if it has an associated tag
-       else (Reason warning, (nfp, sh, fd{_severity = Just DsInfo}))
+  = (Reason warning, (nfp, HideDiag, fd))
 hideDiag _originalFlags t = t
-
-enableUnnecessaryAndDeprecationWarnings :: ParsedModule -> ParsedModule
-enableUnnecessaryAndDeprecationWarnings =
-  (update_pm_mod_summary . update_hspp_opts)
-  (foldr (.) id [(`wopt_set` flag) | flag <- unnecessaryDeprecationWarningFlags])
 
 -- | Warnings which lead to a diagnostic tag
 unnecessaryDeprecationWarningFlags :: [WarningFlag]
