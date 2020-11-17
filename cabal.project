@@ -11,11 +11,6 @@ source-repository-package
   location: https://github.com/bubba/brittany.git
   tag: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 
-source-repository-package
-  type: git
-  location: https://github.com/bubba/hie-bios.git
-  tag: cec139a1c3da1632d9a59271acc70156413017e7
-
 tests: true
 
 package *
