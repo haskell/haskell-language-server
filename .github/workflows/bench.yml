@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - run: git fetch origin master # check the master branch for benchmarking
-    - uses: actions/setup-haskell@v1.1.3
+    - uses: actions/setup-haskell@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
