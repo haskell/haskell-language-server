@@ -1,0 +1,14 @@
+cabal-version:       2.2
+
+name:                a
+version:             0.1.0.0
+author:              Fendor
+maintainer:          power.walross@gmail.com
+build-type:          Simple
+
+executable a
+  main-is:             Main.hs
+  hs-source-dirs:      src
+  ghc-options:         -Wall
+  build-depends:       base
+  default-language:    Haskell2010
