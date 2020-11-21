@@ -19,6 +19,7 @@ module Development.IDE.Plugin.CodeAction
     -- * For testing
     , blockCommandId
     , typeSignatureCommandId
+    , matchRegExMultipleImports
     ) where
 
 import Control.Monad (join, guard)
@@ -381,7 +382,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     opLetter = ":!#$%&*+./<=>?@\\^|-~"
 
     parenthesizeIfNeeds :: Bool -> T.Text -> T.Text
-    parenthesizeIfNeeds needsTypeKeyword x 
+    parenthesizeIfNeeds needsTypeKeyword x
       | T.head x `elem` opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <>")"
       | otherwise = x
 
@@ -649,14 +650,23 @@ suggestExtendImport (Just dflags) contents Diagnostic{_range=_range,..}
       "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
     , Just c <- contents
     , POk _ (L _ name) <- runParser dflags (T.unpack binding) parseIdentifier
-    = let range = case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
-            [s] -> let x = realSrcSpanToRange s
-                   in x{_end = (_end x){_character = succ (_character (_end x))}}
-            _ -> error "bug in srcspan parser"
-          importLine = textInRange range c
-        in [("Add " <> binding <> " to the import list of " <> mod
-        , [TextEdit range (addBindingToImportList (T.pack $ printRdrName name) importLine)])]
+    = [suggestions name c binding mod srcspan]
+    | Just (binding, mod_srcspan) <-
+      matchRegExMultipleImports _message
+    , Just c <- contents
+    , POk _ (L _ name) <- runParser dflags (T.unpack binding) parseIdentifier
+    = fmap (\(x, y) -> suggestions name c binding x y) mod_srcspan
     | otherwise = []
+    where
+        suggestions name c binding mod srcspan = let
+            range = case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
+                [s] -> let x = realSrcSpanToRange s
+                   in x{_end = (_end x){_character = succ (_character (_end x))}}
+                _ -> error "bug in srcspan parser"
+            importLine = textInRange range c
+            in
+                ("Add " <> binding <> " to the import list of " <> mod
+                , [TextEdit range (addBindingToImportList (T.pack $ printRdrName name) importLine)])
 suggestExtendImport Nothing _ _ = []
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
@@ -1135,3 +1145,41 @@ filterNewlines = T.concat  . T.lines
 
 unifySpaces :: T.Text -> T.Text
 unifySpaces    = T.unwords . T.words
+
+-- functions to help parse multiple import suggestions
+
+-- | Returns the first match if found
+regexSingleMatch :: T.Text -> T.Text -> Maybe T.Text
+regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
+    Just (h:_) -> Just h
+    _ -> Nothing
+
+-- | Parses tuples like (‘Data.Map’, (app/ModuleB.hs:2:1-18)) and
+-- | return (Data.Map, app/ModuleB.hs:2:1-18)
+regExPair :: (T.Text, T.Text) -> Maybe (T.Text, T.Text)
+regExPair (modname, srcpair) = do
+  x <- regexSingleMatch modname "‘([^’]*)’"
+  y <- regexSingleMatch srcpair "\\((.*)\\)"
+  return (x, y)
+
+-- | Process a list of (module_name, filename:src_span) values
+-- | Eg. [(Data.Map, app/ModuleB.hs:2:1-18), (Data.HashMap.Strict, app/ModuleB.hs:3:1-29)]
+regExImports :: T.Text -> Maybe [(T.Text, T.Text)]
+regExImports msg = result
+  where
+    parts = T.words msg
+    isPrefix = not . T.isPrefixOf "("
+    (mod, srcspan) = partition isPrefix  parts
+    -- check we have matching pairs like (Data.Map, (app/src.hs:1:2-18))
+    result = if length mod == length srcspan then
+               regExPair `traverse` zip mod srcspan
+             else Nothing
+
+matchRegExMultipleImports :: T.Text -> Maybe (T.Text, [(T.Text, T.Text)])
+matchRegExMultipleImports message = do
+  let pat = T.pack "Perhaps you want to add ‘([^’]*)’ to one of these import lists: *(‘.*\\))$"
+  (binding, imports) <- case matchRegexUnifySpaces message pat of
+                            Just [x, xs] -> Just (x, xs)
+                            _ -> Nothing
+  imps <- regExImports imports
+  return (binding, imps)
