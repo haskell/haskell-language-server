@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
@@ -39,12 +40,16 @@ import Development.IDE.Core.Shake (getDiagnostics)
 #ifdef GHC_LIB
 import Data.List (nub)
 import "ghc-lib" GHC hiding (DynFlags(..))
+import "ghc-lib" GHC.LanguageExtension (Extension)
 import "ghc" GHC as RealGHC (DynFlags(..))
 import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
 import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 #else
 import Development.IDE.GHC.Compat hiding (DynFlags(..))
+import HscTypes (hsc_dflags)
+import Language.Haskell.GHC.ExactPrint.Parsers (postParseTransform)
+import Language.Haskell.GHC.ExactPrint.Delta (normalLayout)
 #endif
 
 import Ide.Logger
@@ -176,7 +181,14 @@ getIdeas nfp = do
   fmap applyHints' (moduleEx flags)
 
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
-#ifdef GHC_LIB
+#ifndef GHC_LIB
+        moduleEx _flags = do
+          mbpm <- getParsedModule nfp
+          return $ createModule <$> mbpm
+          where createModule pm = Right (createModuleEx anns modu)
+                  where anns = pm_annotations pm
+                        modu = pm_parsed_source pm
+#else
         moduleEx flags = do
           mbpm <- getParsedModule nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
@@ -190,20 +202,18 @@ getIdeas nfp = do
                      Just <$> (liftIO $ parseModuleEx flags' fp contents')
 
         setExtensions flags = do
-          hsc <- hscEnv <$> use_ GhcSession nfp
-          let dflags = hsc_dflags hsc
-          let hscExts = EnumSet.toList (extensionFlags dflags)
-          let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-          let hlintExts = nub $ enabledExtensions flags ++ hscExts'
+          hlintExts <- getExtensions
           logm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
-#else
-        moduleEx _flags = do
-          mbpm <- getParsedModule nfp
-          return $ createModule <$> mbpm
-          where createModule pm = Right (createModuleEx anns modu)
-                  where anns = pm_annotations pm
-                        modu = pm_parsed_source pm
+
+getExtensions :: Action [Extension]
+getExtensions = do
+    hsc <- hscEnv <$> use_ GhcSession nfp
+    let dflags = hsc_dflags hsc
+    let hscExts = EnumSet.toList (extensionFlags dflags)
+    let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
+    let hlintExts = nub $ enabledExtensions flags ++ hscExts'
+    return hlintExts
 #endif
 
 -- ---------------------------------------------------------------------
@@ -334,10 +344,15 @@ applyOneCmd lf ide (AOP uri pos title) = do
 applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
 applyHint ide nfp mhint =
   runExceptT $ do
-    ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas nfp
+    let runAction' :: Action a -> IO a
+        runAction' = runAction "applyHint" ide
+    ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
-    let commands = map (show &&& ideaRefactoring) ideas'
+    let commands = map ideaRefactoring ideas'
     liftIO $ logm $ "applyHint:apply=" ++ show commands
+    let fp = fromNormalizedFilePath nfp
+    (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
+    oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
     -- set Nothing as "position" for "applyRefactorings" because
     -- applyRefactorings expects the provided position to be _within_ the scope
     -- of each refactoring it will apply.
@@ -353,19 +368,31 @@ applyHint ide nfp mhint =
     -- If we provide "applyRefactorings" with "Just (1,13)" then
     -- the "Redundant bracket" hint will never be executed
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
-    let fp = fromNormalizedFilePath nfp
-    (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents nfp
-    oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
-    -- We need to save a file with last edited contents cause `apply-refact`
-    -- doesn't expose a function taking directly contents instead a file path.
-    -- Ideally we should try to expose that function upstream and remove this.
-    res <- liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
+#ifdef GHC_LIB
+    res <-
+        liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
             writeFileUTF8NoNewLineTranslation temp oldContent
-            (Right <$> applyRefactorings Nothing commands temp) `catches`
+            let exts = runAction' getExtensions
+            (Right <$> applyRefactorings Nothing commands temp exts)
+                `catches`
                     [ Handler $ \e -> return (Left (show (e :: IOException)))
                     , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                     ]
+#else
+    mbParsedModule <- liftIO $ runAction' $ getParsedModule nfp
+    res <-
+        case mbParsedModule of
+            Nothing -> throwE "Apply hint: error parsing the module"
+            Just pm -> do
+                let anns = pm_annotations pm
+                let modu = pm_parsed_source pm
+                hsc <- liftIO $ runAction' $ hscEnv <$> use_ GhcSession nfp
+                let dflags = hsc_dflags hsc
+                (anns', modu') <-
+                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) normalLayout
+                liftIO (Right <$> applyRefactorings' Nothing commands anns' modu')
+#endif
     case res of
       Right appliedFile -> do
         let uri = fromNormalizedUri (filePathToUri' nfp)
@@ -373,7 +400,7 @@ applyHint ide nfp mhint =
         liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
         ExceptT $ return (Right wsEdit)
       Left err ->
-        throwE (show err)
+        throwE err
     where
           -- | If we are only interested in applying a particular hint then
           -- let's filter out all the irrelevant ideas
