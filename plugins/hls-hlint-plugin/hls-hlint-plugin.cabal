@@ -38,6 +38,7 @@ library
     , directory
     , extra
     , filepath
+    , ghc-exactprint
     , ghcide
     , hashable
     , haskell-lsp
