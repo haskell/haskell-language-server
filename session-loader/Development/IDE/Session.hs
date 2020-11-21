@@ -617,7 +617,8 @@ memoIO op = do
 -- | Throws if package flags are unsatisfiable
 setOptions :: GhcMonad m => ComponentOptions -> DynFlags -> m (DynFlags, [GHC.Target])
 setOptions (ComponentOptions theOpts compRoot _) dflags = do
-    (dflags', targets) <- addCmdOpts theOpts dflags
+    (dflags', targets') <- addCmdOpts theOpts dflags
+    let targets = makeTargetsAbsolute compRoot targets'
     let dflags'' =
           disableWarningsAsErrors $
           -- disabled, generated directly by ghcide instead

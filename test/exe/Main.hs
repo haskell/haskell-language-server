@@ -3192,6 +3192,7 @@ cradleTests = testGroup "cradle"
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce]
     ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2]
+    ,testGroup "sub-directory"   [simpleSubDirectoryTest]
     ]
 
 loadCradleOnlyonce :: TestTree
@@ -3267,6 +3268,17 @@ ignoreFatalWarning = testCase "ignore-fatal-warning" $ runWithExtraFiles "ignore
     src <- liftIO $ readFileUtf8 srcPath
     _ <- createDoc srcPath "haskell" src
     expectNoMoreDiagnostics 5
+
+simpleSubDirectoryTest :: TestTree
+simpleSubDirectoryTest =
+  testCase "simple-subdirectory" $ runWithExtraFiles "cabal-exe" $ \dir -> do
+    let mainPath = dir </> "a/src/Main.hs"
+    mainSource <- liftIO $ readFileUtf8 mainPath
+    _mdoc <- createDoc mainPath "haskell" mainSource
+    expectDiagnosticsWithTags
+      [("a/src/Main.hs", [(DsWarning,(2,0), "Top-level binding", Nothing)]) -- So that we know P has been loaded
+      ]
+    expectNoMoreDiagnostics 0.5
 
 simpleMultiTest :: TestTree
 simpleMultiTest = testCase "simple-multi-test" $ runWithExtraFiles "multi" $ \dir -> do
