@@ -369,6 +369,11 @@ applyHint ide nfp mhint =
     -- the "Redundant bracket" hint will never be executed
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
 #ifdef GHC_LIB
+    let writeFileUTF8NoNewLineTranslation file txt =
+        withFile file WriteMode $ \h -> do
+            hSetEncoding h utf8
+            hSetNewlineMode h noNewlineTranslation
+            hPutStr h (T.unpack txt)
     res <-
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
@@ -423,10 +428,3 @@ bimapExceptT f g (ExceptT m) = ExceptT (fmap h m) where
   h (Left e)  = Left (f e)
   h (Right a) = Right (g a)
 {-# INLINE bimapExceptT #-}
-
-writeFileUTF8NoNewLineTranslation :: FilePath -> T.Text -> IO()
-writeFileUTF8NoNewLineTranslation file txt =
-  withFile file WriteMode $ \h -> do
-    hSetEncoding h utf8
-    hSetNewlineMode h noNewlineTranslation
-    hPutStr h (T.unpack txt)
