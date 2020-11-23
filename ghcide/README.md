@@ -325,6 +325,8 @@ To build and work on `ghcide` itself, you should use cabal, e.g.,
 running `cabal test` will execute the test suite. You can use `stack test` too, but
 note that some tests will fail, and none of the maintainers are currently using `stack`.
 
+If you are using Nix, there is a Cachix nix-shell cache for all the supported platforms: `cachix use haskell-ghcide`.
+
 If you are using Windows, you should disable the `auto.crlf` setting and configure your editor to use LF line endings, directly or making it use the existing `.editor-config`.
 
 If you are chasing down test failures, you can use the tasty-rerun feature by running tests as
