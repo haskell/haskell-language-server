@@ -123,11 +123,28 @@ unzipTrace l =
 -- | Essentially same as 'dataConInstOrigArgTys' in GHC,
 --  but only accepts universally quantified types as the second arguments
 --  and automatically introduces existentials.
-dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
+--
+-- NOTE: The behaviour depends on GHC's 'dataConInstOrigArgTys'.
+--       We need some tweaks if the compiler changes the implementation.
+dataConInstOrigArgTys'
+  :: DataCon
+      -- ^ 'DataCon'structor
+  -> [Type]
+      -- ^ /Universally/ quantified type arguments to a result type.
+      --   It /MUST NOT/ contain any dictionaries, coercion and existentials.
+      --
+      --   For example, for @MkMyGADT :: b -> MyGADT a c@, we
+      --   must pass @[a, c]@ as this argument but not @b@, as @b@ is an existential.
+  -> [Type]
+      -- ^ Types of arguments to the DataCon with returned type is instantiated with the second argument.
 dataConInstOrigArgTys' con uniTys =
   let exvars = dataConExTys con
    in dataConInstOrigArgTys con $
         uniTys ++ fmap mkTyVarTy exvars
+      -- Rationale: At least in GHC <= 8.10, 'dataConInstOrigArgTys'
+      -- unifies the second argument with DataCon's universals followed by existentials.
+      -- If the definition of 'dataConInstOrigArgTys' changes,
+      -- this place must be changed accordingly.
 
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the
