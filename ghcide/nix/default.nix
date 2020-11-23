@@ -16,6 +16,7 @@ let
             };
         in
         {
+        inherit (import sources.gitignore { inherit (pkgs) lib; }) gitignoreSource;
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)

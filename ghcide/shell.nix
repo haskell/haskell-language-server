@@ -18,7 +18,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
             then ourHaskell.packages.${defaultCompiler}
             else ourHaskell.packages.${compiler};
     ghcide = p: haskell.lib.doCheck
-                    (p.callCabal2nixWithOptions "ghcide" ./. "--benchmark" {});
+                    (p.callCabal2nixWithOptions "ghcide" (nixpkgs.gitignoreSource ./.) "--benchmark" {});
     isSupported = compiler == "default" || compiler == defaultCompiler;
 in
 haskellPackagesForProject.shellFor {
