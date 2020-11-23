@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+
 #include "ghc-api-version.h"
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -14,7 +15,8 @@ import Data.Char (isUpper)
 import Data.Generics
 import Data.List.Extra as List hiding (stripPrefix)
 import qualified Data.Map  as Map
-import Data.Maybe (fromMaybe, mapMaybe)
+
+import Data.Maybe (listToMaybe, fromMaybe, mapMaybe)
 import qualified Data.Text as T
 import qualified Text.Fuzzy as Fuzzy
 
@@ -45,6 +47,11 @@ import Development.IDE.Spans.Common
 import Development.IDE.GHC.Util
 import Outputable (Outputable)
 import qualified Data.Set as Set
+import ConLike
+
+import GhcPlugins (
+    flLabel,
+    unpackFS)
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -259,27 +266,39 @@ cacheDataProducer packageState curMod rdrEnv limports deps = do
 
       getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
       getComplsForOne (GRE n _ True _) =
-        (\x -> ([x],mempty)) <$> toCompItem curMod curModName n
+          (, mempty) <$> toCompItem curMod curModName n
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
           compItem <- toCompItem curMod (is_mod spec) n
           let unqual
                 | is_qual spec = []
-                | otherwise = [compItem]
+                | otherwise = compItem
               qual
-                | is_qual spec = Map.singleton asMod [compItem]
-                | otherwise = Map.fromList [(asMod,[compItem]),(origMod,[compItem])]
+                | is_qual spec = Map.singleton asMod compItem
+                | otherwise = Map.fromList [(asMod,compItem),(origMod,compItem)]
               asMod = showModName (is_as spec)
               origMod = showModName (is_mod spec)
           return (unqual,QualCompls qual)
 
-      toCompItem :: Module -> ModuleName -> Name -> IO CompItem
+      toCompItem :: Module -> ModuleName -> Name -> IO [CompItem]
       toCompItem m mn n = do
         docs <- getDocumentationTryGhc packageState curMod deps n
         ty <- catchSrcErrors (hsc_dflags packageState) "completion" $ do
                 name' <- lookupName packageState m n
                 return $ name' >>= safeTyThingType
-        return $ mkNameCompItem n mn (either (const Nothing) id ty) Nothing docs
+        -- use the same pass to also capture any Record snippets that we can collect
+        record_ty <- catchSrcErrors (hsc_dflags packageState) "record-completion" $ do
+                name' <- lookupName packageState m n
+                return $ name' >>= safeTyThingForRecord
+
+        let recordCompls = case either (const Nothing) id record_ty of
+                Just (ctxStr, flds) -> case flds of
+                    [] -> []
+                    _ -> [mkRecordSnippetCompItem ctxStr flds (ppr mn) docs]
+                Nothing -> []
+
+        return $ [mkNameCompItem n mn (either (const Nothing) id ty) Nothing docs] ++
+                 recordCompls
 
   (unquals,quals) <- getCompls rdrElts
 
@@ -289,6 +308,7 @@ cacheDataProducer packageState curMod rdrEnv limports deps = do
     , qualCompls = quals
     , importableModules = moduleNames
     }
+
 
 -- | Produces completions from the top level declarations of a module.
 localCompletionsForParsedModule :: ParsedModule -> CachedCompletions
@@ -323,9 +343,14 @@ localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{
                 | L _ (TypeSig _ ids typ) <- tcdSigs
                 , id <- ids]
             TyClD _ x ->
-                [mkComp id cl Nothing
-                | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
-                , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
+                let generalCompls = [mkComp id cl Nothing
+                        | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
+                        , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
+                    -- here we only have to look at the outermost type
+                    recordCompls = findRecordCompl pm thisModName x
+                in
+                   -- the constructors and snippets will be duplicated here giving the user 2 choices.
+                   generalCompls ++ recordCompls
             ForD _ ForeignImport{fd_name,fd_sig_ty} ->
                 [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
             ForD _ ForeignExport{fd_name,fd_sig_ty} ->
@@ -342,6 +367,34 @@ localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{
 
     thisModName = ppr hsmodName
 
+    --recordCompls = localRecordSnippetProducer pm thisModName
+
+findRecordCompl :: ParsedModule -> T.Text -> TyClDecl GhcPs -> [CompItem]
+findRecordCompl pmod mn DataDecl {tcdLName, tcdDataDefn} = result
+    where
+        result = [mkRecordSnippetCompItem (T.pack . showGhc . unLoc $ con_name) field_labels mn doc
+                 | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
+                 , Just  con_details <- [getFlds con_args]
+                 , let field_names = mapMaybe extract con_details
+                 , let field_labels = T.pack . showGhc . unLoc <$> field_names
+                 , (not . List.null) field_labels
+                 ]
+        doc = SpanDocText (getDocumentation [pmod] tcdLName) (SpanDocUris Nothing Nothing)
+
+        getFlds :: HsConDetails arg (Located [LConDeclField GhcPs]) -> Maybe [ConDeclField GhcPs]
+        getFlds conArg = case conArg of
+                             RecCon rec -> Just $ unLoc <$> unLoc rec
+                             PrefixCon _ -> Just []
+                             _ -> Nothing
+
+        extract ConDeclField{..}
+             -- TODO: Why is cd_fld_names a list?
+            | Just fld_name <- rdrNameFieldOcc . unLoc <$> listToMaybe cd_fld_names = Just fld_name
+            | otherwise = Nothing
+        -- XConDeclField
+        extract _ = Nothing
+findRecordCompl _ _ _ = []
+
 ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
 
@@ -349,11 +402,10 @@ newtype WithSnippets = WithSnippets Bool
 
 toggleSnippets :: ClientCapabilities -> WithSnippets -> CompletionItem -> CompletionItem
 toggleSnippets ClientCapabilities { _textDocument } (WithSnippets with) x
-  | with && supported = x
+  | with = x
   | otherwise = x { _insertTextFormat = Just PlainText
-                  , _insertText       = Nothing
-                  }
-  where supported = Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
+                , _insertText       = Nothing
+                }
 
 -- | Returns the cached completions for the given module and position.
 getCompletions
@@ -466,7 +518,6 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
           in filtModNameCompls ++ map (toggleSnippets caps withSnippets
                                          . mkCompl ideOpts . stripAutoGenerated) uniqueFiltCompls
                                ++ filtKeywordCompls
-
   return result
 
 
@@ -600,3 +651,33 @@ prefixes =
   , "$c"
   , "$m"
   ]
+
+
+safeTyThingForRecord :: TyThing -> Maybe (T.Text, [T.Text])
+safeTyThingForRecord (AnId _) = Nothing
+safeTyThingForRecord (AConLike dc) =
+    let ctxStr =   T.pack . showGhc . occName . conLikeName $ dc
+        field_names = T.pack . unpackFS . flLabel <$> conLikeFieldLabels dc
+    in
+        Just (ctxStr, field_names)
+safeTyThingForRecord _ = Nothing
+
+mkRecordSnippetCompItem :: T.Text -> [T.Text] -> T.Text -> SpanDoc -> CompItem
+mkRecordSnippetCompItem ctxStr compl mn docs = r
+  where
+      r  = CI {
+            compKind = CiSnippet
+          , insertText = buildSnippet
+          , importedFrom = importedFrom
+          , typeText = Nothing
+          , label = ctxStr
+          , isInfix = Nothing
+          , docs = docs
+          , isTypeCompl = False
+          }
+
+      placeholder_pairs = zip compl ([1..]::[Int])
+      snippet_parts = map (\(x, i) -> x <> "=${" <> T.pack (show i) <> ":_" <> x <> "}") placeholder_pairs
+      snippet = T.intercalate (T.pack ", ") snippet_parts
+      buildSnippet = ctxStr <> " {" <> snippet <> "}"
+      importedFrom = Right mn
