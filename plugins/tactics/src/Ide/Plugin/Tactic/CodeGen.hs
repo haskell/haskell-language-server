@@ -127,7 +127,7 @@ dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
 dataConInstOrigArgTys' con uniTys =
   let exvars = dataConExTys con
    in dataConInstOrigArgTys con $
-        uniTys ++ map mkTyVarTy exvars
+        uniTys ++ fmap mkTyVarTy exvars
 
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the
