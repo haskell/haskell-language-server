@@ -1,6 +1,10 @@
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -10,15 +14,18 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
-import           Control.Applicative
+import           Control.Monad (when)
 import           Control.Monad.Except (throwError)
+import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
-import           Data.Function
+import           Data.Bool (bool)
+import           Data.Foldable
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
 import qualified Data.Set as S
+import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
@@ -30,23 +37,17 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
+import           Name (occNameString)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
 
 
-
 ------------------------------------------------------------------------------
 -- | Use something in the hypothesis to fill the hole.
--- TODO(sandy): deprecate this
 assumption :: TacticsM ()
-assumption = rule $ \jdg -> do
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
-  case find ((== g) . snd) $ toList hy of
-    Just (v, _) -> pure $ noLoc $ var' v
-    Nothing -> throwError $ GoalMismatch "assumption" g
+assumption = attemptOn allNames assume
 
 
 ------------------------------------------------------------------------------
@@ -55,35 +56,22 @@ assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
   case M.lookup name $ jHypothesis jdg of
-    Just ty ->
-      case ty == jGoal jdg of
-        True  -> do
-          useOccName jdg name
-          pure $ noLoc $ var' name
-        False -> throwError $ GoalMismatch "assume" g
+    Just (hi_type -> ty) -> do
+      unify ty $ jGoal jdg
+      for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
+      useOccName jdg name
+      pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
 
 
-useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
-useOccName jdg name =
-  case M.lookup name $ jHypothesis jdg of
-    Just{}  -> modify $ withUsedVals $ S.insert name
-    Nothing -> pure ()
-
-
-------------------------------------------------------------------------------
--- | Introduce a lambda.
-intro :: TacticsM ()
-intro = rule $ \jdg -> do
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
-  case splitFunTy_maybe $ unCType g of
-    Just (a, b) -> do
-      v <- pure $ mkGoodName (getInScope hy) a
-      let jdg' = introducing [(v, CType a)] $ withNewGoal (CType b) jdg
-      sg <- newSubgoal jdg'
-      pure $ noLoc $ lambda [bvar' v] $ unLoc sg
-    _ -> throwError $ GoalMismatch "intro" g
+recursion :: TacticsM ()
+recursion = requireConcreteHole $ tracing "recursion" $ do
+  defs <- getCurrentDefinitions
+  attemptOn (const $ fmap fst defs) $ \name -> do
+    modify $ pushRecursionStack .  countRecursiveCall
+    ensure guardStructurallySmallerRecursion popRecursionStack $ do
+      (localTactic (apply name) $ introducingRecursively defs)
+        <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
 ------------------------------------------------------------------------------
@@ -92,13 +80,19 @@ intros :: TacticsM ()
 intros = rule $ \jdg -> do
   let hy = jHypothesis jdg
       g  = jGoal jdg
+  ctx <- ask
   case tcSplitFunTys $ unCType g of
-    ([], _) -> throwError $ GoalMismatch "intro" g
+    ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      vs <- mkManyGoodNames hy as
-      let jdg' = introducing (zip vs $ coerce as) $ withNewGoal (CType b) jdg
-      sg <- newSubgoal jdg'
+      vs <- mkManyGoodNames (jEntireHypothesis jdg) as
+      let top_hole = isTopHole ctx jdg
+          jdg' = introducingLambda top_hole (zip vs $ coerce as)
+               $ withNewGoal (CType b) jdg
+      modify $ withIntroducedVals $ mappend $ S.fromList vs
+      when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
+      (tr, sg) <- newSubgoal jdg'
       pure
+        . (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr, )
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg
@@ -106,73 +100,142 @@ intros = rule $ \jdg -> do
 
 ------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
-destruct :: OccName -> TacticsM ()
-destruct name = do
+destructAuto :: OccName -> TacticsM ()
+destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   jdg <- goal
-  case hasDestructed jdg name of
-    True -> throwError $ AlreadyDestructed name
-    False -> rule $ \jdg -> destruct' (const subgoal) name jdg
+  case M.lookup name $ jHypothesis jdg of
+    Nothing -> throwError $ NotInScope name
+    Just hi ->
+      let subtactic = rule $ destruct' (const subgoal) name
+      in case isPatternMatch $ hi_provenance hi of
+            True ->
+              pruning subtactic $ \jdgs ->
+                let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
+                    new_hy = foldMap getHyTypes jdgs
+                    old_hy = getHyTypes jdg
+                in case S.null $ new_hy S.\\ old_hy of
+                      True  -> Just $ UnhelpfulDestruct name
+                      False -> Nothing
+            False -> subtactic
+
+
+------------------------------------------------------------------------------
+-- | Case split, and leave holes in the matches.
+destruct :: OccName -> TacticsM ()
+destruct name = requireConcreteHole $ tracing "destruct(user)" $
+  rule $ destruct' (const subgoal) name
 
 
 ------------------------------------------------------------------------------
 -- | Case split, using the same data constructor in the matches.
 homo :: OccName -> TacticsM ()
-homo = rule . destruct' (\dc jdg ->
+homo = requireConcreteHole . tracing "homo" . rule . destruct' (\dc jdg ->
   buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
 ------------------------------------------------------------------------------
 -- | LambdaCase split, and leave holes in the matches.
 destructLambdaCase :: TacticsM ()
-destructLambdaCase = rule $ destructLambdaCase' (const subgoal)
+destructLambdaCase = tracing "destructLambdaCase" $ rule $ destructLambdaCase' (const subgoal)
 
 
 ------------------------------------------------------------------------------
 -- | LambdaCase split, using the same data constructor in the matches.
 homoLambdaCase :: TacticsM ()
-homoLambdaCase = rule $ destructLambdaCase' (\dc jdg ->
-  buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+homoLambdaCase =
+  tracing "homoLambdaCase" $
+    rule $ destructLambdaCase' $ \dc jdg ->
+      buildDataCon jdg dc
+        . snd
+        . splitAppTys
+        . unCType
+        $ jGoal jdg
 
 
-apply' :: OccName -> TacticsM ()
-apply' func = rule $ \jdg -> do
+apply :: OccName -> TacticsM ()
+apply func = requireConcreteHole $ tracing ("apply' " <> show func) $ do
+  jdg <- goal
   let hy = jHypothesis jdg
       g  = jGoal jdg
   case M.lookup func hy of
-    Just (CType ty) -> do
-        let (args, ret) = splitFunTys ty
+    Just (hi_type -> CType ty) -> do
+      ty' <- freshTyvars ty
+      let (_, _, args, ret) = tacticsSplitFunTy ty'
+      requireNewHoles $ rule $ \jdg -> do
         unify g (CType ret)
-        sgs <- traverse (newSubgoal . flip withNewGoal jdg . CType) args
-        pure . noLoc
-             . foldl' (@@) (var' func)
-             $ fmap unLoc sgs
-    Nothing -> throwError $ GoalMismatch "apply" g
+        useOccName jdg func
+        (tr, sgs)
+            <- fmap unzipTrace
+            $ traverse ( newSubgoal
+                        . blacklistingDestruct
+                        . flip withNewGoal jdg
+                        . CType
+                        ) args
+        pure
+          . (tr, )
+          . noLoc
+          . foldl' (@@) (var' func)
+          $ fmap unLoc sgs
+    Nothing -> do
+      throwError $ GoalMismatch "apply" g
 
 
 ------------------------------------------------------------------------------
 -- | Choose between each of the goal's data constructors.
 split :: TacticsM ()
-split = do
+split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
-    Nothing -> throwError $ GoalMismatch "getGoalTyCon" g
+    Nothing -> throwError $ GoalMismatch "split" g
     Just (tc, _) -> do
       let dcs = tyConDataCons tc
       choice $ fmap splitDataCon dcs
 
 
 ------------------------------------------------------------------------------
--- | Attempt to instantiate the given data constructor to solve the goal.
-splitDataCon :: DataCon -> TacticsM ()
-splitDataCon dc = rule $ \jdg -> do
+-- | Choose between each of the goal's data constructors. Different than
+-- 'split' because it won't split a data con if it doesn't result in any new
+-- goals.
+splitAuto :: TacticsM ()
+splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
+  jdg <- goal
   let g = jGoal jdg
   case splitTyConApp_maybe $ unCType g of
-    Just (tc, apps) -> do
-      case elem dc $ tyConDataCons tc of
-        True -> buildDataCon jdg dc apps
-        False -> throwError $ IncorrectDataCon dc
-    Nothing -> throwError $ GoalMismatch "splitDataCon" g
+    Nothing -> throwError $ GoalMismatch "split" g
+    Just (tc, _) -> do
+      let dcs = tyConDataCons tc
+      case isSplitWhitelisted jdg of
+        True -> choice $ fmap splitDataCon dcs
+        False -> do
+          choice $ flip fmap dcs $ \dc -> requireNewHoles $
+            splitDataCon dc
+
+
+------------------------------------------------------------------------------
+-- | Allow the given tactic to proceed if and only if it introduces holes that
+-- have a different goal than current goal.
+requireNewHoles :: TacticsM () -> TacticsM ()
+requireNewHoles m = do
+  jdg <- goal
+  pruning m $ \jdgs ->
+    case null jdgs || any (/= jGoal jdg) (fmap jGoal jdgs) of
+      True  -> Nothing
+      False -> Just NoProgress
+
+
+------------------------------------------------------------------------------
+-- | Attempt to instantiate the given data constructor to solve the goal.
+splitDataCon :: DataCon -> TacticsM ()
+splitDataCon dc =
+  requireConcreteHole $ tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
+    let g = jGoal jdg
+    case splitTyConApp_maybe $ unCType g of
+      Just (tc, apps) -> do
+        case elem dc $ tyConDataCons tc of
+          True -> buildDataCon (unwhitelistingSplit jdg) dc apps
+          False -> throwError $ IncorrectDataCon dc
+      Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 
 ------------------------------------------------------------------------------
@@ -186,41 +249,37 @@ attemptOn :: (Judgement -> [a]) -> (a -> TacticsM ()) -> TacticsM ()
 attemptOn getNames tac = matching (choice . fmap (\s -> tac s) . getNames)
 
 
-------------------------------------------------------------------------------
--- | Automatically solve a goal.
-auto :: TacticsM ()
-auto = do
-  current <- getCurrentDefinitions
+localTactic :: TacticsM a -> (Judgement -> Judgement) -> TacticsM a
+localTactic t f = do
   TacticT $ StateT $ \jdg ->
-    runStateT (unTacticT $ auto' 5) $ disallowing current jdg
+    runStateT (unTacticT t) $ f jdg
+
 
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
   let loop = auto' (n - 1)
-  intros <|> many_ intro
+  try intros
   choice
-    [ attemptOn functionNames $ \fname -> do
-        apply' fname
+    [ overFunctions $ \fname -> do
+        apply fname
         loop
-    , attemptOn algebraicNames $ \aname -> do
-        progress ((==) `on` jGoal) NoProgress (destruct aname)
+    , overAlgebraicTerms $ \aname -> do
+        destructAuto aname
         loop
-    , split >> loop
-    , attemptOn allNames $ \name -> do
-        assume name
-        loop
+    , splitAuto >> loop
+    , assumption >> loop
+    , recursion
     ]
 
+overFunctions :: (OccName -> TacticsM ()) -> TacticsM ()
+overFunctions =
+  attemptOn $ M.keys . M.filter (isFunction . unCType . hi_type) . jHypothesis
 
-functionNames :: Judgement -> [OccName]
-functionNames  =
-  M.keys . M.filter (isFunction . unCType) . jHypothesis
-
-
-algebraicNames :: Judgement -> [OccName]
-algebraicNames =
-  M.keys . M.filter (isJust . algebraicTyCon . unCType) . jHypothesis
+overAlgebraicTerms :: (OccName -> TacticsM ()) -> TacticsM ()
+overAlgebraicTerms =
+  attemptOn $
+    M.keys . M.filter (isJust . algebraicTyCon . unCType . hi_type) . jHypothesis
 
 
 allNames :: Judgement -> [OccName]

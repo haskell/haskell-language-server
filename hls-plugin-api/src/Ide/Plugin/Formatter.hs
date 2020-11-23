@@ -62,7 +62,19 @@ doFormatting lf providers ideState ft uri params = do
                   provider lf ideState ft contents fp params
               Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
           Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
-      Nothing -> return $ Left $ responseError $ T.pack $ "Formatter plugin: no formatter found for:[" ++ T.unpack mf ++ "]"
+      Nothing -> return $ Left $ responseError $ mconcat
+        [ "Formatter plugin: no formatter found for:["
+        , mf
+        , "]"
+        , if mf == "brittany"
+          then T.unlines
+            [ "\nThe haskell-language-server must be compiled with the agpl flag to provide Brittany."
+            , "Stack users add 'agpl: true' in the flags section of the 'stack.yaml' file."
+            , "The 'haskell-language-server.cabal' file already has this flag enabled by default."
+            , "For more information see: https://github.com/haskell/haskell-language-server/issues/269"
+            ]
+          else ""
+        ]
 
 -- ---------------------------------------------------------------------
 

@@ -9,7 +9,11 @@ module Tactic
 where
 
 import           Control.Applicative.Combinators ( skipManyTill )
+import           Control.Lens hiding ((<.>))
+import           Control.Monad (unless)
 import           Control.Monad.IO.Class
+import           Data.Aeson
+import           Data.Either (isLeft)
 import           Data.Foldable
 import           Data.Maybe
 import           Data.Text (Text)
@@ -17,13 +21,14 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic.TestTypes
 import           Language.Haskell.LSP.Test
-import           Language.Haskell.LSP.Types (ApplyWorkspaceEditRequest, Position(..) , Range(..) , CAResult(..) , CodeAction(..))
+import           Language.Haskell.LSP.Types (ExecuteCommandParams(ExecuteCommandParams), ClientMethod (..), Command, ExecuteCommandResponse, ResponseMessage (..), ApplyWorkspaceEditRequest, Position(..) , Range(..) , CAResult(..) , CodeAction(..))
+import           Language.Haskell.LSP.Types.Lens hiding (id, capabilities, message, executeCommand, applyEdit, rename)
+import           System.Directory (doesFileExist)
+import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
+import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import           Test.Tasty.HUnit
-import           System.FilePath
-import System.Directory (doesFileExist)
-import Control.Monad (unless)
 
 
 ------------------------------------------------------------------------------
@@ -86,16 +91,31 @@ tests = testGroup
       [ (not, DestructLambdaCase, "")
       ]
   , goldenTest "GoldenIntros.hs"            2 8  Intros ""
-  , goldenTest "GoldenEitherAuto.hs"        2 11 Auto   ""
-  , goldenTest "GoldenJoinCont.hs"          4 12 Auto   ""
-  , goldenTest "GoldenIdentityFunctor.hs"   3 11 Auto   ""
-  , goldenTest "GoldenIdTypeFam.hs"         7 11 Auto   ""
+  , goldenTest "GoldenEitherAuto.hs"        2 11 Auto ""
+  , goldenTest "GoldenJoinCont.hs"          4 12 Auto ""
+  , goldenTest "GoldenIdentityFunctor.hs"   3 11 Auto ""
+  , goldenTest "GoldenIdTypeFam.hs"         7 11 Auto ""
   , goldenTest "GoldenEitherHomomorphic.hs" 2 15 Auto ""
   , goldenTest "GoldenNote.hs"              2 8  Auto ""
   , goldenTest "GoldenPureList.hs"          2 12 Auto ""
+  , goldenTest "GoldenListFmap.hs"          2 12 Auto ""
+  , goldenTest "GoldenFromMaybe.hs"         2 13 Auto ""
+  , goldenTest "GoldenFoldr.hs"             2 10 Auto ""
+  , goldenTest "GoldenSwap.hs"              2 8  Auto ""
+  , goldenTest "GoldenFmapTree.hs"          4 11 Auto ""
   , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
   , goldenTest "GoldenGADTDestructCoercion.hs" 8 17 Destruct "gadt"
   , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
+  , goldenTest "GoldenSwapMany.hs"          2 12 Auto ""
+  , goldenTest "GoldenBigTuple.hs"          4 12 Auto ""
+  , goldenTest "GoldenShow.hs"              2 10 Auto ""
+  , goldenTest "GoldenShowCompose.hs"       2 15 Auto ""
+  , goldenTest "GoldenShowMapChar.hs"       2 8  Auto ""
+  , goldenTest "GoldenSuperclass.hs"        7 8  Auto ""
+  , ignoreTestBecause "It is unreliable in circleci builds"
+      $ goldenTest "GoldenApplicativeThen.hs"   2 11 Auto ""
+  , goldenTest "GoldenSafeHead.hs"          2 12 Auto ""
+  , expectFail "GoldenFish.hs"              5 18 Auto ""
   ]
 
 
@@ -114,8 +134,9 @@ mkTest
     -> TestTree
 mkTest name fp line col ts =
   testCase name $ do
-  runSession hieCommand fullCaps tacticPath $ do
+  runSession hlsCommand fullCaps tacticPath $ do
     doc <- openDoc fp "haskell"
+    _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col
     let titles = mapMaybe codeActionTitle actions
     for_ ts $ \(f, tc, var) -> do
@@ -128,8 +149,9 @@ mkTest name fp line col ts =
 goldenTest :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
 goldenTest input line col tc occ =
   testCase (input <> " (golden)") $ do
-    runSession hieCommand fullCaps tacticPath $ do
+    runSession hlsCommand fullCaps tacticPath $ do
       doc <- openDoc input "haskell"
+      _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
       Just (CACodeAction (CodeAction {_command = Just c}))
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
@@ -144,6 +166,27 @@ goldenTest input line col tc occ =
       liftIO $ edited @?= expected
 
 
+expectFail :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
+expectFail input line col tc occ =
+  testCase (input <> " (golden)") $ do
+    runSession hlsCommand fullCaps tacticPath $ do
+      doc <- openDoc input "haskell"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc $ pointRange line col
+      Just (CACodeAction (CodeAction {_command = Just c}))
+        <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
+      resp <- executeCommandWithResp c
+      liftIO $ unless (isLeft $ _result resp) $
+        assertFailure "didn't fail, but expected one"
+
+
 tacticPath :: FilePath
 tacticPath = "test/testdata/tactic"
+
+
+executeCommandWithResp :: Command -> Session ExecuteCommandResponse
+executeCommandWithResp cmd = do
+  let args = decode $ encode $ fromJust $ cmd ^. arguments
+      execParams = ExecuteCommandParams (cmd ^. command) args Nothing
+  request WorkspaceExecuteCommand execParams
 

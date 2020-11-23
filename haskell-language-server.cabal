@@ -1,7 +1,7 @@
 cabal-version:      2.2
 category:           Development
 name:               haskell-language-server
-version:            0.5.1.0
+version:            0.6.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -59,11 +59,11 @@ library
     , containers
     , data-default
     , ghc
-    , ghcide
+    , ghcide                >=0.5
     , gitrev
     , haskell-lsp           ^>=0.22
     , hie-bios              >=0.6.1 && <0.8
-    , hls-plugin-api
+    , hls-plugin-api        >=0.5
     , hslogger
     , optparse-applicative
     , optparse-simple
@@ -77,10 +77,11 @@ library
 
   default-language: Haskell2010
 
+
 executable haskell-language-server
   import:           agpl, common-deps
   main-is:          Main.hs
-  hs-source-dirs:   exe plugins/default/src plugins/tactics/src
+  hs-source-dirs:   exe plugins/default/src
   other-modules:
     Ide.Plugin.Eval
     Ide.Plugin.Example
@@ -93,19 +94,6 @@ executable haskell-language-server
     Ide.Plugin.Pragmas
     Ide.Plugin.Retrie
     Ide.Plugin.StylishHaskell
-    Ide.Plugin.Tactic
-    Ide.Plugin.Tactic.CodeGen
-    Ide.Plugin.Tactic.Context
-    Ide.Plugin.Tactic.Debug
-    Ide.Plugin.Tactic.GHC
-    Ide.Plugin.Tactic.Judgements
-    Ide.Plugin.Tactic.Machinery
-    Ide.Plugin.Tactic.Naming
-    Ide.Plugin.Tactic.Range
-    Ide.Plugin.Tactic.Tactics
-    Ide.Plugin.Tactic.Types
-    Ide.Plugin.Tactic.TestTypes
-    Ide.TreeTransform
 
   ghc-options:
     -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
@@ -128,11 +116,13 @@ executable haskell-language-server
     , fourmolu                 ^>=0.2
     , ghc
     , ghc-boot-th
-    , ghcide                   >=0.1
+    , ghcide
     , hashable
     , haskell-language-server
     , haskell-lsp              ^>=0.22
+    , hls-hlint-plugin
     , hls-plugin-api
+    , hls-tactics-plugin
     , lens
     , ormolu                   ^>=0.1.2
     , regex-tdfa
@@ -151,14 +141,9 @@ executable haskell-language-server
     , stylish-haskell          ^>=0.12
     , temporary
     , text
-    , syb
     , time
     , transformers
     , unordered-containers
-    , ghc-source-gen
-    , refinery                 ^>=0.2
-    , ghc-exactprint
-    , fingertree
 
   if flag(agpl)
     build-depends: brittany
@@ -214,7 +199,7 @@ common hls-test-utils
     , hslogger
     , hspec
     , hspec-core
-    , lsp-test              >=0.11.0.4
+    , lsp-test              >=0.11.0.6
     , stm
     , tasty-hunit
     , temporary
@@ -291,6 +276,7 @@ test-suite wrapper-test
     , process
     , tasty
     , tasty-ant-xml  >=1.1.6
+    , tasty-rerun
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs

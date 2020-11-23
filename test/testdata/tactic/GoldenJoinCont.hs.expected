@@ -1,7 +1,4 @@
 type Cont r a = ((a -> r) -> r)
 
-joinCont :: Show a => (a -> c) -> (b -> c) -> Either a b -> (c -> d) -> d
-joinCont = (\ fac fbc eab fcd
-   -> case eab of
-        (Left a) -> fcd (fac a)
-        (Right b) -> fcd (fbc b))
+joinCont :: Cont r (Cont r a) -> Cont r a
+joinCont = (\ f_r far -> f_r (\ f_r2 -> f_r2 far))

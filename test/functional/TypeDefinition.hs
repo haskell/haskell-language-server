@@ -12,7 +12,7 @@ import Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "type definitions" [
     ignoreTestBecause "Broken" $ testCase "finds local definition of record variable"
-        $ runSession hieCommand fullCaps "test/testdata/gototest"
+        $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (11, 23))
@@ -22,7 +22,7 @@ tests = testGroup "type definitions" [
                                     (Range (toPos (8, 1)) (toPos (8, 29)))
                          ]
     , ignoreTestBecause "Broken" $ testCase "finds local definition of newtype variable"
-        $ runSession hieCommand fullCaps "test/testdata/gototest"
+        $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (16, 21))
@@ -32,7 +32,7 @@ tests = testGroup "type definitions" [
                                     (Range (toPos (13, 1)) (toPos (13, 30)))
                          ]
     , ignoreTestBecause "Broken" $ testCase "finds local definition of sum type variable"
-        $ runSession hieCommand fullCaps "test/testdata/gototest"
+        $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (21, 13))
@@ -42,7 +42,7 @@ tests = testGroup "type definitions" [
                                     (Range (toPos (18, 1)) (toPos (18, 26)))
                          ]
     , ignoreTestBecause "Broken" $ testCase "finds local definition of sum type contructor"
-            $ runSession hieCommand fullCaps "test/testdata/gototest"
+            $ runSession hlsCommand fullCaps "test/testdata/gototest"
             $ do
                 doc  <- openDoc "src/Lib.hs" "haskell"
                 defs <- getTypeDefinitions doc (toPos (24, 7))
@@ -53,14 +53,14 @@ tests = testGroup "type definitions" [
                                        (Range (toPos (18, 1)) (toPos (18, 26)))
                             ]
     , ignoreTestBecause "Broken" $ testCase "can not find non-local definition of type def"
-        $ runSession hieCommand fullCaps "test/testdata/gototest"
+        $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (30, 17))
             liftIO $ defs @?= []
 
     , ignoreTestBecause "Broken" $ testCase "find local definition of type def"
-        $ runSession hieCommand fullCaps "test/testdata/gototest"
+        $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc      <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (35, 16))
@@ -73,7 +73,7 @@ tests = testGroup "type definitions" [
     {--  TODO Implement
      , ignoreTestBecause "Broken" $ testCase "find type-definition of type def in component"
          $ pendingWith "Finding symbols cross module is currently not supported"
-         $ runSession hieCommand fullCaps "test/testdata/gototest"
+         $ runSession hlsCommand fullCaps "test/testdata/gototest"
          $ do
              doc      <- openDoc "src/Lib2.hs" "haskell"
              otherDoc <- openDoc "src/Lib.hs" "haskell"
@@ -87,7 +87,7 @@ tests = testGroup "type definitions" [
                             ]
     --}
     , ignoreTestBecause "Broken" $ testCase "find definition of parameterized data type"
-        $ runSession hieCommand fullCaps "test/testdata/gototest"
+        $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (40, 19))

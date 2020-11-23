@@ -1,7 +1,10 @@
 packages:
          ./
-         ghcide
-         hls-plugin-api
+         ./ghcide/hie-compat
+         ./ghcide
+         ./hls-plugin-api
+         ./plugins/tactics
+         ./plugins/hls-hlint-plugin
 
 source-repository-package
   type: git
@@ -20,6 +23,11 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-10-08T12:51:21Z
+index-state: 2020-11-12T03:53:09Z
 
 allow-newer: data-tree-print:base
+
+-- To ensure the build get the version with the fix for #498
+-- Remove when the constraint is included upstream
+constraints: implicit-hie >= 0.1.2.3
+constraints: implicit-hie-cradle >= 0.3.0.0

@@ -17,6 +17,8 @@ module Ide.Plugin
     , allLspCmdIds'
     , getPid
     , responseError
+    , getClientConfig
+    , getClientConfigAction
     ) where
 
 import           Control.Exception(SomeException, catch)
@@ -25,6 +27,7 @@ import           Control.Monad
 import qualified Data.Aeson as J
 import qualified Data.Default
 import           Data.Either
+import           Data.Hashable (unhashed)
 import qualified Data.List                     as List
 import qualified Data.Map  as Map
 import           Data.Maybe
@@ -32,6 +35,7 @@ import qualified Data.Text                     as T
 import           Development.IDE   hiding (pluginRules)
 import           Development.IDE.LSP.Server
 import           GHC.Generics
+import           Ide.Logger
 import           Ide.Plugin.Config
 import           Ide.Plugin.Formatter
 import           Ide.Types
@@ -588,4 +592,13 @@ getPrefixAtPos lf uri pos = do
 getClientConfig :: LSP.LspFuncs Config -> IO Config
 getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
 
+-- | Returns the client configurarion stored in the IdeState.
+-- You can use this function to access it from shake Rules
+getClientConfigAction :: Action Config
+getClientConfigAction = do
+  mbVal <- unhashed <$> useNoFile_ GetClientSettings
+  logm $ "getClientConfigAction:clientSettings:" ++ show mbVal
+  case J.fromJSON <$> mbVal of
+    Just (J.Success c) -> return c
+    _ -> return Data.Default.def
 -- ---------------------------------------------------------------------

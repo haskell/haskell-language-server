@@ -1,6 +1,8 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveFunctor         #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DerivingStrategies    #-}
+{-# LANGUAGE DerivingVia           #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE LambdaCase            #-}
@@ -16,18 +18,28 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
-import           Control.Applicative
-import           Control.Monad.Except (throwError)
+import           Class (Class(classTyVars))
+import           Control.Arrow
+import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State (gets, modify)
+import           Control.Monad.State (MonadState(..))
+import           Control.Monad.State.Class (gets, modify)
+import           Control.Monad.State.Strict (StateT (..))
+import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Either
-import           Data.List (intercalate, sortBy)
+import           Data.Foldable
+import           Data.Functor ((<&>))
+import           Data.Generics (mkQ, everything, gcount)
+import           Data.List (sortBy)
+import qualified Data.Map as M
 import           Data.Ord (comparing, Down(..))
+import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Types
+import           OccName (HasOccName(occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -45,10 +57,12 @@ substCTy subst = coerce . substTy subst . coerce
 -- goal.
 newSubgoal
     :: Judgement
-    -> RuleM (LHsExpr GhcPs)
+    -> Rule
 newSubgoal j = do
     unifier <- gets ts_unifier
-    subgoal $ substJdg unifier j
+    subgoal
+      $ substJdg unifier
+      $ unsetIsTopHole j
 
 
 ------------------------------------------------------------------------------
@@ -58,76 +72,139 @@ runTactic
     :: Context
     -> Judgement
     -> TacticsM ()       -- ^ Tactic to use
-    -> Either [TacticError] (LHsExpr GhcPs)
+    -> Either [TacticError] RunTacticResults
 runTactic ctx jdg t =
-    let skolems = tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
-        tacticState = mempty { ts_skolems = skolems }
+    let skolems = S.fromList
+                $ foldMap (tyCoVarsOfTypeWellScoped . unCType)
+                $ (:) (jGoal jdg)
+                $ fmap hi_type
+                $ toList
+                $ jHypothesis jdg
+        unused_topvals = M.keysSet
+                       $ M.filter (isTopLevel . hi_provenance)
+                       $ jHypothesis jdg
+        tacticState =
+          defaultTacticState
+            { ts_skolems = skolems
+            , ts_unused_top_vals = unused_topvals
+            }
     in case partitionEithers
           . flip runReader ctx
           . unExtractM
-          $ runTacticTWithState t jdg tacticState of
-      (errs, []) -> Left $ errs
-      (_, solns) -> do
-        -- TODO(sandy): remove this trace sometime
-        traceM $ intercalate "\n" $ fmap (unsafeRender . fst) $ solns
-        case sortBy (comparing $ Down . uncurry scoreSolution . snd) solns of
-          (res : _) -> Right $ fst res
+          $ runTacticT t jdg tacticState of
+      (errs, []) -> Left $ take 50 $ errs
+      (_, fmap assoc23 -> solns) -> do
+        let sorted =
+              flip sortBy solns $ comparing $ \((_, ext), (jdg, holes)) ->
+                Down $ scoreSolution ext jdg holes
+        case sorted of
+          (((tr, ext), _) : _) ->
+            Right
+              . RunTacticResults tr ext
+              . reverse
+              . fmap fst
+              $ take 5 sorted
           -- guaranteed to not be empty
           _ -> Left []
 
-
-scoreSolution :: TacticState -> [Judgement] -> Int
-scoreSolution TacticState{..} holes
-  -- TODO(sandy): should this be linear?
-  = S.size ts_used_vals - length holes * 5
+assoc23 :: (a, b, c) -> (a, (b, c))
+assoc23 (a, b, c) = (a, (b, c))
 
 
-runTacticTWithState
-    :: (MonadExtract ext m)
-    => TacticT jdg ext err s m ()
-    -> jdg
-    -> s
-    -> m [Either err (ext, (s, [jdg]))]
-runTacticTWithState t j s = proofs' s $ fmap snd $ proofState t j
+tracePrim :: String -> Trace
+tracePrim = flip rose []
 
 
-proofs'
-    :: (MonadExtract ext m)
-    => s
-    -> ProofStateT ext ext err s m goal
-    -> m [(Either err (ext, (s, [goal])))]
-proofs' s p = go s [] p
-    where
-      go s goals (Subgoal goal k) = do
-         h <- hole
-         (go s (goals ++ [goal]) $ k h)
-      go s goals (Effect m) = go s goals =<< m
-      go s goals (Stateful f) =
-          let (s', p) = f s
-          in go s' goals p
-      go s goals (Alt p1 p2) = liftA2 (<>) (go s goals p1) (go s goals p2)
-      go s goals (Interleave p1 p2) = liftA2 (interleave) (go s goals p1) (go s goals p2)
-      go _ _ Empty = pure []
-      go _ _ (Failure err) = pure [throwError err]
-      go s goals (Axiom ext) = pure [Right (ext, (s, goals))]
+tracing
+    :: Functor m
+    => String
+    -> TacticT jdg (Trace, ext) err s m a
+    -> TacticT jdg (Trace, ext) err s m a
+tracing s (TacticT m)
+  = TacticT $ StateT $ \jdg ->
+      mapExtract' (first $ rose s . pure) $ runStateT m jdg
 
 
 ------------------------------------------------------------------------------
--- | We need to make sure that we don't try to unify any skolems.
--- To see why, consider the case:
+-- | Recursion is allowed only when we can prove it is on a structurally
+-- smaller argument. The top of the 'ts_recursion_stack' witnesses the smaller
+-- pattern val.
+guardStructurallySmallerRecursion
+    :: TacticState
+    -> Maybe TacticError
+guardStructurallySmallerRecursion s =
+  case head $ ts_recursion_stack s of
+     Just _  -> Nothing
+     Nothing -> Just NoProgress
+
+
+------------------------------------------------------------------------------
+-- | Mark that the current recursive call is structurally smaller, due to
+-- having been matched on a pattern value.
 --
--- uhh :: (Int -> Int) -> a
--- uhh f = _
+-- Implemented by setting the top of the 'ts_recursion_stack'.
+markStructuralySmallerRecursion :: MonadState TacticState m => PatVal -> m ()
+markStructuralySmallerRecursion pv = do
+  modify $ withRecursionStack $ \case
+    (_ : bs) -> Just pv : bs
+    []       -> []
+
+
+------------------------------------------------------------------------------
+-- | Given the results of running a tactic, score the solutions by
+-- desirability.
 --
--- If we were to apply 'f', then we would try to unify 'Int' and 'a'.
--- This is fine from the perspective of 'tcUnifyTy', but will cause obvious
--- type errors in our use case. Therefore, we need to ensure that our
--- 'TCvSubst' doesn't try to unify skolems.
-checkSkolemUnification :: CType -> CType -> TCvSubst -> RuleM ()
-checkSkolemUnification t1 t2 subst = do
-    skolems <- gets ts_skolems
-    unless (all (flip notElemTCvSubst subst) skolems) $
-      throwError (UnificationError t1 t2)
+-- TODO(sandy): This function is completely unprincipled and was just hacked
+-- together to produce the right test results.
+scoreSolution
+    :: LHsExpr GhcPs
+    -> TacticState
+    -> [Judgement]
+    -> ( Penalize Int  -- number of holes
+       , Reward Bool   -- all bindings used
+       , Penalize Int  -- unused top-level bindings
+       , Penalize Int  -- number of introduced bindings
+       , Reward Int    -- number used bindings
+       , Penalize Int  -- number of recursive calls
+       , Penalize Int  -- size of extract
+       )
+scoreSolution ext TacticState{..} holes
+  = ( Penalize $ length holes
+    , Reward   $ S.null $ ts_intro_vals S.\\ ts_used_vals
+    , Penalize $ S.size ts_unused_top_vals
+    , Penalize $ S.size ts_intro_vals
+    , Reward   $ S.size ts_used_vals
+    , Penalize $ ts_recursion_count
+    , Penalize $ solutionSize ext
+    )
+
+
+------------------------------------------------------------------------------
+-- | Compute the number of 'LHsExpr' nodes; used as a rough metric for code
+-- size.
+solutionSize :: LHsExpr GhcPs -> Int
+solutionSize = everything (+) $ gcount $ mkQ False $ \case
+  (_ :: LHsExpr GhcPs) -> True
+
+
+newtype Penalize a = Penalize a
+  deriving (Eq, Ord, Show) via (Down a)
+
+newtype Reward a = Reward a
+  deriving (Eq, Ord, Show) via a
+
+
+------------------------------------------------------------------------------
+-- | Like 'tcUnifyTy', but takes a list of skolems to prevent unification of.
+tryUnifyUnivarsButNotSkolems :: Set TyVar -> CType -> CType -> Maybe TCvSubst
+tryUnifyUnivarsButNotSkolems skolems goal inst =
+  case tcUnifyTysFG
+         (bool BindMe Skolem . flip S.member skolems)
+         [unCType inst]
+         [unCType goal] of
+    Unifiable subst -> pure subst
+    _ -> Nothing
+
 
 
 ------------------------------------------------------------------------------
@@ -135,10 +212,43 @@ checkSkolemUnification t1 t2 subst = do
 unify :: CType -- ^ The goal type
       -> CType -- ^ The type we are trying unify the goal type with
       -> RuleM ()
-unify goal inst =
-    case tcUnifyTy (unCType inst) (unCType goal) of
-      Just subst -> do
-          checkSkolemUnification inst goal subst
-          modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
-      Nothing -> throwError (UnificationError inst goal)
+unify goal inst = do
+  skolems <- gets ts_skolems
+  case tryUnifyUnivarsButNotSkolems skolems goal inst of
+    Just subst ->
+      modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
+    Nothing -> throwError (UnificationError inst goal)
+
+
+------------------------------------------------------------------------------
+-- | Get the class methods of a 'PredType', correctly dealing with
+-- instantiation of quantified class types.
+methodHypothesis :: PredType -> Maybe [(OccName, HyInfo CType)]
+methodHypothesis ty = do
+  (tc, apps) <- splitTyConApp_maybe ty
+  cls <- tyConClass_maybe tc
+  let methods = classMethods cls
+      tvs     = classTyVars cls
+      subst   = zipTvSubst tvs apps
+  sc_methods <- fmap join
+              $ traverse (methodHypothesis . substTy subst)
+              $ classSCTheta cls
+  pure $ mappend sc_methods $ methods <&> \method ->
+    let (_, _, ty) = tcSplitSigmaTy $ idType method
+    in ( occName method
+       , HyInfo (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
+       )
+
+
+------------------------------------------------------------------------------
+-- | Run the given tactic iff the current hole contains no univars. Skolems and
+-- already decided univars are OK though.
+requireConcreteHole :: TacticsM a -> TacticsM a
+requireConcreteHole m = do
+  jdg     <- goal
+  skolems <- gets ts_skolems
+  let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
+  case S.size $ vars S.\\ skolems of
+    0 -> m
+    _ -> throwError TooPolymorphic
 

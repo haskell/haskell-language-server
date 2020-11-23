@@ -21,7 +21,7 @@ import           Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "liquid haskell diagnostics" [
     ignoreTestBecause "Broken" $ testCase "runs diagnostics on save, no liquid" $
-        runSession hieCommandExamplePlugin codeActionSupportCaps "test/testdata" $ do
+        runSession hlsCommandExamplePlugin codeActionSupportCaps "test/testdata" $ do
             doc <- openDoc "liquid/Evens.hs" "haskell"
 
             diags@(reduceDiag:_) <- waitForDiagnostics
@@ -51,8 +51,8 @@ tests = testGroup "liquid haskell diagnostics" [
     -- ---------------------------------
 
     , ignoreTestBecause "Broken" $ testCase "runs diagnostics on save, with liquid haskell" $
-        runSession hieCommand codeActionSupportCaps "test/testdata" $ do
-        -- runSessionWithConfig logConfig hieCommand codeActionSupportCaps "test/testdata" $ do
+        runSession hlsCommand codeActionSupportCaps "test/testdata" $ do
+        -- runSessionWithConfig logConfig hlsCommand codeActionSupportCaps "test/testdata" $ do
             doc <- openDoc "liquid/Evens.hs" "haskell"
 
             diags@(reduceDiag:_) <- waitForDiagnostics

@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -20,8 +22,14 @@ import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Coerce
+import           Data.Functor ((<&>))
+import           Data.Generics.Aliases (mkQ)
+import           Data.Generics.Schemes (everything)
+import           Data.List
+import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
+import           Data.Monoid
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
@@ -38,6 +46,7 @@ import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin (mkLspCommand)
+import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
@@ -50,6 +59,9 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
+import           SrcLoc (containsSpan)
+import           System.Timeout
+import           TcRnTypes (tcg_binds)
 
 
 descriptor :: PluginId -> PluginDescriptor
@@ -205,7 +217,7 @@ filterBindingType
 filterBindingType p tp dflags plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
-   in fmap join $ for (M.toList hy) $ \(occ, CType ty) ->
+   in fmap join $ for (M.toList hy) $ \(occ, hi_type -> CType ty) ->
         case p (unCType g) ty of
           True  -> tp occ ty dflags plId uri range jdg
           False -> pure []
@@ -235,7 +247,7 @@ judgementForHole state nfp range = do
 
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  (modsum, _) <- MaybeT $ runIde state $ useWithStale GetModSummaryWithoutTimestamps nfp
+  ((modsum,_), _) <- MaybeT $ runIde state $ useWithStale GetModSummaryWithoutTimestamps nfp
   let dflags = ms_hspp_opts modsum
 
   (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
@@ -249,14 +261,33 @@ judgementForHole state nfp range = do
 
   resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
   (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
-  let tcg = fst $ tm_internals_ $ tmrModule tcmod
+  let tcg  = tmrTypechecked tcmod
+      tcs = tcg_binds tcg
       ctx = mkContext
               (mapMaybe (sequenceA . (occName *** coerce))
                 $ getDefiningBindings binds rss)
               tcg
-      hyps = hypothesisFromBindings rss binds
-  pure (resulting_range, mkFirstJudgement hyps goal, ctx, dflags)
+      top_provs = getRhsPosVals rss tcs
+      local_hy = spliceProvenance top_provs
+               $ hypothesisFromBindings rss binds
+      cls_hy = contextMethodHypothesis ctx
+  pure ( resulting_range
+       , mkFirstJudgement
+           (local_hy <> cls_hy)
+           (isRhsHole rss tcs)
+           goal
+       , ctx
+       , dflags
+       )
 
+
+spliceProvenance
+    :: Map OccName Provenance
+    -> Map OccName (HyInfo a)
+    -> Map OccName (HyInfo a)
+spliceProvenance provs =
+  M.mapWithKey $ \name hi ->
+    overProvenance (maybe id const $ M.lookup name provs) hi
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction TacticParams
@@ -266,20 +297,27 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        case runTactic ctx jdg
-              $ tac
-              $ mkVarOcc
-              $ T.unpack var_name of
-          Left err ->
-            pure $ (, Nothing)
-              $ Left
-              $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-          Right res -> do
-            let g = graft (RealSrcSpan span) res
-                response = transform dflags (clientCapabilities lf) uri g pm
-            pure $ case response of
-               Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
-               Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+        x <- lift $ timeout 2e8 $
+          case runTactic ctx jdg
+                $ tac
+                $ mkVarOcc
+                $ T.unpack var_name of
+            Left err ->
+              pure $ (, Nothing)
+                $ Left
+                $ ResponseError InvalidRequest (T.pack $ show err) Nothing
+            Right rtr -> do
+              traceMX "solns" $ rtr_other_solns rtr
+              let g = graft (RealSrcSpan span) $ rtr_extract rtr
+                  response = transform dflags (clientCapabilities lf) uri g pm
+              pure $ case response of
+                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+                Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+        pure $ case x of
+          Just y -> y
+          Nothing -> (, Nothing)
+                   $ Left
+                   $ ResponseError InvalidRequest "timed out" Nothing
 tacticCmd _ _ _ _ =
   pure ( Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
        , Nothing
@@ -291,4 +329,40 @@ fromMaybeT def = fmap (fromMaybe def) . runMaybeT
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
+
+
+------------------------------------------------------------------------------
+-- | Is this hole immediately to the right of an equals sign?
+isRhsHole :: RealSrcSpan -> TypecheckedSource -> Bool
+isRhsHole rss tcs = everything (||) (mkQ False $ \case
+  TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
+  _ -> False
+  ) tcs
+
+
+------------------------------------------------------------------------------
+-- | Compute top-level position vals of a function
+getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Map OccName Provenance
+getRhsPosVals rss tcs
+  = M.fromList
+  $ join
+  $ maybeToList
+  $ getFirst
+  $ everything (<>) (mkQ mempty $ \case
+      TopLevelRHS name ps
+          (L (RealSrcSpan span)  -- body with no guards and a single defn
+            (HsVar _ (L _ hole)))
+        | containsSpan rss span  -- which contains our span
+        , isHole $ occName hole  -- and the span is a hole
+        -> First $ do
+            patnames <- traverse getPatName ps
+            pure $ zip patnames $ [0..] <&> TopLevelArgPrv name
+      _ -> mempty
+  ) tcs
+
+
+
+-- TODO(sandy): Make this more robust
+isHole :: OccName -> Bool
+isHole = isPrefixOf "_" . occNameString
 

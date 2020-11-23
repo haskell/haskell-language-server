@@ -26,7 +26,7 @@ cradle:
               component: "haskell-language-server:exe:haskell-language-server"
 
             - path: "./plugins/tactics/src"
-              component: "haskell-language-server:exe:haskell-language-server"
+              component: "lib:hls-tactics-plugin"
 
             - path: "./exe/Wrapper.hs"
               component: "haskell-language-server:exe:haskell-language-server-wrapper"
@@ -34,7 +34,7 @@ cradle:
             - path: "./src"
               component: "lib:haskell-language-server"
 
-            - path: "./.stack-work/"
+            - path: "./dist-newstyle/"
               component: "lib:haskell-language-server"
 
             - path: "./ghcide/src"
@@ -45,3 +45,6 @@ cradle:
 
             - path: "./hls-plugin-api/src"
               component: "hls-plugin-api:lib:hls-plugin-api"
+
+            - path: "./plugins/hls-hlint-plugin/src"
+              component: "lib:hls-hlint-plugin"

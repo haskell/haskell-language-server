@@ -22,7 +22,7 @@ tests :: TestTree
 tests = testGroup "deferred responses" [
 
     --TODO: DOes not compile
-    -- testCase "do not affect hover requests" $ runSession hieCommand fullCaps "test/testdata" $ do
+    -- testCase "do not affect hover requests" $ runSession hlsCommand fullCaps "test/testdata" $ do
     --   doc <- openDoc "FuncTest.hs" "haskell"
 
     --   id1 <- sendRequest TextDocumentHover (TextDocumentPositionParams doc (Position 4 2) Nothing)
@@ -91,7 +91,7 @@ tests = testGroup "deferred responses" [
     --                  }
     --                ]
 
-     testCase "instantly respond to failed modules with no cache" $ runSession hieCommand fullCaps "test/testdata" $ do
+     testCase "instantly respond to failed modules with no cache" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "FuncTestFail.hs" "haskell"
         defs <- getDefinitions doc (Position 1 11)
         liftIO $ defs @?= []
@@ -99,13 +99,13 @@ tests = testGroup "deferred responses" [
     -- TODO: the benefits of caching parsed modules is doubted.
     -- TODO: add issue link
     -- , testCase "respond to untypecheckable modules with parsed module cache" $
-    --   runSession hieCommand fullCaps "test/testdata" $ do
+    --   runSession hlsCommand fullCaps "test/testdata" $ do
     --     doc <- openDoc "FuncTestFail.hs" "haskell"
     --     (Left (sym:_)) <- getDocumentSymbols doc
     --     liftIO $ sym ^. name @?= "main"
 
     -- TODO does not compile
-    -- , testCase "returns hints as diagnostics" $ runSession hieCommand fullCaps "test/testdata" $ do
+    -- , testCase "returns hints as diagnostics" $ runSession hlsCommand fullCaps "test/testdata" $ do
     --     _ <- openDoc "FuncTest.hs" "haskell"
 
     --     cwd <- liftIO getCurrentDirectory
@@ -145,7 +145,7 @@ tests = testGroup "deferred responses" [
 -- multiServerTests :: TestTree
 -- multiServerTests = testGroup "multi-server setup" [
 --     testCase "doesn't have clashing commands on two servers" $ do
---         let getCommands = runSession hieCommand fullCaps "test/testdata" $ do
+--         let getCommands = runSession hlsCommand fullCaps "test/testdata" $ do
 --                 rsp <- initializeResponse
 --                 let uuids = rsp ^? result . _Just . capabilities . executeCommandProvider . _Just . commands
 --                 return $ fromJust uuids
@@ -158,7 +158,7 @@ multiMainTests :: TestTree
 multiMainTests = testGroup "multiple main modules" [
     ignoreTestBecause "Broken: Unexpected ConduitParser.empty" $
     testCase "Can load one file at a time, when more than one Main module exists"
-        $ runSession hieCommand fullCaps "test/testdata" $ do
+        $ runSession hlsCommand fullCaps "test/testdata" $ do
             _doc <- openDoc "ApplyRefact2.hs" "haskell"
             _diagsRspHlint <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
             diagsRspGhc    <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification

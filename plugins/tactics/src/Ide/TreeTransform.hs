@@ -12,7 +12,6 @@ import           BasicTypes (appPrec)
 import           Control.Monad
 import           Control.Monad.Trans.Class
 import qualified Data.Text as T
-import           Debug.Trace
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
@@ -104,7 +103,7 @@ fixAnns ParsedModule {..} =
 annotate :: DynFlags -> LHsExpr GhcPs -> TransformT (Either String) (Anns, LHsExpr GhcPs)
 annotate dflags expr = do
   uniq <- show <$> uniqueSrcSpanT
-  let rendered = traceId $ render dflags expr
+  let rendered = render dflags expr
   (anns, expr') <- lift $ either (Left . show) Right $ parseExpr dflags uniq rendered
   let anns' = setPrecedingLines expr' 0 1 anns
   pure (anns', expr')

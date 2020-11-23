@@ -18,7 +18,7 @@ import Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "completions" [
---     testCase "works" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     testCase "works" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -40,7 +40,7 @@ tests = testGroup "completions" [
 --             resolved ^. insertTextFormat @?= Just Snippet
 --             resolved ^. insertText @?= Just "putStrLn ${1:String}"
 
---     , testCase "completes imports" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -54,7 +54,7 @@ tests = testGroup "completions" [
 --             item ^. detail @?= Just "Data.Maybe"
 --             item ^. kind @?= Just CiModule
 
---     , testCase "completes qualified imports" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes qualified imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -68,7 +68,7 @@ tests = testGroup "completions" [
 --             item ^. detail @?= Just "Data.List"
 --             item ^. kind @?= Just CiModule
 
---     , testCase "completes language extensions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes language extensions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -81,7 +81,7 @@ tests = testGroup "completions" [
 --             item ^. label @?= "OverloadedStrings"
 --             item ^. kind @?= Just CiKeyword
 
---     , testCase "completes pragmas" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes pragmas" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -96,7 +96,7 @@ tests = testGroup "completions" [
 --             item ^. insertTextFormat @?= Just Snippet
 --             item ^. insertText @?= Just "LANGUAGE ${1:extension} #-}"
 
---     , testCase "completes pragmas no close" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes pragmas no close" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -111,7 +111,7 @@ tests = testGroup "completions" [
 --             item ^. insertTextFormat @?= Just Snippet
 --             item ^. insertText @?= Just "LANGUAGE ${1:extension}"
 
---     , testCase "completes options pragma" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes options pragma" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -128,7 +128,7 @@ tests = testGroup "completions" [
 
 --   -- -----------------------------------
 
---     , testCase "completes ghc options pragma values" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes ghc options pragma values" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
@@ -146,14 +146,14 @@ tests = testGroup "completions" [
 
 --   -- -----------------------------------
 
---     , testCase "completes with no prefix" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "completes with no prefix" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 --         compls <- getCompletions doc (Position 5 7)
 --         liftIO $ filter ((== "!!") . (^. label)) compls `shouldNotSatisfy` null
 
 --     -- See https://github.com/haskell/haskell-ide-engine/issues/903
---     , testCase "strips compiler generated stuff from completions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "strips compiler generated stuff from completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "DupRecFields.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -168,7 +168,7 @@ tests = testGroup "completions" [
 --             item ^. detail @?= Just "Two -> Int\nDupRecFields"
 --             item ^. insertText @?= Just "accessor ${1:Two}"
 
---     , testCase "have implicit foralls on basic polymorphic types" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "have implicit foralls on basic polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 --         let te = TextEdit (Range (Position 5 7) (Position 5 9)) "id"
@@ -180,7 +180,7 @@ tests = testGroup "completions" [
 --         liftIO $
 --             resolved ^. detail @?= Just "a -> a\nPrelude"
 
---     , testCase "have implicit foralls with multiple type variables" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "have implicit foralls with multiple type variables" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 --         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "flip"
@@ -198,7 +198,7 @@ tests = testGroup "completions" [
 
 -- snippetTests :: TestTree
 -- snippetTests = testGroup "snippets" [
---     testCase "work for argumentless constructors" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     testCase "work for argumentless constructors" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -211,7 +211,7 @@ tests = testGroup "completions" [
 --             item ^. insertTextFormat @?= Just Snippet
 --             item ^. insertText @?= Just "Nothing"
 
---     , testCase "work for polymorphic types" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "work for polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -228,7 +228,7 @@ tests = testGroup "completions" [
 --             resolved ^. insertTextFormat @?= Just Snippet
 --             resolved ^. insertText @?= Just "foldl ${1:b -> a -> b} ${2:b} ${3:t a}"
 
---     , testCase "work for complex types" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "work for complex types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -245,7 +245,7 @@ tests = testGroup "completions" [
 --             resolved ^. insertTextFormat @?= Just Snippet
 --             resolved ^. insertText @?= Just "mapM ${1:a -> m b} ${2:t a}"
 
---     , testCase "work for infix functions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "work for infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -260,7 +260,7 @@ tests = testGroup "completions" [
 --             item ^. insertTextFormat @?= Just Snippet
 --             item ^. insertText @?= Just "filter`"
 
---     , testCase "work for infix functions in backticks" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "work for infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -275,7 +275,7 @@ tests = testGroup "completions" [
 --             item ^. insertTextFormat @?= Just Snippet
 --             item ^. insertText @?= Just "filter"
 
---     , testCase "work for qualified infix functions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "work for qualified infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -290,7 +290,7 @@ tests = testGroup "completions" [
 --             item ^. insertTextFormat @?= Just Snippet
 --             item ^. insertText @?= Just "intersperse`"
 
---     , testCase "work for qualified infix functions in backticks" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+--     , testCase "work for qualified infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
 --         doc <- openDoc "Completion.hs" "haskell"
 --         _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -306,7 +306,7 @@ tests = testGroup "completions" [
 --             item ^. insertText @?= Just "intersperse"
 
     -- -- TODO : Fix compile issue in the test "Variable not in scope: object"
-    -- , testCase "respects lsp configuration" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+    -- , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
     --     doc <- openDoc "Completion.hs" "haskell"
     --     _   <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -317,7 +317,7 @@ tests = testGroup "completions" [
 
     --     checkNoSnippets doc
 
-    -- , testCase "respects client capabilities" $ runSession hieCommand noSnippetsCaps "test/testdata/completion" $ do
+    -- , testCase "respects client capabilities" $ runSession hlsCommand noSnippetsCaps "test/testdata/completion" $ do
     --     doc <- openDoc "Completion.hs" "haskell"
     --     _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
 
@@ -359,7 +359,7 @@ tests = testGroup "completions" [
 contextTests :: TestTree
 contextTests = testGroup "contexts" [
     ignoreTestBecause "Broken: Timed out waiting to receive a message from the server" $
-    testCase "only provides type suggestions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+    testCase "only provides type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
       _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
       compls <- getCompletions doc (Position 2 17)
@@ -368,7 +368,7 @@ contextTests = testGroup "contexts" [
         compls `shouldNotContainCompl` "interact"
 
     , ignoreTestBecause "Broken: Timed out waiting to receive a message from the server" $
-      testCase "only provides type suggestions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+      testCase "only provides type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
       _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
       compls <- getCompletions doc (Position 3 9)
@@ -377,7 +377,7 @@ contextTests = testGroup "contexts" [
         compls `shouldNotContainCompl` "Applicative"
 
     -- This currently fails if , testCase takes too long to typecheck the module
-    -- , testCase "completes qualified type suggestions" $ runSession hieCommand fullCaps "test/testdata/completion" $ do
+    -- , testCase "completes qualified type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
     --     doc <- openDoc "Context.hs" "haskell"
     --     _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
     --     let te = TextEdit (Range (Position 2 17) (Position 2 17)) " -> Conc."
