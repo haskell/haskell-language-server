@@ -23,6 +23,7 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
+import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
@@ -120,13 +121,13 @@ unzipTrace l =
 
 
 -- | Essentially same as 'dataConInstOrigArgTys' in GHC,
---   but we need some tweaks in GHC >= 8.8.
---   Since old 'dataConInstArgTys' seems working with >= 8.8,
---   we just filter out class dictionaries and coercions from the result.
+--  but only accepts universally quantified types as the second arguments
+--  and automatically introduces existentials.
 dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
-dataConInstOrigArgTys' con ty =
-    let tys0 = dataConInstOrigArgTys con ty
-    in filter (not . isPredTy) tys0
+dataConInstOrigArgTys' con uniTys =
+  let exvars = dataConExTys con
+   in dataConInstOrigArgTys con $
+        uniTys ++ map mkTyVarTy exvars
 
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the
