@@ -40,7 +40,7 @@ import Development.IDE.Core.Shake (getDiagnostics)
 #ifdef GHC_LIB
 import Data.List (nub)
 import "ghc-lib" GHC hiding (DynFlags(..))
-import "ghc-lib" GHC.LanguageExtension (Extension)
+import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
 import "ghc" GHC as RealGHC (DynFlags(..))
 import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
 import qualified "ghc" EnumSet as EnumSet
@@ -370,10 +370,10 @@ applyHint ide nfp mhint =
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
 #ifdef GHC_LIB
     let writeFileUTF8NoNewLineTranslation file txt =
-        withFile file WriteMode $ \h -> do
-            hSetEncoding h utf8
-            hSetNewlineMode h noNewlineTranslation
-            hPutStr h (T.unpack txt)
+            withFile file WriteMode $ \h -> do
+                hSetEncoding h utf8
+                hSetNewlineMode h noNewlineTranslation
+                hPutStr h (T.unpack txt)
     res <-
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
