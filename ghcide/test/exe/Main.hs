@@ -2717,15 +2717,16 @@ completionTests
     , testGroup "other" otherCompletionTests
     ]
 
-completionTest :: String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, Bool, Bool)] -> TestTree
+completionTest :: String -> [T.Text] -> Position -> [(T.Text, CompletionItemKind, T.Text, Bool, Bool)] -> TestTree
 completionTest name src pos expected = testSessionWait name $ do
     docId <- createDoc "A.hs" "haskell" (T.unlines src)
     _ <- waitForDiagnostics
     compls <- getCompletions docId pos
-    let compls' = [ (_label, _kind) | CompletionItem{..} <- compls]
+    let compls' = [ (_label, _kind, _insertText) | CompletionItem{..} <- compls]
     liftIO $ do
-        compls' @?= [ (l, Just k) | (l,k,_,_) <- expected]
-        forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,expectedSig, expectedDocs)) -> do
+        let emptyToMaybe x = if T.null x then Nothing else Just x
+        compls' @?= [ (l, Just k, emptyToMaybe t) | (l,k,t,_,_) <- expected]
+        forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,_,expectedSig, expectedDocs)) -> do
             when expectedSig $
                 assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
             when expectedDocs $
@@ -2737,42 +2738,43 @@ topLevelCompletionTests = [
         "variable"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, True, True),
-         ("XxxCon", CiConstructor, False, True)
+        [("xxx", CiFunction, "xxx", True, True),
+         ("XxxCon", CiConstructor, "XxxCon", False, True)
         ],
     completionTest
         "constructor"
         ["bar = xx", "-- | haddock", "xxx :: ()", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 8)
-        [("xxx", CiFunction, True, True),
-         ("XxxCon", CiConstructor, False, True)
+        [("xxx", CiFunction, "xxx", True, True),
+         ("XxxCon", CiConstructor, "XxxCon", False, True)
         ],
     completionTest
         "class method"
         ["bar = xx", "class Xxx a where", "-- | haddock", "xxx :: ()", "xxx = ()"]
         (Position 0 8)
-        [("xxx", CiFunction, True, True)],
+        [("xxx", CiFunction, "xxx", True, True)],
     completionTest
         "type"
         ["bar :: Xx", "xxx = ()", "-- | haddock", "data Xxx = XxxCon"]
         (Position 0 9)
-        [("Xxx", CiStruct, False, True)],
+        [("Xxx", CiStruct, "Xxx", False, True)],
     completionTest
         "class"
         ["bar :: Xx", "xxx = ()", "-- | haddock", "class Xxx a"]
         (Position 0 9)
-        [("Xxx", CiClass, False, True)],
+        [("Xxx", CiClass, "Xxx", False, True)],
     completionTest
         "records"
         ["data Person = Person { _personName:: String, _personAge:: Int}", "bar = Person { _pers }" ]
         (Position 1 19)
-        [("_personName", CiFunction, False, True),
-         ("_personAge", CiFunction, False, True)],
+        [("_personName", CiFunction, "_personName", False, True),
+         ("_personAge", CiFunction, "_personAge", False, True)],
     completionTest
         "recordsConstructor"
         ["data XxRecord = XyRecord { x:: String, y:: Int}", "bar = Xy" ]
         (Position 1 19)
-        [("XyRecord", CiConstructor, False, True)]
+        [("XyRecord", CiConstructor, "XyRecord", False, True),
+         ("XyRecord", CiSnippet, "XyRecord {x=${1:_x}, y=${2:_y}}", False, True)]
     ]
 
 localCompletionTests :: [TestTree]
@@ -2781,8 +2783,8 @@ localCompletionTests = [
         "argument"
         ["bar (Just abcdef) abcdefg = abcd"]
         (Position 0 32)
-        [("abcdef", CiFunction, True, False),
-         ("abcdefg", CiFunction , True, False)
+        [("abcdef", CiFunction, "abcdef", True, False),
+         ("abcdefg", CiFunction , "abcdefg", True, False)
         ],
     completionTest
         "let"
@@ -2791,8 +2793,8 @@ localCompletionTests = [
         ,"        in abcd"
         ]
         (Position 2 15)
-        [("abcdef", CiFunction, True, False),
-         ("abcdefg", CiFunction , True, False)
+        [("abcdef", CiFunction, "abcdef", True, False),
+         ("abcdefg", CiFunction , "abcdefg", True, False)
         ],
     completionTest
         "where"
@@ -2801,8 +2803,8 @@ localCompletionTests = [
         ,"        abcdefg = let abcd = undefined in undefined"
         ]
         (Position 0 10)
-        [("abcdef", CiFunction, True, False),
-         ("abcdefg", CiFunction , True, False)
+        [("abcdef", CiFunction, "abcdef", True, False),
+         ("abcdefg", CiFunction , "abcdefg", True, False)
         ],
     completionTest
         "do/1"
@@ -2813,7 +2815,7 @@ localCompletionTests = [
         ,"  pure ()"
         ]
         (Position 2 6)
-        [("abcdef", CiFunction, True, False)
+        [("abcdef", CiFunction, "abcdef", True, False)
         ],
     completionTest
         "do/2"
@@ -2827,12 +2829,12 @@ localCompletionTests = [
         ,"    abcdefghij = undefined"
         ]
         (Position 5 8)
-        [("abcde", CiFunction, True, False)
-        ,("abcdefghij", CiFunction, True, False)
-        ,("abcdef", CiFunction, True, False)
-        ,("abcdefg", CiFunction, True, False)
-        ,("abcdefgh", CiFunction, True, False)
-        ,("abcdefghi", CiFunction, True, False)
+        [("abcde", CiFunction, "abcde", True, False)
+        ,("abcdefghij", CiFunction, "abcdefghij", True, False)
+        ,("abcdef", CiFunction, "abcdef", True, False)
+        ,("abcdefg", CiFunction, "abcdefg", True, False)
+        ,("abcdefgh", CiFunction, "abcdefgh", True, False)
+        ,("abcdefghi", CiFunction, "abcdefghi", True, False)
         ]
     ]
 
@@ -2842,32 +2844,41 @@ nonLocalCompletionTests =
       "variable"
       ["module A where", "f = hea"]
       (Position 1 7)
-      [("head", CiFunction, True, True)],
+      [("head", CiFunction, "head ${1:[a]}", True, True)],
     completionTest
       "constructor"
       ["module A where", "f = Tru"]
       (Position 1 7)
-      [ ("True", CiConstructor, True, True),
-        ("truncate", CiFunction, True, True)
+      [ ("True", CiConstructor, "True ", True, True),
+        ("truncate", CiFunction, "truncate ${1:a}", True, True)
       ],
     completionTest
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
       (Position 2 7)
-      [ ("Bounded", CiClass, True, True),
-        ("Bool", CiStruct, True, True)
+      [ ("Bounded", CiClass, "Bounded ${1:*}", True, True),
+        ("Bool", CiStruct, "Bool ", True, True)
       ],
     completionTest
       "qualified"
       ["{-# OPTIONS_GHC -Wunused-binds #-}", "module A () where", "f = Prelude.hea"]
       (Position 2 15)
-      [ ("head", CiFunction, True, True)
+      [ ("head", CiFunction, "head ${1:[a]}", True, True)
       ],
     completionTest
       "duplicate import"
       ["module A where", "import Data.List", "import Data.List", "f = perm"]
       (Position 3 8)
-      [ ("permutations", CiFunction, False, False)
+      [ ("permutations", CiFunction, "permutations ${1:[a]}", False, False)
+      ],
+    completionTest
+      "record snippet on import"
+      ["module A where", "import Text.Printf (FormatParse(FormatParse))", "FormatParse"]
+      (Position 2 10)
+      [("FormatParse", CiStruct, "FormatParse ", False, False),
+       ("FormatParse", CiConstructor, "FormatParse ${1:String} ${2:Char} ${3:String}", False, False),
+       ("FormatParse", CiSnippet,
+           "FormatParse {fpModifiers=${1:_fpModifiers}, fpChar=${2:_fpChar}, fpRest=${3:_fpRest}}", False, False)
       ]
   ]
 
@@ -2877,7 +2888,7 @@ otherCompletionTests = [
       "keyword"
       ["module A where", "f = newty"]
       (Position 1 9)
-      [("newtype", CiKeyword, False, False)],
+      [("newtype", CiKeyword, "", False, False)],
     completionTest
       "type context"
       [ "{-# OPTIONS_GHC -Wunused-binds #-}",
@@ -2889,7 +2900,7 @@ otherCompletionTests = [
       -- This should be sufficient to detect that we are in a
       -- type context and only show the completion to the type.
       (Position 3 11)
-      [("Integer", CiStruct, True, True)]
+      [("Integer", CiStruct, "Integer ", True, True)]
   ]
 
 highlightTests :: TestTree
