@@ -11,8 +11,6 @@ jobs:
         os: [ubuntu-latest, macOS-latest, windows-latest]
         exclude:
           - os: windows-latest
-            ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
-          - os: windows-latest
             ghc: '8.8.4' # also fails due to segfault :(
           - os: windows-latest
             ghc: '8.8.3' # fails due to segfault
