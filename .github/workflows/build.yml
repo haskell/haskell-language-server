@@ -16,13 +16,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['8.10.2.2', '8.10.2', '8.10.1', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
+        ghc: ['8.10.2', '8.10.1', '8.8.4', '8.8.3', '8.8.2', '8.6.5', '8.6.4']
         os: [ubuntu-latest, macOS-latest, windows-latest]
         exclude:
-          - os: ubuntu-latest
-            ghc: '8.10.2.2' # only valid for windows and chocolatey
-          - os: macOS-latest
-            ghc: '8.10.2.2' # only valid for windows and chocolatey
           - os: windows-latest
             ghc: '8.10.2' # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
           - os: windows-latest
@@ -31,6 +27,9 @@ jobs:
             ghc: '8.8.3' # fails due to segfault
           - os: windows-latest
             ghc: '8.8.2' # fails due to error with Cabal
+        include:
+          - os: windows-latest
+            ghc: '8.10.2.2' # only available for windows and choco
 
     steps:
     - uses: actions/checkout@v2
