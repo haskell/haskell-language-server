@@ -27,12 +27,15 @@ jobs:
             ghc: '8.8.3' # fails due to segfault
           - os: windows-latest
             ghc: '8.8.2' # fails due to error with Cabal
+        include:
+          - os: windows-latest
+            ghc: '8.10.2.2' # only available for windows and choco
 
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: actions/setup-haskell@v1.1.3
+    - uses: actions/setup-haskell@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
