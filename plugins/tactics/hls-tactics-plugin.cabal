@@ -99,5 +99,6 @@ test-suite tests
     , hie-bios
     , ghc
     , containers
+  build-tool-depends: hspec-discover:hspec-discover
   default-language: Haskell2010
 
