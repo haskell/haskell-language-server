@@ -23,6 +23,7 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
+import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
@@ -120,13 +121,30 @@ unzipTrace l =
 
 
 -- | Essentially same as 'dataConInstOrigArgTys' in GHC,
---   but we need some tweaks in GHC >= 8.8.
---   Since old 'dataConInstArgTys' seems working with >= 8.8,
---   we just filter out non-class types in the result.
-dataConInstOrigArgTys' :: DataCon -> [Type] -> [Type]
-dataConInstOrigArgTys' con ty =
-    let tys0 = dataConInstArgTys con ty
-    in filter (maybe True (not . isClassTyCon) . tyConAppTyCon_maybe) tys0
+--  but only accepts universally quantified types as the second arguments
+--  and automatically introduces existentials.
+--
+-- NOTE: The behaviour depends on GHC's 'dataConInstOrigArgTys'.
+--       We need some tweaks if the compiler changes the implementation.
+dataConInstOrigArgTys'
+  :: DataCon
+      -- ^ 'DataCon'structor
+  -> [Type]
+      -- ^ /Universally/ quantified type arguments to a result type.
+      --   It /MUST NOT/ contain any dictionaries, coercion and existentials.
+      --
+      --   For example, for @MkMyGADT :: b -> MyGADT a c@, we
+      --   must pass @[a, c]@ as this argument but not @b@, as @b@ is an existential.
+  -> [Type]
+      -- ^ Types of arguments to the DataCon with returned type is instantiated with the second argument.
+dataConInstOrigArgTys' con uniTys =
+  let exvars = dataConExTys con
+   in dataConInstOrigArgTys con $
+        uniTys ++ fmap mkTyVarTy exvars
+      -- Rationale: At least in GHC <= 8.10, 'dataConInstOrigArgTys'
+      -- unifies the second argument with DataCon's universals followed by existentials.
+      -- If the definition of 'dataConInstOrigArgTys' changes,
+      -- this place must be changed accordingly.
 
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the

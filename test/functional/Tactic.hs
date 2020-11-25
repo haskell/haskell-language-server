@@ -104,6 +104,7 @@ tests = testGroup
   , goldenTest "GoldenSwap.hs"              2 8  Auto ""
   , goldenTest "GoldenFmapTree.hs"          4 11 Auto ""
   , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
+  , goldenTest "GoldenGADTDestructCoercion.hs" 8 17 Destruct "gadt"
   , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
   , goldenTest "GoldenSwapMany.hs"          2 12 Auto ""
   , goldenTest "GoldenBigTuple.hs"          4 12 Auto ""

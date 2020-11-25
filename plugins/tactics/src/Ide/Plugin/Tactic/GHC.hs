@@ -9,6 +9,7 @@ import           Control.Monad.State
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
 import           Data.Traversable
+import qualified DataCon as DataCon
 import           Development.IDE.GHC.Compat
 import           Generics.SYB (mkT, everywhere)
 import           Ide.Plugin.Tactic.Types
@@ -19,7 +20,6 @@ import           Type
 import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unique
 import           Var
-
 
 tcTyVar_maybe :: Type -> Maybe Var
 tcTyVar_maybe ty | Just ty' <- tcView ty = tcTyVar_maybe ty'
@@ -148,3 +148,9 @@ getPatName (fromPatCompat -> p0) =
 #endif
     _             -> Nothing
 
+dataConExTys :: DataCon -> [TyCoVar]
+#if __GLASGOW_HASKELL__ >= 808
+dataConExTys = DataCon.dataConExTyCoVars
+#else
+dataConExTys = DataCon.dataConExTyVars
+#endif
