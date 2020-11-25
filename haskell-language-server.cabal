@@ -113,7 +113,7 @@ executable haskell-language-server
     , containers
     , deepseq
     , floskell                 ^>=0.10
-    , fourmolu                 ^>=0.2
+    , fourmolu                 ^>=0.3
     , ghc
     , ghc-boot-th
     , ghcide
