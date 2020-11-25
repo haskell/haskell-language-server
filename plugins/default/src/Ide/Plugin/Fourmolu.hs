@@ -59,7 +59,7 @@ provider lf ideState typ contents fp fo = withIndefiniteProgress lf title Cancel
                     , cfgDebug = True
                     , cfgPrinterOpts =
                         fillMissingPrinterOpts
-                            (lspPrinterOpts <> printerOpts)
+                            (printerOpts <> lspPrinterOpts)
                             defaultPrinterOpts
                     }
 
