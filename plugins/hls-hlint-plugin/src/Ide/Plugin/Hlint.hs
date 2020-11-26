@@ -202,17 +202,17 @@ getIdeas nfp = do
                      Just <$> (liftIO $ parseModuleEx flags' fp contents')
 
         setExtensions flags = do
-          hlintExts <- getExtensions
+          hlintExts <- getExtensions flags nfp
           logm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 
-getExtensions :: Action [Extension]
-getExtensions = do
+getExtensions :: ParseFlags -> NormalizedFilePath -> Action [Extension]
+getExtensions pflags nfp = do
     hsc <- hscEnv <$> use_ GhcSession nfp
     let dflags = hsc_dflags hsc
     let hscExts = EnumSet.toList (extensionFlags dflags)
     let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-    let hlintExts = nub $ enabledExtensions flags ++ hscExts'
+    let hlintExts = nub $ enabledExtensions pflags ++ hscExts'
     return hlintExts
 #endif
 
@@ -378,9 +378,9 @@ applyHint ide nfp mhint =
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
             writeFileUTF8NoNewLineTranslation temp oldContent
-            let exts = runAction' getExtensions
-            (Right <$> applyRefactorings Nothing commands temp exts)
-                `catches`
+            (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
+            exts <- runAction' $ getExtensions pflags nfp
+            (Right <$> applyRefactorings Nothing commands temp (map show exts)) `catches`
                     [ Handler $ \e -> return (Left (show (e :: IOException)))
                     , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                     ]
