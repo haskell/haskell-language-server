@@ -116,9 +116,9 @@ ghcVersion = GHC84
 logFilePath :: String
 logFilePath = "hls-" ++ show ghcVersion ++ ".log"
 
--- | The command to execute the version of hie for the current compiler.
+-- | The command to execute the version of hls for the current compiler.
 --
--- Both @stack test@ and @cabal new-test@ setup the environment so @hie@ is
+-- Both @stack test@ and @cabal new-test@ setup the environment so @hls@ is
 -- on PATH. Cabal seems to respond to @build-tool-depends@ specifically while
 -- stack just puts all project executables on PATH.
 hlsCommand :: String
