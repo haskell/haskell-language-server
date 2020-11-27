@@ -91,6 +91,8 @@ tests = testGroup
   $ goldenTest "T25.hs"
   , testCase "local imports"
   $ goldenTest "T26.hs"
+  , testCase "Preserves one empty comment line after prompt"
+  $ goldenTest "T27.hs"
   ]
 
 goldenTest :: FilePath -> IO ()

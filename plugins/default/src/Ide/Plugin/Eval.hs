@@ -117,7 +117,14 @@ extractMatches = goSearch 0 . maybe [] T.lines
         r = Range p p'
         p = Position line 0
         p' = Position (line + spliceLength) 0
-        spliceLength = length (takeWhile looksLikeSplice (l : ll))
+        spliceLines = takeWhile looksLikeSplice (l : ll)
+        -- Don't include the last line if it's an empty comment.
+        -- Do this to preserve spacing between consecutive splices
+        isEmptyComment = (== "--")
+        spliceLength = case spliceLines of
+                         [] -> 0
+                         ls | isEmptyComment (last ls) -> length ls - 1
+                            | otherwise -> length ls
 
 provider :: CodeLensProvider
 provider lsp _state plId CodeLensParams {_textDocument} = response $ do
