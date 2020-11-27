@@ -380,7 +380,10 @@ applyHint ide nfp mhint =
             writeFileUTF8NoNewLineTranslation temp oldContent
             (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
             exts <- runAction' $ getExtensions pflags nfp
-            (Right <$> applyRefactorings Nothing commands temp (map show exts)) `catches`
+            -- We have to reparse extensions to remove the invalid ones
+            let (enabled, disabled, _invalid) = parseExtensions $ map show exts
+            let refactExts = map show $ enabled ++ disabled
+            (Right <$> applyRefactorings Nothing commands temp refactExts) `catches`
                     [ Handler $ \e -> return (Left (show (e :: IOException)))
                     , Handler $ \e -> return (Left (show (e :: ErrorCall)))
                     ]
