@@ -2872,6 +2872,21 @@ nonLocalCompletionTests =
       [ ("permutations", CiFunction, "permutations ${1:[a]}", False, False)
       ],
     completionTest
+      "show imports not in list but available in module"
+      ["{-# LANGUAGE NoImplicitPrelude #-}",
+       "module A where", "import Control.Monad (msum)", "f = joi"]
+      (Position 3 6)
+      [("join", CiFunction, "join ${1:m (m a)}", False, False)],
+    completionTest
+       "dont show hidden items"
+       [ "{-# LANGUAGE NoImplicitPrelude #-}",
+         "module A where",
+         "import Control.Monad hiding (join)",
+         "f = joi"
+       ]
+       (Position 3 6)
+       [],
+    completionTest
       "record snippet on import"
       ["module A where", "import Text.Printf (FormatParse(FormatParse))", "FormatParse"]
       (Position 2 10)
