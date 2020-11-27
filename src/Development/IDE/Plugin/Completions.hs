@@ -71,14 +71,26 @@ produceCompletions = do
         case (ms, sess) of
             (Just (ms,imps), Just sess) -> do
               let env = hscEnv sess
-              res <- liftIO $ tcRnImportDecls env imps
+              -- We do this to be able to provide completions of items that are not restricted to the explicit list
+              let imps' = map dropListFromImportDecl imps
+              res <- liftIO $ tcRnImportDecls env imps'
               case res of
                   (_, Just rdrEnv) -> do
-                      cdata <- liftIO $ cacheDataProducer env (ms_mod ms) rdrEnv imps parsedDeps
+                      cdata <- liftIO $ cacheDataProducer env (ms_mod ms) rdrEnv imps' parsedDeps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
             _ -> return ([], Nothing)
+
+-- Drop any explicit imports in ImportDecl if not hidden
+dropListFromImportDecl :: GenLocated SrcSpan (ImportDecl GhcPs) -> GenLocated SrcSpan (ImportDecl GhcPs)
+dropListFromImportDecl iDecl = let
+    f d@ImportDecl {ideclHiding} = case ideclHiding of
+        Just (False, _) -> d {ideclHiding=Nothing}
+        -- if hiding or Nothing just return d
+        _ -> d
+    f x = x
+    in f <$> iDecl
 
 -- | Produce completions info for a file
 type instance RuleResult ProduceCompletions = CachedCompletions
