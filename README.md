@@ -46,7 +46,7 @@ a simple reproduction of the bug.
 
 ### Install `ghcide`
 
-[We recommend](https://neilmitchell.blogspot.com/2020/09/dont-use-ghcide-anymore-directly.html) installing and using the Haskell extension in VS Code, or the prebuilt binaries provided by https://github.com/haskell/haskell-language-server
+[We recommend](https://neilmitchell.blogspot.com/2020/09/dont-use-ghcide-anymore-directly.html) installing and using the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) in VS Code, or the prebuilt binaries provided by the [haskell-language-server project](https://github.com/haskell/haskell-language-server).
 
 If you still wish to install `ghcide` direcly, the instructions below might prove useful *but you are on your own*.
 
