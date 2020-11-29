@@ -126,6 +126,7 @@ import UniqSupply
 import PrelInfo
 import Data.Int (Int64)
 import qualified Data.HashSet as HSet
+import Language.Haskell.LSP.Types.Capabilities
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -164,6 +165,7 @@ data ShakeExtras = ShakeExtras
     ,exportsMap :: Var ExportsMap
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
+    ,clientCapabilities :: ClientCapabilities
     }
 
 -- | A mapping of module name to known files
@@ -401,6 +403,7 @@ shakeOpen :: IO LSP.LspId
           -> (LSP.FromServerMessage -> IO ()) -- ^ diagnostic handler
           -> WithProgressFunc
           -> WithIndefiniteProgressFunc
+          -> ClientCapabilities
           -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
@@ -409,7 +412,7 @@ shakeOpen :: IO LSP.LspId
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen getLspId eventer withProgress withIndefiniteProgress logger debouncer
+shakeOpen getLspId eventer withProgress withIndefiniteProgress clientCapabilities logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) opts rules = mdo
 
     inProgress <- newVar HMap.empty
