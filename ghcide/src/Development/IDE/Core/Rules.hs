@@ -905,13 +905,20 @@ getLinkableType f = do
 needsCompilationRule :: Rules ()
 needsCompilationRule = defineEarlyCutoff $ \NeedsCompilation file -> do
   ((ms,_),_) <- useWithStale_ GetModSummaryWithoutTimestamps file
-  -- A file needs object code if it uses TH or any file that depends on it uses TH
+  -- A file needs object code if it uses TemplateHaskell or any file that depends on it uses TemplateHaskell
   res <-
     if uses_th_qq ms
     then pure True
-    -- Treat as False if some reverse dependency header fails to parse
-    else anyM (fmap (fromMaybe False) . use NeedsCompilation) . maybe [] (immediateReverseDependencies file)
-           =<< useNoFile GetModuleGraph
+    else do
+      graph <- useNoFile GetModuleGraph
+      case graph of
+          -- Treat as False if some reverse dependency header fails to parse
+          Nothing -> pure False
+          Just depinfo -> case immediateReverseDependencies file depinfo of
+            -- If we fail to get immediate reverse dependencies, fail with an error message
+            Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show file
+            Just revdeps -> anyM (fmap (fromMaybe False) . use NeedsCompilation) revdeps
+
   pure (Just $ BS.pack $ show $ hash res, ([], Just res))
   where
     uses_th_qq (ms_hspp_opts -> dflags) =

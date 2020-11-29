@@ -317,23 +317,23 @@ partitionSCC (AcyclicSCC x:rest) = first (x:)   $ partitionSCC rest
 partitionSCC []                  = ([], [])
 
 -- | Transitive reverse dependencies of a file
-transitiveReverseDependencies :: NormalizedFilePath -> DependencyInformation -> [NormalizedFilePath]
-transitiveReverseDependencies file DependencyInformation{..} =
-  let FilePathId cur_id = pathToId depPathIdMap file
-  in map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
+transitiveReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]
+transitiveReverseDependencies file DependencyInformation{..} = do
+    FilePathId cur_id <- lookupPathToId depPathIdMap file
+    return $ map (idToPath depPathIdMap . FilePathId) (IntSet.toList (go cur_id IntSet.empty))
   where
     go :: Int -> IntSet -> IntSet
     go k i =
-      let outwards = fromMaybe IntSet.empty (IntMap.lookup k depReverseModuleDeps  )
+      let outwards = fromMaybe IntSet.empty (IntMap.lookup k depReverseModuleDeps)
           res = IntSet.union i outwards
           new = IntSet.difference i outwards
       in IntSet.foldr go res new
 
 -- | Immediate reverse dependencies of a file
-immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> [NormalizedFilePath]
-immediateReverseDependencies file DependencyInformation{..} =
-  let FilePathId cur_id = pathToId depPathIdMap file
-  in map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
+immediateReverseDependencies :: NormalizedFilePath -> DependencyInformation -> Maybe [NormalizedFilePath]
+immediateReverseDependencies file DependencyInformation{..} = do
+  FilePathId cur_id <- lookupPathToId depPathIdMap file
+  return $ map (idToPath depPathIdMap . FilePathId) (maybe mempty IntSet.toList (IntMap.lookup cur_id depReverseModuleDeps))
 
 transitiveDeps :: DependencyInformation -> NormalizedFilePath -> Maybe TransitiveDependencies
 transitiveDeps DependencyInformation{..} file = do
@@ -401,4 +401,3 @@ instance NFData NamedModuleDep where
 
 instance Show NamedModuleDep where
   show NamedModuleDep{..} = show nmdFilePath
-
