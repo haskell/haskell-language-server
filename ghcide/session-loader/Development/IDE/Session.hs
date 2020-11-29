@@ -3,7 +3,12 @@
 {-|
 The logic for setting up a ghcide session by tapping into hie-bios.
 -}
-module Development.IDE.Session (loadSession) where
+module Development.IDE.Session
+  (SessionLoadingOptions(..)
+  ,defaultLoadingOptions
+  ,loadSession
+  ,loadSessionWithOptions
+  ) where
 
 -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
 -- the real GHC library and the types are incompatible. Furthermore, when
@@ -44,7 +49,7 @@ import Development.IDE.Types.Logger
 import Development.IDE.Types.Options
 import Development.Shake (Action)
 import GHC.Check
-import HIE.Bios
+import qualified HIE.Bios as HieBios
 import HIE.Bios.Environment hiding (getCacheDir)
 import HIE.Bios.Types
 import Hie.Implicit.Cradle (loadImplicitHieCradle)
@@ -64,6 +69,18 @@ import Module
 import NameCache
 import Packages
 import Control.Exception (evaluate)
+import Data.Void
+
+data SessionLoadingOptions = SessionLoadingOptions
+  { findCradle :: FilePath -> IO (Maybe FilePath)
+  , loadCradle :: FilePath -> IO (HieBios.Cradle Void)
+  }
+
+defaultLoadingOptions :: SessionLoadingOptions
+defaultLoadingOptions = SessionLoadingOptions
+    {findCradle = HieBios.findCradle
+    ,loadCradle = HieBios.loadCradle
+    }
 
 -- | Given a root directory, return a Shake 'Action' which setups an
 -- 'IdeGhcSession' given a file.
@@ -79,7 +96,10 @@ import Control.Exception (evaluate)
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 loadSession :: FilePath -> IO (Action IdeGhcSession)
-loadSession dir = do
+loadSession = loadSessionWithOptions defaultLoadingOptions
+
+loadSessionWithOptions :: SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
+loadSessionWithOptions SessionLoadingOptions{..} dir = do
   -- Mapping from hie.yaml file to HscEnv, one per hie.yaml file
   hscEnvs <- newVar Map.empty :: IO (Var HieMap)
   -- Mapping from a Filepath to HscEnv
