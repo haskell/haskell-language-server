@@ -56,6 +56,7 @@ initialise caps mainRule getLspId toDiags wProg wIndefProg logger debouncer opti
         toDiags
         wProg
         wIndefProg
+        caps
         logger
         debouncer
         (optShakeProfiling options)
