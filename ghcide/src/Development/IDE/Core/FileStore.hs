@@ -239,10 +239,12 @@ typecheckParentsAction nfp = do
     revs <- transitiveReverseDependencies nfp <$> useNoFile_ GetModuleGraph
     logger <- logger <$> getShakeExtras
     let log = L.logInfo logger . T.pack
-    liftIO $ do
-      (log $ "Typechecking reverse dependencies for" ++ show nfp ++ ": " ++ show revs)
-        `catch` \(e :: SomeException) -> log (show e)
-    () <$ uses GetModIface revs
+    case revs of
+      Nothing -> liftIO $ log $ "Could not identify reverse dependencies for " ++ show nfp
+      Just rs -> do
+        liftIO $ (log $ "Typechecking reverse dependencies for " ++ show nfp ++ ": " ++ show revs)
+          `catch` \(e :: SomeException) -> log (show e)
+        () <$ uses GetModIface rs
 
 -- | Note that some buffer somewhere has been modified, but don't say what.
 --   Only valid if the virtual file system was initialised by LSP, as that
