@@ -21,6 +21,7 @@ let
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
             hls-tactics-plugin = gitignoreSource ../plugins/tactics;
             hls-hlint-plugin = gitignoreSource ../plugins/hls-hlint-plugin;
+            hls-explicit-imports-plugin = gitignoreSource ../plugins/hls-explicit-imports-plugin;
           });
         in
         {

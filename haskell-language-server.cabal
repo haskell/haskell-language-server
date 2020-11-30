@@ -88,7 +88,6 @@ executable haskell-language-server
     Ide.Plugin.Example2
     Ide.Plugin.Floskell
     Ide.Plugin.Fourmolu
-    Ide.Plugin.ImportLens
     Ide.Plugin.ModuleName
     Ide.Plugin.Ormolu
     Ide.Plugin.Pragmas
@@ -123,6 +122,7 @@ executable haskell-language-server
     , hls-hlint-plugin
     , hls-plugin-api
     , hls-tactics-plugin
+    , hls-explicit-imports-plugin
     , lens
     , ormolu                   ^>=0.1.2
     , regex-tdfa

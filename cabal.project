@@ -5,6 +5,7 @@ packages:
          ./hls-plugin-api
          ./plugins/tactics
          ./plugins/hls-hlint-plugin
+         ./plugins/hls-explicit-imports-plugin
 
 source-repository-package
   type: git
