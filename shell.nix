@@ -4,6 +4,12 @@
 # Maintaining this file:
 #
 #     - Bump the nixpkgs version using `niv update nixpkgs`
+#     - To edit the set of local packages:
+#       1. Declare them in nix/default.nix
+#       2. Edit the list of packages below
+#
+# For more details: https://github.com/NixOS/nixpkgs/blob/20.03/pkgs/development/haskell-modules/make-package-set.nix#L256
+
 
 { compiler ? "default",
   withHoogle ? false,
