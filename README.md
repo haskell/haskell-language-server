@@ -691,8 +691,6 @@ $ cp install/hie.yaml.cbl install/hie.yaml
 
 #### Using Stack
 
-Note: Stack project must also be built once until [this issue](https://github.com/commercialhaskell/stack/issues/5213) is fixed.
-
 ```shell
 $ cp hie.yaml.stack hie.yaml
 $ cp install/hie.yaml.stack install/hie.yaml
