@@ -29,5 +29,5 @@ allow-newer: data-tree-print:base
 
 -- To ensure the build get the version with the fix for #498
 -- Remove when the constraint is included upstream
-constraints: implicit-hie >= 0.1.2.3
+constraints: implicit-hie >= 0.1.2.5
 constraints: implicit-hie-cradle >= 0.3.0.0
