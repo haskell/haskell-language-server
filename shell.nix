@@ -31,6 +31,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
                     p.hls-tactics-plugin
                     p.hls-hlint-plugin
                     p.hls-explicit-imports-plugin
+                    p.hls-retrie-plugin
                   ];
 
     isSupported = compiler == "default" || compiler == defaultCompiler;

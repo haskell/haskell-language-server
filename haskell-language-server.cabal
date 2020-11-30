@@ -91,7 +91,6 @@ executable haskell-language-server
     Ide.Plugin.ModuleName
     Ide.Plugin.Ormolu
     Ide.Plugin.Pragmas
-    Ide.Plugin.Retrie
     Ide.Plugin.StylishHaskell
 
   ghc-options:
@@ -123,10 +122,10 @@ executable haskell-language-server
     , hls-plugin-api
     , hls-tactics-plugin
     , hls-explicit-imports-plugin
+    , hls-retrie-plugin
     , lens
     , ormolu                   ^>=0.1.2
     , regex-tdfa
-    , retrie                   >=0.1.1.0
     , hslogger
     , optparse-applicative
     , haskell-lsp              ^>=0.22
@@ -135,7 +134,6 @@ executable haskell-language-server
     , mtl
     , ormolu                   ^>=0.1.2
     , regex-tdfa
-    , retrie                   >=0.1.1.0
     , safe-exceptions
     , shake                    >=0.17.5
     , stylish-haskell          ^>=0.12

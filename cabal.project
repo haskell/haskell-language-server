@@ -6,6 +6,7 @@ packages:
          ./plugins/tactics
          ./plugins/hls-hlint-plugin
          ./plugins/hls-explicit-imports-plugin
+         ./plugins/hls-retrie-plugin
 
 source-repository-package
   type: git
