@@ -694,6 +694,7 @@ $ cp install/hie.yaml.cbl install/hie.yaml
 ```shell
 $ cp hie.yaml.stack hie.yaml
 $ cp install/hie.yaml.stack install/hie.yaml
+$ cp ghcide/hie.yaml.stack ghcide/hie.yaml
 $ stack build --test --no-run-tests
 $ cd install
 $ stack build
