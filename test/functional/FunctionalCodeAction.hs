@@ -404,32 +404,31 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
 
 unusedTermTests :: TestTree
 unusedTermTests = testGroup "unused term code actions" [
-    -- ignoreTestBecause "Broken" $ testCase "Prefixes with '_'" $ pendingWith "removed because of HaRe"
-    --     runSession hlsCommand fullCaps "test/testdata/" $ do
-    --       doc <- openDoc "UnusedTerm.hs" "haskell"
-    --
-    --       _ <- waitForDiagnosticsSource "typecheck"
-    --       cas <- map fromAction <$> getAllCodeActions doc
-    --
-    --       liftIO $ map (^. L.title) cas `shouldContain` [ "Prefix imUnused with _"]
-    --
-    --       executeCodeAction $ head cas
-    --
-    --       edit <- skipManyTill anyMessage $ getDocumentEdit doc
-    --
-    --       let expected = [ "{-# OPTIONS_GHC -Wall #-}"
-    --                      , "module UnusedTerm () where"
-    --                      , "_imUnused :: Int -> Int"
-    --                      , "_imUnused 1 = 1"
-    --                      , "_imUnused 2 = 2"
-    --                      , "_imUnused _ = 3"
-    --                      ]
-    --
-    --       liftIO $ edit @?= T.unlines expected
+    ignoreTestBecause "no support for prefixing unused names with _" $ testCase "Prefixes with '_'" $
+        runSession hlsCommand fullCaps "test/testdata/" $ do
+          doc <- openDoc "UnusedTerm.hs" "haskell"
+
+          _ <- waitForDiagnosticsSource "typecheck"
+          cars <- getAllCodeActions doc
+          prefixImUnused <- liftIO $ inspectCodeAction cars ["Prefix imUnused with _"]
+
+          executeCodeAction prefixImUnused
+
+          edit <- skipManyTill anyMessage $ getDocumentEdit doc
+
+          let expected = [ "{-# OPTIONS_GHC -Wall #-}"
+                         , "module UnusedTerm () where"
+                         , "_imUnused :: Int -> Int"
+                         , "_imUnused 1 = 1"
+                         , "_imUnused 2 = 2"
+                         , "_imUnused _ = 3"
+                         ]
+
+          liftIO $ edit @?= T.unlines expected
 
     -- See https://microsoft.github.io/language-server-protocol/specifications/specification-3-15/#textDocument_codeAction
     -- `CodeActionContext`
-    testCase "respect 'only' parameter" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    , testCase "respect 'only' parameter" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc   <- openDoc "CodeActionOnly.hs" "haskell"
         _     <- waitForDiagnostics
         diags <- getCurrentDiagnostics doc
