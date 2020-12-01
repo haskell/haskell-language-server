@@ -64,7 +64,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         executeCodeAction (fromJust redId)
 
-        contents <- getDocumentEdit doc
+        contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo x = x\n"
 
     , testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata/hlint" $ do
@@ -77,7 +77,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         executeCommand etaReduce
 
-        contents <- skipManyTill publishDiagnosticsNotification $ getDocumentEdit doc
+        contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo = id\n"
 
     , testCase "changing configuration enables or disables hlint diagnostics" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
@@ -214,7 +214,7 @@ packageTests = testGroup "add package suggestions" [
 
             executeCodeAction action
 
-            contents <- getDocumentEdit . TextDocumentIdentifier =<< getDocUri "add-package-test.cabal"
+            contents <- skipManyTill anyMessage $ getDocumentEdit . TextDocumentIdentifier =<< getDocUri "add-package-test.cabal"
             liftIO $
                 any (\l -> "text -any" `T.isSuffixOf` l || "text : {} -any" `T.isSuffixOf` l) (T.lines contents) @? "Contains text package"
 
@@ -243,7 +243,7 @@ packageTests = testGroup "add package suggestions" [
 
             executeCodeAction action
 
-            contents <- getDocumentEdit . TextDocumentIdentifier =<< getDocUri "package.yaml"
+            contents <- skipManyTill anyMessage $ getDocumentEdit . TextDocumentIdentifier =<< getDocUri "package.yaml"
             liftIO $ do
                 "zlib" `T.isSuffixOf` (T.lines contents !! 3) @? "Contains zlib"
                 "zlib" `T.isSuffixOf` (T.lines contents !! 21) @? "Does not contain zlib in unrelated component"
@@ -415,7 +415,7 @@ unusedTermTests = testGroup "unused term code actions" [
     --
     --       executeCodeAction $ head cas
     --
-    --       edit <- getDocumentEdit doc
+    --       edit <- skipManyTill anyMessage $ getDocumentEdit doc
     --
     --       let expected = [ "{-# OPTIONS_GHC -Wall #-}"
     --                      , "module UnusedTerm () where"
