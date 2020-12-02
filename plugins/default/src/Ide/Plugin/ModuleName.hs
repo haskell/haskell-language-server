@@ -1,9 +1,6 @@
 {-# OPTIONS_GHC -Wwarn -fno-warn-type-defaults -fno-warn-unused-binds -fno-warn-unused-imports #-}
-{-# LANGUAGE NamedFieldPuns            #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE RecordWildCards           #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE NamedFieldPuns, NoMonomorphismRestriction, OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables                         #-}
 
 {-| Keep the module name in sync with its file path.
 
@@ -16,84 +13,61 @@ module Ide.Plugin.ModuleName
   )
 where
 
-import           Control.Monad                  ( join )
-import           Control.Monad.IO.Class         ( MonadIO(liftIO) )
-import           Control.Monad.Trans.Maybe      ( )
-import           Data.Aeson                     ( ToJSON(toJSON)
-                                                , Value(Null)
-                                                )
-import qualified Data.HashMap.Strict           as Map
-import           Data.List                      ( isPrefixOf )
-import           Data.List.Extra                ( replace )
-import           Data.Maybe                     ( listToMaybe )
-import           Data.String                    ( IsString )
-import           Data.Text                      ( Text )
-import qualified Data.Text                     as T
-import           Development.IDE                ( hscEnvWithImportPaths
-                                                , GetParsedModule
-                                                  ( GetParsedModule
-                                                  )
-                                                , GhcSession(GhcSession)
-                                                , HscEnvEq
-                                                , IdeState
-                                                , List(..)
-                                                , NormalizedFilePath
-                                                , Position(Position)
-                                                , Range(Range)
-                                                , evalGhcEnv
-                                                , realSrcSpanToRange
-                                                , runAction
-                                                , toNormalizedUri
-                                                , uriToFilePath'
-                                                , use
-                                                , use_
-                                                )
-import           Development.IDE.Plugin         ( getPid )
-import           GHC                            ( DynFlags(importPaths)
-                                                , GenLocated(L)
-                                                , HsModule(hsmodName)
-                                                , ParsedModule(pm_parsed_source)
-                                                , SrcSpan(RealSrcSpan)
-                                                , unLoc
-                                                , getSessionDynFlags
-                                                )
-import           Ide.Types                      ( CommandFunction
-                                                , PluginCommand(..)
-                                                , PluginDescriptor(..)
-                                                , PluginId(..)
-                                                , defaultPluginDescriptor
-                                                )
-import           Language.Haskell.LSP.Core      ( LspFuncs
-                                                , getVirtualFileFunc
-                                                )
-import           Language.Haskell.LSP.Types     ( ApplyWorkspaceEditParams(..)
-                                                , CAResult(CACodeAction)
-                                                , CodeAction(CodeAction)
-                                                , CodeActionKind
-                                                  ( CodeActionQuickFix
-                                                  )
-                                                , CodeLens(CodeLens)
-                                                , CodeLensParams(CodeLensParams)
-                                                , Command(Command)
-                                                , ServerMethod(..)
-                                                , TextDocumentIdentifier
-                                                  ( TextDocumentIdentifier
-                                                  )
-                                                , TextEdit(TextEdit)
-                                                , Uri
-                                                , WorkspaceEdit(..)
-                                                , uriToNormalizedFilePath
-                                                )
-import           Language.Haskell.LSP.VFS       ( virtualFileText )
-import           System.FilePath                ( splitDirectories
-                                                , dropExtension
-                                                )
-import           Ide.Plugin                     ( mkLspCmdId )
-import           Development.IDE.Types.Logger
-import           Development.IDE.Core.Shake
-import           Data.Text                      ( pack )
-import           System.Directory               ( canonicalizePath )
+import           Control.Monad                (join)
+import           Control.Monad.IO.Class       (MonadIO (liftIO))
+import           Control.Monad.Trans.Maybe    ()
+import           Data.Aeson                   (ToJSON (toJSON), Value (Null))
+import           Data.Char                    (isUpper)
+import qualified Data.HashMap.Strict          as Map
 import           Data.List
+import           Data.List                    (isPrefixOf)
+import           Data.List.Extra              (replace)
+import           Data.Maybe                   (listToMaybe)
+import           Data.String                  (IsString)
+import           Data.Text                    (Text, pack)
+import qualified Data.Text                    as T
+import           Development.IDE              (GetParsedModule (GetParsedModule),
+                                               GhcSession (GhcSession),
+                                               HscEnvEq, IdeState, List (..),
+                                               NormalizedFilePath,
+                                               Position (Position),
+                                               Range (Range), evalGhcEnv,
+                                               hscEnvWithImportPaths,
+                                               realSrcSpanToRange, runAction,
+                                               toNormalizedUri, uriToFilePath',
+                                               use, use_)
+import           Development.IDE.Core.Shake
+import           Development.IDE.Plugin       (getPid)
+import           Development.IDE.Types.Logger
+import           GHC                          (DynFlags (importPaths),
+                                               GenLocated (L),
+                                               HsModule (hsmodName),
+                                               ParsedModule (pm_parsed_source),
+                                               SrcSpan (RealSrcSpan),
+                                               getSessionDynFlags, unLoc)
+import           Ide.Plugin                   (mkLspCmdId)
+import           Ide.Types                    (CommandFunction,
+                                               PluginCommand (..),
+                                               PluginDescriptor (..),
+                                               PluginId (..),
+                                               defaultPluginDescriptor)
+import           Language.Haskell.LSP.Core    (LspFuncs, getVirtualFileFunc)
+import           Language.Haskell.LSP.Types   (ApplyWorkspaceEditParams (..),
+                                               CAResult (CACodeAction),
+                                               CodeAction (CodeAction),
+                                               CodeActionKind (CodeActionQuickFix),
+                                               CodeLens (CodeLens),
+                                               CodeLensParams (CodeLensParams),
+                                               Command (Command),
+                                               ServerMethod (..),
+                                               TextDocumentIdentifier (TextDocumentIdentifier),
+                                               TextEdit (TextEdit), Uri,
+                                               WorkspaceEdit (..),
+                                               uriToNormalizedFilePath)
+import           Language.Haskell.LSP.VFS     (virtualFileText)
+import           System.Directory             (canonicalizePath)
+import           System.FilePath              (dropExtension, splitDirectories,
+                                               takeFileName)
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
@@ -188,20 +162,23 @@ pathModuleName state normFilePath filePath = do
   out state ["import paths", show srcPaths]
   paths   <- mapM canonicalizePath srcPaths
   mdlPath <- canonicalizePath filePath
-  out state ["canonic paths", show paths, "mdlPath", mdlPath]
-  let maybePrefix = listToMaybe . filter (`isPrefixOf` mdlPath) $ paths
-  out state ["prefix", show maybePrefix]
+  if isUpper $ head $ takeFileName mdlPath
+  then do
+    out state ["canonic paths", show paths, "mdlPath", mdlPath]
+    let maybePrefix = listToMaybe . filter (`isPrefixOf` mdlPath) $ paths
+    out state ["prefix", show maybePrefix]
 
-  let maybeMdlName =
-        (\prefix ->
-            intercalate "."
-              . splitDirectories
-              . drop (length prefix + 1)
-              $ dropExtension mdlPath
-          )
-          <$> maybePrefix
-  out state ["mdlName", show maybeMdlName]
-  return $ T.pack <$> maybeMdlName
+    let maybeMdlName =
+            (\prefix ->
+                intercalate "."
+                . splitDirectories
+                . drop (length prefix + 1)
+                $ dropExtension mdlPath
+            )
+            <$> maybePrefix
+    out state ["mdlName", show maybeMdlName]
+    return $ T.pack <$> maybeMdlName
+  else return $ Just "Main"
 
 -- | The module name, as stated in the module
 codeModuleName :: IdeState -> NormalizedFilePath -> IO (Maybe (Range, Text))
