@@ -700,6 +700,19 @@ $ cd install
 $ stack build
 ```
 
+#### Using Nix
+
+The instructions below show how to set up a Cachix binary cache and open a nix shell for local development.
+
+```shell
+$ cachix use haskell-language-server
+$ nix-shell
+$ cabal update
+$ cabal build
+```
+
+If you are looking for a Nix expression to create haskell-language-server binaries, see https://github.com/haskell/haskell-language-server/issues/122
+
 #### Introduction tutorial
 Pepeiborra [wrote an tutorial](https://github.com/pepeiborra/hls-tutorial) on writing a plugin in HLS.
 

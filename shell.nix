@@ -1,125 +1,52 @@
 # This shell.nix file is designed for use with cabal build
-# It aims to leverage the nix cache in as much as possible
-# while reducing Nix maintenance costs.
-# It does **not** aim to replace Cabal/Stack with Nix
+# It does **not** aim to replace Cabal
 
 # Maintaining this file:
 #
-# - Dealing with broken nix-shell
+#     - Bump the nixpkgs version using `niv update nixpkgs`
+#     - To edit the set of local packages:
+#       1. Declare them in nix/default.nix
+#       2. Edit the list of packages below
 #
-#     1. Bump the nixpkgs version using `niv update nixpkgs`
-#     2. Comment out any remaining failing packages
-#
-# - Dealing with broken cabal build inside nix-shell:
-#
-#    If my understanding of cabal new-build is correct this should never happen,
-#    assuming that cabal new-build does succeed outside nix-shell
+# For more details: https://github.com/NixOS/nixpkgs/blob/20.03/pkgs/development/haskell-modules/make-package-set.nix#L256
 
-{ sources ? import nix/sources.nix,
-  nixpkgs ? import sources.nixpkgs { },
-  compiler ? "default",
-  hoogle ? false
+
+{ compiler ? "default",
+  withHoogle ? false,
+  nixpkgs ? import ./nix {}
  }:
+
 with nixpkgs;
 
 let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.version;
-    haskellPackagesForProject = p:
-        if compiler == "default" || compiler == defaultCompiler
-            then if hoogle
-                then haskellPackages.ghcWithHoogle p
-                else haskellPackages.ghcWithPackages p
-            # for all other compilers there is no Nix cache so dont bother building deps
-            else if hoogle
-                then  haskell.packages.${compiler}.ghcWithHoogle (_: [])
-                else haskell.packages.${compiler}.ghcWithPackages (_: []);
+    haskellPackagesForProject =
+        if compiler == "default"
+            then ourHaskell.packages.${defaultCompiler}
+            else ourHaskell.packages.${compiler};
 
-    retrie = with haskell.lib; dontCheck(disableLibraryProfiling(haskellPackages.retrie));
-    compilerWithPackages = haskellPackagesForProject(p:
-        with p;
-        [
-          Diff
-          Glob
-          HsYAML-aeson
-          QuickCheck
-          aeson
-          alex
-          async
-          base16-bytestring
-          blaze-builder
-          blaze-markup
-          brittany
-          conduit-extra
-          conduit-parse
-          cryptohash-sha1
-          data-default
-          data-default-class
-          data-default-instances-containers
-          data-default-instances-dlist
-          data-default-instances-old-locale
-          extra
-          floskell
-        #   fourmolu
-          fuzzy
-          generic-deriving
-          ghc-check
-          gitrev
-          haddock-library
-          happy
-          haskell-lsp
-          haskell-src-exts
-          hie-bios
-          hslogger
-          hspec
-          lens
-          lsp-test
-          megaparsec
-          network
-          opentelemetry
-          optparse-simple
-          ormolu
-          parser-combinators
-          parsers
-          prettyprinter
-          prettyprinter-ansi-terminal
-          primes
-          psqueues
-          regex-tdfa
-          retrie
-          rope-utf16-splay
-          safe-exceptions
-          shake
-          sorted-list
-          strict
-          stylish-haskell
-          tasty
-          tasty-ant-xml
-          tasty-expected-failure
-          tasty-golden
-          tasty-hunit
-          tasty-rerun
-          temporary
-          text
-          typed-process
-          unix-compat
-          unordered-containers
-          xml
-          yaml
-          zlib
-         ]);
+    packages = p: [ p.haskell-language-server
+                    p.ghcide
+                    p.hie-compat
+                    p.hls-plugin-api
+                    p.hls-tactics-plugin
+                    p.hls-hlint-plugin
+                  ];
+
+    isSupported = compiler == "default" || compiler == defaultCompiler;
 in
-stdenv.mkDerivation {
-  name = "haskell-language-server";
+haskellPackagesForProject.shellFor {
+  inherit withHoogle;
+  doBenchmark = true;
+  packages = p: if isSupported then packages p else [p.ghc-paths];
   buildInputs = [
-    git
     gmp
-    ncurses
     zlib
+    ncurses
 
     haskellPackages.cabal-install
     haskellPackages.hlint
-
-    compilerWithPackages
-
+    haskellPackages.ormolu
+    haskellPackages.stylish-haskell
   ];
   src = null;
   shellHook = ''

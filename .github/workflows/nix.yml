@@ -1,0 +1,26 @@
+name: Nix
+
+on: [push, pull_request]
+jobs:
+  nix:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ghc: ['default', 'ghc8102', 'ghc884', 'ghc865']
+        os: [ubuntu-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: cachix/install-nix-action@v12
+      with:
+        nix_path: nixpkgs=channel:nixos-20.03
+    - uses: cachix/cachix-action@v8
+      with:
+        name: haskell-language-server
+        extraPullNames: haskell-ghcide
+        authToken: '${{ secrets.HLS_CACHIX_AUTH_TOKEN }}'
+    - run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"

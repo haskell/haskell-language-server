@@ -171,33 +171,6 @@ jobs:
           key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
           paths:
             - ~/.cabal
-  nix:
-    working_directory: ~/build
-    environment:
-        - NIXPKGS_ALLOW_BROKEN: 1
-    docker:
-        - image: nixorg/nix:circleci
-    steps:
-      - checkout
-      - run:
-          name: Sync submodules
-          command: git submodule sync --recursive
-      - run:
-          name: Update submodules
-          command: git submodule update --recursive --init
-      - restore-cache:
-          keys:
-            - cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-      - run:
-          name: Build
-          command: nix-shell -j4 --run "cabal new-update && (cabal new-build -j1 --enable-tests || cabal new-build -j1 --enable-tests) "
-          no_output_timeout: 30m
-      - save_cache:
-          key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-          paths:
-            - ~/.cabal
-
-
 
 workflows:
   version: 2
@@ -212,4 +185,3 @@ workflows:
       - ghc-8.10.2
       # - ghc-nightly
       - cabal
-      - nix
