@@ -43,7 +43,7 @@ hlintTests :: TestTree
 hlintTests = testGroup "hlint suggestions" [
     testCase "provides 3.8 code actions including apply all" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags@(reduceDiag:_) <- waitForDiagnosticsSource "hlint"
+        diags@(reduceDiag:_) <- waitForDiagnosticsFromSource doc "hlint"
 
         liftIO $ do
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
@@ -70,7 +70,7 @@ hlintTests = testGroup "hlint suggestions" [
     , testCase "falls back to pre 3.8 code actions" $ runSession hlsCommand noLiteralCaps "test/testdata/hlint" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
 
-        _ <- waitForDiagnosticsSource "hlint"
+        _ <- waitForDiagnosticsFromSource doc "hlint"
 
         cars <- getAllCodeActions doc
         etaReduce <- liftIO $ inspectCommand cars ["Apply hint: Eta reduce"]
@@ -84,15 +84,15 @@ hlintTests = testGroup "hlint suggestions" [
         let config = def { hlintOn = True }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
-        _ <- openDoc "ApplyRefact2.hs" "haskell"
-        diags <- waitForDiagnosticsSource "hlint"
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        diags <- waitForDiagnosticsFromSource doc "hlint"
 
         liftIO $ length diags > 0 @? "There are hlint diagnostics"
 
         let config' = def { hlintOn = False }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
-        diags' <- waitForDiagnostics
+        diags' <- waitForDiagnosticsFrom doc
 
         liftIO $ Just "hlint" `notElem` map (^. L.source) diags' @? "There are no hlint diagnostics"
 
@@ -118,7 +118,7 @@ hlintTests = testGroup "hlint suggestions" [
 
         changeDoc doc [change']
 
-        diags'' <- waitForDiagnosticsSource "hlint"
+        diags'' <- waitForDiagnosticsFromSource doc "hlint"
 
         liftIO $ length diags'' @?= 2
     ]
@@ -128,7 +128,7 @@ renameTests = testGroup "rename suggestions" [
     testCase "works" $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
         doc <- openDoc "CodeActionRename.hs" "haskell"
 
-        _ <- waitForDiagnosticsSource "typecheck"
+        _ <- waitForDiagnosticsFromSource doc "typecheck"
 
         cars <- getAllCodeActions doc
         replaceButStrLn <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
@@ -141,7 +141,7 @@ renameTests = testGroup "rename suggestions" [
         $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
             doc <- openDoc "CodeActionRename.hs" "haskell"
 
-            _ <- waitForDiagnosticsSource "typecheck"
+            _ <- waitForDiagnosticsFromSource doc "typecheck"
 
             cars <- getAllCodeActions doc
             cmd <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
@@ -168,7 +168,7 @@ importTests = testGroup "import suggestions" [
         let config = def { formattingProvider = "none" }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
-        diag:_ <- waitForDiagnostics
+        (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?= "Variable not in scope: when :: Bool -> IO () -> IO ()"
 
         actionsOrCommands <- getAllCodeActions doc
@@ -195,7 +195,7 @@ packageTests = testGroup "add package suggestions" [
             doc <- openDoc "AddPackage.hs" "haskell"
 
             -- ignore the first empty hlint diagnostic publish
-            [_,diag:_] <- count 2 waitForDiagnostics
+            [_,diag:_] <- count 2 $ waitForDiagnosticsFrom doc
 
             let prefixes = [ "Could not load module `Data.Text'" -- Windows && GHC >= 8.6
                         , "Could not find module `Data.Text'" -- Windows
@@ -223,7 +223,7 @@ packageTests = testGroup "add package suggestions" [
             doc <- openDoc "app/Asdf.hs" "haskell"
 
             -- ignore the first empty hlint diagnostic publish
-            [_,_:diag:_] <- count 2 waitForDiagnostics
+            [_,_:diag:_] <- count 2 $ waitForDiagnosticsFrom doc
 
             let prefixes = [ "Could not load module `Codec.Compression.GZip'" -- Windows && GHC >= 8.6
                         , "Could not find module `Codec.Compression.GZip'" -- Windows
@@ -255,7 +255,7 @@ redundantImportTests = testGroup "redundant import code actions" [
         runSession hlsCommand fullCaps "test/testdata/redundantImportTest/" $ do
             doc <- openDoc "src/CodeActionRedundant.hs" "haskell"
 
-            diags <- waitForDiagnostics
+            diags <- waitForDiagnosticsFrom doc
             liftIO $ expectDiagnostic diags ["The import of", "Data.List", "is redundant"]
 
             mActions <- getAllCodeActions doc
@@ -280,7 +280,7 @@ redundantImportTests = testGroup "redundant import code actions" [
 
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
-        _   <- waitForDiagnostics
+        _   <- waitForDiagnosticsFrom doc
         CACommand cmd : _ <- getAllCodeActions doc
         executeCommand cmd
         contents <- documentContents doc
@@ -297,7 +297,7 @@ typedHoleTests = testGroup "typed hole code actions" [
     testCase "works" $
         runSession hlsCommand fullCaps "test/testdata" $ do
             doc <- openDoc "TypedHoles.hs" "haskell"
-            _ <- waitForDiagnosticsSource "typecheck"
+            _ <- waitForDiagnosticsFromSource doc "typecheck"
             cas <- getAllCodeActions doc
             liftIO $ do
                 expectCodeAction cas ["replace _ with minBound"]
@@ -317,7 +317,7 @@ typedHoleTests = testGroup "typed hole code actions" [
       , testCase "shows more suggestions" $
             runSession hlsCommand fullCaps "test/testdata" $ do
                 doc <- openDoc "TypedHoles2.hs" "haskell"
-                _ <- waitForDiagnosticsSource "typecheck"
+                _ <- waitForDiagnosticsFromSource doc "typecheck"
                 cas <- getAllCodeActions doc
 
                 liftIO $ do
@@ -345,7 +345,7 @@ signatureTests = testGroup "missing top level signature code actions" [
       runSession hlsCommand fullCaps "test/testdata/" $ do
         doc <- openDoc "TopLevelSignature.hs" "haskell"
 
-        _ <- waitForDiagnosticsSource "typecheck"
+        _ <- waitForDiagnosticsFromSource doc "typecheck"
         cas <- map fromAction <$> getAllCodeActions doc
 
         liftIO $ "add signature: main :: IO ()" `elem` (map (^. L.title) cas) @? "Contains code action"
@@ -371,7 +371,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
         runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
             doc <- openDoc "NeedsPragmas.hs" "haskell"
 
-            _ <- waitForDiagnosticsSource "typecheck"
+            _ <- waitForDiagnosticsFromSource doc "typecheck"
             cas <- map fromAction <$> getAllCodeActions doc
 
             liftIO $ "Add \"TypeSynonymInstances\"" `elem` map (^. L.title) cas @? "Contains TypeSynonymInstances code action"
@@ -408,7 +408,7 @@ unusedTermTests = testGroup "unused term code actions" [
         runSession hlsCommand fullCaps "test/testdata/" $ do
           doc <- openDoc "UnusedTerm.hs" "haskell"
 
-          _ <- waitForDiagnosticsSource "typecheck"
+          _ <- waitForDiagnosticsFromSource doc "typecheck"
           cars <- getAllCodeActions doc
           prefixImUnused <- liftIO $ inspectCodeAction cars ["Prefix imUnused with _"]
 
@@ -430,7 +430,7 @@ unusedTermTests = testGroup "unused term code actions" [
     -- `CodeActionContext`
     , testCase "respect 'only' parameter" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc   <- openDoc "CodeActionOnly.hs" "haskell"
-        _     <- waitForDiagnostics
+        _     <- waitForDiagnosticsFrom doc
         diags <- getCurrentDiagnostics doc
         let params = CodeActionParams doc (Range (Position 2 10) (Position 4 0)) caContext Nothing
             caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactorInline]))
@@ -482,3 +482,23 @@ inspectCommand cars s = fromCommand <$> onMatch cars pred err
     where pred (CACommand command) = all  (`T.isInfixOf` (command ^. L.title)) s
           pred _ = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
+
+waitForDiagnosticsFrom :: TextDocumentIdentifier -> Session [Diagnostic]
+waitForDiagnosticsFrom doc = do
+    diagsNot <- skipManyTill anyMessage message :: Session PublishDiagnosticsNotification
+    let (List diags) = diagsNot ^. L.params . L.diagnostics
+    if doc ^. L.uri /= diagsNot ^. L.params . L.uri
+       then waitForDiagnosticsFrom doc
+       else return diags
+
+waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> Session [Diagnostic]
+waitForDiagnosticsFromSource doc src = do
+    diagsNot <- skipManyTill anyMessage message :: Session PublishDiagnosticsNotification
+    let (List diags) = diagsNot ^. L.params . L.diagnostics
+    let res = filter matches diags
+    if doc ^. L.uri /= diagsNot ^. L.params . L.uri || null res
+       then waitForDiagnosticsFromSource doc src
+       else return res
+  where
+    matches :: Diagnostic -> Bool
+    matches d = d ^. L.source == Just (T.pack src)
