@@ -4,6 +4,7 @@ cradle:
       - "CodeActionImport"
       - "CodeActionOnly"
       - "CodeActionRename"
+      - "Symbols"
       - "TopLevelSignature"
       - "TypedHoles"
       - "TypedHoles2"
