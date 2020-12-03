@@ -238,9 +238,8 @@ makeExecuteCommands ecs lf ide = wrapUnhandledExceptions $ do
                 -- Send off the workspace request if it has one
                 forM_ mEdit $ \edit -> do
                   let eParams = J.ApplyWorkspaceEditParams edit
-                  -- TODO: Use lspfuncs to send an applyedit message. Or change
-                  -- the API to allow a list of messages to be returned.
-                  return (Right J.Null, Just(J.WorkspaceApplyEdit, eParams))
+                  reqId <- LSP.getNextReqId lf
+                  LSP.sendFunc lf $ ReqApplyWorkspaceEdit $ RequestMessage "2.0" reqId WorkspaceApplyEdit eParams
 
                 case mCmd of
                   -- If we have a command, continue to execute it
