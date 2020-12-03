@@ -29,11 +29,6 @@ executable symbols
   default-language:    Haskell2010
 
 
-executable applyrefact2
-  build-depends:       base
-  main-is:             ApplyRefact2.hs
-  default-language:    Haskell2010
-
 executable hlintpragma
   build-depends:       base
   main-is:             HlintPragma.hs
