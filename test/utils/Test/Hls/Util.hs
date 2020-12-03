@@ -3,28 +3,42 @@ module Test.Hls.Util
   (
       codeActionSupportCaps
     , dummyLspFuncs
+    , expectCodeAction
+    , expectDiagnostic
     , flushStackEnvironment
+    , fromAction
+    , fromCommand
     , getHspecFormattedConfig
     , ghcVersion, GhcVersion(..)
     , hlsCommand
     , hlsCommandExamplePlugin
     , hlsCommandVomit
+    , inspectCodeAction
+    , inspectCommand
+    , inspectDiagnostic
     , logConfig
     , logFilePath
     , noLogConfig
     , setupBuildToolFiles
+    , waitForDiagnosticsFrom
+    , waitForDiagnosticsFromSource
     , withFileLogging
     , withCurrentDirectoryInTmp
   )
 where
 
 import           Control.Monad
+import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Lens ((^.))
 import           Data.Default
 import           Data.List (intercalate)
+import           Data.List.Extra (find)
 import           Data.Maybe
+import qualified Data.Text as T
 import           Language.Haskell.LSP.Core
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Test as T
+import qualified Language.Haskell.LSP.Types.Lens as L
 import qualified Language.Haskell.LSP.Types.Capabilities as C
 import           System.Directory
 import           System.Environment
@@ -35,7 +49,7 @@ import           System.IO.Unsafe
 import           Test.Hspec.Runner
 import           Test.Hspec.Core.Formatters
 import           Text.Blaze.Renderer.String (renderMarkup)
-import           Text.Blaze.Internal
+import           Text.Blaze.Internal hiding (null)
 
 
 noLogConfig :: T.SessionConfig
@@ -282,3 +296,56 @@ copyDir src dst = do
         then createDirectory dstFp >> copyDir srcFp dstFp
         else copyFile srcFp dstFp
   where ignored = ["dist", "dist-newstyle", ".stack-work"]
+
+fromAction :: CAResult -> CodeAction
+fromAction (CACodeAction action) = action
+fromAction _ = error "Not a code action"
+
+fromCommand :: CAResult -> Command
+fromCommand (CACommand command) = command
+fromCommand _ = error "Not a command"
+
+onMatch :: [a] -> (a -> Bool) -> String -> IO a
+onMatch as pred err = maybe (fail err) return (find pred as)
+
+inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
+inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
+    where err = "expected diagnostic matching '" ++ show s ++ "' but did not find one"
+
+expectDiagnostic :: [Diagnostic] -> [T.Text] -> IO ()
+expectDiagnostic diags s = void $ inspectDiagnostic diags s
+
+inspectCodeAction :: [CAResult] -> [T.Text] -> IO CodeAction
+inspectCodeAction cars s = fromAction <$> onMatch cars pred err
+    where pred (CACodeAction ca) = all (`T.isInfixOf` (ca ^. L.title)) s
+          pred _ = False
+          err = "expected code action matching '" ++ show s ++ "' but did not find one"
+
+expectCodeAction :: [CAResult] -> [T.Text] -> IO ()
+expectCodeAction cars s = void $ inspectCodeAction cars s
+
+inspectCommand :: [CAResult] -> [T.Text] -> IO Command
+inspectCommand cars s = fromCommand <$> onMatch cars pred err
+    where pred (CACommand command) = all  (`T.isInfixOf` (command ^. L.title)) s
+          pred _ = False
+          err = "expected code action matching '" ++ show s ++ "' but did not find one"
+
+waitForDiagnosticsFrom :: TextDocumentIdentifier -> T.Session [Diagnostic]
+waitForDiagnosticsFrom doc = do
+    diagsNot <- skipManyTill T.anyMessage T.message :: T.Session PublishDiagnosticsNotification
+    let (List diags) = diagsNot ^. L.params . L.diagnostics
+    if doc ^. L.uri /= diagsNot ^. L.params . L.uri
+       then waitForDiagnosticsFrom doc
+       else return diags
+
+waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> T.Session [Diagnostic]
+waitForDiagnosticsFromSource doc src = do
+    diagsNot <- skipManyTill T.anyMessage T.message :: T.Session PublishDiagnosticsNotification
+    let (List diags) = diagsNot ^. L.params . L.diagnostics
+    let res = filter matches diags
+    if doc ^. L.uri /= diagsNot ^. L.params . L.uri || null res
+       then waitForDiagnosticsFromSource doc src
+       else return res
+  where
+    matches :: Diagnostic -> Bool
+    matches d = d ^. L.source == Just (T.pack src)
