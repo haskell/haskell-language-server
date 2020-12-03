@@ -40,8 +40,8 @@ extra-deps:
 - HsYAML-0.2.1.0@rev:1
 - HsYAML-aeson-0.2.0.0@rev:2
 - ilist-0.3.1.0
-- implicit-hie-cradle-0.3.0.0
-- implicit-hie-0.1.2.3
+- implicit-hie-cradle-0.3.0.2
+- implicit-hie-0.1.2.5
 - lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
 - opentelemetry-0.4.2
