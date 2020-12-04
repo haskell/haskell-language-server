@@ -25,8 +25,8 @@ extra-deps:
 - dual-tree-0.2.2.1
 - force-layout-0.4.0.6
 - statestack-0.3
-- implicit-hie-0.1.2.3
-- implicit-hie-cradle-0.3.0.0
+- implicit-hie-0.1.2.5
+- implicit-hie-cradle-0.3.0.2
 
 nix:
   packages: [zlib]
