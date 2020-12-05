@@ -13,7 +13,7 @@
 
 #include "ghc-api-version.h"
 
-module Ide.Plugin.ImportLens (descriptor) where
+module Ide.Plugin.ExplicitImports (descriptor) where
 
 import Control.DeepSeq
 import Control.Monad.IO.Class
