@@ -12,18 +12,19 @@ let
                 });
             };
             };
+        gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
         extended = haskellPackages:
           haskellPackages.extend (pkgs.haskell.lib.packageSourceOverrides {
-            haskell-language-server = ../.;
-            ghcide = ../ghcide;
-            hie-compat = ../ghcide/hie-compat;
-            hls-plugin-api = ../hls-plugin-api;
-            hls-tactics-plugin = ../plugins/tactics;
-            hls-hlint-plugin = ../plugins/hls-hlint-plugin;
+            haskell-language-server = gitignoreSource ../.;
+            ghcide = gitignoreSource ../ghcide;
+            hie-compat = gitignoreSource ../ghcide/hie-compat;
+            hls-plugin-api = gitignoreSource ../hls-plugin-api;
+            hls-tactics-plugin = gitignoreSource ../plugins/tactics;
+            hls-hlint-plugin = gitignoreSource ../plugins/hls-hlint-plugin;
           });
         in
         {
-        inherit (import sources.gitignore { inherit (pkgs) lib; }) gitignoreSource;
+        inherit gitignoreSource;
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)
