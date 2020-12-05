@@ -40,7 +40,7 @@ import Numeric.Natural
 import Options.Applicative
 import System.Directory
 import System.Environment.Blank (getEnv)
-import System.FilePath ((</>))
+import System.FilePath ((</>), (<.>))
 import System.Process
 import System.Time.Extra
 import Text.ParserCombinators.ReadP (readP_to_S)
@@ -129,7 +129,6 @@ exampleModulePath = exampleModule (example ?config)
 examplesPath :: FilePath
 examplesPath = "bench/example"
 
-
 defConfig :: Config
 Success defConfig = execParserPure defaultPrefs (info configP fullDesc) []
 
@@ -147,6 +146,7 @@ configP =
          <|> pure Normal
         )
     <*> optional (strOption (long "shake-profiling" <> metavar "PATH"))
+    <*> optional (strOption (long "ot-profiling" <> metavar "DIR" <> help "Enable OpenTelemetry and write eventlog for each benchmark in DIR"))
     <*> strOption (long "csv" <> metavar "PATH" <> value "results.csv" <> showDefault)
     <*> flag Cabal Stack (long "stack" <> help "Use stack (by default cabal is used)")
     <*> many (strOption (long "ghcide-options" <> help "additional options for ghcide"))
@@ -212,6 +212,10 @@ runBenchmarksFun dir allBenchmarks = do
   let benchmarks = [ b{samples = fromMaybe (samples b) (repetitions ?config) }
                    | b <- allBenchmarks
                    , select b ]
+
+  whenJust (otMemoryProfiling ?config) $ \eventlogDir ->
+      createDirectoryIfMissing True eventlogDir
+
   results <- forM benchmarks $ \b@Bench{name} ->
                 let run = runSessionWithConfig conf (cmd name dir) lspTestCaps dir
                 in (b,) <$> runBench run b
@@ -278,14 +282,18 @@ runBenchmarksFun dir allBenchmarks = do
           "--cwd",
           dir,
           "+RTS",
-          "-S" <> gcStats name,
-          "-RTS"
+          "-S" <> gcStats name
         ]
+          ++ case otMemoryProfiling ?config of
+            Just dir -> ["-l", "-ol" ++ (dir </> (map (\c -> if c == ' ' then '-' else c) name) <.> "eventlog")]
+            Nothing -> []
+          ++ [ "-RTS" ]
           ++ ghcideOptions ?config
           ++ concat
             [ ["--shake-profiling", path] | Just path <- [shakeProfiling ?config]
             ]
           ++ ["--verbose" | verbose ?config]
+          ++ if isJust (otMemoryProfiling ?config) then [ "--ot-memory-profiling" ] else []
     lspTestCaps =
       fullCaps {_window = Just $ WindowClientCapabilities $ Just True}
     conf =

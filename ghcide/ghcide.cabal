@@ -57,6 +57,7 @@ library
         hie-compat,
         mtl,
         network-uri,
+        parallel,
         prettyprinter-ansi-terminal,
         prettyprinter-ansi-terminal,
         prettyprinter,
@@ -73,7 +74,9 @@ library
         transformers,
         unordered-containers >= 0.2.10.0,
         utf8-string,
-        hslogger
+        hslogger,
+        opentelemetry >=0.6.1,
+        heapsize ==0.3.*
     if flag(ghc-lib)
       build-depends:
         ghc-lib >= 8.8,
@@ -134,6 +137,7 @@ library
         Development.IDE.Core.RuleTypes
         Development.IDE.Core.Service
         Development.IDE.Core.Shake
+        Development.IDE.Core.Tracing
         Development.IDE.GHC.Compat
         Development.IDE.GHC.Error
         Development.IDE.GHC.Orphans
@@ -149,9 +153,11 @@ library
         Development.IDE.Spans.LocalBindings
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Exports
+        Development.IDE.Types.KnownTargets
         Development.IDE.Types.Location
         Development.IDE.Types.Logger
         Development.IDE.Types.Options
+        Development.IDE.Types.Shake
         Development.IDE.Plugin
         Development.IDE.Plugin.Completions
         Development.IDE.Plugin.CodeAction
@@ -262,6 +268,7 @@ executable ghcide
         hashable,
         haskell-lsp,
         haskell-lsp-types,
+        heapsize,
         hie-bios,
         ghcide,
         lens,

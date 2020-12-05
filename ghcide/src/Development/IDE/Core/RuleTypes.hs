@@ -18,7 +18,7 @@ import Data.Binary
 import           Development.IDE.Import.DependencyInformation
 import Development.IDE.GHC.Compat hiding (HieFileResult)
 import Development.IDE.GHC.Util
-import Development.IDE.Core.Shake (KnownTargets)
+import Development.IDE.Types.KnownTargets
 import           Data.Hashable
 import           Data.Typeable
 import qualified Data.Set as S
@@ -36,6 +36,7 @@ import Data.ByteString (ByteString)
 import Language.Haskell.LSP.Types (NormalizedFilePath)
 import TcRnMonad (TcGblEnv)
 import qualified Data.ByteString.Char8 as BS
+import Development.IDE.Types.Options (IdeGhcSession)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show)
@@ -138,10 +139,10 @@ data HieAstResult
   -- Lazyness can't cause leaks here because the lifetime of `refMap` will be the same
   -- as that of `hieAst`
   }
- 
+
 instance NFData HieAstResult where
     rnf (HAR m hf _rm) = rnf m `seq` rwhnf hf
- 
+
 instance Show HieAstResult where
     show = show . hieModule
 
@@ -335,3 +336,13 @@ instance NFData   GetClientSettings
 instance Binary   GetClientSettings
 
 type instance RuleResult GetClientSettings = Hashed (Maybe Value)
+
+-- A local rule type to get caching. We want to use newCache, but it has
+-- thread killed exception issues, so we lift it to a full rule.
+-- https://github.com/digital-asset/daml/pull/2808#issuecomment-529639547
+type instance RuleResult GhcSessionIO = IdeGhcSession
+
+data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
+instance Hashable GhcSessionIO
+instance NFData   GhcSessionIO
+instance Binary   GhcSessionIO
