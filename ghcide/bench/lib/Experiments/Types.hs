@@ -18,6 +18,7 @@ data Config = Config
   { verbosity :: !Verbosity,
     -- For some reason, the Shake profile files are truncated and won't load
     shakeProfiling :: !(Maybe FilePath),
+    otMemoryProfiling :: !(Maybe FilePath),
     outputCSV :: !FilePath,
     buildTool :: !CabalStack,
     ghcideOptions :: ![String],
