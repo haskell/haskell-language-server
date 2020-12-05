@@ -8,7 +8,7 @@ import qualified Data.Text as T
 import SrcLoc
 
 import Development.IDE.Spans.Common
-import Language.Haskell.LSP.Types (CompletionItemKind)
+import Language.Haskell.LSP.Types (TextEdit, CompletionItemKind)
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
 
@@ -25,6 +25,7 @@ data CompItem = CI
                                    -- in the context of an infix notation.
   , docs         :: SpanDoc        -- ^ Available documentation.
   , isTypeCompl  :: Bool
+  , additionalTextEdits :: Maybe [TextEdit]
   }
   deriving (Eq, Show)
 
