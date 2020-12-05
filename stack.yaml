@@ -9,6 +9,11 @@ extra-deps:
 - lsp-test-0.11.0.6
 - ghc-check-0.5.0.1
 - hie-bios-0.7.1
+- ghc-events-0.13.0
+- ghc-trace-events-0.1.2.1
+- heapsize-0.3.0
+- opentelemetry-0.6.1
+- opentelemetry-extra-0.6.1
 
 # not yet in stackage
 - Chart-diagrams-1.9.3

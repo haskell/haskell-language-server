@@ -51,6 +51,9 @@ import qualified Data.Aeson as J
 
 import HIE.Bios.Cradle
 import Development.IDE (action)
+import Text.Printf
+import Development.IDE.Core.Tracing
+import Development.IDE.Types.Shake (Key(Key))
 
 ghcideVersion :: IO String
 ghcideVersion = do
@@ -105,12 +108,13 @@ main = do
             sessionLoader <- loadSession $ fromMaybe dir rootPath
             config <- fromMaybe defaultLspConfig <$> getConfig
             let options = (defaultIdeOptions sessionLoader)
-                    { optReportProgress = clientSupportsProgress caps
-                    , optShakeProfiling = argsShakeProfiling
-                    , optTesting        = IdeTesting argsTesting
-                    , optThreads        = argsThreads
-                    , optCheckParents   = checkParents config
-                    , optCheckProject   = checkProject config
+                    { optReportProgress    = clientSupportsProgress caps
+                    , optShakeProfiling    = argsShakeProfiling
+                    , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
+                    , optTesting           = IdeTesting argsTesting
+                    , optThreads           = argsThreads
+                    , optCheckParents      = checkParents config
+                    , optCheckProject      = checkProject config
                     }
                 logLevel = if argsVerbose then minBound else Info
             debouncer <- newAsyncDebouncer
@@ -139,21 +143,45 @@ main = do
         putStrLn "\nStep 3/4: Initializing the IDE"
         vfs <- makeVFSHandle
         debouncer <- newAsyncDebouncer
-        let logLevel = if argsVerbose then minBound else Info
-            dummyWithProg _ _ f = f (const (pure ()))
+        let dummyWithProg _ _ f = f (const (pure ()))
         sessionLoader <- loadSession dir
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer (defaultIdeOptions sessionLoader)  vfs
+        let options = (defaultIdeOptions sessionLoader)
+                    { optShakeProfiling    = argsShakeProfiling
+                    -- , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
+                    , optTesting           = IdeTesting argsTesting
+                    , optThreads           = argsThreads
+                    }
+            logLevel = if argsVerbose then minBound else Info
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashMap.fromList $ map ((, OnDisk) . toNormalizedFilePath') files
         results <- runAction "User TypeCheck" ide $ uses TypeCheck (map toNormalizedFilePath' files)
+        _results <- runAction "GetHie" ide $ uses GetHieAst (map toNormalizedFilePath' files)
+        _results <- runAction "GenerateCore" ide $ uses GenerateCore (map toNormalizedFilePath' files)
         let (worked, failed) = partition fst $ zip (map isJust results) files
         when (failed /= []) $
             putStr $ unlines $ "Files that failed:" : map ((++) " * " . snd) failed
 
-        let files xs = let n = length xs in if n == 1 then "1 file" else show n ++ " files"
-        putStrLn $ "\nCompleted (" ++ files worked ++ " worked, " ++ files failed ++ " failed)"
+        let nfiles xs = let n = length xs in if n == 1 then "1 file" else show n ++ " files"
+        putStrLn $ "\nCompleted (" ++ nfiles worked ++ " worked, " ++ nfiles failed ++ " failed)"
+
+        when argsOTMemoryProfiling $ do
+            let valuesRef = state $ shakeExtras ide
+            values <- readVar valuesRef
+            let consoleObserver Nothing = return $ \size -> printf "Total: %.2fMB\n" (fromIntegral @Int @Double size / 1e6)
+                consoleObserver (Just k) = return $ \size -> printf "  - %s: %.2fKB\n" (show k) (fromIntegral @Int @Double size / 1e3)
+
+            printf "# Shake value store contents(%d):\n" (length values)
+            let keys = nub
+                     $ Key GhcSession : Key GhcSessionDeps
+                     : [ k | (_,k) <- HashMap.keys values, k /= Key GhcSessionIO]
+                     ++ [Key GhcSessionIO]
+            measureMemory (logger logLevel) [keys] consoleObserver valuesRef
+
         unless (null failed) (exitWith $ ExitFailure (length failed))
+
+{-# ANN main ("HLint: ignore Use nubOrd" :: String) #-}
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do

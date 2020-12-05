@@ -8,8 +8,7 @@ module Development.IDE
 
 import Development.IDE.Core.RuleTypes as X
 import Development.IDE.Core.Rules as X
-  (GhcSessionIO(..)
-  ,getAtPoint
+  (getAtPoint
   ,getDefinition
   ,getParsedModule
   ,getTypeDefinition

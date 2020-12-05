@@ -55,4 +55,4 @@ jobs:
         name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
         path: |
            bench-results/results.*
-           bench-results/*.svg
+           bench-results/**/*.svg

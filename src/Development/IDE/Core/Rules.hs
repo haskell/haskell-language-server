@@ -624,16 +624,6 @@ currentLinkables = do
   where
     go (mod, time) = LM time mod []
 
--- A local rule type to get caching. We want to use newCache, but it has
--- thread killed exception issues, so we lift it to a full rule.
--- https://github.com/digital-asset/daml/pull/2808#issuecomment-529639547
-type instance RuleResult GhcSessionIO = IdeGhcSession
-
-data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
-instance Hashable GhcSessionIO
-instance NFData   GhcSessionIO
-instance Binary   GhcSessionIO
-
 loadGhcSession :: Rules ()
 loadGhcSession = do
     -- This function should always be rerun because it tracks changes
