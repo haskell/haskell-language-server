@@ -15,4 +15,3 @@ pr:
 
 jobs:
   - template: ./.azure/linux-stack.yml
-  - template: ./.azure/windows-stack.yml
