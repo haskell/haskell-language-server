@@ -60,7 +60,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       , Brittany.descriptor "brittany"
 #endif
       , Eval.descriptor "eval"
-      , ExplicitImports.descriptor "explicitImports"
+      , ExplicitImports.descriptor "importLens"
       , ModuleName.descriptor "moduleName"
       , Hlint.descriptor "hlint"
       ]
