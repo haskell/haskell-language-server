@@ -390,6 +390,8 @@ contextTests = testGroup "contexts" [
     ]
     where
         compls `shouldContainCompl` x  =
-            null (filter ((== x) . (^. label)) compls) @? "Should contain completion"
+            any ((== x) . (^. label)) compls
+            @? "Should contain completion: " ++ show x
         compls `shouldNotContainCompl` x =
-            null (filter ((== x) . (^. label)) compls) @? "Should not contain completion"
+            all ((/= x) . (^. label)) compls
+            @? "Should not contain completion: " ++ show x
