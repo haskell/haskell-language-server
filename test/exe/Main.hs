@@ -97,7 +97,6 @@ main = do
     , rootUriTests
     , asyncTests
     , clientSettingsTest
-
     , codeActionHelperFunctionTests
     ]
 
@@ -1679,6 +1678,19 @@ fillTypedHoleTests = let
   , check "replace _ with foo _"
           "_" "n" "n"
           "(foo _)" "n" "n"
+  , testSession "replace _toException with E.toException" $ do
+      let mkDoc x = T.unlines
+            [ "module Testing where"
+            , "import qualified Control.Exception as E"
+            , "ioToSome :: E.IOException -> E.SomeException"
+            , "ioToSome = " <> x ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_toException"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc (Range (Position 3 0) (Position 3 maxBound))
+      chosen <- liftIO $ pickActionWithTitle "replace _toException with E.toException" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "E.toException" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
@@ -2215,7 +2227,7 @@ addSigLensesTests :: TestTree
 addSigLensesTests = let
   missing = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures -Wunused-matches #-}"
   notMissing = "{-# OPTIONS_GHC -Wunused-matches #-}"
-  moduleH = "{-# LANGUAGE PatternSynonyms #-}\nmodule Sigs where"
+  moduleH = "{-# LANGUAGE PatternSynonyms #-}\nmodule Sigs where\nimport qualified Data.Complex as C"
   other = T.unlines ["f :: Integer -> Integer", "f x = 3"]
   before  withMissing def
     = T.unlines $ (if withMissing then (missing :) else (notMissing :)) [moduleH, def, other]
@@ -2240,6 +2252,7 @@ addSigLensesTests = let
       , sigSession enableWarnings "a >>>> b = a + b"        "(>>>>) :: Num a => a -> a -> a"
       , sigSession enableWarnings "a `haha` b = a b"        "haha :: (t1 -> t2) -> t1 -> t2"
       , sigSession enableWarnings "pattern Some a = Just a" "pattern Some :: a -> Maybe a"
+      , sigSession enableWarnings "qualifiedSigTest= C.realPart" "qualifiedSigTest :: C.Complex a -> a"
       ]
       | (title, enableWarnings) <-
         [("with warnings enabled", True)
