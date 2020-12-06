@@ -56,10 +56,16 @@ diagFromText diagSource sev loc msg = (toNormalizedFilePath' $ fromMaybe noFileP
 -- | Produce a GHC-style error from a source span and a message.
 diagFromErrMsg :: T.Text -> DynFlags -> ErrMsg -> [FileDiagnostic]
 diagFromErrMsg diagSource dflags e =
-    [ diagFromText diagSource sev (errMsgSpan e) $ T.pack $ Out.showSDoc dflags $
-      ErrUtils.formatErrDoc dflags $ ErrUtils.errMsgDoc e
+    [ diagFromText diagSource sev (errMsgSpan e)
+      $ T.pack $ formatErrorWithQual dflags e
     | Just sev <- [toDSeverity $ errMsgSeverity e]]
 
+formatErrorWithQual :: DynFlags -> ErrMsg -> String
+formatErrorWithQual dflags e =
+    Out.showSDoc dflags
+    $ Out.withPprStyle (Out.mkErrStyle dflags $ errMsgContext e)
+    $ ErrUtils.formatErrDoc dflags
+    $ ErrUtils.errMsgDoc e
 
 diagFromErrMsgs :: T.Text -> DynFlags -> Bag ErrMsg -> [FileDiagnostic]
 diagFromErrMsgs diagSource dflags = concatMap (diagFromErrMsg diagSource dflags) . bagToList
