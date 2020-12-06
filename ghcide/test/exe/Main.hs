@@ -995,7 +995,7 @@ extendImportTests = testGroup "extend import actions"
             , "main = print (stuffB .* stuffB)"
             ])
       (Range (Position 3 17) (Position 3 18))
-      ["Add .* to the import list of ModuleA"]
+      ["Add (.*) to the import list of ModuleA"]
       (T.unlines
             [ "module ModuleB where"
             , "import ModuleA as A ((.*), stuffB)"
@@ -1020,7 +1020,7 @@ extendImportTests = testGroup "extend import actions"
             , "b :: A"
             , "b = 0"
             ])
-  ,  (`xfail` "known broken") $ testSession "extend single line import with constructor" $ template
+  , testSession "extend single line import with constructor" $ template
       [("ModuleA.hs", T.unlines
             [ "module ModuleA where"
             , "data A = Constructor"
@@ -1032,12 +1032,32 @@ extendImportTests = testGroup "extend import actions"
             , "b = Constructor"
             ])
       (Range (Position 2 5) (Position 2 5))
-      ["Add Constructor to the import list of ModuleA"]
+      ["Add A(Constructor) to the import list of ModuleA"]
       (T.unlines
             [ "module ModuleB where"
             , "import ModuleA (A(Constructor))"
             , "b :: A"
             , "b = Constructor"
+            ])  
+  , testSession "extend single line import with mixed constructors" $ template
+      [("ModuleA.hs", T.unlines
+            [ "module ModuleA where"
+            , "data A = ConstructorFoo | ConstructorBar"
+            , "a = 1"
+            ])]
+      ("ModuleB.hs", T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA (A(ConstructorBar),a)"
+            , "b :: A"
+            , "b = ConstructorFoo"
+            ])
+      (Range (Position 2 5) (Position 2 5))
+      ["Add A(ConstructorFoo) to the import list of ModuleA"]
+      (T.unlines
+            [ "module ModuleB where"
+            , "import ModuleA (A(ConstructorFoo,ConstructorBar), a)"
+            , "b :: A"
+            , "b = ConstructorFoo"
             ])
   , testSession "extend single line qualified import with value" $ template
       [("ModuleA.hs", T.unlines

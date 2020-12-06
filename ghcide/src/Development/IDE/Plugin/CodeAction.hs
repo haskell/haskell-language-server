@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                   #-}
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
@@ -30,7 +30,6 @@ import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Error
-import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
 import Development.IDE.Plugin.CodeAction.PositionIndexed
 import Development.IDE.Plugin.CodeAction.RuleTypes
@@ -51,8 +50,6 @@ import Data.Maybe
 import Data.List.Extra
 import qualified Data.Text as T
 import Data.Tuple.Extra ((&&&))
-import HscTypes
-import Parser
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
 import Outputable (ppr, showSDocUnsafe)
 import GHC.LanguageExtensions.Type (Extension)
@@ -99,10 +96,9 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
     pkgExports <- runAction "CodeAction:PackageExports" state $ (useNoFile_ . PackageExports) `traverse` env
     localExports <- readVar (exportsMap $ shakeExtras state)
     let exportsMap = localExports <> fromMaybe mempty pkgExports
-    let dflags = hsc_dflags . hscEnv <$> env
     pure . Right $
         [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List [x]) (Just edit) Nothing
-        | x <- xs, (title, tedit) <- suggestAction dflags exportsMap ideOptions parsedModule text x
+        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ] <> caRemoveRedundantImports parsedModule text diag xs uri
 
@@ -153,18 +149,17 @@ commandHandler lsp _ideState ExecuteCommandParams{..}
     = return (Right Null, Nothing)
 
 suggestAction
-  :: Maybe DynFlags
-  -> ExportsMap
+  :: ExportsMap
   -> IdeOptions
   -> Maybe ParsedModule
   -> Maybe T.Text
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
-suggestAction dflags packageExports ideOptions parsedModule text diag = concat
+suggestAction packageExports ideOptions parsedModule text diag = concat
    -- Order these suggestions by priority
     [ suggestAddExtension diag             -- Highest priority
     , suggestSignature True diag
-    , suggestExtendImport dflags text diag
+    , suggestExtendImport packageExports text diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
@@ -643,31 +638,37 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
-suggestExtendImport :: Maybe DynFlags -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestExtendImport (Just dflags) contents Diagnostic{_range=_range,..}
+suggestExtendImport :: ExportsMap -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestExtendImport exportsMap contents Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
       "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
     , Just c <- contents
-    , POk _ (L _ name) <- runParser dflags (T.unpack binding) parseIdentifier
-    = [suggestions name c binding mod srcspan]
+    = suggestions c binding mod srcspan
     | Just (binding, mod_srcspan) <-
       matchRegExMultipleImports _message
     , Just c <- contents
-    , POk _ (L _ name) <- runParser dflags (T.unpack binding) parseIdentifier
-    = fmap (\(x, y) -> suggestions name c binding x y) mod_srcspan
+    = mod_srcspan >>= (\(x, y) -> suggestions c binding x y) 
     | otherwise = []
     where
-        suggestions name c binding mod srcspan = let
-            range = case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
+        suggestions c binding mod srcspan
+          |  range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
                 [s] -> let x = realSrcSpanToRange s
                    in x{_end = (_end x){_character = succ (_character (_end x))}}
-                _ -> error "bug in srcspan parser"
-            importLine = textInRange range c
-            in
-                ("Add " <> binding <> " to the import list of " <> mod
-                , [TextEdit range (addBindingToImportList (T.pack $ printRdrName name) importLine)])
-suggestExtendImport Nothing _ _ = []
+                _ -> error "bug in srcspan parser",
+            importLine <- textInRange range c,
+            Just (parent,r) <- lookupExportMap binding mod
+            =
+                [("Add " <> r <> " to the import list of " <> mod
+                , [TextEdit range (addBindingToImportList parent r importLine)])]
+          | otherwise = []
+        renderImport IdentInfo {parent, rendered}
+          | Just p <- parent = (p, p <> "(" <> rendered <> ")")
+          | otherwise        = ("", rendered)
+        lookupExportMap binding mod 
+          | [(renderImport -> pair, _)] <- filter (\(_,m) -> mod == m) $ maybe [] Set.toList $ Map.lookup binding (getExportsMap exportsMap)
+           = Just pair
+          | otherwise = Nothing
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestFixConstructorImport _ Diagnostic{_range=_range,..}
@@ -1108,17 +1109,31 @@ rangesForBinding' _ _ = []
 --       import (qualified) A (..) ..
 --   Places the new binding first, preserving whitespace.
 --   Copes with multi-line import lists
-addBindingToImportList :: T.Text -> T.Text -> T.Text
-addBindingToImportList binding importLine = case T.breakOn "(" importLine of
-    (pre, T.uncons -> Just (_, rest)) ->
-      case T.uncons (T.dropWhile isSpace rest) of
-        Just (')', _) -> T.concat [pre, "(", binding, rest]
-        _             -> T.concat [pre, "(", binding, ", ", rest]
-    _ ->
-      error
-        $  "importLine does not have the expected structure: "
+addBindingToImportList :: T.Text -> T.Text -> T.Text -> T.Text
+addBindingToImportList parent renderedBinding importLine = case T.breakOn "(" importLine of
+  (pre, T.uncons -> Just (_, rest)) ->
+    -- If the data type is in the import list wiouht the constructor, we should remove it and import it again
+    let rest' = case parent of
+          "" -> ", " <> rest
+          _ -> case T.breakOn parent rest of
+            (h, T.stripPrefix parent -> Just r) -> case T.uncons (T.dropWhile isSpace r) of
+              Just (')', _) -> ")" <> h <> r
+              Just ('(', xs) -> let imported = T.takeWhile (/= ')') xs in T.concat ["," ,imported , "), " , h , removeHeadingComma (T.tail (T.dropWhile (/= ')') r))]
+              _ -> "), " <> h <> r
+            _ -> "), " <> rest
+        binding' = (if T.null parent then id else T.init) renderedBinding
+     in removeTrailingComma $ T.concat [pre, "(", binding', rest']
+  _ ->
+    error $
+      "importLine does not have the expected structure: "
         <> T.unpack importLine
-
+  where
+    removeTrailingComma (T.unsnoc -> Just (T.unsnoc -> Just (T.unsnoc -> Just (xs, ','), ' '), ')')) = xs <> ")"
+    removeTrailingComma (T.unsnoc -> Just (xs, x)) = T.snoc (removeTrailingComma xs) x
+    removeTrailingComma x = x
+    removeHeadingComma (T.stripStart -> s) = case T.uncons s of
+      Just (',', xs) -> xs
+      _ -> s
 -- | 'matchRegex' combined with 'unifySpaces'
 matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegexUnifySpaces message = matchRegex (unifySpaces message)
