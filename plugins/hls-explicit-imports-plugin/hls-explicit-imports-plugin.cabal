@@ -8,6 +8,9 @@ author:        Pepe Iborra
 maintainer:    pepeiborra@gmail.com
 category:      Development
 build-type:    Simple
+extra-source-files:
+  LICENSE
+  include/ghc-api-version.h
 
 library
   exposed-modules:  Ide.Plugin.ExplicitImports
