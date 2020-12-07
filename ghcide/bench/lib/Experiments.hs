@@ -1,4 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ImplicitParams #-}
@@ -273,19 +272,16 @@ runBenchmarksFun dir allBenchmarks = do
   outputRow $ (map . map) (const '-') paddedHeaders
   forM_ rowsHuman $ \row -> outputRow $ zipWith pad pads row
   where
-    gcStats name = escapeSpaces (name <> ".benchmark-gcStats")
     cmd name dir =
       unwords $
         [ ghcide ?config,
           "--lsp",
           "--test",
           "--cwd",
-          dir,
-          "+RTS",
-          "-S" <> gcStats name
+          dir
         ]
           ++ case otMemoryProfiling ?config of
-            Just dir -> ["-l", "-ol" ++ (dir </> (map (\c -> if c == ' ' then '-' else c) name) <.> "eventlog")]
+            Just dir -> ["-l", "-ol" ++ (dir </> map (\c -> if c == ' ' then '-' else c) name <.> "eventlog")]
             Nothing -> []
           ++ [ "-RTS" ]
           ++ ghcideOptions ?config
@@ -293,7 +289,7 @@ runBenchmarksFun dir allBenchmarks = do
             [ ["--shake-profiling", path] | Just path <- [shakeProfiling ?config]
             ]
           ++ ["--verbose" | verbose ?config]
-          ++ if isJust (otMemoryProfiling ?config) then [ "--ot-memory-profiling" ] else []
+          ++ ["--ot-memory-profiling" | Just _ <- [otMemoryProfiling ?config]]
     lspTestCaps =
       fullCaps {_window = Just $ WindowClientCapabilities $ Just True}
     conf =

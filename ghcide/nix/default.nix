@@ -14,14 +14,21 @@ let
                 });
             };
             };
+        gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
+        extend = haskellPackages:
+          (haskellPackages.override sharedOverrides).extend (pkgs.haskell.lib.packageSourceOverrides {
+            ghcide = gitignoreSource ../.;
+            hie-compat = gitignoreSource ../hie-compat;
+            shake-bench = gitignoreSource ../shake-bench;
+          });
         in
         {
-        inherit (import sources.gitignore { inherit (pkgs) lib; }) gitignoreSource;
+        inherit gitignoreSource;
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)
-                ghc8101 = pkgs.haskell.packages.ghc8101.override sharedOverrides;
-                ghc8102 = pkgs.haskell.packages.ghc8102.override sharedOverrides;
+                ghc8101 = extend pkgs.haskell.packages.ghc8101;
+                ghc8102 = extend pkgs.haskell.packages.ghc8102;
             };
         };
         };

@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DerivingStrategies #-}
-module Experiments.Types where
+{-# LANGUAGE OverloadedStrings #-}
+module Experiments.Types (module Experiments.Types ) where
 
 import Data.Aeson
 import Data.Version

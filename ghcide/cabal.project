@@ -1,4 +1,4 @@
-packages: . ./hie-compat/
+packages: . ./hie-compat/ ./shake-bench/
 
 test-show-details: direct
 

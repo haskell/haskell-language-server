@@ -208,7 +208,6 @@ benchmark benchHist
     hs-source-dirs: bench/hist bench/lib
     other-modules: Experiments.Types
     build-tool-depends:
-        ghcide:ghcide,
         ghcide:ghcide-bench
     default-extensions:
         BangPatterns
@@ -218,7 +217,6 @@ benchmark benchHist
         GeneralizedNewtypeDeriving
         LambdaCase
         NamedFieldPuns
-        OverloadedStrings
         RecordWildCards
         ScopedTypeVariables
         StandaloneDeriving
@@ -229,12 +227,8 @@ benchmark benchHist
     build-depends:
         aeson,
         base == 4.*,
-        Chart,
-        Chart-diagrams,
-        diagrams,
-        diagrams-svg,
+        shake-bench == 0.1.*,
         directory,
-        extra >= 1.7.2,
         filepath,
         shake,
         text,
@@ -392,7 +386,7 @@ executable ghcide-bench
         text
     hs-source-dirs: bench/lib bench/exe
     include-dirs: include
-    ghc-options: -threaded -Wall -Wno-name-shadowing
+    ghc-options: -threaded -Wall -Wno-name-shadowing -rtsopts
     main-is: Main.hs
     other-modules:
         Experiments
