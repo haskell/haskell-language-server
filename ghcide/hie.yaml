@@ -4,6 +4,11 @@ cradle:
   multi:
     - path: "./test/data"
       config: { cradle: { none:  } }
+    - path: "./shake-bench/src"
+      config:
+        cradle:
+          cabal:
+            component: "lib:shake-bench"
     - path: "./"
       config:
         cradle:

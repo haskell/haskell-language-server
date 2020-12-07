@@ -17,14 +17,15 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
         if compiler == "default"
             then ourHaskell.packages.${defaultCompiler}
             else ourHaskell.packages.${compiler};
-    ghcide = p: haskell.lib.doCheck
-                    (p.callCabal2nixWithOptions "ghcide" (nixpkgs.gitignoreSource ./.) "--benchmark" {});
     isSupported = compiler == "default" || compiler == defaultCompiler;
 in
 haskellPackagesForProject.shellFor {
   inherit withHoogle;
   doBenchmark = true;
-  packages = p: [ (if isSupported then ghcide p else p.ghc-paths) ];
+  packages = p:
+    if isSupported
+      then [p.ghcide p.hie-compat p.shake-bench]
+      else [p.ghc-paths];
   buildInputs = [
     gmp
     zlib
