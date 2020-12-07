@@ -21,12 +21,16 @@ import qualified Language.Haskell.LSP.Types.Lens as J
 import           Development.IDE as D
 import           Language.Haskell.LSP.Types
 
+import qualified Language.Haskell.LSP.Core as LSP
+import qualified Language.Haskell.LSP.VFS as VFS
+
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCommands = commands
   , pluginCodeActionProvider = Just codeActionProvider
+  , pluginCompletionProvider = Just completion
   }
 
 -- ---------------------------------------------------------------------
@@ -160,3 +164,54 @@ possiblePragmas =
   ]
 
 -- ---------------------------------------------------------------------
+
+completion :: CompletionProvider
+completion lspFuncs _ide complParams = do
+    let (TextDocumentIdentifier uri) = complParams ^. J.textDocument
+        position = complParams ^. J.position
+    putStrLn $ "Uri" ++ show uri
+    putStrLn $ "nor uri" ++ show (toNormalizedUri uri)
+    contents <- LSP.getVirtualFileFunc lspFuncs $ toNormalizedUri uri
+    fmap Right $ case (contents, uriToFilePath' uri) of
+        (Just cnts, Just _path) -> do
+            pfix <- VFS.getCompletionPrefix position cnts
+            putStrLn $ "pfix" ++ show pfix
+            return $ Completions $ List [r]
+            where
+                r =
+                   CompletionItem
+                     label
+                     kind
+                     tags
+                     detail
+                     documentation
+                     deprecated
+                     preselect
+                     sortText
+                     filterText
+                     insertText
+                     insertTextFormat
+                     textEdit
+                     additionalTextEdits
+                     commitCharacters
+                     command
+                     xd
+                label = "Example Pragma completion"
+                kind = Nothing
+                tags = List []
+                detail = Nothing
+                documentation = Nothing
+                deprecated = Nothing
+                preselect = Nothing
+                sortText = Nothing
+                filterText = Nothing
+                insertText = Nothing
+                insertTextFormat = Nothing
+                textEdit = Nothing
+                additionalTextEdits = Nothing
+                commitCharacters = Nothing
+                command = Nothing
+                xd = Nothing
+        _ -> do
+            putStrLn $ "Need to handle this path"'
+            return $ Completions $ List []
