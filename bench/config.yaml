@@ -4,9 +4,6 @@ samples: 100
 
 buildTool: cabal
 
-# Path to the ghcide-bench binary to use for experiments
-ghcideBench: ghcide-bench
-
 # Output folder for the experiments
 outputFolder: bench-results
 
