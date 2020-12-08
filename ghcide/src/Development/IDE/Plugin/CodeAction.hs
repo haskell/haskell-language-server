@@ -657,17 +657,17 @@ suggestExtendImport exportsMap contents Diagnostic{_range=_range,..}
                    in x{_end = (_end x){_character = succ (_character (_end x))}}
                 _ -> error "bug in srcspan parser",
             importLine <- textInRange range c,
-            Just (parent,r) <- lookupExportMap binding mod
-            =
-                [("Add " <> r <> " to the import list of " <> mod
-                , [TextEdit range (addBindingToImportList parent r importLine)])]
+            Just ident <- lookupExportMap binding mod,
+            Just result <- addBindingToImportList ident importLine
+            = [("Add " <> renderImport ident <> " to the import list of " <> mod, [TextEdit range result])]
           | otherwise = []
         renderImport IdentInfo {parent, rendered}
-          | Just p <- parent = (p, p <> "(" <> rendered <> ")")
-          | otherwise        = ("", rendered)
+          | Just p <- parent = p <> "(" <> rendered <> ")"
+          | otherwise        = rendered
         lookupExportMap binding mod 
-          | [(renderImport -> pair, _)] <- filter (\(_,m) -> mod == m) $ maybe [] Set.toList $ Map.lookup binding (getExportsMap exportsMap)
-           = Just pair
+          | Just match <- Map.lookup binding (getExportsMap exportsMap)
+          , [(ident, _)] <- filter (\(_,m) -> mod == m) (Set.toList match)
+           = Just ident
           | otherwise = Nothing
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
@@ -1109,31 +1109,41 @@ rangesForBinding' _ _ = []
 --       import (qualified) A (..) ..
 --   Places the new binding first, preserving whitespace.
 --   Copes with multi-line import lists
-addBindingToImportList :: T.Text -> T.Text -> T.Text -> T.Text
-addBindingToImportList parent renderedBinding importLine = case T.breakOn "(" importLine of
-  (pre, T.uncons -> Just (_, rest)) ->
-    -- If the data type is in the import list wiouht the constructor, we should remove it and import it again
-    let rest' = case parent of
-          "" -> ", " <> rest
-          _ -> case T.breakOn parent rest of
-            (h, T.stripPrefix parent -> Just r) -> case T.uncons (T.dropWhile isSpace r) of
-              Just (')', _) -> ")" <> h <> r
-              Just ('(', xs) -> let imported = T.takeWhile (/= ')') xs in T.concat ["," ,imported , "), " , h , removeHeadingComma (T.tail (T.dropWhile (/= ')') r))]
-              _ -> "), " <> h <> r
-            _ -> "), " <> rest
-        binding' = (if T.null parent then id else T.init) renderedBinding
-     in removeTrailingComma $ T.concat [pre, "(", binding', rest']
-  _ ->
-    error $
-      "importLine does not have the expected structure: "
-        <> T.unpack importLine
+addBindingToImportList :: IdentInfo -> T.Text -> Maybe T.Text
+addBindingToImportList IdentInfo {parent = _parent, ..} importLine =
+  case T.breakOn "(" importLine of
+    (pre, T.uncons -> Just (_, rest)) ->
+      case _parent of
+        -- the binding is not a constructor, add it to the head of import list
+        Nothing -> Just $ T.concat [pre, "(", rendered, addCommaIfNeeds rest]
+        Just parent -> case T.breakOn parent rest of
+          -- the binding is a constructor, and current import list contains its parent
+          -- `rest'` could be 1. `,...)`
+          --               or 2. `(),...)`
+          --               or 3. `(ConsA),...)`
+          --               or 4. `)`
+          (leading, T.stripPrefix parent -> Just rest') -> case T.uncons (T.stripStart rest') of
+            -- case 1: no children and parentheses, e.g. `import A(Foo,...)` --> `import A(Foo(Cons), ...)`
+            Just (',', rest'') -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ")", addCommaIfNeeds rest'']
+            -- case 2: no children but parentheses, e.g. `import A(Foo(),...)` --> `import A(Foo(Cons), ...)`
+            Just ('(', T.uncons -> Just (')', rest'')) -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ")", rest'']
+            -- case 3: children with parentheses, e.g. `import A(Foo(ConsA),...)` --> `import A(Foo(Cons, ConsA), ...)`
+            Just ('(', T.breakOn ")" -> (children, rest''))
+              | not (T.null children),
+                -- ignore A(Foo({-...-}), ...)
+                not $ "{-" `T.isPrefixOf` T.stripStart children
+              -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ", ", children, rest'']
+            -- case 4: no trailing, e.g. `import A(..., Foo)` --> `import A(..., Foo(Cons))`
+            Just (')', _) -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ")", rest']
+            _ -> Nothing
+          -- current import list does not contain the parent, e.g. `import A(...)` --> `import A(Foo(Cons), ...)`
+          _ -> Just $ T.concat [pre, "(", parent, "(", rendered, ")", addCommaIfNeeds rest]
+    _ -> Nothing
   where
-    removeTrailingComma (T.unsnoc -> Just (T.unsnoc -> Just (T.unsnoc -> Just (xs, ','), ' '), ')')) = xs <> ")"
-    removeTrailingComma (T.unsnoc -> Just (xs, x)) = T.snoc (removeTrailingComma xs) x
-    removeTrailingComma x = x
-    removeHeadingComma (T.stripStart -> s) = case T.uncons s of
-      Just (',', xs) -> xs
-      _ -> s
+    addCommaIfNeeds r = case T.uncons (T.stripStart r) of
+      Just (')', _) -> r
+      _ -> ", " <> r
+
 -- | 'matchRegex' combined with 'unifySpaces'
 matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegexUnifySpaces message = matchRegex (unifySpaces message)
