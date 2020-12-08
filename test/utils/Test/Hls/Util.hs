@@ -306,7 +306,7 @@ fromCommand (CACommand command) = command
 fromCommand _ = error "Not a command"
 
 onMatch :: [a] -> (a -> Bool) -> String -> IO a
-onMatch as pred err = maybe (fail err) return (find pred as)
+onMatch as predicate err = maybe (fail err) return (find predicate as)
 
 inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
 inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
@@ -316,18 +316,18 @@ expectDiagnostic :: [Diagnostic] -> [T.Text] -> IO ()
 expectDiagnostic diags s = void $ inspectDiagnostic diags s
 
 inspectCodeAction :: [CAResult] -> [T.Text] -> IO CodeAction
-inspectCodeAction cars s = fromAction <$> onMatch cars pred err
-    where pred (CACodeAction ca) = all (`T.isInfixOf` (ca ^. L.title)) s
-          pred _ = False
+inspectCodeAction cars s = fromAction <$> onMatch cars predicate err
+    where predicate (CACodeAction ca) = all (`T.isInfixOf` (ca ^. L.title)) s
+          predicate _ = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
 expectCodeAction :: [CAResult] -> [T.Text] -> IO ()
 expectCodeAction cars s = void $ inspectCodeAction cars s
 
 inspectCommand :: [CAResult] -> [T.Text] -> IO Command
-inspectCommand cars s = fromCommand <$> onMatch cars pred err
-    where pred (CACommand command) = all  (`T.isInfixOf` (command ^. L.title)) s
-          pred _ = False
+inspectCommand cars s = fromCommand <$> onMatch cars predicate err
+    where predicate (CACommand command) = all  (`T.isInfixOf` (command ^. L.title)) s
+          predicate _ = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> T.Session [Diagnostic]
