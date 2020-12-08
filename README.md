@@ -1,7 +1,5 @@
 # `ghcide` - A library for building Haskell IDE tooling
 
-Note: `ghcide` was previously called `hie-core`.
-
 Our vision is that you should build an IDE by combining:
 
 ![vscode](https://raw.githubusercontent.com/haskell/ghcide/master/img/vscode2.png)
@@ -10,7 +8,7 @@ Our vision is that you should build an IDE by combining:
 * `ghcide` (i.e. this library) for defining how to type check, when to type check, and producing diagnostic messages;
 * A bunch of plugins that haven't yet been written, e.g. [`hie-hlint`](https://github.com/ndmitchell/hlint) and [`hie-ormolu`](https://github.com/tweag/ormolu), to choose which features you want;
 * [`haskell-lsp`](https://github.com/alanz/haskell-lsp) for sending those messages to a [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) server;
-* An extension for your editor. We provide a [VS Code extension](https://code.visualstudio.com/api) as `extension` in this directory, although the components work in other LSP editors too (see below for instructions using Emacs).
+* An LSP client for your editor.
 
 There are more details about our approach [in this blog post](https://4ta.uk/p/shaking-up-the-ide).
 
@@ -44,11 +42,14 @@ a simple reproduction of the bug.
 
 ## Using it
 
+`ghcide` is not an end-user tool, [don't use `ghcide`](https://neilmitchell.blogspot.com/2020/09/dont-use-ghcide-anymore-directly.html) directly (more about the rationale [here](https://github.com/haskell/ghcide/pull/939)).
+
+ [`haskell-language-server`](http://github.com/haskell/haskell-language-server) is an LSP server built on top of `ghcide` with additional features and a user friendly deployment model. To get it, simply install the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) in VS Code, or download prebuilt binaries from the [haskell-language-server](https://github.com/haskell/haskell-language-server) project page.
+
+
+The instructions below are meant for developers interested in setting up ghcide as an LSP server for testing purposes.
+
 ### Install `ghcide`
-
-[We recommend](https://neilmitchell.blogspot.com/2020/09/dont-use-ghcide-anymore-directly.html) installing and using the [Haskell extension](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) in VS Code, or the prebuilt binaries provided by the [haskell-language-server project](https://github.com/haskell/haskell-language-server).
-
-If you still wish to install `ghcide` direcly, the instructions below might prove useful *but you are on your own*.
 
 #### With Nix
 
@@ -119,8 +120,7 @@ If you can't get `ghcide` working outside the editor, see [this setup troublesho
 
 ### Using with VS Code
 
-You can install the VSCode extension from the [VSCode
-marketplace](https://marketplace.visualstudio.com/items?itemName=DigitalAssetHoldingsLLC.ghcide).
+The [Haskell](https://marketplace.visualstudio.com/items?itemName=haskell.haskell) extension has a setting for ghcide.
 
 ### Using with Atom
 
@@ -346,18 +346,6 @@ It should take around 15 minutes and the results will be stored in the `bench-re
 
 More details in [bench/README](bench/README.md)
 
-### Building the extension
-
-For development, you can also the VSCode extension from this repository (see
-https://code.visualstudio.com/docs/setup/mac for details on adding
-`code` to your `$PATH`):
-
-1. `cd extension/`
-2. `npm ci`
-3. `npm run vscepackage`
-4. `code --install-extension ghcide-0.0.1.vsix`
-
-Now opening a `.hs` file should work with `ghcide`.
 
 ## History and relationship to other Haskell IDE's
 
