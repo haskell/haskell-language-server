@@ -71,15 +71,24 @@ import Packages
 import Control.Exception (evaluate)
 import Data.Void
 
+
+data CacheDirs = CacheDirs
+  { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
+
 data SessionLoadingOptions = SessionLoadingOptions
   { findCradle :: FilePath -> IO (Maybe FilePath)
   , loadCradle :: FilePath -> IO (HieBios.Cradle Void)
+  -- | Given the project name and a set of command line flags,
+  --   return the path for storing generated GHC artifacts,
+  --   or 'Nothing' to respect the cradle setting
+  , getCacheDirs :: String -> [String] -> IO CacheDirs
   }
 
 defaultLoadingOptions :: SessionLoadingOptions
 defaultLoadingOptions = SessionLoadingOptions
     {findCradle = HieBios.findCradle
     ,loadCradle = HieBios.loadCradle
+    ,getCacheDirs = getCacheDirsDefault
     }
 
 -- | Given a root directory, return a Shake 'Action' which setups an
@@ -185,7 +194,10 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                   let (df2, uids) = removeInplacePackages inplace rawComponentDynFlags
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
-                  processed_df <- setCacheDir logger prefix (sort $ map show uids) opts df2
+                  let hscComponents = sort $ map show uids
+                      cacheDirOpts = hscComponents ++ componentOptions opts
+                  cacheDirs <- liftIO $ getCacheDirs prefix cacheDirOpts
+                  processed_df <- setCacheDirs logger cacheDirs df2
                   -- The final component information, mostly the same but the DynFlags don't
                   -- contain any packages which are also loaded
                   -- into the same component.
@@ -515,14 +527,13 @@ should be filtered out, such that we dont have to re-compile everything.
 -- | Set the cache-directory based on the ComponentOptions and a list of
 -- internal packages.
 -- For the exact reason, see Note [Avoiding bad interface files].
-setCacheDir :: MonadIO m => Logger -> String -> [String] -> ComponentOptions -> DynFlags -> m DynFlags
-setCacheDir logger prefix hscComponents comps dflags = do
-    cacheDir <- liftIO $ getCacheDir prefix (hscComponents ++ componentOptions comps)
+setCacheDirs :: MonadIO m => Logger -> CacheDirs -> DynFlags -> m DynFlags
+setCacheDirs logger CacheDirs{..} dflags = do
     liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack cacheDir
     pure $ dflags
-          & setHiDir cacheDir
-          & setHieDir cacheDir
-          & setODir cacheDir
+          & maybe id setHiDir hiCacheDir
+          & maybe id setHieDir hieCacheDir
+          & maybe id setODir oCacheDir
 
 
 renderCradleError :: NormalizedFilePath -> CradleError -> FileDiagnostic
@@ -685,8 +696,10 @@ setODir f d =
     -- override user settings to avoid conflicts leading to recompilation
     d { objectDir = Just f}
 
-getCacheDir :: String -> [String] -> IO FilePath
-getCacheDir prefix opts = getXdgDirectory XdgCache (cacheDir </> prefix ++ "-" ++ opts_hash)
+getCacheDirsDefault :: String -> [String] -> IO CacheDirs
+getCacheDirsDefault prefix opts = do
+    dir <- Just <$> getXdgDirectory XdgCache (cacheDir </> prefix ++ "-" ++ opts_hash)
+    return $ CacheDirs dir dir dir
     where
         -- Create a unique folder per set of different GHC options, assuming that each different set of
         -- GHC options will create incompatible interface files.
