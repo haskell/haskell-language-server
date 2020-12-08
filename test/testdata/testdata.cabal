@@ -8,11 +8,6 @@ executable applyrefact
   main-is:             ApplyRefact.hs
   default-language:    Haskell2010
 
-executable applyrefact2
-  build-depends:       base
-  main-is:             ApplyRefact2.hs
-  default-language:    Haskell2010
-
 executable codeactionrename
   build-depends:       base
   main-is:             CodeActionRename.hs
