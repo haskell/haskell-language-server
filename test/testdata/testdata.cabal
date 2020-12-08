@@ -3,11 +3,6 @@ version:             0.1.0.0
 cabal-version:       >=2.0
 build-type: Simple
 
-executable applyrefact
-  build-depends:       base
-  main-is:             ApplyRefact.hs
-  default-language:    Haskell2010
-
 executable codeactionrename
   build-depends:       base
   main-is:             CodeActionRename.hs
