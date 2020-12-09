@@ -62,7 +62,6 @@ library
     , ghcide                >=0.6
     , gitrev
     , haskell-lsp           ^>=0.22
-    , hie-bios              >=0.7.1 && <0.8
     , hls-plugin-api        >=0.5
     , hslogger
     , optparse-applicative
@@ -170,6 +169,7 @@ executable haskell-language-server-wrapper
   build-depends:
     , ghc
     , ghc-paths
+    , ghcide
     , gitrev
     , haskell-language-server
     , hie-bios

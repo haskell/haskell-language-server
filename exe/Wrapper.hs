@@ -7,7 +7,8 @@ import Control.Monad.Extra
 import Data.Foldable
 import Data.List
 import Data.Void
-import HIE.Bios
+import Development.IDE.Session (findCradle, defaultLoadingOptions)
+import HIE.Bios hiding (findCradle)
 import HIE.Bios.Environment
 import HIE.Bios.Types
 import Ide.Arguments
@@ -135,7 +136,7 @@ getRuntimeGhcVersion' cradle = do
 -- of the project that may or may not be accurate.
 findLocalCradle :: FilePath -> IO (Cradle Void)
 findLocalCradle fp = do
-  cradleConf <- findCradle fp
+  cradleConf <- (findCradle defaultLoadingOptions) fp
   crdl       <- case cradleConf of
     Just yaml -> do
       hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
