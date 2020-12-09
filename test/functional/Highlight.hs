@@ -1,20 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Highlight (tests) where
 
-import Control.Applicative.Combinators
 import Control.Monad.IO.Class
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import Test.Hls.Util
 import Test.Tasty
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "highlight" [
-    ignoreTestBecause "Broken" $ testCase "works" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "works" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Highlight.hs" "haskell"
-        _ <- count 2 $ skipManyTill loggingNotification noDiagnostics
+        _ <- waitForDiagnosticsFrom doc
         highlights <- getHighlights doc (Position 2 2)
         liftIO $ do
             let hls =
