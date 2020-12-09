@@ -10,8 +10,8 @@ packages:
 
 source-repository-package
   type: git
-  location: https://github.com/bubba/brittany.git
-  tag: c59655f10d5ad295c2481537fc8abf0a297d9d1c
+  location: https://github.com/lspitzner/brittany.git
+  tag: 0a710ab27147d4f7981fe4ca343b43136ee36919
 
 tests: true
 

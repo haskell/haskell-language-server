@@ -14,8 +14,8 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-- github: bubba/brittany
-  commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
+- github: lspitzner/brittany
+  commit: 0a710ab27147d4f7981fe4ca343b43136ee36919
 - Cabal-3.0.2.0
 - clock-0.7.2
 - data-tree-print-0.1.0.2@rev:2
@@ -45,10 +45,6 @@ flags:
     pedantic: true
   retrie:
     BuildExecutable: false
-
-# for brittany's bounds on strict (>=0.3.2 && <0.4); using strict-0.4.0.1.
-# https://github.com/lspitzner/brittany/issues/328
-allow-newer: true
 
 nix:
   packages: [ icu libcxx zlib ]
