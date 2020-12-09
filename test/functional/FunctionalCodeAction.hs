@@ -444,61 +444,8 @@ unusedTermTests = testGroup "unused term code actions" [
             all (Just CodeActionRefactorInline ==) kinds @? "All CodeActionRefactorInline"
     ]
 
-fromAction :: CAResult -> CodeAction
-fromAction (CACodeAction action) = action
-fromAction _ = error "Not a code action"
-
-fromCommand :: CAResult -> Command
-fromCommand (CACommand command) = command
-fromCommand _ = error "Not a command"
-
 noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = C.CodeActionClientCapabilities (Just True) Nothing
-
-onMatch :: [a] -> (a -> Bool) -> String -> IO a
-onMatch as pred err = maybe (fail err) return (find pred as)
-
-inspectDiagnostic :: [Diagnostic] -> [T.Text] -> IO Diagnostic
-inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.message)) s) err
-    where err = "expected diagnostic matching '" ++ show s ++ "' but did not find one"
-
-expectDiagnostic :: [Diagnostic] -> [T.Text] -> IO ()
-expectDiagnostic diags s = void $ inspectDiagnostic diags s
-
-inspectCodeAction :: [CAResult] -> [T.Text] -> IO CodeAction
-inspectCodeAction cars s = fromAction <$> onMatch cars pred err
-    where pred (CACodeAction ca) = all (`T.isInfixOf` (ca ^. L.title)) s
-          pred _ = False
-          err = "expected code action matching '" ++ show s ++ "' but did not find one"
-
-expectCodeAction :: [CAResult] -> [T.Text] -> IO ()
-expectCodeAction cars s = void $ inspectCodeAction cars s
-
-inspectCommand :: [CAResult] -> [T.Text] -> IO Command
-inspectCommand cars s = fromCommand <$> onMatch cars pred err
-    where pred (CACommand command) = all  (`T.isInfixOf` (command ^. L.title)) s
-          pred _ = False
-          err = "expected code action matching '" ++ show s ++ "' but did not find one"
-
-waitForDiagnosticsFrom :: TextDocumentIdentifier -> Session [Diagnostic]
-waitForDiagnosticsFrom doc = do
-    diagsNot <- skipManyTill anyMessage message :: Session PublishDiagnosticsNotification
-    let (List diags) = diagsNot ^. L.params . L.diagnostics
-    if doc ^. L.uri /= diagsNot ^. L.params . L.uri
-       then waitForDiagnosticsFrom doc
-       else return diags
-
-waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> Session [Diagnostic]
-waitForDiagnosticsFromSource doc src = do
-    diagsNot <- skipManyTill anyMessage message :: Session PublishDiagnosticsNotification
-    let (List diags) = diagsNot ^. L.params . L.diagnostics
-    let res = filter matches diags
-    if doc ^. L.uri /= diagsNot ^. L.params . L.uri || null res
-       then waitForDiagnosticsFromSource doc src
-       else return res
-  where
-    matches :: Diagnostic -> Bool
-    matches d = d ^. L.source == Just (T.pack src)
