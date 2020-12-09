@@ -18,19 +18,21 @@ extra-deps:
   commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
 - Cabal-3.0.2.0
 - clock-0.7.2
-- data-tree-print-0.1.0.2
+- data-tree-print-0.1.0.2@rev:2
 - floskell-0.10.4
 - fourmolu-0.3.0.0
 - ghc-lib-8.10.2.20200916
 - ghc-lib-parser-8.10.2.20200916
+- heapsize-0.3.0
 - hie-bios-0.7.1
-- hlint-3.2
+- hlint-3.2.3
 - HsYAML-aeson-0.2.0.0@rev:2
 - implicit-hie-cradle-0.3.0.2
 - implicit-hie-0.1.2.5
 - lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.4.2
+- opentelemetry-0.6.1
+- opentelemetry-extra-0.6.1
 - ormolu-0.1.4.1
 - refinery-0.3.0.0
 - retrie-0.1.1.1
@@ -44,7 +46,8 @@ flags:
   retrie:
     BuildExecutable: false
 
-# for data-tree-print's bounds on base (>=4.8 && <4.14); using base-4.14.0.0.
+# for brittany's bounds on strict (>=0.3.2 && <0.4); using strict-0.4.0.1.
+# https://github.com/lspitzner/brittany/issues/328
 allow-newer: true
 
 nix:

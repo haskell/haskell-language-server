@@ -25,18 +25,21 @@ extra-deps:
 - extra-1.7.3
 - floskell-0.10.4
 - fourmolu-0.3.0.0
-# - ghcide-0.1.0
+# - ghcide-0.6.0
 - ghc-check-0.5.0.1
+- ghc-events-0.13.0
 - ghc-exactprint-0.6.3.2
 - ghc-lib-8.10.2.20200916
 - ghc-lib-parser-8.10.2.20200916
 - ghc-lib-parser-ex-8.10.0.16
+- ghc-trace-events-0.1.2.1
 - haddock-library-1.8.0
 - haskell-lsp-0.22.0.0
 - haskell-lsp-types-0.22.0.0
 - haskell-src-exts-1.21.1
+- heapsize-0.3.0
 - hie-bios-0.7.1
-- hlint-3.2
+- hlint-3.2.3
 - hoogle-5.0.17.11
 - hsimport-0.11.0
 - HsYAML-0.2.1.0@rev:1
@@ -46,7 +49,8 @@ extra-deps:
 - implicit-hie-0.1.2.5
 - lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.4.2
+- opentelemetry-0.6.1
+- opentelemetry-extra-0.6.1
 - ormolu-0.1.4.1
 - refinery-0.3.0.0
 - retrie-0.1.1.1
