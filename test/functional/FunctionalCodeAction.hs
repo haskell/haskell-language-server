@@ -329,7 +329,7 @@ typedHoleTests = testGroup "typed hole code actions" [
 
                 contents <- documentContents doc
 
-                liftIO $ (T.lines contents) @?=
+                liftIO $ T.lines contents @?=
                         [ "module TypedHoles2 (foo2) where"
                         , "newtype A = A Int"
                         , "foo2 :: [A] -> A"
