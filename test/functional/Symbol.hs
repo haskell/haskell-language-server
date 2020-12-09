@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Symbol (tests) where
 
+import Control.Lens (to, ix, (^?), _Just)
 import Control.Monad.IO.Class
 import Data.List
 import Language.Haskell.LSP.Test as Test
 import Language.Haskell.LSP.Types
+import qualified Language.Haskell.LSP.Types.Lens as L
 import Language.Haskell.LSP.Types.Capabilities
 import Test.Hls.Util
 import Test.Tasty
@@ -19,69 +21,110 @@ tests = testGroup "document symbols" [
 
 v310Tests :: TestTree
 v310Tests = testGroup "3.10 hierarchical document symbols" [
-    ignoreTestBecause "Broken" $ testCase "provides nested data types and constructors" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    testCase "provides nested data types and constructors" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
-        let myData = DocumentSymbol "MyData" (Just "") SkClass Nothing myDataR myDataSR (Just (List [a, b]))
-            a = DocumentSymbol "A" (Just "") SkConstructor Nothing aR aSR (Just mempty)
-            b = DocumentSymbol "B" (Just "") SkConstructor Nothing bR bSR (Just mempty)
+        let myData = DocumentSymbol "MyData" Nothing SkStruct Nothing myDataR myDataSR (Just (List [a, b]))
+            a = DocumentSymbol "A" Nothing SkConstructor Nothing aR aSR Nothing
+            b = DocumentSymbol "B" Nothing SkConstructor Nothing bR bSR Nothing
+        let myData' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 2
 
-        liftIO $ myData `elem` symbs @? "Contains symbol"
+        liftIO $ Just myData == myData' @? "Contains symbol"
 
-    ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    , ignoreTestBecause "extracting symbols from nested wheres not supported" $ testCase "provides nested where functions" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
-        let foo = DocumentSymbol "foo" (Just "") SkFunction Nothing fooR fooSR (Just (List [bar]))
-            bar = DocumentSymbol "bar" (Just "") SkFunction Nothing barR barSR (Just (List [dog, cat]))
-            dog = DocumentSymbol "dog" (Just "") SkVariable Nothing dogR dogSR (Just mempty)
-            cat = DocumentSymbol "cat" (Just "") SkVariable Nothing catR catSR (Just mempty)
+        let foo = DocumentSymbol "foo" Nothing SkFunction Nothing fooR fooSR (Just (List [bar]))
+            bar = DocumentSymbol "bar" Nothing SkFunction Nothing barR barSR (Just (List [dog, cat]))
+            dog = DocumentSymbol "dog" Nothing SkVariable Nothing dogR dogSR (Just mempty)
+            cat = DocumentSymbol "cat" Nothing SkVariable Nothing catR catSR (Just mempty)
+        let foo' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 1
 
-        liftIO $ foo `elem` symbs @? "Contains symbol"
+        liftIO $ Just foo == foo' @? "Contains symbol"
 
-    , ignoreTestBecause "Broken" $ testCase "provides pattern synonyms" $ runSession hlsCommand fullCaps "test/testdata" $ do
+    , ignoreTestBecause "extracting pattern synonym symbols not supported" $ testCase "provides pattern synonyms" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
         let testPattern = DocumentSymbol "TestPattern"
-                (Just "") SkFunction Nothing testPatternR testPatternSR (Just mempty)
+                Nothing SkFunction Nothing testPatternR testPatternSR (Just mempty)
+        let testPattern' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 3
 
-        liftIO $ testPattern `elem` symbs @? "Contains symbol"
+        liftIO $ Just testPattern == testPattern' @? "Contains symbol"
+
+    , testCase "provides imports" $ runSession hlsCommand fullCaps "test/testdata" $ do
+        doc <- openDoc "Symbols.hs" "haskell"
+        Left symbs <- getDocumentSymbols doc
+
+        let imports = DocumentSymbol "imports" Nothing SkModule Nothing importsR importsSR (Just (List [importDataMaybe]))
+            importDataMaybe = DocumentSymbol "import Data.Maybe" Nothing SkModule Nothing importDataMaybeR importDataMaybeSR Nothing
+        let imports' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 0
+
+        liftIO $ Just imports == imports' @? "Contains symbol"
     ]
-
--- TODO: Test module, imports
 
 pre310Tests :: TestTree
 pre310Tests = testGroup "pre 3.10 symbol information" [
-    ignoreTestBecause "Broken" $ testCase "provides nested data types and constructors" $ runSession hlsCommand oldCaps "test/testdata" $ do
+    testCase "provides nested data types and constructors" $ runSession hlsCommand oldCaps "test/testdata" $ do
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 
-        let myData = SymbolInformation "MyData" SkClass Nothing (Location testUri myDataR) Nothing
+        let myData = SymbolInformation "MyData" SkStruct Nothing (Location testUri myDataR) (Just "Symbols")
             a = SymbolInformation "A" SkConstructor Nothing (Location testUri aR) (Just "MyData")
             b = SymbolInformation "B" SkConstructor Nothing (Location testUri bR) (Just "MyData")
 
         liftIO $ [myData, a, b] `isInfixOf` symbs @? "Contains symbols"
 
-    ,ignoreTestBecause "Broken" $ testCase "provides nested where functions" $ runSession hlsCommand oldCaps "test/testdata" $ do
+    , ignoreTestBecause "extracting symbols from nested wheres not supported" $ testCase "provides nested where functions" $ runSession hlsCommand oldCaps "test/testdata" $ do
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 
-        let foo = SymbolInformation "foo" SkFunction Nothing (Location testUri fooR) Nothing
+        let foo = SymbolInformation "foo" SkFunction Nothing (Location testUri fooR) (Just "Symbols")
             bar = SymbolInformation "bar" SkFunction Nothing (Location testUri barR) (Just "foo")
             dog = SymbolInformation "dog" SkVariable Nothing (Location testUri dogR) (Just "bar")
             cat = SymbolInformation "cat" SkVariable Nothing (Location testUri catR) (Just "bar")
 
         -- Order is important!
         liftIO $ [foo, bar, dog, cat] `isInfixOf` symbs @? "Contains symbols"
+
+    , ignoreTestBecause "extracting pattern synonym symbols not supported" $ testCase "provides pattern synonyms" $ runSession hlsCommand oldCaps "test/testdata" $ do
+        doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
+        Right symbs <- getDocumentSymbols doc
+
+        let testPattern = SymbolInformation "TestPattern"
+                SkFunction Nothing (Location testUri testPatternR) (Just "Symbols")
+
+        liftIO $ testPattern `elem` symbs @? "Contains symbols"
+
+    , testCase "provides imports" $ runSession hlsCommand oldCaps "test/testdata" $ do
+        doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
+        Right symbs <- getDocumentSymbols doc
+
+        let imports = SymbolInformation "imports" SkModule Nothing (Location testUri importsR) (Just "Symbols")
+            importDataMaybe = SymbolInformation "import Data.Maybe" SkModule Nothing (Location testUri importDataMaybeR) (Just "imports")
+
+        liftIO $ [imports, importDataMaybe] `isInfixOf` symbs @? "Contains symbol"
     ]
 
 oldCaps :: ClientCapabilities
 oldCaps = capsForVersion (LSPVersion 3 9)
+
+fromList :: List a -> [a]
+fromList (List a) = a
+
 -- Some common ranges and selection ranges in Symbols.hs
+importsR :: Range
+importsR = Range (Position 3 0) (Position 3 17)
+importsSR :: Range
+importsSR = Range (Position 3 0) (Position 3 17)
+importDataMaybeR :: Range
+importDataMaybeR = Range (Position 3 0) (Position 3 17)
+importDataMaybeSR :: Range
+importDataMaybeSR = Range (Position 3 0) (Position 3 17)
 fooSR :: Range
-fooSR = Range (Position 5 0) (Position 5 3)
+fooSR = Range (Position 5 0) (Position 7 43)
 fooR :: Range
 fooR  = Range (Position 5 0) (Position 7 43)
 barSR :: Range
@@ -97,7 +140,7 @@ catSR = Range (Position 7 22) (Position 7 25)
 catR :: Range
 catR  = Range (Position 7 16) (Position 7 43)
 myDataSR :: Range
-myDataSR = Range (Position 9 5) (Position 9 11)
+myDataSR = Range (Position 9 0) (Position 10 22)
 myDataR :: Range
 myDataR  = Range (Position 9 0) (Position 10 22)
 aSR :: Range
