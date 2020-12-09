@@ -1,4 +1,4 @@
-resolver: lts-16.23
+resolver: lts-16.25
 
 packages:
 - .
@@ -22,14 +22,15 @@ extra-deps:
 - cabal-plan-0.6.2.0
 - clock-0.7.2
 - constrained-dynamic-0.1.0.0
-- extra-1.7.3
 - floskell-0.10.4
 - fourmolu-0.3.0.0
-# - ghcide-0.1.0
+# - ghcide-0.6.0
 - ghc-exactprint-0.6.3.2
+- ghc-trace-events-0.1.2.1
 - haskell-src-exts-1.21.1
+- heapsize-0.3.0
 - hie-bios-0.7.1
-- hlint-3.2
+- hlint-3.2.3
 - HsYAML-aeson-0.2.0.0@rev:2
 - hoogle-5.0.17.11
 - hsimport-0.11.0
@@ -38,6 +39,8 @@ extra-deps:
 - implicit-hie-0.1.2.5
 - lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
+- opentelemetry-0.6.1
+- opentelemetry-extra-0.6.1
 - refinery-0.3.0.0
 - retrie-0.1.1.1
 - semigroups-0.18.5
