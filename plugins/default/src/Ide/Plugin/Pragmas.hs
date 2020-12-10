@@ -23,6 +23,7 @@ import           Language.Haskell.LSP.Types
 
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.VFS as VFS
+import Development.IDE.Core.Shake (ShakeExtras(logger))
 
 -- ---------------------------------------------------------------------
 
@@ -165,20 +166,33 @@ possiblePragmas =
 
 -- ---------------------------------------------------------------------
 
+logStuff :: IdeState -> T.Text -> IO ()
+logStuff ide = logInfo (logger (shakeExtras ide))
+
 completion :: CompletionProvider
 completion lspFuncs _ide complParams = do
     let (TextDocumentIdentifier uri) = complParams ^. J.textDocument
         position = complParams ^. J.position
+    logStuff _ide (T.pack "test ---------------------.......")
     putStrLn $ "Uri" ++ show uri
     putStrLn $ "nor uri" ++ show (toNormalizedUri uri)
+    logStuff _ide (T.pack "--------------------------------.......")
     contents <- LSP.getVirtualFileFunc lspFuncs $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
         (Just cnts, Just _path) -> do
             pfix <- VFS.getCompletionPrefix position cnts
-            putStrLn $ "pfix" ++ show pfix
-            return $ Completions $ List [r]
+            logStuff _ide (T.pack "test &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&.......")
+            logStuff _ide $ "pfix" <> (T.pack. show $ pfix)
+            logStuff _ide (T.pack "test &&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&.......")
+            return $ result pfix
             where
-                r =
+                result (Just pfix)
+                    | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
+                    = Completions $ List $ map buildCompletion possiblePragmas
+                    | otherwise
+                    = Completions $ List []
+                result Nothing = Completions $ List []
+                buildCompletion p =
                    CompletionItem
                      label
                      kind
@@ -196,22 +210,21 @@ completion lspFuncs _ide complParams = do
                      commitCharacters
                      command
                      xd
-                label = "Example Pragma completion"
-                kind = Nothing
-                tags = List []
-                detail = Nothing
-                documentation = Nothing
-                deprecated = Nothing
-                preselect = Nothing
-                sortText = Nothing
-                filterText = Nothing
-                insertText = Nothing
-                insertTextFormat = Nothing
-                textEdit = Nothing
-                additionalTextEdits = Nothing
-                commitCharacters = Nothing
-                command = Nothing
-                xd = Nothing
-        _ -> do
-            putStrLn $ "Need to handle this path"'
-            return $ Completions $ List []
+                    where
+                         label = p
+                         kind = Nothing
+                         tags = List []
+                         detail = Nothing
+                         documentation = Nothing
+                         deprecated = Nothing
+                         preselect = Nothing
+                         sortText = Nothing
+                         filterText = Nothing
+                         insertText = Nothing
+                         insertTextFormat = Nothing
+                         textEdit = Nothing
+                         additionalTextEdits = Nothing
+                         commitCharacters = Nothing
+                         command = Nothing
+                         xd = Nothing
+        _ -> return $ Completions $ List []
