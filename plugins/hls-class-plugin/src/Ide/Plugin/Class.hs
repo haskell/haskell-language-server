@@ -87,9 +87,7 @@ addMethodPlaceholders _ _ AddMethodsParams{..} = pure (Right Null, Just (Workspa
 codeAction :: CodeActionProvider
 codeAction _ state plId docId _ ctx = do
   let Just docPath = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath
-  Just (hieAst -> hf, _) <- runAction "classplugin" state $ useWithStale GetHieAst docPath
-  Just (tmrTypechecked -> thisMod, _) <- runAction "classplugin" state $ useWithStale TypeCheck docPath
-  actions <- join <$> mapM (mkActions docPath hf thisMod) methodDiags
+  actions <- join <$> mapM (mkActions docPath) methodDiags
   pure . Right . List $ actions
   where
     ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") . unList $ ctx ^. J.diagnostics
@@ -108,23 +106,26 @@ codeAction _ state plId docId _ ctx = do
           = CACodeAction
           $ CodeAction title (Just CodeActionQuickFix) (Just (List [])) Nothing (Just cmd)
 
-    mkActions docPath hf thisMod d = do
+    mkActions docPath d = do
+      Just (hieAst -> hf, _) <- runAction "classplugin" state $ useWithStale GetHieAst docPath
+      let
+        [([[Right name]], range)]
+          = pointCommand hf (d ^. J.range . J.start & J.character -~ 1)
+            $ \n ->
+                ( Map.keys . Map.filter (isNothing . identType) . nodeIdentifiers . nodeInfo <$> nodeChildren n
+                , realSrcSpanToRange (nodeSpan n)
+                )
       Just (hscEnv -> hscenv, _) <- runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
+      Just (tmrTypechecked -> thisMod, _) <- runAction "classplugin" state $ useWithStale TypeCheck docPath
       (_, Just cls) <- initTcWithGbl hscenv thisMod ghostSpan $ do
         tcthing <- tcLookup name
         case tcthing of
           AGlobal (AConLike (RealDataCon con))
             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
           _ -> panic "Ide.Plugin.Class.mkActions"
-      let minDef = classMinimalDef cls
+      let
+        minDef = classMinimalDef cls
       traverse (mkAction range) (minDefToMethodGroups minDef)
-      where
-        [([[Right name]], range)] =
-          pointCommand hf (d ^. J.range . J.start & J.character -~ 1)
-          $ \n ->
-              ( Map.keys . Map.filter (isNothing . identType) . nodeIdentifiers . nodeInfo <$> nodeChildren n
-              , realSrcSpanToRange (nodeSpan n)
-              )
 
 unList :: List a -> [a]
 unList (List xs) = xs
