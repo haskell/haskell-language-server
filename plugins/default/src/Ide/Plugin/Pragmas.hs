@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
@@ -182,38 +183,22 @@ completion lspFuncs _ide complParams = do
                     = Completions $ List []
                 result Nothing = Completions $ List []
                 buildCompletion p =
-                   CompletionItem
-                     label
-                     kind
-                     tags
-                     detail
-                     documentation
-                     deprecated
-                     preselect
-                     sortText
-                     filterText
-                     insertText
-                     insertTextFormat
-                     textEdit
-                     additionalTextEdits
-                     commitCharacters
-                     command
-                     xd
-                    where
-                         label = p
-                         kind = Nothing
-                         tags = List []
-                         detail = Nothing
-                         documentation = Nothing
-                         deprecated = Nothing
-                         preselect = Nothing
-                         sortText = Nothing
-                         filterText = Nothing
-                         insertText = Nothing
-                         insertTextFormat = Nothing
-                         textEdit = Nothing
-                         additionalTextEdits = Nothing
-                         commitCharacters = Nothing
-                         command = Nothing
-                         xd = Nothing
+                    CompletionItem
+                      { _label = p,
+                        _kind = Nothing,
+                        _tags = List [],
+                        _detail = Nothing,
+                        _documentation = Nothing,
+                        _deprecated = Nothing,
+                        _preselect = Nothing,
+                        _sortText = Nothing,
+                        _filterText = Nothing,
+                        _insertText = Nothing,
+                        _insertTextFormat = Nothing,
+                        _textEdit = Nothing,
+                        _additionalTextEdits = Nothing,
+                        _commitCharacters = Nothing,
+                        _command = Nothing,
+                        _xdata = Nothing
+                      }
         _ -> return $ Completions $ List []
