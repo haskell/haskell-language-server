@@ -29,10 +29,11 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
                     p.shake-bench
                     p.hie-compat
                     p.hls-plugin-api
-                    p.hls-tactics-plugin
-                    p.hls-hlint-plugin
+                    p.hls-class-plugin
                     p.hls-explicit-imports-plugin
+                    p.hls-hlint-plugin
                     p.hls-retrie-plugin
+                    p.hls-tactics-plugin
                   ];
 
     isSupported = compiler == "default" || compiler == defaultCompiler;
