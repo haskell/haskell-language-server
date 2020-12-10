@@ -3,36 +3,17 @@
 # file called 'hie.yaml'
 cradle:
   multi:
-    - path: "./test/testdata/"
-      config: { cradle: { none:  } }
-
+    - path: "./test/testdata"
+      config: { cradle: { none } }
     - path: "./"
       config:
         cradle:
           stack:
-            - path: "./test/functional/"
-              component: "haskell-language-server:func-test"
+            - path: "./ghcide/src"
+              component: "ghcide:lib"
 
-            - path: "./test/utils/"
-              component: "haskell-language-server:func-test"
-
-            - path: "./exe/Main.hs"
-              component: "haskell-language-server:exe:haskell-language-server"
-
-            - path: "./plugins/default/src"
-              component: "haskell-language-server:exe:haskell-language-server"
-
-            - path: "./plugins/tactics/src"
-              component: "hls-tactics-plugin:lib:hls-tactics-plugin"
-
-            - path: "./plugins/tactics/test"
-              component: "hls-tactics-plugin:test:tests"
-
-            - path: "./exe/Arguments.hs"
-              component: "haskell-language-server:exe:haskell-language-server"
-
-            - path: "./exe/Wrapper.hs"
-              component: "haskell-language-server:exe:haskell-language-server-wrapper"
+            - path: "./ghcide/exe"
+              component: "ghcide:exe:ghcide"
 
             - path: "./src"
               component: "haskell-language-server:lib"
@@ -40,14 +21,41 @@ cradle:
             - path: "./.stack-work/"
               component: "haskell-language-server:lib"
 
-            - path: "./ghcide/src"
-              component: "ghcide:lib:ghcide"
+            - path: "./exe/Arguments.hs"
+              component: "haskell-language-server:exe:haskell-language-server"
 
-            - path: "./ghcide/exe"
-              component: "ghcide:exe:ghcide"
+            - path: "./exe/Main.hs"
+              component: "haskell-language-server:exe:haskell-language-server"
 
-            - path: "./hls-plugin-api/src"
-              component: "hls-plugin-api:lib:hls-plugin-api"
+            - path: "./plugins/default/src"
+              component: "haskell-language-server:exe:haskell-language-server"
+
+            - path: "./exe/Wrapper.hs"
+              component: "haskell-language-server:exe:haskell-language-server-wrapper"
+
+            - path: "./test/utils/"
+              component: "haskell-language-server:test:func-test"
+
+            - path: "./test/functional"
+              component: "haskell-language-server:test:func-test"
+
+            - path: "./test/wrapper"
+              component: "haskell-language-server:test:wrapper-test"
+
+            - path: "./plugins/hls-explicit-imports-plugin/src"
+              component: "hls-explicit-imports-plugin:lib"
 
             - path: "./plugins/hls-hlint-plugin/src"
-              component: "hls-hlint-plugin:lib:hls-hlint-plugin"
+              component: "hls-hlint-plugin:lib"
+
+            - path: "./hls-plugin-api/src"
+              component: "hls-plugin-api:lib"
+
+            - path: "./plugins/hls-retrie-plugin/src"
+              component: "hls-retrie-plugin:lib"
+
+            - path: "./plugins/tactics/src"
+              component: "hls-tactics-plugin:lib"
+
+            - path: "./plugins/tactics/test"
+              component: "hls-tactics-plugin:test:tests"
