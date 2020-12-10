@@ -18,12 +18,6 @@ cradle:
             - path: "./src"
               component: "haskell-language-server:lib"
 
-            - path: "./.stack-work/"
-              component: "haskell-language-server:lib"
-
-            - path: "./exe/Arguments.hs"
-              component: "haskell-language-server:exe:haskell-language-server"
-
             - path: "./exe/Main.hs"
               component: "haskell-language-server:exe:haskell-language-server"
 
