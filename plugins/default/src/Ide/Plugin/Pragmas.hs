@@ -185,7 +185,7 @@ completion lspFuncs _ide complParams = do
                 buildCompletion p =
                     CompletionItem
                       { _label = p,
-                        _kind = Nothing,
+                        _kind = Just CiKeyword,
                         _tags = List [],
                         _detail = Nothing,
                         _documentation = Nothing,
