@@ -1,6 +1,6 @@
 name: Benchmark
 
-on: [push, pull_request]
+on: [pull_request]
 jobs:
   bench:
     runs-on: ${{ matrix.os }}

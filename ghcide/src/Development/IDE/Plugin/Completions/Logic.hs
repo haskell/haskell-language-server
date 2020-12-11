@@ -1,9 +1,8 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs#-}
 
 #include "ghc-api-version.h"
-#if MIN_GHC_API_VERSION (8,8,4)
-{-# LANGUAGE GADTs#-}
-#endif
+
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
   CachedCompletions
