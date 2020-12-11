@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
@@ -21,12 +22,16 @@ import qualified Language.Haskell.LSP.Types.Lens as J
 import           Development.IDE as D
 import           Language.Haskell.LSP.Types
 
+import qualified Language.Haskell.LSP.Core as LSP
+import qualified Language.Haskell.LSP.VFS as VFS
+
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCommands = commands
   , pluginCodeActionProvider = Just codeActionProvider
+  , pluginCompletionProvider = Just completion
   }
 
 -- ---------------------------------------------------------------------
@@ -160,3 +165,40 @@ possiblePragmas =
   ]
 
 -- ---------------------------------------------------------------------
+
+completion :: CompletionProvider
+completion lspFuncs _ide complParams = do
+    let (TextDocumentIdentifier uri) = complParams ^. J.textDocument
+        position = complParams ^. J.position
+    contents <- LSP.getVirtualFileFunc lspFuncs $ toNormalizedUri uri
+    fmap Right $ case (contents, uriToFilePath' uri) of
+        (Just cnts, Just _path) -> do
+            pfix <- VFS.getCompletionPrefix position cnts
+            return $ result pfix
+            where
+                result (Just pfix)
+                    | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
+                    = Completions $ List $ map buildCompletion possiblePragmas
+                    | otherwise
+                    = Completions $ List []
+                result Nothing = Completions $ List []
+                buildCompletion p =
+                    CompletionItem
+                      { _label = p,
+                        _kind = Just CiKeyword,
+                        _tags = List [],
+                        _detail = Nothing,
+                        _documentation = Nothing,
+                        _deprecated = Nothing,
+                        _preselect = Nothing,
+                        _sortText = Nothing,
+                        _filterText = Nothing,
+                        _insertText = Nothing,
+                        _insertTextFormat = Nothing,
+                        _textEdit = Nothing,
+                        _additionalTextEdits = Nothing,
+                        _commitCharacters = Nothing,
+                        _command = Nothing,
+                        _xdata = Nothing
+                      }
+        _ -> return $ Completions $ List []
