@@ -199,7 +199,6 @@ tests = testGroup "completions" [
 
 snippetTests :: TestTree
 snippetTests = testGroup "snippets" [
-    ignoreTestBecause "no support for snippets" $
     testCase "work for argumentless constructors" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Completion.hs" "haskell"
       _ <- waitForDiagnosticsFrom doc
@@ -211,10 +210,9 @@ snippetTests = testGroup "snippets" [
       let item = head $ filter ((== "Nothing") . (^. label)) compls
       liftIO $ do
           item ^. insertTextFormat @?= Just Snippet
-          item ^. insertText @?= Just "Nothing"
+          item ^. insertText @?= Just "Nothing "
 
-    , ignoreTestBecause "no support for snippets" $
-      testCase "work for polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "work for polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
 
@@ -229,8 +227,7 @@ snippetTests = testGroup "snippets" [
             item ^. insertTextFormat @?= Just Snippet
             item ^. insertText @?= Just "foldl ${1:b -> a -> b} ${2:b} ${3:t a}"
 
-    , ignoreTestBecause "no support for snippets" $
-      testCase "work for complex types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "work for complex types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
 
@@ -245,8 +242,7 @@ snippetTests = testGroup "snippets" [
             item ^. insertTextFormat @?= Just Snippet
             item ^. insertText @?= Just "mapM ${1:a -> m b} ${2:t a}"
 
-    , ignoreTestBecause "no support for snippets" $
-      testCase "work for infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "work for infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
 
@@ -259,10 +255,9 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "filter"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "filter`"
+            item ^. insertText @?= Just "filter ${1:a -> Bool} ${2:[a]}"
 
-    , ignoreTestBecause "no support for snippets" $
-      testCase "work for infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "work for infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
 
@@ -275,10 +270,9 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "filter"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "filter"
+            item ^. insertText @?= Just "filter ${1:a -> Bool} ${2:[a]}"
 
-    , ignoreTestBecause "no support for snippets" $
-      testCase "work for qualified infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "work for qualified infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
 
@@ -291,10 +285,9 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "intersperse"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "intersperse`"
+            item ^. insertText @?= Just "intersperse ${1:a} ${2:[a]}"
 
-    , ignoreTestBecause "no support for snippets" $
-      testCase "work for qualified infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "work for qualified infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
 
@@ -307,7 +300,7 @@ snippetTests = testGroup "snippets" [
             item ^. label @?= "intersperse"
             item ^. kind @?= Just CiFunction
             item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "intersperse"
+            item ^. insertText @?= Just "intersperse ${1:a} ${2:[a]}"
 
     , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
