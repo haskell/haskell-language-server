@@ -302,7 +302,8 @@ snippetTests = testGroup "snippets" [
             item ^. insertTextFormat @?= Just Snippet
             item ^. insertText @?= Just "intersperse ${1:a} ${2:[a]}"
 
-    , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , ignoreTestBecause "ghcide does not support the completionSnippetsOn option" $
+      testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
 
