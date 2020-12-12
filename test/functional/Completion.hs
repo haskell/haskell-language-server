@@ -366,28 +366,11 @@ contextTests = testGroup "contexts" [
     , testCase "completes qualified type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Context.hs" "haskell"
         _ <- waitForDiagnosticsFrom doc
-        let te = TextEdit (Range (Position 2 17) (Position 2 17)) " -> Conc."
-        _ <- applyEdit doc te
-        -- The module doesn't parse right now. So we are using stale data. HLS
-        -- can give us completions for "Conc." but it can't tell that we are in
-        -- a context where we expect a type.
         compls <- getCompletions doc (Position 2 26)
         liftIO $ do
-            -- forkOn is an inappropriate completion in a type context.
-            compls `shouldContainCompl` "forkOn"
+            compls `shouldNotContainCompl` "forkOn"
             compls `shouldContainCompl` "MVar"
             compls `shouldContainCompl` "Chan"
-        let te' = TextEdit (Range (Position 2 26) (Position 2 26)) "MVar"
-        _ <- applyEdit doc te'
-        -- The module can now be parsed. Wait until it has been.
-        _ <- waitForDiagnosticsFrom doc
-        -- HLS can see that we are expecting a type.
-        compls' <- getCompletions doc (Position 2 26)
-        liftIO $ do
-            -- forkOn is gone.
-            compls' `shouldNotContainCompl` "forkOn"
-            compls' `shouldContainCompl` "MVar"
-            compls' `shouldContainCompl` "Chan"
     ]
 
 shouldContainCompl :: [CompletionItem] -> T.Text -> Assertion
