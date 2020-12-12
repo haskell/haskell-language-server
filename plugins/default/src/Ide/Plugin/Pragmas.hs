@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -113,68 +114,9 @@ findPragma str = concatMap check possiblePragmas
 -- ---------------------------------------------------------------------
 
 -- | Possible Pragma names.
--- Is non-exhaustive, and may be extended.
+-- See discussion at https://github.com/digital-asset/ghcide/pull/638
 possiblePragmas :: [T.Text]
-possiblePragmas =
-  [
-    "ConstraintKinds"
-  , "DefaultSignatures"
-  , "DeriveAnyClass"
-  , "DeriveDataTypeable"
-  , "DeriveFoldable"
-  , "DeriveFunctor"
-  , "DeriveGeneric"
-  , "DeriveLift"
-  , "DeriveTraversable"
-  , "DerivingStrategies"
-  , "DerivingVia"
-  , "EmptyCase"
-  , "EmptyDataDecls"
-  , "EmptyDataDeriving"
-  , "FlexibleContexts"
-  , "FlexibleInstances"
-  , "GADTs"
-  , "GHCForeignImportPrim"
-  , "GeneralizedNewtypeDeriving"
-  , "IncoherentInstances"
-  , "InstanceSigs"
-  , "KindSignatures"
-  , "MultiParamTypeClasses"
-  , "MultiWayIf"
-  , "NamedFieldPuns"
-  , "NamedWildCards"
-  , "OverloadedStrings"
-  , "ParallelListComp"
-  , "PartialTypeSignatures"
-  , "PatternGuards"
-  , "PatternSignatures"
-  , "PatternSynonyms"
-  , "QuasiQuotes"
-  , "Rank2Types"
-  , "RankNTypes"
-  , "RecordPuns"
-  , "RecordWildCards"
-  , "RecursiveDo"
-  , "RelaxedPolyRec"
-  , "RoleAnnotations"
-  , "ScopedTypeVariables"
-  , "StandaloneDeriving"
-  , "StaticPointers"
-  , "TemplateHaskell"
-  , "TemplateHaskellQuotes"
-  , "TransformListComp"
-  , "TupleSections"
-  , "TypeApplications"
-  , "TypeFamilies"
-  , "TypeFamilyDependencies"
-  , "TypeInType"
-  , "TypeOperators"
-  , "TypeSynonymInstances"
-  , "UnboxedSums"
-  , "UndecidableInstances"
-  , "UndecidableSuperClasses"
-  , "ViewPatterns"
-  ]
+possiblePragmas = [name | FlagSpec{flagSpecName = T.pack -> name} <- xFlags, "Strict" /= name]
 
 -- ---------------------------------------------------------------------
 
