@@ -70,7 +70,6 @@ addPragmaCmd _lf _ide (AddPragmaParams uri pragmaName) = do
   return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
 
 -- ---------------------------------------------------------------------
--- ms_hspp_opts
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 codeActionProvider :: CodeActionProvider
@@ -97,7 +96,7 @@ codeActionProvider _ state plId docId _ (J.CodeActionContext (J.List diags) _mon
           return $ codeAction cmd
         genPragma mDynflags target
           | Just dynFlags <- mDynflags,
-            -- GHC does not export 'OnOff', so we have to convert it into string
+            -- GHC does not export 'OnOff', so we have to view it as string
             disabled <- [ e | Just e <- T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags]
           = [ r | r <- findPragma target, r `notElem` disabled]
           | otherwise = []
@@ -114,7 +113,7 @@ findPragma str = concatMap check possiblePragmas
 -- ---------------------------------------------------------------------
 
 -- | Possible Pragma names.
--- See discussion at https://github.com/digital-asset/ghcide/pull/638
+-- See discussion at https://github.com/haskell/ghcide/pull/638
 possiblePragmas :: [T.Text]
 possiblePragmas = [name | FlagSpec{flagSpecName = T.pack -> name} <- xFlags, "Strict" /= name]
 
