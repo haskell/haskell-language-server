@@ -29,8 +29,8 @@ tests = testGroup "completions" [
              item ^. label @?= "putStrLn"
              item ^. kind @?= Just CiFunction
              item ^. detail @?= Just ":: String -> IO ()"
-             item ^. insertTextFormat @?= Just PlainText
-             item ^. insertText @?= Nothing
+             item ^. insertTextFormat @?= Just Snippet
+             item ^. insertText @?= Just "putStrLn ${1:String}"
 
      , ignoreTestBecause "no support for itemCompletion/resolve requests"
        $ testCase "itemCompletion/resolve works" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
@@ -105,8 +105,8 @@ tests = testGroup "completions" [
          liftIO $ do
              item ^. label @?= "LANGUAGE"
              item ^. kind @?= Just CiKeyword
-             item ^. insertTextFormat @?= Just PlainText
-             item ^. insertText @?= Nothing
+             item ^. insertTextFormat @?= Just Snippet
+             item ^. insertText @?= Just "LANGUAGE ${1:extension} #-}"
 
      , testCase "completes pragmas no close" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
@@ -120,8 +120,8 @@ tests = testGroup "completions" [
          liftIO $ do
              item ^. label @?= "LANGUAGE"
              item ^. kind @?= Just CiKeyword
-             item ^. insertTextFormat @?= Just PlainText
-             item ^. insertText @?= Nothing
+             item ^. insertTextFormat @?= Just Snippet
+             item ^. insertText @?= Just "LANGUAGE ${1:extension}"
 
      , testCase "completes options pragma" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
@@ -135,8 +135,8 @@ tests = testGroup "completions" [
          liftIO $ do
              item ^. label @?= "OPTIONS_GHC"
              item ^. kind @?= Just CiKeyword
-             item ^. insertTextFormat @?= Just PlainText
-             item ^. insertText @?= Nothing
+             item ^. insertTextFormat @?= Just Snippet
+             item ^. insertText @?= Just "OPTIONS_GHC -${1:option} #-}"
 
      , testCase "completes ghc options pragma values" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
