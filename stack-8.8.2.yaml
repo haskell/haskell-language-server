@@ -15,8 +15,7 @@ ghc-options:
 
 extra-deps:
 - aeson-1.5.2.0
-- github: lspitzner/brittany
-  commit: 0a710ab27147d4f7981fe4ca343b43136ee36919
+- brittany-0.13.1.0
 - butcher-1.3.3.2
 - bytestring-trie-0.2.5.0
 - clock-0.7.2
