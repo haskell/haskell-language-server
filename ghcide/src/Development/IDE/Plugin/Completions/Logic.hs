@@ -29,7 +29,6 @@ import Type
 import Packages
 #if MIN_GHC_API_VERSION(8,10,0)
 import Predicate (isDictTy)
-import GHC.Platform
 import Pair
 import Coercion
 #endif
@@ -560,8 +559,10 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
       result
         | "import " `T.isPrefixOf` fullLine
         = filtImportCompls
+        -- we leave this condition here to avoid duplications and return empty list
+        -- since HLS implements this completion (#haskell-language-server/pull/662)
         | "{-# language" `T.isPrefixOf` T.toLower fullLine
-        = filtOptsCompls languagesAndExts
+        = []
         | "{-# options_ghc" `T.isPrefixOf` T.toLower fullLine
         = filtOptsCompls (map (T.pack . stripLeading '-') $ flagsForCompletion False)
         | "{-# " `T.isPrefixOf` fullLine
@@ -573,14 +574,6 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
                                ++ filtKeywordCompls
   return result
 
-
--- The supported languages and extensions
-languagesAndExts :: [T.Text]
-#if MIN_GHC_API_VERSION(8,10,0)
-languagesAndExts = map T.pack $ GHC.supportedLanguagesAndExtensions ( PlatformMini ArchUnknown OSUnknown )
-#else
-languagesAndExts = map T.pack GHC.supportedLanguagesAndExtensions
-#endif
 
 -- ---------------------------------------------------------------------
 -- helper functions for pragmas
