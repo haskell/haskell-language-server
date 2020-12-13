@@ -110,7 +110,7 @@ destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
       in case isPatternMatch $ hi_provenance hi of
             True ->
               pruning subtactic $ \jdgs ->
-                let getHyTypes = S.fromList . fmap (hi_type . snd) . M.toList . jHypothesis
+                let getHyTypes = S.fromList . fmap hi_type . M.elems . jHypothesis
                     new_hy = foldMap getHyTypes jdgs
                     old_hy = getHyTypes jdg
                 in case S.null $ new_hy S.\\ old_hy of
