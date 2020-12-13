@@ -211,7 +211,7 @@ filterSameTypeFromOtherPositions dcon pos jdg =
              (findDconPositionVals jdg dcon pos)
              (WrongBranch pos)
              jdg
-      tys = S.fromList $ fmap (hi_type . snd) $ M.toList hy
+      tys = S.fromList $ hi_type <$> M.elems hy
       to_remove =
         M.filter (flip S.member tys . hi_type) (jHypothesis jdg)
           M.\\ hy

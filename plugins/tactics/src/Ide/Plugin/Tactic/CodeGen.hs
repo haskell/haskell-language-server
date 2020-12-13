@@ -154,9 +154,9 @@ destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
 destruct' f term jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let hy = jHypothesis jdg
-  case find ((== term) . fst) $ toList hy of
+  case M.lookup term hy of
     Nothing -> throwError $ UndefinedHypothesis term
-    Just (_, hi_type -> t) -> do
+    Just (hi_type -> t) -> do
       useOccName jdg term
       (tr, ms)
           <- destructMatches
