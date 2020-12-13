@@ -85,8 +85,7 @@ import           Type.Reflection            (Typeable)
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginId = plId,
-      pluginCodeLensProvider = Just provider,
+    { pluginCodeLensProvider = Just provider,
       pluginCommands = [evalCommand]
     }
 

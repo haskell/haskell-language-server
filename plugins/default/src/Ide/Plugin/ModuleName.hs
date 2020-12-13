@@ -95,8 +95,7 @@ import System.FilePath (
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
     (defaultPluginDescriptor plId)
-        { pluginId = plId
-        , pluginCodeLensProvider = Just codeLens
+        { pluginCodeLensProvider = Just codeLens
         , pluginCommands = [PluginCommand editCommandName editCommandName command]
         }
 
