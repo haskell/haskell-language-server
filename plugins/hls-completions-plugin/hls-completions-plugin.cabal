@@ -1,0 +1,37 @@
+cabal-version: 2.2
+name:          hls-completions-plugin
+version:       0.1.0.0
+synopsis:      Local and Non-local completions for Haskell Language Server
+license:       Apache-2.0
+license-file:  LICENSE
+author:        Guru Devanla
+maintainer:    grdvnl@gmail.com
+category:      Development
+build-type:    Simple
+extra-source-files:
+  LICENSE
+  include/ghc-api-version.h
+
+library
+  exposed-modules:  Ide.Plugin.LocalCompletions
+  hs-source-dirs:   src
+  build-depends:    aeson
+                  , base
+                  , containers
+                  , deepseq
+                  , haskell-lsp-types
+                  , hls-plugin-api
+                  , ghc
+                  , ghcide
+                  , shake
+                  , text
+                  , unordered-containers
+                  -- remove these after testing
+                  , transformers
+                  , binary
+                  , hashable
+                  , regex-tdfa
+
+
+  default-language: Haskell2010
+  include-dirs:     include
