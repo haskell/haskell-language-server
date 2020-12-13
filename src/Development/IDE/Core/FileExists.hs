@@ -151,7 +151,7 @@ fileExistsRules :: ClientCapabilities -> VFSHandle -> Rules ()
 fileExistsRules ClientCapabilities{_workspace} vfs = do
   -- Create the global always, although it should only be used if we have fast rules.
   -- But there's a chance someone will send unexpected notifications anyway,
-  -- e.g. https://github.com/digital-asset/ghcide/issues/599
+  -- e.g. https://github.com/haskell/ghcide/issues/599
   addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
 
   extras <- getShakeExtrasRules

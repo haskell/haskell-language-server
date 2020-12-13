@@ -2572,7 +2572,7 @@ safeTests :: TestTree
 safeTests =
   testGroup
     "SafeHaskell"
-    [ -- Test for https://github.com/digital-asset/ghcide/issues/424
+    [ -- Test for https://github.com/haskell/ghcide/issues/424
       testSessionWait "load" $ do
         let sourceA =
               T.unlines
@@ -2601,7 +2601,7 @@ thTests :: TestTree
 thTests =
   testGroup
     "TemplateHaskell"
-    [ -- Test for https://github.com/digital-asset/ghcide/pull/212
+    [ -- Test for https://github.com/haskell/ghcide/pull/212
       testSessionWait "load" $ do
         let sourceA =
               T.unlines
@@ -2647,7 +2647,7 @@ thTests =
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
     , thReloadingTest
-    -- Regression test for https://github.com/digital-asset/ghcide/issues/614
+    -- Regression test for https://github.com/haskell/ghcide/issues/614
     , thLinkingTest
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
@@ -3454,7 +3454,7 @@ simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \
 
 ifaceTests :: TestTree
 ifaceTests = testGroup "Interface loading tests"
-    [ -- https://github.com/digital-asset/ghcide/pull/645/
+    [ -- https://github.com/haskell/ghcide/pull/645/
       ifaceErrorTest
     , ifaceErrorTest2
     , ifaceErrorTest3

@@ -126,7 +126,7 @@ main = do
         hSetEncoding stderr utf8
 
         putStrLn $ "Ghcide setup tester in " ++ dir ++ "."
-        putStrLn "Report bugs at https://github.com/digital-asset/ghcide/issues"
+        putStrLn "Report bugs at https://github.com/haskell/ghcide/issues"
 
         putStrLn $ "\nStep 1/4: Finding files to test in " ++ dir
         files <- expandFiles (argFiles ++ ["." | null argFiles])

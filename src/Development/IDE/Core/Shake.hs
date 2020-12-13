@@ -541,7 +541,7 @@ shakeRestart IdeState{..} acts =
         )
         -- It is crucial to be masked here, otherwise we can get killed
         -- between spawning the new thread and updating shakeSession.
-        -- See https://github.com/digital-asset/ghcide/issues/79
+        -- See https://github.com/haskell/ghcide/issues/79
         (\() -> do
           (,()) <$> newSession shakeExtras shakeDb acts)
 

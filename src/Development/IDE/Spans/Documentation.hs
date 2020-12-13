@@ -87,7 +87,7 @@ getDocumentationsTryGhc env mod sources names = do
     unwrap _ n = mkSpanDocText n
 
     mkSpanDocText name =
-      pure (SpanDocText (getDocumentation sources name)) <*> getUris name
+      SpanDocText (getDocumentation sources name) <$> getUris name
    
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do

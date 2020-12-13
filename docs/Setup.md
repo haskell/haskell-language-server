@@ -115,7 +115,7 @@ This can happen if you have a GHC compiled without GHC library support.  This se
 
 ## Symbol’s value as variable is void: capability
 
-As described [here](https://github.com/emacs-lsp/lsp-mode/issues/770#issuecomment-483540119) and [here](https://github.com/emacs-lsp/lsp-mode/issues/517#issuecomment-445448700), the default installation of `lsp-mode`, `lsp-ui`, `lsp-ui-mode` and `lsp-haskell` as described in [ghcide's "Using with Emacs" section](https://github.com/digital-asset/ghcide/#using-with-emacs) may result in the following error message:
+As described [here](https://github.com/emacs-lsp/lsp-mode/issues/770#issuecomment-483540119) and [here](https://github.com/emacs-lsp/lsp-mode/issues/517#issuecomment-445448700), the default installation of `lsp-mode`, `lsp-ui`, `lsp-ui-mode` and `lsp-haskell` as described in [ghcide's "Using with Emacs" section](https://github.com/haskell/ghcide/#using-with-emacs) may result in the following error message:
  
 ```
 Symbol’s value as variable is void: capability
@@ -132,7 +132,7 @@ find ~/.emacs.d -name '*.elc' -exec rm {} \;
 
 ## Docker stack builds
 
-You're likely to see `ghcide: (ExitFailure 1,"","")`. Because ghcide can't get at the ghc installed inside Docker, your best bet is to `stack exec ghcide` and make sure `ghcide` is installed within the container. Full details at [issue 221](https://github.com/digital-asset/ghcide/issues/221).
+You're likely to see `ghcide: (ExitFailure 1,"","")`. Because ghcide can't get at the ghc installed inside Docker, your best bet is to `stack exec ghcide` and make sure `ghcide` is installed within the container. Full details at [issue 221](https://github.com/haskell/ghcide/issues/221).
 
 ## stty error on Windows + Stack
 
