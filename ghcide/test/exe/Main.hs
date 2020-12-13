@@ -547,7 +547,6 @@ codeActionTests = testGroup "code actions"
   , removeImportTests
   , extendImportTests
   , suggestImportTests
-  , addExtensionTests
   , fixConstructorImportTests
   , importRenameActionTests
   , fillTypedHoleTests
@@ -1038,7 +1037,7 @@ extendImportTests = testGroup "extend import actions"
             , "import ModuleA (A(Constructor))"
             , "b :: A"
             , "b = Constructor"
-            ])  
+            ])
   , testSession "extend single line import with mixed constructors" $ template
       [("ModuleA.hs", T.unlines
             [ "module ModuleA where"
@@ -1229,63 +1228,6 @@ suggestImportTests = testGroup "suggest import actions"
              liftIO $ after @=? contentAfterAction
           else
               liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
-
-
-addExtensionTests :: TestTree
-addExtensionTests = testGroup "add language extension actions"
-  [ testSession "add NamedFieldPuns language extension" $ template
-      (T.unlines
-            [ "module Module where"
-            , ""
-            , "data A = A { getA :: Bool }"
-            , ""
-            , "f :: A -> Bool"
-            , "f A { getA } = getA"
-            ])
-      (Range (Position 0 0) (Position 0 0))
-      "Add NamedFieldPuns extension"
-      (T.unlines
-            [ "{-# LANGUAGE NamedFieldPuns #-}"
-            , "module Module where"
-            , ""
-            , "data A = A { getA :: Bool }"
-            , ""
-            , "f :: A -> Bool"
-            , "f A { getA } = getA"
-            ])
-  , testSession "add RecordWildCards language extension" $ template
-      (T.unlines
-            [ "module Module where"
-            , ""
-            , "data A = A { getA :: Bool }"
-            , ""
-            , "f :: A -> Bool"
-            , "f A { .. } = getA"
-            ])
-      (Range (Position 0 0) (Position 0 0))
-      "Add RecordWildCards extension"
-      (T.unlines
-            [ "{-# LANGUAGE RecordWildCards #-}"
-            , "module Module where"
-            , ""
-            , "data A = A { getA :: Bool }"
-            , ""
-            , "f :: A -> Bool"
-            , "f A { .. } = getA"
-            ])
-  ]
-    where
-      template initialContent range expectedAction expectedContents = do
-        doc <- createDoc "Module.hs" "haskell" initialContent
-        _ <- waitForDiagnostics
-        CACodeAction action@CodeAction { _title = actionTitle } : _
-                    <- sortOn (\(CACodeAction CodeAction{_title=x}) -> x) <$>
-                       getCodeActions doc range
-        liftIO $ expectedAction @=? actionTitle
-        executeCodeAction action
-        contentAfterAction <- documentContents doc
-        liftIO $ expectedContents @=? contentAfterAction
-
 
 insertNewDefinitionTests :: TestTree
 insertNewDefinitionTests = testGroup "insert new definition actions"
@@ -2952,7 +2894,16 @@ nonLocalCompletionTests =
        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}])),
        ("FormatParse", CiSnippet, "FormatParse {fpModifiers=${1:_fpModifiers}, fpChar=${2:_fpChar}, fpRest=${3:_fpRest}}", False, False,
        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}]))
+      ],
+      -- we need this test to make sure the ghcide completions module does not return completions for language pragmas. this functionality is turned on in hls
+     completionTest
+      "do not show pragma completions"
+      [ "{-# LANGUAGE  ",
+        "{module A where}",
+        "main = return ()"
       ]
+      (Position 0 13)
+      []
   ]
 
 otherCompletionTests :: [TestTree]
