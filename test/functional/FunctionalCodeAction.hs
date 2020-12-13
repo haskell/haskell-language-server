@@ -276,7 +276,7 @@ redundantImportTests = testGroup "redundant import code actions" [
             -- provides workspace edit property which skips round trip to
             -- the server
             contents <- documentContents doc
-            liftIO $ contents @?= "module CodeActionRedundant where\nmain :: IO ()\nmain = putStrLn \"hello\""
+            liftIO $ contents @?= "{-# OPTIONS_GHC -Wunused-imports #-}\nmodule CodeActionRedundant where\nmain :: IO ()\nmain = putStrLn \"hello\"\n"
 
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
@@ -285,7 +285,8 @@ redundantImportTests = testGroup "redundant import code actions" [
         executeCommand cmd
         contents <- documentContents doc
         liftIO $ (T.lines contents) @?=
-                [ "module MultipleImports where"
+                [ "{-# OPTIONS_GHC -Wunused-imports #-}"
+                , "module MultipleImports where"
                 , "import Data.Maybe"
                 , "foo :: Int"
                 , "foo = fromJust (Just 3)"
