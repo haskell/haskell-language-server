@@ -19,6 +19,7 @@ import           Ide.Plugin.Floskell       as Floskell
 import           Ide.Plugin.Fourmolu       as Fourmolu
 import           Ide.Plugin.GhcIde         as GhcIde
 import           Ide.Plugin.ExplicitImports as ExplicitImports
+import           Ide.Plugin.LocalCompletions as LocalCompletions
 import           Ide.Plugin.Ormolu         as Ormolu
 import           Ide.Plugin.Retrie         as Retrie
 import           Ide.Plugin.StylishHaskell as StylishHaskell
@@ -61,6 +62,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
       , Eval.descriptor "eval"
       , ExplicitImports.descriptor "importLens"
+      , LocalCompletions.descriptor "localCompletions"
       , ModuleName.descriptor "moduleName"
       , Hlint.descriptor "hlint"
       ]
