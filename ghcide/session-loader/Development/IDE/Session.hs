@@ -123,7 +123,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
       res <- findCradle v
       -- Sometimes we get C:, sometimes we get c:, and sometimes we get a relative path
       -- try and normalise that
-      -- e.g. see https://github.com/digital-asset/ghcide/issues/126
+      -- e.g. see https://github.com/haskell/ghcide/issues/126
       res' <- traverse makeAbsolute res
       return $ normalise <$> res'
 
