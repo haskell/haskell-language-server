@@ -13,12 +13,12 @@ import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 import qualified Data.Text as T
+import System.Time.Extra (sleep)
 
 tests :: TestTree
 tests = testGroup "completions" [
      testCase "works" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
 
          let te = TextEdit (Range (Position 5 7) (Position 5 24)) "put"
          _ <- applyEdit doc te
@@ -35,7 +35,6 @@ tests = testGroup "completions" [
      , ignoreTestBecause "no support for itemCompletion/resolve requests"
        $ testCase "itemCompletion/resolve works" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
 
          let te = TextEdit (Range (Position 5 7) (Position 5 24)) "put"
          _ <- applyEdit doc te
@@ -54,7 +53,8 @@ tests = testGroup "completions" [
 
      , testCase "completes imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
+         liftIO $ sleep 4
 
          let te = TextEdit (Range (Position 1 17) (Position 1 26)) "Data.M"
          _ <- applyEdit doc te
@@ -68,7 +68,8 @@ tests = testGroup "completions" [
 
      , testCase "completes qualified imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
+         liftIO $ sleep 4
 
          let te = TextEdit (Range (Position 2 17) (Position 1 25)) "Dat"
          _ <- applyEdit doc te
@@ -82,7 +83,8 @@ tests = testGroup "completions" [
 
      , testCase "completes language extensions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
+         liftIO $ sleep 4
 
          let te = TextEdit (Range (Position 0 24) (Position 0 31)) ""
          _ <- applyEdit doc te
@@ -95,7 +97,8 @@ tests = testGroup "completions" [
 
      , testCase "completes pragmas" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
+         liftIO $ sleep 4
 
          let te = TextEdit (Range (Position 0 4) (Position 0 34)) ""
          _ <- applyEdit doc te
@@ -110,7 +113,6 @@ tests = testGroup "completions" [
 
      , testCase "completes pragmas no close" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
 
          let te = TextEdit (Range (Position 0 4) (Position 0 24)) ""
          _ <- applyEdit doc te
@@ -125,7 +127,8 @@ tests = testGroup "completions" [
 
      , testCase "completes options pragma" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
+         liftIO $ sleep 4
 
          let te = TextEdit (Range (Position 0 4) (Position 0 34)) "OPTIONS"
          _ <- applyEdit doc te
@@ -141,8 +144,6 @@ tests = testGroup "completions" [
      , testCase "completes ghc options pragma values" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         _ <- waitForDiagnosticsFrom doc
-
          let te = TextEdit (Range (Position 0 0) (Position 0 0)) "{-# OPTIONS_GHC -Wno-red  #-}\n"
          _ <- applyEdit doc te
 
@@ -156,7 +157,7 @@ tests = testGroup "completions" [
 
      , testCase "completes with no prefix" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
          compls <- getCompletions doc (Position 5 7)
          liftIO $ any ((== "!!") . (^. label)) compls @? ""
 
@@ -175,7 +176,7 @@ tests = testGroup "completions" [
 
      , testCase "have implicit foralls on basic polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
          let te = TextEdit (Range (Position 5 7) (Position 5 9)) "id"
          _ <- applyEdit doc te
          compls <- getCompletions doc (Position 5 9)
@@ -185,7 +186,7 @@ tests = testGroup "completions" [
 
      , testCase "have implicit foralls with multiple type variables" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
-         _ <- waitForDiagnosticsFrom doc
+
          let te = TextEdit (Range (Position 5 7) (Position 5 24)) "flip"
          _ <- applyEdit doc te
          compls <- getCompletions doc (Position 5 11)
@@ -201,7 +202,6 @@ snippetTests :: TestTree
 snippetTests = testGroup "snippets" [
     testCase "work for argumentless constructors" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Completion.hs" "haskell"
-      _ <- waitForDiagnosticsFrom doc
 
       let te = TextEdit (Range (Position 5 7) (Position 5 24)) "Nothing"
       _ <- applyEdit doc te
@@ -214,7 +214,6 @@ snippetTests = testGroup "snippets" [
 
     , testCase "work for polymorphic types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "fold"
         _ <- applyEdit doc te
@@ -229,7 +228,6 @@ snippetTests = testGroup "snippets" [
 
     , testCase "work for complex types" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "mapM"
         _ <- applyEdit doc te
@@ -244,7 +242,6 @@ snippetTests = testGroup "snippets" [
 
     , testCase "work for infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "even `filte"
         _ <- applyEdit doc te
@@ -259,7 +256,6 @@ snippetTests = testGroup "snippets" [
 
     , testCase "work for infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "even `filte`"
         _ <- applyEdit doc te
@@ -274,7 +270,6 @@ snippetTests = testGroup "snippets" [
 
     , testCase "work for qualified infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "\"\" `Data.List.interspe"
         _ <- applyEdit doc te
@@ -289,7 +284,6 @@ snippetTests = testGroup "snippets" [
 
     , testCase "work for qualified infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         let te = TextEdit (Range (Position 5 7) (Position 5 24)) "\"\" `Data.List.interspe`"
         _ <- applyEdit doc te
@@ -305,7 +299,6 @@ snippetTests = testGroup "snippets" [
     , ignoreTestBecause "ghcide does not support the completionSnippetsOn option" $
       testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         let config = object [ "haskell" .= (object ["completionSnippetsOn" .= False])]
 
@@ -316,7 +309,6 @@ snippetTests = testGroup "snippets" [
 
     , testCase "respects client capabilities" $ runSession hlsCommand noSnippetsCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
 
         checkNoSnippets doc
     ]
@@ -349,7 +341,7 @@ contextTests :: TestTree
 contextTests = testGroup "contexts" [
     testCase "only provides type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
-      _ <- waitForDiagnosticsFrom doc
+
       compls <- getCompletions doc (Position 2 17)
       liftIO $ do
         compls `shouldContainCompl` "Integer"
@@ -357,7 +349,7 @@ contextTests = testGroup "contexts" [
 
     , testCase "only provides value suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
-      _ <- waitForDiagnosticsFrom doc
+
       compls <- getCompletions doc (Position 3 9)
       liftIO $ do
         compls `shouldContainCompl` "abs"
@@ -365,7 +357,7 @@ contextTests = testGroup "contexts" [
 
     , testCase "completes qualified type suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Context.hs" "haskell"
-        _ <- waitForDiagnosticsFrom doc
+
         compls <- getCompletions doc (Position 2 26)
         liftIO $ do
             compls `shouldNotContainCompl` "forkOn"
