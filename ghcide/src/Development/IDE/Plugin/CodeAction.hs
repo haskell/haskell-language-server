@@ -549,7 +549,7 @@ ghcExtensions :: Map.HashMap T.Text Extension
 ghcExtensions = Map.fromList . filter notStrictFlag . map ( ( T.pack . flagSpecName ) &&& flagSpecFlag ) $ xFlags
   where
     -- Strict often causes false positives, as in Data.Map.Strict imports.
-    -- See discussion at https://github.com/digital-asset/ghcide/pull/638
+    -- See discussion at https://github.com/haskell/ghcide/pull/638
     notStrictFlag (name, _) = name /= "Strict"
 
 suggestModuleTypo :: Diagnostic -> [(T.Text, [TextEdit])]

@@ -260,7 +260,7 @@ priorityFilesOfInterest = Priority (-2)
 -- We currently parse the module both with and without Opt_Haddock, and
 -- return the one with Haddocks if it -- succeeds. However, this may not work
 -- for hlint, and we might need to save the one without haddocks too.
--- See https://github.com/digital-asset/ghcide/pull/350#discussion_r370878197
+-- See https://github.com/haskell/ghcide/pull/350#discussion_r370878197
 -- and https://github.com/mpickering/ghcide/pull/22#issuecomment-625070490
 getParsedModuleRule :: Rules ()
 getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
@@ -651,7 +651,7 @@ loadGhcSession = do
         let cutoffHash =
               case optShakeFiles opts of
                 -- optShakeFiles is only set in the DAML case.
-                -- https://github.com/digital-asset/ghcide/pull/522#discussion_r428622915
+                -- https://github.com/haskell/ghcide/pull/522#discussion_r428622915
                 Just {} -> ""
                 -- Hash the HscEnvEq returned so cutoff if it didn't change
                 -- from last time

@@ -2,7 +2,7 @@
 
 -- | This module exists to circumvent a compile time exception on Windows with
 -- Stack and GHC 8.10.1. It's just been pulled out from Development.IDE.Session.
--- See https://github.com/digital-asset/ghcide/pull/697
+-- See https://github.com/haskell/ghcide/pull/697
 module Development.IDE.Session.VersionCheck (ghcVersionChecker) where
 
 import Data.Maybe
