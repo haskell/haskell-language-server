@@ -1,3 +1,7 @@
+### 0.6.0.1 (2020-12-13)
+* Fix build with GHC 8.8.2 and 8.8.3 - (Javier Neira)
+* Update old URLs still pointing to digital-asset - (Jan Hrcek)
+
 ### 0.6.0 (2020-12-06)
 * Completions: extend explicit import list automatically (#930) - (Guru Devanla)
 * Completions for identifiers not in explicit import lists (#919) - (Guru Devanla)
