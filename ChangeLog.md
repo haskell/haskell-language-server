@@ -1,5 +1,79 @@
 # Changelog for haskell-language-server
 
+## 0.7.0
+
+* This version contains mainly refactors and updates of upstream packages
+* It bumps up some formatter versions:
+  * ormolu is 0.1.4.1
+  * fourmolu is 0.3.0.0
+  * brittany is 0.13.1.0
+* It uses last implicit-hie-cradle-0.3.0.2, with some [bug](https://github.com/Avi-D-coder/implicit-hie/issues/29) [fixes](https://github.com/Avi-D-coder/implicit-hie/issues/30)
+* It uses last ghcide-0.6.0.1 with [improvements and bug fixes](https://github.com/haskell/ghcide/blob/master/CHANGELOG.md#060-2020-12-06):
+  * Do not enable every "unnecessary" warning by default
+  * Improvements over completions:
+    * record fields
+    * identifiers not in explicit import lists
+    * extend explicit import list automatically
+
+Thanks to all haskell-language-server, ghcide and other upstream packages contributors (the list continue growing healthy) for make this release possible.
+
+### Pull requests merged
+
+- Miscellanous fixes: correct tactic plugin package metadata and cabal.hie.yaml/stack.hie.yaml
+([#672)](https://github.com/haskell/haskell-language-server/pull/672) by @berberman
+- Remove unnecessary pluginId setting and user Better Map functions in tactics plugin
+([#669)](https://github.com/haskell/haskell-language-server/pull/669) by @jhrcek
+- Do not suggest explicitly disabled pragmas
+([#666)](https://github.com/haskell/haskell-language-server/pull/666) by @berberman
+- fixed hie.yaml.stack
+([#664)](https://github.com/haskell/haskell-language-server/pull/664) by @tittoassini
+- Add pragmas completions
+([#662)](https://github.com/haskell/haskell-language-server/pull/662) by @gdevanla
+- Enable code completion tests
+([#657)](https://github.com/haskell/haskell-language-server/pull/657) by @peterwicksstringfield
+- Enable highlight unittests
+([#656)](https://github.com/haskell/haskell-language-server/pull/656) by @peterwicksstringfield
+- Fix document symbols unit tests.
+([#655)](https://github.com/haskell/haskell-language-server/pull/655) by @peterwicksstringfield
+- Delete duplicate cabal clause for applyrefact2
+([#654)](https://github.com/haskell/haskell-language-server/pull/654) by @peterwicksstringfield
+- Add extra-source-files for split plugins
+([#650)](https://github.com/haskell/haskell-language-server/pull/650) by @berberman
+- [nix-shell] Actually use gitignore
+([#649)](https://github.com/haskell/haskell-language-server/pull/649) by @pepeiborra
+-  idempotent command and code cleanup
+([#648)](https://github.com/haskell/haskell-language-server/pull/648) by @tittoassini
+- Split the Imports and Retrie plugins
+([#647)](https://github.com/haskell/haskell-language-server/pull/647) by @pepeiborra
+- Simplify and Bump implicit-hie version constraints
+([#645)](https://github.com/haskell/haskell-language-server/pull/645) by @Avi-D-coder
+- Fix and enable disabled code action unit tests, fix fallback handler
+([#643)](https://github.com/haskell/haskell-language-server/pull/643) by @peterwicksstringfield
+- Add Ghcide hie.yaml instruction for Stack users
+([#641)](https://github.com/haskell/haskell-language-server/pull/641) by @Sir4ur0n
+- Upgrade the Nix build system
+([#639)](https://github.com/haskell/haskell-language-server/pull/639) by @pepeiborra
+- No longer needed to build once for Stack
+([#637)](https://github.com/haskell/haskell-language-server/pull/637) by @Sir4ur0n
+- Preserve the last empty comment line after eval plugin
+([#631)](https://github.com/haskell/haskell-language-server/pull/631) by @expipiplus1
+- Update fourmolu to 0.3.0.0
+([#624)](https://github.com/haskell/haskell-language-server/pull/624) by @gwils
+- Add hspec-discover to build-tool-depends in tactics plugin
+([#623)](https://github.com/haskell/haskell-language-server/pull/623) by @gwils
+- Add build to ghc-8.10.2 and windows
+([#619)](https://github.com/haskell/haskell-language-server/pull/619) by @jneira
+- Module Name Plugin: Treat modules starting with lowercase as Main module
+([#616)](https://github.com/haskell/haskell-language-server/pull/616) by @konn
+- Bump ormolu to 0.1.4.1
+([#614)](https://github.com/haskell/haskell-language-server/pull/614) by @AlistairB
+- Fix fourmolu plugin inconsistent formatting
+([#599)](https://github.com/haskell/haskell-language-server/pull/599) by @zweimach
+- Hlint: bring over idea2Message for formatting
+([#598)](https://github.com/haskell/haskell-language-server/pull/598) by @alanz
+- Makes dictionary argument exclusion logic in Tactic plugin more robust
+([#508)](https://github.com/haskell/haskell-language-server/pull/508) by @konn
+
 ## 0.6.0
 
 0.6.0 includes two brand new plugins!
