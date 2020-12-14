@@ -1,7 +1,8 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
@@ -10,20 +11,22 @@ module Ide.Plugin.Pragmas
   -- ,   commands -- TODO: get rid of this
   ) where
 
-import           Control.Lens hiding (List)
+import           Control.Lens                    hiding (List)
 import           Data.Aeson
 import qualified Data.HashMap.Strict             as H
 import qualified Data.Text                       as T
+import           Development.IDE                 as D
+import qualified GHC.Generics                    as Generics
 import           Ide.Plugin
 import           Ide.Types
-import qualified GHC.Generics                    as Generics
+import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as J
 import qualified Language.Haskell.LSP.Types.Lens as J
-import           Development.IDE as D
-import           Language.Haskell.LSP.Types
 
-import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.VFS as VFS
+import           Control.Monad                   (join)
+import           Development.IDE.GHC.Compat
+import qualified Language.Haskell.LSP.Core       as LSP
+import qualified Language.Haskell.LSP.VFS        as VFS
 
 -- ---------------------------------------------------------------------
 
@@ -67,28 +70,37 @@ addPragmaCmd _lf _ide (AddPragmaParams uri pragmaName) = do
   return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
 
 -- ---------------------------------------------------------------------
-
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 codeActionProvider :: CodeActionProvider
-codeActionProvider _ _ plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
-  cmds <- mapM mkCommand pragmas
-  -- cmds <- mapM mkCommand ("FooPragma":pragmas)
-  return $ Right $ List cmds
-  where
+codeActionProvider _ state plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
+    let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
+    pm <- fmap join $ runAction "addPragma" state $ getParsedModule `traverse` mFile
+    let dflags = ms_hspp_opts . pm_mod_summary <$> pm
     -- Filter diagnostics that are from ghcmod
-    ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
+        ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
     -- Get all potential Pragmas for all diagnostics.
-    pragmas = concatMap (\d -> findPragma (d ^. J.message)) ghcDiags
-    mkCommand pragmaName = do
-      let
-        -- | Code Action for the given command.
-        codeAction :: J.Command -> J.CAResult
-        codeAction cmd = J.CACodeAction $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing (Just cmd)
-        title = "Add \"" <> pragmaName <> "\""
-        cmdParams = [toJSON (AddPragmaParams (docId ^. J.uri) pragmaName )]
-      cmd <- mkLspCommand plId "addPragma" title  (Just cmdParams)
-      return $ codeAction cmd
+        pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) ghcDiags
+    -- cmds <- mapM mkCommand ("FooPragma":pragmas)
+    cmds <- mapM mkCommand pragmas
+    return $ Right $ List cmds
+      where
+        mkCommand pragmaName = do
+          let
+            -- | Code Action for the given command.
+            codeAction :: J.Command -> J.CAResult
+            codeAction cmd = J.CACodeAction $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing (Just cmd)
+            title = "Add \"" <> pragmaName <> "\""
+            cmdParams = [toJSON (AddPragmaParams (docId ^. J.uri) pragmaName)]
+          cmd <- mkLspCommand plId "addPragma" title  (Just cmdParams)
+          return $ codeAction cmd
+        genPragma mDynflags target
+          | Just dynFlags <- mDynflags,
+            -- GHC does not export 'OnOff', so we have to view it as string
+            disabled <- [ e | Just e <- T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags]
+          = [ r | r <- findPragma target, r `notElem` disabled]
+          | otherwise = []
+
 
 -- ---------------------------------------------------------------------
 
@@ -101,68 +113,9 @@ findPragma str = concatMap check possiblePragmas
 -- ---------------------------------------------------------------------
 
 -- | Possible Pragma names.
--- Is non-exhaustive, and may be extended.
+-- See discussion at https://github.com/haskell/ghcide/pull/638
 possiblePragmas :: [T.Text]
-possiblePragmas =
-  [
-    "ConstraintKinds"
-  , "DefaultSignatures"
-  , "DeriveAnyClass"
-  , "DeriveDataTypeable"
-  , "DeriveFoldable"
-  , "DeriveFunctor"
-  , "DeriveGeneric"
-  , "DeriveLift"
-  , "DeriveTraversable"
-  , "DerivingStrategies"
-  , "DerivingVia"
-  , "EmptyCase"
-  , "EmptyDataDecls"
-  , "EmptyDataDeriving"
-  , "FlexibleContexts"
-  , "FlexibleInstances"
-  , "GADTs"
-  , "GHCForeignImportPrim"
-  , "GeneralizedNewtypeDeriving"
-  , "IncoherentInstances"
-  , "InstanceSigs"
-  , "KindSignatures"
-  , "MultiParamTypeClasses"
-  , "MultiWayIf"
-  , "NamedFieldPuns"
-  , "NamedWildCards"
-  , "OverloadedStrings"
-  , "ParallelListComp"
-  , "PartialTypeSignatures"
-  , "PatternGuards"
-  , "PatternSignatures"
-  , "PatternSynonyms"
-  , "QuasiQuotes"
-  , "Rank2Types"
-  , "RankNTypes"
-  , "RecordPuns"
-  , "RecordWildCards"
-  , "RecursiveDo"
-  , "RelaxedPolyRec"
-  , "RoleAnnotations"
-  , "ScopedTypeVariables"
-  , "StandaloneDeriving"
-  , "StaticPointers"
-  , "TemplateHaskell"
-  , "TemplateHaskellQuotes"
-  , "TransformListComp"
-  , "TupleSections"
-  , "TypeApplications"
-  , "TypeFamilies"
-  , "TypeFamilyDependencies"
-  , "TypeInType"
-  , "TypeOperators"
-  , "TypeSynonymInstances"
-  , "UnboxedSums"
-  , "UndecidableInstances"
-  , "UndecidableSuperClasses"
-  , "ViewPatterns"
-  ]
+possiblePragmas = [name | FlagSpec{flagSpecName = T.pack -> name} <- xFlags, "Strict" /= name]
 
 -- ---------------------------------------------------------------------
 
