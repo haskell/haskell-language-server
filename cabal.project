@@ -20,6 +20,6 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-12-11T18:53:33Z
+index-state: 2020-12-13T11:31:58Z
 
 allow-newer: data-tree-print:base
