@@ -150,6 +150,8 @@ main = do
                     -- , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                     , optTesting           = IdeTesting argsTesting
                     , optThreads           = argsThreads
+                    , optCheckParents      = NeverCheck
+                    , optCheckProject      = CheckProject False
                     }
             logLevel = if argsVerbose then minBound else Info
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs

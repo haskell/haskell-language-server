@@ -13,7 +13,7 @@ import           Control.Concurrent.Extra       (Var, modifyVar_, newVar,
                                                  readVar, threadDelay)
 import           Control.Exception              (evaluate)
 import           Control.Exception.Safe         (catch, SomeException)
-import           Control.Monad                  (forM_, forever, (>=>))
+import           Control.Monad                  (unless, forM_, forever, (>=>))
 import           Control.Monad.Extra            (whenJust)
 import           Control.Seq                    (r0, seqList, seqTuple2, using)
 import           Data.Dynamic                   (Dynamic)
@@ -56,16 +56,20 @@ otTracedAction
     :: Show k
     => k -- ^ The Action's Key
     -> NormalizedFilePath -- ^ Path to the file the action was run for
+    -> (a -> Bool) -- ^ Did this action succeed?
     -> Action a -- ^ The action
     -> Action a
-otTracedAction key file act = actionBracket
+otTracedAction key file success act = actionBracket
     (do
         sp <- beginSpan (fromString (show key))
         setTag sp "File" (fromString $ fromNormalizedFilePath file)
         return sp
     )
     endSpan
-    (const act)
+    (\sp -> do
+        res <- act
+        unless (success res) $ setTag sp "error" "1"
+        return res)
 
 startTelemetry :: Logger -> Var Values -> IO ()
 startTelemetry logger stateRef = do

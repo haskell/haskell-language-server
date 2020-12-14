@@ -84,12 +84,25 @@ expectNoMoreDiagnostics timeout = do
         void (LspTest.message :: Session CustomResponse)
     ignoreOthers = void anyMessage >> handleMessages
 
+-- | It is not possible to use 'expectDiagnostics []' to assert the absence of diagnostics,
+--   only that existing diagnostics have been cleared.
+--
+--   Rather than trying to assert the absence of diagnostics, introduce an
+--   expected diagnostic (e.g. a redundant import) and assert the singleton diagnostic.
 expectDiagnostics :: [(FilePath, [(DiagnosticSeverity, Cursor, T.Text)])] -> Session ()
 expectDiagnostics
   = expectDiagnosticsWithTags
   . map (second (map (\(ds, c, t) -> (ds, c, t, Nothing))))
 
 expectDiagnosticsWithTags :: [(FilePath, [(DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)])] -> Session ()
+expectDiagnosticsWithTags [] = do
+    diagsNot <- skipManyTill anyMessage diagnostic
+    let actual = diagsNot ^. params . diagnostics
+    case actual of
+        List [] ->
+            return ()
+        _ ->
+            liftIO $ assertFailure $ "Got unexpected diagnostics:" <> show actual
 expectDiagnosticsWithTags expected = do
     let f = getDocUri >=> liftIO . canonicalizeUri >=> pure . toNormalizedUri
     expected' <- Map.fromListWith (<>) <$> traverseOf (traverse . _1) f expected

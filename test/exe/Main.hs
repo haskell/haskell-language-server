@@ -323,8 +323,11 @@ diagnosticTests = testGroup "diagnostics"
             , "import {-# SOURCE #-} ModuleB"
             ]
       let contentB = T.unlines
-            [ "module ModuleB where"
+            [ "{-# OPTIONS -Wmissing-signatures#-}"
+            , "module ModuleB where"
             , "import ModuleA"
+            -- introduce an artificial diagnostic
+            , "foo = ()"
             ]
       let contentBboot = T.unlines
             [ "module ModuleB where"
@@ -332,7 +335,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- createDoc "ModuleB.hs-boot" "haskell" contentBboot
-      expectDiagnostics []
+      expectDiagnostics [("ModuleB.hs", [(DsWarning, (3,0), "Top-level binding")])]
   , testSessionWait "correct reference used with hs-boot" $ do
       let contentB = T.unlines
             [ "module ModuleB where"
@@ -347,7 +350,8 @@ diagnosticTests = testGroup "diagnostics"
             [ "module ModuleA where"
             ]
       let contentC = T.unlines
-            [ "module ModuleC where"
+            [ "{-# OPTIONS -Wmissing-signatures #-}"
+            , "module ModuleC where"
             , "import ModuleA"
             -- this reference will fail if it gets incorrectly
             -- resolved to the hs-boot file
@@ -357,7 +361,7 @@ diagnosticTests = testGroup "diagnostics"
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleA.hs-boot" "haskell" contentAboot
       _ <- createDoc "ModuleC.hs" "haskell" contentC
-      expectDiagnostics []
+      expectDiagnostics [("ModuleC.hs", [(DsWarning, (3,0), "Top-level binding")])]
   , testSessionWait "redundant import" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
@@ -375,13 +379,15 @@ diagnosticTests = testGroup "diagnostics"
   , testSessionWait "redundant import even without warning" $ do
       let contentA = T.unlines ["module ModuleA where"]
       let contentB = T.unlines
-            [ "{-# OPTIONS_GHC -Wno-unused-imports #-}"
+            [ "{-# OPTIONS_GHC -Wno-unused-imports -Wmissing-signatures #-}"
             , "module ModuleB where"
             , "import ModuleA"
+            -- introduce an artificial warning for testing purposes
+            , "foo = ()"
             ]
       _ <- createDoc "ModuleA.hs" "haskell" contentA
       _ <- createDoc "ModuleB.hs" "haskell" contentB
-      expectDiagnostics []
+      expectDiagnostics [("ModuleB.hs", [(DsWarning, (3,0), "Top-level binding")])]
   , testSessionWait "package imports" $ do
       let thisDataListContent = T.unlines
             [ "module Data.List where"
@@ -538,6 +544,18 @@ diagnosticTests = testGroup "diagnostics"
       [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
       ]
     expectNoMoreDiagnostics 2
+
+  , testSessionWait "deduplicate missing module diagnostics" $  do
+      let fooContent = T.unlines [ "module Foo() where" , "import MissingModule" ]
+      doc <- createDoc "Foo.hs" "haskell" fooContent
+      expectDiagnostics [("Foo.hs", [(DsError, (1,7), "Could not find module 'MissingModule'")])]
+
+      changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing "module Foo() where" ]
+      expectDiagnostics []
+
+      changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines
+            [ "module Foo() where" , "import MissingModule" ] ]
+      expectDiagnostics [("Foo.hs", [(DsError, (1,7), "Could not find module 'MissingModule'")])]
   ]
 
 codeActionTests :: TestTree
