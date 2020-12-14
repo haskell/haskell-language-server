@@ -685,16 +685,16 @@ templates.
 #### Using Cabal
 
 ```shell
-$ cp hie.yaml.cbl hie.yaml
-$ cp install/hie.yaml.cbl install/hie.yaml
+$ cp hie-cabal.yaml hie.yaml
+$ cp install/hie-cabal.yaml install/hie.yaml
 ```
 
 #### Using Stack
 
 ```shell
-$ cp hie.yaml.stack hie.yaml
-$ cp install/hie.yaml.stack install/hie.yaml
-$ cp ghcide/hie.yaml.stack ghcide/hie.yaml
+$ cp hie-stack.yaml hie.yaml
+$ cp install/hie-stack.yaml install/hie.yaml
+$ cp ghcide/hie-stack.yaml ghcide/hie.yaml
 $ stack build --test --no-run-tests
 $ cd install
 $ stack build

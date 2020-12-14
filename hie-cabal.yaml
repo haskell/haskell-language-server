@@ -25,9 +25,6 @@ cradle:
             - path: "./plugins/default/src"
               component: "haskell-language-server:exe:haskell-language-server"
 
-            - path: "./plugins/tactics/src"
-              component: "lib:hls-tactics-plugin"
-
             - path: "./exe/Wrapper.hs"
               component: "haskell-language-server:exe:haskell-language-server-wrapper"
 
@@ -44,7 +41,21 @@ cradle:
               component: "ghcide:exe:ghcide"
 
             - path: "./hls-plugin-api/src"
-              component: "hls-plugin-api:lib:hls-plugin-api"
+              component: "hls-plugin-api"
+
+# Plugins:
+
+            - path: "./plugins/tactics/src"
+              component: "hls-tactics-plugin:lib:hls-tactics-plugin"
+
+            - path: "./plugins/tactics/test"
+              component: "hls-tactics-plugin:test:tests"
 
             - path: "./plugins/hls-hlint-plugin/src"
-              component: "lib:hls-hlint-plugin"
+              component: "hls-hlint-plugin"
+
+            - path: "./plugins/hls-retrie-plugin/src"
+              component: "hls-retrie-plugin"
+
+            - path: "./plugins/hls-explicit-imports-plugin/src"
+              component: "hls-explicit-imports-plugin"

@@ -36,14 +36,16 @@ cradle:
             - path: "./test/wrapper"
               component: "haskell-language-server:test:wrapper-test"
 
+            - path: "./hls-plugin-api/src"
+              component: "hls-plugin-api:lib"
+
+# Plugins:
+
             - path: "./plugins/hls-explicit-imports-plugin/src"
               component: "hls-explicit-imports-plugin:lib"
 
             - path: "./plugins/hls-hlint-plugin/src"
               component: "hls-hlint-plugin:lib"
-
-            - path: "./hls-plugin-api/src"
-              component: "hls-plugin-api:lib"
 
             - path: "./plugins/hls-retrie-plugin/src"
               component: "hls-retrie-plugin:lib"
