@@ -1,4 +1,10 @@
 {
+    "ghcs-nix": {
+        "branch": "master",
+        "repo": "https://gitlab.haskell.org/bgamari/ghcs-nix.git",
+        "rev": "71809abe1a0cc54490949156623cd4c8b76c84e3",
+        "type": "git"
+    },
     "gitignore": {
         "branch": "master",
         "description": "Nix function for filtering local git sources",
