@@ -553,16 +553,18 @@ getBindingsRule =
 getDocMapRule :: Rules ()
 getDocMapRule =
     define $ \GetDocMap file -> do
-      (tmrTypechecked -> tc,_) <- useWithStale_ TypeCheck file
-      (hscEnv -> hsc,_) <-useWithStale_ GhcSessionDeps file
-      (refMap -> rf, _) <- useWithStale_ GetHieAst file
+      -- Stale data for the scenario where a broken module has previously typechecked
+      -- but we never generated a DocMap for it
+      (tmrTypechecked -> tc, _) <- useWithStale_ TypeCheck file
+      (hscEnv -> hsc, _)        <- useWithStale_ GhcSessionDeps file
+      (refMap -> rf, _)         <- useWithStale_ GetHieAst file
 
 -- When possible, rely on the haddocks embedded in our interface files
 -- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
 #if !defined(GHC_LIB)
       let parsedDeps = []
 #else
-      deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
+      deps <- fromMaybe (TransitiveDependencies [] [] []) <$> use GetDependencies file
       let tdeps = transitiveModuleDeps deps
       parsedDeps <- uses_ GetParsedModule tdeps
 #endif
@@ -664,8 +666,8 @@ ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
 ghcSessionDepsDefinition file = do
         env <- use_ GhcSession file
         let hsc = hscEnv env
-        ((ms,_),_) <- useWithStale_ GetModSummaryWithoutTimestamps file
-        (deps,_) <- useWithStale_ GetDependencies file
+        (ms,_) <- use_ GetModSummaryWithoutTimestamps file
+        deps <- use_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
             uses_th_qq =
               xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
@@ -894,7 +896,15 @@ getLinkableType f = do
 
 needsCompilationRule :: Rules ()
 needsCompilationRule = defineEarlyCutoff $ \NeedsCompilation file -> do
-  ((ms,_),_) <- useWithStale_ GetModSummaryWithoutTimestamps file
+  -- It's important to use stale data here to avoid wasted work.
+  -- if NeedsCompilation fails for a module M its result will be  under-approximated
+  -- to False in its dependencies. However, if M actually used TH, this will
+  -- cause a re-evaluation of GetModIface for all dependencies
+  -- (since we don't need to generate object code anymore).
+  -- Once M is fixed we will discover that we actually needed all the object code
+  -- that we just threw away, and thus have to recompile all dependencies once
+  -- again, this time keeping the object code.
+  (ms,_) <- fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
   -- A file needs object code if it uses TemplateHaskell or any file that depends on it uses TemplateHaskell
   res <-
     if uses_th_qq ms
