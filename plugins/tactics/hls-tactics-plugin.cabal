@@ -2,12 +2,8 @@ cabal-version:      2.2
 category:           Development
 name:               hls-tactics-plugin
 version:            0.5.1.0
-synopsis:           LSP server for GHC
-description:
-  Please see the README on GitHub at <https://github.com/isovector/hls-tactics-plugin#readme>
-
-homepage:           https://github.com/isovector/hls-tactics-plugin#readme
-bug-reports:        https://github.com/isovector/hls-tactics-plugin/issues
+synopsis:           Tactics plugin for Haskell Language Server
+description:        Please see README.md
 author:             Sandy Maguire, Reed Mullanix
 maintainer:         sandy@sandymaguire.me
 copyright:          Sandy Maguire, Reed Mullanix
@@ -22,10 +18,6 @@ flag pedantic
   description: Enable -Werror
   default:     False
   manual:      True
-
-source-repository head
-  type:     git
-  location: https://github.com/isovector/hls-tactics-plugin
 
 library
   hs-source-dirs:   src
