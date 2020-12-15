@@ -30,7 +30,11 @@ import Development.IDE.GHC.Compat (ParsedModule(ParsedModule))
 import Development.IDE.Spans.Common
 import Development.IDE.Spans.Documentation
 import Development.IDE.Core.Rules (useE)
-import Development.IDE.Core.Shake (getDiagnostics, getHiddenDiagnostics)
+import Development.IDE.Core.Shake (
+      getDiagnostics
+    , getHiddenDiagnostics
+    , getIdeOptionsIO
+    )
 import GHC.Generics
 import GHC.Generics as GG
 import Ide.Plugin
@@ -75,8 +79,11 @@ import Development.IDE.GHC.Util
 import Outputable (Outputable)
 import qualified Data.Set as Set
 import ConLike
+import qualified Language.Haskell.LSP.Core as LSP
+import qualified Language.Haskell.LSP.VFS as VFS
 
 import GhcPlugins (
+    liftIO,
     flLabel,
     unpackFS)
 import Control.DeepSeq
@@ -162,6 +169,42 @@ data LocalCompletions = LocalCompletions
 instance Hashable LocalCompletions
 instance NFData   LocalCompletions
 instance Binary   LocalCompletions
+
+
+-- | Generate code actions.
+getCompletionsLSP
+    :: LSP.LspFuncs cofd
+    -> IdeState
+    -> CompletionParams
+    -> IO (Either ResponseError CompletionResponseResult)
+getCompletionsLSP lsp ide
+  CompletionParams{_textDocument=TextDocumentIdentifier uri
+                  ,_position=position
+                  ,_context=completionContext} = do
+    contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
+    fmap Right $ case (contents, uriToFilePath' uri) of
+      (Just cnts, Just path) -> do
+        let npath = toNormalizedFilePath' path
+        (ideOpts, compls) <- runIdeAction "Completion" (shakeExtras ide) $ do
+            opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
+            compls <- useWithStaleFast LocalCompletions npath
+            pm <- useWithStaleFast GetParsedModule npath
+            binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
+            pure (opts, fmap (,pm,binds) compls )
+        case compls of
+          Just ((cci', _), parsedMod, bindMap) -> do
+            pfix <- VFS.getCompletionPrefix position cnts
+            case (pfix, completionContext) of
+              (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
+                -> return (Completions $ List [])
+              (Just pfix', _) -> do
+                -- let clientCaps = clientCapabilities $ shakeExtras ide
+                -- Completions . List <$> getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps (WithSnippets True)
+                return (Completions $ List [])
+              _ -> return (Completions $ List [])
+          _ -> return (Completions $ List [])
+      _ -> return (Completions $ List [])
+
 
 completion :: CompletionProvider
 completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
