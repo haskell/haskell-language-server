@@ -98,7 +98,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginCodeLensProvider   = Nothing
   , pluginHoverProvider      = Nothing
   , pluginSymbolsProvider    = Nothing
-  , pluginCompletionProvider = Just completion
+  , pluginCompletionProvider = Just getCompletionsLSP
   }
 
 
@@ -375,3 +375,334 @@ extendImportList name lDecl = let
     f _ _ = Nothing
     src_span = srcSpanToRange . getLoc $ lDecl
     in f src_span . unLoc $ lDecl
+
+
+--- Completions that are returned and related functions
+
+-- | A context of a declaration in the program
+-- e.g. is the declaration a type declaration or a value declaration
+-- Used for determining which code completions to show
+data Context = TypeContext
+             | ValueContext
+             | ModuleContext String -- ^ module context with module name
+             | ImportContext String -- ^ import context with module name
+             | ImportListContext String -- ^ import list context with module name
+             | ImportHidingContext String -- ^ import hiding context with module name
+             | ExportContext -- ^ List of exported identifiers from the current module
+  deriving (Show, Eq)
+
+-- | Generates a map of where the context is a type and where the context is a value
+-- i.e. where are the value decls and the type decls
+getCContext :: Position -> ParsedModule -> Maybe Context
+getCContext pos pm
+  | Just (L r modName) <- moduleHeader
+  , pos `isInsideSrcSpan` r
+  = Just (ModuleContext (moduleNameString modName))
+
+  | Just (L r _) <- exportList
+  , pos `isInsideSrcSpan` r
+  = Just ExportContext
+
+  | Just ctx <- something (Nothing `mkQ` go `extQ` goInline) decl
+  = Just ctx
+
+  | Just ctx <- something (Nothing `mkQ` importGo) imports
+  = Just ctx
+
+  | otherwise
+  = Nothing
+  where decl = hsmodDecls $ unLoc $ pm_parsed_source pm
+        moduleHeader = hsmodName $ unLoc $ pm_parsed_source pm
+        exportList = hsmodExports $ unLoc $ pm_parsed_source pm
+        imports = hsmodImports $ unLoc $ pm_parsed_source pm
+
+        go :: LHsDecl GhcPs -> Maybe Context
+        go (L r SigD {})
+          | pos `isInsideSrcSpan` r = Just TypeContext
+          | otherwise = Nothing
+        go (L r GHC.ValD {})
+          | pos `isInsideSrcSpan` r = Just ValueContext
+          | otherwise = Nothing
+        go _ = Nothing
+
+        goInline :: GHC.LHsType GhcPs -> Maybe Context
+        goInline (GHC.L r _)
+          | pos `isInsideSrcSpan` r = Just TypeContext
+        goInline _ = Nothing
+
+        importGo :: GHC.LImportDecl GhcPs -> Maybe Context
+        importGo (L r impDecl)
+          | pos `isInsideSrcSpan` r
+          = importInline importModuleName (ideclHiding impDecl)
+          <|> Just (ImportContext importModuleName)
+
+          | otherwise = Nothing
+          where importModuleName = moduleNameString $ unLoc $ ideclName impDecl
+
+        importInline :: String -> Maybe (Bool,  GHC.Located [LIE GhcPs]) -> Maybe Context
+        importInline modName (Just (True, L r _))
+          | pos `isInsideSrcSpan` r = Just $ ImportHidingContext modName
+          | otherwise = Nothing
+        importInline modName (Just (False, L r _))
+          | pos `isInsideSrcSpan` r = Just $ ImportListContext modName
+          | otherwise = Nothing
+        importInline _ _ = Nothing
+
+
+-- | Returns the cached completions for the given module and position.
+getCompletions
+    :: IdeOptions
+    -> CachedCompletions
+    -> Maybe (ParsedModule, PositionMapping)
+    -> (Bindings, PositionMapping)
+    -> VFS.PosPrefixInfo
+    -> ClientCapabilities
+    -> WithSnippets
+    -> IO [CompletionItem]
+getCompletions ideOpts CC { unqualCompls }
+               maybe_parsed (localBindings, bmapping) prefixInfo caps withSnippets = do
+  let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
+      enteredQual = if T.null prefixModule then "" else prefixModule <> "."
+      fullPrefix  = enteredQual <> prefixText
+
+      {- correct the position by moving 'foo :: Int -> String ->    '
+                                                                    ^
+          to                             'foo :: Int -> String ->    '
+                                                              ^
+      -}
+      pos = VFS.cursorPos prefixInfo
+
+      filtCompls = map Fuzzy.original $ Fuzzy.filter prefixText ctxCompls "" "" label False
+        where
+
+          mcc = case maybe_parsed of
+            Nothing -> Nothing
+            Just (pm, pmapping) ->
+              let PositionMapping pDelta = pmapping
+                  position' = fromDelta pDelta pos
+                  lpos = lowerRange position'
+                  hpos = upperRange position'
+              in getCContext lpos pm <|> getCContext hpos pm
+
+          -- completions specific to the current context
+          ctxCompls' = case mcc of
+                        Nothing -> compls
+                        Just TypeContext -> filter isTypeCompl compls
+                        Just ValueContext -> filter (not . isTypeCompl) compls
+                        Just _ -> filter (not . isTypeCompl) compls
+          -- Add whether the text to insert has backticks
+          ctxCompls = map (\comp -> comp { isInfix = infixCompls }) ctxCompls'
+
+          infixCompls :: Maybe Backtick
+          infixCompls = isUsedAsInfix fullLine prefixModule prefixText pos
+
+          PositionMapping bDelta = bmapping
+          oldPos = fromDelta bDelta $ VFS.cursorPos prefixInfo
+          startLoc = lowerRange oldPos
+          endLoc = upperRange oldPos
+          localCompls = map (uncurry localBindsToCompItem) $ getFuzzyScope localBindings startLoc endLoc
+          localBindsToCompItem :: Name -> Maybe Type -> CompItem
+          localBindsToCompItem name typ = CI ctyp pn thisModName ty pn Nothing emptySpanDoc (not $ isValOcc occ) Nothing
+            where
+              occ = nameOccName name
+              ctyp = occNameToComKind Nothing occ
+              pn = ppr name
+              ty = ppr <$> typ
+              thisModName = case nameModule_maybe name of
+                Nothing -> Left $ nameSrcSpan name
+                Just m -> Right $ ppr m
+
+          compls = if T.null prefixModule
+            then localCompls
+            else []
+
+      filtListWith f list =
+        [ f label
+        | label <- Fuzzy.simpleFilter fullPrefix list
+        , enteredQual `T.isPrefixOf` label
+        ]
+
+      filtListWithSnippet f list suffix =
+        [ toggleSnippets caps withSnippets (f label (snippet <> (suffix:: T.Text)))
+        | (snippet, label) <- list
+        , Fuzzy.test fullPrefix label
+        ]
+
+      filtKeywordCompls
+          | T.null prefixModule = filtListWith mkExtCompl (optKeywords ideOpts)
+          | otherwise = []
+
+      stripLeading :: Char -> String -> String
+      stripLeading _ [] = []
+      stripLeading c (s:ss)
+        | s == c = ss
+        | otherwise = s:ss
+
+      result
+        | "import " `T.isPrefixOf` fullLine
+        = []
+        | "{-#" `T.isPrefixOf` T.toLower fullLine
+        = []
+        | otherwise
+        = let uniqueFiltCompls = nubOrdOn insertText filtCompls
+          in map (toggleSnippets caps withSnippets
+                     . mkCompl ideOpts . stripAutoGenerated) uniqueFiltCompls
+             ++ filtKeywordCompls
+  return result
+
+
+mkCompl :: IdeOptions -> CompItem -> CompletionItem
+mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs, additionalTextEdits} =
+  CompletionItem {_label = label,
+                  _kind = kind,
+                  _tags = List [],
+                  _detail = (colon <>) <$> typeText,
+                  _documentation = documentation,
+                  _deprecated = Nothing,
+                  _preselect = Nothing,
+                  _sortText = Nothing,
+                  _filterText = Nothing,
+                  _insertText = Just insertText,
+                  _insertTextFormat = Just Snippet,
+                  _textEdit = Nothing,
+                  _additionalTextEdits = List <$> additionalTextEdits,
+                  _commitCharacters = Nothing,
+                  _command = Nothing,
+                  _xdata = Nothing}
+
+  where kind = Just compKind
+        docs' = imported : spanDocToMarkdown docs
+        imported = case importedFrom of
+          Left pos -> "*Defined at '" <> ppr pos <> "'*\n'"
+          Right mod -> "*Defined in '" <> mod <> "'*\n"
+        colon = if optNewColonConvention then ": " else ":: "
+        documentation = Just $ CompletionDocMarkup $
+                        MarkupContent MkMarkdown $
+                        T.intercalate sectionSeparator docs'
+
+-- TODO: We probably don't need to this function in this module
+mkExtCompl :: T.Text -> CompletionItem
+mkExtCompl label =
+  CompletionItem
+    label
+    (Just CiKeyword)
+    (List [])
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+    Nothing
+
+
+--- helper functions that will be useful for non-local completions as well
+
+hasTrailingBacktick :: T.Text -> Position -> Bool
+hasTrailingBacktick line Position { _character }
+    | T.length line > _character = (line `T.index` _character) == '`'
+    | otherwise = False
+
+isUsedAsInfix :: T.Text -> T.Text -> T.Text -> Position -> Maybe Backtick
+isUsedAsInfix line prefixMod prefixText pos
+    | hasClosingBacktick && hasOpeningBacktick = Just Surrounded
+    | hasOpeningBacktick = Just LeftSide
+    | otherwise = Nothing
+  where
+    hasOpeningBacktick = openingBacktick line prefixMod prefixText pos
+    hasClosingBacktick = hasTrailingBacktick line pos
+
+openingBacktick :: T.Text -> T.Text -> T.Text -> Position -> Bool
+openingBacktick line prefixModule prefixText Position { _character }
+  | backtickIndex < 0 = False
+  | otherwise = (line `T.index` backtickIndex) == '`'
+    where
+    backtickIndex :: Int
+    backtickIndex =
+      let
+          prefixLength = T.length prefixText
+          moduleLength = if prefixModule == ""
+                    then 0
+                    else T.length prefixModule + 1 {- Because of "." -}
+      in
+        -- Points to the first letter of either the module or prefix text
+        _character - (prefixLength + moduleLength) - 1
+
+toggleSnippets :: ClientCapabilities -> WithSnippets -> CompletionItem -> CompletionItem
+toggleSnippets ClientCapabilities {_textDocument} (WithSnippets with) x
+  | with && supported = x
+  | otherwise =
+    x
+      { _insertTextFormat = Just PlainText,
+        _insertText = Nothing
+      }
+  where
+    supported =
+      Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
+
+-- | Under certain circumstance GHC generates some extra stuff that we
+-- don't want in the autocompleted symbols
+stripAutoGenerated :: CompItem -> CompItem
+stripAutoGenerated ci =
+    ci {label = stripPrefix (label ci)}
+    {- When e.g. DuplicateRecordFields is enabled, compiler generates
+    names like "$sel:accessor:One" and "$sel:accessor:Two" to disambiguate record selectors
+    https://ghc.haskell.org/trac/ghc/wiki/Records/OverloadedRecordFields/DuplicateRecordFields#Implementation
+    -}
+
+stripPrefix :: T.Text -> T.Text
+stripPrefix name = T.takeWhile (/= ':') $ go prefixes
+  where
+    go [] = name
+    go (p : ps)
+      | T.isPrefixOf p name = T.drop (T.length p) name
+      | otherwise = go ps
+
+
+-- | Prefixes that can occur in a GHC OccName
+prefixes :: [T.Text]
+prefixes =
+  [
+    -- long ones
+    "$con2tag_"
+  , "$tag2con_"
+  , "$maxtag_"
+
+  -- four chars
+  , "$sel:"
+  , "$tc'"
+
+  -- three chars
+  , "$dm"
+  , "$co"
+  , "$tc"
+  , "$cp"
+  , "$fx"
+
+  -- two chars
+  , "$W"
+  , "$w"
+  , "$m"
+  , "$b"
+  , "$c"
+  , "$d"
+  , "$i"
+  , "$s"
+  , "$f"
+  , "$r"
+  , "C:"
+  , "N:"
+  , "D:"
+  , "$p"
+  , "$L"
+  , "$f"
+  , "$t"
+  , "$c"
+  , "$m"
+  ]
