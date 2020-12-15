@@ -1,4 +1,10 @@
 cradle:
   direct:
     arguments:
+      - "-DFLAG"
+      - "-Wno-unrecognised-pragmas"
+      - "ApplyRefact1"
       - "ApplyRefact2"
+      - "ApplyRefact3"
+      - "ApplyRefact4"
+      - "ApplyRefact5"

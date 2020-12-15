@@ -1,0 +1,2 @@
+- ignore: { name: "Redundant bracket" }
+- ignore: { name: "Use camelCase" }
