@@ -62,3 +62,6 @@ cradle:
 
             - path: "./plugins/tactics/test"
               component: "hls-tactics-plugin:test:tests"
+
+            - path: "./plugins/hls-haddock-comments-plugin/src"
+              component: "hls-haddock-comments-plugin:lib"
