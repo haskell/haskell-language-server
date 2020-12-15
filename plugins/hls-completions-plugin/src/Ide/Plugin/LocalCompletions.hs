@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
@@ -7,6 +8,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Ide.Plugin.LocalCompletions
   (
@@ -18,189 +22,146 @@ import Control.Monad.Trans.Maybe
 import Data.Aeson
 import Data.Binary
 import Data.Functor
-import qualified Data.HashMap.Strict as Map
 import Data.Hashable
 import qualified Data.Text as T
 import Data.Typeable
 import Development.IDE as D
 import Development.IDE.GHC.Compat (ParsedModule(ParsedModule))
+import Development.IDE.Spans.Common
+import Development.IDE.Spans.Documentation
 import Development.IDE.Core.Rules (useE)
 import Development.IDE.Core.Shake (getDiagnostics, getHiddenDiagnostics)
 import GHC.Generics
+import GHC.Generics as GG
 import Ide.Plugin
 import Ide.Types
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
 
+import Control.Applicative
+import Data.Char (isAlphaNum, isUpper)
+import Data.Generics as G
+import Data.List.Extra as List hiding (stripPrefix)
+import qualified Data.Map  as Map
+
+import Data.Maybe (listToMaybe, fromMaybe, mapMaybe)
+import qualified Data.Text as T
+import qualified Text.Fuzzy as Fuzzy
+
+import HscTypes
+import Name
+import RdrName
+import Type
+import Packages
+-- #if MIN_GHC_API_VERSION(8,10,0)
+-- import Predicate (isDictTy)
+-- import Pair
+-- import Coercion
+-- #endif
+
+import Language.Haskell.LSP.Types
+import Language.Haskell.LSP.Types.Capabilities
+-- import qualified Language.Haskell.LSP.VFS as VFS
+-- import Development.IDE.Core.Compile
+import Development.IDE.Core.PositionMapping
+-- import Development.IDE.Plugin.Completions.Types
+-- import Development.IDE.Spans.Documentation
+import Development.IDE.Spans.LocalBindings
+import Development.IDE.GHC.Compat as GHC
+import Development.IDE.GHC.Error
+import Development.IDE.Types.Options
+import Development.IDE.Spans.Common
+import Development.IDE.GHC.Util
+import Outputable (Outputable)
+import qualified Data.Set as Set
+import ConLike
+
+import GhcPlugins (
+    flLabel,
+    unpackFS)
+import Control.DeepSeq
+
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = exampleRules
-  , pluginCommands = [PluginCommand "codelens.todo" "example adding" addTodoCmd]
-  , pluginCodeActionProvider = Just codeAction
-  , pluginCodeLensProvider   = Just codeLens
-  , pluginHoverProvider      = Just hover
-  , pluginSymbolsProvider    = Just symbols
+  {
+    pluginCommands = []
+  , pluginCodeActionProvider = Nothing
+  , pluginCodeLensProvider   = Nothing
+  , pluginHoverProvider      = Nothing
+  , pluginSymbolsProvider    = Nothing
   , pluginCompletionProvider = Just completion
   }
 
--- ---------------------------------------------------------------------
 
-hover :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
-hover = request "Hover" blah (Right Nothing) foundHover
+------------------------
+--- Completion Types
+------------------------
 
-blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
-blah _ (Position line col)
-  = return $ Just (Just (Range (Position line col) (Position (line+1) 0)), ["example hover 1\n"])
+data Backtick = Surrounded | LeftSide
+  deriving (Eq, Ord, Show)
 
--- ---------------------------------------------------------------------
--- Generating Diagnostics via rules
--- ---------------------------------------------------------------------
 
-data Example = Example
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable Example
-instance NFData   Example
-instance Binary   Example
+-- | Intermediate Result of Completions
+data CachedCompletions = CC
+  {
+   unqualCompls :: [CompItem]  -- ^ All Possible completion items
+  } deriving Show
 
-type instance RuleResult Example = ()
+instance NFData CachedCompletions where
+    rnf = rwhnf
 
-exampleRules :: Rules ()
-exampleRules = do
-  define $ \Example file -> do
-    _pm <- getParsedModule file
-    let diag = mkDiag file "example" DsError (Range (Position 0 0) (Position 1 0)) "example diagnostic, hello world"
-    return ([diag], Just ())
+instance Monoid CachedCompletions where
+    mempty = CC mempty
 
-  action $ do
-    files <- getFilesOfInterest
-    void $ uses Example $ Map.keys files
+instance Semigroup CachedCompletions where
+    CC a <> CC a' =
+        CC (a<>a')
 
-mkDiag :: NormalizedFilePath
-       -> DiagnosticSource
-       -> DiagnosticSeverity
-       -> Range
-       -> T.Text
-       -> FileDiagnostic
-mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
-    Diagnostic
-    { _range    = loc
-    , _severity = Just sev
-    , _source   = Just diagSource
-    , _message  = msg
-    , _code     = Nothing
-    , _tags     = Nothing
-    , _relatedInformation = Nothing
-    }
 
--- ---------------------------------------------------------------------
--- code actions
--- ---------------------------------------------------------------------
-
--- | Generate code actions.
-codeAction :: CodeActionProvider
-codeAction _lf state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
-    let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
-    Just (ParsedModule{},_) <- runIdeAction "example" (shakeExtras state) $ useWithStaleFast GetParsedModule nfp
-    let
-      title = "Add TODO Item 1"
-      tedit = [TextEdit (Range (Position 2 0) (Position 2 0))
-               "-- TODO1 added by Example Plugin directly\n"]
-      edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-    pure $ Right $ List
-        [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) (Just edit) Nothing ]
-
--- ---------------------------------------------------------------------
-
-codeLens :: CodeLensProvider
-codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
-    logInfo (ideLogger ideState) "Example.codeLens entered (ideLogger)" -- AZ
-    case uriToFilePath' uri of
-      Just (toNormalizedFilePath -> filePath) -> do
-        _ <- runIdeAction "Example.codeLens" (shakeExtras ideState) $ runMaybeT $ useE TypeCheck filePath
-        _diag <- getDiagnostics ideState
-        _hDiag <- getHiddenDiagnostics ideState
-        let
-          title = "Add TODO Item via Code Lens"
-          -- tedit = [TextEdit (Range (Position 3 0) (Position 3 0))
-          --      "-- TODO added by Example Plugin via code lens action\n"]
-          -- edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-          range = Range (Position 3 0) (Position 4 0)
-        let cmdParams = AddTodoParams uri "do abc"
-        cmd <- mkLspCommand plId "codelens.todo" title (Just [(toJSON cmdParams)])
-        pure $ Right $ List [ CodeLens range (Just cmd) Nothing ]
-      Nothing -> pure $ Right $ List []
-
--- ---------------------------------------------------------------------
--- | Parameters for the addTodo PluginCommand.
-data AddTodoParams = AddTodoParams
-  { file   :: Uri  -- ^ Uri of the file to add the pragma to
-  , todoText :: T.Text
+data CompItem = CI
+  { compKind :: CompletionItemKind,
+    -- | Snippet for the completion
+    insertText :: T.Text,
+    -- | From where this item is imported from.
+    importedFrom :: Either SrcSpan T.Text,
+    -- | Available type information.
+    typeText :: Maybe T.Text,
+    -- | Label to display to the user.
+    label :: T.Text,
+    -- | Did the completion happen
+    -- in the context of an infix notation.
+    isInfix :: Maybe Backtick,
+    -- | Available documentation.
+    docs :: SpanDoc,
+    isTypeCompl :: Bool,
+    additionalTextEdits :: Maybe [TextEdit]
   }
-  deriving (Show, Eq, Generic, ToJSON, FromJSON)
-
-addTodoCmd :: CommandFunction AddTodoParams
-addTodoCmd _lf _ide (AddTodoParams uri todoText) = do
-  let
-    pos = Position 3 0
-    textEdits = List
-      [TextEdit (Range pos pos)
-                  ("-- TODO:" <> todoText <> "\n")
-      ]
-    res = WorkspaceEdit
-      (Just $ Map.singleton uri textEdits)
-      Nothing
-  return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+  deriving (Eq, Show)
 
 -- ---------------------------------------------------------------------
-
-foundHover :: (Maybe Range, [T.Text]) -> Either ResponseError (Maybe Hover)
-foundHover (mbRange, contents) =
-  Right $ Just $ Hover (HoverContents $ MarkupContent MkMarkdown
-                        $ T.intercalate sectionSeparator contents) mbRange
-
-
--- | Respond to and log a hover or go-to-definition request
-request
-  :: T.Text
-  -> (NormalizedFilePath -> Position -> Action (Maybe a))
-  -> Either ResponseError b
-  -> (a -> Either ResponseError b)
-  -> IdeState
-  -> TextDocumentPositionParams
-  -> IO (Either ResponseError b)
-request label getResults notFound found ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos _) = do
-    mbResult <- case uriToFilePath' uri of
-        Just path -> logAndRunRequest label getResults ide pos path
-        Nothing   -> pure Nothing
-    pure $ maybe notFound found mbResult
-
-logAndRunRequest :: T.Text -> (NormalizedFilePath -> Position -> Action b)
-                  -> IdeState -> Position -> String -> IO b
-logAndRunRequest label getResults ide pos path = do
-  let filePath = toNormalizedFilePath path
-  logInfo (ideLogger ide) $
-    label <> " request at position " <> T.pack (showPosition pos) <>
-    " in file: " <> T.pack path
-  runAction "Example" ide $ getResults filePath pos
-
+-- Generating Local Completions via Rules
 -- ---------------------------------------------------------------------
 
-symbols :: SymbolsProvider
-symbols _lf _ide (DocumentSymbolParams _doc _mt)
-    = pure $ Right [r]
-    where
-        r = DocumentSymbol name detail kind deprecation range selR chList
-        name = "Example_symbol_name"
-        detail = Nothing
-        kind = SkVariable
-        deprecation = Nothing
-        range = Range (Position 2 0) (Position 2 5)
-        selR = range
-        chList = Nothing
+produceLocalCompletions :: Rules ()
+produceLocalCompletions = do
+    define $ \LocalCompletions file -> do
+        pm <- useWithStale GetParsedModule file
+        case pm of
+            Just (pm, _) -> do
+                let cdata = localCompletionsForParsedModule pm
+                return ([], Just cdata)
+            _ -> return ([], Nothing)
 
--- ---------------------------------------------------------------------
+-- | Produce completions info for a file
+type instance RuleResult LocalCompletions = CachedCompletions
+
+data LocalCompletions = LocalCompletions
+     deriving (Eq, Show, Typeable, GG.Generic)
+instance Hashable LocalCompletions
+instance NFData   LocalCompletions
+instance Binary   LocalCompletions
 
 completion :: CompletionProvider
 completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
@@ -228,3 +189,146 @@ completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
         xd = Nothing
 
 -- ---------------------------------------------------------------------
+-- Supporting code
+------------------------------------------------------------------------
+
+-- | Produces completions from the top level declarations of a module.
+localCompletionsForParsedModule :: ParsedModule -> CachedCompletions
+localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls, hsmodName}} =
+    CC { unqualCompls = compls }
+  where
+    typeSigIds = Set.fromList
+        [ id
+            | L _ (SigD _ (TypeSig _ ids _)) <- hsmodDecls
+            , L _ id <- ids
+            ]
+    hasTypeSig = (`Set.member` typeSigIds) . unLoc
+
+    compls = concat
+        [ case decl of
+            SigD _ (TypeSig _ ids typ) ->
+                [mkComp id CiFunction (Just $ ppr typ) | id <- ids]
+            ValD _ FunBind{fun_id} ->
+                [ mkComp fun_id CiFunction Nothing
+                | not (hasTypeSig fun_id)
+                ]
+            ValD _ PatBind{pat_lhs} ->
+                [mkComp id CiVariable Nothing
+                | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
+            TyClD _ ClassDecl{tcdLName, tcdSigs} ->
+                mkComp tcdLName CiClass Nothing :
+                [ mkComp id CiFunction (Just $ ppr typ)
+                | L _ (TypeSig _ ids typ) <- tcdSigs
+                , id <- ids]
+            TyClD _ x ->
+                let generalCompls = [mkComp id cl Nothing
+                        | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
+                        , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
+                    -- here we only have to look at the outermost type
+                    recordCompls = findRecordCompl pm thisModName x
+                in
+                   -- the constructors and snippets will be duplicated here giving the user 2 choices.
+                   generalCompls ++ recordCompls
+            ForD _ ForeignImport{fd_name,fd_sig_ty} ->
+                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+            ForD _ ForeignExport{fd_name,fd_sig_ty} ->
+                [mkComp fd_name CiVariable (Just $ ppr fd_sig_ty)]
+            _ -> []
+            | L _ decl <- hsmodDecls
+        ]
+
+    mkComp n ctyp ty =
+        CI ctyp pn (Right thisModName) ty pn Nothing doc (ctyp `elem` [CiStruct, CiClass]) Nothing
+      where
+        pn = ppr n
+        doc = SpanDocText (getDocumentation [pm] n) (SpanDocUris Nothing Nothing)
+
+    thisModName = ppr hsmodName
+
+findRecordCompl :: ParsedModule -> T.Text -> TyClDecl GhcPs -> [CompItem]
+findRecordCompl pmod mn DataDecl {tcdLName, tcdDataDefn} = result
+    where
+        result = [mkRecordSnippetCompItem (T.pack . showGhc . unLoc $ con_name) field_labels mn doc Nothing
+                 | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
+                 , Just  con_details <- [getFlds con_args]
+                 , let field_names = mapMaybe extract con_details
+                 , let field_labels = T.pack . showGhc . unLoc <$> field_names
+                 , (not . List.null) field_labels
+                 ]
+        doc = SpanDocText (getDocumentation [pmod] tcdLName) (SpanDocUris Nothing Nothing)
+
+        getFlds :: HsConDetails arg (Located [LConDeclField GhcPs]) -> Maybe [ConDeclField GhcPs]
+        getFlds conArg = case conArg of
+                             RecCon rec -> Just $ unLoc <$> unLoc rec
+                             PrefixCon _ -> Just []
+                             _ -> Nothing
+
+        extract ConDeclField{..}
+             -- TODO: Why is cd_fld_names a list?
+            | Just fld_name <- rdrNameFieldOcc . unLoc <$> listToMaybe cd_fld_names = Just fld_name
+            | otherwise = Nothing
+        -- XConDeclField
+        extract _ = Nothing
+findRecordCompl _ _ _ = []
+
+
+ppr :: Outputable a => a -> T.Text
+ppr = T.pack . prettyPrint
+
+occNameToComKind :: Maybe T.Text -> OccName -> CompletionItemKind
+occNameToComKind ty oc
+  | isVarOcc  oc = case occNameString oc of
+                     i:_ | isUpper i -> CiConstructor
+                     _               -> CiFunction
+  | isTcOcc   oc = case ty of
+                     Just t
+                       | "Constraint" `T.isSuffixOf` t
+                       -> CiClass
+                     _ -> CiStruct
+  | isDataOcc oc = CiConstructor
+  | otherwise    = CiVariable
+
+
+mkRecordSnippetCompItem :: T.Text -> [T.Text] -> T.Text -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
+mkRecordSnippetCompItem ctxStr compl mn docs imp = r
+  where
+    r =
+      CI
+        { compKind = CiSnippet,
+          insertText = buildSnippet,
+          importedFrom = importedFrom,
+          typeText = Nothing,
+          label = ctxStr,
+          isInfix = Nothing,
+          docs = docs,
+          isTypeCompl = False,
+          additionalTextEdits = imp >>= extendImportList (T.unpack ctxStr)
+        }
+
+    placeholder_pairs = zip compl ([1 ..] :: [Int])
+    snippet_parts = map (\(x, i) -> x <> "=${" <> T.pack (show i) <> ":_" <> x <> "}") placeholder_pairs
+    snippet = T.intercalate (T.pack ", ") snippet_parts
+    buildSnippet = ctxStr <> " {" <> snippet <> "}"
+    importedFrom = Right mn
+
+
+extendImportList :: String -> LImportDecl GhcPs -> Maybe [TextEdit]
+extendImportList name lDecl = let
+    f (Just range) ImportDecl {ideclHiding} = case ideclHiding of
+        Just (False, x)
+          | Set.notMember name (Set.fromList [show y| y <- unLoc x])
+          -> let
+            start_pos = _end range
+            new_start_pos = start_pos {_character = _character start_pos - 1}
+            -- use to same start_pos to handle situation where we do not have latest edits due to caching of Rules
+            new_range = Range new_start_pos new_start_pos
+            -- we cannot wrap mapM_ inside (mapM_) but we need to wrap (<$)
+            alpha = all isAlphaNum $ filter (\c -> c /= '_') name
+            result = if alpha then name ++ ", "
+                else "(" ++ name ++ "), "
+            in Just [TextEdit new_range (T.pack result)]
+          | otherwise -> Nothing
+        _ -> Nothing  -- hiding import list and no list
+    f _ _ = Nothing
+    src_span = srcSpanToRange . getLoc $ lDecl
+    in f src_span . unLoc $ lDecl
