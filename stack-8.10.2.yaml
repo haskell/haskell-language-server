@@ -1,4 +1,4 @@
-resolver: nightly-2020-11-22
+resolver: nightly-2020-12-09
 
 packages:
 - .
@@ -14,18 +14,17 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-- github: bubba/brittany
-  commit: c59655f10d5ad295c2481537fc8abf0a297d9d1c
+- brittany-0.13.1.0
 - Cabal-3.0.2.0
 - clock-0.7.2
-- data-tree-print-0.1.0.2
+- data-tree-print-0.1.0.2@rev:2
 - floskell-0.10.4
 - fourmolu-0.3.0.0
+- heapsize-0.3.0
 - implicit-hie-cradle-0.3.0.2
 - implicit-hie-0.1.2.5
 - lsp-test-0.11.0.6
 - monad-dijkstra-0.1.1.2
-- opentelemetry-0.4.2
 - refinery-0.3.0.0
 - retrie-0.1.1.1
 - stylish-haskell-0.12.2.0
@@ -37,9 +36,6 @@ flags:
     pedantic: true
   retrie:
     BuildExecutable: false
-
-# for data-tree-print's bounds on base (>=4.8 && <4.14); using base-4.14.0.0.
-allow-newer: true
 
 nix:
   packages: [ icu libcxx zlib ]

@@ -26,6 +26,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
 
     packages = p: [ p.haskell-language-server
                     p.ghcide
+                    p.shake-bench
                     p.hie-compat
                     p.hls-plugin-api
                     p.hls-tactics-plugin

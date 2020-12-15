@@ -1,7 +1,7 @@
 cabal-version:      2.2
 category:           Development
 name:               haskell-language-server
-version:            0.6.0.0
+version:            0.7.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -59,10 +59,9 @@ library
     , containers
     , data-default
     , ghc
-    , ghcide                >=0.5
+    , ghcide                >=0.6.0.1
     , gitrev
     , haskell-lsp           ^>=0.22
-    , hie-bios              >=0.6.1 && <0.8
     , hls-plugin-api        >=0.5
     , hslogger
     , optparse-applicative
@@ -144,7 +143,7 @@ executable haskell-language-server
     , unordered-containers
 
   if flag(agpl)
-    build-depends: brittany
+    build-depends: brittany     >= 0.13.1.0
     other-modules: Ide.Plugin.Brittany
 
   include-dirs:     include
@@ -170,6 +169,7 @@ executable haskell-language-server-wrapper
   build-depends:
     , ghc
     , ghc-paths
+    , ghcide
     , gitrev
     , haskell-language-server
     , hie-bios

@@ -8,11 +8,6 @@ packages:
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-retrie-plugin
 
-source-repository-package
-  type: git
-  location: https://github.com/bubba/brittany.git
-  tag: c59655f10d5ad295c2481537fc8abf0a297d9d1c
-
 tests: true
 
 package *
@@ -25,6 +20,6 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-12-03T03:58:05Z
+index-state: 2020-12-13T11:31:58Z
 
 allow-newer: data-tree-print:base
