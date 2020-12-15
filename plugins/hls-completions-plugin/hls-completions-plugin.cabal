@@ -31,6 +31,12 @@ library
                   , binary
                   , hashable
                   , regex-tdfa
+                  , syb
+                  , extra
+                  , fuzzy
+                  , haskell-lsp-types == 0.22.*
+                  , haskell-lsp == 0.22.*
+                  , ghcide
 
 
   default-language: Haskell2010
