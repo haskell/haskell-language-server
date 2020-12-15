@@ -37,10 +37,11 @@ nix:
   packages: [zlib]
 
 configure-options:
+    ghcide:
+        - --disable-library-for-ghci
     heapsize:
         - --disable-library-for-ghci
-        - --disable-library-stripping
-# Otherwise the ghcide will fail with:
+# Otherwise the ghcide build will fail with:
 # ```
 # ghcide                           > ghc.exe: unable to load package `heapsize-0.2'
 # ghcide                           > ghc-iserv:  | D:\a\1\s\.stack-work\install\52d658b2\lib\x86_64-windows-ghc-8.10.1\heapsize-0.2-KCPoGpPDcevACNftTTY2at\HSheapsize-0.2-KCPoGpPDcevACNftTTY2at.o: unknown symbol `heap_view_closurePtrs'
@@ -48,7 +49,12 @@ configure-options:
 # Cause:
 # The pre-linked object file is missing the heapsize_prim.o symbols table (from the cbits object)
 #
-# Reason: The ld invocation is stripping too much
+# Reason: Not sure, maybe the ld invocation is stripping too much
+#
+# Fix: do not generate the pre-linked object to prevent ghc from using it at link time.
+#      There are two instances where this must be prevented:
+#         1. When linking the ghcide library (using the heapsize pre-linked object)
+#         2. When linking the ghcide executable (using the ghcide pre-linked object)
 #
 # Quoting https://downloads.haskell.org/ghc/latest/docs/html/users_guide/packages.html
 #
