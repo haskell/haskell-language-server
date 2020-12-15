@@ -622,11 +622,8 @@ suggestExtendImport exportsMap contents Diagnostic{_range=_range,..}
             importLine <- textInRange range c,
             Just ident <- lookupExportMap binding mod,
             Just result <- addBindingToImportList ident importLine
-            = [("Add " <> renderImport ident <> " to the import list of " <> mod, [TextEdit range result])]
+            = [("Add " <> renderIdentInfo ident <> " to the import list of " <> mod, [TextEdit range result])]
           | otherwise = []
-        renderImport IdentInfo {parent, rendered}
-          | Just p <- parent = p <> "(" <> rendered <> ")"
-          | otherwise        = rendered
         lookupExportMap binding mod
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
           , [(ident, _)] <- filter (\(_,m) -> mod == m) (Set.toList match)
@@ -899,7 +896,8 @@ removeRedundantConstraints mContents Diagnostic{..}
 suggestNewImport :: ExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
   | msg <- unifySpaces _message
-  , Just name <- extractNotInScopeName msg
+  , Just thingMissing <- extractNotInScopeName msg
+  , qual <- extractQualifiedModuleName msg
   , Just insertLine <- case hsmodImports of
         [] -> case srcSpanStart $ getLoc (head hsmodDecls) of
           RealSrcLoc s -> Just $ srcLocLine s - 1
@@ -911,15 +909,16 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = [(imp, [TextEdit (Range insertPos insertPos) (imp <> "\n")])
-    | imp <- sort $ constructNewImportSuggestions packageExportsMap name extendImportSuggestions
+    | imp <- sort $ constructNewImportSuggestions packageExportsMap (qual, thingMissing) extendImportSuggestions
     ]
 suggestNewImport _ _ _ = []
 
 constructNewImportSuggestions
-  :: ExportsMap -> NotInScope -> Maybe [T.Text] -> [T.Text]
-constructNewImportSuggestions exportsMap thingMissing notTheseModules = nubOrd
+  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [T.Text]
+constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrd
   [ suggestion
-  | (identInfo, m) <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
+  | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
+  , (identInfo, m) <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
   , canUseIdent thingMissing identInfo
   , m `notElem` fromMaybe [] notTheseModules
   , suggestion <- renderNewImport identInfo m
@@ -930,15 +929,8 @@ constructNewImportSuggestions exportsMap thingMissing notTheseModules = nubOrd
     , asQ <- if q == m then "" else " as " <> q
     = ["import qualified " <> m <> asQ]
     | otherwise
-    = ["import " <> m <> " (" <> importWhat identInfo <> ")"
+    = ["import " <> m <> " (" <> renderIdentInfo identInfo <> ")"
       ,"import " <> m ]
-
-  (qual, name) = case T.splitOn "." (notInScope thingMissing) of
-    [n]      -> (Nothing, n)
-    segments -> (Just (T.intercalate "." $ init segments), last segments)
-  importWhat IdentInfo {parent, rendered}
-    | Just p <- parent = p <> "(" <> rendered <> ")"
-    | otherwise        = rendered
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
 canUseIdent NotInScopeDataConstructor{} = isDatacon
@@ -971,6 +963,13 @@ extractNotInScopeName x
   = Just $ NotInScopeThing name
   | otherwise
   = Nothing
+
+extractQualifiedModuleName :: T.Text -> Maybe T.Text
+extractQualifiedModuleName x
+  | Just [m] <- matchRegexUnifySpaces x "module named [^‘]*‘([^’]*)’"
+  = Just m
+  | otherwise 
+  = Nothing 
 
 -------------------------------------------------------------------------------------------------
 
@@ -1171,3 +1170,8 @@ matchRegExMultipleImports message = do
                             _ -> Nothing
   imps <- regExImports imports
   return (binding, imps)
+
+renderIdentInfo :: IdentInfo -> T.Text
+renderIdentInfo IdentInfo {parent, rendered}
+  | Just p <- parent = p <> "(" <> rendered <> ")"
+  | otherwise        = rendered
