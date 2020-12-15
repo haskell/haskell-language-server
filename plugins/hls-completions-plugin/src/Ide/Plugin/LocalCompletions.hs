@@ -93,7 +93,7 @@ import Control.DeepSeq
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
   {
-    pluginCommands = []
+    pluginRules = produceLocalCompletions
   , pluginCodeActionProvider = Nothing
   , pluginCodeLensProvider   = Nothing
   , pluginHoverProvider      = Nothing
@@ -169,7 +169,6 @@ data LocalCompletions = LocalCompletions
 instance Hashable LocalCompletions
 instance NFData   LocalCompletions
 instance Binary   LocalCompletions
-
 
 -- | Generate code actions.
 getCompletionsLSP
