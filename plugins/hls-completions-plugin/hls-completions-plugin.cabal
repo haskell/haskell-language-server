@@ -4,7 +4,7 @@ version:       0.1.0.0
 synopsis:      Local and Non-local completions for Haskell Language Server
 license:       Apache-2.0
 license-file:  LICENSE
-author:        Guru Devanla
+author:        Digital Asset and Ghcide contributors 2018-2020
 maintainer:    grdvnl@gmail.com
 category:      Development
 build-type:    Simple
