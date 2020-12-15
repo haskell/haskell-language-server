@@ -1220,6 +1220,7 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f :: Text"                   ["f = undefined"] "import Data.Text (Text)"
     , test True []          "f = [] & id"                 []                "import Data.Function ((&))"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
+    , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     ]
   ]
   where
