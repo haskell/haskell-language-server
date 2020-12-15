@@ -149,6 +149,7 @@ library
         Development.IDE.LSP.Protocol
         Development.IDE.LSP.Server
         Development.IDE.Spans.Common
+        Development.IDE.Spans.Documentation
         Development.IDE.Spans.AtPoint
         Development.IDE.Spans.LocalBindings
         Development.IDE.Types.Diagnostics
@@ -183,7 +184,6 @@ library
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
         Development.IDE.LSP.Notifications
-        Development.IDE.Spans.Documentation
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.CodeAction.Rules
         Development.IDE.Plugin.CodeAction.RuleTypes
