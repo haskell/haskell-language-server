@@ -5,7 +5,7 @@ synopsis:      Local and Non-local completions for Haskell Language Server
 license:       Apache-2.0
 license-file:  LICENSE
 author:        Digital Asset and Ghcide contributors 2018-2020
-maintainer:    grdvnl@gmail.com
+maintainer:    Ghcide contributors
 category:      Development
 build-type:    Simple
 extra-source-files:
