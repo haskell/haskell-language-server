@@ -20,8 +20,9 @@ import qualified Language.Haskell.LSP.Types.Lens as L
 import qualified Language.Haskell.LSP.Types.Capabilities as C
 import           Test.Hls.Util
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
+import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
 import           Test.Tasty.HUnit
+import           System.FilePath ((</>))
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -41,7 +42,7 @@ tests = testGroup "code actions" [
 
 hlintTests :: TestTree
 hlintTests = testGroup "hlint suggestions" [
-    testCase "provides 3.8 code actions including apply all" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+    testCase "provides 3.8 code actions including apply all" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         diags@(reduceDiag:_) <- waitForDiagnosticsFromSource doc "hlint"
 
@@ -73,55 +74,110 @@ hlintTests = testGroup "hlint suggestions" [
         _ <- waitForDiagnosticsFromSource doc "hlint"
 
         cars <- getAllCodeActions doc
-        etaReduce <- liftIO $ inspectCommand cars ["Apply hint: Eta reduce"]
+        etaReduce <- liftIO $ inspectCommand cars ["Eta reduce"]
 
         executeCommand etaReduce
 
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo = id\n"
 
-    , testCase "changing configuration enables or disables hlint diagnostics" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+    , testCase "changing configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
         let config = def { hlintOn = True }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags <- waitForDiagnosticsFromSource doc "hlint"
-
-        liftIO $ length diags > 0 @? "There are hlint diagnostics"
+        testHlintDiagnostics doc
 
         let config' = def { hlintOn = False }
         sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
         diags' <- waitForDiagnosticsFrom doc
 
-        liftIO $ Just "hlint" `notElem` map (^. L.source) diags' @? "There are no hlint diagnostics"
+        liftIO $ noHlintDiagnostics diags'
 
-    , testCase "changing document contents updates hlint diagnostics" $ runSession hlsCommand fullCaps "test/testdata/hlint" $ do
+    , knownBrokenForGhcVersions [GHC88, GHC86] "hlint doesn't take in account cpp flag as ghc -D argument" $
+      testCase "hlint diagnostics works with CPP via ghc -XCPP argument (#554)" $ runHlintSession "cpp" $ do
+        doc <- openDoc "ApplyRefact3.hs" "haskell"
+        testHlintDiagnostics doc
+
+    , knownBrokenForGhcVersions [GHC88, GHC86] "hlint doesn't take in account cpp flag as ghc -D argument" $
+      testCase "hlint diagnostics works with CPP via language pragma (#554)" $ runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact3.hs" "haskell"
+        testHlintDiagnostics doc
+
+    , testCase "hlint diagnostics works with CPP via -XCPP argument and flag via #include header (#554)" $ runHlintSession "cpp" $ do
         doc <- openDoc "ApplyRefact2.hs" "haskell"
-        diags <- waitForDiagnosticsSource "hlint"
+        testHlintDiagnostics doc
 
-        liftIO $ length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
+    , knownBrokenForGhcVersions [GHC88, GHC86] "apply-refact doesn't take in account the -X argument" $
+      testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
+        testRefactor "ApplyRefact1.hs" "Redundant bracket"
+            expectedLambdaCase
 
-        let change = TextDocumentContentChangeEvent
-                        (Just (Range (Position 1 8) (Position 1 12)))
-                         Nothing "x"
+    , testCase "apply hints works with LambdaCase via language pragma" $ runHlintSession "" $ do
+        testRefactor "ApplyRefact1.hs" "Redundant bracket"
+            ("{-# LANGUAGE LambdaCase #-}" : expectedLambdaCase)
 
-        changeDoc doc [change]
+    , expectFailBecause "apply-refact doesn't work with cpp" $
+      testCase "apply hints works with CPP via -XCPP argument" $ runHlintSession "cpp" $ do
+        testRefactor "ApplyRefact3.hs" "Redundant bracket"
+            expectedCPP
 
-        diags' <- waitForDiagnostics
+    , expectFailBecause "apply-refact doesn't work with cpp" $
+      testCase "apply hints works with CPP via language pragma" $ runHlintSession "" $ do
+        testRefactor "ApplyRefact3.hs" "Redundant bracket"
+            ("{-# LANGUAGE CPP #-}" : expectedCPP)
 
-        liftIO $ (not $ Just "hlint" `elem` map (^. L.source) diags') @? "There are no hlint diagnostics"
+    , testCase "hlint diagnostics ignore hints honouring .hlint.yaml" $ runHlintSession "ignore" $ do
+        doc <- openDoc "ApplyRefact.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
 
-        let change' = TextDocumentContentChangeEvent
-                        (Just (Range (Position 1 8) (Position 1 12)))
-                         Nothing "id x"
+    , testCase "hlint diagnostics ignore hints honouring ANN annotations" $ runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact4.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
 
-        changeDoc doc [change']
-
-        diags'' <- waitForDiagnosticsFromSource doc "hlint"
-
-        liftIO $ length diags'' @?= 2
+    , knownBrokenForGhcVersions [GHC810] "hlint plugin doesn't honour HLINT annotations (#838)" $
+      testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact5.hs" "haskell"
+        expectNoMoreDiagnostics 3 doc "hlint"
     ]
+    where
+        runHlintSession :: FilePath -> Session a -> IO a
+        runHlintSession subdir  =
+            failIfSessionTimeout . runSession hlsCommand fullCaps ("test/testdata/hlint" </> subdir)
+
+        noHlintDiagnostics :: [Diagnostic] -> Assertion
+        noHlintDiagnostics diags =
+            Just "hlint" `notElem` map (^. L.source) diags @? "There are no hlint diagnostics"
+
+        testHlintDiagnostics doc = do
+            diags <- waitForDiagnosticsFromSource doc "hlint"
+            liftIO $ length diags > 0 @? "There are hlint diagnostics"
+
+        testRefactor file caTitle expected = do
+            doc <- openDoc file "haskell"
+            testHlintDiagnostics doc
+
+            cas <- map fromAction <$> getAllCodeActions doc
+            let ca = find (\ca -> caTitle `T.isSuffixOf` (ca ^. L.title)) cas
+            liftIO $ isJust ca @? ("There is '" ++ T.unpack caTitle ++"' code action")
+
+            executeCodeAction (fromJust ca)
+
+            contents <- getDocumentEdit doc
+            liftIO $ contents @?= T.unlines expected
+
+        expectedLambdaCase = [ "module ApplyRefact1 where", ""
+                             , "f = \\case \"true\" -> True"
+                             , "          _ -> False"
+                             ]
+        expectedCPP =        [ "module ApplyRefact3 where", ""
+                             , "#ifdef FLAG"
+                             , "f = 1"
+                             , "#else"
+                             , "g = 2"
+                             , "#endif", ""
+                             ]
 
 renameTests :: TestTree
 renameTests = testGroup "rename suggestions" [

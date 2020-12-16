@@ -1,10 +1,12 @@
-{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns #-}
+{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns, MultiParamTypeClasses #-}
 module Test.Hls.Util
   (
       codeActionSupportCaps
     , dummyLspFuncs
     , expectCodeAction
     , expectDiagnostic
+    , expectNoMoreDiagnostics
+    , failIfSessionTimeout
     , flushStackEnvironment
     , fromAction
     , fromCommand
@@ -13,22 +15,27 @@ module Test.Hls.Util
     , hlsCommand
     , hlsCommandExamplePlugin
     , hlsCommandVomit
+    , ignoreForGhcVersions
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
+    , knownBrokenForGhcVersions
     , logConfig
     , logFilePath
     , noLogConfig
     , setupBuildToolFiles
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
+    , waitForDiagnosticsFromSourceWithTimeout
     , withFileLogging
     , withCurrentDirectoryInTmp
   )
 where
 
+import           Control.Exception (throwIO, catch)
 import           Control.Monad
-import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Monad.IO.Class
+import           Control.Applicative.Combinators (skipManyTill, (<|>))
 import           Control.Lens ((^.))
 import           Data.Default
 import           Data.List (intercalate)
@@ -36,27 +43,32 @@ import           Data.List.Extra (find)
 import           Data.Maybe
 import qualified Data.Text as T
 import           Language.Haskell.LSP.Core
+import           Language.Haskell.LSP.Messages (FromServerMessage(NotLogMessage))
 import           Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Test as T
+import qualified Language.Haskell.LSP.Test as Test
 import qualified Language.Haskell.LSP.Types.Lens as L
 import qualified Language.Haskell.LSP.Types.Capabilities as C
 import           System.Directory
 import           System.Environment
+import           System.Time.Extra (Seconds, sleep)
 import           System.FilePath
 import qualified System.Log.Logger as L
 import           System.IO.Temp
 import           System.IO.Unsafe
 import           Test.Hspec.Runner
-import           Test.Hspec.Core.Formatters
+import           Test.Hspec.Core.Formatters hiding (Seconds)
+import           Test.Tasty (TestTree)
+import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
+import           Test.Tasty.HUnit (assertFailure)
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal hiding (null)
 
 
-noLogConfig :: T.SessionConfig
-noLogConfig = T.defaultConfig { T.logMessages = False }
+noLogConfig :: Test.SessionConfig
+noLogConfig = Test.defaultConfig { Test.logMessages = False }
 
-logConfig :: T.SessionConfig
-logConfig = T.defaultConfig { T.logMessages = True }
+logConfig :: Test.SessionConfig
+logConfig = Test.defaultConfig { Test.logMessages = True }
 
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
@@ -126,6 +138,16 @@ ghcVersion = GHC86
 #elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,4,0,0)))
 ghcVersion = GHC84
 #endif
+
+knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
+knownBrokenForGhcVersions vers reason
+    | ghcVersion `elem` vers =  expectFailBecause reason
+    | otherwise = id
+
+ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
+ignoreForGhcVersions vers reason
+    | ghcVersion `elem` vers =  ignoreTestBecause reason
+    | otherwise = id
 
 logFilePath :: String
 logFilePath = "hls-" ++ show ghcVersion ++ ".log"
@@ -330,17 +352,17 @@ inspectCommand cars s = fromCommand <$> onMatch cars predicate err
           predicate _ = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
-waitForDiagnosticsFrom :: TextDocumentIdentifier -> T.Session [Diagnostic]
+waitForDiagnosticsFrom :: TextDocumentIdentifier -> Test.Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
-    diagsNot <- skipManyTill T.anyMessage T.message :: T.Session PublishDiagnosticsNotification
+    diagsNot <- skipManyTill Test.anyMessage Test.message :: Test.Session PublishDiagnosticsNotification
     let (List diags) = diagsNot ^. L.params . L.diagnostics
     if doc ^. L.uri /= diagsNot ^. L.params . L.uri
        then waitForDiagnosticsFrom doc
        else return diags
 
-waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> T.Session [Diagnostic]
+waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
 waitForDiagnosticsFromSource doc src = do
-    diagsNot <- skipManyTill T.anyMessage T.message :: T.Session PublishDiagnosticsNotification
+    diagsNot <- skipManyTill Test.anyMessage Test.message :: Test.Session PublishDiagnosticsNotification
     let (List diags) = diagsNot ^. L.params . L.diagnostics
     let res = filter matches diags
     if doc ^. L.uri /= diagsNot ^. L.params . L.uri || null res
@@ -349,3 +371,55 @@ waitForDiagnosticsFromSource doc src = do
   where
     matches :: Diagnostic -> Bool
     matches d = d ^. L.source == Just (T.pack src)
+
+-- | wait for @timeout@ seconds and report an assertion failure
+-- if any diagnostic messages arrive in that period
+expectNoMoreDiagnostics :: Seconds -> TextDocumentIdentifier -> String -> Test.Session ()
+expectNoMoreDiagnostics timeout doc src = do
+    diags <- waitForDiagnosticsFromSourceWithTimeout timeout doc src
+    unless (null diags) $
+        liftIO $ assertFailure $
+            "Got unexpected diagnostics for " <> show (doc ^. L.uri) <>
+            " got " <> show diags
+
+-- | wait for @timeout@ seconds and return diagnostics for the given @document and @source.
+-- If timeout is 0 it will wait until the session timeout
+waitForDiagnosticsFromSourceWithTimeout :: Seconds -> TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
+waitForDiagnosticsFromSourceWithTimeout timeout document source = do
+    when (timeout > 0) $ do
+        -- Give any further diagnostic messages time to arrive.
+        liftIO $ sleep timeout
+        -- Send a dummy message to provoke a response from the server.
+        -- This guarantees that we have at least one message to
+        -- process, so message won't block or timeout.
+        void $ Test.sendRequest (CustomClientMethod "non-existent-method") ()
+    handleMessages
+  where
+    matches :: Diagnostic -> Bool
+    matches d = d ^. L.source == Just (T.pack source)
+
+    handleMessages = handleDiagnostic <|> handleCustomMethodResponse <|> ignoreOthers
+    handleDiagnostic = do
+        diagsNot <- Test.message :: Test.Session PublishDiagnosticsNotification
+        let fileUri = diagsNot ^. L.params . L.uri
+            (List diags) = diagsNot ^. L.params . L.diagnostics
+            res = filter matches diags
+        if fileUri == document ^. L.uri && not (null res)
+            then return diags else handleMessages
+    handleCustomMethodResponse =
+        -- the CustomClientMethod triggers a RspCustomServer
+        -- handle that and then exit
+        void (Test.satisfyMaybe responseForNonExistentMethod) >> return []
+
+    responseForNonExistentMethod notif
+        | NotLogMessage logMsg <- notif,
+          "non-existent-method" `T.isInfixOf` (logMsg ^. L.params . L.message)  = Just notif
+        | otherwise = Nothing
+
+    ignoreOthers = void Test.anyMessage >> handleMessages
+
+failIfSessionTimeout :: IO a -> IO a
+failIfSessionTimeout action = action `catch` errorHandler
+    where errorHandler :: Test.SessionException -> IO a
+          errorHandler e@(Test.Timeout _) = assertFailure $ show e
+          errorHandler e = throwIO e
