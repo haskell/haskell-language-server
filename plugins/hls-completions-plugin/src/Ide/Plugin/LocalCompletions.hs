@@ -26,15 +26,12 @@ import Data.Hashable
 import qualified Data.Text as T
 import Data.Typeable
 import Development.IDE as D
+import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat (ParsedModule(ParsedModule))
 import Development.IDE.Spans.Common
 import Development.IDE.Spans.Documentation
 import Development.IDE.Core.Rules (useE)
-import Development.IDE.Core.Shake (
-      getDiagnostics
-    , getHiddenDiagnostics
-    , getIdeOptionsIO
-    )
+import Development.IDE.Core.Shake as S
 import GHC.Generics
 import GHC.Generics as GG
 import Ide.Plugin
@@ -197,9 +194,10 @@ getCompletionsLSP lsp ide
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
                 -> return (Completions $ List [])
               (Just pfix', _) -> do
-                -- let clientCaps = clientCapabilities $ shakeExtras ide
-                -- Completions . List <$> getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps (WithSnippets True)
-                return (Completions $ List [])
+                  let extras = shakeExtras ide
+                  let clientCaps = S.clientCapabilities extras
+                  -- return Completions $ List <$> getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps (WithSnippets True)
+                  return (Completions $ List [])
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
