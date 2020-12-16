@@ -214,7 +214,6 @@ Install haskell-language-server for a specific GHC version (and hoogle docs):
 
 ```bash
 stack ./install.hs hls-8.8.3
-stack ./install.hs data
 ```
 
 `hls-8.8.3` target will build the project and install `haskell-language-server-wrapper`,
@@ -244,7 +243,6 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 
 ```bash
 ./cabal-hls-install hls-8.6.5
-./cabal-hls-install data
 ```
 
 ## Configuring `haskell-language-server`
