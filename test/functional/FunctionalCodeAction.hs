@@ -142,7 +142,9 @@ hlintTests = testGroup "hlint suggestions" [
         expectNoMoreDiagnostics 3 doc "hlint"
     ]
     where
-        runHlintSession subdir = runSession hlsCommand fullCaps $ "test/testdata/hlint" </> subdir
+        runHlintSession :: FilePath -> Session a -> IO a
+        runHlintSession subdir  =
+            failIfSessionTimeout . runSession hlsCommand fullCaps ("test/testdata/hlint" </> subdir)
 
         noHlintDiagnostics :: [Diagnostic] -> Assertion
         noHlintDiagnostics diags =

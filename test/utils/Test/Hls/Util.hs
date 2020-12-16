@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns #-}
+{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns, MultiParamTypeClasses #-}
 module Test.Hls.Util
   (
       codeActionSupportCaps
@@ -6,6 +6,7 @@ module Test.Hls.Util
     , expectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
+    , failIfSessionTimeout
     , flushStackEnvironment
     , fromAction
     , fromCommand
@@ -31,6 +32,7 @@ module Test.Hls.Util
   )
 where
 
+import           Control.Exception (throwIO, catch)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Applicative.Combinators (skipManyTill, (<|>))
@@ -415,3 +417,9 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
         | otherwise = Nothing
 
     ignoreOthers = void Test.anyMessage >> handleMessages
+
+failIfSessionTimeout :: IO a -> IO a
+failIfSessionTimeout action = action `catch` errorHandler
+    where errorHandler :: Test.SessionException -> IO a
+          errorHandler e@(Test.Timeout _) = assertFailure $ show e
+          errorHandler e = throwIO e
