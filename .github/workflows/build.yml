@@ -67,6 +67,8 @@ jobs:
       env:
         GHC_VER: ${{ matrix.ghc }}
       run: |
+        # We normalize windows+choco ghc version 8.10.2.2
+        GHC_VERSION=$(echo $GHC_VERSION | sed 's/8.10.2.2/8.10.2/g')
         HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
         HLS=haskell-language-server-$GHC_VER
         mv $HLS_BUILD $HLS${{env.EXE_EXT}}
