@@ -1,5 +1,21 @@
 # Changelog for haskell-language-server
 
+## 0.7.1
+
+- This is a minor bug fix release:
+  - It fixes an issue that removed accidentally desugarer warnings (#676).
+  - It disables auto extend import lists in completions, see #679.
+### Pull requests merged
+
+- Disable auto extend import lists in completions. It fixes #679.
+([#685)](https://github.com/haskell/haskell-language-server/pull/685) by @pepeiborra
+- Restore kick (#676). It fixes #676.
+([#677)](https://github.com/haskell/haskell-language-server/pull/677) by @wz1000
+- README: Remove instructions to execute data target
+([#675)](https://github.com/haskell/haskell-language-server/pull/675) by @andys8
+- Add hlint tests over cpp, extensions and ignore hints
+([#674)](https://github.com/haskell/haskell-language-server/pull/674) by @jneira
+
 ## 0.7.0
 
 * This version contains mainly refactors and updates of upstream packages
