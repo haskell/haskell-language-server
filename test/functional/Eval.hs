@@ -30,6 +30,7 @@ import Language.Haskell.LSP.Types (
     Command (Command, _title),
     Position (..),
     Range (..),
+    TextDocumentIdentifier,
  )
 import System.Directory (doesFileExist)
 import System.FilePath (
@@ -57,27 +58,27 @@ tests =
         [ testCase "Produces Evaluate code lenses" $
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
-                lenses <- getCodeLenses doc
+                lenses <- getEvalCodeLenses doc
                 liftIO $ map (fmap _title . _command) lenses @?= [Just "Evaluate..."]
         , testCase "Produces Refresh code lenses" $
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
-                lenses <- getCodeLenses doc
+                lenses <- getEvalCodeLenses doc
                 liftIO $ map (fmap _title . _command) lenses @?= [Just "Refresh..."]
         , testCase "Code lenses have ranges" $
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
-                lenses <- getCodeLenses doc
+                lenses <- getEvalCodeLenses doc
                 liftIO $ map _range lenses @?= [Range (Position 4 0) (Position 5 0)]
         , testCase "Multi-line expressions have a multi-line range" $ do
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T3.hs" "haskell"
-                lenses <- getCodeLenses doc
+                lenses <- getEvalCodeLenses doc
                 liftIO $ map _range lenses @?= [Range (Position 3 0) (Position 5 0)]
         , testCase "Executed expressions range covers only the expression" $ do
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
-                lenses <- getCodeLenses doc
+                lenses <- getEvalCodeLenses doc
                 liftIO $ map _range lenses @?= [Range (Position 4 0) (Position 5 0)]
         , testCase "Evaluation of expressions" $ goldenTest "T1.hs"
         , testCase "Reevaluation of expressions" $ goldenTest "T2.hs"
@@ -164,12 +165,8 @@ goldenTestBy f input = runSession hlsCommand fullCaps evalPath $ do
     doc <- openDoc input "haskell"
 
     -- Execute lenses backwards, to avoid affecting their position in the source file
-    codeLenses <- reverse . filter f <$> getCodeLenses doc
+    codeLenses <- reverse <$> getCodeLensesBy f doc
     -- liftIO $ print codeLenses
-
-    -- Execute in parallel
-    -- mapM_ executeCommand $ [c | CodeLens{_command = Just c} <- codeLenses]
-    -- _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
 
     -- Execute sequentially
     mapM_ executeCmd $ [c | CodeLens{_command = Just c} <- codeLenses]
@@ -186,6 +183,12 @@ goldenTestBy f input = runSession hlsCommand fullCaps evalPath $ do
 
     expected <- liftIO $ T.readFile expectedFile
     liftIO $ edited @?= expected
+
+getEvalCodeLenses :: TextDocumentIdentifier -> Session [CodeLens]
+getEvalCodeLenses = getCodeLensesBy isEvalTest
+
+getCodeLensesBy :: (CodeLens -> Bool) -> TextDocumentIdentifier -> Session [CodeLens]
+getCodeLensesBy f doc = filter f <$> getCodeLenses doc
 
 -- Execute command and wait for result
 executeCmd :: Command -> Session ()

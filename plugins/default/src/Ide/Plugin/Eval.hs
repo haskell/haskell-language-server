@@ -19,10 +19,7 @@ module Ide.Plugin.Eval (
 
 import qualified Ide.Plugin.Eval.CodeLens as CL
 import Ide.Types (
-    PluginDescriptor (
-        pluginCodeLensProvider,
-        pluginCommands,
-    ),
+    PluginDescriptor (..),
     PluginId,
     defaultPluginDescriptor,
  )

@@ -380,7 +380,6 @@ test-suite func-test
     , tasty-ant-xml           >=1.1.6
     , tasty-golden
     , tasty-rerun
-    , QuickCheck
 
   hs-source-dirs:     test/functional plugins/tactics/src
 
