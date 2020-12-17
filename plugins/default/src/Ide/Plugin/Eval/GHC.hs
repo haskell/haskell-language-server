@@ -15,6 +15,7 @@ module Ide.Plugin.Eval.GHC (
 ) where
 
 import Data.List (isPrefixOf)
+import Data.Maybe (mapMaybe)
 import Development.IDE.GHC.Compat
 import qualified EnumSet
 import GHC.LanguageExtensions.Type (Extension (..))
@@ -39,9 +40,9 @@ import StringBuffer (stringToStringBuffer)
 {- $setup
 >>> import GHC
 >>> import GHC.Paths
->>> run act = runGhc (Just libdir) (getSessionDynFlags >>= act)
+>>> run act = runGhc (Just libdir) (getInteractiveDynFlags >>= act)
 >>> libdir
-"/Users/titto/.stack/programs/x86_64-osx/ghc-8.10.2/lib/ghc-8.10.2"
+"/Users/titto/.ghcup/ghc/8.8.4/lib/ghc-8.8.4"
 -}
 
 {- | Returns true if string is an expression
@@ -82,38 +83,61 @@ Right True
 >>> hasPackageTst "ghc"
 Right True
 
+>>> hasPackageTst "extra"
+Left "<command line>: cannot satisfy -package extra\n    (use -v for more information)"
+
 >>> hasPackageTst "QuickCheck"
 Left "<command line>: cannot satisfy -package QuickCheck\n    (use -v for more information)"
 -}
 hasPackage :: DynFlags -> String -> Bool
-hasPackage df name =
-    any
-        ( \case
-            ExposePackage _ (PackageArg n) _ | name `isPrefixOf` n -> True
-            ExposePackage _ (UnitIdArg (DefiniteUnitId (DefUnitId (InstalledUnitId n)))) _ | name `isPrefixOf` asS n -> True
-            _ -> False
-        )
-        $ packageFlags df
+hasPackage df = hasPackage_ (packageFlags df)
 
-{- | Expose a list of packages
+hasPackage_ :: [PackageFlag] -> [Char] -> Bool
+hasPackage_ pkgFlags name = any (name `isPrefixOf`) (pkgNames_ pkgFlags)
+
+{- |
+>>> run (return . pkgNames)
+[]
+-}
+pkgNames :: DynFlags -> [String]
+pkgNames = pkgNames_ . packageFlags
+
+pkgNames_ :: [PackageFlag] -> [String]
+pkgNames_ =
+    mapMaybe
+        ( \case
+            ExposePackage _ (PackageArg n) _ -> Just n
+            ExposePackage _ (UnitIdArg (DefiniteUnitId n)) _ -> Just $ asS n
+            _ -> Nothing
+        )
+
+{- | Expose a list of packages.
 >>> addPackagesTest pkgs = run (\_ -> (packageFlags <$>) <$> addPackages pkgs)
 
 >>> addPackagesTest []
 Right []
 
->>> addPackagesTest ["base","array"]
+>>> addPackagesTest ["base","base","array"]
 Right [-package base{package base True ([])},-package array{package array True ([])}]
+
+>>> addPackagesTest ["Cabal"]
+Right [-package Cabal{package Cabal True ([])}]
 
 >>> addPackagesTest ["QuickCheck"]
 Left "<command line>: cannot satisfy -package QuickCheck\n    (use -v for more information)"
 
->>> addPackagesTest ["notThere"]
+>>> addPackagesTest ["base","notThere"]
 Left "<command line>: cannot satisfy -package notThere\n    (use -v for more information)"
+
+prop> \(x::Int) -> x + x == 2 * x
++++ OK, passed 100 tests.
 -}
 addPackages :: [String] -> Ghc (Either String DynFlags)
-addPackages pkgNames = gStrictTry $ modifyFlags (\df -> df{packageFlags = map expose pkgNames ++ packageFlags df})
+addPackages pkgNames = gStrictTry $
+    modifyFlags $ \df ->
+        df{packageFlags = foldr (\pkgName pf -> if hasPackage_ pf pkgName then pf else expose pkgName : pf) (packageFlags df) pkgNames}
   where
-    expose name = ExposePackage ("-package " ++ name) (PackageArg name) (ModRenaming True []) -- -package-id filepath-1.4.2.1
+    expose name = ExposePackage ("-package " ++ name) (PackageArg name) (ModRenaming True [])
 
 modifyFlags :: GhcMonad m => (DynFlags -> DynFlags) -> m DynFlags
 modifyFlags f = do
@@ -168,11 +192,12 @@ showDynFlags df =
         [ ("extensions", ppr . extensions $ df)
         , ("extensionFlags", ppr . EnumSet.toList . extensionFlags $ df)
         , ("importPaths", vList $ importPaths df)
-        -- , ("includePaths", text . show $ includePaths df)
-        -- , ("packageEnv", ppr $ packageEnv df)
-        -- , ("packageFlags", vcat . map ppr $ packageFlags df)
+        , -- , ("includePaths", text . show $ includePaths df)
+          -- ("packageEnv", ppr $ packageEnv df)
+          ("pkgNames", vcat . map text $ pkgNames df)
+        , ("packageFlags", vcat . map ppr $ packageFlags df)
         -- ,("pkgDatabase",(map) (ppr . installedPackageId) . pkgDatabase $ df)
-        -- ,("pkgDatabase",text . show <$> pkgDatabase $ df)
+        -- ("pkgDatabase", text . show <$> pkgDatabase $ df)
         ]
 
 vList :: [String] -> SDoc
