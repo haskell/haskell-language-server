@@ -54,6 +54,7 @@ import System.FilePath
 import System.IO
 import qualified System.Log.Logger as L
 import System.Time.Extra
+import Development.Shake (action)
 
 -- ---------------------------------------------------------------------
 -- ghcide partialhandlers
@@ -136,7 +137,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
                     -- , optCheckProject   = checkProject config
                     }
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins)
+            initialise caps (mainRule >> pluginRules plugins >> action kick)
                 getLspId event wProg wIndefProg hlsLogger debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error

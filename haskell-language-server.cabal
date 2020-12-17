@@ -67,6 +67,7 @@ library
     , optparse-applicative
     , optparse-simple
     , process
+    , shake
     , unordered-containers
 
   ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
