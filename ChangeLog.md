@@ -1,5 +1,18 @@
 # Changelog for haskell-language-server
 
+## 0.7.1
+
+* This is a minor bug fix release, mainly fixing an issue that removed accidentally desugarer warnings (#676).
+
+### Pull requests merged
+
+- Restore kick (#676). It fixes #676.
+([#677)](https://github.com/haskell/haskell-language-server/pull/677) by @wz1000
+- README: Remove instructions to execute data target
+([#675)](https://github.com/haskell/haskell-language-server/pull/675) by @andys8
+- Add hlint tests over cpp, extensions and ignore hints
+([#674)](https://github.com/haskell/haskell-language-server/pull/674) by @jneira
+
 ## 0.7.0
 
 * This version contains mainly refactors and updates of upstream packages
