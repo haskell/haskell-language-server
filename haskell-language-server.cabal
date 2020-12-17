@@ -77,21 +77,180 @@ library
 
   default-language: Haskell2010
 
+flag all-plugins
+  description: Enable all non formatter plugins
+  default:     True
+  manual:      True
+
+flag all-formatters
+  description: Enable all fomatters
+  default:     True
+  manual:      True
+
+flag eval
+  description: Enable eval plugin
+  default:     False
+  manual:      True
+
+flag importLens
+  description: Enable importLens plugin
+  default:     False
+  manual:      True
+
+flag retrie
+  description: Enable retrie plugin
+  default:     False
+  manual:      True
+
+flag tactic
+  description: Enable tactic plugin
+  default:     False
+  manual:      True
+
+flag hlint
+  description: Enable hlint plugin
+  default:     False
+  manual:      True
+
+flag moduleName
+  description: Enable moduleName plugin
+  default:     False
+  manual:      True
+
+flag pragmas
+  description: Enable pragmas plugin
+  default:     False
+  manual:      True
+
+-- formatters
+
+flag floskell
+  description: Enable floskell plugin
+  default:     False
+  manual:      True
+
+flag fourmolu
+  description: Enable fourmolu plugin
+  default:     False
+  manual:      True
+
+flag ormolu
+  description: Enable ormolu plugin
+  default:     False
+  manual:      True
+
+flag stylishHaskell
+  description: Enable stylishHaskell plugin
+  default:     False
+  manual:      True
+
+flag brittany
+  description: Enable brittany plugin
+  default:     False
+  manual:      True
+
+common example-plugins
+  hs-source-dirs: plugins/default/src
+  other-modules: Ide.Plugin.Example,
+                 Ide.Plugin.Example2
+
+common eval
+  if flag(eval) || flag(all-plugins)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.Eval
+    build-depends:
+    cpp-options: -Deval
+
+common importLens
+  if flag(importLens) || flag(all-plugins)
+    build-depends: hls-explicit-imports-plugin
+    cpp-options: -DimportLens
+
+common retrie
+  if flag(retrie) || flag(all-plugins)
+    build-depends: hls-retrie-plugin
+    cpp-options: -Dretrie
+
+common tactic
+  if flag(tactic) || flag(all-plugins)
+    build-depends: hls-tactics-plugin
+    cpp-options: -Dtactic
+
+common hlint
+  if flag(hlint) || flag(all-plugins)
+    build-depends: hls-hlint-plugin
+    cpp-options: -Dhlint
+
+common moduleName
+  if flag(moduleName) || flag(all-plugins)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.ModuleName
+    cpp-options: -DmoduleName
+
+common pragmas
+  if flag(pragmas) || flag(all-plugins)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.Pragmas
+    cpp-options: -Dpragmas
+
+-- formatters
+
+common floskell
+  if flag(floskell) || flag(all-formatters)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.Floskell
+    build-depends: floskell                 ^>=0.10
+    cpp-options: -Dfloskell
+
+common fourmolu
+  if flag(fourmolu) || flag(all-formatters)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.Fourmolu
+    build-depends: fourmolu                 ^>=0.3
+    cpp-options: -Dfourmolu
+
+common ormolu
+  if flag(ormolu) || flag(all-formatters)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.Ormolu
+    build-depends: ormolu                   ^>=0.1.2
+    cpp-options: -Dormolu
+
+common stylishHaskell
+  if flag(stylishHaskell) || flag(all-formatters)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.StylishHaskell
+    build-depends: stylish-haskell          ^>=0.12
+    cpp-options: -DstylishHaskell
+
+common brittany
+  if (flag(brittany) || flag(all-formatters)) && flag(agpl)
+    hs-source-dirs: plugins/default/src
+    other-modules: Ide.Plugin.Brittany
+    build-depends: brittany                 >= 0.13.1.0
+    cpp-options: -Dbrittany
 
 executable haskell-language-server
-  import:           agpl, common-deps
+  import:             agpl
+                    , common-deps
+                    -- plugins
+                    , example-plugins
+                    , eval
+                    , importLens
+                    , retrie
+                    , tactic
+                    , hlint
+                    , moduleName
+                    , pragmas
+                    , floskell
+                    , fourmolu
+                    , ormolu
+                    , stylishHaskell
+                    , brittany
+
   main-is:          Main.hs
-  hs-source-dirs:   exe plugins/default/src
-  other-modules:
-    Ide.Plugin.Eval
-    Ide.Plugin.Example
-    Ide.Plugin.Example2
-    Ide.Plugin.Floskell
-    Ide.Plugin.Fourmolu
-    Ide.Plugin.ModuleName
-    Ide.Plugin.Ormolu
-    Ide.Plugin.Pragmas
-    Ide.Plugin.StylishHaskell
+  hs-source-dirs:   exe
+  other-modules:    Plugins
 
   ghc-options:
     -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
@@ -110,42 +269,26 @@ executable haskell-language-server
     , bytestring
     , containers
     , deepseq
-    , floskell                 ^>=0.10
-    , fourmolu                 ^>=0.3
     , ghc
     , ghc-boot-th
     , ghcide
     , hashable
     , haskell-language-server
     , haskell-lsp              ^>=0.22
-    , hls-hlint-plugin
-    , hls-plugin-api
-    , hls-tactics-plugin
-    , hls-explicit-imports-plugin
-    , hls-retrie-plugin
     , lens
-    , ormolu                   ^>=0.1.2
     , regex-tdfa
     , hslogger
     , optparse-applicative
-    , haskell-lsp              ^>=0.22
     , hls-plugin-api
     , lens
     , mtl
-    , ormolu                   ^>=0.1.2
     , regex-tdfa
     , safe-exceptions
     , shake                    >=0.17.5
-    , stylish-haskell          ^>=0.12
     , temporary
-    , text
     , time
     , transformers
     , unordered-containers
-
-  if flag(agpl)
-    build-depends: brittany     >= 0.13.1.0
-    other-modules: Ide.Plugin.Brittany
 
   include-dirs:     include
   default-language: Haskell2010
