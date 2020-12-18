@@ -45,6 +45,9 @@ cradle:
 
 # Plugins:
 
+            - path: "./plugins/hls-class-plugin/src"
+              component: "hls-class-plugin"
+
             - path: "./plugins/tactics/src"
               component: "hls-tactics-plugin:lib:hls-tactics-plugin"
 
