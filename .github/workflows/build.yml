@@ -50,11 +50,20 @@ jobs:
 
     - name: Set some window specific things
       if: matrix.os == 'windows-latest'
-      run: echo "EXE_EXT=.exe" >> $GITHUB_ENV
+      env:
+        GHC_VER: ${{ matrix.ghc }}
+      run: |
+        echo "EXE_EXT=.exe" >> $GITHUB_ENV
+        GHC_VER=$(echo $GHC_VER | sed 's/8.10.2.2/8.10.2/g')
+        echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Set some linux specific things
       if: matrix.os == 'ubuntu-latest'
-      run: echo "LINUX_CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
+      env:
+        GHC_VER: ${{ matrix.ghc }}
+      run: |
+        echo "LINUX_CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
+        echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows
@@ -64,13 +73,10 @@ jobs:
 
     - name: Compress Server Binary
       id: compress_server_binary
-      env:
-        GHC_VER: ${{ matrix.ghc }}
       run: |
         # We normalize windows+choco ghc version 8.10.2.2
-        GHC_VERSION=$(echo $GHC_VERSION | sed 's/8.10.2.2/8.10.2/g')
         HLS_BUILD=$(find dist-newstyle \( -name 'hls' -o -name 'hls.exe' \) -type f)
-        HLS=haskell-language-server-$GHC_VER
+        HLS=haskell-language-server-${{env.GHC_VERSION}}
         mv $HLS_BUILD $HLS${{env.EXE_EXT}}
         if [[ "$OSTYPE" == "msys" ]]; then
           7z a $HLS.zip $HLS${{env.EXE_EXT}}
@@ -91,7 +97,7 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ${{ steps.compress_server_binary.outputs.path }}
-        asset_name: haskell-language-server-${{ runner.OS }}-${{ matrix.ghc }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
+        asset_name: haskell-language-server-${{ runner.OS }}-${{ env.GHC_VERSION }}${{env.EXE_EXT}}.${{ steps.compress_server_binary.outputs.extension }}
         asset_content_type: ${{ steps.compress_server_binary.outputs.content_type }}
 
     - uses: actions/upload-artifact@v2
