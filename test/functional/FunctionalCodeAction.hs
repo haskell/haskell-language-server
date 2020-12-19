@@ -127,8 +127,7 @@ hlintTests = testGroup "hlint suggestions" [
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
-    , knownBrokenForGhcVersions [GHC88, GHC86] "apply-refact doesn't take in account the -X argument" $
-      testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
+    , testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
         testRefactor "ApplyRefact1.hs" "Redundant bracket"
             expectedLambdaCase
 
