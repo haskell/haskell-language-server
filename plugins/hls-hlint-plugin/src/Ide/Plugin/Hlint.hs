@@ -37,7 +37,7 @@ import Development.IDE
 import Development.IDE.Core.Rules (defineNoFile)
 import Development.IDE.Core.Shake (getDiagnostics)
 
-#ifdef GHC_LIB
+#ifdef HLINT_ON_GHC_LIB
 import Data.List (nub)
 import "ghc-lib" GHC hiding (DynFlags(..))
 import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
@@ -181,7 +181,7 @@ getIdeas nfp = do
   fmap applyHints' (moduleEx flags)
 
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
-#ifndef GHC_LIB
+#ifndef HLINT_ON_GHC_LIB
         moduleEx _flags = do
           mbpm <- getParsedModule nfp
           return $ createModule <$> mbpm
@@ -368,7 +368,7 @@ applyHint ide nfp mhint =
     -- If we provide "applyRefactorings" with "Just (1,13)" then
     -- the "Redundant bracket" hint will never be executed
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
-#ifdef GHC_LIB
+#ifdef HLINT_ON_GHC_LIB
     let writeFileUTF8NoNewLineTranslation file txt =
             withFile file WriteMode $ \h -> do
                 hSetEncoding h utf8

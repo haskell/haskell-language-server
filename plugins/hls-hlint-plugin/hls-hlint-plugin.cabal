@@ -62,7 +62,7 @@ library
       , ghc-lib            ^>= 8.10.2.20200916
       , ghc-lib-parser-ex  ^>= 8.10
 
-    cpp-options:   -DGHC_LIB
+    cpp-options:   -DHLINT_ON_GHC_LIB
 
   ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
 
