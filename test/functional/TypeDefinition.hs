@@ -6,12 +6,12 @@ import Language.Haskell.LSP.Types
 import System.Directory
 import Test.Hls.Util
 import Test.Tasty
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
+import Test.Tasty.ExpectedFailure (expectFailBecause)
 
 tests :: TestTree
 tests = testGroup "type definitions" [
-    ignoreTestBecause "Broken" $ testCase "finds local definition of record variable"
+    testCase "finds local definition of record variable"
         $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
@@ -21,7 +21,8 @@ tests = testGroup "type definitions" [
                 defs @?= [ Location (filePathToUri fp)
                                     (Range (toPos (8, 1)) (toPos (8, 29)))
                          ]
-    , ignoreTestBecause "Broken" $ testCase "finds local definition of newtype variable"
+
+    , testCase "finds local definition of newtype variable"
         $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
@@ -31,7 +32,8 @@ tests = testGroup "type definitions" [
                 defs @?= [ Location (filePathToUri fp)
                                     (Range (toPos (13, 1)) (toPos (13, 30)))
                          ]
-    , ignoreTestBecause "Broken" $ testCase "finds local definition of sum type variable"
+
+    , testCase "finds local definition of sum type variable"
         $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
@@ -41,7 +43,8 @@ tests = testGroup "type definitions" [
                 defs @?= [ Location (filePathToUri fp)
                                     (Range (toPos (18, 1)) (toPos (18, 26)))
                          ]
-    , ignoreTestBecause "Broken" $ testCase "finds local definition of sum type contructor"
+
+    , testCase "finds local definition of sum type constructor"
             $ runSession hlsCommand fullCaps "test/testdata/gototest"
             $ do
                 doc  <- openDoc "src/Lib.hs" "haskell"
@@ -52,14 +55,20 @@ tests = testGroup "type definitions" [
                         @?= [ Location (filePathToUri fp)
                                        (Range (toPos (18, 1)) (toPos (18, 26)))
                             ]
-    , ignoreTestBecause "Broken" $ testCase "can not find non-local definition of type def"
+
+    , testCase "finds non-local definition of type def"
         $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
             defs <- getTypeDefinitions doc (toPos (30, 17))
-            liftIO $ defs @?= []
+            liftIO $ do
+                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
+                defs
+                    @?= [ Location (filePathToUri fp)
+                                   (Range (toPos (27, 1)) (toPos (27, 17)))
+                        ]
 
-    , ignoreTestBecause "Broken" $ testCase "find local definition of type def"
+    , testCase "find local definition of type def"
         $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc      <- openDoc "src/Lib.hs" "haskell"
@@ -67,12 +76,11 @@ tests = testGroup "type definitions" [
             liftIO $ do
                 fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
                 defs @?= [ Location (filePathToUri fp)
-                                    (Range (toPos (18, 1)) (toPos (18, 26)))
+                                    (Range (toPos (32, 1)) (toPos (32, 18)))
                          ]
 
-    {--  TODO Implement
-     , ignoreTestBecause "Broken" $ testCase "find type-definition of type def in component"
-         $ pendingWith "Finding symbols cross module is currently not supported"
+    , expectFailBecause "This test is broken because it needs a proper cradle." $
+      testCase "find type-definition of type def in component"
          $ runSession hlsCommand fullCaps "test/testdata/gototest"
          $ do
              doc      <- openDoc "src/Lib2.hs" "haskell"
@@ -85,8 +93,8 @@ tests = testGroup "type definitions" [
                  @?= [ Location (filePathToUri fp)
                                        (Range (toPos (8, 1)) (toPos (8, 29)))
                             ]
-    --}
-    , ignoreTestBecause "Broken" $ testCase "find definition of parameterized data type"
+
+    , testCase "find definition of parameterized data type"
         $ runSession hlsCommand fullCaps "test/testdata/gototest"
         $ do
             doc  <- openDoc "src/Lib.hs" "haskell"
