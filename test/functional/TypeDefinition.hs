@@ -1,110 +1,54 @@
 module TypeDefinition (tests) where
 
+import Control.Lens ((^.))
 import Control.Monad.IO.Class
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
+import qualified Language.Haskell.LSP.Types.Lens as L
 import System.Directory
+import System.FilePath ((</>))
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.ExpectedFailure (expectFailBecause)
 
 tests :: TestTree
 tests = testGroup "type definitions" [
     testCase "finds local definition of record variable"
-        $ runSession hlsCommand fullCaps "test/testdata/gototest"
-        $ do
-            doc  <- openDoc "src/Lib.hs" "haskell"
-            defs <- getTypeDefinitions doc (toPos (11, 23))
-            liftIO $ do
-                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs @?= [ Location (filePathToUri fp)
-                                    (Range (toPos (8, 1)) (toPos (8, 29)))
-                         ]
-
+        $ getTypeDefinitionTest' (11, 23) 8
     , testCase "finds local definition of newtype variable"
-        $ runSession hlsCommand fullCaps "test/testdata/gototest"
-        $ do
-            doc  <- openDoc "src/Lib.hs" "haskell"
-            defs <- getTypeDefinitions doc (toPos (16, 21))
-            liftIO $ do
-                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs @?= [ Location (filePathToUri fp)
-                                    (Range (toPos (13, 1)) (toPos (13, 30)))
-                         ]
-
+        $ getTypeDefinitionTest' (16, 21) 13
     , testCase "finds local definition of sum type variable"
-        $ runSession hlsCommand fullCaps "test/testdata/gototest"
-        $ do
-            doc  <- openDoc "src/Lib.hs" "haskell"
-            defs <- getTypeDefinitions doc (toPos (21, 13))
-            liftIO $ do
-                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs @?= [ Location (filePathToUri fp)
-                                    (Range (toPos (18, 1)) (toPos (18, 26)))
-                         ]
-
+        $ getTypeDefinitionTest' (21, 13) 18
     , testCase "finds local definition of sum type constructor"
-            $ runSession hlsCommand fullCaps "test/testdata/gototest"
-            $ do
-                doc  <- openDoc "src/Lib.hs" "haskell"
-                defs <- getTypeDefinitions doc (toPos (24, 7))
-                liftIO $ do
-                    fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                    defs
-                        @?= [ Location (filePathToUri fp)
-                                       (Range (toPos (18, 1)) (toPos (18, 26)))
-                            ]
-
+        $ getTypeDefinitionTest' (24, 7) 18
     , testCase "finds non-local definition of type def"
-        $ runSession hlsCommand fullCaps "test/testdata/gototest"
-        $ do
-            doc  <- openDoc "src/Lib.hs" "haskell"
-            defs <- getTypeDefinitions doc (toPos (30, 17))
-            liftIO $ do
-                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs
-                    @?= [ Location (filePathToUri fp)
-                                   (Range (toPos (27, 1)) (toPos (27, 17)))
-                        ]
-
+        $ getTypeDefinitionTest' (30, 17) 27
     , testCase "find local definition of type def"
-        $ runSession hlsCommand fullCaps "test/testdata/gototest"
-        $ do
-            doc      <- openDoc "src/Lib.hs" "haskell"
-            defs <- getTypeDefinitions doc (toPos (35, 16))
-            liftIO $ do
-                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs @?= [ Location (filePathToUri fp)
-                                    (Range (toPos (32, 1)) (toPos (32, 18)))
-                         ]
-
+        $ getTypeDefinitionTest' (35, 16) 32
     , expectFailBecause "This test is broken because it needs a proper cradle." $
       testCase "find type-definition of type def in component"
-         $ runSession hlsCommand fullCaps "test/testdata/gototest"
-         $ do
-             doc      <- openDoc "src/Lib2.hs" "haskell"
-             otherDoc <- openDoc "src/Lib.hs" "haskell"
-             closeDoc otherDoc
-             defs <- getTypeDefinitions doc (toPos (13, 20))
-             liftIO $ do
-               fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-               defs
-                 @?= [ Location (filePathToUri fp)
-                                       (Range (toPos (8, 1)) (toPos (8, 29)))
-                            ]
-
+        $ getTypeDefinitionTest "src/Lib2.hs" (13, 20) "src/Lib.hs" 8
     , testCase "find definition of parameterized data type"
-        $ runSession hlsCommand fullCaps "test/testdata/gototest"
-        $ do
-            doc  <- openDoc "src/Lib.hs" "haskell"
-            defs <- getTypeDefinitions doc (toPos (40, 19))
-            liftIO $ do
-                fp <- canonicalizePath "test/testdata/gototest/src/Lib.hs"
-                defs @?= [ Location (filePathToUri fp)
-                                    (Range (toPos (37, 1)) (toPos (37, 31)))
-                         ]
+        $ getTypeDefinitionTest' (40, 19) 37
     ]
+
+getTypeDefinitionTest :: String -> (Int, Int) -> String -> Int -> Assertion
+getTypeDefinitionTest symbolFile symbolPosition definitionFile definitionLine =
+    failIfSessionTimeout . runSession hlsCommand fullCaps "test/testdata/gototest" $ do
+        doc  <- openDoc symbolFile "haskell"
+        _  <- openDoc definitionFile "haskell"
+        defs <- getTypeDefinitions doc $ toPos symbolPosition
+        fp <- liftIO $ canonicalizePath $ "test/testdata/gototest" </> definitionFile
+        liftIO $ do
+            length defs == 1 @? "Expecting a list containing one location, but got: " ++ show defs
+            let [def] = defs
+            def ^. L.uri @?= filePathToUri fp
+            def ^. L.range . L.start . L.line @?= definitionLine - 1
+            def ^. L.range . L.end . L.line @?= definitionLine - 1
+
+getTypeDefinitionTest' :: (Int, Int) -> Int -> Assertion
+getTypeDefinitionTest' symbolPosition definitionLine =
+    getTypeDefinitionTest "src/Lib.hs" symbolPosition "src/Lib.hs" definitionLine
 
 --NOTE: copied from Haskell.Ide.Engine.ArtifactMap
 toPos :: (Int,Int) -> Position
