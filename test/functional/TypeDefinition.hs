@@ -25,8 +25,7 @@ tests = testGroup "type definitions" [
         $ getTypeDefinitionTest' (30, 17) 27
     , testCase "find local definition of type def"
         $ getTypeDefinitionTest' (35, 16) 32
-    , expectFailBecause "This test is broken because it needs a proper cradle." $
-      testCase "find type-definition of type def in component"
+    , testCase "find type-definition of type def in component"
         $ getTypeDefinitionTest "src/Lib2.hs" (13, 20) "src/Lib.hs" 8
     , testCase "find definition of parameterized data type"
         $ getTypeDefinitionTest' (40, 19) 37
