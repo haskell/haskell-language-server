@@ -19,7 +19,8 @@ tests = testGroup "type definitions" [
         $ getTypeDefinitionTest' (16, 21) 13
     , testCase "finds local definition of sum type variable"
         $ getTypeDefinitionTest' (21, 13) 18
-    , testCase "finds local definition of sum type constructor"
+    , knownBrokenForGhcVersions [GHC88] "Definition of sum type not found from data constructor in GHC 8.8.x" $
+      testCase "finds local definition of sum type constructor"
         $ getTypeDefinitionTest' (24, 7) 18
     , testCase "finds non-local definition of type def"
         $ getTypeDefinitionTest' (30, 17) 27
