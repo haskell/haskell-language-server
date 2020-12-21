@@ -118,7 +118,15 @@ main = do
                     }
                 logLevel = if argsVerbose then minBound else Info
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins >> action kick)
+            let rules = do
+                  -- install the main and ghcide-plugin rules
+                  mainRule
+                  pluginRules plugins
+                  -- install the kick action, which triggers a typecheck on every
+                  -- Shake database restart, i.e. on every user edit.
+                  unless argsDisableKick $
+                    action kick
+            initialise caps rules
                 getLspId event wProg wIndefProg (logger logLevel) debouncer options vfs
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error

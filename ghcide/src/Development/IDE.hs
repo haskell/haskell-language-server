@@ -28,7 +28,6 @@ import Development.IDE.Core.Shake as X
     ShakeExtras,
     IdeRule,
     define, defineEarlyCutoff,
-    GetModificationTime(GetModificationTime),
     use, useNoFile, uses, useWithStale, useWithStaleFast, useWithStaleFast',
     FastResult(..),
     use_, useNoFile_, uses_, useWithStale_,

@@ -28,7 +28,6 @@ import           Control.Monad.Extra
 import           Development.Shake
 import           Development.Shake.Classes
 import           Control.Exception
-import           GHC.Generics
 import Data.Either.Extra
 import Data.Int (Int64)
 import Data.Time
@@ -99,15 +98,6 @@ isFileOfInterestRule = defineEarlyCutoff $ \IsFileOfInterest f -> do
     filesOfInterest <- getFilesOfInterest
     let res = maybe NotFOI IsFOI $ f `HM.lookup` filesOfInterest
     return (Just $ BS.pack $ show $ hash res, ([], Just res))
-
--- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
-type instance RuleResult GetFileContents = (FileVersion, Maybe T.Text)
-
-data GetFileContents = GetFileContents
-    deriving (Eq, Show, Generic)
-instance Hashable GetFileContents
-instance NFData   GetFileContents
-instance Binary   GetFileContents
 
 getModificationTimeRule :: VFSHandle -> Rules ()
 getModificationTimeRule vfs =

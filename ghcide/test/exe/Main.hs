@@ -58,7 +58,8 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import System.Time.Extra
 import Development.IDE.Plugin.CodeAction (typeSignatureCommandId, blockCommandId, matchRegExMultipleImports)
-import Development.IDE.Plugin.Test (TestRequest(BlockSeconds,GetInterfaceFilesDir))
+import Development.IDE.Plugin.Test (WaitForIdeRuleResult(..), TestRequest(WaitForIdeRule, BlockSeconds,GetInterfaceFilesDir))
+import Control.Monad.Extra (whenJust)
 
 main :: IO ()
 main = do
@@ -556,7 +557,91 @@ diagnosticTests = testGroup "diagnostics"
       changeDoc doc [TextDocumentContentChangeEvent Nothing Nothing $ T.unlines
             [ "module Foo() where" , "import MissingModule" ] ]
       expectDiagnostics [("Foo.hs", [(DsError, (1,7), "Could not find module 'MissingModule'")])]
+
+  , testGroup "Cancellation"
+    [ cancellationTestGroup "edit header" editHeader yesDepends yesSession noParse  noTc
+    , cancellationTestGroup "edit import" editImport noDepends  noSession  yesParse noTc
+    , cancellationTestGroup "edit body"   editBody   yesDepends yesSession yesParse yesTc
+    ]
   ]
+  where
+      editPair x y = let p = Position x y ; p' = Position x (y+2) in
+        (TextDocumentContentChangeEvent {_range=Just (Range p p), _rangeLength=Nothing, _text="fd"}
+        ,TextDocumentContentChangeEvent {_range=Just (Range p p'), _rangeLength=Nothing, _text=""})
+      editHeader = editPair 0 0
+      editImport = editPair 2 10
+      editBody   = editPair 3 10
+
+      noParse = False
+      yesParse = True
+
+      noDepends = False
+      yesDepends = True
+
+      noSession = False
+      yesSession = True
+
+      noTc = False
+      yesTc = True
+
+cancellationTestGroup :: TestName -> (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Bool -> Bool -> Bool -> Bool -> TestTree
+cancellationTestGroup name edits dependsOutcome sessionDepsOutcome parseOutcome tcOutcome = testGroup name
+    [ cancellationTemplate edits Nothing
+    , cancellationTemplate edits $ Just ("GetFileContents", True)
+    , cancellationTemplate edits $ Just ("GhcSession", True)
+      -- the outcome for GetModSummary is always True because parseModuleHeader never fails (!)
+    , cancellationTemplate edits $ Just ("GetModSummary", True)
+    , cancellationTemplate edits $ Just ("GetModSummaryWithoutTimestamps", True)
+      -- getLocatedImports never fails
+    , cancellationTemplate edits $ Just ("GetLocatedImports", True)
+    , cancellationTemplate edits $ Just ("GetDependencies", dependsOutcome)
+    , cancellationTemplate edits $ Just ("GhcSessionDeps", sessionDepsOutcome)
+    , cancellationTemplate edits $ Just ("GetParsedModule", parseOutcome)
+    , cancellationTemplate edits $ Just ("TypeCheck", tcOutcome)
+    , cancellationTemplate edits $ Just ("GetHieAst", tcOutcome)
+    ]
+
+cancellationTemplate :: (TextDocumentContentChangeEvent, TextDocumentContentChangeEvent) -> Maybe (String, Bool) -> TestTree
+cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ runTestNoKick $ do
+      doc <- createDoc "Foo.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wall #-}"
+            , "module Foo where"
+            , "import Data.List()"
+            , "f0 x = (x,x)"
+            ]
+
+      -- for the example above we expect one warning
+      let missingSigDiags = [(DsWarning, (3, 0), "Top-level binding") ]
+      typeCheck doc >> expectCurrentDiagnostics doc missingSigDiags
+
+      -- Now we edit the document and wait for the given key (if any)
+      changeDoc doc [edit]
+      whenJust mbKey $ \(key, expectedResult) -> do
+        Right WaitForIdeRuleResult{ideResultSuccess} <- waitForAction key doc
+        liftIO $ ideResultSuccess @?= expectedResult
+
+      -- The 2nd edit cancels the active session and unbreaks the file
+      -- wait for typecheck and check that the current diagnostics are accurate
+      changeDoc doc [undoEdit]
+      typeCheck doc >> expectCurrentDiagnostics doc missingSigDiags
+
+      expectNoMoreDiagnostics 0.5
+    where
+        -- similar to run except it disables kick
+        runTestNoKick s = withTempDir $ \dir -> runInDir' dir "." "." ["--test-no-kick"] s
+
+        waitForAction key TextDocumentIdentifier{_uri} = do
+            waitId <- sendRequest (CustomClientMethod "test") (WaitForIdeRule key _uri)
+            ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId waitId
+            return _result
+
+        typeCheck doc = do
+            Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+            liftIO $ assertBool "The file should typecheck" ideResultSuccess
+            -- wait for the debouncer to publish diagnostics if the rule runs
+            liftIO $ sleep 0.2
+            -- flush messages to ensure current diagnostics state is updated
+            flushMessages
 
 codeActionTests :: TestTree
 codeActionTests = testGroup "code actions"
@@ -3652,7 +3737,7 @@ rootUriTests = testCase "use rootUri" . runTest "dirA" "dirB" $ \dir -> do
   where
     -- similar to run' except we can configure where to start ghcide and session
     runTest :: FilePath -> FilePath -> (FilePath -> Session ()) -> IO ()
-    runTest dir1 dir2 s = withTempDir $ \dir -> runInDir' dir dir1 dir2 (s dir)
+    runTest dir1 dir2 s = withTempDir $ \dir -> runInDir' dir dir1 dir2 [] (s dir)
 
 -- | Test if ghcide asynchronously handles Commands and user Requests
 asyncTests :: TestTree
@@ -3765,11 +3850,11 @@ run' :: (FilePath -> Session a) -> IO a
 run' s = withTempDir $ \dir -> runInDir dir (s dir)
 
 runInDir :: FilePath -> Session a -> IO a
-runInDir dir = runInDir' dir "." "."
+runInDir dir = runInDir' dir "." "." []
 
 -- | Takes a directory as well as relative paths to where we should launch the executable as well as the session root.
-runInDir' :: FilePath -> FilePath -> FilePath -> Session a -> IO a
-runInDir' dir startExeIn startSessionIn s = do
+runInDir' :: FilePath -> FilePath -> FilePath -> [String] -> Session a -> IO a
+runInDir' dir startExeIn startSessionIn extraOptions s = do
   ghcideExe <- locateGhcideExecutable
   let startDir = dir </> startExeIn
   let projDir = dir </> startSessionIn
@@ -3780,7 +3865,8 @@ runInDir' dir startExeIn startSessionIn s = do
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
   createDirectoryIfMissing True $ projDir ++ "/Data"
 
-  let cmd = unwords [ghcideExe, "--lsp", "--test", "--verbose", "--cwd", startDir]
+  let cmd = unwords $
+       [ghcideExe, "--lsp", "--test", "--verbose", "--cwd", startDir] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
