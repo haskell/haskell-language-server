@@ -1,5 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -8,6 +6,7 @@ module Ide.Plugin.Config
       getInitialConfig
     , getConfigFromNotification
     , Config(..)
+    , PluginConfig(..)
     ) where
 
 import           Control.Applicative
@@ -16,6 +15,7 @@ import           Data.Aeson              hiding ( Error )
 import           Data.Default
 import qualified Data.Text                     as T
 import           Language.Haskell.LSP.Types
+import qualified Data.Map as Map
 
 -- ---------------------------------------------------------------------
 
@@ -43,14 +43,15 @@ getInitialConfig (RequestMessage _ _ _ InitializeParams{_initializationOptions =
 -- will be surprises relating to config options being ignored, initially though.
 data Config =
   Config
-    { hlintOn                     :: Bool
-    , diagnosticsOnChange         :: Bool
-    , maxNumberOfProblems         :: Int
-    , diagnosticsDebounceDuration :: Int
-    , liquidOn                    :: Bool
-    , completionSnippetsOn        :: Bool
-    , formatOnImportOn            :: Bool
-    , formattingProvider          :: T.Text
+    { hlintOn                     :: !Bool
+    , diagnosticsOnChange         :: !Bool
+    , maxNumberOfProblems         :: !Int
+    , diagnosticsDebounceDuration :: !Int
+    , liquidOn                    :: !Bool
+    , completionSnippetsOn        :: !Bool
+    , formatOnImportOn            :: !Bool
+    , formattingProvider          :: !T.Text
+    , plugins                     :: !(Map.Map T.Text PluginConfig)
     } deriving (Show,Eq)
 
 instance Default Config where
@@ -66,6 +67,7 @@ instance Default Config where
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
+    , plugins                     = Map.empty
     }
 
 -- TODO: Add API for plugins to expose their own LSP config options
@@ -83,6 +85,7 @@ instance A.FromJSON Config where
       <*> o .:? "completionSnippetsOn"        .!= completionSnippetsOn def
       <*> o .:? "formatOnImportOn"            .!= formatOnImportOn def
       <*> o .:? "formattingProvider"          .!= formattingProvider def
+      <*> o .:? "plugin"                      .!= plugins def
 
 -- 2017-10-09 23:22:00.710515298 [ThreadId 11] - ---> {"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"haskell":{"maxNumberOfProblems":100,"hlintOn":true}}}}
 -- 2017-10-09 23:22:00.710667381 [ThreadId 15] - reactor:got didChangeConfiguration notification:
@@ -94,7 +97,7 @@ instance A.FromJSON Config where
 --                                                                            ,("maxNumberOfProblems",Number 100.0)]))])}}
 
 instance A.ToJSON Config where
-  toJSON (Config h diag m d l c f fp) = object [ "haskell" .= r ]
+  toJSON (Config h diag m d l c f fp p) = object [ "haskell" .= r ]
     where
       r = object [ "hlintOn"                     .= h
                  , "diagnosticsOnChange"         .= diag
@@ -104,4 +107,65 @@ instance A.ToJSON Config where
                  , "completionSnippetsOn"        .= c
                  , "formatOnImportOn"            .= f
                  , "formattingProvider"          .= fp
+                 , "plugin"                      .= p
                  ]
+
+-- ---------------------------------------------------------------------
+
+-- | A PluginConfig is a generic configuration for a given HLS plugin.  It
+-- provides a "big switch" to turn it on or off as a whole, as well as small
+-- switches per feature, and a slot for custom config.
+-- This provides a regular naming scheme for all plugin config.
+data PluginConfig =
+    PluginConfig
+      { plcGlobalOn      :: !Bool
+      , plcCodeActionsOn :: !Bool
+      , plcCodeLensOn    :: !Bool
+      , plcDiagnosticsOn :: !Bool
+      , plcHoverOn       :: !Bool
+      , plcSymbolsOn     :: !Bool
+      , plcCompletionOn  :: !Bool
+      , plcRenameOn      :: !Bool
+      , plcConfig        :: !A.Object
+      } deriving (Show,Eq)
+
+instance Default PluginConfig where
+  def = PluginConfig
+      { plcGlobalOn      = True
+      , plcCodeActionsOn = True
+      , plcCodeLensOn    = True
+      , plcDiagnosticsOn = True
+      , plcHoverOn       = True
+      , plcSymbolsOn     = True
+      , plcCompletionOn  = True
+      , plcRenameOn      = True
+      , plcConfig        = mempty
+      }
+
+instance A.ToJSON PluginConfig where
+    toJSON (PluginConfig g ca cl d h s c rn cfg) = r
+      where
+        r = object [ "globalOn"      .= g
+                   , "codeActionsOn" .= ca
+                   , "codeLensOn"    .= cl
+                   , "diagnosticsOn" .= d
+                   , "hoverOn"       .= h
+                   , "symbolsOn"     .= s
+                   , "completionOn"  .= c
+                   , "renameOn"      .= rn
+                   , "config"        .= cfg
+                   ]
+
+instance A.FromJSON PluginConfig where
+  parseJSON = A.withObject "PluginConfig" $ \o  -> PluginConfig
+      <$> o .:? "globalOn"      .!= plcGlobalOn def
+      <*> o .:? "codeActionsOn" .!= plcCodeActionsOn def
+      <*> o .:? "codeLensOn"    .!= plcCodeLensOn    def
+      <*> o .:? "diagnosticsOn" .!= plcDiagnosticsOn def -- AZ
+      <*> o .:? "hoverOn"       .!= plcHoverOn       def
+      <*> o .:? "symbolsOn"     .!= plcSymbolsOn     def
+      <*> o .:? "completionOn"  .!= plcCompletionOn  def
+      <*> o .:? "renameOn"      .!= plcRenameOn      def
+      <*> o .:? "config"        .!= plcConfig        def
+
+-- ---------------------------------------------------------------------

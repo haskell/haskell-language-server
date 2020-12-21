@@ -19,6 +19,9 @@ module Ide.Plugin
     , responseError
     , getClientConfig
     , getClientConfigAction
+    , getPluginConfig
+    , configForPlugin
+    , pluginEnabled
     ) where
 
 import           Control.Exception(SomeException, catch)
@@ -121,7 +124,12 @@ makeCodeAction :: [(PluginId, CodeActionProvider)]
 makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
     let caps = LSP.clientCapabilities lf
         unL (List ls) = ls
-    r <- mapM (\(pid,provider) -> provider lf ideState pid docId range context) cas
+        makeAction (pid,provider) = do
+          pluginConfig <- getPluginConfig lf pid
+          if pluginEnabled pluginConfig plcCodeActionsOn
+            then provider lf ideState pid docId range context
+            else return $ Right (List [])
+    r <- mapM makeAction cas
     let actions = filter wasRequested . concat $ map unL $ rights r
     res <- send caps actions
     return $ Right res
@@ -181,7 +189,10 @@ makeCodeLens cas lf ideState params = do
     logInfo (ideLogger ideState) "Plugin.makeCodeLens (ideLogger)" -- AZ
     let
       makeLens (pid, provider) = do
-          r <- provider lf ideState pid params
+          pluginConfig <- getPluginConfig lf pid
+          r <- if pluginEnabled pluginConfig plcCodeLensOn
+                 then provider lf ideState pid params
+                 else return $ Right (List [])
           return (pid, r)
       breakdown :: [(PluginId, Either ResponseError a)] -> ([(PluginId, ResponseError)], [(PluginId, a)])
       breakdown ls = (concatMap doOneLeft ls, concatMap doOneRight ls)
@@ -409,9 +420,15 @@ makeHover :: [(PluginId, HoverProvider)]
       -> LSP.LspFuncs Config -> IdeState
       -> TextDocumentPositionParams
       -> IO (Either ResponseError (Maybe Hover))
-makeHover hps _lf ideState params
+makeHover hps lf ideState params
   = do
-      mhs <- mapM (\(_,p) -> p ideState params) hps
+      let
+        makeHover(pid,p) = do
+          pluginConfig <- getPluginConfig lf pid
+          if pluginEnabled pluginConfig plcHoverOn
+             then p ideState params
+             else return $ Right Nothing
+      mhs <- mapM makeHover hps
       -- TODO: We should support ServerCapabilities and declare that
       -- we don't support hover requests during initialization if we
       -- don't have any hover providers
@@ -462,7 +479,12 @@ makeSymbols sps lf ideState params
                       si = SymbolInformation name' (ds ^. kind) (ds ^. deprecated) loc parent
                   in [si] <> children'
 
-      mhs <- mapM (\(_,p) -> p lf ideState params) sps
+          makeSymbols (pid,p) = do
+            pluginConfig <- getPluginConfig lf pid
+            if pluginEnabled pluginConfig plcSymbolsOn
+              then p lf ideState params
+              else return $ Right []
+      mhs <- mapM makeSymbols sps
       case rights mhs of
           [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
           hs -> return $ Right $ convertSymbols $ concat hs
@@ -485,7 +507,14 @@ renameWith ::
   RenameParams ->
   IO (Either ResponseError WorkspaceEdit)
 renameWith providers lspFuncs state params = do
-    results <- mapM (\(_,p) -> p lspFuncs state params) providers
+    let
+        makeAction (pid,p) = do
+          pluginConfig <- getPluginConfig lspFuncs pid
+          if pluginEnabled pluginConfig plcRenameOn
+             then p lspFuncs state params
+             else return $ Right $ WorkspaceEdit Nothing Nothing
+    -- TODO:AZ: we need to consider the right way to combine possible renamers
+    results <- mapM makeAction providers
     case partitionEithers results of
         (errors, []) -> return $ Left $ responseError $ T.pack $ show $ errors
         (_, edits) -> return $ Right $ mconcat edits
@@ -530,7 +559,7 @@ makeCompletions :: [(PluginId, CompletionProvider)]
 makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier doc) pos _context _mt)
   = do
       mprefix <- getPrefixAtPos lf doc pos
-      _snippets <- WithSnippets <$> completionSnippetsOn <$> (getClientConfig lf)
+      _snippets <- WithSnippets <$> completionSnippetsOn <$> getClientConfig lf
 
       let
           combine :: [CompletionResponseResult] -> CompletionResponseResult
@@ -545,11 +574,16 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
                       = go (CompletionList $ CompletionListType (complete || complete2) (List (ls <> ls2))) rest
                   go (CompletionList (CompletionListType complete (List ls))) (Completions (List ls2):rest)
                       = go (CompletionList $ CompletionListType complete (List (ls <> ls2))) rest
+          makeAction (pid,p) = do
+            pluginConfig <- getPluginConfig lf pid
+            if pluginEnabled pluginConfig plcCompletionOn
+               then p lf ideState params
+               else return $ Right $ Completions $ List []
 
       case mprefix of
           Nothing -> return $ Right $ Completions $ List []
           Just _prefix -> do
-            mhs <- mapM (\(_,p) -> p lf ideState params) sps
+            mhs <- mapM makeAction sps
             case rights mhs of
                 [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
                 hs -> return $ Right $ combine hs
@@ -583,15 +617,15 @@ getPrefixAtPos lf uri pos = do
 
 -- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently
--- cache the returned value of this function, as clients can at runitime change
--- their configuration.
+-- cache the returned value of this function, as clients can change their
+-- configuration at runtime.
 --
 -- If no custom configuration has been set by the client, this function returns
 -- our own defaults.
 getClientConfig :: LSP.LspFuncs Config -> IO Config
 getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
 
--- | Returns the client configurarion stored in the IdeState.
+-- | Returns the client configuration stored in the IdeState.
 -- You can use this function to access it from shake Rules
 getClientConfigAction :: Action Config
 getClientConfigAction = do
@@ -600,4 +634,27 @@ getClientConfigAction = do
   case J.fromJSON <$> mbVal of
     Just (J.Success c) -> return c
     _ -> return Data.Default.def
+
 -- ---------------------------------------------------------------------
+
+-- | Returns the current plugin configuration. It is not wise to permanently
+-- cache the returned value of this function, as clients can change their
+-- configuration at runtime.
+--
+-- If no custom configuration has been set by the client, this function returns
+-- our own defaults.
+getPluginConfig :: LSP.LspFuncs Config -> PluginId -> IO PluginConfig
+getPluginConfig lf plugin = do
+    config <- getClientConfig lf
+    return $ configForPlugin config plugin
+
+configForPlugin :: Config -> PluginId -> PluginConfig
+configForPlugin config (PluginId plugin)
+    = Map.findWithDefault Data.Default.def plugin (plugins config)
+
+-- ---------------------------------------------------------------------
+
+-- | Checks that a given plugin is both enabled and the specific feature is
+-- enabled
+pluginEnabled :: PluginConfig -> (PluginConfig -> Bool) -> Bool
+pluginEnabled pluginConfig f = plcGlobalOn pluginConfig && f pluginConfig
