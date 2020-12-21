@@ -41,6 +41,7 @@ library
         base == 4.*,
         binary,
         bytestring,
+        case-insensitive,
         containers,
         data-default,
         deepseq,

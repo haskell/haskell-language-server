@@ -115,7 +115,13 @@ experiments =
         )
         ( \p doc -> do
             changeDoc doc [hygienicEdit]
-            whileM (null <$> waitForDiagnostics)
+            waitForProgressDone
+            -- NOTE ghcide used to clear and reinstall the diagnostics here
+            -- new versions no longer do, but keep this logic around
+            -- to benchmark old versions sucessfully
+            diags <- getCurrentDiagnostics doc
+            when (null diags) $
+              whileM (null <$> waitForDiagnostics)
             not . null <$> getCodeActions doc (Range p p)
         )
     ]

@@ -13,7 +13,7 @@ module Development.IDE.Core.Service(
     IdeState, initialise, shutdown,
     runAction,
     writeProfile,
-    getDiagnostics, unsafeClearDiagnostics,
+    getDiagnostics,
     ideLogger,
     updatePositionMapping,
     ) where
