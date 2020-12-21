@@ -7,7 +7,6 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE PatternSynonyms            #-}
 
 -- | A Shake implementation of the compiler service.
 --
@@ -38,7 +37,7 @@ module Development.IDE.Core.Shake(
     useWithStale, usesWithStale,
     useWithStale_, usesWithStale_,
     define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks,
-    getDiagnostics, unsafeClearDiagnostics,
+    getDiagnostics,
     getHiddenDiagnostics,
     IsIdeGlobal, addIdeGlobal, addIdeGlobalExtras, getIdeGlobalState, getIdeGlobalAction,
     getIdeGlobalExtras,
@@ -84,6 +83,7 @@ import Development.IDE.Core.Debouncer
 import Development.IDE.GHC.Compat (NameCacheUpdater(..), upNameCache )
 import Development.IDE.GHC.Orphans ()
 import Development.IDE.Core.PositionMapping
+import Development.IDE.Core.RuleTypes
 import Development.IDE.Types.Action
 import Development.IDE.Types.Logger hiding (Priority)
 import Development.IDE.Types.KnownTargets
@@ -124,7 +124,6 @@ import Data.IORef
 import NameCache
 import UniqSupply
 import PrelInfo
-import Data.Int (Int64)
 import Language.Haskell.LSP.Types.Capabilities
 import OpenTelemetry.Eventlog
 
@@ -502,7 +501,7 @@ shakeShut IdeState{..} = withMVar shakeSession $ \runner -> do
 -- | This is a variant of withMVar where the first argument is run unmasked and if it throws
 -- an exception, the previous value is restored while the second argument is executed masked.
 withMVar' :: MVar a -> (a -> IO b) -> (b -> IO (a, c)) -> IO c
-withMVar' var unmasked masked = mask $ \restore -> do
+withMVar' var unmasked masked = uninterruptibleMask $ \restore -> do
     a <- takeMVar var
     b <- restore (unmasked a) `onException` putMVar var a
     (a', c) <- masked b
@@ -651,11 +650,6 @@ getHiddenDiagnostics :: IdeState -> IO [FileDiagnostic]
 getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
     val <- readVar hiddenDiagnostics
     return $ getAllDiagnostics val
-
--- | FIXME: This function is temporary! Only required because the files of interest doesn't work
-unsafeClearDiagnostics :: IdeState -> IO ()
-unsafeClearDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} =
-    writeVar diagnostics mempty
 
 -- | Clear the results for all files that do not match the given predicate.
 garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
@@ -998,25 +992,19 @@ updateFileDiagnostics :: MonadIO m
 updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, eventer} current = liftIO $ do
     modTime <- (currentValue =<<) <$> getValues state GetModificationTime fp
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
+        uri = filePathToUri' fp
+        ver = vfsVersion =<< modTime
+        updateDiagnosticsWithForcing new store = do
+            store' <- evaluate $ setStageDiagnostics uri ver (T.pack $ show k) new store
+            new' <- evaluate $ getUriDiagnostics uri store'
+            return (store', new')
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- modifyVar diagnostics $ \old -> do
-            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime)
-                                  (T.pack $ show k) (map snd currentShown) old
-            let newDiags = getFileDiagnostics fp newDiagsStore
-            _ <- evaluate newDiagsStore
-            _ <- evaluate newDiags
-            pure (newDiagsStore, newDiags)
-        modifyVar_ hiddenDiagnostics $ \old -> do
-            let newDiagsStore = setStageDiagnostics fp (vfsVersion =<< modTime)
-                                  (T.pack $ show k) (map snd currentHidden) old
-            let newDiags = getFileDiagnostics fp newDiagsStore
-            _ <- evaluate newDiagsStore
-            _ <- evaluate newDiags
-            return newDiagsStore
+        newDiags <- modifyVar diagnostics $ updateDiagnosticsWithForcing $ map snd currentShown
+        _ <- modifyVar hiddenDiagnostics $  updateDiagnosticsWithForcing $ map snd currentHidden
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
@@ -1051,45 +1039,6 @@ actionLogger = do
     return logger
 
 
--- The Shake key type for getModificationTime queries
-data GetModificationTime = GetModificationTime_
-    { missingFileDiagnostics :: Bool
-      -- ^ If false, missing file diagnostics are not reported
-    }
-    deriving (Show, Generic)
-
-instance Eq GetModificationTime where
-    -- Since the diagnostics are not part of the answer, the query identity is
-    -- independent from the 'missingFileDiagnostics' field
-    _ == _ = True
-
-instance Hashable GetModificationTime where
-    -- Since the diagnostics are not part of the answer, the query identity is
-    -- independent from the 'missingFileDiagnostics' field
-    hashWithSalt salt _ = salt
-
-instance NFData   GetModificationTime
-instance Binary   GetModificationTime
-
-pattern GetModificationTime :: GetModificationTime
-pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
-
--- | Get the modification time of a file.
-type instance RuleResult GetModificationTime = FileVersion
-
-data FileVersion
-    = VFSVersion !Int
-    | ModificationTime
-      !Int64   -- ^ Large unit (platform dependent, do not make assumptions)
-      !Int64   -- ^ Small unit (platform dependent, do not make assumptions)
-    deriving (Show, Generic)
-
-instance NFData FileVersion
-
-vfsVersion :: FileVersion -> Maybe Int
-vfsVersion (VFSVersion i) = Just i
-vfsVersion ModificationTime{} = Nothing
-
 getDiagnosticsFromStore :: StoreItem -> [Diagnostic]
 getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.elems diags
 
@@ -1097,17 +1046,24 @@ getDiagnosticsFromStore (StoreItem _ diags) = concatMap SL.fromSortedList $ Map.
 -- | Sets the diagnostics for a file and compilation step
 --   if you want to clear the diagnostics call this with an empty list
 setStageDiagnostics
-    :: NormalizedFilePath
+    :: NormalizedUri
     -> TextDocumentVersion -- ^ the time that the file these diagnostics originate from was last edited
     -> T.Text
     -> [LSP.Diagnostic]
     -> DiagnosticStore
     -> DiagnosticStore
-setStageDiagnostics fp timeM stage diags ds  =
-    updateDiagnostics ds uri timeM diagsBySource
-    where
-        diagsBySource = Map.singleton (Just stage) (SL.toSortedList diags)
-        uri = filePathToUri' fp
+setStageDiagnostics uri ver stage diags ds = newDiagsStore where
+    -- When 'ver' is a new version, updateDiagnostics throws away diagnostics from all stages
+    -- This interacts bady with early cutoff, so we make sure to preserve diagnostics
+    -- from other stages when calling updateDiagnostics
+    -- But this means that updateDiagnostics cannot be called concurrently
+    -- for different stages anymore
+    updatedDiags = Map.insert (Just stage) (SL.toSortedList diags) oldDiags
+    oldDiags = case HMap.lookup uri ds of
+            Just (StoreItem _ byStage) -> byStage
+            _ -> Map.empty
+    newDiagsStore = updateDiagnostics ds uri ver updatedDiags
+
 
 getAllDiagnostics ::
     DiagnosticStore ->
@@ -1115,13 +1071,13 @@ getAllDiagnostics ::
 getAllDiagnostics =
     concatMap (\(k,v) -> map (fromUri k,ShowDiag,) $ getDiagnosticsFromStore v) . HMap.toList
 
-getFileDiagnostics ::
-    NormalizedFilePath ->
+getUriDiagnostics ::
+    NormalizedUri ->
     DiagnosticStore ->
     [LSP.Diagnostic]
-getFileDiagnostics fp ds =
+getUriDiagnostics uri ds =
     maybe [] getDiagnosticsFromStore $
-    HMap.lookup (filePathToUri' fp) ds
+    HMap.lookup uri ds
 
 filterDiagnostics ::
     (NormalizedFilePath -> Bool) ->

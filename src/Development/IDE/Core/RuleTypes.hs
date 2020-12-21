@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DerivingStrategies #-}
 
@@ -37,6 +38,8 @@ import Language.Haskell.LSP.Types (NormalizedFilePath)
 import TcRnMonad (TcGblEnv)
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Options (IdeGhcSession)
+import Data.Text (Text)
+import Data.Int (Int64)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show)
@@ -189,6 +192,55 @@ type instance RuleResult GetModIface = HiFileResult
 -- | Get a module interface details, without the Linkable
 -- For better early cuttoff
 type instance RuleResult GetModIfaceWithoutLinkable = HiFileResult
+
+-- | Get the contents of a file, either dirty (if the buffer is modified) or Nothing to mean use from disk.
+type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
+
+-- The Shake key type for getModificationTime queries
+data GetModificationTime = GetModificationTime_
+    { missingFileDiagnostics :: Bool
+      -- ^ If false, missing file diagnostics are not reported
+    }
+    deriving (Show, Generic)
+
+instance Eq GetModificationTime where
+    -- Since the diagnostics are not part of the answer, the query identity is
+    -- independent from the 'missingFileDiagnostics' field
+    _ == _ = True
+
+instance Hashable GetModificationTime where
+    -- Since the diagnostics are not part of the answer, the query identity is
+    -- independent from the 'missingFileDiagnostics' field
+    hashWithSalt salt _ = salt
+
+instance NFData   GetModificationTime
+instance Binary   GetModificationTime
+
+pattern GetModificationTime :: GetModificationTime
+pattern GetModificationTime = GetModificationTime_ {missingFileDiagnostics=True}
+
+-- | Get the modification time of a file.
+type instance RuleResult GetModificationTime = FileVersion
+
+data FileVersion
+    = VFSVersion !Int
+    | ModificationTime
+      !Int64   -- ^ Large unit (platform dependent, do not make assumptions)
+      !Int64   -- ^ Small unit (platform dependent, do not make assumptions)
+    deriving (Show, Generic)
+
+instance NFData FileVersion
+
+vfsVersion :: FileVersion -> Maybe Int
+vfsVersion (VFSVersion i) = Just i
+vfsVersion ModificationTime{} = Nothing
+
+data GetFileContents = GetFileContents
+    deriving (Eq, Show, Generic)
+instance Hashable GetFileContents
+instance NFData   GetFileContents
+instance Binary   GetFileContents
+
 
 data FileOfInterestStatus = OnDisk | Modified
   deriving (Eq, Show, Typeable, Generic)

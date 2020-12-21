@@ -734,7 +734,7 @@ getModSummaryRule = do
                 getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
             Right res@(ms,_) -> do
-                let fingerPrint = hash (computeFingerprint f dflags ms, hashUTC modTime)
+                let fingerPrint = hash (computeFingerprint f (fromJust $ ms_hspp_buf ms) dflags ms, hashUTC modTime)
                 return ( Just (BS.pack $ show fingerPrint) , ([], Just res))
             Left diags -> return (Nothing, (diags, Nothing))
 
@@ -742,16 +742,18 @@ getModSummaryRule = do
         ms <- use GetModSummary f
         case ms of
             Just res@(msWithTimestamps,_) -> do
-                let ms = msWithTimestamps { ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps" }
+                let ms = msWithTimestamps {
+                    ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps",
+                    ms_hspp_buf = error "use GetModSummary instead of GetModSummaryWithoutTimestamps"
+                    }
                 dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
-                -- include the mod time in the fingerprint
-                let fp = BS.pack $ show $ hash (computeFingerprint f dflags ms)
+                let fp = BS.pack $ show $ hash (computeFingerprint f (fromJust $ ms_hspp_buf msWithTimestamps) dflags ms)
                 return (Just fp, ([], Just res))
             Nothing -> return (Nothing, ([], Nothing))
     where
         -- Compute a fingerprint from the contents of `ModSummary`,
         -- eliding the timestamps and other non relevant fields.
-        computeFingerprint f dflags ModSummary{..} =
+        computeFingerprint f sb dflags ModSummary{..} =
             let fingerPrint =
                     ( moduleNameString (moduleName ms_mod)
                     , ms_hspp_file
@@ -761,7 +763,7 @@ getModSummaryRule = do
                     , fingerPrintImports ms_textual_imps
                     )
                 fingerPrintImports = map (fmap uniq *** (moduleNameString . unLoc))
-                opts = Hdr.getOptions dflags (fromJust ms_hspp_buf) (fromNormalizedFilePath f)
+                opts = Hdr.getOptions dflags sb (fromNormalizedFilePath f)
             in fingerPrint
 
         hashUTC UTCTime{..} = (fromEnum utctDay, fromEnum utctDayTime)
