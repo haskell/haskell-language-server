@@ -381,6 +381,7 @@ test-suite func-test
   other-modules:
     Command
     Completion
+    Config
     Deferred
     Definition
     Diagnostic
