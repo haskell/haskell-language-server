@@ -20,7 +20,6 @@ module Ide.Plugin.Hlint
 import Refact.Apply
 import Control.Arrow ((&&&))
 import Control.DeepSeq
-import Control.Exception
 import Control.Lens ((^.))
 import Control.Monad
 import Control.Monad.IO.Class
@@ -38,16 +37,19 @@ import Development.IDE.Core.Rules (defineNoFile)
 import Development.IDE.Core.Shake (getDiagnostics)
 
 #ifdef HLINT_ON_GHC_LIB
+import Control.Exception
 import Data.List (nub)
-import "ghc-lib" GHC hiding (DynFlags(..))
+import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts)
 import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
 import "ghc" GHC as RealGHC (DynFlags(..))
-import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
+import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags, ms_hspp_opts)
 import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
+import System.FilePath (takeFileName)
+import System.IO (hPutStr, noNewlineTranslation, hSetNewlineMode, utf8, hSetEncoding, IOMode(WriteMode), withFile, hClose)
+import System.IO.Temp
 #else
 import Development.IDE.GHC.Compat hiding (DynFlags(..))
-import HscTypes (hsc_dflags)
 import Language.Haskell.GHC.ExactPrint.Parsers (postParseTransform)
 import Language.Haskell.GHC.ExactPrint.Delta (normalLayout)
 #endif
@@ -58,12 +60,12 @@ import Ide.Plugin.Config
 import Ide.PluginUtils
 import Language.Haskell.HLint as Hlint
 import Language.Haskell.LSP.Core
+    ( LspFuncs(withIndefiniteProgress),
+      ProgressCancellable(Cancellable) )
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as LSP
 import qualified Language.Haskell.LSP.Types.Lens as LSP
-import System.FilePath (takeFileName)
-import System.IO (hPutStr, noNewlineTranslation, hSetNewlineMode, utf8, hSetEncoding, IOMode(WriteMode), withFile, hClose)
-import System.IO.Temp
+
 import Text.Regex.TDFA.Text()
 import GHC.Generics (Generic)
 
@@ -208,12 +210,15 @@ getIdeas nfp = do
 
 getExtensions :: ParseFlags -> NormalizedFilePath -> Action [Extension]
 getExtensions pflags nfp = do
-    hsc <- hscEnv <$> use_ GhcSession nfp
-    let dflags = hsc_dflags hsc
+    dflags <- getFlags
     let hscExts = EnumSet.toList (extensionFlags dflags)
     let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
     let hlintExts = nub $ enabledExtensions pflags ++ hscExts'
     return hlintExts
+  where getFlags :: Action DynFlags
+        getFlags = do
+          (modsum, _) <- use_ GetModSummary nfp
+          return $ ms_hspp_opts modsum
 #endif
 
 -- ---------------------------------------------------------------------
@@ -395,8 +400,8 @@ applyHint ide nfp mhint =
             Just pm -> do
                 let anns = pm_annotations pm
                 let modu = pm_parsed_source pm
-                hsc <- liftIO $ runAction' $ hscEnv <$> use_ GhcSession nfp
-                let dflags = hsc_dflags hsc
+                (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
+                let dflags = ms_hspp_opts modsum
                 (anns', modu') <-
                     ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) normalLayout
                 liftIO (Right <$> applyRefactorings' Nothing commands anns' modu')
