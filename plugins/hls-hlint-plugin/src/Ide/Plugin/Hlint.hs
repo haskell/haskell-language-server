@@ -20,6 +20,7 @@ module Ide.Plugin.Hlint
 import Refact.Apply
 import Control.Arrow ((&&&))
 import Control.DeepSeq
+import Control.Exception
 import Control.Lens ((^.))
 import Control.Monad
 import Control.Monad.IO.Class
@@ -37,7 +38,6 @@ import Development.IDE.Core.Rules (defineNoFile)
 import Development.IDE.Core.Shake (getDiagnostics)
 
 #ifdef HLINT_ON_GHC_LIB
-import Control.Exception
 import Data.List (nub)
 import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts)
 import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
@@ -351,6 +351,9 @@ applyHint ide nfp mhint =
   runExceptT $ do
     let runAction' :: Action a -> IO a
         runAction' = runAction "applyHint" ide
+    let errorHandlers = [ Handler $ \e -> return (Left (show (e :: IOException)))
+                        , Handler $ \e -> return (Left (show (e :: ErrorCall)))
+                        ]
     ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
     let commands = map ideaRefactoring ideas'
@@ -388,10 +391,8 @@ applyHint ide nfp mhint =
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> applyRefactorings Nothing commands temp refactExts) `catches`
-                    [ Handler $ \e -> return (Left (show (e :: IOException)))
-                    , Handler $ \e -> return (Left (show (e :: ErrorCall)))
-                    ]
+            (Right <$> applyRefactorings Nothing commands temp refactExts)
+                `catches` errorHandlers
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModule nfp
     res <-
@@ -404,7 +405,8 @@ applyHint ide nfp mhint =
                 let dflags = ms_hspp_opts modsum
                 (anns', modu') <-
                     ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) normalLayout
-                liftIO (Right <$> applyRefactorings' Nothing commands anns' modu')
+                liftIO $ (Right <$> applyRefactorings' Nothing commands anns' modu')
+                            `catches` errorHandlers
 #endif
     case res of
       Right appliedFile -> do
