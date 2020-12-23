@@ -81,20 +81,6 @@ hlintTests = testGroup "hlint suggestions" [
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo = id\n"
 
-    , testCase "changing configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
-        let config = def { hlintOn = True }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
-
-        doc <- openDoc "ApplyRefact2.hs" "haskell"
-        testHlintDiagnostics doc
-
-        let config' = def { hlintOn = False }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
-
-        diags' <- waitForDiagnosticsFrom doc
-
-        liftIO $ noHlintDiagnostics diags'
-
     , knownBrokenForGhcVersions [GHC88, GHC86] "hlint doesn't take in account cpp flag as ghc -D argument" $
       testCase "hlint diagnostics works with CPP via ghc -XCPP argument (#554)" $ runHlintSession "cpp" $ do
         doc <- openDoc "ApplyRefact3.hs" "haskell"
