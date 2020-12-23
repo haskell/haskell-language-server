@@ -8,6 +8,7 @@ import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.Runners.AntXML
 
 import           Command
+import           Config
 import           Completion
 import           Deferred
 import           Definition
@@ -37,6 +38,7 @@ main =
         "haskell-language-server"
         [ Command.tests
         , Completion.tests
+        , Config.tests
         , Deferred.tests
         , Definition.tests
         , Diagnostic.tests

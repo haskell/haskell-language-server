@@ -67,7 +67,7 @@ import GHC.Generics (Generic)
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = rules
+  { pluginRules = rules plId
   , pluginCommands =
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
@@ -93,10 +93,12 @@ type instance RuleResult GetHlintDiagnostics = ()
 -- |    - `getIdeas` -> `getFileContents` if the hls ghc does not match the hlint default ghc
 -- | - The client settings have changed, to honour the `hlintOn` setting, via `getClientConfigAction`
 -- | - The hlint specific settings have changed, via `getHlintSettingsRule`
-rules :: Rules ()
-rules = do
+rules :: PluginId -> Rules ()
+rules plugin = do
   define $ \GetHlintDiagnostics file -> do
-    hlintOn' <- hlintOn <$> getClientConfigAction
+    config <- getClientConfigAction
+    let pluginConfig = configForPlugin config plugin
+    let hlintOn' = hlintOn config && pluginEnabled pluginConfig plcDiagnosticsOn
     ideas <- if hlintOn' then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
