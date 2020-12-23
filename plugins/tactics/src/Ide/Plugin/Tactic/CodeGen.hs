@@ -237,15 +237,26 @@ bvar' :: BVar a => OccName -> a
 bvar' = bvar . fromString . occNameString
 
 
+------------------------------------------------------------------------------
+-- | Get an HsExpr corresponding to a function name.
 mkFunc :: String -> HsExpr GhcPs
 mkFunc = var' . mkVarOcc
 
+
+------------------------------------------------------------------------------
+-- | Get an HsExpr corresponding to a value name.
 mkVal :: String -> HsExpr GhcPs
 mkVal = var' . mkVarOcc
 
+
+------------------------------------------------------------------------------
+-- | Like 'op', but easier to call.
 infixCall :: String -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
 infixCall s = flip op (fromString s)
 
+
+------------------------------------------------------------------------------
+-- | Like '(@@)', but uses a dollar instead of parentheses.
 appDollar :: HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
 appDollar = infixCall "$"
 

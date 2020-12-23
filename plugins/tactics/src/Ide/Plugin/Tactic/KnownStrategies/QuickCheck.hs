@@ -26,6 +26,11 @@ import Type ( splitTyConApp_maybe )
 import Data.Generics (mkQ, everything)
 
 
+------------------------------------------------------------------------------
+-- | Known tactic for deriving @arbitrary :: Gen a@. This tactic splits the
+-- type's data cons into terminal and inductive cases, and generates code that
+-- produces a terminal if the QuickCheck size parameter is <=1, or any data con
+-- otherwise. It correctly scales recursive parameters, ensuring termination.
 deriveArbitrary :: TacticsM ()
 deriveArbitrary = do
   ty <- jGoal <$> goal
@@ -56,18 +61,21 @@ deriveArbitrary = do
     _ -> throwError $ GoalMismatch "deriveArbitrary" ty
 
 
-
+------------------------------------------------------------------------------
+-- | Helper data type for the generator of a specific data con.
 data Generator = Generator
   { genRecursiveCount :: Integer
   , genExpr :: HsExpr GhcPs
   }
 
 
+------------------------------------------------------------------------------
+-- | Make a 'Generator' for a given tycon instantiated with the given @[Type]@.
 mkGenerator :: TyCon -> [Type] -> DataCon -> Generator
 mkGenerator tc apps dc = do
   let dc_expr   = var' $ occName $ dataConName dc
       args = dataConInstOrigArgTys' dc apps
-      num_recursive_calls = sum $ fmap (bool 0 1 . isRecursiveValue tc) args
+      num_recursive_calls = sum $ fmap (bool 0 1 . doesTypeContain tc) args
       mkArbitrary = mkArbitraryCall tc num_recursive_calls
   Generator num_recursive_calls $ case args of
     []  -> mkFunc "pure" @@ dc_expr
@@ -78,15 +86,22 @@ mkGenerator tc apps dc = do
         (fmap mkArbitrary as)
 
 
-isRecursiveValue :: TyCon -> Type -> Bool
-isRecursiveValue recursive_tc =
+------------------------------------------------------------------------------
+-- | Check if the given 'TyCon' exists anywhere in the 'Type'.
+doesTypeContain :: TyCon -> Type -> Bool
+doesTypeContain recursive_tc =
   everything (||) $ mkQ False (== recursive_tc)
 
 
+------------------------------------------------------------------------------
+-- | Generate the correct sort of call to @arbitrary@. For recursive calls, we
+-- need to scale down the size parameter, either by a constant factor of 1 if
+-- it's the only recursive parameter, or by @`div` n@ where n is the number of
+-- recursive parameters. For all other types, just call @arbitrary@ directly.
 mkArbitraryCall :: TyCon -> Integer -> Type -> HsExpr GhcPs
 mkArbitraryCall recursive_tc n ty =
   let arbitrary = mkFunc "arbitrary"
-   in case isRecursiveValue recursive_tc ty of
+   in case doesTypeContain recursive_tc ty of
         True ->
           mkFunc "scale"
             @@ bool (mkFunc "flip" @@ mkFunc "div" @@ int n)
