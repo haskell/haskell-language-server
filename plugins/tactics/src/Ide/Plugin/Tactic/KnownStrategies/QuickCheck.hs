@@ -3,6 +3,7 @@
 
 module Ide.Plugin.Tactic.KnownStrategies.QuickCheck where
 
+import Control.Monad.Except (MonadError(throwError))
 import Data.Bool (bool)
 import Data.List (partition)
 import DataCon ( DataCon, dataConName )
@@ -17,38 +18,42 @@ import GHC.SourceGen.Pat ( conP )
 import Ide.Plugin.Tactic.CodeGen
 import Ide.Plugin.Tactic.Judgements (jGoal)
 import Ide.Plugin.Tactic.Machinery (tracePrim)
-import Ide.Plugin.Tactic.Types ( Type, TacticsM, CType(unCType) )
-import OccName ( mkVarOcc, HasOccName(occName) )
-import Refinery.Tactic ( rule )
-import TyCon ( TyCon, tyConDataCons )
+import Ide.Plugin.Tactic.Types
+import OccName (occNameString,  mkVarOcc, HasOccName(occName) )
+import Refinery.Tactic (goal,  rule )
+import TyCon (tyConName,  TyCon, tyConDataCons )
 import Type ( splitTyConApp_maybe )
 
 
 deriveArbitrary :: TacticsM ()
-deriveArbitrary = rule $ \jdg -> do
-  let arb_ty = unCType $ jGoal jdg
-  case splitTyConApp_maybe arb_ty of
-    Just (_gen_tc, [splitTyConApp_maybe -> Just (tc, apps)]) -> do
-      let dcs = tyConDataCons tc
-          (small, big) = partition ((== 0) . genRecursiveCount)
-                       $ fmap (mkGenerator tc apps) dcs
-          small_expr = mkVal "small"
-          oneof_expr = mkVal "oneof"
-      pure
-        ( tracePrim "hi"
-        , noLoc $
-            let' [valBind (fromString "small") $ list $ fmap genExpr small] $
-              appDollar (mkFunc "sized") $ lambda [bvar' (mkVarOcc "n")] $
-                case' (infixCall "<=" (mkVal "n") (int 1))
-                  [ match [conP (fromString "True") []] $
-                      oneof_expr @@ small_expr
-                  , match [conP (fromString "False") []] $
-                      appDollar oneof_expr $
-                        infixCall "<>"
-                          (list $ fmap genExpr big)
-                          small_expr
-                  ]
-        )
+deriveArbitrary = do
+  ty <- jGoal <$> goal
+  case splitTyConApp_maybe $ unCType ty of
+    Just (gen_tc, [splitTyConApp_maybe -> Just (tc, apps)])
+        | occNameString (occName $ tyConName gen_tc) == "Gen" -> do
+      rule $ \_ -> do
+        let dcs = tyConDataCons tc
+            (small, big) = partition ((== 0) . genRecursiveCount)
+                        $ fmap (mkGenerator tc apps) dcs
+            small_expr = mkVal "small"
+            oneof_expr = mkVal "oneof"
+        pure
+          ( tracePrim "deriveArbitrary"
+          , noLoc $
+              let' [valBind (fromString "small") $ list $ fmap genExpr small] $
+                appDollar (mkFunc "sized") $ lambda [bvar' (mkVarOcc "n")] $
+                  case' (infixCall "<=" (mkVal "n") (int 1))
+                    [ match [conP (fromString "True") []] $
+                        oneof_expr @@ small_expr
+                    , match [conP (fromString "False") []] $
+                        appDollar oneof_expr $
+                          infixCall "<>"
+                            (list $ fmap genExpr big)
+                            small_expr
+                    ]
+          )
+    _ -> throwError $ GoalMismatch "deriveArbitrary" ty
+
 
 
 data Generator = Generator
