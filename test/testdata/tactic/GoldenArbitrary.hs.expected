@@ -36,8 +36,8 @@ arbitrary = (let
                                   $ ([(Rotate2 <$> arbitrary) <*> scale (subtract 1) arbitrary,
                                       Complement <$> scale (subtract 1) arbitrary,
                                       (UnionR <$> arbitrary) <*> scale (subtract 1) arbitrary,
-                                      ((DifferenceR <$> arbitrary) <*> scale (div 2) arbitrary)
-                                        <*> scale (div 2) arbitrary,
+                                      ((DifferenceR <$> arbitrary) <*> scale (flip div 2) arbitrary)
+                                        <*> scale (flip div 2) arbitrary,
                                       (IntersectR <$> arbitrary) <*> scale (subtract 1) arbitrary,
                                       ((Translate <$> arbitrary) <*> arbitrary)
                                         <*> scale (subtract 1) arbitrary,

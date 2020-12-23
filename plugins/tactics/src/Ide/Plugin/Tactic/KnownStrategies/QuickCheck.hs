@@ -89,7 +89,7 @@ mkArbitraryCall recursive_tc n ty =
    in case isRecursiveValue recursive_tc ty of
         True ->
           mkFunc "scale"
-            @@ bool (mkFunc "div" @@ int n)
+            @@ bool (mkFunc "flip" @@ mkFunc "div" @@ int n)
                     (mkFunc "subtract" @@ int 1)
                     (n == 1)
             @@ arbitrary
