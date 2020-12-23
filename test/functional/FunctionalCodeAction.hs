@@ -157,6 +157,9 @@ hlintTests = testGroup "hlint suggestions" [
       testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact5.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
+
+    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+        testRefactor "ApplyRefact6.hs" "Redundant bracket" expectedComments
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
@@ -190,6 +193,14 @@ hlintTests = testGroup "hlint suggestions" [
                              , "#else"
                              , "g = 2"
                              , "#endif", ""
+                             ]
+        expectedComments =   [ "-- comment before header"
+                             , "module ApplyRefact6 where", ""
+                             , "{-# standalone annotation #-}", ""
+                             , "-- standalone comment", ""
+                             , "-- | haddock comment"
+                             , "f = {- inline comment -} 1 -- ending comment", ""
+                             , "-- final comment"
                              ]
 
 renameTests :: TestTree
