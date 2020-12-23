@@ -137,7 +137,12 @@ jobs:
       - STACK_FILE: "stack-8.10.2.yaml"
     <<: *defaults
 
-  ghc-nightly:
+  ghc-8.10.3:
+    environment:
+      - STACK_FILE: "stack-8.10.3.yaml"
+    <<: *defaults
+
+  ghc-default:
     environment:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
@@ -145,7 +150,7 @@ jobs:
   cabal:
     working_directory: ~/build
     docker:
-      - image: haskell:8.10.1
+      - image: haskell:8.10.3
     steps:
       - checkout
       - run:
@@ -191,5 +196,6 @@ workflows:
       - ghc-8.8.4
       - ghc-8.10.1
       - ghc-8.10.2
-      # - ghc-nightly
+      - ghc-8.10.3
+      - ghc-default
       - cabal
