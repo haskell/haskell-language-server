@@ -9,11 +9,13 @@ import Ide.Plugin.Tactic.Types
 import OccName (mkVarOcc)
 import Refinery.Tactic
 import Ide.Plugin.Tactic.Machinery (tracing)
+import Ide.Plugin.Tactic.KnownStrategies.QuickCheck (deriveArbitrary)
 
 
 knownStrategies :: TacticsM ()
 knownStrategies = choice
-  [ deriveFmap
+  [ known "fmap" deriveFmap
+  , known "arbitrary" deriveArbitrary
   ]
 
 
@@ -26,7 +28,7 @@ known name t = do
 
 
 deriveFmap :: TacticsM ()
-deriveFmap = known "fmap" $ do
+deriveFmap = do
   try intros
   overAlgebraicTerms homo
   choice
