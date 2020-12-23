@@ -236,3 +236,16 @@ var' = var . fromString . occNameString
 bvar' :: BVar a => OccName -> a
 bvar' = bvar . fromString . occNameString
 
+
+mkFunc :: String -> HsExpr GhcPs
+mkFunc = var' . mkVarOcc
+
+mkVal :: String -> HsExpr GhcPs
+mkVal = var' . mkVarOcc
+
+infixCall :: String -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
+infixCall s = flip op (fromString s)
+
+appDollar :: HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
+appDollar = infixCall "$"
+
