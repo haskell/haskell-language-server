@@ -132,10 +132,6 @@ hlintTests = testGroup "hlint suggestions" [
         runHlintSession subdir  =
             failIfSessionTimeout . runSession hlsCommand fullCaps ("test/testdata/hlint" </> subdir)
 
-        noHlintDiagnostics :: [Diagnostic] -> Assertion
-        noHlintDiagnostics diags =
-            Just "hlint" `notElem` map (^. L.source) diags @? "There are no hlint diagnostics"
-
         testHlintDiagnostics doc = do
             diags <- waitForDiagnosticsFromSource doc "hlint"
             liftIO $ length diags > 0 @? "There are hlint diagnostics"
