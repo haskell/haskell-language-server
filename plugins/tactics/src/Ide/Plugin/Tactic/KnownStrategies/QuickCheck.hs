@@ -34,23 +34,23 @@ deriveArbitrary = do
         | occNameString (occName $ tyConName gen_tc) == "Gen" -> do
       rule $ \_ -> do
         let dcs = tyConDataCons tc
-            (small, big) = partition ((== 0) . genRecursiveCount)
+            (terminal, big) = partition ((== 0) . genRecursiveCount)
                         $ fmap (mkGenerator tc apps) dcs
-            small_expr = mkVal "small"
+            terminal_expr = mkVal "terminal"
             oneof_expr = mkVal "oneof"
         pure
           ( tracePrim "deriveArbitrary"
           , noLoc $
-              let' [valBind (fromString "small") $ list $ fmap genExpr small] $
+              let' [valBind (fromString "terminal") $ list $ fmap genExpr terminal] $
                 appDollar (mkFunc "sized") $ lambda [bvar' (mkVarOcc "n")] $
                   case' (infixCall "<=" (mkVal "n") (int 1))
                     [ match [conP (fromString "True") []] $
-                        oneof_expr @@ small_expr
+                        oneof_expr @@ terminal_expr
                     , match [conP (fromString "False") []] $
                         appDollar oneof_expr $
                           infixCall "<>"
                             (list $ fmap genExpr big)
-                            small_expr
+                            terminal_expr
                     ]
           )
     _ -> throwError $ GoalMismatch "deriveArbitrary" ty
