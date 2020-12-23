@@ -23,6 +23,7 @@ import OccName (occNameString,  mkVarOcc, HasOccName(occName) )
 import Refinery.Tactic (goal,  rule )
 import TyCon (tyConName,  TyCon, tyConDataCons )
 import Type ( splitTyConApp_maybe )
+import Data.Generics (mkQ, everything)
 
 
 deriveArbitrary :: TacticsM ()
@@ -78,20 +79,19 @@ mkGenerator tc apps dc = do
 
 
 isRecursiveValue :: TyCon -> Type -> Bool
-isRecursiveValue recursive_tc (splitTyConApp_maybe -> Just (tc, _))
-  = recursive_tc == tc
-isRecursiveValue _ _ = False
+isRecursiveValue recursive_tc =
+  everything (||) $ mkQ False (== recursive_tc)
 
 
 mkArbitraryCall :: TyCon -> Integer -> Type -> HsExpr GhcPs
 mkArbitraryCall recursive_tc n ty =
   let arbitrary = mkFunc "arbitrary"
-   in case splitTyConApp_maybe ty of
-        Just (tc, _) | tc == recursive_tc ->
+   in case isRecursiveValue recursive_tc ty of
+        True ->
           mkFunc "scale"
             @@ bool (mkFunc "div" @@ int n)
                     (mkFunc "subtract" @@ int 1)
                     (n == 1)
             @@ arbitrary
-        _ -> arbitrary
+        False -> arbitrary
 
