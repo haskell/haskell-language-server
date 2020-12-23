@@ -51,7 +51,8 @@ import System.IO.Temp
 #else
 import Development.IDE.GHC.Compat hiding (DynFlags(..))
 import Language.Haskell.GHC.ExactPrint.Parsers (postParseTransform)
-import Language.Haskell.GHC.ExactPrint.Delta (normalLayout)
+import Language.Haskell.GHC.ExactPrint.Delta (deltaOptions)
+import Language.Haskell.GHC.ExactPrint.Types (Rigidity(..))
 #endif
 
 import Ide.Logger
@@ -403,8 +404,9 @@ applyHint ide nfp mhint =
                 let modu = pm_parsed_source pm
                 (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
                 let dflags = ms_hspp_opts modsum
+                let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
-                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) normalLayout
+                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
                 liftIO $ (Right <$> applyRefactorings' Nothing commands anns' modu')
                             `catches` errorHandlers
 #endif
