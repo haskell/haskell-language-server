@@ -195,9 +195,9 @@ getCompletionsLSP lsp ide
                 -> return (Completions $ List [])
               (Just pfix', _) -> do
                   let extras = shakeExtras ide
-                  let clientCaps = S.clientCapabilities extras
-                  -- return Completions $ List <$> getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps (WithSnippets True)
-                  return (Completions $ List [])
+                      clientCaps = S.clientCapabilities extras
+                      compls = getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps (WithSnippets True)
+                  Completions . List <$> compls
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
@@ -510,7 +510,7 @@ getCompletions ideOpts CC { unqualCompls }
                 Just m -> Right $ ppr m
 
           compls = if T.null prefixModule
-            then localCompls
+            then localCompls ++ unqualCompls
             else []
 
       filtListWith f list =
