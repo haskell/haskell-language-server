@@ -405,6 +405,7 @@ test-suite func-test
 
   main-is:            Main.hs
   other-modules:
+    Class
     Command
     Completion
     Config
