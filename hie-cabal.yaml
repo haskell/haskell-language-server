@@ -106,6 +106,9 @@ cradle:
     - path: "./plugins/hls-class-plugin/src"
       component: "lib:hls-class-plugin"
 
+    - path: "./plugins/hls-eval-plugin/src"
+      component: "lib:hls-eval-plugin"
+
     - path: "./plugins/hls-explicit-imports-plugin/src"
       component: "lib:hls-explicit-imports-plugin"
 

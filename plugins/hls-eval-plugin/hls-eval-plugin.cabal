@@ -1,0 +1,54 @@
+cabal-version:      2.2
+name:               hls-eval-plugin
+version:            0.1.0.0
+synopsis:           Eval plugin for Haskell Language Server
+license:            Apache-2.0
+license-file:       LICENSE
+author:             pepeiborra@gmail.com,tittoassini@gmail.com
+maintainer:         pepeiborra@gmail.com,tittoassini@gmail.com
+build-type:         Simple
+extra-source-files: LICENSE
+
+library
+  exposed-modules:  Ide.Plugin.Eval
+  hs-source-dirs:   src
+  other-modules:
+    Ide.Plugin.Eval.Code
+    Ide.Plugin.Eval.CodeLens
+    Ide.Plugin.Eval.GHC
+    Ide.Plugin.Eval.Parse.Option
+    Ide.Plugin.Eval.Parse.Parser
+    Ide.Plugin.Eval.Parse.Section
+    Ide.Plugin.Eval.Parse.Token
+    Ide.Plugin.Eval.Types
+    Ide.Plugin.Eval.Util
+
+  build-depends:
+    , aeson
+    , base
+    , containers
+    , deepseq
+    , Diff
+    , directory
+    , extra
+    , filepath
+    , ghc
+    , ghc-boot-th
+    , ghc-paths
+    , ghcide
+    , hashable
+    , haskell-lsp
+    , haskell-lsp-types
+    , hls-plugin-api
+    , parser-combinators
+    , pretty-simple
+    , QuickCheck
+    , safe-exceptions
+    , shake
+    , temporary
+    , text
+    , time
+    , transformers
+    , unordered-containers
+
+  default-language: Haskell2010

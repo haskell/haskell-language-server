@@ -65,11 +65,11 @@ defaults: &defaults
 
     - run:
         name: Setup stack eval hie.html
-        command: cp test/testdata/eval/hie-stack.yaml test/testdata/eval/hie.yaml
+        command: cp plugins/hls-eval-plugin/test/testdata/hie-stack.yaml plugins/hls-eval-plugin/test/testdata/hie.yaml
 
     - run:
         name: Setup stack eval stack.html
-        command: grep '^resolver:\|^compiler:' stack-build.txt > test/testdata/eval/stack.yaml
+        command: grep '^resolver:\|^compiler:' stack-build.txt > plugins/hls-eval-plugin/test/testdata/stack.yaml
 
     - run:
         name: Test haskell-language-server func-test suite

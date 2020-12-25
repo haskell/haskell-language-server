@@ -40,13 +40,16 @@ cradle:
             - path: "./hls-plugin-api/src"
               component: "hls-plugin-api:lib"
 
-# Plugins:
+            # Plugins:
 
             - path: "./plugins/hls-class-plugin/src"
               component: "hls-class-plugin:lib"
 
             - path: "./plugins/hls-explicit-imports-plugin/src"
               component: "hls-explicit-imports-plugin:lib"
+
+            - path: "./plugins/hls-eval-plugin/src"
+              component: "hls-eval-plugin:lib"
 
             - path: "./plugins/hls-hlint-plugin/src"
               component: "hls-hlint-plugin:lib"
