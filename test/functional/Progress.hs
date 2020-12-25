@@ -31,7 +31,7 @@ tests = testGroup "window/workDoneProgress" [
               [evalLens] <- getCodeLenses doc
               let cmd = evalLens ^?! L.command . _Just
               _ <- sendRequest WorkspaceExecuteCommand $ ExecuteCommandParams (cmd ^. L.command) (decode $ encode $ fromJust $ cmd ^. L.arguments) Nothing
-              expectProgressReports ["Eval"]
+              expectProgressReports ["Evaluating"]
     , testCase "ormolu plugin sends progress notifications" $ do
           runSession hlsCommand progressCaps "test/testdata" $ do
               sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
