@@ -6,27 +6,29 @@ module Progress (tests) where
 import Control.Applicative.Combinators
 import Control.Lens hiding ((.=))
 import Control.Monad.IO.Class
+import Data.Aeson (encode, decode, object, toJSON, Value, (.=))
 import Data.Default
+import Data.Maybe (fromJust)
+import Data.List (delete)
+import Data.Text (Text, pack)
 import Ide.Plugin.Config
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Language.Haskell.LSP.Types.Capabilities
+import System.FilePath ((</>))
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
-import Data.Text (Text)
-import Data.Aeson (encode, decode, object, toJSON, Value, (.=))
-import Data.Maybe (fromJust)
-import Data.List (delete)
 
 tests :: TestTree
 tests = testGroup "window/workDoneProgress" [
     testCase "sends indefinite progress notifications" $
         runSession hlsCommand progressCaps "test/testdata" $ do
-            _ <- openDoc "hlint/ApplyRefact2.hs" "haskell"
-            expectProgressReports ["Setting up hlint (for hlint/ApplyRefact2.hs)", "Processing"]
+            let path = "hlint" </> "ApplyRefact2.hs"
+            _ <- openDoc path "haskell"
+            expectProgressReports [pack ("Setting up hlint (for " ++ path ++ ")"), "Processing"]
     , testCase "eval plugin sends progress reports" $
           runSession hlsCommand progressCaps "test/testdata/eval" $ do
               doc <- openDoc "T1.hs" "haskell"
