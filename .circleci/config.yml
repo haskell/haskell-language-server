@@ -150,7 +150,7 @@ jobs:
   cabal:
     working_directory: ~/build
     docker:
-      - image: haskell:8.10.3
+      - image: haskell:8.10.2
     steps:
       - checkout
       - run:
