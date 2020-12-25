@@ -1,0 +1,25 @@
+{- | Multi line comments are parsed correctly.
+
+ Note that if they open and close on a single line, their content is ignored.
+-}
+module TMulti () where
+
+{- ORMOLU_DISABLE -}
+
+-- this should work fine if previous multi comment is parsed correctly
+-- >>> "a"++"b"
+-- "ab"
+
+  {- >>> 3+3
+6
+    -}
+
+-- this should work fine if previous multi comment is parsed correctly
+-- >>> "a"++"b"
+-- "ab"
+
+  {-| >>> IGNORED -}
+
+-- this should work fine if previous multi comment is parsed correctly
+-- >>> "a"++"b"
+-- "ab"

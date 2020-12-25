@@ -8,10 +8,10 @@ import           Ide.Arguments             (Arguments (..), LspArguments (..),
                                             getArguments)
 import           Ide.Main                  (defaultMain)
 import           Plugins
-
+import Main.Utf8 (withUtf8)
 
 main :: IO ()
-main = do
+main = withUtf8 $ do
     args <- getArguments "haskell-language-server"
 
     let withExamples =
