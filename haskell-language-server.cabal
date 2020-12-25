@@ -157,7 +157,16 @@ common example-plugins
 common eval
   if flag(eval) || flag(all-plugins)
     hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Eval
+    other-modules:  Ide.Plugin.Eval
+                    Ide.Plugin.Eval.Code
+                    Ide.Plugin.Eval.CodeLens
+                    Ide.Plugin.Eval.GHC
+                    Ide.Plugin.Eval.Parse.Option
+                    Ide.Plugin.Eval.Parse.Parser
+                    Ide.Plugin.Eval.Parse.Section
+                    Ide.Plugin.Eval.Parse.Token
+                    Ide.Plugin.Eval.Types
+                    Ide.Plugin.Eval.Util
     build-depends:
     cpp-options: -Deval
 
