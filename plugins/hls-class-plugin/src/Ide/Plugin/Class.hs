@@ -125,9 +125,9 @@ addMethodPlaceholders lf state AddMinimalMethodsParams{..} = fmap (fromMaybe err
       | otherwise
       = n
 
--- | This implementation is extremely ad-hoc in a sense that
--- 1. sensitive to the format of diagnostic messages from GHC
--- 2. pattern matches are not exhaustive
+-- |
+-- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
+-- sensitive to the format of diagnostic messages from GHC.
 codeAction :: CodeActionProvider
 codeAction _ state plId docId _ context = fmap (fromMaybe errorResult) . runMaybeT $ do
   docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
