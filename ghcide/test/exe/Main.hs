@@ -2952,34 +2952,6 @@ nonLocalCompletionTests =
       [ ("permutations", CiFunction, "permutations ${1:[a]}", False, False, Nothing)
       ],
     completionTest
-      "show imports not in list - simple"
-      ["{-# LANGUAGE NoImplicitPrelude #-}",
-       "module A where", "import Control.Monad (msum)", "f = joi"]
-      (Position 3 6)
-      [("join", CiFunction, "join ${1:m (m a)}", False, False,
-        Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 26}, _end = Position {_line = 2, _character = 26}}, _newText = "join, "}]))],
-    completionTest
-      "show imports not in list - multi-line"
-      ["{-# LANGUAGE NoImplicitPrelude #-}",
-       "module A where", "import Control.Monad (\n    msum)", "f = joi"]
-      (Position 4 6)
-      [("join", CiFunction, "join ${1:m (m a)}", False, False,
-        Just (List [TextEdit {_range = Range {_start = Position {_line = 3, _character = 8}, _end = Position {_line = 3, _character = 8}}, _newText = "join, "}]))],
-    completionTest
-      "show imports not in list - names with _"
-      ["{-# LANGUAGE NoImplicitPrelude #-}",
-       "module A where", "import qualified Control.Monad as M (msum)", "f = M.mapM_"]
-      (Position 3 11)
-      [("mapM_", CiFunction, "mapM_ ${1:a -> m b} ${2:t a}", False, False,
-        Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 41}, _end = Position {_line = 2, _character = 41}}, _newText = "mapM_, "}]))],
-    completionTest
-      "show imports not in list - initial empty list"
-      ["{-# LANGUAGE NoImplicitPrelude #-}",
-       "module A where", "import qualified Control.Monad as M ()", "f = M.joi"]
-      (Position 3 10)
-      [("join", CiFunction, "join ${1:m (m a)}", False, False,
-        Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 37}, _end = Position {_line = 2, _character = 37}}, _newText = "join, "}]))],
-    completionTest
        "dont show hidden items"
        [ "{-# LANGUAGE NoImplicitPrelude #-}",
          "module A where",
@@ -2988,16 +2960,47 @@ nonLocalCompletionTests =
        ]
        (Position 3 6)
        [],
-    completionTest
-      "record snippet on import"
-      ["module A where", "import Text.Printf (FormatParse(FormatParse))", "FormatParse"]
-      (Position 2 10)
-      [("FormatParse", CiStruct, "FormatParse ", False, False,
-       Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}])),
-       ("FormatParse", CiConstructor, "FormatParse ${1:String} ${2:Char} ${3:String}", False, False,
-       Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}])),
-       ("FormatParse", CiSnippet, "FormatParse {fpModifiers=${1:_fpModifiers}, fpChar=${2:_fpChar}, fpRest=${3:_fpRest}}", False, False,
-       Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}]))
+    expectFailBecause "Auto import completion snippets were disabled in v0.6.0.2" $
+      testGroup "auto import snippets"
+      [ completionTest
+        "show imports not in list - simple"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import Control.Monad (msum)", "f = joi"]
+        (Position 3 6)
+        [("join", CiFunction, "join ${1:m (m a)}", False, False,
+            Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 26}, _end = Position {_line = 2, _character = 26}}, _newText = "join, "}]))]
+      , completionTest
+        "show imports not in list - multi-line"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import Control.Monad (\n    msum)", "f = joi"]
+        (Position 4 6)
+        [("join", CiFunction, "join ${1:m (m a)}", False, False,
+            Just (List [TextEdit {_range = Range {_start = Position {_line = 3, _character = 8}, _end = Position {_line = 3, _character = 8}}, _newText = "join, "}]))]
+      , completionTest
+        "show imports not in list - names with _"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import qualified Control.Monad as M (msum)", "f = M.mapM_"]
+        (Position 3 11)
+        [("mapM_", CiFunction, "mapM_ ${1:a -> m b} ${2:t a}", False, False,
+            Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 41}, _end = Position {_line = 2, _character = 41}}, _newText = "mapM_, "}]))]
+      , completionTest
+        "show imports not in list - initial empty list"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import qualified Control.Monad as M ()", "f = M.joi"]
+        (Position 3 10)
+        [("join", CiFunction, "join ${1:m (m a)}", False, False,
+            Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 37}, _end = Position {_line = 2, _character = 37}}, _newText = "join, "}]))]
+      , completionTest
+        "record snippet on import"
+        ["module A where", "import Text.Printf (FormatParse(FormatParse))", "FormatParse"]
+        (Position 2 10)
+        [("FormatParse", CiStruct, "FormatParse ", False, False,
+        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}])),
+        ("FormatParse", CiConstructor, "FormatParse ${1:String} ${2:Char} ${3:String}", False, False,
+        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}])),
+        ("FormatParse", CiSnippet, "FormatParse {fpModifiers=${1:_fpModifiers}, fpChar=${2:_fpChar}, fpRest=${3:_fpRest}}", False, False,
+        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}]))
+        ]
       ],
       -- we need this test to make sure the ghcide completions module does not return completions for language pragmas. this functionality is turned on in hls
      completionTest
