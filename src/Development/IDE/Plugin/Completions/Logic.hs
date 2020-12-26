@@ -287,10 +287,6 @@ cacheDataProducer packageState curMod rdrEnv limports deps = do
   let dflags = hsc_dflags packageState
       curModName = moduleName curMod
 
-      importMap = Map.fromList [
-          (getLoc imp, imp)
-          | imp <- limports ]
-
       iDeclToModName :: ImportDecl name -> ModuleName
       iDeclToModName = unLoc . ideclName
 
@@ -319,8 +315,7 @@ cacheDataProducer packageState curMod rdrEnv limports deps = do
           (, mempty) <$> toCompItem curMod curModName n Nothing
       getComplsForOne (GRE n _ False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
-          let originalImportDecl = Map.lookup (is_dloc spec) importMap
-          compItem <- toCompItem curMod (is_mod spec) n originalImportDecl
+          compItem <- toCompItem curMod (is_mod spec) n Nothing
           let unqual
                 | is_qual spec = []
                 | otherwise = compItem
