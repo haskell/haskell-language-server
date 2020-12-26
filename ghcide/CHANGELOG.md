@@ -1,3 +1,8 @@
+### 0.6.0.2 (2020-12-26)
+* Fix disappearing diagnostics bug (#959) - (Pepe Iborra)
+* Use qualified module name from diagnostics in suggestNewImport (#945) - (Potato Hatsue)
+* Disable auto extend import snippets in completions (these need a bit more work)
+
 ### 0.6.0.1 (2020-12-13)
 * Fix build with GHC 8.8.2 and 8.8.3 - (Javier Neira)
 * Update old URLs still pointing to digital-asset - (Jan Hrcek)
