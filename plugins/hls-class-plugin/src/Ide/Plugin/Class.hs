@@ -14,6 +14,8 @@ import           ConLike
 import           Control.Applicative
 import           Control.Lens hiding (List, use)
 import           Control.Monad
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Char
 import qualified Data.HashMap.Strict as H
@@ -60,29 +62,31 @@ data AddMinimalMethodsParams = AddMinimalMethodsParams
   deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
 addMethodPlaceholders :: CommandFunction AddMinimalMethodsParams
-addMethodPlaceholders lf state AddMinimalMethodsParams{..} = do
-  Just pm <- runAction "classplugin" state $ use GetParsedModule docPath
+addMethodPlaceholders lf state AddMinimalMethodsParams{..} = fmap (fromMaybe errorResult) . runMaybeT $ do
+  docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
+  pm <- MaybeT . runAction "classplugin" state $ use GetParsedModule docPath
   let
     ps = pm_parsed_source pm
     anns = relativiseApiAnns ps (pm_annotations pm)
     old = T.pack $ exactPrint ps anns
 
-  Just (hsc_dflags . hscEnv -> df) <- runAction "classplugin" state $ use GhcSessionDeps docPath
+  (hsc_dflags . hscEnv -> df) <- MaybeT . runAction "classplugin" state $ use GhcSessionDeps docPath
+  List (unzip -> (mAnns, mDecls)) <- MaybeT . pure $ traverse (makeMethodDecl df) methodGroup
   let
-    Right (List (unzip -> (mAnns, mDecls))) = traverse (makeMethodDecl df) methodGroup
     (ps', (anns', _), _) = runTransform (mergeAnns (mergeAnnList mAnns) anns) (addMethodDecls ps mDecls)
     new = T.pack $ exactPrint ps' anns'
 
   pure (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams (workspaceEdit caps old new)))
   where
-    caps = clientCapabilities lf
-    Just docPath = uriToNormalizedFilePath $ toNormalizedUri uri
+    errorResult = (Right Null, Nothing)
 
+    caps = clientCapabilities lf
     indent = 2
 
-    makeMethodDecl df mName  = do
-      (ann, d) <- parseDecl df (T.unpack mName) . T.unpack $ toMethodName mName <> " = _"
-      pure (setPrecedingLines d 1 indent ann, d)
+    makeMethodDecl df mName =
+      case parseDecl df (T.unpack mName) . T.unpack $ toMethodName mName <> " = _" of
+        Right (ann, d) -> Just (setPrecedingLines d 1 indent ann, d)
+        Left _ -> Nothing
 
     addMethodDecls :: ParsedSource -> [LHsDecl GhcPs] -> Transform (Located (HsModule GhcPs))
     addMethodDecls ps mDecls = do
@@ -125,19 +129,22 @@ addMethodPlaceholders lf state AddMinimalMethodsParams{..} = do
 -- 1. sensitive to the format of diagnostic messages from GHC
 -- 2. pattern matches are not exhaustive
 codeAction :: CodeActionProvider
-codeAction _ state plId (TextDocumentIdentifier uri) _ CodeActionContext{ _diagnostics = List diags } = do
-  actions <- join <$> mapM mkActions methodDiags
+codeAction _ state plId docId _ context = fmap (fromMaybe errorResult) . runMaybeT $ do
+  docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
+  actions <- join <$> mapM (mkActions docPath) methodDiags
   pure . Right . List $ actions
   where
-    Just docPath = uriToNormalizedFilePath $ toNormalizedUri uri
+    errorResult = Right (List [])
+    uri = docId ^. J.uri
+    List diags = context ^. J.diagnostics
 
     ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
     methodDiags = filter (\d -> isClassMethodWarning (d ^. J.message)) ghcDiags
 
-    mkActions diag = do
-      ident <- findClassIdentifier range
-      cls <- findClassFromIdentifier ident
-      traverse mkAction . minDefToMethodGroups . classMinimalDef $ cls
+    mkActions docPath diag = do
+      ident <- findClassIdentifier docPath range
+      cls <- findClassFromIdentifier docPath ident
+      lift . traverse mkAction . minDefToMethodGroups . classMinimalDef $ cls
       where
         range = diag ^. J.range
 
@@ -159,9 +166,8 @@ codeAction _ state plId (TextDocumentIdentifier uri) _ CodeActionContext{ _diagn
           . CodeAction title (Just CodeActionQuickFix) (Just (List [])) Nothing
           . Just
 
-    findClassIdentifier :: Range -> IO Identifier
-    findClassIdentifier range = do
-      Just (hieAst -> hf, pmap) <- runAction "classplugin" state $ useWithStale GetHieAst docPath
+    findClassIdentifier docPath range = do
+      (hieAst -> hf, pmap) <- MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath
       pure
         $ head . head
         $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
@@ -169,18 +175,16 @@ codeAction _ state plId (TextDocumentIdentifier uri) _ CodeActionContext{ _diagn
             <=< nodeChildren
           )
 
-    findClassFromIdentifier :: Identifier -> IO Class
-    findClassFromIdentifier (Right name) = do
-      Just (hscEnv -> hscenv, _) <- runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
-      Just (tmrTypechecked -> thisMod, _) <- runAction "classplugin" state $ useWithStale TypeCheck docPath
-      (_, Just cls) <- initTcWithGbl hscenv thisMod ghostSpan $ do
+    findClassFromIdentifier docPath (Right name) = do
+      (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath
+      (tmrTypechecked -> thisMod, _) <- MaybeT . runAction "classplugin" state $ useWithStale TypeCheck docPath
+      MaybeT . fmap snd . initTcWithGbl hscenv thisMod ghostSpan $ do
         tcthing <- tcLookup name
         case tcthing of
           AGlobal (AConLike (RealDataCon con))
             | Just cls <- tyConClass_maybe (dataConOrigTyCon con) -> pure cls
           _ -> panic "Ide.Plugin.Class.findClassFromIdentifier"
-      pure cls
-    findClassFromIdentifier (Left _) = panic "Ide.Plugin.Class.findClassIdentifier"
+    findClassFromIdentifier _ (Left _) = panic "Ide.Plugin.Class.findClassIdentifier"
 
 ghostSpan :: RealSrcSpan
 ghostSpan = realSrcLocSpan $ mkRealSrcLoc (fsLit "<haskell-language-sever>") 1 1
