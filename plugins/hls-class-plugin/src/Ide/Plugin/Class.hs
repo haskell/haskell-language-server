@@ -93,11 +93,11 @@ addMethodPlaceholders lf state AddMinimalMethodsParams{..} = fmap (fromMaybe err
       d <- findInstDecl ps
       newSpan <- uniqueSrcSpanT
       let
+        annKey = mkAnnKey d
         newAnnKey = AnnKey newSpan (CN "HsValBinds")
-        addWhere mkds@(Map.lookup (mkAnnKey d) -> Just ann)
+        addWhere mkds@(Map.lookup annKey -> Just ann)
           = Map.insert newAnnKey ann2 mkds2
           where
-            annKey = mkAnnKey d
             ann1 = ann
                    { annsDP = annsDP ann ++ [(G AnnWhere, DP (0, 1))]
                    , annCapturedSpan = Just newAnnKey
@@ -105,7 +105,7 @@ addMethodPlaceholders lf state AddMinimalMethodsParams{..} = fmap (fromMaybe err
                    }
             mkds2 = Map.insert annKey ann1 mkds
             ann2 = annNone
-                   { annEntryDelta = DP (1, 2)
+                   { annEntryDelta = DP (1, indent)
                    }
         addWhere _ = panic "Ide.Plugin.Class.addMethodPlaceholder"
       modifyAnnsT addWhere
