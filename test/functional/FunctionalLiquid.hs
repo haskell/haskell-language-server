@@ -52,7 +52,6 @@ tests = testGroup "liquid haskell diagnostics" [
 
     , ignoreTestBecause "Broken" $ testCase "runs diagnostics on save, with liquid haskell" $
         runSession hlsCommand codeActionSupportCaps "test/testdata" $ do
-        -- runSessionWithConfig logConfig hlsCommand codeActionSupportCaps "test/testdata" $ do
             doc <- openDoc "liquid/Evens.hs" "haskell"
 
             diags@(reduceDiag:_) <- waitForDiagnostics

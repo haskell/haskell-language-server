@@ -20,14 +20,11 @@ module Test.Hls.Util
     , inspectCommand
     , inspectDiagnostic
     , knownBrokenForGhcVersions
-    , logConfig
     , logFilePath
-    , noLogConfig
     , setupBuildToolFiles
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
-    , withFileLogging
     , withCurrentDirectoryInTmp
   )
 where
@@ -63,34 +60,12 @@ import           Test.Tasty.HUnit (assertFailure)
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal hiding (null)
 
-
-noLogConfig :: Test.SessionConfig
-noLogConfig = Test.defaultConfig { Test.logMessages = False }
-
-logConfig :: Test.SessionConfig
-logConfig = Test.defaultConfig { Test.logMessages = True }
-
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = C.CodeActionClientCapabilities (Just True) (Just literalSupport)
     literalSupport = C.CodeActionLiteralSupport def
-
-withFileLogging :: FilePath -> IO a -> IO a
-withFileLogging logFile f = do
-  let logDir = "./test-logs"
-      logPath = logDir </> logFile
-
-  dirExists <- doesDirectoryExist logDir
-  unless dirExists $ createDirectory logDir
-
-  exists <- doesFileExist logPath
-  when exists $ removeFile logPath
-
-  setupLogger (Just logPath) ["hie"] L.DEBUG
-
-  f
 
 -- ---------------------------------------------------------------------
 
