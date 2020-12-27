@@ -1,6 +1,7 @@
 packages:
          ./
-         ./ghcide/hie-compat
+         ./hie-compat
+         ./shake-bench
          ./ghcide
          ./hls-plugin-api
          ./plugins/tactics

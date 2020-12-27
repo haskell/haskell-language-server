@@ -2,8 +2,9 @@ resolver: nightly-2020-08-16 # Last 8.10.1
 
 packages:
 - .
-- ./ghcide/hie-compat
+- ./hie-compat
 - ./ghcide/
+- ./shake-bench
 - ./hls-plugin-api
 - ./plugins/hls-class-plugin
 - ./plugins/hls-explicit-imports-plugin

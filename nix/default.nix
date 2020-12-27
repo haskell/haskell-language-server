@@ -17,8 +17,8 @@ let
           haskellPackages.extend (pkgs.haskell.lib.packageSourceOverrides {
             haskell-language-server = gitignoreSource ../.;
             ghcide = gitignoreSource ../ghcide;
-            shake-bench = gitignoreSource ../ghcide/shake-bench;
-            hie-compat = gitignoreSource ../ghcide/hie-compat;
+            shake-bench = gitignoreSource ../shake-bench;
+            hie-compat = gitignoreSource ../hie-compat;
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
             hls-explicit-imports-plugin = gitignoreSource ../plugins/hls-explicit-imports-plugin;

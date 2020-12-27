@@ -2,8 +2,9 @@ resolver: lts-14.27 # Last 8.6.5
 
 packages:
 - .
-- ./ghcide/hie-compat
-- ./ghcide/
+- ./hie-compat
+- ./ghcide
+- ./shake-bench
 - ./hls-plugin-api
 - ./plugins/hls-class-plugin
 - ./plugins/hls-explicit-imports-plugin

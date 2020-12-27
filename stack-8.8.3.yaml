@@ -2,8 +2,9 @@ resolver: lts-16.11 # Last 8.8.3
 
 packages:
 - .
-- ./ghcide/hie-compat
+- ./hie-compat
 - ./ghcide/
+- ./shake-bench
 - ./hls-plugin-api
 - ./plugins/hls-class-plugin
 - ./plugins/hls-explicit-imports-plugin
