@@ -6,6 +6,7 @@ packages:
 - ./ghcide/hie-compat
 - ./ghcide/
 - ./hls-plugin-api
+- ./plugins/hls-class-plugin
 - ./plugins/tactics
 - ./plugins/hls-hlint-plugin
 - ./plugins/hls-explicit-imports-plugin
