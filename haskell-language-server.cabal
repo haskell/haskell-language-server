@@ -395,6 +395,7 @@ test-suite func-test
   build-depends:
     , bytestring
     , data-default
+    , hspec-expectations
     , lens
     , tasty
     , tasty-ant-xml           >=1.1.6
