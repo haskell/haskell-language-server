@@ -35,14 +35,14 @@ jobs:
     - name: Build
       shell: bash
       # Retry it three times to workaround compiler segfaults in windows
-      run: cabal build || cabal build || cabal build
+      run: cabal build ghcide:benchHist || cabal build ghcide:benchHist || cabal build ghcide:benchHist
 
     - name: Bench
       shell: bash
       # run the tests without parallelism, otherwise tasty will attempt to run
       # all test cases simultaneously which causes way too many hls
       # instances to be spun up for the poor github actions runner to handle
-      run: cabal bench
+      run: cabal bench ghcide:benchHist
 
     - name: Display results
       shell: bash
