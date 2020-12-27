@@ -12,6 +12,10 @@ import           Ide.Plugin.GhcIde         as GhcIde
 
 -- haskell-language-server optional plugins
 
+#if class
+import           Ide.Plugin.Class          as Class
+#endif
+
 #if eval
 import           Ide.Plugin.Eval           as Eval
 #endif
@@ -100,6 +104,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if AGPL && brittany
       , Brittany.descriptor "brittany"
+#endif
+#if class
+      , Class.descriptor "class"
 #endif
 #if eval
       , Eval.descriptor "eval"

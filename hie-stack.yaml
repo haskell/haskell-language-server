@@ -41,6 +41,9 @@ cradle:
 
 # Plugins:
 
+            - path: "./plugins/hls-class-plugin/src"
+              component: "hls-class-plugin:lib"
+
             - path: "./plugins/hls-explicit-imports-plugin/src"
               component: "hls-explicit-imports-plugin:lib"
 

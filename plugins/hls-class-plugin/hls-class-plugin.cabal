@@ -1,0 +1,29 @@
+cabal-version:      2.2
+name:               hls-class-plugin
+version:            0.1.0.0
+synopsis:           Explicit imports plugin for Haskell Language Server
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Junyoung Clare Jang
+maintainer:         jjc9310@gmail.com
+category:           Development
+build-type:         Simple
+
+library
+  exposed-modules:  Ide.Plugin.Class
+  hs-source-dirs:   src
+  build-depends:    aeson
+                  , base
+                  , containers
+                  , haskell-lsp
+                  , hls-plugin-api
+                  , ghc
+                  , ghc-exactprint
+                  , ghcide
+                  , lens
+                  , shake
+                  , text
+                  , transformers
+                  , unordered-containers
+
+  default-language: Haskell2010

@@ -1,5 +1,6 @@
 module Main where
 
+import Class
 import Command
 import Completion
 import Config
@@ -36,7 +37,8 @@ main =
         [antXMLRunner, rerunningTests [listingTests, consoleTestReporter]]
         $ testGroup
             "haskell-language-server"
-            [ Command.tests
+            [ Class.tests
+            , Command.tests
             , Completion.tests
             , Config.tests
             , Deferred.tests

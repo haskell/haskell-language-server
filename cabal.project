@@ -4,8 +4,9 @@ packages:
          ./ghcide
          ./hls-plugin-api
          ./plugins/tactics
-         ./plugins/hls-hlint-plugin
+         ./plugins/hls-class-plugin
          ./plugins/hls-explicit-imports-plugin
+         ./plugins/hls-hlint-plugin
          ./plugins/hls-retrie-plugin
 
 tests: true

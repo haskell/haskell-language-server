@@ -87,6 +87,11 @@ flag all-formatters
   default:     True
   manual:      True
 
+flag class
+  description: Enable class plugin
+  default:     False
+  manual:      True
+
 flag eval
   description: Enable eval plugin
   default:     False
@@ -153,6 +158,11 @@ common example-plugins
   hs-source-dirs: plugins/default/src
   other-modules: Ide.Plugin.Example,
                  Ide.Plugin.Example2
+
+common class
+  if flag(class) || flag(all-plugins)
+    build-depends: hls-class-plugin
+    cpp-options: -Dclass
 
 common eval
   if flag(eval) || flag(all-plugins)
@@ -244,6 +254,7 @@ executable haskell-language-server
                     , common-deps
                     -- plugins
                     , example-plugins
+                    , class
                     , eval
                     , importLens
                     , retrie
@@ -394,6 +405,7 @@ test-suite func-test
 
   main-is:            Main.hs
   other-modules:
+    Class
     Command
     Completion
     Config
