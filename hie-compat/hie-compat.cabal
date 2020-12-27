@@ -1,0 +1,45 @@
+cabal-version:       1.22
+name:                hie-compat
+version:             0.1.0.0
+synopsis:            HIE files for GHC 8.6 and other HIE file backports
+license:             Apache-2.0
+description:
+  Backports for HIE files to GHC 8.6, along with a few other backports
+  of HIE file related fixes for ghcide.
+
+  THIS DOES NOT LET YOU READ HIE FILES WITH MISMATCHED VERSIONS OF GHC
+license-file:        LICENSE
+author:              Zubin Duggal
+maintainer:          zubin.duggal@gmail.com
+build-type:          Simple
+extra-source-files:  CHANGELOG.md README.md
+category:            Development
+
+flag ghc-lib
+  description: build against ghc-lib instead of the ghc package
+  default: False
+  manual: True
+
+library
+  default-language:    Haskell2010
+  build-depends:
+     base < 4.15, array, bytestring, containers, directory, filepath, transformers
+  if flag(ghc-lib)
+    build-depends: ghc-lib
+  else
+    build-depends: ghc, ghc-boot
+
+  exposed-modules:
+    Compat.HieAst
+    Compat.HieBin
+    Compat.HieTypes
+    Compat.HieDebug
+    Compat.HieUtils
+
+  if (impl(ghc > 8.5) && impl(ghc < 8.7) && !flag(ghc-lib))
+    hs-source-dirs: src-ghc86
+  if (impl(ghc > 8.7) && impl(ghc < 8.10)) 
+    hs-source-dirs: src-ghc88 src-reexport
+  if (impl(ghc > 8.9) && impl(ghc < 8.11) || flag(ghc-lib))
+    hs-source-dirs: src-ghc810 src-reexport
+
