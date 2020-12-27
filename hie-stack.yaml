@@ -1,6 +1,7 @@
 # This is a sample hie.yaml file for opening haskell-language-server
 # in hie, using stack as the build system.  To use is, copy it to a
 # file called 'hie.yaml'
+# TODO regenerate this file using gen-hie
 cradle:
   multi:
     - path: "./test/testdata"
