@@ -150,6 +150,8 @@ jobs:
   cabal:
     working_directory: ~/build
     docker:
+      # We have to wait to a docker image with ghc-8.10.3
+      # See https://github.com/haskell/docker-haskell/issues/31
       - image: haskell:8.10.2
     steps:
       - checkout
