@@ -19,6 +19,8 @@ import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as L
 import qualified Language.Haskell.LSP.Types.Capabilities as C
 import           Test.Hls.Util
+import           Test.Hspec.Expectations
+
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
 import           Test.Tasty.HUnit
@@ -293,17 +295,19 @@ redundantImportTests = testGroup "redundant import code actions" [
         runSession hlsCommand fullCaps "test/testdata/redundantImportTest/" $ do
             doc <- openDoc "src/CodeActionRedundant.hs" "haskell"
 
-            diags <- waitForDiagnosticsFrom doc
+            diags <- waitForDiagnosticsFromSource doc "typecheck"
             liftIO $ expectDiagnostic diags ["The import of", "Data.List", "is redundant"]
 
             mActions <- getAllCodeActions doc
 
-            let allActions@[removeAction, removeAllAction, makeAllExplicitAction] = map fromAction mActions
+            let allActions = map fromAction mActions
+                actionTitles = map (view L.title) allActions
+
+            liftIO $ actionTitles `shouldContain` ["Remove import", "Remove all redundant imports"]
+
+            let Just removeAction = find (\x -> x ^. L.title == "Remove import") allActions
 
             liftIO $ do
-                removeAction ^. L.title @?= "Remove import"
-                removeAllAction ^. L.title @?= "Remove all redundant imports"
-                makeAllExplicitAction ^. L.title @?= "Make all imports explicit"
                 forM_ allActions $ \a -> a ^. L.kind @?= Just CodeActionQuickFix
                 forM_ allActions $ \a -> a ^. L.command @?= Nothing
                 forM_ allActions $ \a -> isJust (a ^. L.edit) @? "Has edit"
@@ -318,7 +322,7 @@ redundantImportTests = testGroup "redundant import code actions" [
 
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
-        _   <- waitForDiagnosticsFrom doc
+        _   <- waitForDiagnosticsFromSource doc "typecheck"
         CACommand cmd : _ <- getAllCodeActions doc
         executeCommand cmd
         contents <- documentContents doc
