@@ -9,8 +9,9 @@ module Development.IDE.Plugin.HLS.GhcIde
 
 import Data.Aeson
 import Development.IDE
-import Development.IDE.Plugin.Completions
-import Development.IDE.Plugin.CodeAction
+import Development.IDE.Plugin as Ghcide
+import Development.IDE.Plugin.Completions as Completions
+import Development.IDE.Plugin.CodeAction as CodeAction
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Outline
 import Ide.PluginUtils
@@ -28,6 +29,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginHoverProvider      = Just hover'
   , pluginSymbolsProvider    = Just symbolsProvider
   , pluginCompletionProvider = Just getCompletionsLSP
+  , pluginRules              = Ghcide.pluginRules Completions.plugin <> Ghcide.pluginRules CodeAction.plugin
   }
 
 -- ---------------------------------------------------------------------
