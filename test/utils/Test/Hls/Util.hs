@@ -160,7 +160,7 @@ logFilePath = "hls-" ++ show ghcVersion ++ ".log"
 hlsCommand :: String
 hlsCommand = unsafePerformIO $ do
   testExe <- fromMaybe "haskell-language-server" <$> lookupEnv "HLS_TEST_EXE"
-  pure $ testExe ++ " --lsp -d -l test-logs/" ++ logFilePath
+  pure $ testExe ++ " --lsp -d -j2 -l test-logs/" ++ logFilePath
 
 hlsCommandVomit :: String
 hlsCommandVomit = hlsCommand ++ " --vomit"
