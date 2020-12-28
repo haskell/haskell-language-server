@@ -47,12 +47,12 @@ jobs:
     - name: Display results
       shell: bash
       run: |
-        column -s, -t < bench-results/results.csv | tee bench-results/results.txt
+        column -s, -t < ghcide/bench-results/results.csv | tee ghcide/bench-results/results.txt
 
     - name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v2
       with:
         name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
         path: |
-           bench-results/results.*
-           bench-results/**/*.svg
+           ghcide/bench-results/results.*
+           ghcide/bench-results/**/*.svg
