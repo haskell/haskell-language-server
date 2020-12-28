@@ -57,14 +57,6 @@ import qualified System.Log.Logger as L
 import System.Time.Extra
 import Development.Shake (action)
 
--- ---------------------------------------------------------------------
--- ghcide partialhandlers
-import Development.IDE.Plugin.CodeAction  as CodeAction
-import Development.IDE.Plugin.Completions as Completions
-import Development.IDE.LSP.HoverDefinition as HoverDefinition
-
--- ---------------------------------------------------------------------
-
 ghcIdePlugins :: T.Text -> IdePlugins IdeState -> (Plugin Config, [T.Text])
 ghcIdePlugins pid ps = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
 
@@ -121,10 +113,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
 
     pid <- T.pack . show <$> getProcessID
     let
-        (ps, commandIds) = ghcIdePlugins pid idePlugins
-        plugins = Completions.plugin <> CodeAction.plugin <>
-                  Plugin mempty HoverDefinition.setHandlersDefinition <>
-                  ps
+        (plugins, commandIds) = ghcIdePlugins pid idePlugins
         options = def { LSP.executeCommandCommands = Just commandIds
                       , LSP.completionTriggerCharacters = Just "."
                       }
