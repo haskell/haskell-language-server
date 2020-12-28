@@ -1,6 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Ide.Plugin.GhcIde
+module Development.IDE.Plugin.GhcIde
   (
     descriptor
   ) where
@@ -11,14 +11,14 @@ import Development.IDE.Plugin.Completions
 import Development.IDE.Plugin.CodeAction
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Outline
-import Ide.Plugin
+import Ide.PluginUtils
 import Ide.Types
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCommands = [PluginCommand (CommandId "typesignature.add") "adds a signature" commandAddSignature]
   , pluginCodeActionProvider = Just codeAction'
@@ -30,30 +30,30 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 -- ---------------------------------------------------------------------
 
-hover' :: HoverProvider
+hover' :: HoverProvider IdeState
 hover' ideState params = do
     logInfo (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState params
 
 -- ---------------------------------------------------------------------
 
-commandAddSignature :: CommandFunction WorkspaceEdit
+commandAddSignature :: CommandFunction IdeState WorkspaceEdit
 commandAddSignature lf ide params
     = commandHandler lf ide (ExecuteCommandParams "typesignature.add" (Just (List [toJSON params])) Nothing)
 
 -- ---------------------------------------------------------------------
 
-codeAction' :: CodeActionProvider
+codeAction' :: CodeActionProvider IdeState
 codeAction' lf ide _ doc range context = fmap List <$> codeAction lf ide doc range context
 
 -- ---------------------------------------------------------------------
 
-codeLens' :: CodeLensProvider
+codeLens' :: CodeLensProvider IdeState
 codeLens' lf ide _ params = codeLens lf ide params
 
 -- ---------------------------------------------------------------------
 
-symbolsProvider :: SymbolsProvider
+symbolsProvider :: SymbolsProvider IdeState
 symbolsProvider ls ide params = do
     ds <- moduleOutline ls ide params
     case ds of
