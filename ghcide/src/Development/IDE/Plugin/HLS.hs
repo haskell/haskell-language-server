@@ -7,41 +7,27 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Ide.Plugin
+module Development.IDE.Plugin.HLS
     (
       asGhcIdePlugin
-    , pluginDescToIdePlugins
-    , mkLspCommand
-    , mkLspCmdId
-    , allLspCmdIds
-    , allLspCmdIds'
-    , getPid
-    , responseError
-    , getClientConfig
-    , getClientConfigAction
-    , getPluginConfig
-    , configForPlugin
-    , pluginEnabled
     ) where
 
 import           Control.Exception(SomeException, catch)
 import           Control.Lens ( (^.) )
 import           Control.Monad
 import qualified Data.Aeson as J
-import qualified Data.Default
 import           Data.Either
-import           Data.Hashable (unhashed)
 import qualified Data.List                     as List
 import qualified Data.Map  as Map
 import           Data.Maybe
 import qualified Data.Text                     as T
-import           Development.IDE   hiding (pluginRules)
+import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server
+import           Development.IDE.Plugin
+import           Development.IDE.Plugin.HLS.Formatter
 import           GHC.Generics
-import           Ide.Logger
 import           Ide.Plugin.Config
-import           Ide.Plugin.Formatter
-import           Ide.Types
+import           Ide.Types as HLS
 import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Messages
 import           Language.Haskell.LSP.Types
@@ -50,15 +36,18 @@ import qualified Language.Haskell.LSP.Types.Capabilities as C
 import           Language.Haskell.LSP.Types.Lens as L hiding (formatting, rangeFormatting)
 import qualified Language.Haskell.LSP.VFS                as VFS
 import           Text.Regex.TDFA.Text()
+import Development.Shake (Rules)
+import Ide.PluginUtils (getClientConfig, pluginEnabled, getPluginConfig, responseError, getProcessID)
+import Development.IDE.Types.Logger (logInfo)
 
 -- ---------------------------------------------------------------------
 
 -- | Map a set of plugins to the underlying ghcide engine.  Main point is
 -- IdePlugins are arranged by kind of operation, 'Plugin' is arranged by message
 -- category ('Notifaction', 'Request' etc).
-asGhcIdePlugin :: IdePlugins -> Plugin Config
+asGhcIdePlugin :: IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin mp =
-    mkPlugin rulesPlugins (Just . pluginRules) <>
+    mkPlugin rulesPlugins (Just . HLS.pluginRules) <>
     mkPlugin executeCommandPlugins (Just . pluginCommands) <>
     mkPlugin codeActionPlugins     pluginCodeActionProvider <>
     mkPlugin codeLensPlugins       pluginCodeLensProvider <>
@@ -74,7 +63,7 @@ asGhcIdePlugin mp =
 
         ls = Map.toList (ipMap mp)
 
-        mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor -> Maybe b) -> Plugin Config
+        mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> Maybe b) -> Plugin Config
         mkPlugin maker selector =
           case concatMap (\(pid, p) -> justs (pid, selector p)) ls of
             -- If there are no plugins that provide a descriptor, use mempty to
@@ -83,21 +72,6 @@ asGhcIdePlugin mp =
             [] -> mempty
             xs -> maker xs
 
-
-pluginDescToIdePlugins :: [PluginDescriptor] -> IdePlugins
-pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginId p, p)) plugins
-
-allLspCmdIds' :: T.Text -> IdePlugins -> [T.Text]
-allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
-    where
-        justs (p, Just x)  = [(p, x)]
-        justs (_, Nothing) = []
-
-        ls = Map.toList (ipMap mp)
-
-        mkPlugin maker selector
-            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
-
 -- ---------------------------------------------------------------------
 
 rulesPlugins :: [(PluginId, Rules ())] -> Plugin Config
@@ -105,19 +79,19 @@ rulesPlugins rs = Plugin rules mempty
     where
         rules = mconcat $ map snd rs
 
-codeActionPlugins :: [(PluginId, CodeActionProvider)] -> Plugin Config
+codeActionPlugins :: [(PluginId, CodeActionProvider IdeState)] -> Plugin Config
 codeActionPlugins cas = Plugin codeActionRules (codeActionHandlers cas)
 
 codeActionRules :: Rules ()
 codeActionRules = mempty
 
-codeActionHandlers :: [(PluginId, CodeActionProvider)] -> PartialHandlers Config
+codeActionHandlers :: [(PluginId, CodeActionProvider IdeState)] -> PartialHandlers Config
 codeActionHandlers cas = PartialHandlers $ \WithMessage{..} x -> return x
     { LSP.codeActionHandler
         = withResponse RspCodeAction (makeCodeAction cas)
     }
 
-makeCodeAction :: [(PluginId, CodeActionProvider)]
+makeCodeAction :: [(PluginId, CodeActionProvider IdeState)]
       -> LSP.LspFuncs Config -> IdeState
       -> CodeActionParams
       -> IO (Either ResponseError (List CAResult))
@@ -168,19 +142,19 @@ data FallbackCodeActionParams =
 
 -- -----------------------------------------------------------
 
-codeLensPlugins :: [(PluginId, CodeLensProvider)] -> Plugin Config
+codeLensPlugins :: [(PluginId, CodeLensProvider IdeState)] -> Plugin Config
 codeLensPlugins cas = Plugin codeLensRules (codeLensHandlers cas)
 
 codeLensRules :: Rules ()
 codeLensRules = mempty
 
-codeLensHandlers :: [(PluginId, CodeLensProvider)] -> PartialHandlers Config
+codeLensHandlers :: [(PluginId, CodeLensProvider IdeState)] -> PartialHandlers Config
 codeLensHandlers cas = PartialHandlers $ \WithMessage{..} x -> return x
     { LSP.codeLensHandler
         = withResponse RspCodeLens (makeCodeLens cas)
     }
 
-makeCodeLens :: [(PluginId, CodeLensProvider)]
+makeCodeLens :: [(PluginId, CodeLensProvider IdeState)]
       -> LSP.LspFuncs Config
       -> IdeState
       -> CodeLensParams
@@ -211,10 +185,10 @@ makeCodeLens cas lf ideState params = do
 
 -- -----------------------------------------------------------
 
-executeCommandPlugins :: [(PluginId, [PluginCommand])] -> Plugin Config
+executeCommandPlugins :: [(PluginId, [PluginCommand IdeState])] -> Plugin Config
 executeCommandPlugins ecs = Plugin mempty (executeCommandHandlers ecs)
 
-executeCommandHandlers :: [(PluginId, [PluginCommand])] -> PartialHandlers Config
+executeCommandHandlers :: [(PluginId, [PluginCommand IdeState])] -> PartialHandlers Config
 executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit (makeExecuteCommands ecs)
     }
@@ -222,7 +196,7 @@ executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
 -- type ExecuteCommandProvider = IdeState
 --                             -> ExecuteCommandParams
 --                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-makeExecuteCommands :: [(PluginId, [PluginCommand])] -> LSP.LspFuncs Config -> ExecuteCommandProvider
+makeExecuteCommands :: [(PluginId, [PluginCommand IdeState])] -> LSP.LspFuncs Config -> ExecuteCommandProvider IdeState
 makeExecuteCommands ecs lf ide = wrapUnhandledExceptions $ do
   let
       pluginMap = Map.fromList ecs
@@ -358,7 +332,7 @@ wrapUnhandledExceptions action input =
 
 -- | Runs a plugin command given a PluginId, CommandId and
 -- arguments in the form of a JSON object.
-runPluginCommand :: Map.Map PluginId [PluginCommand]
+runPluginCommand :: Map.Map PluginId [PluginCommand IdeState]
                  -> LSP.LspFuncs Config
                  -> IdeState
                  -> PluginId
@@ -390,7 +364,7 @@ runPluginCommand m lf ide  p@(PluginId p') com@(CommandId com') arg =
 
 mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [J.Value] -> IO Command
 mkLspCommand plid cn title args' = do
-  pid <- getPid
+  pid <- T.pack . show <$> getProcessID
   let cmdId = mkLspCmdId pid plid cn
   let args = List <$> args'
   return $ Command title cmdId args
@@ -399,24 +373,19 @@ mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
 mkLspCmdId pid (PluginId plid) (CommandId cid)
   = pid <> ":" <> plid <> ":" <> cid
 
-allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand])] -> [T.Text]
-allLspCmdIds pid commands = concat $ map go commands
-  where
-    go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
-
 -- ---------------------------------------------------------------------
 
-hoverPlugins :: [(PluginId, HoverProvider)] -> Plugin Config
+hoverPlugins :: [(PluginId, HoverProvider IdeState)] -> Plugin Config
 hoverPlugins hs = Plugin hoverRules (hoverHandlers hs)
 
 hoverRules :: Rules ()
 hoverRules = mempty
 
-hoverHandlers :: [(PluginId, HoverProvider)] -> PartialHandlers Config
+hoverHandlers :: [(PluginId, HoverProvider IdeState)] -> PartialHandlers Config
 hoverHandlers hps = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.hoverHandler = withResponse RspHover (makeHover hps)}
 
-makeHover :: [(PluginId, HoverProvider)]
+makeHover :: [(PluginId, HoverProvider IdeState)]
       -> LSP.LspFuncs Config -> IdeState
       -> TextDocumentPositionParams
       -> IO (Either ResponseError (Maybe Hover))
@@ -444,17 +413,17 @@ makeHover hps lf ideState params
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
 
-symbolsPlugins :: [(PluginId, SymbolsProvider)] -> Plugin Config
+symbolsPlugins :: [(PluginId, SymbolsProvider IdeState)] -> Plugin Config
 symbolsPlugins hs = Plugin symbolsRules (symbolsHandlers hs)
 
 symbolsRules :: Rules ()
 symbolsRules = mempty
 
-symbolsHandlers :: [(PluginId, SymbolsProvider)] -> PartialHandlers Config
+symbolsHandlers :: [(PluginId, SymbolsProvider IdeState)] -> PartialHandlers Config
 symbolsHandlers hps = PartialHandlers $ \WithMessage{..} x ->
   return x {LSP.documentSymbolHandler = withResponse RspDocumentSymbols (makeSymbols hps)}
 
-makeSymbols :: [(PluginId, SymbolsProvider)]
+makeSymbols :: [(PluginId, SymbolsProvider IdeState)]
       -> LSP.LspFuncs Config
       -> IdeState
       -> DocumentSymbolParams
@@ -493,7 +462,7 @@ makeSymbols sps lf ideState params
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
 
-renamePlugins :: [(PluginId, RenameProvider)] -> Plugin Config
+renamePlugins :: [(PluginId, RenameProvider IdeState)] -> Plugin Config
 renamePlugins providers = Plugin rules handlers
   where
     rules = mempty
@@ -501,7 +470,7 @@ renamePlugins providers = Plugin rules handlers
       { LSP.renameHandler = withResponse RspRename (renameWith providers)}
 
 renameWith ::
-  [(PluginId, RenameProvider)] ->
+  [(PluginId, RenameProvider IdeState)] ->
   LSP.LspFuncs Config ->
   IdeState ->
   RenameParams ->
@@ -522,7 +491,7 @@ renameWith providers lspFuncs state params = do
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
 
-formatterPlugins :: [(PluginId, FormattingProvider IO)] -> Plugin Config
+formatterPlugins :: [(PluginId, FormattingProvider IdeState IO)] -> Plugin Config
 formatterPlugins providers
     = Plugin formatterRules
              (formatterHandlers (Map.fromList (("none",noneProvider):providers)))
@@ -530,7 +499,7 @@ formatterPlugins providers
 formatterRules :: Rules ()
 formatterRules = mempty
 
-formatterHandlers :: Map.Map PluginId (FormattingProvider IO) -> PartialHandlers Config
+formatterHandlers :: Map.Map PluginId (FormattingProvider IdeState IO) -> PartialHandlers Config
 formatterHandlers providers = PartialHandlers $ \WithMessage{..} x -> return x
     { LSP.documentFormattingHandler
         = withResponse RspDocumentFormatting (formatting providers)
@@ -541,17 +510,17 @@ formatterHandlers providers = PartialHandlers $ \WithMessage{..} x -> return x
 -- ---------------------------------------------------------------------
 -- ---------------------------------------------------------------------
 
-completionsPlugins :: [(PluginId, CompletionProvider)] -> Plugin Config
+completionsPlugins :: [(PluginId, CompletionProvider IdeState)] -> Plugin Config
 completionsPlugins cs = Plugin completionsRules (completionsHandlers cs)
 
 completionsRules :: Rules ()
 completionsRules = mempty
 
-completionsHandlers :: [(PluginId, CompletionProvider)] -> PartialHandlers Config
+completionsHandlers :: [(PluginId, CompletionProvider IdeState)] -> PartialHandlers Config
 completionsHandlers cps = PartialHandlers $ \WithMessage{..} x ->
   return x {LSP.completionHandler = withResponse RspCompletion (makeCompletions cps)}
 
-makeCompletions :: [(PluginId, CompletionProvider)]
+makeCompletions :: [(PluginId, CompletionProvider IdeState)]
       -> LSP.LspFuncs Config
       -> IdeState
       -> CompletionParams
@@ -614,47 +583,3 @@ getPrefixAtPos lf uri pos = do
   case mvf of
     Just vf -> VFS.getCompletionPrefix pos vf
     Nothing -> return Nothing
-
--- ---------------------------------------------------------------------
--- | Returns the current client configuration. It is not wise to permanently
--- cache the returned value of this function, as clients can change their
--- configuration at runtime.
---
--- If no custom configuration has been set by the client, this function returns
--- our own defaults.
-getClientConfig :: LSP.LspFuncs Config -> IO Config
-getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
-
--- | Returns the client configuration stored in the IdeState.
--- You can use this function to access it from shake Rules
-getClientConfigAction :: Action Config
-getClientConfigAction = do
-  mbVal <- unhashed <$> useNoFile_ GetClientSettings
-  logm $ "getClientConfigAction:clientSettings:" ++ show mbVal
-  case J.fromJSON <$> mbVal of
-    Just (J.Success c) -> return c
-    _ -> return Data.Default.def
-
--- ---------------------------------------------------------------------
-
--- | Returns the current plugin configuration. It is not wise to permanently
--- cache the returned value of this function, as clients can change their
--- configuration at runtime.
---
--- If no custom configuration has been set by the client, this function returns
--- our own defaults.
-getPluginConfig :: LSP.LspFuncs Config -> PluginId -> IO PluginConfig
-getPluginConfig lf plugin = do
-    config <- getClientConfig lf
-    return $ configForPlugin config plugin
-
-configForPlugin :: Config -> PluginId -> PluginConfig
-configForPlugin config (PluginId plugin)
-    = Map.findWithDefault Data.Default.def plugin (plugins config)
-
--- ---------------------------------------------------------------------
-
--- | Checks that a given plugin is both enabled and the specific feature is
--- enabled
-pluginEnabled :: PluginConfig -> (PluginConfig -> Bool) -> Bool
-pluginEnabled pluginConfig f = plcGlobalOn pluginConfig && f pluginConfig
