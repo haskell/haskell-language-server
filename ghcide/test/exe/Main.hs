@@ -3869,7 +3869,7 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   createDirectoryIfMissing True $ projDir ++ "/Data"
 
   let cmd = unwords $
-       [ghcideExe, "--lsp", "--test", "--verbose", "--cwd", startDir] ++ extraOptions
+       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
