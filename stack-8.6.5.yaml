@@ -5,7 +5,7 @@ packages:
   - ./hie-compat
   - ./ghcide/
   - ./hls-plugin-api
-  - ./shake-bench
+# - ./shake-bench
   - ./plugins/hls-class-plugin
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-hlint-plugin
