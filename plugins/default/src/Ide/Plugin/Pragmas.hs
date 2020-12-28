@@ -17,7 +17,6 @@ import qualified Data.HashMap.Strict             as H
 import qualified Data.Text                       as T
 import           Development.IDE                 as D
 import qualified GHC.Generics                    as Generics
-import           Ide.Plugin
 import           Ide.Types
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as J
@@ -32,16 +31,9 @@ import qualified Language.Haskell.LSP.VFS        as VFS
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginCommands = commands
-  , pluginCodeActionProvider = Just codeActionProvider
+  { pluginCodeActionProvider = Just codeActionProvider
   , pluginCompletionProvider = Just completion
   }
-
--- ---------------------------------------------------------------------
-
-commands :: [PluginCommand]
-commands = [ PluginCommand "addPragma" "add the given pragma" addPragmaCmd
-           ]
 
 -- ---------------------------------------------------------------------
 
@@ -56,9 +48,9 @@ data AddPragmaParams = AddPragmaParams
 -- Pragma is added to the first line of the Uri.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
-addPragmaCmd :: CommandFunction AddPragmaParams
-addPragmaCmd _lf _ide (AddPragmaParams uri pragmaName) = do
-  let
+-- mkPragmaEdit :: CommandFunction AddPragmaParams
+mkPragmaEdit :: Uri -> T.Text -> WorkspaceEdit
+mkPragmaEdit uri pragmaName = res where
     pos = J.Position 0 0
     textEdits = J.List
       [J.TextEdit (J.Range pos pos)
@@ -67,13 +59,12 @@ addPragmaCmd _lf _ide (AddPragmaParams uri pragmaName) = do
     res = J.WorkspaceEdit
       (Just $ H.singleton uri textEdits)
       Nothing
-  return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
 
 -- ---------------------------------------------------------------------
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
 codeActionProvider :: CodeActionProvider
-codeActionProvider _ state plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
+codeActionProvider _ state _plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
     let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
     pm <- fmap join $ runAction "addPragma" state $ getParsedModule `traverse` mFile
     let dflags = ms_hspp_opts . pm_mod_summary <$> pm
@@ -81,19 +72,16 @@ codeActionProvider _ state plId docId _ (J.CodeActionContext (J.List diags) _mon
         ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
     -- Get all potential Pragmas for all diagnostics.
         pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) ghcDiags
-    -- cmds <- mapM mkCommand ("FooPragma":pragmas)
-    cmds <- mapM mkCommand pragmas
+    cmds <- mapM mkCodeAction pragmas
     return $ Right $ List cmds
       where
-        mkCommand pragmaName = do
+        mkCodeAction pragmaName = do
           let
-            -- | Code Action for the given command.
-            codeAction :: J.Command -> J.CAResult
-            codeAction cmd = J.CACodeAction $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing (Just cmd)
+            codeAction = J.CACodeAction $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) (Just edit) Nothing
             title = "Add \"" <> pragmaName <> "\""
-            cmdParams = [toJSON (AddPragmaParams (docId ^. J.uri) pragmaName)]
-          cmd <- mkLspCommand plId "addPragma" title  (Just cmdParams)
-          return $ codeAction cmd
+            edit = mkPragmaEdit (docId ^. J.uri) pragmaName
+          return codeAction
+
         genPragma mDynflags target
           | Just dynFlags <- mDynflags,
             -- GHC does not export 'OnOff', so we have to view it as string
