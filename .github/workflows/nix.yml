@@ -1,6 +1,6 @@
 name: Nix
 
-on: [push, pull_request]
+on: [pull_request]
 jobs:
   nix:
     runs-on: ${{ matrix.os }}
