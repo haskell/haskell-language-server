@@ -54,6 +54,8 @@ import Development.IDE (action)
 import Text.Printf
 import Development.IDE.Core.Tracing
 import Development.IDE.Types.Shake (Key(Key))
+import Ide.Plugin.Config
+import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 
 ghcideVersion :: IO String
 ghcideVersion = do
@@ -87,9 +89,9 @@ main = do
 
     let plugins = Completions.plugin <> CodeAction.plugin
             <> if argsTesting then Test.plugin else mempty
-        onInitialConfiguration :: InitializeRequest -> Either T.Text LspConfig
+        onInitialConfiguration :: InitializeRequest -> Either T.Text Config
         onInitialConfiguration x = case x ^. params . initializationOptions of
-          Nothing -> Right defaultLspConfig
+          Nothing -> Right def
           Just v -> case J.fromJSON v of
             J.Error err -> Left $ T.pack err
             J.Success a -> Right a
@@ -106,7 +108,7 @@ main = do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             sessionLoader <- loadSession $ fromMaybe dir rootPath
-            config <- fromMaybe defaultLspConfig <$> getConfig
+            config <- fromMaybe def <$> getConfig
             let options = (defaultIdeOptions sessionLoader)
                     { optReportProgress    = clientSupportsProgress caps
                     , optShakeProfiling    = argsShakeProfiling
@@ -159,7 +161,7 @@ main = do
                     , optTesting           = IdeTesting argsTesting
                     , optThreads           = argsThreads
                     , optCheckParents      = NeverCheck
-                    , optCheckProject      = CheckProject False
+                    , optCheckProject      = False
                     }
             logLevel = if argsVerbose then minBound else Info
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs

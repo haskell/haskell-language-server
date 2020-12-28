@@ -269,6 +269,7 @@ executable ghcide
         haskell-lsp-types,
         heapsize,
         hie-bios,
+        hls-plugin-api,
         ghcide,
         lens,
         optparse-applicative,

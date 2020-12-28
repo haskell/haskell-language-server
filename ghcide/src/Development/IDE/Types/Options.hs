@@ -21,13 +21,10 @@ module Development.IDE.Types.Options
   , defaultIdeOptions
   , IdeResult
   , IdeGhcSession(..)
-  , LspConfig(..)
-  , defaultLspConfig
-  , CheckProject(..)
-  , CheckParents(..)
   , OptHaddockParse(..)
   ) where
 
+import Data.Default
 import Development.Shake
 import Development.IDE.GHC.Util
 import           GHC hiding (parseModule, typecheckModule)
@@ -36,8 +33,7 @@ import qualified Language.Haskell.LSP.Types.Capabilities as LSP
 import qualified Data.Text as T
 import Development.IDE.Types.Diagnostics
 import Control.DeepSeq (NFData(..))
-import Data.Aeson
-import GHC.Generics
+import Ide.Plugin.Config
 
 data IdeGhcSession = IdeGhcSession
   { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
@@ -89,7 +85,7 @@ data IdeOptions = IdeOptions
     --   features such as diagnostics and go-to-definition, in
     --   situations in which they would become unavailable because of
     --   the presence of type errors, holes or unbound variables.
-  , optCheckProject :: CheckProject
+  , optCheckProject :: !Bool
     -- ^ Whether to typecheck the entire project on load
   , optCheckParents :: CheckParents
     -- ^ When to typecheck reverse dependencies of a file
@@ -105,29 +101,6 @@ data IdeOptions = IdeOptions
 
 data OptHaddockParse = HaddockParse | NoHaddockParse
   deriving (Eq,Ord,Show,Enum)
-
-newtype CheckProject = CheckProject { shouldCheckProject :: Bool }
-  deriving stock (Eq, Ord, Show)
-  deriving newtype (FromJSON,ToJSON)
-data CheckParents
-    -- Note that ordering of constructors is meaningful and must be monotonically
-    -- increasing in the scenarios where parents are checked
-    = NeverCheck
-    | CheckOnClose
-    | CheckOnSaveAndClose
-    | AlwaysCheck
-  deriving stock (Eq, Ord, Show, Generic)
-  deriving anyclass (FromJSON, ToJSON)
-
-data LspConfig
-  = LspConfig
-  { checkParents :: CheckParents
-  , checkProject :: CheckProject
-  } deriving stock (Eq, Ord, Show, Generic)
-    deriving anyclass (FromJSON, ToJSON)
-
-defaultLspConfig :: LspConfig
-defaultLspConfig = LspConfig CheckOnSaveAndClose (CheckProject True)
 
 data IdePreprocessedSource = IdePreprocessedSource
   { preprocWarnings :: [(GHC.SrcSpan, String)]
@@ -163,8 +136,8 @@ defaultIdeOptions session = IdeOptions
     ,optKeywords = haskellKeywords
     ,optDefer = IdeDefer True
     ,optTesting = IdeTesting False
-    ,optCheckProject = checkProject defaultLspConfig
-    ,optCheckParents = checkParents defaultLspConfig
+    ,optCheckProject = checkProject def
+    ,optCheckParents = checkParents def
     ,optHaddockParse = HaddockParse
     ,optCustomDynFlags = id
     }
