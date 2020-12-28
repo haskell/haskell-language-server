@@ -193,9 +193,6 @@ executeCommandHandlers ecs = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.executeCommandHandler = withResponseAndRequest RspExecuteCommand ReqApplyWorkspaceEdit (makeExecuteCommands ecs)
     }
 
--- type ExecuteCommandProvider = IdeState
---                             -> ExecuteCommandParams
---                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 makeExecuteCommands :: [(PluginId, [PluginCommand IdeState])] -> LSP.LspFuncs Config -> ExecuteCommandProvider IdeState
 makeExecuteCommands ecs lf ide = wrapUnhandledExceptions $ do
   let
@@ -233,12 +230,6 @@ makeExecuteCommands ecs lf ide = wrapUnhandledExceptions $ do
                   Nothing -> return (Right J.Null, Nothing)
 
               J.Error _str -> return (Right J.Null, Nothing)
-              -- Couldn't parse the fallback command params
-              -- _ -> liftIO $
-              --   LSP.sendErrorResponseS (LSP.sendFunc lf)
-              --                           (J.responseId (req ^. J.id))
-              --                           J.InvalidParams
-              --                           "Invalid fallbackCodeAction params"
 
           -- Just an ordinary HIE command
           Just (plugin, cmd) -> runPluginCommand pluginMap lf ide plugin cmd cmdParams
@@ -248,77 +239,6 @@ makeExecuteCommands ecs lf ide = wrapUnhandledExceptions $ do
 
   execCmd
 
-{-
-       ReqExecuteCommand req -> do
-          liftIO $ U.logs $ "reactor:got ExecuteCommandRequest:" ++ show req
-          lf <- asks lspFuncs
-
-          let params = req ^. J.params
-
-              parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
-              parseCmdId x = case T.splitOn ":" x of
-                [plugin, command] -> Just (PluginId plugin, CommandId command)
-                [_, plugin, command] -> Just (PluginId plugin, CommandId command)
-                _ -> Nothing
-
-              callback obj = do
-                liftIO $ U.logs $ "ExecuteCommand response got:r=" ++ show obj
-                case fromDynJSON obj :: Maybe J.WorkspaceEdit of
-                  Just v -> do
-                    lid <- nextLspReqId
-                    reactorSend $ RspExecuteCommand $ Core.makeResponseMessage req (A.Object mempty)
-                    let msg = fmServerApplyWorkspaceEditRequest lid $ J.ApplyWorkspaceEditParams v
-                    liftIO $ U.logs $ "ExecuteCommand sending edit: " ++ show msg
-                    reactorSend $ ReqApplyWorkspaceEdit msg
-                  Nothing -> reactorSend $ RspExecuteCommand $ Core.makeResponseMessage req $ dynToJSON obj
-
-              execCmd cmdId args = do
-                -- The parameters to the HIE command are always the first element
-                let cmdParams = case args of
-                     Just (J.List (x:_)) -> x
-                     _ -> A.Null
-
-                case parseCmdId cmdId of
-                  -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
-                  Just ("hls", "fallbackCodeAction") -> do
-                    case A.fromJSON cmdParams of
-                      A.Success (FallbackCodeActionParams mEdit mCmd) -> do
-
-                        -- Send off the workspace request if it has one
-                        forM_ mEdit $ \edit -> do
-                          lid <- nextLspReqId
-                          let eParams = J.ApplyWorkspaceEditParams edit
-                              eReq = fmServerApplyWorkspaceEditRequest lid eParams
-                          reactorSend $ ReqApplyWorkspaceEdit eReq
-
-                        case mCmd of
-                          -- If we have a command, continue to execute it
-                          Just (J.Command _ innerCmdId innerArgs) -> execCmd innerCmdId innerArgs
-
-                          -- Otherwise we need to send back a response oureslves
-                          Nothing -> reactorSend $ RspExecuteCommand $ Core.makeResponseMessage req (A.Object mempty)
-
-                      -- Couldn't parse the fallback command params
-                      _ -> liftIO $
-                        Core.sendErrorResponseS (Core.sendFunc lf)
-                                                (J.responseId (req ^. J.id))
-                                                J.InvalidParams
-                                                "Invalid fallbackCodeAction params"
-                  -- Just an ordinary HIE command
-                  Just (plugin, cmd) ->
-                    let preq = GReq tn "plugin" Nothing Nothing (Just $ req ^. J.id) callback (toDynJSON (Nothing :: Maybe J.WorkspaceEdit))
-                               $ runPluginCommand plugin cmd cmdParams
-                    in makeRequest preq
-
-                  -- Couldn't parse the command identifier
-                  _ -> liftIO $
-                    Core.sendErrorResponseS (Core.sendFunc lf)
-                                            (J.responseId (req ^. J.id))
-                                            J.InvalidParams
-                                            "Invalid command identifier"
-
-          execCmd (params ^. J.command) (params ^. J.arguments)
--}
 
 -- -----------------------------------------------------------
 wrapUnhandledExceptions ::
@@ -354,11 +274,6 @@ runPluginCommand m lf ide  p@(PluginId p') com@(CommandId com') arg =
                                        <> ": " <> T.pack err
                                        <> "\narg = " <> T.pack (show arg)) Nothing, Nothing)
         J.Success a -> f lf ide a
-
--- lsp-request: error while parsing args for typesignature.add in plugin ghcide:
--- When parsing the record ExecuteCommandParams of type
--- Language.Haskell.LSP.Types.DataTypesJSON.ExecuteCommandParams the key command
--- was not present.
 
 -- -----------------------------------------------------------
 
@@ -556,26 +471,6 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
             case rights mhs of
                 [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
                 hs -> return $ Right $ combine hs
-
-{-
-        ReqCompletion req -> do
-          liftIO $ U.logs $ "reactor:got CompletionRequest:" ++ show req
-          let (_, doc, pos) = reqParams req
-
-          mprefix <- getPrefixAtPos doc pos
-
-          let callback compls = do
-                let rspMsg = Core.makeResponseMessage req
-                              $ J.Completions $ J.List compls
-                reactorSend $ RspCompletion rspMsg
-          case mprefix of
-            Nothing -> callback []
-            Just prefix -> do
-              snippets <- Completions.WithSnippets <$> configVal completionSnippetsOn
-              let hreq = IReq tn "completion" (req ^. J.id) callback
-                           $ lift $ Completions.getCompletions doc prefix snippets
-              makeRequest hreq
--}
 
 getPrefixAtPos :: LSP.LspFuncs Config -> Uri -> Position -> IO (Maybe VFS.PosPrefixInfo)
 getPrefixAtPos lf uri pos = do
