@@ -1,11 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Development.IDE.Plugin.HLS
     (
@@ -77,7 +70,7 @@ asGhcIdePlugin mp =
 rulesPlugins :: [(PluginId, Rules ())] -> Plugin Config
 rulesPlugins rs = Plugin rules mempty
     where
-        rules = mconcat $ map snd rs
+        rules = foldMap snd rs
 
 codeActionPlugins :: [(PluginId, CodeActionProvider IdeState)] -> Plugin Config
 codeActionPlugins cas = Plugin codeActionRules (codeActionHandlers cas)
@@ -104,7 +97,7 @@ makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
             then provider lf ideState pid docId range context
             else return $ Right (List [])
     r <- mapM makeAction cas
-    let actions = filter wasRequested . concat $ map unL $ rights r
+    let actions = filter wasRequested . foldMap unL $ rights r
     res <- send caps actions
     return $ Right res
   where
@@ -320,7 +313,7 @@ makeHover hps lf ideState params
       -- work out range here?
       let hs = catMaybes (rights mhs)
           r = listToMaybe $ mapMaybe (^. range) hs
-          h = case mconcat ((map (^. contents) hs) :: [HoverContents]) of
+          h = case foldMap (^. contents) hs of
             HoverContentsMS (List []) -> Nothing
             hh                        -> Just $ Hover hh r
       return $ Right h
@@ -347,8 +340,7 @@ makeSymbols sps lf ideState params
   = do
       let uri' = params ^. textDocument . uri
           (C.ClientCapabilities _ tdc _ _) = LSP.clientCapabilities lf
-          supportsHierarchy = fromMaybe False $ tdc >>= C._documentSymbol
-                              >>= C._hierarchicalDocumentSymbolSupport
+          supportsHierarchy = Just True == (tdc >>= C._documentSymbol >>= C._hierarchicalDocumentSymbolSupport)
           convertSymbols :: [DocumentSymbol] -> DSResult
           convertSymbols symbs
             | supportsHierarchy = DSDocumentSymbols $ List symbs
@@ -400,7 +392,7 @@ renameWith providers lspFuncs state params = do
     -- TODO:AZ: we need to consider the right way to combine possible renamers
     results <- mapM makeAction providers
     case partitionEithers results of
-        (errors, []) -> return $ Left $ responseError $ T.pack $ show $ errors
+        (errors, []) -> return $ Left $ responseError $ T.pack $ show errors
         (_, edits) -> return $ Right $ mconcat edits
 
 -- ---------------------------------------------------------------------
@@ -443,7 +435,7 @@ makeCompletions :: [(PluginId, CompletionProvider IdeState)]
 makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier doc) pos _context _mt)
   = do
       mprefix <- getPrefixAtPos lf doc pos
-      _snippets <- WithSnippets <$> completionSnippetsOn <$> getClientConfig lf
+      _snippets <- WithSnippets . completionSnippetsOn <$> getClientConfig lf
 
       let
           combine :: [CompletionResponseResult] -> CompletionResponseResult
@@ -474,7 +466,7 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
 
 getPrefixAtPos :: LSP.LspFuncs Config -> Uri -> Position -> IO (Maybe VFS.PosPrefixInfo)
 getPrefixAtPos lf uri pos = do
-  mvf <-  (LSP.getVirtualFileFunc lf) (J.toNormalizedUri uri)
+  mvf <-  LSP.getVirtualFileFunc lf (J.toNormalizedUri uri)
   case mvf of
     Just vf -> VFS.getCompletionPrefix pos vf
     Nothing -> return Nothing
