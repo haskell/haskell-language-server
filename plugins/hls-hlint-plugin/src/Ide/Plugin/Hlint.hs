@@ -34,7 +34,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Typeable
 import Development.IDE
-import Development.IDE.Core.Rules (defineNoFile)
+import Development.IDE.Core.Rules (getParsedModuleWithComments, defineNoFile)
 import Development.IDE.Core.Shake (getDiagnostics)
 
 #ifdef HLINT_ON_GHC_LIB
@@ -395,7 +395,7 @@ applyHint ide nfp mhint =
             (Right <$> applyRefactorings Nothing commands temp refactExts)
                 `catches` errorHandlers
 #else
-    mbParsedModule <- liftIO $ runAction' $ getParsedModule nfp
+    mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
     res <-
         case mbParsedModule of
             Nothing -> throwE "Apply hint: error parsing the module"
@@ -404,6 +404,7 @@ applyHint ide nfp mhint =
                 let modu = pm_parsed_source pm
                 (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
                 let dflags = ms_hspp_opts modsum
+                -- apply-refact uses RigidLayout
                 let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
                     ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
