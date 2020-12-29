@@ -1,14 +1,14 @@
-{-# LANGUAGE CPP               #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+
 module Plugins where
 
-import           Ide.Types                 (IdePlugins)
-import           Ide.Plugin                (pluginDescToIdePlugins)
-
+import Ide.Plugin (pluginDescToIdePlugins)
 -- fixed plugins
-import           Ide.Plugin.Example        as Example
-import           Ide.Plugin.Example2       as Example2
-import           Ide.Plugin.GhcIde         as GhcIde
+import Ide.Plugin.Example as Example
+import Ide.Plugin.Example2 as Example2
+import Ide.Plugin.GhcIde as GhcIde
+import Ide.Types (IdePlugins)
 
 -- haskell-language-server optional plugins
 
@@ -44,6 +44,11 @@ import           Ide.Plugin.ModuleName     as ModuleName
 import           Ide.Plugin.Pragmas        as Pragmas
 #endif
 
+#if defined(splice)
+import           Ide.Plugin.Splice         as Splice
+#endif
+
+
 -- formatters
 
 #if floskell
@@ -68,14 +73,14 @@ import           Ide.Plugin.Brittany       as Brittany
 
 -- ---------------------------------------------------------------------
 
--- | The plugins configured for use in this instance of the language
--- server.
--- These can be freely added or removed to tailor the available
--- features of the server.
-
+{- | The plugins configured for use in this instance of the language
+ server.
+ These can be freely added or removed to tailor the available
+ features of the server.
+-}
 idePlugins :: Bool -> IdePlugins
 idePlugins includeExamples = pluginDescToIdePlugins allPlugins
-  where
+    where
     allPlugins = if includeExamples
                    then basePlugins ++ examplePlugins
                    else basePlugins
@@ -119,6 +124,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if hlint
       , Hlint.descriptor "hlint"
+#endif
+#if defined(splice)
+      , Splice.descriptor "splice"
 #endif
       ]
     examplePlugins =

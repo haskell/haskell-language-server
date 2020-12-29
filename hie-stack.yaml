@@ -54,6 +54,9 @@ cradle:
             - path: "./plugins/hls-retrie-plugin/src"
               component: "hls-retrie-plugin:lib"
 
+            - path: "./plugins/hls-splice-plugin/src"
+              component: "hls-splice-plugin:lib"
+
             - path: "./plugins/tactics/src"
               component: "hls-tactics-plugin:lib"
 

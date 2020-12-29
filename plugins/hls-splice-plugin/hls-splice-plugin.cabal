@@ -1,0 +1,32 @@
+cabal-version:      2.2
+name:               hls-splice-plugin
+version:            0.1.0.0
+synopsis:           HLS Plugin Expanding
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Hiromi ISHII
+maintainer:         konn.jinro_at_gmail.com
+category:           Development
+build-type:         Simple
+
+library
+  exposed-modules:  Ide.Plugin.Splice
+  ghc-options:      -Wall
+  other-modules:    Ide.Plugin.Splice.Types
+  hs-source-dirs:   src
+  build-depends:    aeson
+                  , base
+                  , containers
+                  , haskell-lsp
+                  , hls-plugin-api
+                  , ghc
+                  , ghc-exactprint
+                  , ghcide
+                  , lens
+                  , dlist
+                  , shake
+                  , text
+                  , transformers
+                  , unordered-containers
+
+  default-language: Haskell2010

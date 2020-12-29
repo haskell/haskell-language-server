@@ -127,6 +127,11 @@ flag pragmas
   default:     False
   manual:      True
 
+flag splice
+  description: Enable splice plugin
+  default:     False
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -212,6 +217,11 @@ common pragmas
     other-modules: Ide.Plugin.Pragmas
     cpp-options: -Dpragmas
 
+common splice
+  if flag(splice) || flag(all-plugins)
+    build-depends: hls-splice-plugin
+    cpp-options: -Dsplice
+
 -- formatters
 
 common floskell
@@ -262,6 +272,7 @@ executable haskell-language-server
                     , hlint
                     , moduleName
                     , pragmas
+                    , splice
                     , floskell
                     , fourmolu
                     , ormolu
