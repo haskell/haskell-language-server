@@ -1,6 +1,6 @@
 name: Nix
 
-on: [push, pull_request]
+on: [pull_request]
 jobs:
   nix:
     runs-on: ${{ matrix.os }}
@@ -21,6 +21,5 @@ jobs:
     - uses: cachix/cachix-action@v8
       with:
         name: haskell-language-server
-        extraPullNames: haskell-ghcide
         authToken: '${{ secrets.HLS_CACHIX_AUTH_TOKEN }}'
     - run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"

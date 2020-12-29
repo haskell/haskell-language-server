@@ -1,0 +1,59 @@
+# The number of samples to run per experiment.
+# At least 100 is recommended in order to observe space leaks
+samples: 100
+
+buildTool: cabal
+
+# Output folder for the experiments
+outputFolder: bench-results
+
+# Example project used to run the experiments
+# Can either be a Hackage package (name,version)
+# or a local project (path) with a valid `hie.yaml` file
+examples:
+  # Medium-sized project without TH
+  - name: Cabal
+    version: 3.0.0.0
+    module: Distribution/Simple.hs
+  # Small-sized project with TH
+  - name: haskell-lsp-types
+    version: 0.22.0.0
+    module: src/Language/Haskell/LSP/Types/Lens.hs
+# - path: path-to-example
+#   module: path-to-module
+
+# The set of experiments to execute
+experiments:
+    - hover
+    - edit
+    - getDefinition
+    - "hover after edit"
+    - "completions after edit"
+    - "code actions"
+    - "code actions after edit"
+    - "documentSymbols after edit"
+
+# An ordered list of versions to analyze
+versions:
+# A version can be defined briefly:
+# - <tag>
+# - <branch>
+# - <commit hash>
+
+# Or in extended form, where all the fields are optional:
+# - <name>:
+#    git: <tag/branch/commithash>
+#    include: true                   # whether to include in comparison graphs
+#    parent: <tag/branch/commithash> # version to compare with in .diff graphs
+
+
+# - v0.0.5
+# - v0.0.6
+# - v0.1.0
+# - v0.2.0
+# - v0.3.0
+# - v0.4.0
+# - v0.5.0
+# - v0.6.0
+# - upstream: origin/master
+- HEAD

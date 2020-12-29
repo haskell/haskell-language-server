@@ -1,6 +1,7 @@
 packages:
          ./
-         ./ghcide/hie-compat
+         ./hie-compat
+         ./shake-bench
          ./ghcide
          ./hls-plugin-api
          ./plugins/tactics
@@ -23,4 +24,16 @@ write-ghc-environment-files: never
 
 index-state: 2020-12-13T11:31:58Z
 
-allow-newer: data-tree-print:base
+allow-newer:
+	active:base,
+  data-tree-print:base,
+	diagrams-contrib:base,
+	diagrams-core:base,
+	diagrams-lib:base,
+	diagrams-postscript:base,
+  diagrams-svg:base,
+	dual-tree:base,
+	force-layout:base,
+	monoid-extras:base,
+	statestack:base,
+	svg-builder:base
