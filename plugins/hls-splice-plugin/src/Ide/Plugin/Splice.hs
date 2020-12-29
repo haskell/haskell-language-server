@@ -74,21 +74,20 @@ codeAction _ state plId docId _ _ =
         theUri = docId ^. J.uri
         go ast = forM (flattenAst ast) $ \Node {..} -> do
             let NodeInfo {..} = nodeInfo
-            when (Set.size nodeAnnotations == 1) $ do
-                -- (cons, typ)
-                let spCxt = case head $ Set.toList nodeAnnotations of
-                        ("SplicePat", "Pat") -> Just Pat
-                        ("HsSpliceE", "HsExpr") -> Just Expr
-                        ("HsSpliceTy", "HsType") -> Just HsType
-                        ("SpliceD", "HsDecl") -> Just HsDecl
-                        _ -> Nothing
-                forM_ spCxt $ \spliceContext -> forM_ expandStyles $ \(_style, title, cmdId) ->
-                    let range = realSrcSpanToRange nodeSpan
-                        params = ExpandSpliceParams {uri = theUri, ..}
-                     in CACodeAction
-                            . CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing
-                            . Just
-                            <$> liftIO (mkLspCommand plId cmdId title (Just [toJSON params]))
+                spCxt
+                    | ("SplicePat", "Pat") `Set.member` nodeAnnotations =
+                        Just Pat
+                    | ("HsSpliceE", "HsExpr") `Set.member` nodeAnnotations = Just Expr
+                    | ("HsSpliceTy", "HsType") `Set.member` nodeAnnotations = Just HsType
+                    | ("SpliceD", "HsDecl") `Set.member` nodeAnnotations = Just HsDecl
+                    | otherwise = Nothing
+            forM_ spCxt $ \spliceContext -> forM_ expandStyles $ \(_style, title, cmdId) ->
+                let range = realSrcSpanToRange nodeSpan
+                    params = ExpandSpliceParams {uri = theUri, ..}
+                 in CACodeAction
+                        . CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing
+                        . Just
+                        <$> liftIO (mkLspCommand plId cmdId title (Just [toJSON params]))
 
 expandStyles :: [(ExpandStyle, T.Text, CommandId)]
 expandStyles =
