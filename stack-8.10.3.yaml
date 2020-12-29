@@ -3,13 +3,15 @@ compiler: ghc-8.10.3
 
 packages:
 - .
-- ./ghcide/hie-compat
+- ./hie-compat
 - ./ghcide/
 - ./hls-plugin-api
-- ./plugins/tactics
-- ./plugins/hls-hlint-plugin
+# - ./shake-bench
+- ./plugins/hls-class-plugin
 - ./plugins/hls-explicit-imports-plugin
+- ./plugins/hls-hlint-plugin
 - ./plugins/hls-retrie-plugin
+- ./plugins/tactics
 
 ghc-options:
   "$everything": -haddock
@@ -33,6 +35,14 @@ extra-deps:
 - stylish-haskell-0.12.2.0
 - semigroups-0.18.5
 - temporary-1.2.1.1
+
+configure-options:
+  ghcide:
+      - --disable-library-for-ghci
+  haskell-language-server:
+      - --disable-library-for-ghci
+  heapsize:
+      - --disable-library-for-ghci
 
 flags:
   haskell-language-server:
