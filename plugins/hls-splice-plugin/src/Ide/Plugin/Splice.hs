@@ -57,8 +57,16 @@ expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
     CommandFunction ExpandSpliceParams
-expandTHSplice _eStyle _ _ params@ExpandSpliceParams {..} = do
-    debugm $ "Expanding splice for " <> show params <> " (lie!)"
+expandTHSplice _eStyle lsp _ params@ExpandSpliceParams {..} = do
+    sendFunc lsp $
+        NotShowMessage $
+            NotificationMessage "2.0" WindowShowMessage $
+                ShowMessageParams MtInfo $
+                    T.unlines
+                        [ "## Expanding splice for: "
+                        , "-" <> T.pack (show params)
+                        , "(lie)"
+                        ]
     pure (Right Null, Nothing)
 
 codeAction :: CodeActionProvider
