@@ -1,0 +1,4 @@
+ghcide
+ghcide-bench
+ghcide-preprocessor
+*.benchmark-gcStats

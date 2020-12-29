@@ -1,0 +1,22 @@
+cradle:
+  multi:
+    - path: "./test/data"
+      config: { cradle: { none:  } }
+    - path: "./"
+      config:
+        cradle:
+          stack:
+            - path: "./src"
+              component: "ghcide:lib"
+            - path: "./exe"
+              component: "ghcide:exe:ghcide"
+            - path: "./session-loader"
+              component: "ghcide:lib"
+            - path: "./test"
+              component: "ghcide:test:ghcide-tests"
+            - path: "./bench"
+              component: "ghcide:exe:ghcide-bench"
+            - path: "./bench/Hist"
+              component: "ghcide:bench:benchHist"
+            - path: "./test/preprocessor"
+              component: "ghcide:exe:ghcide-test-preprocessor"

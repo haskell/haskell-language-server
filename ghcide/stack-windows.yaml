@@ -1,0 +1,64 @@
+resolver: nightly-2020-06-19
+
+packages:
+- .
+- ./hie-compat/
+extra-deps:
+- haskell-lsp-0.22.0.0
+- haskell-lsp-types-0.22.0.0
+- lsp-test-0.11.0.6
+- ghc-check-0.5.0.1
+- hie-bios-0.7.1
+- ghc-events-0.13.0
+- ghc-trace-events-0.1.2.1
+- heapsize-0.3.0
+- opentelemetry-0.6.1
+- opentelemetry-extra-0.6.1
+
+# not yet in stackage
+- Chart-diagrams-1.9.3
+- SVGFonts-1.7.0.1
+- diagrams-1.4
+- diagrams-svg-1.4.3
+- diagrams-contrib-1.4.4
+- diagrams-core-1.4.2
+- diagrams-lib-1.4.3
+- diagrams-postscript-1.5
+- monoid-extras-0.5.1
+- svg-builder-0.1.1
+- active-0.2.0.14
+- dual-tree-0.2.2.1
+- force-layout-0.4.0.6
+- statestack-0.3
+- implicit-hie-0.1.2.5
+- implicit-hie-cradle-0.3.0.2
+
+nix:
+  packages: [zlib]
+
+configure-options:
+    ghcide:
+        - --disable-library-for-ghci
+    heapsize:
+        - --disable-library-for-ghci
+# Otherwise the ghcide build will fail with:
+# ```
+# ghcide                           > ghc.exe: unable to load package `heapsize-0.2'
+# ghcide                           > ghc-iserv:  | D:\a\1\s\.stack-work\install\52d658b2\lib\x86_64-windows-ghc-8.10.1\heapsize-0.2-KCPoGpPDcevACNftTTY2at\HSheapsize-0.2-KCPoGpPDcevACNftTTY2at.o: unknown symbol `heap_view_closurePtrs'
+#
+# Cause:
+# The pre-linked object file is missing the heapsize_prim.o symbols table (from the cbits object)
+#
+# Reason: Not sure, maybe the ld invocation is stripping too much
+#
+# Fix: do not generate the pre-linked object to prevent ghc from using it at link time.
+#      There are two instances where this must be prevented:
+#         1. When linking the ghcide library (using the heapsize pre-linked object)
+#         2. When linking the ghcide executable (using the ghcide pre-linked object)
+#
+# Quoting https://downloads.haskell.org/ghc/latest/docs/html/users_guide/packages.html
+#
+# > To load a package foo, GHCi can load its libHSfoo.a library directly, but it can also load a package in the form of a single HSfoo.o file that has been pre-linked. Loading the .o file is slightly quicker, but at the expense of having another copy of the compiled package. The rule of thumb is that if the modules of the package were compiled with -split-sections then building the HSfoo.o is worthwhile because it saves time when loading the package into GHCi. Without -split-sections, there is not much difference in load time between the .o and .a libraries, so it is better to save the disk space and only keep the .a around. In a GHC distribution we provide .o files for most packages except the GHC package itself.
+# > The HSfoo.o file is built by Cabal automatically; use --disable-library-for-ghci to disable it. To build one manually, the following GNU ld command can be used:
+
+# > ld -r --whole-archive -o HSfoo.o libHSfoo.a
