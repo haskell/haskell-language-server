@@ -11,7 +11,7 @@
 module Main (main) where
 
 import Control.Applicative.Combinators
-import Control.Exception (catch)
+import Control.Exception (bracket_, catch)
 import qualified Control.Lens as Lens
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
@@ -41,7 +41,7 @@ import Language.Haskell.LSP.Types.Capabilities
 import qualified Language.Haskell.LSP.Types.Lens as Lsp (diagnostics, params, message)
 import Language.Haskell.LSP.VFS (applyChange)
 import Network.URI
-import System.Environment.Blank (getEnv, setEnv)
+import System.Environment.Blank (unsetEnv, getEnv, setEnv)
 import System.FilePath
 import System.IO.Extra hiding (withTempDir)
 import qualified System.IO.Extra
@@ -58,8 +58,10 @@ import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import System.Time.Extra
 import Development.IDE.Plugin.CodeAction (typeSignatureCommandId, blockCommandId, matchRegExMultipleImports)
-import Development.IDE.Plugin.Test (WaitForIdeRuleResult(..), TestRequest(WaitForIdeRule, BlockSeconds,GetInterfaceFilesDir))
+import Development.IDE.Plugin.Test (WaitForIdeRuleResult(..), TestRequest(BlockSeconds,GetInterfaceFilesDir))
 import Control.Monad.Extra (whenJust)
+import qualified Language.Haskell.LSP.Types.Lens as L
+import Control.Lens ((^.))
 
 main :: IO ()
 main = do
@@ -629,11 +631,6 @@ cancellationTemplate (edit, undoEdit) mbKey = testCase (maybe "-" fst mbKey) $ r
     where
         -- similar to run except it disables kick
         runTestNoKick s = withTempDir $ \dir -> runInDir' dir "." "." ["--test-no-kick"] s
-
-        waitForAction key TextDocumentIdentifier{_uri} = do
-            waitId <- sendRequest (CustomClientMethod "test") (WaitForIdeRule key _uri)
-            ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId waitId
-            return _result
 
         typeCheck doc = do
             Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
@@ -3479,17 +3476,19 @@ simpleSubDirectoryTest =
     expectNoMoreDiagnostics 0.5
 
 simpleMultiTest :: TestTree
-simpleMultiTest = testCase "simple-multi-test" $ runWithExtraFiles "multi" $ \dir -> do
+simpleMultiTest = testCase "simple-multi-test" $ withLongTimeout $ runWithExtraFiles "multi" $ \dir -> do
     let aPath = dir </> "a/A.hs"
         bPath = dir </> "b/B.hs"
     aSource <- liftIO $ readFileUtf8 aPath
-    (TextDocumentIdentifier adoc) <- createDoc aPath "haskell" aSource
-    expectNoMoreDiagnostics 0.5
+    adoc <- createDoc aPath "haskell" aSource
+    Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" adoc
+    liftIO $ assertBool "A should typecheck" ideResultSuccess
     bSource <- liftIO $ readFileUtf8 bPath
     bdoc <- createDoc bPath "haskell" bSource
-    expectNoMoreDiagnostics 0.5
+    Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" bdoc
+    liftIO $ assertBool "B should typecheck" ideResultSuccess
     locs <- getDefinitions bdoc (Position 2 7)
-    let fooL = mkL adoc 2 0 2 3
+    let fooL = mkL (adoc ^. L.uri) 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
@@ -3855,6 +3854,9 @@ run' s = withTempDir $ \dir -> runInDir dir (s dir)
 runInDir :: FilePath -> Session a -> IO a
 runInDir dir = runInDir' dir "." "." []
 
+withLongTimeout :: IO a -> IO a
+withLongTimeout = bracket_ (setEnv "LSP_TIMEOUT" "120" True) (unsetEnv "LSP_TIMEOUT")
+
 -- | Takes a directory as well as relative paths to where we should launch the executable as well as the session root.
 runInDir' :: FilePath -> FilePath -> FilePath -> [String] -> Session a -> IO a
 runInDir' dir startExeIn startSessionIn extraOptions s = do
@@ -3875,18 +3877,18 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   setEnv "HOME" "/homeless-shelter" False
   let lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
   logColor <- fromMaybe True <$> checkEnv "LSP_TEST_LOG_COLOR"
+  timeoutOverride <- fmap read <$> getEnv "LSP_TIMEOUT"
+  let conf = defaultConfig{messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
+            -- uncomment this or set LSP_TEST_LOG_STDERR=1 to see all logging
+            --   { logStdErr = True }
+            --   uncomment this or set LSP_TEST_LOG_MESSAGES=1 to see all messages
+            --   { logMessages = True }
   runSessionWithConfig conf{logColor} cmd lspTestCaps projDir s
   where
     checkEnv :: String -> IO (Maybe Bool)
     checkEnv s = fmap convertVal <$> getEnv s
     convertVal "0" = False
     convertVal _ = True
-
-    conf = defaultConfig
-      -- uncomment this or set LSP_TEST_LOG_STDERR=1 to see all logging
-    --   { logStdErr = True }
-    --   uncomment this or set LSP_TEST_LOG_MESSAGES=1 to see all messages
-    --   { logMessages = True }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
