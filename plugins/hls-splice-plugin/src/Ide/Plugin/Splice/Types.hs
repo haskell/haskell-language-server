@@ -8,6 +8,7 @@ module Ide.Plugin.Splice.Types where
 
 import Data.Aeson (FromJSON (parseJSON), ToJSON (toJSON), withText)
 import Data.Function (on)
+import Data.Set (Set)
 import qualified Data.Text as T
 import Development.IDE (Range, Uri)
 import GHC.Generics (Generic)
