@@ -54,6 +54,10 @@ data LinkableType = ObjectLinkable | BCOLinkable
 -- | The parse tree for the file using GetFileContents
 type instance RuleResult GetParsedModule = ParsedModule
 
+-- | The parse tree for the file using GetFileContents,
+-- all comments included using Opt_KeepRawTokenStream
+type instance RuleResult GetParsedModuleWithComments = ParsedModule
+
 -- | The dependency information produced by following the imports recursively.
 -- This rule will succeed even if there is an error, e.g., a module could not be located,
 -- a module could not be parsed or an import cycle.
@@ -301,6 +305,12 @@ data GetParsedModule = GetParsedModule
 instance Hashable GetParsedModule
 instance NFData   GetParsedModule
 instance Binary   GetParsedModule
+
+data GetParsedModuleWithComments = GetParsedModuleWithComments
+    deriving (Eq, Show, Typeable, Generic)
+instance Hashable GetParsedModuleWithComments
+instance NFData   GetParsedModuleWithComments
+instance Binary   GetParsedModuleWithComments
 
 data GetLocatedImports = GetLocatedImports
     deriving (Eq, Show, Typeable, Generic)
