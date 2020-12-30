@@ -45,6 +45,7 @@ main = do
   hSetBuffering stderr LineBuffering
   config <- execParser $ info (configP <**> helper) fullDesc
   let ?config = config
+  hPrint stderr config
 
   output "starting test"
 

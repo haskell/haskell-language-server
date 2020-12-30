@@ -398,6 +398,11 @@ data SetupResult = SetupResult {
     cleanUp :: IO ()
 }
 
+callCommandLogging :: HasConfig => String -> IO ()
+callCommandLogging cmd = do
+    output cmd
+    callCommand cmd
+
 setup :: HasConfig => IO SetupResult
 setup = do
   alreadyExists <- doesDirectoryExist examplesPath
@@ -409,7 +414,8 @@ setup = do
             package = exampleName <> "-" <> showVersion exampleVersion
         case buildTool ?config of
             Cabal -> do
-                callCommand $ "cabal get -v0 " <> package <> " -d " <> examplesPath
+                let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
+                callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
                 writeFile
                     (path </> "hie.yaml")
                     ("cradle: {cabal: {component: " <> exampleName <> "}}")
@@ -421,7 +427,11 @@ setup = do
                     (path </> "cabal.project.local")
                     ""
             Stack -> do
-                callCommand $ "stack --silent unpack " <> package <> " --to " <> examplesPath
+                let stackVerbosity = case verbosity ?config of
+                        Quiet -> "--silent"
+                        Normal -> ""
+                        All -> "--verbose"
+                callCommandLogging $ "stack " <> stackVerbosity <> " unpack " <> package <> " --to " <> examplesPath
                 -- Generate the stack descriptor to match the one used to build ghcide
                 stack_yaml <- fromMaybe "stack.yaml" <$> getEnv "STACK_YAML"
                 stack_yaml_lines <- lines <$> readFile stack_yaml
