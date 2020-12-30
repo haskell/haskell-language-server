@@ -1,7 +1,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -10,32 +14,45 @@ module Ide.Plugin.Splice
     )
 where
 
-import Control.Lens hiding (List, use)
+import Control.Exception (SomeException)
+import Control.Lens (ifoldMap, (%~), (<&>), (^.))
+import Control.Lens.At
 import Control.Monad
+import qualified Control.Monad.Fail as Fail
+import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Writer.CPS
 import Data.Aeson
 import qualified Data.DList as DL
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Ap (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.String
 import qualified Data.Text as T
 import Development.IDE
 import Development.IDE.Core.PositionMapping
 import Development.IDE.GHC.Compat hiding (getLoc)
+import Exception (gtry)
+import GhcMonad
 import GhcPlugins hiding (Var, getLoc, (<>))
-import Ide.Logger (debugm)
 import Ide.Plugin
 import Ide.Plugin.Splice.Types
     ( ExpandSpliceParams (..),
       ExpandStyle (..),
       SpliceContext (Expr, HsDecl, HsType, Pat),
     )
+import Ide.TreeTransform
 import Ide.Types
+import Language.Haskell.GHC.ExactPrint (Annotation (..), TransformT, getEntryDPT, modifyAnnsT, setPrecedingLines, uniqueSrcSpanT)
+import qualified Language.Haskell.GHC.ExactPrint.Parsers as Exact
+import Language.Haskell.GHC.ExactPrint.Types (Comment (Comment), mkAnnKey)
 import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as J
+import RnSplice
+import TcRnMonad
 
 descriptor :: PluginId -> PluginDescriptor
 descriptor plId =
@@ -65,27 +82,183 @@ expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
     CommandFunction ExpandSpliceParams
-expandTHSplice _eStyle lsp _ params@ExpandSpliceParams {..} = do
-    sendFunc lsp $
-        NotShowMessage $
-            NotificationMessage "2.0" WindowShowMessage $
-                ShowMessageParams MtInfo $
-                    T.unlines
-                        [ "## Expanding splice for: "
-                        , "-" <> T.pack (show (_eStyle, params))
-                        , "(lie)"
-                        ]
-    pure (Right Null, Nothing)
+expandTHSplice eStyle lsp ideState params@ExpandSpliceParams {..} =
+    fmap (fromMaybe defaultResult) $
+        runMaybeT $ do
+            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
+            TcModuleResult {tmrParsed = pm, ..} <-
+                MaybeT $
+                    runAction "expandTHSplice.TypeCheck" ideState $
+                        use TypeCheck fp
+            ps <-
+                MaybeT $
+                    useAnnotatedSource
+                        "expandTHSplice.AnnotedSource"
+                        ideState
+                        fp
+            hscEnvEq <-
+                lift $
+                    runAction "expandTHSplice.ghcSessionDeps" ideState $
+                        use_ GhcSessionDeps fp
+            let hscEnv0 = hscEnvWithImportPaths hscEnvEq
+                modSum = pm_mod_summary pm
+            hscEnv <- lift $
+                evalGhcEnv hscEnv0 $ do
+                    env <- getSession
+                    df <- liftIO $ setupDynFlagsForGHCiLike env $ ms_hspp_opts modSum
+
+                    let impPaths = fromMaybe (importPaths df) (envImportPaths hscEnvEq)
+
+                    -- Set the modified flags in the session
+                    _lp <- setSessionDynFlags df {importPaths = impPaths}
+
+                    -- copy the package state to the interactive DynFlags
+                    idflags <- getInteractiveDynFlags
+                    setInteractiveDynFlags $
+                        idflags
+                            { pkgState = pkgState df
+                            , pkgDatabase = pkgDatabase df
+                            , packageFlags = packageFlags df
+                            , useColor = Never
+                            , canUseColor = False
+                            }
+                    env' <- getSession
+                    resl <- load LoadAllTargets
+                    case resl of
+                        Succeeded -> do
+                            setContext [IIModule $ moduleName $ ms_mod modSum]
+                                `gcatch` \(e :: SomeException) ->
+                                    reportEditor
+                                        lsp
+                                        MtWarning
+                                        ["Setting failure: ", T.pack $ show e]
+                            getSession
+                        Failed -> pure env'
+
+            let dflags = hsc_dflags hscEnv
+                srcSpan = rangeToRealSrcSpan range $ fromString $ fromNormalizedFilePath fp
+            ((warns, errs), mEdits) <- liftIO $
+                initTcWithGbl hscEnv tmrTypechecked srcSpan $
+                    case spliceContext of
+                        Expr -> do
+                            let g = graftWithSmallestM (RealSrcSpan srcSpan) $ \case
+                                    inp@(L _spn (HsSpliceE _ spl)) -> do
+                                        eExpr <- lift $ gtry @_ @SomeException (fst <$> rnSpliceExpr spl)
+                                        case eExpr of
+                                            Left exc ->
+                                                lift $
+                                                    Nothing
+                                                        <$ reportEditor
+                                                            lsp
+                                                            MtError
+                                                            [ "Error during expanding splice"
+                                                            , ""
+                                                            , T.pack (show exc)
+                                                            ]
+                                            Right expr' ->
+                                                case eStyle of
+                                                    Inplace -> do
+                                                        Just <$> unRenamedE dflags expr'
+                                                    Commented -> do
+                                                        let expanded = showSDoc dflags $ ppr expr'
+                                                        dPos <- getEntryDPT inp
+                                                        uniq <- uniqueSrcSpanT
+                                                        modifyAnnsT $
+                                                            ix (mkAnnKey inp)
+                                                                %~ \ann ->
+                                                                    ann
+                                                                        { annFollowingComments =
+                                                                            (Comment expanded uniq Nothing, dPos) :
+                                                                            annFollowingComments ann
+                                                                        }
+                                                        pure $ Just inp
+                                    _ -> pure Nothing
+                            transformM dflags (clientCapabilities lsp) uri g ps
+                        HsDecl -> undefined
+                        Pat -> undefined
+                        HsType -> undefined
+
+            unless (null errs) $
+                reportEditor
+                    lsp
+                    MtError
+                    [ "Error during expanding splice:"
+                    , T.pack $ show errs
+                    ]
+            guard $ not $ null errs
+            unless (null warns) $
+                reportEditor
+                    lsp
+                    MtWarning
+                    [ "Warning during expanding splice:"
+                    , T.pack $ show warns
+                    ]
+            pure
+                ( Right Null
+                , mEdits <&> \edits ->
+                    (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
+                )
+    where
+        defaultResult = (Right Null, Nothing)
+
+-- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
+reportEditor :: MonadIO m => LspFuncs a -> MessageType -> [T.Text] -> m ()
+reportEditor lsp msgTy msgs =
+    liftIO $
+        sendFunc lsp $
+            NotShowMessage $
+                NotificationMessage "2.0" WindowShowMessage $
+                    ShowMessageParams msgTy $
+                        T.unlines msgs
+
+setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
+setupDynFlagsForGHCiLike env dflags = do
+    let dflags3 =
+            dflags
+                { hscTarget = HscInterpreted
+                , ghcMode = CompManager
+                , ghcLink = LinkInMemory
+                }
+        platform = targetPlatform dflags3
+        dflags3a = updateWays $ dflags3 {ways = interpWays}
+        dflags3b =
+            foldl gopt_set dflags3a $
+                concatMap (wayGeneralFlags platform) interpWays
+        dflags3c =
+            foldl gopt_unset dflags3b $
+                concatMap (wayUnsetGeneralFlags platform) interpWays
+        dflags4 =
+            dflags3c
+                `gopt_set` Opt_ImplicitImportQualified
+                `gopt_set` Opt_IgnoreOptimChanges
+                `gopt_set` Opt_IgnoreHpcChanges
+                `gopt_unset` Opt_DiagnosticsShowCaret
+    initializePlugins env dflags4
+
+unRenamedE ::
+    Fail.MonadFail m =>
+    DynFlags ->
+    HsExpr GhcRn ->
+    TransformT m (LHsExpr GhcPs)
+unRenamedE dflags expr = do
+    uniq <- show <$> uniqueSrcSpanT
+    (anns, expr') <-
+        either (fail . show) pure $
+            Exact.parseExpr dflags uniq $
+                showSDoc dflags $ ppr expr
+    let _anns' = setPrecedingLines expr' 0 1 anns
+    -- modifyAnnsT $ mappend anns'
+    pure expr'
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: CodeActionProvider
-codeAction lsp state plId docId range0 _ =
+codeAction _ state plId docId range0 _ =
     fmap (maybe (Right $ List []) Right) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
             (getAsts . hieAst -> asts, posMap) <-
-                MaybeT . runAction "splice" state $
+                MaybeT . runAction "splice.codeAction.GitHieAst" state $
                     useWithStale GetHieAst fp
             ran' <-
                 MaybeT $
@@ -95,15 +268,9 @@ codeAction lsp state plId docId range0 _ =
                 execWriterT $
                     getAp $ ifoldMap (fmap Ap . go ran') asts
     where
-        sloc pos fs = mkRealSrcLoc fs (line pos + 1) (cha pos + 1)
-        sp ran fs = mkRealSrcSpan (sloc (_start ran) fs) (sloc (_end ran) fs)
-        line ran = _line ran
-        cha ran = _character ran
-
         theUri = docId ^. J.uri
         go ran' fs ast = do
-            trace ("astanns: " <> show (foldMap (DL.singleton . nodeAnnotations . nodeInfo) (flattenAst ast))) $ pure ()
-            forM_ (smallestContainingSatisfying (sp ran' fs) isSpliceNode ast) $
+            forM_ (smallestContainingSatisfying (rangeToRealSrcSpan ran' fs) isSpliceNode ast) $
                 \Node {..} -> do
                     let NodeInfo {..} = nodeInfo
                         spCxt
@@ -123,6 +290,18 @@ codeAction lsp state plId docId range0 _ =
                             DL.singleton $
                                 CACodeAction $
                                     CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing (Just act)
+
+posToRealSrcLoc :: Position -> FastString -> RealSrcLoc
+posToRealSrcLoc pos fs = mkRealSrcLoc fs (line + 1) (col + 1)
+    where
+        line = _line pos
+        col = _character pos
+
+rangeToRealSrcSpan :: Range -> FastString -> RealSrcSpan
+rangeToRealSrcSpan ran fs =
+    mkRealSrcSpan
+        (posToRealSrcLoc (_start ran) fs)
+        (posToRealSrcLoc (_end ran) fs)
 
 isSpliceNode :: HieAST Type -> Bool
 isSpliceNode Node {..} =
