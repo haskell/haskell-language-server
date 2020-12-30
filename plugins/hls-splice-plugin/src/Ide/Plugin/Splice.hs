@@ -78,7 +78,7 @@ commentedCmdName = "expand TemplateHaskell Splice (comented-out)"
 commands :: [PluginCommand]
 commands =
     [ PluginCommand expandInplaceId inplaceCmdName $ expandTHSplice Inplace
-    , PluginCommand expandCommentedId commentedCmdName $ expandTHSplice Commented
+    -- , PluginCommand expandCommentedId commentedCmdName $ expandTHSplice Commented
     ]
 
 expandTHSplice ::
@@ -361,5 +361,5 @@ spliceAnns =
 expandStyles :: [(ExpandStyle, T.Text, CommandId)]
 expandStyles =
     [ (Inplace, inplaceCmdName, expandInplaceId)
-    , (Commented, commentedCmdName, expandCommentedId)
+    -- , (Commented, commentedCmdName, expandCommentedId)
     ]
