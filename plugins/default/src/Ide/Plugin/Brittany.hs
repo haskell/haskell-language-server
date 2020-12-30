@@ -8,17 +8,17 @@ import           Data.Semigroup
 import           Data.Text                             (Text)
 import qualified Data.Text                             as T
 import           Development.IDE
+-- import           Development.IDE.Plugin.Formatter
 import           Language.Haskell.Brittany
 import           Language.Haskell.LSP.Types            as J
 import qualified Language.Haskell.LSP.Types.Lens       as J
-import           Ide.Plugin.Formatter
 import           Ide.PluginUtils
 import           Ide.Types
 
 import           System.FilePath
 import           Data.Maybe (maybeToList)
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginFormattingProvider = Just provider
   }
@@ -27,7 +27,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider
-  :: FormattingProvider IO
+  :: FormattingProvider IdeState IO
 provider _lf _ideState typ contents fp opts = do
 -- text uri formatType opts = pluginGetFile "brittanyCmd: " uri $ \fp -> do
   confFile <- liftIO $ getConfFile fp
