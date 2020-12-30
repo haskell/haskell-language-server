@@ -97,12 +97,12 @@ providerTests = testGroup "formatting provider" [
 
 stylishHaskellTests :: TestTree
 stylishHaskellTests = testGroup "stylish-haskell" [
-  goldenVsStringDiff "formats a document" goldenGitDiff "test/testdata/format/StylishHaksell.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
+  goldenVsStringDiff "formats a document" goldenGitDiff "test/testdata/format/StylishHaskell.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
       doc <- openDoc "StylishHaskell.hs" "haskell"
       formatDoc doc (FormattingOptions 2 True)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  , goldenVsStringDiff "formats a range" goldenGitDiff "test/testdata/format/StylishHaksell.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
+  , goldenVsStringDiff "formats a range" goldenGitDiff "test/testdata/format/StylishHaskell.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
       doc <- openDoc "StylishHaskell.hs" "haskell"
       formatRange doc (FormattingOptions 2 True) (Range (Position 0 0) (Position 2 21))
