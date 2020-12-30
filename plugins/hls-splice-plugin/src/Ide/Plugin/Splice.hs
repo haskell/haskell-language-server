@@ -48,7 +48,6 @@ import Ide.Plugin.Splice.Types
 import Ide.TreeTransform
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint (TransformT, setPrecedingLines, uniqueSrcSpanT)
-import qualified Language.Haskell.GHC.ExactPrint.Parsers as Exact
 import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
