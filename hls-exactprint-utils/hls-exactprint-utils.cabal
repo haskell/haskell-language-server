@@ -1,0 +1,47 @@
+cabal-version: 2.2
+name:          hls-exactprint-utils
+version:       0.5.0.1
+synopsis:      Common residence package of ExactPrint related tree-transformation utilities for HLS plugins (ported from tactics plugin).
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+homepage:      https://github.com/haskell/haskell-language-server/hls-exactprint-utils
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
+author:        Sandy Maguire, Reed Mullanix
+maintainer:    sandy@sandymaguire.me
+copyright:     Sandy Maguire, Reed Mullanix
+category:      Web
+build-type:    Simple
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
+
+library
+  exposed-modules:
+    Ide.TreeTransform
+
+  hs-source-dirs:   src
+  build-depends:
+      base                  >=4.12    && <5
+    , ghc
+    , ghc-exactprint
+    , ghcide
+    , haskell-lsp-types
+    , hls-plugin-api
+    , retrie
+    , syb
+    , text
+    , transformers
+
+
+  ghc-options:      -Wall -Wredundant-constraints -Wincomplete-uni-patterns
+
+  if flag(pedantic)
+    ghc-options: -Werror
+
+  default-language: Haskell2010
