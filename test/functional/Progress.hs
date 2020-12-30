@@ -41,14 +41,14 @@ tests =
                 _ <- sendRequest WorkspaceExecuteCommand $ ExecuteCommandParams (cmd ^. L.command) (decode $ encode $ fromJust $ cmd ^. L.arguments) Nothing
                 expectProgressReports ["Evaluating"]
         , testCase "ormolu plugin sends progress notifications" $ do
-            runSession hlsCommand progressCaps "test/testdata" $ do
+            runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
                 doc <- openDoc "Format.hs" "haskell"
                 expectProgressReports ["Setting up testdata (for Format.hs)", "Processing"]
                 _ <- sendRequest TextDocumentFormatting $ DocumentFormattingParams doc (FormattingOptions 2 True) Nothing
                 expectProgressReports ["Formatting Format.hs"]
         , testCase "fourmolu plugin sends progress notifications" $ do
-            runSession hlsCommand progressCaps "test/testdata" $ do
+            runSession hlsCommand progressCaps "test/testdata/format" $ do
                 sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
                 doc <- openDoc "Format.hs" "haskell"
                 expectProgressReports ["Setting up testdata (for Format.hs)", "Processing"]
