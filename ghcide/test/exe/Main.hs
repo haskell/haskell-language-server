@@ -3385,7 +3385,7 @@ cradleTests :: TestTree
 cradleTests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
-    ,testGroup "loading" [loadCradleOnlyonce]
+    ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
     ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2]
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
     ]
@@ -3411,6 +3411,43 @@ loadCradleOnlyonce = testGroup "load cradle only once"
             _ <- createDoc "A.hs" "haskell" "module A where\nimport LoadCradleBar"
             msgs <- manyTill (skipManyTill anyMessage cradleLoadedMessage) (skipManyTill anyMessage (message @PublishDiagnosticsNotification))
             liftIO $ length msgs @?= 0
+
+retryFailedCradle :: TestTree
+retryFailedCradle = testSession' "retry failed" $ \dir -> do
+  -- The false cradle always fails
+  let hieContents = "cradle: {bios: {shell: \"false\"}}"
+      hiePath = dir </> "hie.yaml"
+  liftIO $ writeFile hiePath hieContents
+  hieDoc <- createDoc hiePath "yaml" $ T.pack hieContents
+  let aPath = dir </> "A.hs"
+  doc <- createDoc aPath "haskell" "main = return ()"
+  Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  liftIO $ "Test assumption failed: cradle should error out" `assertBool` not ideResultSuccess
+
+  -- Fix the cradle and typecheck again
+  let validCradle = "cradle: {bios: {shell: \"echo A.hs\"}}"
+  liftIO $ writeFileUTF8 hiePath $ T.unpack validCradle
+  changeDoc
+    hieDoc
+    [ TextDocumentContentChangeEvent
+        { _range = Nothing,
+          _rangeLength = Nothing,
+          _text = validCradle
+        }
+    ]
+
+  -- Force a session restart by making an edit, just to dirty the typecheck node
+  changeDoc
+    doc
+    [ TextDocumentContentChangeEvent
+        { _range = Just Range {_start = Position 0 0, _end = Position 0 0},
+          _rangeLength = Nothing,
+          _text = "\n"
+        }
+    ]
+
+  Right WaitForIdeRuleResult {..} <- waitForAction "TypeCheck" doc
+  liftIO $ "No joy after fixing the cradle" `assertBool` ideResultSuccess
 
 
 dependentFileTest :: TestTree
