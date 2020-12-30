@@ -25,6 +25,7 @@ library
                   , ghcide
                   , lens
                   , dlist
+                  , retrie
                   , shake
                   , text
                   , transformers
