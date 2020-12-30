@@ -20,7 +20,7 @@ let
             shake-bench = gitignoreSource ../shake-bench;
             hie-compat = gitignoreSource ../hie-compat;
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
-            hls-plugin-api = gitignoreSource ../hls-exactprint-utils;
+            hls-exactprint-utils = gitignoreSource ../hls-exactprint-utils;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
             hls-explicit-imports-plugin = gitignoreSource ../plugins/hls-explicit-imports-plugin;
