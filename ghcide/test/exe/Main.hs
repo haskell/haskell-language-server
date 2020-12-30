@@ -1207,6 +1207,46 @@ extendImportTests = testGroup "extend import actions"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
+        , testSession "extend single line import with method within class" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "class C a where"
+                    , "  m1 :: a -> a"
+                    , "  m2 :: a -> a"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m1))"
+                    , "b = m2"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            ["Add C(m2) to the import list of ModuleA",
+             "Add m2 to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m2, m1))"
+                    , "b = m2"
+                    ])
+        , testSession "extend single line import with method without class" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "class C a where"
+                    , "  m1 :: a -> a"
+                    , "  m2 :: a -> a"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m1))"
+                    , "b = m2"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            ["Add m2 to the import list of ModuleA",
+             "Add C(m2) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (m2, C(m1))"
+                    , "b = m2"
+                    ])
         , testSession "extend import list with multiple choices" $ template
             [("ModuleA.hs", T.unlines
                     --  this is just a dummy module to help the arguments needed for this test
@@ -1296,6 +1336,8 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable.Internal (Typeable)"
       -- package not in scope
     , test False []         "f = quickCheck"              []                "import Test.QuickCheck (quickCheck)"
+      -- don't omit the parent data type of a constructor
+    , test False []         "f ExitSuccess = ()"          []                "import System.Exit (ExitSuccess)"
     ]
   , testGroup "want suggestion"
     [ wantWait  []          "f = foo"                     []                "import Foo (foo)"
@@ -1316,6 +1358,7 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f :: Alternative f => f ()"  ["f = undefined"] "import Control.Applicative (Alternative)"
     , test True []          "f :: Alternative f => f ()"  ["f = undefined"] "import Control.Applicative"
     , test True []          "f = empty"                   []                "import Control.Applicative (Alternative(empty))"
+    , test True []          "f = empty"                   []                "import Control.Applicative (empty)"
     , test True []          "f = empty"                   []                "import Control.Applicative"
     , test True []          "f = (&)"                     []                "import Data.Function ((&))"
     , test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
@@ -1326,6 +1369,7 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = [] & id"                 []                "import Data.Function ((&))"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
+    , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
     ]
   ]
   where

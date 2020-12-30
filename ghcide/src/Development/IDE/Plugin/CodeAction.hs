@@ -48,6 +48,8 @@ import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
 import Data.Char
 import Data.Maybe
 import Data.List.Extra
+import Data.List.NonEmpty (NonEmpty((:|)))
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
 import Outputable (ppr, showSDocUnsafe)
@@ -620,9 +622,13 @@ suggestExtendImport exportsMap contents Diagnostic{_range=_range,..}
                    in x{_end = (_end x){_character = succ (_character (_end x))}}
                 _ -> error "bug in srcspan parser",
             importLine <- textInRange range c,
-            Just ident <- lookupExportMap binding mod,
-            Just result <- addBindingToImportList ident importLine
-            = [("Add " <> renderIdentInfo ident <> " to the import list of " <> mod, [TextEdit range result])]
+            Just ident <- lookupExportMap binding mod
+          = [ ( "Add " <> rendered <> " to the import list of " <> mod
+              , [TextEdit range result]
+              )
+            | importStyle <- NE.toList $ importStyles ident
+            , let rendered = renderImportStyle importStyle
+            , result <- maybeToList $ addBindingToImportList importStyle importLine]
           | otherwise = []
         lookupExportMap binding mod
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
@@ -931,13 +937,15 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
   , suggestion <- renderNewImport identInfo m
   ]
  where
+  renderNewImport :: IdentInfo -> T.Text -> [T.Text]
   renderNewImport identInfo m
     | Just q <- qual
     , asQ <- if q == m then "" else " as " <> q
     = ["import qualified " <> m <> asQ]
     | otherwise
-    = ["import " <> m <> " (" <> renderIdentInfo identInfo <> ")"
-      ,"import " <> m ]
+    = ["import " <> m <> " (" <> renderImportStyle importStyle <> ")"
+      | importStyle <- NE.toList $ importStyles identInfo] ++
+      ["import " <> m ]
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
 canUseIdent NotInScopeDataConstructor{} = isDatacon
@@ -1078,15 +1086,18 @@ rangesForBinding' _ _ = []
 --       import (qualified) A (..) ..
 --   Places the new binding first, preserving whitespace.
 --   Copes with multi-line import lists
-addBindingToImportList :: IdentInfo -> T.Text -> Maybe T.Text
-addBindingToImportList IdentInfo {parent = _parent, ..} importLine =
+addBindingToImportList :: ImportStyle -> T.Text -> Maybe T.Text
+addBindingToImportList importStyle importLine =
   case T.breakOn "(" importLine of
     (pre, T.uncons -> Just (_, rest)) ->
-      case _parent of
-        -- the binding is not a constructor, add it to the head of import list
-        Nothing -> Just $ T.concat [pre, "(", rendered, addCommaIfNeeds rest]
-        Just parent -> case T.breakOn parent rest of
-          -- the binding is a constructor, and current import list contains its parent
+      case importStyle of
+        ImportTopLevel rendered ->
+          -- the binding has no parent, add it to the head of import list
+          Just $ T.concat [pre, "(", rendered, addCommaIfNeeds rest]
+        ImportViaParent rendered parent -> case T.breakOn parent rest of
+          -- the binding has a parent, and the current import list contains the
+          -- parent
+          --
           -- `rest'` could be 1. `,...)`
           --               or 2. `(),...)`
           --               or 3. `(ConsA),...)`
@@ -1178,7 +1189,43 @@ matchRegExMultipleImports message = do
   imps <- regExImports imports
   return (binding, imps)
 
-renderIdentInfo :: IdentInfo -> T.Text
-renderIdentInfo IdentInfo {parent, rendered}
-  | Just p <- parent = p <> "(" <> rendered <> ")"
-  | otherwise        = rendered
+-- | Possible import styles for an 'IdentInfo'.
+--
+-- The first 'Text' parameter corresponds to the 'rendered' field of the
+-- 'IdentInfo'.
+data ImportStyle
+    = ImportTopLevel T.Text
+      -- ^ Import a top-level export from a module, e.g., a function, a type, a
+      -- class.
+      --
+      -- > import M (?)
+      --
+      -- Some exports that have a parent, like a type-class method or an
+      -- associated type/data family, can still be imported as a top-level
+      -- import.
+      --
+      -- Note that this is not the case for constructors, they must always be
+      -- imported as part of their parent data type.
+
+    | ImportViaParent T.Text T.Text
+      -- ^ Import an export (first parameter) through its parent (second
+      -- parameter).
+      --
+      -- import M (P(?))
+      --
+      -- @P@ and @?@ can be a data type and a constructor, a class and a method,
+      -- a class and an associated type/data family, etc.
+
+importStyles :: IdentInfo -> NonEmpty ImportStyle
+importStyles IdentInfo {parent, rendered, isDatacon}
+  | Just p <- parent
+    -- Constructors always have to be imported via their parent data type, but
+    -- methods and associated type/data families can also be imported as
+    -- top-level exports.
+  = ImportViaParent rendered p :| [ImportTopLevel rendered | not isDatacon]
+  | otherwise
+  = ImportTopLevel rendered :| []
+
+renderImportStyle :: ImportStyle -> T.Text
+renderImportStyle (ImportTopLevel x) = x
+renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
