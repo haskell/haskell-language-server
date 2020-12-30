@@ -166,18 +166,7 @@ common class
 
 common eval
   if flag(eval) || flag(all-plugins)
-    hs-source-dirs: plugins/default/src
-    other-modules:  Ide.Plugin.Eval
-                    Ide.Plugin.Eval.Code
-                    Ide.Plugin.Eval.CodeLens
-                    Ide.Plugin.Eval.GHC
-                    Ide.Plugin.Eval.Parse.Option
-                    Ide.Plugin.Eval.Parse.Parser
-                    Ide.Plugin.Eval.Parse.Section
-                    Ide.Plugin.Eval.Parse.Token
-                    Ide.Plugin.Eval.Types
-                    Ide.Plugin.Eval.Util
-    build-depends:
+    build-depends: hls-eval-plugin
     cpp-options: -Deval
 
 common importLens
@@ -306,14 +295,8 @@ executable haskell-language-server
     , safe-exceptions
     , shake                    >=0.17.5
     , temporary
-    , time
     , transformers
     , unordered-containers
-    , parser-combinators
-    , pretty-simple
-    , Diff
-    , QuickCheck
-    , ghc-paths
     , with-utf8
 
   include-dirs:     include
@@ -402,7 +385,7 @@ test-suite func-test
     , tasty-golden
     , tasty-rerun
 
-  hs-source-dirs:     test/functional plugins/tactics/src
+  hs-source-dirs:     test/functional plugins/tactics/src plugins/hls-eval-plugin/test
 
   main-is:            Main.hs
   other-modules:

@@ -1,45 +1,46 @@
 resolver: nightly-2020-12-09
 
 packages:
-- .
-- ./hie-compat
-- ./ghcide/
-- ./hls-plugin-api
-# - ./shake-bench
-- ./plugins/hls-class-plugin
-- ./plugins/hls-explicit-imports-plugin
-- ./plugins/hls-hlint-plugin
-- ./plugins/hls-retrie-plugin
-- ./plugins/tactics
+  - .
+  - ./hie-compat
+  - ./ghcide/
+  - ./hls-plugin-api
+  # - ./shake-bench
+  - ./plugins/hls-class-plugin
+  - ./plugins/hls-eval-plugin
+  - ./plugins/hls-explicit-imports-plugin
+  - ./plugins/hls-hlint-plugin
+  - ./plugins/hls-retrie-plugin
+  - ./plugins/tactics
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
-- brittany-0.13.1.0
-- Cabal-3.0.2.0
-- clock-0.7.2
-- data-tree-print-0.1.0.2@rev:2
-- floskell-0.10.4
-- fourmolu-0.3.0.0
-- heapsize-0.3.0
-- implicit-hie-cradle-0.3.0.2
-- implicit-hie-0.1.2.5
-- lsp-test-0.11.0.6
-- monad-dijkstra-0.1.1.2
-- refinery-0.3.0.0
-- retrie-0.1.1.1
-- stylish-haskell-0.12.2.0
-- semigroups-0.18.5
-- temporary-1.2.1.1
+  - brittany-0.13.1.0
+  - Cabal-3.0.2.0
+  - clock-0.7.2
+  - data-tree-print-0.1.0.2@rev:2
+  - floskell-0.10.4
+  - fourmolu-0.3.0.0
+  - heapsize-0.3.0
+  - implicit-hie-cradle-0.3.0.2
+  - implicit-hie-0.1.2.5
+  - lsp-test-0.11.0.6
+  - monad-dijkstra-0.1.1.2
+  - refinery-0.3.0.0
+  - retrie-0.1.1.1
+  - stylish-haskell-0.12.2.0
+  - semigroups-0.18.5
+  - temporary-1.2.1.1
 
 configure-options:
   ghcide:
-      - --disable-library-for-ghci
+    - --disable-library-for-ghci
   haskell-language-server:
-      - --disable-library-for-ghci
+    - --disable-library-for-ghci
   heapsize:
-      - --disable-library-for-ghci
+    - --disable-library-for-ghci
 
 flags:
   haskell-language-server:
@@ -48,6 +49,6 @@ flags:
     BuildExecutable: false
 
 nix:
-  packages: [ icu libcxx zlib ]
+  packages: [icu libcxx zlib]
 
 concurrent-tests: false

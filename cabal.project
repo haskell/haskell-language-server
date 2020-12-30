@@ -6,6 +6,7 @@ packages:
          ./hls-plugin-api
          ./plugins/tactics
          ./plugins/hls-class-plugin
+         ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-hlint-plugin
          ./plugins/hls-retrie-plugin
