@@ -18,36 +18,9 @@ executable symbols
   main-is:             Symbols.hs
   default-language:    Haskell2010
 
-
 executable hlintpragma
   build-depends:       base
   main-is:             HlintPragma.hs
-  default-language:    Haskell2010
-
-executable harecase
-  build-depends:       base
-  main-is:             HaReCase.hs
-  default-language:    Haskell2010
-
-executable haredemote
-  build-depends:       base
-  main-is:             HaReDemote.hs
-  default-language:    Haskell2010
-
-executable haremovedef
-  build-depends:       base
-  main-is:             HaReMoveDef.hs
-  default-language:    Haskell2010
-
-executable harerename
-  build-depends:       base
-  main-is:             HaReRename.hs
-  default-language:    Haskell2010
-
-executable haregenapplicative
-  build-depends:       base
-                     , parsec
-  main-is:             HaReGA1.hs
   default-language:    Haskell2010
 
 executable functests
