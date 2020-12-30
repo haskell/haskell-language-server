@@ -432,23 +432,25 @@ suggestAddTypeAnnotationToSatisfyContraints sourceOpt Diagnostic{_range=_range,.
 --       In the expression: seq "test" seq "test" (traceShow "test")
 --       In an equation for ‘f’:
 --          f = seq "test" seq "test" (traceShow "test")
-    | Just [ty, lit] <- matchRegexUnifySpaces _message (pat False False True)
-                        <|> matchRegexUnifySpaces _message (pat False False False)
+    | Just [ty, lit] <- matchRegexUnifySpaces _message (pat False False True False)
+                        <|> matchRegexUnifySpaces _message (pat False False False True)
+                        <|> matchRegexUnifySpaces _message (pat False False False False)
             = codeEdit ty lit (makeAnnotatedLit ty lit)
     | Just source <- sourceOpt
-    , Just [ty, lit] <- matchRegexUnifySpaces _message (pat True True False)
+    , Just [ty, lit] <- matchRegexUnifySpaces _message (pat True True False False)
             = let lit' = makeAnnotatedLit ty lit;
                   tir = textInRange _range source
               in codeEdit ty lit (T.replace lit lit' tir)
     | otherwise = []
     where
       makeAnnotatedLit ty lit = "(" <> lit <> " :: " <> ty <> ")"
-      pat multiple at inThe = T.concat [ ".*Defaulting the following constraint"
+      pat multiple at inArg inExpr = T.concat [ ".*Defaulting the following constraint"
                                        , if multiple then "s" else ""
                                        , " to type ‘([^ ]+)’ "
                                        , ".*arising from the literal ‘(.+)’"
-                                       , if inThe then ".+In the.+argument" else ""
+                                       , if inArg then ".+In the.+argument" else ""
                                        , if at then ".+at" else ""
+                                       , if inExpr then ".+In the expression" else ""
                                        , ".+In the expression"
                                        ]
       codeEdit ty lit replacement =
