@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -12,6 +13,7 @@ module Ide.TreeTransform
       transform,
       transformM,
       useAnnotatedSource,
+      ASTElement(..),
     )
 where
 
@@ -32,7 +34,7 @@ import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable
-import Retrie.ExactPrint hiding (parseExpr)
+import Retrie.ExactPrint hiding (parseExpr, parsePattern, parseType, parseDecl)
 
 ------------------------------------------------------------------------------
 
@@ -121,23 +123,23 @@ graft dst val = Graft $ \dflags a -> do
 ------------------------------------------------------------------------------
 
 graftWithM ::
-    forall m a.
-    (Fail.MonadFail m, Data a) =>
+    forall ast m a.
+    (Fail.MonadFail m, Data a, ASTElement ast) =>
     SrcSpan ->
-    (LHsExpr GhcPs -> TransformT m (Maybe (LHsExpr GhcPs))) ->
+    (Located ast -> TransformT m (Maybe (Located ast))) ->
     Graft m a
 graftWithM dst trans = Graft $ \dflags a -> do
     everywhereM'
         ( mkM $
             \case
-                val@(L src _ :: LHsExpr GhcPs)
+                val@(L src _ :: Located ast)
                     | src == dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
                                 (anns, val'') <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags $ parenthesize val'
+                                        annotate dflags $ maybeParensAST val'
                                 modifyAnnsT $ mappend anns
                                 pure val''
                             Nothing -> pure val
@@ -146,23 +148,23 @@ graftWithM dst trans = Graft $ \dflags a -> do
         a
 
 graftWithSmallestM ::
-    forall m a.
-    (Fail.MonadFail m, Data a) =>
+    forall ast m a.
+    (Fail.MonadFail m, Data a, ASTElement ast) =>
     SrcSpan ->
-    (LHsExpr GhcPs -> TransformT m (Maybe (LHsExpr GhcPs))) ->
+    (Located ast -> TransformT m (Maybe (Located ast))) ->
     Graft m a
 graftWithSmallestM dst trans = Graft $ \dflags a -> do
     everywhereM
         ( mkM $
             \case
-                val@(L src _ :: LHsExpr GhcPs)
+                val@(L src _ :: Located ast)
                     | dst `isSubspanOf` src -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
                                 (anns, val'') <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags $ parenthesize val'
+                                        annotate dflags $ maybeParensAST val'
                                 modifyAnnsT $ mappend anns
                                 pure val''
                             Nothing -> pure val
@@ -176,8 +178,27 @@ everywhereM' f = go
         go :: GenericM m
         go = gmapM go <=< f
 
-------------------------------------------------------------------------------
+class (Data ast, Outputable ast) => ASTElement ast where
+    parseAST :: Parser (Located ast)
+    maybeParensAST :: Located ast -> Located ast
 
+instance p ~ GhcPs => ASTElement (HsExpr p) where
+    parseAST = parseExpr
+    maybeParensAST = parenthesize
+
+instance p ~ GhcPs => ASTElement (Pat p) where
+    parseAST = parsePattern
+    maybeParensAST = parenthesizePat appPrec
+
+instance p ~ GhcPs => ASTElement (HsType p) where
+    parseAST = parseType
+    maybeParensAST = parenthesizeHsType appPrec
+
+instance p ~ GhcPs => ASTElement (HsDecl p) where
+    parseAST = parseDecl
+    maybeParensAST = id
+
+------------------------------------------------------------------------------
 -- | Dark magic I stole from retrie. No idea what it does.
 fixAnns :: ParsedModule -> Annotated ParsedSource
 fixAnns ParsedModule {..} =
@@ -187,11 +208,11 @@ fixAnns ParsedModule {..} =
 ------------------------------------------------------------------------------
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
-annotate :: DynFlags -> LHsExpr GhcPs -> TransformT (Either String) (Anns, LHsExpr GhcPs)
-annotate dflags expr = do
+annotate :: ASTElement ast => DynFlags -> Located ast -> TransformT (Either String) (Anns, Located ast)
+annotate dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
-    let rendered = render dflags expr
-    (anns, expr') <- lift $ either (Left . show) Right $ parseExpr dflags uniq rendered
+    let rendered = render dflags ast
+    (anns, expr') <- lift $ either (Left . show) Right $ parseAST dflags uniq rendered
     let anns' = setPrecedingLines expr' 0 1 anns
     pure (anns', expr')
 
