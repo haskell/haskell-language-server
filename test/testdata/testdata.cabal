@@ -18,11 +18,6 @@ executable symbols
   main-is:             Symbols.hs
   default-language:    Haskell2010
 
-executable hlintpragma
-  build-depends:       base
-  main-is:             HlintPragma.hs
-  default-language:    Haskell2010
-
 executable functests
   build-depends:       base
   main-is:             FuncTest.hs
@@ -32,9 +27,4 @@ executable evens
   build-depends:       base
   main-is:             Evens.hs
   hs-source-dirs:      liquid
-  default-language:    Haskell2010
-
-executable filewithwarning
-  build-depends:       base
-  main-is:             FileWithWarning.hs
   default-language:    Haskell2010
