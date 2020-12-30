@@ -1235,7 +1235,9 @@ extendImportTests = testGroup "extend import actions"
                     ])
         ]
       where
-        template setUpModules moduleUnderTest range expectedActions expectedContentB = do
+        codeActionTitle CodeAction{_title=x} = x
+
+        template setUpModules moduleUnderTest range expectedTitles expectedContentB = do
             sendNotification WorkspaceDidChangeConfiguration
                 (DidChangeConfigurationParams $ toJSON
                   def{checkProject = overrideCheckProject})
@@ -1245,14 +1247,23 @@ extendImportTests = testGroup "extend import actions"
             docB <- createDoc (fst moduleUnderTest) "haskell" (snd moduleUnderTest)
             _  <- waitForDiagnostics
             void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
-            codeActions <- filter (\(CACodeAction CodeAction{_title=x}) -> T.isPrefixOf "Add" x)
-                <$>  getCodeActions docB range
-            let expectedTitles = (\(CACodeAction CodeAction{_title=x}) ->x) <$> codeActions
-            liftIO $ expectedActions @=? expectedTitles
+            actionsOrCommands <- getCodeActions docB range
+            let codeActions =
+                  filter
+                    (T.isPrefixOf "Add" . codeActionTitle)
+                    [ca | CACodeAction ca <- actionsOrCommands]
+                actualTitles = codeActionTitle <$> codeActions
+            -- Note that we are not testing the order of the actions, as the
+            -- order of the expected actions indicates which one we'll execute
+            -- in this test, i.e., the first one.
+            liftIO $ sort expectedTitles @=? sort actualTitles
 
-            -- Get the first action and execute the first action
-            let CACodeAction action :  _
-                        = sortOn (\(CACodeAction CodeAction{_title=x}) -> x) codeActions
+            -- Execute the action with the same title as the first expected one.
+            -- Since we tested that both lists have the same elements (possibly
+            -- in a different order), this search cannot fail.
+            let firstTitle:_ = expectedTitles
+                action = fromJust $
+                  find ((firstTitle ==) . codeActionTitle) codeActions
             executeCodeAction action
             contentAfterAction <- documentContents docB
             liftIO $ expectedContentB @=? contentAfterAction
