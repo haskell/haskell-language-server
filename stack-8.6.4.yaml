@@ -9,6 +9,7 @@ packages:
   - ./hls-plugin-api
   - ./hls-exactprint-utils
   - ./plugins/hls-class-plugin
+  - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
@@ -81,7 +82,6 @@ extra-deps:
   - topograph-1
   - with-utf8-1.0.2.1@sha256:95c02fffa643ddbeb092359802a512007c3e644cd509809f4716ad54592c437b,3057
   - th-env-0.1.0.2@sha256:d8f1f37f42a8f1a22404d7d0579528af18f5dac7232cca6bdbd5117c115a0ad5,1370
-
 
 flags:
   haskell-language-server:

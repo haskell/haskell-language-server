@@ -208,4 +208,4 @@ replaceUnicodeQuotes :: T.Text -> T.Text
 replaceUnicodeQuotes = T.replace "‘" "'" . T.replace "’" "'"
 
 evalPath :: FilePath
-evalPath = "test/testdata/eval"
+evalPath = "plugins/hls-eval-plugin/test/testdata"
