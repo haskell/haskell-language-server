@@ -123,61 +123,53 @@ expandTHSplice eStyle lsp ideState params@ExpandSpliceParams {..} =
                             , canUseColor = False
                             }
                     env' <- getSession
+                    -- setTargets [thisModuleTarget]
                     resl <- load LoadAllTargets
                     case resl of
                         Succeeded -> do
                             setContext [IIModule $ moduleName $ ms_mod modSum]
-                                `gcatch` \(e :: SomeException) ->
-                                    reportEditor
-                                        lsp
-                                        MtWarning
-                                        ["Setting failure: ", T.pack $ show e]
+                                `gcatch` \(_ :: SomeException) -> pure ()
                             getSession
                         Failed -> pure env'
-
             let dflags = hsc_dflags hscEnv
                 srcSpan = rangeToRealSrcSpan range $ fromString $ fromNormalizedFilePath fp
             ((warns, errs), mEdits) <- liftIO $
                 initTcWithGbl hscEnv tmrTypechecked srcSpan $
                     case spliceContext of
-                        Expr -> do
-                            let g = graftWithSmallestM (RealSrcSpan srcSpan) $ \case
-                                    inp@(L _spn (HsSpliceE _ spl)) -> do
-                                        eExpr <- lift $ gtry @_ @SomeException (fst <$> rnSpliceExpr spl)
-                                        case eExpr of
-                                            Left exc ->
-                                                lift $
-                                                    Nothing
-                                                        <$ reportEditor
-                                                            lsp
-                                                            MtError
-                                                            [ "Error during expanding splice"
-                                                            , ""
-                                                            , T.pack (show exc)
-                                                            ]
-                                            Right expr' ->
-                                                case eStyle of
-                                                    Inplace -> do
-                                                        Just <$> unRenamedE dflags expr'
-                                                    Commented -> do
-                                                        let expanded = showSDoc dflags $ ppr expr'
-                                                        dPos <- getEntryDPT inp
-                                                        uniq <- uniqueSrcSpanT
-                                                        modifyAnnsT $
-                                                            ix (mkAnnKey inp)
-                                                                %~ \ann ->
-                                                                    ann
-                                                                        { annFollowingComments =
-                                                                            (Comment expanded uniq Nothing, dPos) :
-                                                                            annFollowingComments ann
-                                                                        }
-                                                        pure $ Just inp
-                                    _ -> pure Nothing
-                            transformM dflags (clientCapabilities lsp) uri g ps
+                        Expr -> flip (transformM dflags (clientCapabilities lsp) uri) ps $
+                            graftWithSmallestM (RealSrcSpan srcSpan) $ \case
+                                inp@(L _spn (HsSpliceE _ spl)) -> do
+                                    eExpr <- lift $ gtry @_ @SomeException (fst <$> rnSpliceExpr spl)
+                                    case (eExpr, eStyle) of
+                                        (Left exc, _) ->
+                                            lift $
+                                                Nothing
+                                                    <$ reportEditor
+                                                        lsp
+                                                        MtError
+                                                        [ "Error during expanding splice"
+                                                        , ""
+                                                        , T.pack (show exc)
+                                                        ]
+                                        (Right expr', Inplace) ->
+                                            Just <$> unRenamedE dflags expr'
+                                        (Right expr', Commented) -> do
+                                            let expanded = showSDoc dflags $ ppr expr'
+                                            dPos <- getEntryDPT inp
+                                            uniq <- uniqueSrcSpanT
+                                            modifyAnnsT $
+                                                ix (mkAnnKey inp)
+                                                    %~ \ann ->
+                                                        ann
+                                                            { annFollowingComments =
+                                                                (Comment expanded uniq Nothing, dPos) :
+                                                                annFollowingComments ann
+                                                            }
+                                            pure $ Just inp
+                                _ -> pure Nothing
                         HsDecl -> undefined
                         Pat -> undefined
                         HsType -> undefined
-
             unless (null errs) $
                 reportEditor
                     lsp
@@ -185,7 +177,7 @@ expandTHSplice eStyle lsp ideState params@ExpandSpliceParams {..} =
                     [ "Error during expanding splice:"
                     , T.pack $ show errs
                     ]
-            guard $ not $ null errs
+            guard $ null errs
             unless (null warns) $
                 reportEditor
                     lsp
