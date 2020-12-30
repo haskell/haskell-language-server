@@ -293,7 +293,8 @@ runBenchmarksFun dir allBenchmarks = do
           "--lsp",
           "--test",
           "--cwd",
-          dir
+          dir,
+          "+RTS"
         ]
     cmd name dir =
       unwords $
