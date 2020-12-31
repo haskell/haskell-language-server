@@ -1,6 +1,6 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
@@ -18,26 +18,19 @@ module Ide.Plugin.Splice
 where
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Lens (ifoldMap, (^.))
+import Control.Lens ((^.))
 import Control.Monad
 import qualified Control.Monad.Fail as Fail
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.Writer.CPS
 import Data.Aeson
-import qualified Data.DList as DL
 import Data.Function
 import Data.Generics
 import qualified Data.Kind as Kinds
 import Data.List (sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
-import Data.Monoid (Ap (..))
-import Data.Semigroup (Last)
-import Data.Set (Set)
-import qualified Data.Set as Set
 import qualified Data.Text as T
 import Development.IDE
-import Development.IDE.Core.PositionMapping
 import Development.IDE.GHC.Compat hiding (getLoc)
 import GHC.Exts
 import GhcMonad
@@ -52,7 +45,6 @@ import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as J
 import TcRnMonad
-import Development.IDE.GHC.Compat (HasSrcSpan(getLoc))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -239,7 +231,7 @@ codeAction _ state plId docId ran _ =
             mkQ
                 Nothing
                 ( \case
-                    (L l@(RealSrcSpan spLoc) HsSpliceE{}  :: LHsExpr GhcPs)
+                    (L l@(RealSrcSpan spLoc) HsSpliceE {} :: LHsExpr GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, Expr)
                     _ -> Nothing
                 )
