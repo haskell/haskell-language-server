@@ -8,8 +8,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.TreeTransform
-    ( Graft,
+    ( Graft(..),
       graft,
+      graftMany,
       hoistGraft,
       graftWithM,
       graftWithSmallestM,
@@ -46,6 +47,8 @@ import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
+import qualified Data.DList as DL
+import Data.Monoid (Ap(..))
 
 ------------------------------------------------------------------------------
 
@@ -197,7 +200,7 @@ graftWithSmallestM ::
     (Located ast -> TransformT m (Maybe (Located ast))) ->
     Graft m a
 graftWithSmallestM dst trans = Graft $ \dflags a -> do
-    everywhereM
+    everywhereM'
         ( mkM $
             \case
                 val@(L src _ :: Located ast)
@@ -211,6 +214,38 @@ graftWithSmallestM dst trans = Graft $ \dflags a -> do
                                 modifyAnnsT $ mappend anns
                                 pure val''
                             Nothing -> pure val
+                l -> pure l
+        )
+        a
+
+graftMany ::
+    forall ast a.
+    (Data a, ASTElement ast) =>
+    SrcSpan ->
+    [Located ast] ->
+    Graft (Either String) a
+graftMany dst vals = Graft $ \dflags a -> do
+    everywhereM
+        ( mkM $
+            \case
+                (ast@(L src _ :: Located ast) : rest)
+                    | dst == src -> do
+                        (anns, vals') <-
+                            getAp $
+                                foldMap
+                                    ( Ap
+                                        . fmap
+                                            ( \(ann0, ast') ->
+                                                ( setPrecedingLines ast' 1 0 ann0
+                                                , DL.singleton ast'
+                                                )
+                                            )
+                                        . annotate dflags
+                                        . maybeParensAST
+                                    )
+                                    vals
+                        modifyAnnsT $ mappend anns
+                        pure $ DL.toList vals' ++ rest
                 l -> pure l
         )
         a

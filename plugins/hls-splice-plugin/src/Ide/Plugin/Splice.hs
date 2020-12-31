@@ -18,7 +18,7 @@ module Ide.Plugin.Splice
 where
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Lens ((^.))
+import Control.Lens ((<&>), (^.))
 import Control.Monad
 import qualified Control.Monad.Fail as Fail
 import Control.Monad.Trans.Class
@@ -93,32 +93,38 @@ expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
                     listToMaybe $ findSubSpansDesc srcSpan patSplices
                 typeSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan typeSplices
-                declSueprSpans =
+                declSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan declSplices
 
                 graftSpliceWith ::
                     forall ast.
                     HasSplice ast =>
                     Maybe (SrcSpan, Located (ast GhcPs)) ->
-                    MaybeT IO (Maybe (Either String WorkspaceEdit))
-                graftSpliceWith expandeds = forM expandeds $ \(loc, expanded) ->
-                    transformM
-                        dflags
-                        (clientCapabilities lsp)
-                        uri
-                        ( graftWithSmallestM
-                            loc
-                            $ \case
-                                (L _ (matchSplice @ast proxy# -> Just {})) -> pure $ Just expanded
-                                _ -> pure Nothing
-                        )
-                        ps
-            eedits <-
-                join . maybe (Left "No splcie information found") Right <$> case spliceContext of
-                    Expr -> graftSpliceWith exprSuperSpans
-                    Pat -> graftSpliceWith patSuperSpans
-                    HsType -> graftSpliceWith typeSuperSpans
-                    HsDecl -> mzero
+                    Maybe (Either String WorkspaceEdit)
+                graftSpliceWith expandeds =
+                    expandeds <&> \(_, expanded) ->
+                        transform
+                            dflags
+                            (clientCapabilities lsp)
+                            uri
+                            (graft (RealSrcSpan spliceSpan) expanded)
+                            ps
+            let eedits = join . maybe (Left "No splcie information found") Right $
+                    case spliceContext of
+                        Expr -> graftSpliceWith exprSuperSpans
+                        Pat -> graftSpliceWith patSuperSpans
+                        HsType -> graftSpliceWith typeSuperSpans
+                        HsDecl ->
+                            -- FIXME: It seems multiline edit results in wrong Edit
+                            -- emited by @transform@.
+                            -- It will eat preceding comments and spaces!
+                            declSuperSpans <&> \(_, expanded) ->
+                                transform
+                                    dflags
+                                    (clientCapabilities lsp)
+                                    uri
+                                    (graftMany (RealSrcSpan spliceSpan) expanded)
+                                    ps
             case eedits of
                 Left err -> do
                     reportEditor
@@ -183,7 +189,6 @@ unRenamedE dflags expr = do
             parseAST @(ast GhcPs) dflags uniq $
                 showSDoc dflags $ ppr expr
     let _anns' = setPrecedingLines expr' 0 1 anns
-    -- modifyAnnsT $ mappend anns'
     pure expr'
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)

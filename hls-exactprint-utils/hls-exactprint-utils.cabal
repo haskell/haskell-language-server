@@ -28,6 +28,7 @@ library
   hs-source-dirs:   src
   build-depends:
       base                  >=4.12    && <5
+    , dlist
     , ghc
     , ghc-exactprint
     , ghcide
