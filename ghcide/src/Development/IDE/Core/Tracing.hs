@@ -108,7 +108,7 @@ performMeasurement logger stateRef instrumentFor mapCountInstrument = do
                         , k /= Key GhcSessionDeps
                         , k /= Key GhcSessionIO
              ] ++ [Key GhcSessionIO]
-    !groupedForSharing <- evaluate (keys `using` seqList r0)
+    groupedForSharing <- evaluate (keys `using` seqList r0)
     measureMemory logger [groupedForSharing] instrumentFor stateRef
         `catch` \(e::SomeException) ->
         logInfo logger ("MEMORY PROFILING ERROR: " <> fromString (show e))
