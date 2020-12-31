@@ -129,7 +129,9 @@ instance Monoid Splices where
 
 instance NFData Splices where
     rnf Splices {..} =
-        exprSplices `seq` patSplices `seq` typeSplices `seq` declSplices `seq` ()
+        liftRnf rwhnf exprSplices `seq`
+        liftRnf rwhnf patSplices `seq`
+        liftRnf rwhnf typeSplices `seq` liftRnf rwhnf declSplices `seq` ()
 
 {- | Contains the typechecked module and the OrigNameCache entry for
  that module.
