@@ -15,9 +15,7 @@ module Ide.Plugin.Splice
     )
 where
 
-import Control.Arrow (Arrow (first))
-import Control.Exception (SomeException)
-import Control.Lens (ifoldMap, (<&>), (^.))
+import Control.Lens (ifoldMap, (^.))
 import Control.Monad
 import qualified Control.Monad.Fail as Fail
 import Control.Monad.Trans.Class
@@ -25,8 +23,10 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Writer.CPS
 import Data.Aeson
 import qualified Data.DList as DL
+import Data.Function
 import qualified Data.Kind as Kinds
-import Data.Maybe (fromMaybe)
+import Data.List (sortOn)
+import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid (Ap (..))
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -34,17 +34,11 @@ import qualified Data.Text as T
 import Development.IDE
 import Development.IDE.Core.PositionMapping
 import Development.IDE.GHC.Compat hiding (getLoc)
-import ErrUtils (ErrorMessages, WarningMessages)
-import Exception (gtry)
 import GHC.Exts
 import GhcMonad
 import GhcPlugins hiding (Var, getLoc, (<>))
 import Ide.Plugin.Splice.Types
-    ( ExpandSpliceParams (..),
-      ExpandStyle (..),
-      SpliceContext (..),
-    )
-import Ide.PluginUtils (mkLspCommand)
+import Ide.PluginUtils (mkLspCommand, responseError)
 import Ide.TreeTransform
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint (TransformT, setPrecedingLines, uniqueSrcSpanT)
@@ -52,8 +46,6 @@ import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as J
-import Retrie.ExactPrint (Annotated)
-import RnSplice
 import TcRnMonad
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -80,131 +72,100 @@ commands =
     -- , PluginCommand expandCommentedId commentedCmdName $ expandTHSplice Commented
     ]
 
+newtype SubSpan = SubSpan {runSubSpan :: SrcSpan}
+
+instance Eq SubSpan where
+    (==) = (==) `on` runSubSpan
+
+instance Ord SubSpan where
+    (<=) = coerce isSubspanOf
+
 expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
     CommandFunction IdeState ExpandSpliceParams
-expandTHSplice eStyle lsp ideState params@ExpandSpliceParams {..} =
+expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
     fmap (fromMaybe defaultResult) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
-            TcModuleResult {tmrParsed = pm, ..} <-
+            TcModuleResult {..} <-
                 MaybeT $
                     runAction "expandTHSplice.TypeCheck" ideState $
                         use TypeCheck fp
-            ps <-
-                MaybeT $
-                    useAnnotatedSource
-                        "expandTHSplice.AnnotedSource"
-                        ideState
-                        fp
+            let ps = annotateParsedSource tmrParsed
+                Splices {..} = tmrTopLevelSplices
             hscEnvEq <-
                 lift $
                     runAction "expandTHSplice.ghcSessionDeps" ideState $
                         use_ GhcSessionDeps fp
-            let hscEnv = hscEnvWithImportPaths hscEnvEq
-                srcSpan = rangeToRealSrcSpan range $ fromString $ fromNormalizedFilePath fp
-            ((warns, errs), mEdits) <- calculateEdits lsp ps hscEnv tmrTypechecked srcSpan eStyle params
-            unless (null errs) $
-                reportEditor
-                    lsp
-                    MtError
-                    [ "Error during expanding splice:"
-                    , T.pack $ show errs
-                    ]
-            guard $ null errs
-            unless (null warns) $
-                reportEditor
-                    lsp
-                    MtWarning
-                    [ "Warning during expanding splice:"
-                    , T.pack $ show warns
-                    ]
-            pure
-                ( Right Null
-                , mEdits <&> \edits ->
-                    (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
-                )
+            let dflags = hsc_dflags $ hscEnv hscEnvEq
+                srcSpan =
+                    RealSrcSpan $
+                        rangeToRealSrcSpan range $ fromString $ fromNormalizedFilePath fp
+                exprSuperSpans =
+                    listToMaybe $ findSuperSpansAsc srcSpan exprSplices
+                patSuperSpans =
+                    listToMaybe $ findSuperSpansAsc srcSpan patSplices
+                typeSuperSpans =
+                    listToMaybe $ findSuperSpansAsc srcSpan typeSplices
+
+                graftSpliceWith ::
+                    forall ast.
+                    HasSplice ast =>
+                    Maybe (SrcSpan, Located (ast GhcPs)) ->
+                    MaybeT IO (Maybe (Either String WorkspaceEdit))
+                graftSpliceWith expandeds = forM expandeds $ \(loc, expanded) ->
+                    transformM
+                        dflags
+                        (clientCapabilities lsp)
+                        uri
+                        ( graftWithSmallestM
+                            loc
+                            $ \case
+                                (L _ (matchSplice @ast proxy# -> Just {})) -> pure $ Just expanded
+                                _ -> pure Nothing
+                        )
+                        ps
+            eedits <-
+                join . maybe (Left "No splcie information found") Right <$> case spliceContext of
+                    Expr -> graftSpliceWith exprSuperSpans
+                    Pat -> graftSpliceWith patSuperSpans
+                    HsType -> graftSpliceWith typeSuperSpans
+            pure $ case eedits of
+                Left err ->
+                    (Left $ responseError $ T.pack err, Nothing)
+                Right edits ->
+                    ( Right Null
+                    , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
+                    )
     where
         defaultResult = (Right Null, Nothing)
 
-data SomeHasSplice where
-    MkSomeHasSplice :: HasSplice ast => Proxy# ast -> SomeHasSplice
+findSuperSpansAsc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
+findSuperSpansAsc srcSpan =
+    sortOn (SubSpan . fst)
+        . mapMaybe
+            ( \(L spn _, e) -> do
+                guard (srcSpan `isSubspanOf` spn)
+                pure (spn, e)
+            )
 
 class (Outputable (ast GhcRn), ASTElement (ast GhcPs)) => HasSplice ast where
     type SpliceOf ast :: Kinds.Type -> Kinds.Type
     type SpliceOf ast = HsSplice
     matchSplice :: Proxy# ast -> ast GhcPs -> Maybe (SpliceOf ast GhcPs)
-    renameSplice :: Proxy# ast -> SpliceOf ast GhcPs -> RnM (Either (ast GhcPs) (ast GhcRn), FreeVars)
 
 instance HasSplice HsExpr where
     matchSplice _ (HsSpliceE _ spl) = Just spl
     matchSplice _ _ = Nothing
-    renameSplice _ = fmap (first Right) . rnSpliceExpr
 
-{-
-instance HasSplice HsDecl where
-    type SpliceOf HsDecl = SpliceDecl
-    matchSplice _ (SpliceD _ decl) = Just decl
-    matchSplice _ _ = Nothing
-    renameSplice (SpliceDecl _ (L _ spl) flg) =
-        case flg of
-            ImplicitSplice ->
-                rnTopSpliceDecls spl
- -}
 instance HasSplice Pat where
     matchSplice _ (SplicePat _ spl) = Just spl
     matchSplice _ _ = Nothing
-    renameSplice _ = rnSplicePat
 
 instance HasSplice HsType where
     matchSplice _ (HsSpliceTy _ spl) = Just spl
     matchSplice _ _ = Nothing
-    renameSplice _ = fmap (first Right) . rnSpliceType
-
-toSomeASTElement :: SpliceContext -> SomeHasSplice
-toSomeASTElement = \case
-    Expr -> MkSomeHasSplice @HsExpr proxy#
-    -- HsDecl -> MkSomeHasSplice @HsDecl proxy#
-    Pat -> MkSomeHasSplice @Pat proxy#
-    HsType -> MkSomeHasSplice @HsType proxy#
-
-calculateEdits ::
-    LspFuncs a ->
-    Annotated ParsedSource ->
-    HscEnv ->
-    TcGblEnv ->
-    RealSrcSpan ->
-    ExpandStyle ->
-    ExpandSpliceParams ->
-    MaybeT IO ((WarningMessages, ErrorMessages), Maybe WorkspaceEdit)
-calculateEdits lsp ps hscEnv typechkd srcSpan eStyle ExpandSpliceParams {..} =
-    liftIO $
-        initTcWithGbl hscEnv typechkd srcSpan $
-            case toSomeASTElement spliceContext of
-                MkSomeHasSplice astP ->
-                    flip (transformM dflags (clientCapabilities lsp) uri) ps $
-                        graftWithSmallestM (RealSrcSpan srcSpan) $ \case
-                            (L _spn (matchSplice astP -> Just spl)) -> do
-                                eExpr <- lift $ gtry @_ @SomeException (fst <$> renameSplice astP spl)
-                                case (eExpr, eStyle) of
-                                    (Left exc, _) ->
-                                        lift $
-                                            Nothing
-                                                <$ reportEditor
-                                                    lsp
-                                                    MtError
-                                                    [ "Error during expanding splice"
-                                                    , ""
-                                                    , T.pack (show exc)
-                                                    ]
-                                    (Right expr', Inplace) ->
-                                        Just <$> either (pure . L _spn) (unRenamedE dflags) expr'
-                                    (Right _expr', Commented) ->
-                                        pure Nothing
-                            _ -> pure Nothing
-    where
-        dflags = hsc_dflags hscEnv
 
 -- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 reportEditor :: MonadIO m => LspFuncs a -> MessageType -> [T.Text] -> m ()
@@ -215,30 +176,6 @@ reportEditor lsp msgTy msgs =
                 NotificationMessage "2.0" WindowShowMessage $
                     ShowMessageParams msgTy $
                         T.unlines msgs
-
-setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
-setupDynFlagsForGHCiLike env dflags = do
-    let dflags3 =
-            dflags
-                { hscTarget = HscInterpreted
-                , ghcMode = CompManager
-                , ghcLink = LinkInMemory
-                }
-        platform = targetPlatform dflags3
-        dflags3a = updateWays $ dflags3 {ways = interpWays}
-        dflags3b =
-            foldl gopt_set dflags3a $
-                concatMap (wayGeneralFlags platform) interpWays
-        dflags3c =
-            foldl gopt_unset dflags3b $
-                concatMap (wayUnsetGeneralFlags platform) interpWays
-        dflags4 =
-            dflags3c
-                `gopt_set` Opt_ImplicitImportQualified
-                `gopt_set` Opt_IgnoreOptimChanges
-                `gopt_set` Opt_IgnoreHpcChanges
-                `gopt_unset` Opt_DiagnosticsShowCaret
-    initializePlugins env dflags4
 
 unRenamedE ::
     forall ast m.
