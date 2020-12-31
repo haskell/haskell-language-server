@@ -1,0 +1,98 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
+
+module Splice (tests) where
+
+import Control.Applicative.Combinators
+import Control.Monad
+import Control.Monad.IO.Class
+import Data.List (find)
+import Data.Text (Text)
+import qualified Data.Text.IO as T
+import Ide.Plugin.Splice.Types
+import Language.Haskell.LSP.Test
+import Language.Haskell.LSP.Types
+    ( ApplyWorkspaceEditRequest,
+      CAResult (..),
+      CodeAction (..),
+      Position (..),
+      Range (..),
+    )
+import System.Directory
+import System.FilePath
+import Test.Hls.Util
+import Test.Tasty
+import Test.Tasty.HUnit
+
+tests :: TestTree
+tests =
+    testGroup
+        "splice"
+        [ goldenTest "TSimpleExp.hs" Inplace 6 15
+        , goldenTest "TSimpleExp.hs" Inplace 6 24
+        , goldenTest "TErrorExp.hs" Inplace 6 15
+        , goldenTest "TErrorExp.hs" Inplace 6 51
+        , goldenTest "TQQExp.hs" Inplace 6 17
+        , goldenTest "TQQExp.hs" Inplace 6 25
+        , goldenTest "TQQExpError.hs" Inplace 6 13
+        , goldenTest "TQQExpError.hs" Inplace 6 22
+        , goldenTest "TSimplePat.hs" Inplace 6 3
+        , goldenTest "TSimplePat.hs" Inplace 6 22
+        , goldenTest "TSimplePat.hs" Inplace 6 3
+        , goldenTest "TSimplePat.hs" Inplace 6 22
+        , goldenTest "TErrorPat.hs" Inplace 6 3
+        , goldenTest "TErrorPat.hs" Inplace 6 18
+        , goldenTest "TQQPat.hs" Inplace 6 3
+        , goldenTest "TQQPat.hs" Inplace 6 11
+        , goldenTest "TQQPatError.hs" Inplace 6 3
+        , goldenTest "TQQPatError.hs" Inplace 6 11
+        , goldenTest "TSimpleType.hs" Inplace 5 12
+        , goldenTest "TSimpleType.hs" Inplace 5 22
+        , goldenTest "TTypeTypeError.hs" Inplace 7 12
+        , goldenTest "TTypeTypeError.hs" Inplace 7 52
+        , goldenTest "TQQType.hs" Inplace 8 19
+        , goldenTest "TQQType.hs" Inplace 8 28
+        , goldenTest "TQQTypeTypeError.hs" Inplace 8 19
+        , goldenTest "TQQTypeTypeError.hs" Inplace 8 28
+{-      it must fail (and hence success by expectFail), but no..
+        , expectFail
+        $ testGroup "Type splices with kind error"
+            [goldenTest "TTypeKindError.hs" Inplace 7 9
+            , goldenTest "TTypeKindError.hs" Inplace 7 29]
+ -}
+        ]
+
+goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
+goldenTest input tc line col =
+    testCase (input <> " (golden)") $ do
+        runSession hlsCommand fullCaps spliceTestPath $ do
+            doc <- openDoc input "haskell"
+            _ <- waitForDiagnostics
+            actions <- getCodeActions doc $ pointRange line col
+            Just (CACodeAction CodeAction {_command = Just c}) <-
+                pure $ find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions
+            executeCommand c
+            _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+            edited <- documentContents doc
+            let expected_name = spliceTestPath </> input <.> "expected"
+            -- Write golden tests if they don't already exist
+            liftIO $
+                (doesFileExist expected_name >>=) $
+                    flip unless $ do
+                        T.writeFile expected_name edited
+            expected <- liftIO $ T.readFile expected_name
+            liftIO $ edited @?= expected
+
+spliceTestPath :: FilePath
+spliceTestPath = "test/testdata/splice"
+
+pointRange :: Int -> Int -> Range
+pointRange
+    (subtract 1 -> line)
+    (subtract 1 -> col) =
+        Range (Position line col) (Position line $ col + 1)
+
+-- | Get the title of a code action.
+codeActionTitle :: CAResult -> Maybe Text
+codeActionTitle CACommand {} = Nothing
+codeActionTitle (CACodeAction (CodeAction title _ _ _ _)) = Just title

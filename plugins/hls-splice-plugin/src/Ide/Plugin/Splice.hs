@@ -53,17 +53,6 @@ descriptor plId =
         , pluginCodeActionProvider = Just codeAction
         }
 
---
-expandInplaceId, expandCommentedId :: CommandId
-expandInplaceId = "expandTHSpliceInplace"
-expandCommentedId = "expandTHSpliceCommented"
-
-inplaceCmdName :: T.Text
-inplaceCmdName = "expand TemplateHaskell Splice (in-place)"
-
-commentedCmdName :: T.Text
-commentedCmdName = "expand TemplateHaskell Splice (comented-out)"
-
 commands :: [PluginCommand IdeState]
 commands =
     [ PluginCommand expandInplaceId inplaceCmdName $ expandTHSplice Inplace
@@ -77,9 +66,6 @@ instance Eq SubSpan where
 
 instance Ord SubSpan where
     (<=) = coerce isSubspanOf
-
-pprLoc :: Show (Located a) => Located a -> String
-pprLoc a@(L loc _) = show (loc, a)
 
 expandTHSplice ::
     -- | Inplace?
@@ -214,7 +200,7 @@ codeAction _ state plId docId ran _ =
                 mouterSplice = something' (detectSplice spn) pm_parsed_source
             mcmds <- forM mouterSplice $
                 \(spliceSpan, spliceContext) ->
-                    forM expandStyles $ \(_style, title, cmdId) -> do
+                    forM expandStyles $ \(_, (title, cmdId)) -> do
                         let params = ExpandSpliceParams {uri = theUri, ..}
                         act <- liftIO $ mkLspCommand plId cmdId title (Just [toJSON params])
                         pure $
@@ -243,6 +229,10 @@ codeAction _ state plId docId ran _ =
                     (L l@(RealSrcSpan spLoc) HsSpliceTy {} :: LHsType GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, HsType)
                     _ -> Nothing
+                `extQ` \case
+                    (L l@(RealSrcSpan spLoc) SpliceD {} :: LHsDecl GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, HsDecl)
+                    _ -> Nothing
 
 -- | Like 'something', but performs in bottom-up manner.
 something' :: forall a. GenericQ (Maybe a) -> GenericQ (Maybe a)
@@ -259,9 +249,3 @@ rangeToRealSrcSpan ran fs =
     mkRealSrcSpan
         (posToRealSrcLoc (_start ran) fs)
         (posToRealSrcLoc (_end ran) fs)
-
-expandStyles :: [(ExpandStyle, T.Text, CommandId)]
-expandStyles =
-    [ (Inplace, inplaceCmdName, expandInplaceId)
-    -- , (Commented, commentedCmdName, expandCommentedId)
-    ]
