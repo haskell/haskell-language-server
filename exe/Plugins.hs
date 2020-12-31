@@ -1,10 +1,10 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+module Plugins where
 
 import           Ide.Types                 (IdePlugins)
 import           Ide.PluginUtils           (pluginDescToIdePlugins)
 
-import Ide.Plugin (pluginDescToIdePlugins)
 -- fixed plugins
 import           Ide.Plugin.Example        as Example
 import           Ide.Plugin.Example2       as Example2
@@ -45,10 +45,9 @@ import           Ide.Plugin.ModuleName     as ModuleName
 import           Ide.Plugin.Pragmas        as Pragmas
 #endif
 
-#if defined(splice)
-import           Ide.Plugin.Splice         as Splice
+#if splice
+import           Ide.Plugin.Splice        as Splice
 #endif
-
 
 -- formatters
 
@@ -81,7 +80,7 @@ import           Ide.Plugin.Brittany       as Brittany
 
 idePlugins :: Bool -> IdePlugins IdeState
 idePlugins includeExamples = pluginDescToIdePlugins allPlugins
-    where
+  where
     allPlugins = if includeExamples
                    then basePlugins ++ examplePlugins
                    else basePlugins
@@ -126,7 +125,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if hlint
       , Hlint.descriptor "hlint"
 #endif
-#if defined(splice)
+#if splice
       , Splice.descriptor "splice"
 #endif
       ]
