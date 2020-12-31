@@ -100,18 +100,19 @@ performMeasurement logger stateRef instrumentFor mapCountInstrument = do
     withSpan_ "Measure length" $ readVar stateRef >>= observe mapCountInstrument . length
 
     values <- readVar stateRef
-    let keys = nub
-                    $ Key GhcSession : Key GhcSessionDeps
-                    : [ k | (_,k) <- HMap.keys values
+    let keys = Key GhcSession
+             : Key GhcSessionDeps
+             : [ k | (_,k) <- HMap.keys values
                         -- do GhcSessionIO last since it closes over stateRef itself
-                        , k /= Key GhcSessionIO]
-                    ++ [Key GhcSessionIO]
+                        , k /= Key GhcSession
+                        , k /= Key GhcSessionDeps
+                        , k /= Key GhcSessionIO
+             ] ++ [Key GhcSessionIO]
     !groupedForSharing <- evaluate (keys `using` seqList r0)
     measureMemory logger [groupedForSharing] instrumentFor stateRef
         `catch` \(e::SomeException) ->
         logInfo logger ("MEMORY PROFILING ERROR: " <> fromString (show e))
 
-{-# ANN startTelemetry ("HLint: ignore Use nubOrd" :: String) #-}
 
 type OurValueObserver = Int -> IO ()
 
