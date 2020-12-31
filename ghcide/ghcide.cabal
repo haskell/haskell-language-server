@@ -46,6 +46,7 @@ library
         data-default,
         deepseq,
         directory,
+        dlist,
         extra,
         fuzzy,
         filepath,

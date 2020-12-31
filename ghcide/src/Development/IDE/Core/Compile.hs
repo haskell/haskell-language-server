@@ -91,6 +91,7 @@ import           System.Directory
 import System.IO.Extra ( fixIO, newTempFileWithin )
 import Control.Exception (evaluate)
 import TcEnv (tcLookup)
+import qualified Data.DList as DL
 import Data.Time (UTCTime, getCurrentTime)
 import Bag
 import Linker (unload)
@@ -433,11 +434,21 @@ generateHieAsts hscEnv tcm =
     -- These varBinds use unitDataConId but it could be anything as the id name is not used
     -- during the hie file generation process. It's a workaround for the fact that the hie modules
     -- don't export an interface which allows for additional information to be added to hie files.
-    let fake_splice_binds = listToBag (map (mkVarBind unitDataConId) (tmrTopLevelSplices tcm))
+    let fake_splice_binds = listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
         real_binds = tcg_binds $ tmrTypechecked tcm
     Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm)
   where
     dflags = hsc_dflags hscEnv
+
+spliceExpresions :: Splices -> [LHsExpr GhcTc]
+spliceExpresions Splices{..} =
+    DL.toList $ mconcat
+        [ DL.fromList $ map fst exprSplices
+        , DL.fromList $ map fst patSplices
+        , DL.fromList $ map fst typeSplices
+        , DL.fromList $ map fst declSplices
+        , DL.fromList $ map fst awSplices
+        ]
 
 writeHieFile :: HscEnv -> ModSummary -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
 writeHieFile hscEnv mod_summary exports ast source =
