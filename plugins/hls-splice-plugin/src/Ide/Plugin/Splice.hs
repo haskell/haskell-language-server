@@ -39,12 +39,12 @@ import Exception (gtry)
 import GHC.Exts
 import GhcMonad
 import GhcPlugins hiding (Var, getLoc, (<>))
-import Ide.Plugin
 import Ide.Plugin.Splice.Types
     ( ExpandSpliceParams (..),
       ExpandStyle (..),
       SpliceContext (..),
     )
+import Ide.PluginUtils (mkLspCommand)
 import Ide.TreeTransform
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint (TransformT, setPrecedingLines, uniqueSrcSpanT)
@@ -56,7 +56,7 @@ import Retrie.ExactPrint (Annotated)
 import RnSplice
 import TcRnMonad
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
         { pluginCommands = commands
@@ -74,7 +74,7 @@ inplaceCmdName = "expand TemplateHaskell Splice (in-place)"
 commentedCmdName :: T.Text
 commentedCmdName = "expand TemplateHaskell Splice (comented-out)"
 
-commands :: [PluginCommand]
+commands :: [PluginCommand IdeState]
 commands =
     [ PluginCommand expandInplaceId inplaceCmdName $ expandTHSplice Inplace
     -- , PluginCommand expandCommentedId commentedCmdName $ expandTHSplice Commented
@@ -83,7 +83,7 @@ commands =
 expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
-    CommandFunction ExpandSpliceParams
+    CommandFunction IdeState ExpandSpliceParams
 expandTHSplice eStyle lsp ideState params@ExpandSpliceParams {..} =
     fmap (fromMaybe defaultResult) $
         runMaybeT $ do
@@ -258,7 +258,7 @@ unRenamedE dflags expr = do
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
-codeAction :: CodeActionProvider
+codeAction :: CodeActionProvider IdeState
 codeAction _ state plId docId range0 _ =
     fmap (maybe (Right $ List []) Right) $
         runMaybeT $ do
