@@ -150,17 +150,17 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
 -- | Add a Hook to the DynFlags which captures and returns the
 -- typechecked splices before they are run. This information
 -- is used for hover.
-captureSplices :: DynFlags -> (DynFlags -> IO a) -> IO (a, SpliceInfo)
+captureSplices :: DynFlags -> (DynFlags -> IO a) -> IO (a, Splices)
 captureSplices dflags k = do
   splice_ref <- newIORef mempty
   res <- k (dflags { hooks = addSpliceHook splice_ref (hooks dflags)})
   splices <- readIORef splice_ref
   return (res, splices)
   where
-    addSpliceHook :: IORef SpliceInfo -> Hooks -> Hooks
+    addSpliceHook :: IORef Splices -> Hooks -> Hooks
     addSpliceHook var h = h { runMetaHook = Just (splice_hook var) }
 
-    splice_hook :: IORef SpliceInfo -> MetaHook TcM
+    splice_hook :: IORef Splices -> MetaHook TcM
     splice_hook var metaReq e = case metaReq of
         (MetaE f) -> do
             expr' <- metaRequestE defaultRunMeta e
@@ -200,7 +200,7 @@ tcRnModule hsc_env keep_lbls pmod = do
       hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
 
   unload hsc_env_tmp keep_lbls
-  
+
   ((tc_gbl_env, mrn_info), splices)
       <- liftIO $ captureSplices (ms_hspp_opts ms) $ \dflags ->
              do  let hsc_env_tmp = hsc_env { hsc_dflags = dflags }
