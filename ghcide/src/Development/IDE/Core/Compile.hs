@@ -75,6 +75,7 @@ import           Hooks
 import           TcSplice
 
 import Control.Exception.Safe
+import Control.Lens hiding (List)
 import Control.Monad.Extra
 import Control.Monad.Except
 import Control.Monad.Trans.Except
@@ -149,21 +150,49 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
 -- | Add a Hook to the DynFlags which captures and returns the
 -- typechecked splices before they are run. This information
 -- is used for hover.
-captureSplices :: DynFlags -> (DynFlags -> IO a) -> IO (a, [LHsExpr GhcTc])
+captureSplices :: DynFlags -> (DynFlags -> IO a) -> IO (a, SpliceInfo)
 captureSplices dflags k = do
-  splice_ref <- newIORef []
+  splice_ref <- newIORef mempty
   res <- k (dflags { hooks = addSpliceHook splice_ref (hooks dflags)})
   splices <- readIORef splice_ref
   return (res, splices)
   where
-    addSpliceHook :: IORef [LHsExpr GhcTc] -> Hooks -> Hooks
+    addSpliceHook :: IORef SpliceInfo -> Hooks -> Hooks
     addSpliceHook var h = h { runMetaHook = Just (splice_hook var) }
 
-    splice_hook :: IORef [LHsExpr GhcTc] -> MetaRequest -> LHsExpr GhcTc -> TcM MetaResult
-    splice_hook var mr e = do
-      liftIO $ modifyIORef var (e:)
-      pprTraceM "expr" (ppr e)
-      defaultRunMeta mr e
+    splice_hook :: IORef SpliceInfo -> MetaHook TcM
+    splice_hook var metaReq e = case metaReq of
+        (MetaE f) -> do
+            expr' <- metaRequestE defaultRunMeta e
+            liftIO $
+                modifyIORef' var $
+                    exprSplicesL %~ ((e, expr'):)
+            pure $ f expr'
+        (MetaP f) -> do
+            pat' <- metaRequestP defaultRunMeta e
+            liftIO $
+                modifyIORef' var $
+                    patSplicesL %~ ((e, pat'):)
+            pure $ f pat'
+        (MetaT f) -> do
+            type' <- metaRequestT defaultRunMeta e
+            liftIO $
+                modifyIORef' var $
+                    typeSplicesL %~ ((e, type'):)
+            pure $ f type'
+        (MetaD f) -> do
+            decl' <- metaRequestD defaultRunMeta e
+            liftIO $
+                modifyIORef' var $
+                    declSplicesL %~ ((e, decl'):)
+            pure $ f decl'
+        (MetaAW f) -> do
+            aw' <- metaRequestAW defaultRunMeta e
+            liftIO $
+                modifyIORef' var $
+                    awSplicesL %~ ((e, aw'):)
+            pure $ f aw'
+
 
 tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do

@@ -3,6 +3,7 @@
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DerivingStrategies #-}
 
@@ -36,10 +37,12 @@ import           Development.IDE.Import.FindImports (ArtifactsLocation)
 import Data.ByteString (ByteString)
 import Language.Haskell.LSP.Types (NormalizedFilePath)
 import TcRnMonad (TcGblEnv)
+import Control.Lens
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Options (IdeGhcSession)
 import Data.Text (Text)
 import Data.Int (Int64)
+import GHC.Serialized (Serialized)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show)
@@ -90,13 +93,38 @@ newtype ImportMap = ImportMap
   } deriving stock Show
     deriving newtype NFData
 
+data SpliceInfo = SpliceInfo
+    { exprSplices :: [(LHsExpr GhcTc, LHsExpr GhcPs)]
+    , patSplices :: [(LHsExpr GhcTc, LPat GhcPs)]
+    , typeSplices :: [(LHsExpr GhcTc, LHsType GhcPs)]
+    , declSplices :: [(LHsExpr GhcTc, [LHsDecl GhcPs])]
+    , awSplices :: [(LHsExpr GhcTc, Serialized)]
+    }
+
+instance Semigroup SpliceInfo where
+    SpliceInfo e p t d aw <> SpliceInfo e' p' t' d' aw' =
+        SpliceInfo
+            (e <> e')
+            (p <> p')
+            (t <> t')
+            (d <> d')
+            (aw <> aw')
+
+instance Monoid SpliceInfo where
+    mempty = SpliceInfo mempty mempty mempty mempty mempty
+
+instance NFData SpliceInfo where
+  rnf SpliceInfo{..} =
+     exprSplices `seq` patSplices `seq` typeSplices `seq` declSplices `seq` ()
+
 -- | Contains the typechecked module and the OrigNameCache entry for
 -- that module.
 data TcModuleResult = TcModuleResult
     { tmrParsed :: ParsedModule
     , tmrRenamed :: RenamedSource
     , tmrTypechecked :: TcGblEnv
-    , tmrTopLevelSplices :: [LHsExpr GhcTc] -- ^ Typechecked top-level splices from this module
+    , tmrTopLevelSplices :: SpliceInfo
+      -- ^ Typechecked splice information
     , tmrDeferedError :: !Bool -- ^ Did we defer any type errors for this module?
     }
 instance Show TcModuleResult where
@@ -399,3 +427,7 @@ data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
 instance Binary   GhcSessionIO
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''SpliceInfo
