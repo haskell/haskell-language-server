@@ -1,9 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -15,6 +17,7 @@ module Ide.Plugin.Splice
     )
 where
 
+import Control.Applicative (Alternative ((<|>)))
 import Control.Lens (ifoldMap, (^.))
 import Control.Monad
 import qualified Control.Monad.Fail as Fail
@@ -24,10 +27,12 @@ import Control.Monad.Trans.Writer.CPS
 import Data.Aeson
 import qualified Data.DList as DL
 import Data.Function
+import Data.Generics
 import qualified Data.Kind as Kinds
 import Data.List (sortOn)
 import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
 import Data.Monoid (Ap (..))
+import Data.Semigroup (Last)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Data.Text as T
@@ -47,6 +52,7 @@ import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as J
 import TcRnMonad
+import Development.IDE.GHC.Compat (HasSrcSpan(getLoc))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -80,6 +86,9 @@ instance Eq SubSpan where
 instance Ord SubSpan where
     (<=) = coerce isSubspanOf
 
+pprLoc :: Show (Located a) => Located a -> String
+pprLoc a@(L loc _) = show (loc, a)
+
 expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
@@ -87,6 +96,7 @@ expandTHSplice ::
 expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
     fmap (fromMaybe defaultResult) $
         runMaybeT $ do
+            let srcSpan = RealSrcSpan spliceSpan
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
             TcModuleResult {..} <-
                 MaybeT $
@@ -99,15 +109,12 @@ expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
                     runAction "expandTHSplice.ghcSessionDeps" ideState $
                         use_ GhcSessionDeps fp
             let dflags = hsc_dflags $ hscEnv hscEnvEq
-                srcSpan =
-                    RealSrcSpan $
-                        rangeToRealSrcSpan range $ fromString $ fromNormalizedFilePath fp
                 exprSuperSpans =
-                    listToMaybe $ findSuperSpansAsc srcSpan exprSplices
+                    listToMaybe $ findSubSpansDesc srcSpan exprSplices
                 patSuperSpans =
-                    listToMaybe $ findSuperSpansAsc srcSpan patSplices
+                    listToMaybe $ findSubSpansDesc srcSpan patSplices
                 typeSuperSpans =
-                    listToMaybe $ findSuperSpansAsc srcSpan typeSplices
+                    listToMaybe $ findSubSpansDesc srcSpan typeSplices
 
                 graftSpliceWith ::
                     forall ast.
@@ -133,22 +140,25 @@ expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
                     HsType -> graftSpliceWith typeSuperSpans
             case eedits of
                 Left err -> do
-                    reportEditor lsp MtError
+                    reportEditor
+                        lsp
+                        MtError
                         ["Error during expanding splice: " <> T.pack err]
                     pure (Left $ responseError $ T.pack err, Nothing)
-                Right edits -> pure
-                    ( Right Null
-                    , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
-                    )
+                Right edits ->
+                    pure
+                        ( Right Null
+                        , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
+                        )
     where
         defaultResult = (Right Null, Nothing)
 
-findSuperSpansAsc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
-findSuperSpansAsc srcSpan =
-    sortOn (SubSpan . fst)
+findSubSpansDesc :: SrcSpan -> [(LHsExpr GhcTc, a)] -> [(SrcSpan, a)]
+findSubSpansDesc srcSpan =
+    sortOn (Down . SubSpan . fst)
         . mapMaybe
             ( \(L spn _, e) -> do
-                guard (srcSpan `isSubspanOf` spn)
+                guard (spn `isSubspanOf` srcSpan)
                 pure (spn, e)
             )
 
@@ -169,7 +179,6 @@ instance HasSplice HsType where
     matchSplice _ (HsSpliceTy _ spl) = Just spl
     matchSplice _ _ = Nothing
 
--- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 reportEditor :: MonadIO m => LspFuncs a -> MessageType -> [T.Text] -> m ()
 reportEditor lsp msgTy msgs =
     liftIO $
@@ -179,6 +188,7 @@ reportEditor lsp msgTy msgs =
                     ShowMessageParams msgTy $
                         T.unlines msgs
 
+-- | FIXME:  Is thereAny "clever" way to do this exploiting TTG?
 unRenamedE ::
     forall ast m.
     (Fail.MonadFail m, HasSplice ast) =>
@@ -198,45 +208,53 @@ unRenamedE dflags expr = do
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: CodeActionProvider IdeState
-codeAction _ state plId docId range0 _ =
+codeAction _ state plId docId ran _ =
     fmap (maybe (Right $ List []) Right) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
-            (getAsts . hieAst -> asts, posMap) <-
+            ParsedModule {..} <-
                 MaybeT . runAction "splice.codeAction.GitHieAst" state $
-                    useWithStale GetHieAst fp
-            ran' <-
-                MaybeT $
-                    pure $
-                        fromCurrentRange posMap range0
-            fmap (List . DL.toList) $
-                execWriterT $
-                    getAp $ ifoldMap (fmap Ap . go ran') asts
+                    use GetParsedModule fp
+            let spn =
+                    rangeToRealSrcSpan ran $
+                        fromString $
+                            fromNormalizedFilePath fp
+                mouterSplice = something' (detectSplice spn) pm_parsed_source
+            mcmds <- forM mouterSplice $
+                \(spliceSpan, spliceContext) ->
+                    forM expandStyles $ \(_style, title, cmdId) -> do
+                        let params = ExpandSpliceParams {uri = theUri, ..}
+                        act <- liftIO $ mkLspCommand plId cmdId title (Just [toJSON params])
+                        pure $
+                            CACodeAction $
+                                CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing (Just act)
+
+            pure $ maybe mempty List mcmds
     where
         theUri = docId ^. J.uri
-        go ran' fs ast =
-            forM_ (smallestContainingSatisfying (rangeToRealSrcSpan ran' fs) isSpliceNode ast) $
-                \Node {..} -> do
-                    let NodeInfo {..} = nodeInfo
-                        spCxt
-                            | ("SplicePat", "Pat") `Set.member` nodeAnnotations =
-                                Just Pat
-                            | ("HsSpliceE", "HsExpr") `Set.member` nodeAnnotations = Just Expr
-                            | ("HsSpliceTy", "HsType") `Set.member` nodeAnnotations = Just HsType
-                            {- FIXME:  HsDecl needs different treatment
-                            | ("SpliceD", "HsDecl") `Set.member` nodeAnnotations = Just HsDecl
-                            -}
-                            | otherwise = Nothing
-                    forM_ spCxt $ \spliceContext -> forM_ expandStyles $ \(_style, title, cmdId) -> do
-                        let range = realSrcSpanToRange nodeSpan
-                            params = ExpandSpliceParams {uri = theUri, ..}
-                        act <-
-                            liftIO $
-                                mkLspCommand plId cmdId title (Just [toJSON params])
-                        tell $
-                            DL.singleton $
-                                CACodeAction $
-                                    CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing (Just act)
+        detectSplice ::
+            RealSrcSpan ->
+            GenericQ (Maybe (RealSrcSpan, SpliceContext))
+        detectSplice spn =
+            mkQ
+                Nothing
+                ( \case
+                    (L l@(RealSrcSpan spLoc) HsSpliceE{}  :: LHsExpr GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, Expr)
+                    _ -> Nothing
+                )
+                `extQ` \case
+                    (L l@(RealSrcSpan spLoc) SplicePat {} :: LPat GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, Pat)
+                    _ -> Nothing
+                `extQ` \case
+                    (L l@(RealSrcSpan spLoc) HsSpliceTy {} :: LHsType GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, HsType)
+                    _ -> Nothing
+
+-- | Like 'something', but performs in bottom-up manner.
+something' :: forall a. GenericQ (Maybe a) -> GenericQ (Maybe a)
+something' = everything (flip (<|>))
 
 posToRealSrcLoc :: Position -> FastString -> RealSrcLoc
 posToRealSrcLoc pos fs = mkRealSrcLoc fs (line + 1) (col + 1)
@@ -249,22 +267,6 @@ rangeToRealSrcSpan ran fs =
     mkRealSrcSpan
         (posToRealSrcLoc (_start ran) fs)
         (posToRealSrcLoc (_end ran) fs)
-
-isSpliceNode :: HieAST Type -> Bool
-isSpliceNode Node {..} =
-    not $
-        Set.null $
-            spliceAnns
-                `Set.intersection` nodeAnnotations nodeInfo
-
-spliceAnns :: Set (FastString, FastString)
-spliceAnns =
-    Set.fromList
-        [ ("SplicePat", "Pat")
-        , ("HsSpliceE", "HsExpr")
-        , ("HsSpliceTy", "HsType")
-        -- , ("SpliceD", "HsDecl") -- FIXME: HsDecl
-        ]
 
 expandStyles :: [(ExpandStyle, T.Text, CommandId)]
 expandStyles =

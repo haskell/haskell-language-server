@@ -7,11 +7,12 @@ module Ide.Plugin.Splice.Types where
 import Data.Aeson (FromJSON, ToJSON)
 import Development.IDE (Range, Uri)
 import GHC.Generics (Generic)
+import Development.IDE.GHC.Compat (RealSrcSpan)
 
 -- | Parameter for the addMethods PluginCommand.
 data ExpandSpliceParams = ExpandSpliceParams
     { uri :: Uri
-    , range :: Range
+    , spliceSpan :: RealSrcSpan
     , spliceContext :: SpliceContext
     }
     deriving (Show, Eq, Generic)

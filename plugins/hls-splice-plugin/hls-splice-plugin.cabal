@@ -27,6 +27,7 @@ library
                   , dlist
                   , retrie
                   , shake
+                  , syb
                   , text
                   , transformers
                   , unordered-containers
