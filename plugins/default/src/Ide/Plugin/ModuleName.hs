@@ -24,7 +24,7 @@ import qualified Data.HashMap.Strict as Map
 import Data.List (find, intercalate, isPrefixOf)
 import Data.Maybe (maybeToList)
 import Data.String (IsString)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import qualified Data.Text as T
 -- import Debug.Trace (trace)
 import Development.IDE (
@@ -47,7 +47,6 @@ import Development.IDE (
     use,
     use_,
  )
-import Development.IDE.Plugin (getPid)
 import GHC (
     DynFlags (importPaths),
     GenLocated (L),
@@ -57,7 +56,7 @@ import GHC (
     getSessionDynFlags,
     unLoc,
  )
-import Ide.Plugin (mkLspCmdId)
+import Ide.PluginUtils (mkLspCmdId, getProcessID)
 import Ide.Types (
     CommandFunction,
     PluginCommand (..),
@@ -92,7 +91,7 @@ import System.FilePath (
  )
 
 -- |Plugin descriptor
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
         { pluginCodeLensProvider = Just codeLens
@@ -118,11 +117,11 @@ codeLens ::
     IO (Either a2 (List CodeLens))
 codeLens lsp state pluginId (CodeLensParams (TextDocumentIdentifier uri) _) =
     do
-        pid <- getPid
+        pid <- pack . show <$> getProcessID
         Right . List . maybeToList . (asCodeLens (mkLspCmdId pid pluginId editCommandName) <$>) <$> action lsp state uri
 
 -- | (Quasi) Idempotent command execution: recalculate action to execute on command request
-command :: CommandFunction Uri
+command :: CommandFunction IdeState Uri
 command lsp state uri = do
     actMaybe <- action lsp state uri
     return

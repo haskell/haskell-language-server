@@ -1,14 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Plugins where
+import           Ide.Types                 (IdePlugins)
+import           Ide.PluginUtils           (pluginDescToIdePlugins)
 
 import Ide.Plugin (pluginDescToIdePlugins)
 -- fixed plugins
-import Ide.Plugin.Example as Example
-import Ide.Plugin.Example2 as Example2
-import Ide.Plugin.GhcIde as GhcIde
-import Ide.Types (IdePlugins)
+import           Ide.Plugin.Example        as Example
+import           Ide.Plugin.Example2       as Example2
+import           Development.IDE           (IdeState)
+import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
 
 -- haskell-language-server optional plugins
 
@@ -73,12 +74,12 @@ import           Ide.Plugin.Brittany       as Brittany
 
 -- ---------------------------------------------------------------------
 
-{- | The plugins configured for use in this instance of the language
- server.
- These can be freely added or removed to tailor the available
- features of the server.
--}
-idePlugins :: Bool -> IdePlugins
+-- | The plugins configured for use in this instance of the language
+-- server.
+-- These can be freely added or removed to tailor the available
+-- features of the server.
+
+idePlugins :: Bool -> IdePlugins IdeState
 idePlugins includeExamples = pluginDescToIdePlugins allPlugins
     where
     allPlugins = if includeExamples

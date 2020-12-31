@@ -1,14 +1,47 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Ide.PluginUtils where
+module Ide.PluginUtils
+  ( WithDeletions(..),
+    getProcessID,
+    normalize,
+    makeDiffTextEdit,
+    makeDiffTextEditAdditive,
+    diffText,
+    diffText',
+    pluginDescToIdePlugins,
+    responseError,
+    getClientConfig,
+    getPluginConfig,
+    configForPlugin,
+    pluginEnabled,
+    extractRange,
+    fullRange,
+    mkLspCommand,
+    mkLspCmdId,
+  allLspCmdIds,allLspCmdIds')
+where
 
-import qualified Data.Text as T
-import           Data.Maybe
-import           Data.Algorithm.DiffOutput
+
 import           Data.Algorithm.Diff
-import qualified Data.HashMap.Strict as H
-import           Language.Haskell.LSP.Types.Capabilities
-import qualified Language.Haskell.LSP.Types            as J
+import           Data.Algorithm.DiffOutput
+import qualified Data.HashMap.Strict                     as H
+import           Data.Maybe
+import qualified Data.Text                               as T
+import           Ide.Types
 import           Language.Haskell.LSP.Types
+import qualified Language.Haskell.LSP.Types              as J
+import           Language.Haskell.LSP.Types.Capabilities
+
+#ifdef mingw32_HOST_OS
+import qualified System.Win32.Process                    as P (getCurrentProcessId)
+#else
+import qualified System.Posix.Process                    as P (getProcessID)
+#endif
+import qualified Data.Aeson                              as J
+import qualified Data.Default
+import qualified Data.Map.Strict                         as Map
+import           Ide.Plugin.Config
+import qualified Language.Haskell.LSP.Core               as LSP
 
 -- ---------------------------------------------------------------------
 
@@ -45,7 +78,7 @@ diffTextEdit fText f2Text withDeletions = J.List r
                      (diffToLineRanges d)
 
     isDeletion (Deletion _ _) = True
-    isDeletion _ = False
+    isDeletion _              = False
 
 
     diffOperationToTextEdit :: DiffOperation LineRange -> J.TextEdit
@@ -108,3 +141,113 @@ clientSupportsDocumentChanges caps =
         mDc
   in
     fromMaybe False supports
+
+-- ---------------------------------------------------------------------
+
+pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
+pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginId p, p)) plugins
+
+
+-- ---------------------------------------------------------------------
+
+responseError :: T.Text -> ResponseError
+responseError txt = ResponseError InvalidParams txt Nothing
+
+
+-- ---------------------------------------------------------------------
+-- | Returns the current client configuration. It is not wise to permanently
+-- cache the returned value of this function, as clients can at runitime change
+-- their configuration.
+--
+-- If no custom configuration has been set by the client, this function returns
+-- our own defaults.
+getClientConfig :: LSP.LspFuncs Config -> IO Config
+getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
+
+-- ---------------------------------------------------------------------
+
+-- | Returns the current plugin configuration. It is not wise to permanently
+-- cache the returned value of this function, as clients can change their
+-- configuration at runtime.
+--
+-- If no custom configuration has been set by the client, this function returns
+-- our own defaults.
+getPluginConfig :: LSP.LspFuncs Config -> PluginId -> IO PluginConfig
+getPluginConfig lf plugin = do
+    config <- getClientConfig lf
+    return $ configForPlugin config plugin
+
+configForPlugin :: Config -> PluginId -> PluginConfig
+configForPlugin config (PluginId plugin)
+    = Map.findWithDefault Data.Default.def plugin (plugins config)
+
+-- ---------------------------------------------------------------------
+
+-- | Checks that a given plugin is both enabled and the specific feature is
+-- enabled
+pluginEnabled :: PluginConfig -> (PluginConfig -> Bool) -> Bool
+pluginEnabled pluginConfig f = plcGlobalOn pluginConfig && f pluginConfig
+
+-- ---------------------------------------------------------------------
+
+extractRange :: Range -> T.Text -> T.Text
+extractRange (Range (Position sl _) (Position el _)) s = newS
+  where focusLines = take (el-sl+1) $ drop sl $ T.lines s
+        newS = T.unlines focusLines
+
+-- | Gets the range that covers the entire text
+fullRange :: T.Text -> Range
+fullRange s = Range startPos endPos
+  where startPos = Position 0 0
+        endPos = Position lastLine 0
+        {-
+        In order to replace everything including newline characters,
+        the end range should extend below the last line. From the specification:
+        "If you want to specify a range that contains a line including
+        the line ending character(s) then use an end position denoting
+        the start of the next line"
+        -}
+        lastLine = length $ T.lines s
+
+-- ---------------------------------------------------------------------
+
+allLspCmdIds' :: T.Text -> IdePlugins ideState -> [T.Text]
+allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
+    where
+        justs (p, Just x)  = [(p, x)]
+        justs (_, Nothing) = []
+
+        ls = Map.toList (ipMap mp)
+
+        mkPlugin maker selector
+            = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls
+
+
+allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]
+allLspCmdIds pid commands = concat $ map go commands
+  where
+    go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
+
+mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [J.Value] -> IO Command
+mkLspCommand plid cn title args' = do
+  pid <- getPid
+  let cmdId = mkLspCmdId pid plid cn
+  let args = List <$> args'
+  return $ Command title cmdId args
+
+mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
+mkLspCmdId pid (PluginId plid) (CommandId cid)
+  = pid <> ":" <> plid <> ":" <> cid
+
+-- | Get the operating system process id for the running server
+-- instance. This should be the same for the lifetime of the instance,
+-- and different from that of any other currently running instance.
+getPid :: IO T.Text
+getPid = T.pack . show <$> getProcessID
+
+getProcessID :: IO Int
+#ifdef mingw32_HOST_OS
+getProcessID = fromIntegral <$> P.getCurrentProcessId
+#else
+getProcessID = fromIntegral <$> P.getProcessID
+#endif

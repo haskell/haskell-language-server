@@ -136,7 +136,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                       } <- getShakeExtras
 
     IdeOptions{ optTesting = IdeTesting optTesting
-              , optCheckProject = CheckProject checkProject
+              , optCheckProject = checkProject
               , optCustomDynFlags
               , optExtensions
               } <- getIdeOptions

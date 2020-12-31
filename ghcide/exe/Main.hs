@@ -28,8 +28,6 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Types.Logger
 import Development.IDE.Plugin
-import Development.IDE.Plugin.Completions as Completions
-import Development.IDE.Plugin.CodeAction as CodeAction
 import Development.IDE.Plugin.Test as Test
 import Development.IDE.Session (loadSession)
 import qualified Language.Haskell.LSP.Core as LSP
@@ -54,6 +52,10 @@ import Development.IDE (action)
 import Text.Printf
 import Development.IDE.Core.Tracing
 import Development.IDE.Types.Shake (Key(Key))
+import Development.IDE.Plugin.HLS (asGhcIdePlugin)
+import Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import Ide.Plugin.Config
+import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 
 ghcideVersion :: IO String
 ghcideVersion = do
@@ -83,18 +85,23 @@ main = do
     whenJust argsCwd IO.setCurrentDirectory
 
     dir <- IO.getCurrentDirectory
-    command <- makeLspCommandId "typesignature.add"
 
-    let plugins = Completions.plugin <> CodeAction.plugin
+    let hlsPlugins = pluginDescToIdePlugins [GhcIde.descriptor "ghcide"]
+
+    pid <- T.pack . show <$> getProcessID
+    let hlsPlugin = asGhcIdePlugin hlsPlugins
+        hlsCommands = allLspCmdIds' pid hlsPlugins
+
+    let plugins = hlsPlugin
             <> if argsTesting then Test.plugin else mempty
-        onInitialConfiguration :: InitializeRequest -> Either T.Text LspConfig
+        onInitialConfiguration :: InitializeRequest -> Either T.Text Config
         onInitialConfiguration x = case x ^. params . initializationOptions of
-          Nothing -> Right defaultLspConfig
+          Nothing -> Right def
           Just v -> case J.fromJSON v of
             J.Error err -> Left $ T.pack err
             J.Success a -> Right a
         onConfigurationChange = const $ Left "Updating Not supported"
-        options = def { LSP.executeCommandCommands = Just [command]
+        options = def { LSP.executeCommandCommands = Just hlsCommands
                       , LSP.completionTriggerCharacters = Just "."
                       }
 
@@ -106,7 +113,7 @@ main = do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             sessionLoader <- loadSession $ fromMaybe dir rootPath
-            config <- fromMaybe defaultLspConfig <$> getConfig
+            config <- fromMaybe def <$> getConfig
             let options = (defaultIdeOptions sessionLoader)
                     { optReportProgress    = clientSupportsProgress caps
                     , optShakeProfiling    = argsShakeProfiling
@@ -159,7 +166,7 @@ main = do
                     , optTesting           = IdeTesting argsTesting
                     , optThreads           = argsThreads
                     , optCheckParents      = NeverCheck
-                    , optCheckProject      = CheckProject False
+                    , optCheckProject      = False
                     }
             logLevel = if argsVerbose then minBound else Info
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs
