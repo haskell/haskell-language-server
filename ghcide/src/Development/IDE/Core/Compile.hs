@@ -158,39 +158,29 @@ captureSplices dflags k = do
   return (res, splices)
   where
     addSpliceHook :: IORef Splices -> Hooks -> Hooks
-    addSpliceHook var h = h { runMetaHook = Just (splice_hook var) }
+    addSpliceHook var h = h { runMetaHook = Just (splice_hook (runMetaHook h) var) }
 
-    splice_hook :: IORef Splices -> MetaHook TcM
-    splice_hook var metaReq e = case metaReq of
+    splice_hook :: Maybe (MetaHook TcM) -> IORef Splices -> MetaHook TcM
+    splice_hook (fromMaybe defaultRunMeta -> hook) var metaReq e = case metaReq of
         (MetaE f) -> do
-            expr' <- metaRequestE defaultRunMeta e
-            liftIO $
-                modifyIORef' var $
-                    exprSplicesL %~ ((e, expr'):)
+            expr' <- metaRequestE hook e
+            liftIO $ modifyIORef' var $ exprSplicesL %~ ((e, expr') :)
             pure $ f expr'
         (MetaP f) -> do
-            pat' <- metaRequestP defaultRunMeta e
-            liftIO $
-                modifyIORef' var $
-                    patSplicesL %~ ((e, pat'):)
+            pat' <- metaRequestP hook e
+            liftIO $ modifyIORef' var $ patSplicesL %~ ((e, pat') :)
             pure $ f pat'
         (MetaT f) -> do
-            type' <- metaRequestT defaultRunMeta e
-            liftIO $
-                modifyIORef' var $
-                    typeSplicesL %~ ((e, type'):)
+            type' <- metaRequestT hook e
+            liftIO $ modifyIORef' var $ typeSplicesL %~ ((e, type') :)
             pure $ f type'
         (MetaD f) -> do
-            decl' <- metaRequestD defaultRunMeta e
-            liftIO $
-                modifyIORef' var $
-                    declSplicesL %~ ((e, decl'):)
+            decl' <- metaRequestD hook e
+            liftIO $ modifyIORef' var $ declSplicesL %~ ((e, decl') :)
             pure $ f decl'
         (MetaAW f) -> do
-            aw' <- metaRequestAW defaultRunMeta e
-            liftIO $
-                modifyIORef' var $
-                    awSplicesL %~ ((e, aw'):)
+            aw' <- metaRequestAW hook e
+            liftIO $ modifyIORef' var $ awSplicesL %~ ((e, aw') :)
             pure $ f aw'
 
 
