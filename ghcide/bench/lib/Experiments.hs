@@ -20,12 +20,10 @@ module Experiments
 , exampleToOptions
 ) where
 import Control.Applicative.Combinators (skipManyTill)
-import Control.Concurrent
 import Control.Exception.Safe
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Data.Aeson (Value(Null))
-import Data.Char (isDigit)
 import Data.List
 import Data.Maybe
 import qualified Data.Text as T
@@ -245,8 +243,7 @@ runBenchmarksFun dir allBenchmarks = do
         , "userTime"
         , "delayedTime"
         , "totalTime"
-        , "maxResidency"
-        , "allocatedBytes"]
+        ]
       rows =
         [ [ name,
             show success,
@@ -255,9 +252,7 @@ runBenchmarksFun dir allBenchmarks = do
             show runSetup',
             show userWaits,
             show delayedWork,
-            show runExperiment,
-            show maxResidency,
-            show allocations
+            show runExperiment
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -277,9 +272,7 @@ runBenchmarksFun dir allBenchmarks = do
             showDuration runSetup',
             showDuration userWaits,
             showDuration delayedWork,
-            showDuration runExperiment,
-            showMB maxResidency,
-            showMB allocations
+            showDuration runExperiment
           ]
           | (Bench {name, samples}, BenchRun {..}) <- results,
             let runSetup' = if runSetup < 0.01 then 0 else runSetup
@@ -325,13 +318,11 @@ data BenchRun = BenchRun
     runExperiment :: !Seconds,
     userWaits :: !Seconds,
     delayedWork :: !Seconds,
-    success :: !Bool,
-    maxResidency :: !Int,
-    allocations :: !Int
+    success :: !Bool
   }
 
 badRun :: BenchRun
-badRun = BenchRun 0 0 0 0 0 False 0 0
+badRun = BenchRun 0 0 0 0 0 False
 
 waitForProgressDone :: Session ()
 waitForProgressDone =
@@ -379,15 +370,6 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
       (runExperiment, result) <- duration $ loop 0 0 samples
       let success = isJust result
           (userWaits, delayedWork) = fromMaybe (0,0) result
-          gcStats = escapeSpaces (name <> ".benchmark-gcStats")
-
-      -- sleep to give ghcide a chance to GC
-      liftIO $ threadDelay 1100000
-
-      (maxResidency, allocations) <- liftIO $
-          ifM (doesFileExist gcStats)
-              (parseMaxResidencyAndAllocations <$> readFile gcStats)
-              (pure (0,0))
 
       return BenchRun {..}
 
@@ -500,29 +482,10 @@ setupDocumentContents config =
 
 --------------------------------------------------------------------------------------------
 
--- Parse the max residency and allocations in RTS -s output
-parseMaxResidencyAndAllocations :: String -> (Int, Int)
-parseMaxResidencyAndAllocations input =
-    (f "maximum residency", f "bytes allocated in the heap")
-  where
-    inps = reverse $ lines input
-    f label = case find (label `isInfixOf`) inps of
-        Just l -> read $ filter isDigit $ head $ words l
-        Nothing -> -1
-
-escapeSpaces :: String -> String
-escapeSpaces = map f
-  where
-    f ' ' = '_'
-    f x = x
-
 pad :: Int -> String -> String
 pad n [] = replicate n ' '
 pad 0 _ = error "pad"
 pad n (x:xx) = x : pad (n-1) xx
-
-showMB :: Int -> String
-showMB x = show (x `div` 2^(20::Int)) <> "MB"
 
 -- | Search for a position where:
 --     - get definition works and returns a uri other than this file
