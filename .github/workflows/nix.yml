@@ -8,8 +8,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['default', 'ghc8102', 'ghc884', 'ghc865']
+        ghc: ['ghc8101', 'ghc8102', 'ghc882', 'ghc883', 'ghc884', 'ghc865']
         os: [ubuntu-latest, macOS-latest]
+        ghc-lib: [false]
+        include:
+          # one ghc-lib build
+          - os: ubuntu-latest
+            ghc: 'ghc8101'
+            ghc-lib: true
 
     steps:
     - uses: actions/checkout@v2
@@ -22,4 +28,27 @@ jobs:
       with:
         name: haskell-language-server
         authToken: '${{ secrets.HLS_CACHIX_AUTH_TOKEN }}'
-    - run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"
+    - name: Build
+      run: nix-shell --argstr compiler ${{ matrix.ghc }} --run "cabal update && cabal build"
+
+    - name: Test ghcide
+      if: ${{ !matrix.ghc-lib }}
+      shell: bash
+      # run the tests without parallelism to avoid running out of memory
+      run: nix-shell --argstr compiler ${{ matrix.ghc}} --run "cabal test ghcide --test-options='-j1 --rerun-update' || cabal test ghcide --test-options='-j1 --rerun' || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options='-j1 --rerun'"
+
+    - name: Test func-test suite
+      if: ${{ !matrix.ghc-lib }}
+      shell: bash
+      # run the tests without parallelism, otherwise tasty will attempt to run
+      # all functional test cases simultaneously which causes way too many hls
+      # instances to be spun up for the poor github actions runner to handle
+      run: nix-shell --argstr compiler ${{ matrix.ghc}} --run "cabal test func-test --test-options='-j1 --rerun-update' || cabal test func-test --test-options='-j1 --rerun --rerun-update' || cabal test func-test --test-options='-j1 --rerun' || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test func-test --test-options='-j1 --rerun'"
+
+    - name: Test wrapper-test suite
+      if: ${{ !matrix.ghc-lib }}
+      shell: bash
+      # run the tests without parallelism, otherwise tasty will attempt to run
+      # all functional test cases simultaneously which causes way too many hls
+      # instances to be spun up for the poor github actions runner to handle
+      run: nix-shell --argstr compiler ${{ matrix.ghc}} --run "cabal test wrapper-test --test-options=-j1 || cabal test wrapper-test --test-options=-j1 || cabal test wrapper-test --test-options=-j1"
