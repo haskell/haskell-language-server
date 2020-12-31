@@ -131,10 +131,12 @@ expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
                     Expr -> graftSpliceWith exprSuperSpans
                     Pat -> graftSpliceWith patSuperSpans
                     HsType -> graftSpliceWith typeSuperSpans
-            pure $ case eedits of
-                Left err ->
-                    (Left $ responseError $ T.pack err, Nothing)
-                Right edits ->
+            case eedits of
+                Left err -> do
+                    reportEditor lsp MtError
+                        ["Error during expanding splice: " <> T.pack err]
+                    pure (Left $ responseError $ T.pack err, Nothing)
+                Right edits -> pure
                     ( Right Null
                     , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
                     )
