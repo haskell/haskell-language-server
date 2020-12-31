@@ -93,6 +93,8 @@ expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
                     listToMaybe $ findSubSpansDesc srcSpan patSplices
                 typeSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan typeSplices
+                declSueprSpans =
+                    listToMaybe $ findSubSpansDesc srcSpan declSplices
 
                 graftSpliceWith ::
                     forall ast.
@@ -116,6 +118,7 @@ expandTHSplice _eStyle lsp ideState ExpandSpliceParams {..} =
                     Expr -> graftSpliceWith exprSuperSpans
                     Pat -> graftSpliceWith patSuperSpans
                     HsType -> graftSpliceWith typeSuperSpans
+                    HsDecl -> mzero
             case eedits of
                 Left err -> do
                     reportEditor
