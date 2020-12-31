@@ -1,4 +1,6 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -8,19 +10,28 @@
 module Ide.TreeTransform
     ( Graft,
       graft,
+      hoistGraft,
       graftWithM,
       graftWithSmallestM,
       transform,
       transformM,
       useAnnotatedSource,
-      ASTElement(..),
+      annotateParsedSource,
+      ASTElement (..),
+      ExceptStringT (..),
     )
 where
 
 import BasicTypes (appPrec)
+import Control.Applicative (Alternative)
 import Control.Monad
 import qualified Control.Monad.Fail as Fail
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
+import Control.Monad.Zip
+import Data.Functor.Classes
+import Data.Functor.Contravariant
 import qualified Data.Text as T
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Rules
@@ -34,7 +45,7 @@ import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable
-import Retrie.ExactPrint hiding (parseExpr, parsePattern, parseType, parseDecl)
+import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
 
 ------------------------------------------------------------------------------
 
@@ -44,9 +55,12 @@ useAnnotatedSource ::
     IdeState ->
     NormalizedFilePath ->
     IO (Maybe (Annotated ParsedSource))
-useAnnotatedSource herald state nfp = do
-    pm <- runAction herald state $ use GetParsedModule nfp
-    pure $ fmap fixAnns pm
+useAnnotatedSource herald state nfp =
+    fmap annotateParsedSource
+        <$> runAction herald state (use GetParsedModule nfp)
+
+annotateParsedSource :: ParsedModule -> Annotated ParsedSource
+annotateParsedSource = fixAnns
 
 ------------------------------------------------------------------------------
 
@@ -56,6 +70,34 @@ useAnnotatedSource herald state nfp = do
 newtype Graft m a = Graft
     { runGraft :: DynFlags -> a -> TransformT m a
     }
+
+hoistGraft :: (forall x. m x -> n x) -> Graft m a -> Graft n a
+hoistGraft h (Graft f) = Graft (fmap (hoistTransform h) . f)
+
+newtype ExceptStringT m a = ExceptStringT {runExceptString :: ExceptT String m a}
+    deriving newtype
+        ( MonadTrans
+        , Monad
+        , Functor
+        , Applicative
+        , Alternative
+        , Foldable
+        , Contravariant
+        , MonadIO
+        , Eq1
+        , Ord1
+        , Show1
+        , Read1
+        , MonadZip
+        , MonadPlus
+        , Eq
+        , Ord
+        , Show
+        , Read
+        )
+
+instance Monad m => Fail.MonadFail (ExceptStringT m) where
+    fail = ExceptStringT . ExceptT . pure . Left
 
 instance Monad m => Semigroup (Graft m a) where
     Graft a <> Graft b = Graft $ \dflags -> a dflags >=> b dflags
@@ -87,14 +129,15 @@ transformM ::
     DynFlags ->
     ClientCapabilities ->
     Uri ->
-    Graft m ParsedSource ->
+    Graft (ExceptStringT m) ParsedSource ->
     Annotated ParsedSource ->
-    m WorkspaceEdit
-transformM dflags ccs uri f a = do
-    let src = printA a
-    a' <- transformA a $ runGraft f dflags
-    let res = printA a'
-    pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
+    m (Either String WorkspaceEdit)
+transformM dflags ccs uri f a = runExceptT $
+    runExceptString $ do
+        let src = printA a
+        a' <- transformA a $ runGraft f dflags
+        let res = printA a'
+        pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 ------------------------------------------------------------------------------
 
@@ -103,19 +146,19 @@ transformM dflags ccs uri f a = do
  this is a no-op.
 -}
 graft ::
-    forall a.
-    Data a =>
+    forall ast a.
+    (Data a, ASTElement ast) =>
     SrcSpan ->
-    LHsExpr GhcPs ->
+    Located ast ->
     Graft (Either String) a
 graft dst val = Graft $ \dflags a -> do
-    (anns, val') <- annotate dflags $ parenthesize val
+    (anns, val') <- annotate dflags $ maybeParensAST val
     modifyAnnsT $ mappend anns
     pure $
         everywhere'
             ( mkT $
                 \case
-                    (L src _ :: LHsExpr GhcPs) | src == dst -> val'
+                    (L src _ :: Located ast) | src == dst -> val'
                     l -> l
             )
             a
@@ -199,6 +242,7 @@ instance p ~ GhcPs => ASTElement (HsDecl p) where
     maybeParensAST = id
 
 ------------------------------------------------------------------------------
+
 -- | Dark magic I stole from retrie. No idea what it does.
 fixAnns :: ParsedModule -> Annotated ParsedSource
 fixAnns ParsedModule {..} =
