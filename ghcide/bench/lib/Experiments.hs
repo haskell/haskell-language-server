@@ -44,81 +44,71 @@ import System.Process
 import System.Time.Extra
 import Text.ParserCombinators.ReadP (readP_to_S)
 
-hygienicEdit :: (?hygienicP :: Position) => TextDocumentContentChangeEvent
-hygienicEdit =
+charEdit :: Position -> TextDocumentContentChangeEvent
+charEdit p =
     TextDocumentContentChangeEvent
-    { _range = Just (Range ?hygienicP ?hygienicP),
-        _rangeLength = Nothing,
-        _text = " "
-    }
-
-breakingEdit :: (?identifierP :: Position) => TextDocumentContentChangeEvent
-breakingEdit =
-    TextDocumentContentChangeEvent
-    { _range = Just (Range ?identifierP ?identifierP),
+    { _range = Just (Range p p),
         _rangeLength = Nothing,
         _text = "a"
     }
 
--- | Experiments have access to these special positions:
--- - hygienicP points to a string in the target file, convenient for hygienic edits
--- - identifierP points to the middle of an identifier, convenient for goto-def, hover and completions
-type HasPositions = (?hygienicP :: Position, ?identifierP :: Position)
+data DocumentPositions = DocumentPositions {
+    identifierP, stringLiteralP :: !Position,
+    doc :: !TextDocumentIdentifier
+}
 
 experiments :: [Bench]
 experiments =
     [ ---------------------------------------------------------------------------------------
-      bench "hover" 10 $ \doc ->
-        isJust <$> getHover doc ?identifierP,
+      bench "hover" 10 $ allM $ \DocumentPositions{..} ->
+        isJust <$> getHover doc identifierP,
       ---------------------------------------------------------------------------------------
-      bench "edit" 10 $ \doc -> do
-        changeDoc doc [hygienicEdit]
+      bench "edit" 10 $  allM $ \DocumentPositions{..} -> do
+        changeDoc doc [charEdit stringLiteralP]
         waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
-      bench "hover after edit" 10 $ \doc -> do
-        changeDoc doc [hygienicEdit]
-        isJust <$> getHover doc ?identifierP,
+      bench "hover after edit" 10 $ allM $ \DocumentPositions{..} -> do
+        changeDoc doc [charEdit stringLiteralP]
+        isJust <$> getHover doc identifierP,
       ---------------------------------------------------------------------------------------
-      bench "getDefinition" 10 $ \doc ->
-        not . null <$> getDefinitions doc ?identifierP,
+      bench "getDefinition" 10 $ allM $ \DocumentPositions{..} ->
+        not . null <$> getDefinitions doc identifierP,
       ---------------------------------------------------------------------------------------
-      bench "getDefinition after edit" 10 $ \doc -> do
-        changeDoc doc [hygienicEdit]
-        not . null <$> getDefinitions doc ?identifierP,
+      bench "getDefinition after edit" 10 $ allM $ \DocumentPositions{..} -> do
+        changeDoc doc [charEdit stringLiteralP]
+        not . null <$> getDefinitions doc identifierP,
       ---------------------------------------------------------------------------------------
-      bench "documentSymbols" 100 $
-        fmap (either (not . null) (not . null)) . getDocumentSymbols,
+      bench "documentSymbols" 100 $ allM $ \DocumentPositions{..} -> do
+        fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
       ---------------------------------------------------------------------------------------
-      bench "documentSymbols after edit" 100 $ \doc -> do
-        changeDoc doc [hygienicEdit]
+      bench "documentSymbols after edit" 100 $ allM $ \DocumentPositions{..} -> do
+        changeDoc doc [charEdit stringLiteralP]
         either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
-      bench "completions after edit" 10 $ \doc -> do
-        changeDoc doc [hygienicEdit]
-        not . null <$> getCompletions doc ?identifierP,
+      bench "completions after edit" 10 $ allM $ \DocumentPositions{..} -> do
+        changeDoc doc [charEdit stringLiteralP]
+        not . null <$> getCompletions doc identifierP,
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions"
         10
-        ( \doc -> do
-            changeDoc doc [breakingEdit]
+        ( mapM_ $ \DocumentPositions{..} -> do
+            changeDoc doc [charEdit identifierP]
             waitForProgressDone
-            return ?identifierP
         )
-        ( \p doc -> do
-            not . null <$> getCodeActions doc (Range p p)
+        ( allM $ \DocumentPositions{..} -> do
+            not . null <$> getCodeActions doc (Range identifierP identifierP)
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions after edit"
         10
-        ( \doc -> do
-            changeDoc doc [breakingEdit]
-            return ?identifierP
+        ( mapM_ $ \DocumentPositions{..} ->
+            changeDoc doc [charEdit identifierP]
         )
-        ( \p doc -> do
-            changeDoc doc [hygienicEdit]
+        ( allM $ \DocumentPositions{..} -> do
+            changeDoc doc [charEdit stringLiteralP]
             waitForProgressDone
             -- NOTE ghcide used to clear and reinstall the diagnostics here
             -- new versions no longer do, but keep this logic around
@@ -126,14 +116,11 @@ experiments =
             diags <- getCurrentDiagnostics doc
             when (null diags) $
               whileM (null <$> waitForDiagnostics)
-            not . null <$> getCodeActions doc (Range p p)
+            not . null <$> getCodeActions doc (Range identifierP identifierP)
         )
     ]
 
 ---------------------------------------------------------------------------------------------
-
-exampleModulePath :: HasConfig => FilePath
-exampleModulePath = exampleModule (example ?config)
 
 examplesPath :: FilePath
 examplesPath = "bench/example"
@@ -164,14 +151,14 @@ configP =
     <*> strOption (long "ghcide" <> metavar "PATH" <> help "path to ghcide" <> value "ghcide")
     <*> option auto (long "timeout" <> value 60 <> help "timeout for waiting for a ghcide response")
     <*> ( GetPackage <$> strOption (long "example-package-name" <> value "Cabal")
-               <*> moduleOption
+               <*> (some moduleOption <|> pure ["Distribution/Simple.hs"])
                <*> option versionP (long "example-package-version" <> value (makeVersion [3,2,0,0]))
          <|>
           UsePackage <$> strOption (long "example-path")
-                     <*> moduleOption
+                     <*> some moduleOption
          )
   where
-      moduleOption = strOption (long "example-module" <> metavar "PATH" <> value "Distribution/Simple.hs")
+      moduleOption = strOption (long "example-module" <> metavar "PATH")
 
 versionP :: ReadM Version
 versionP = maybeReader $ extract . readP_to_S parseVersion
@@ -183,15 +170,15 @@ output = if quiet?config then (\_ -> pure ()) else liftIO . putStrLn
 
 ---------------------------------------------------------------------------------------
 
-type Experiment = TextDocumentIdentifier -> Session Bool
+type Experiment = [DocumentPositions] -> Session Bool
 
-data Bench = forall setup.
+data Bench =
   Bench
   { name :: !String,
     enabled :: !Bool,
     samples :: !Natural,
-    benchSetup :: HasPositions => TextDocumentIdentifier -> Session setup,
-    experiment :: HasPositions => setup -> Experiment
+    benchSetup :: [DocumentPositions] -> Session (),
+    experiment :: Experiment
   }
 
 select :: HasConfig => Bench -> Bool
@@ -203,18 +190,16 @@ select Bench {name, enabled} =
 benchWithSetup ::
   String ->
   Natural ->
-  (HasPositions => TextDocumentIdentifier -> Session p) ->
-  (HasPositions => p -> Experiment) ->
+  ([DocumentPositions] -> Session ()) ->
+  Experiment ->
   Bench
 benchWithSetup name samples benchSetup experiment = Bench {..}
   where
     enabled = True
 
-bench :: String -> Natural -> (HasPositions => Experiment) -> Bench
-bench name defSamples userExperiment =
-  benchWithSetup name defSamples (const $ pure ()) experiment
-  where
-    experiment () = userExperiment
+bench :: String -> Natural -> Experiment -> Bench
+bench name defSamples =
+  benchWithSetup name defSamples (const $ pure ())
 
 runBenchmarksFun :: HasConfig => FilePath -> [Bench] -> IO ()
 runBenchmarksFun dir allBenchmarks = do
@@ -331,55 +316,57 @@ waitForProgressDone =
 runBench ::
   (?config :: Config) =>
   (Session BenchRun -> IO BenchRun) ->
-  (HasPositions => Bench) ->
+  Bench ->
   IO BenchRun
 runBench runSess b = handleAny (\e -> print e >> return badRun)
   $ runSess
   $ do
-    doc <- openDoc exampleModulePath "haskell"
+    docs <- forM (exampleModules $ example ?config) $ \m -> do
+        doc <- openDoc m "haskell"
 
-    -- Setup the special positions used by the experiments
-    lastLine <- length . T.lines <$> documentContents doc
-    changeDoc doc [TextDocumentContentChangeEvent
-        { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
-        , _rangeLength = Nothing
-        , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
-        }]
-    let
-      -- Points to a string in the target file,
-      -- convenient for hygienic edits
-      ?hygienicP = Position lastLine 15
+        -- Setup the special positions used by the experiments
+        lastLine <- length . T.lines <$> documentContents doc
+        changeDoc doc [TextDocumentContentChangeEvent
+            { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
+            , _rangeLength = Nothing
+            , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
+            }]
+        let
+        -- Points to a string in the target file,
+        -- convenient for hygienic edits
+            stringLiteralP = Position lastLine 15
 
-    -- Find an identifier defined in another file in this project
-    Left [DocumentSymbol{_children = Just (List symbols)}] <- getDocumentSymbols doc
+        -- Find an identifier defined in another file in this project
+        Left [DocumentSymbol{_children = Just (List symbols)}] <- getDocumentSymbols doc
 
-    let endOfImports = case symbols of
-            DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
-                Position (succ $ _line $ _end _range) 4
-            DocumentSymbol{_range} : _ -> _start _range
-            [] -> error "Module has no symbols"
-    contents <- documentContents doc
+        let endOfImports = case symbols of
+                DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
+                    Position (succ $ _line $ _end _range) 4
+                DocumentSymbol{_range} : _ -> _start _range
+                [] -> error "Module has no symbols"
+        contents <- documentContents doc
 
-    identifierP <- searchSymbol doc contents endOfImports
-    liftIO $ print identifierP
+        mb_identifierP <- searchSymbol doc contents endOfImports
 
-    let ?identifierP =
-            fromMaybe (error $ "Failed to find a benchmark position in document: " <> exampleModulePath)
-                      identifierP
+        let identifierP =
+              fromMaybe (error $ "Failed to find a benchmark position in document: " <> m)
+                        mb_identifierP
+        return $ DocumentPositions{..}
 
     case b of
      Bench{..} -> do
       (startup, _) <- duration $ do
         -- wait again, as the progress is restarted once while loading the cradle
         -- make an edit, to ensure this doesn't block
-        changeDoc doc [hygienicEdit]
+        let DocumentPositions{..} = head docs
+        changeDoc doc [charEdit stringLiteralP]
         waitForProgressDone
 
       liftIO $ output $ "Running " <> name <> " benchmark"
-      (runSetup, userState) <- duration $ benchSetup doc
+      (runSetup, ()) <- duration $ benchSetup docs
       let loop !userWaits !delayedWork 0 = return $ Just (userWaits, delayedWork)
           loop !userWaits !delayedWork n = do
-            (t, res) <- duration $ experiment userState doc
+            (t, res) <- duration $ experiment docs
             if not res
               then return Nothing
             else do
@@ -500,8 +487,7 @@ showMB x = show (x `div` 2^(20::Int)) <> "MB"
 --     - get definition works and returns a uri other than this file
 --     - get completions returns a non empty list
 searchSymbol :: TextDocumentIdentifier -> T.Text -> Position -> Session (Maybe Position)
-searchSymbol doc@TextDocumentIdentifier{_uri} fileContents =
-    loop
+searchSymbol doc@TextDocumentIdentifier{_uri} fileContents = loop
   where
       loop pos
         | _line pos >= lll =

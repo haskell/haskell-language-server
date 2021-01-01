@@ -98,8 +98,8 @@ createBuildSystem userRules = do
 
   _ <- addOracle $ \GetExperiments {} -> experiments <$> readConfig config
   _ <- addOracle $ \GetVersions {} -> versions <$> readConfig config
-  _ <- addOracle $ \GetExamples{} -> examples <$> readConfig config
-  _ <- addOracle $ \(GetExample name) -> find (\e -> getExampleName e == name) . examples <$> readConfig config
+  _ <- versioned 1 $ addOracle $ \GetExamples{} -> examples <$> readConfig config
+  _ <- versioned 1 $ addOracle $ \(GetExample name) -> find (\e -> getExampleName e == name) . examples <$> readConfig config
   _ <- addOracle $ \GetBuildSystem {} -> buildTool <$> readConfig config
 
   benchResource <- newResource "ghcide-bench" 1
