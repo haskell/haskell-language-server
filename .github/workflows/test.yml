@@ -19,9 +19,9 @@ jobs:
             ghc: "8.8.3" # fails due to segfault
           - os: windows-latest
             ghc: "8.8.2" # fails due to error with Cabal
-        include:
           - os: windows-latest
             ghc: "8.6.4" # times out after 300m
+        include:
           - os: windows-latest
             ghc: "8.10.2.2" # only available for windows and choco
           # one ghc-lib build
