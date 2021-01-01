@@ -54,12 +54,7 @@ tests =
         , goldenTest "TQQType.hs" Inplace 8 28
         , goldenTest "TQQTypeTypeError.hs" Inplace 8 19
         , goldenTest "TQQTypeTypeError.hs" Inplace 8 28
-{-      it must fail (and hence success by expectFail), but no..
-        , expectFail
-        $ testGroup "Type splices with kind error"
-            [goldenTest "TTypeKindError.hs" Inplace 7 9
-            , goldenTest "TTypeKindError.hs" Inplace 7 29]
- -}
+        , goldenTest "TSimpleDecl.hs" Inplace 8 1
         ]
 
 goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree

@@ -10,7 +10,8 @@
 module Ide.TreeTransform
     ( Graft(..),
       graft,
-      graftMany,
+      graftDecls,
+      graftDeclsWithM,
       hoistGraft,
       graftWithM,
       graftWithSmallestM,
@@ -31,6 +32,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Zip
+import qualified Data.DList as DL
 import Data.Functor.Classes
 import Data.Functor.Contravariant
 import qualified Data.Text as T
@@ -45,11 +47,9 @@ import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
-import Outputable
+import Outputable (Outputable, ppr, showSDoc, trace)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
-import qualified Data.DList as DL
-import Data.Monoid (Ap(..))
-
+import Control.Arrow (Arrow(second))
 ------------------------------------------------------------------------------
 
 -- | Get the latest version of the annotated parse source.
@@ -218,37 +218,45 @@ graftWithSmallestM dst trans = Graft $ \dflags a -> do
         )
         a
 
-graftMany ::
-    forall ast a.
-    (Data a, ASTElement ast) =>
+graftDecls ::
+    forall a.
+    (HasDecls a) =>
     SrcSpan ->
-    [Located ast] ->
+    [LHsDecl GhcPs] ->
     Graft (Either String) a
-graftMany dst vals = Graft $ \dflags a -> do
-    everywhereM
-        ( mkM $
-            \case
-                (ast@(L src _ :: Located ast) : rest)
-                    | dst == src -> do
-                        (anns, vals') <-
-                            getAp $
-                                foldMap
-                                    ( Ap
-                                        . fmap
-                                            ( \(ann0, ast') ->
-                                                ( setPrecedingLines ast' 1 0 ann0
-                                                , DL.singleton ast'
-                                                )
-                                            )
-                                        . annotate dflags
-                                        . maybeParensAST
-                                    )
-                                    vals
+graftDecls dst decs0 = Graft $ \dflags a -> do
+    decs <- forM decs0 $ \decl -> do
+        (anns, decl') <- annotateDecl dflags decl
+        modifyAnnsT $ mappend anns
+        pure decl'
+    let go [] = DL.empty
+        go (L src e : rest)
+            | src == dst = DL.fromList decs <> DL.fromList rest
+            | otherwise = DL.singleton (L src e) <> go rest
+    modifyDeclsT (pure . DL.toList . go) a
+
+graftDeclsWithM ::
+    forall a m.
+    (HasDecls a, Fail.MonadFail m) =>
+    SrcSpan ->
+    (LHsDecl GhcPs -> TransformT m (Maybe [LHsDecl GhcPs])) ->
+    Graft m a
+graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
+    let go [] = pure DL.empty
+        go (e@(L src _) : rest)
+            | src == dst = toDecls e >>= \case
+                Just decs0 -> do
+                    decs <- forM decs0 $ \decl -> do
+                        (anns, decl') <-
+                            hoistTransform (either Fail.fail pure) $
+                            annotateDecl dflags decl
                         modifyAnnsT $ mappend anns
-                        pure $ DL.toList vals' ++ rest
-                l -> pure l
-        )
-        a
+                        pure decl'
+                    pure $ DL.fromList decs <> DL.fromList rest
+                Nothing -> (DL.singleton e <>) <$> go rest
+            | otherwise = (DL.singleton e <>) <$> go rest
+    modifyDeclsT (fmap DL.toList . go) a
+
 
 everywhereM' :: forall m. Monad m => GenericM m -> GenericM m
 everywhereM' f = go
@@ -295,6 +303,14 @@ annotate dflags ast = do
     let anns' = setPrecedingLines expr' 0 1 anns
     pure (anns', expr')
 
+-- | Given an 'LHsDecl', compute its exactprint annotations.
+annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (Anns, LHsDecl GhcPs)
+annotateDecl dflags ast = do
+    uniq <- show <$> uniqueSrcSpanT
+    let rendered = render dflags ast
+    (anns, expr') <- lift $ either (Left . show) Right $ parseDecl dflags uniq rendered
+    let anns' = setPrecedingLines expr' 1 0 anns
+    pure (anns', expr')
 ------------------------------------------------------------------------------
 
 -- | Print out something 'Outputable'.
