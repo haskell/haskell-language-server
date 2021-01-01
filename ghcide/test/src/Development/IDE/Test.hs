@@ -15,7 +15,9 @@ module Development.IDE.Test
   , checkDiagnosticsForDoc
   , canonicalizeUri
   , standardizeQuotes
-  ,flushMessages) where
+  , flushMessages
+  , waitForAction
+  ) where
 
 import Control.Applicative.Combinators
 import Control.Lens hiding (List)
@@ -32,6 +34,7 @@ import System.Time.Extra
 import Test.Tasty.HUnit
 import System.Directory (canonicalizePath)
 import Data.Maybe (fromJust)
+import Development.IDE.Plugin.Test (WaitForIdeRuleResult, TestRequest(WaitForIdeRule))
 
 
 -- | (0-based line number, 0-based column number)
@@ -180,3 +183,9 @@ standardizeQuotes msg = let
         repl '`' = '\''
         repl  c   = c
     in  T.map repl msg
+
+waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
+waitForAction key TextDocumentIdentifier{_uri} = do
+    waitId <- sendRequest (CustomClientMethod "test") (WaitForIdeRule key _uri)
+    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId waitId
+    return _result
