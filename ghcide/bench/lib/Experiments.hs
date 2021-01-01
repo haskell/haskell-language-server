@@ -343,24 +343,33 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
     changeDoc doc [TextDocumentContentChangeEvent
         { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
         , _rangeLength = Nothing
-        , _text = T.unlines
-               [ "_hygienic = \"hygienic\""
-               , "_identifier = _hygienic"
-               ]
+        , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
         }]
     let
       -- Points to a string in the target file,
       -- convenient for hygienic edits
       ?hygienicP = Position lastLine 15
-    let
-      -- Points to the middle of an identifier,
-      -- convenient for requesting goto-def, hover and completions
-      ?identifierP = Position (lastLine+1) 15
+
+    -- Find an identifier defined in another file in this project
+    Left [DocumentSymbol{_children = Just (List symbols)}] <- getDocumentSymbols doc
+
+    let endOfImports = case symbols of
+            DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
+                Position (succ $ _line $ _end _range) 4
+            DocumentSymbol{_range} : _ -> _start _range
+            [] -> error "Module has no symbols"
+    contents <- documentContents doc
+
+    identifierP <- searchSymbol doc contents endOfImports
+    liftIO $ print identifierP
+
+    let ?identifierP =
+            fromMaybe (error $ "Failed to find a benchmark position in document: " <> exampleModulePath)
+                      identifierP
 
     case b of
      Bench{..} -> do
       (startup, _) <- duration $ do
-        waitForProgressDone
         -- wait again, as the progress is restarted once while loading the cradle
         -- make an edit, to ensure this doesn't block
         changeDoc doc [hygienicEdit]
@@ -373,7 +382,7 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
             (t, res) <- duration $ experiment userState doc
             if not res
               then return Nothing
-              else do
+            else do
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
                 waitId <- sendRequest (CustomClientMethod "test") WaitForShakeQueue
@@ -486,3 +495,36 @@ pad n (x:xx) = x : pad (n-1) xx
 
 showMB :: Int -> String
 showMB x = show (x `div` 2^(20::Int)) <> "MB"
+
+-- | Search for a position where:
+--     - get definition works and returns a uri other than this file
+--     - get completions returns a non empty list
+searchSymbol :: TextDocumentIdentifier -> T.Text -> Position -> Session (Maybe Position)
+searchSymbol doc@TextDocumentIdentifier{_uri} fileContents =
+    loop
+  where
+      loop pos
+        | _line pos >= lll =
+            return Nothing
+        | _character pos >= lengthOfLine (_line pos) =
+            loop (nextLine pos)
+        | otherwise = do
+                checks <- checkDefinitions pos &&^ checkCompletions pos
+                if checks
+                    then return $ Just pos
+                    else loop (nextIdent pos)
+
+      nextIdent p = p{_character = _character p + 2}
+      nextLine p = Position (_line p + 1) 4
+
+      lengthOfLine n = if n >= lll then 0 else T.length (ll !! n)
+      ll = T.lines fileContents
+      lll = length ll
+
+      checkDefinitions pos = do
+        defs <- getDefinitions doc pos
+        case defs of
+            [Location uri _] -> return $ uri /= _uri
+            _ -> return False
+      checkCompletions pos =
+        not . null <$> getCompletions doc pos

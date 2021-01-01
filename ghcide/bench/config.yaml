@@ -16,23 +16,23 @@ examples:
     version: 3.0.0.0
     module: Distribution/Simple.hs
   # Small-sized project with TH
-  - name: haskell-lsp-types
-    version: 0.22.0.0
-    module: src/Language/Haskell/LSP/Types/Lens.hs
+  - name: lsp-types
+    version: 1.0.0.1
+    module: src/Language/LSP/VFS.hs
 # - path: path-to-example
 #   module: path-to-module
 
 # The set of experiments to execute
 experiments:
-    - hover
-    - edit
-    - getDefinition
+    - "edit"
+    - "hover"
     - "hover after edit"
+    - "getDefinition"
+    - "getDefinition after edit"
     - "completions after edit"
     - "code actions"
     - "code actions after edit"
     - "documentSymbols after edit"
-    - "getDefinition after edit"
 
 # An ordered list of versions to analyze
 versions:
