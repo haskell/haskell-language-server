@@ -83,6 +83,10 @@ experiments =
       bench "getDefinition" 10 $ \doc ->
         not . null <$> getDefinitions doc ?identifierP,
       ---------------------------------------------------------------------------------------
+      bench "getDefinition after edit" 10 $ \doc -> do
+        changeDoc doc [hygienicEdit]
+        not . null <$> getDefinitions doc ?identifierP,
+      ---------------------------------------------------------------------------------------
       bench "documentSymbols" 100 $
         fmap (either (not . null) (not . null)) . getDocumentSymbols,
       ---------------------------------------------------------------------------------------

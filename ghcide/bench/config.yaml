@@ -32,6 +32,7 @@ experiments:
     - "code actions"
     - "code actions after edit"
     - "documentSymbols after edit"
+    - "getDefinition after edit"
 
 # An ordered list of versions to analyze
 versions:
