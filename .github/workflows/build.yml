@@ -35,7 +35,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
-    - uses: actions/setup-haskell@v1
+    - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
@@ -174,4 +174,3 @@ jobs:
           asset_path: bin/haskell-language-server.tar.gz
           asset_name: haskell-language-server-${{ matrix.os }}-${{ github.event.release.tag_name }}.tar.gz
           asset_content_type: application/gzip
-

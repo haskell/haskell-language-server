@@ -29,7 +29,6 @@ import           Development.IDE.GHC.Compat hiding (getLoc)
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics as Generics
 import           GhcPlugins hiding (Var, getLoc, (<>))
-import           Ide.Plugin
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
@@ -42,13 +41,13 @@ import           SrcLoc
 import           TcEnv
 import           TcRnMonad
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCommands = commands
   , pluginCodeActionProvider = Just codeAction
   }
 
-commands :: [PluginCommand]
+commands :: [PluginCommand IdeState]
 commands
   = [ PluginCommand "addMinimalMethodPlaceholders" "add placeholders for minimal methods" addMethodPlaceholders
     ]
@@ -61,7 +60,7 @@ data AddMinimalMethodsParams = AddMinimalMethodsParams
   }
   deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
-addMethodPlaceholders :: CommandFunction AddMinimalMethodsParams
+addMethodPlaceholders :: CommandFunction IdeState AddMinimalMethodsParams
 addMethodPlaceholders lf state AddMinimalMethodsParams{..} = fmap (fromMaybe errorResult) . runMaybeT $ do
   docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
   pm <- MaybeT . runAction "classplugin" state $ use GetParsedModule docPath
@@ -128,7 +127,7 @@ addMethodPlaceholders lf state AddMinimalMethodsParams{..} = fmap (fromMaybe err
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: CodeActionProvider
+codeAction :: CodeActionProvider IdeState
 codeAction _ state plId docId _ context = fmap (fromMaybe errorResult) . runMaybeT $ do
   docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
   actions <- join <$> mapM (mkActions docPath) methodDiags

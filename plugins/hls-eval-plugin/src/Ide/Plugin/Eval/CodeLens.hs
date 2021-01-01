@@ -134,7 +134,6 @@ import HscTypes (
     Target (Target),
     TargetId (TargetFile),
  )
-import Ide.Plugin (mkLspCommand)
 import Ide.Plugin.Eval.Code (
     Statement,
     asStatements,
@@ -184,6 +183,7 @@ import Ide.Plugin.Eval.Util (
     response',
     timed,
  )
+import Ide.PluginUtils (mkLspCommand)
 import Ide.Types (
     CodeLensProvider,
     CommandFunction,
@@ -234,7 +234,7 @@ import Util (OverridingBool (Never))
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
-codeLens :: CodeLensProvider
+codeLens :: CodeLensProvider IdeState
 codeLens lsp st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
@@ -307,7 +307,7 @@ codeLens lsp st plId CodeLensParams{_textDocument} =
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"
 
-evalCommand :: PluginCommand
+evalCommand :: PluginCommand IdeState
 evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 
 -- |Specify the test section to execute
@@ -317,7 +317,7 @@ data EvalParams = EvalParams
     }
     deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
-runEvalCmd :: CommandFunction EvalParams
+runEvalCmd :: CommandFunction IdeState EvalParams
 runEvalCmd lsp st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg

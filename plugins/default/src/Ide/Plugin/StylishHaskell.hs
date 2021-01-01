@@ -8,7 +8,7 @@ where
 import           Control.Monad.IO.Class
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Ide.Plugin.Formatter
+import           Development.IDE (IdeState)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.Stylish
@@ -17,7 +17,7 @@ import           Language.Haskell.LSP.Types            as J
 import           System.Directory
 import           System.FilePath
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginFormattingProvider = Just provider
   }
@@ -25,7 +25,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- | Formatter provider of stylish-haskell.
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
-provider :: FormattingProvider IO
+provider :: FormattingProvider IdeState IO
 provider _lf _ideState typ contents fp _opts = do
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file

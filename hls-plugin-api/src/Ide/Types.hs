@@ -15,6 +15,7 @@ module Ide.Types
     , SymbolsProvider
     , FormattingType(..)
     , FormattingProvider
+    , noneProvider
     , HoverProvider
     , CodeActionProvider
     , CodeLensProvider
@@ -30,7 +31,7 @@ import qualified Data.Map  as Map
 import qualified Data.Set                      as S
 import           Data.String
 import qualified Data.Text                     as T
-import           Development.IDE
+import           Development.Shake
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
 import           Language.Haskell.LSP.Types
@@ -38,29 +39,28 @@ import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-newtype IdePlugins = IdePlugins
-  { ipMap :: Map.Map PluginId PluginDescriptor
-  }
+newtype IdePlugins ideState = IdePlugins
+  { ipMap :: Map.Map PluginId (PluginDescriptor ideState)}
 
 -- ---------------------------------------------------------------------
 
-data PluginDescriptor =
+data PluginDescriptor ideState =
   PluginDescriptor { pluginId                 :: !PluginId
                    , pluginRules              :: !(Rules ())
-                   , pluginCommands           :: ![PluginCommand]
-                   , pluginCodeActionProvider :: !(Maybe CodeActionProvider)
-                   , pluginCodeLensProvider   :: !(Maybe CodeLensProvider)
+                   , pluginCommands           :: ![PluginCommand ideState]
+                   , pluginCodeActionProvider :: !(Maybe (CodeActionProvider ideState))
+                   , pluginCodeLensProvider   :: !(Maybe (CodeLensProvider ideState))
                    , pluginDiagnosticProvider :: !(Maybe DiagnosticProvider)
                      -- ^ TODO: diagnostics are generally provided via rules,
                      -- this is probably redundant.
-                   , pluginHoverProvider      :: !(Maybe HoverProvider)
-                   , pluginSymbolsProvider    :: !(Maybe SymbolsProvider)
-                   , pluginFormattingProvider :: !(Maybe (FormattingProvider IO))
-                   , pluginCompletionProvider :: !(Maybe CompletionProvider)
-                   , pluginRenameProvider     :: !(Maybe RenameProvider)
+                   , pluginHoverProvider      :: !(Maybe (HoverProvider ideState))
+                   , pluginSymbolsProvider    :: !(Maybe (SymbolsProvider ideState))
+                   , pluginFormattingProvider :: !(Maybe (FormattingProvider ideState IO))
+                   , pluginCompletionProvider :: !(Maybe (CompletionProvider ideState))
+                   , pluginRenameProvider     :: !(Maybe (RenameProvider ideState))
                    }
 
-defaultPluginDescriptor :: PluginId -> PluginDescriptor
+defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
   PluginDescriptor
     plId
@@ -94,42 +94,43 @@ newtype CommandId = CommandId T.Text
 instance IsString CommandId where
   fromString = CommandId . T.pack
 
-data PluginCommand = forall a. (FromJSON a) =>
+data PluginCommand ideState = forall a. (FromJSON a) =>
   PluginCommand { commandId   :: CommandId
                 , commandDesc :: T.Text
-                , commandFunc :: CommandFunction a
+                , commandFunc :: CommandFunction ideState a
                 }
+
 
 -- ---------------------------------------------------------------------
 
-type CommandFunction a = LSP.LspFuncs Config
-                       -> IdeState
+type CommandFunction ideState a = LSP.LspFuncs Config
+                       -> ideState
                        -> a
                        -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 
-type CodeActionProvider = LSP.LspFuncs Config
-                        -> IdeState
+type CodeActionProvider ideState = LSP.LspFuncs Config
+                        -> ideState
                         -> PluginId
                         -> TextDocumentIdentifier
                         -> Range
                         -> CodeActionContext
                         -> IO (Either ResponseError (List CAResult))
 
-type CompletionProvider = LSP.LspFuncs Config
-                        -> IdeState
+type CompletionProvider ideState = LSP.LspFuncs Config
+                        -> ideState
                         -> CompletionParams
                         -> IO (Either ResponseError CompletionResponseResult)
 
 
 
-type CodeLensProvider = LSP.LspFuncs Config
-                      -> IdeState
+type CodeLensProvider ideState = LSP.LspFuncs Config
+                      -> ideState
                       -> PluginId
                       -> CodeLensParams
                       -> IO (Either ResponseError (List CodeLens))
 
-type RenameProvider = LSP.LspFuncs Config
-                    -> IdeState
+type RenameProvider ideState = LSP.LspFuncs Config
+                    -> ideState
                     -> RenameParams
                     -> IO (Either ResponseError WorkspaceEdit)
 
@@ -158,14 +159,14 @@ data DiagnosticTrigger = DiagnosticOnOpen
                        deriving (Show,Ord,Eq)
 
 -- type HoverProvider = Uri -> Position -> IO (Either ResponseError [Hover])
-type HoverProvider = IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
+type HoverProvider ideState = ideState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
 
-type SymbolsProvider = LSP.LspFuncs Config
-                     -> IdeState
+type SymbolsProvider ideState = LSP.LspFuncs Config
+                     -> ideState
                      -> DocumentSymbolParams
                      -> IO (Either ResponseError [DocumentSymbol])
 
-type ExecuteCommandProvider = IdeState
+type ExecuteCommandProvider ideState = ideState
                             -> ExecuteCommandParams
                             -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
 
@@ -192,13 +193,14 @@ data FormattingType = FormatText
 -- | To format a whole document, the 'FormatText' @FormattingType@ can be used.
 -- It is required to pass in the whole Document Text for that to happen, an empty text
 -- and file uri, does not suffice.
-type FormattingProvider m
+type FormattingProvider ideState m
         = LSP.LspFuncs Config
-        -> IdeState
+        -> ideState
         -> FormattingType  -- ^ How much to format
         -> T.Text -- ^ Text to format
         -> NormalizedFilePath -- ^ location of the file being formatted
         -> FormattingOptions -- ^ Options for the formatter
         -> m (Either ResponseError (List TextEdit)) -- ^ Result of the formatting
 
--- ---------------------------------------------------------------------
+noneProvider :: FormattingProvider ideState IO
+noneProvider _ _ _ _ _ _ = return $ Right (List [])

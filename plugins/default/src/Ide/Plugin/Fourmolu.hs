@@ -21,8 +21,7 @@ import qualified EnumSet as S
 import GHC (DynFlags, moduleNameString)
 import GHC.LanguageExtensions.Type (Extension (Cpp))
 import GhcPlugins (HscEnv (hsc_dflags))
-import Ide.Plugin.Formatter (responseError)
-import Ide.PluginUtils (makeDiffTextEdit)
+import Ide.PluginUtils (responseError, makeDiffTextEdit)
 import Language.Haskell.LSP.Messages (FromServerMessage (ReqShowMessage))
 
 import Ide.Types
@@ -33,7 +32,7 @@ import "fourmolu" Ormolu
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
         { pluginFormattingProvider = Just provider
@@ -41,7 +40,7 @@ descriptor plId =
 
 -- ---------------------------------------------------------------------
 
-provider :: FormattingProvider IO
+provider :: FormattingProvider IdeState IO
 provider lf ideState typ contents fp fo = withIndefiniteProgress lf title Cancellable $ do
     ghc <- runAction "Fourmolu" ideState $ use GhcSession fp
     fileOpts <- case hsc_dflags . hscEnv <$> ghc of
