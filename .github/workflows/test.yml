@@ -5,7 +5,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         ghc: ["8.10.2", "8.10.1", "8.8.4", "8.8.3", "8.8.2", "8.6.5", "8.6.4"]
         os: [ubuntu-latest, windows-latest]
