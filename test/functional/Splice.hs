@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -8,6 +9,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Data.List (find)
 import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Ide.Plugin.Splice.Types
 import Language.Haskell.LSP.Test
@@ -17,9 +19,12 @@ import Language.Haskell.LSP.Types
       CodeAction (..),
       Position (..),
       Range (..),
+      TextDocumentContentChangeEvent (..),
+      TextEdit (..),
     )
 import System.Directory
 import System.FilePath
+import System.Time.Extra (sleep)
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -55,6 +60,9 @@ tests =
         , goldenTest "TQQTypeTypeError.hs" Inplace 8 19
         , goldenTest "TQQTypeTypeError.hs" Inplace 8 28
         , goldenTest "TSimpleDecl.hs" Inplace 8 1
+        , goldenTest "TQQDecl.hs" Inplace 5 1
+        , goldenTestWithEdit "TTypeKindError.hs" Inplace 7 9
+        , goldenTestWithEdit "TDeclKindError.hs" Inplace 8 1
         ]
 
 goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
@@ -63,6 +71,38 @@ goldenTest input tc line col =
         runSession hlsCommand fullCaps spliceTestPath $ do
             doc <- openDoc input "haskell"
             _ <- waitForDiagnostics
+            actions <- getCodeActions doc $ pointRange line col
+            Just (CACodeAction CodeAction {_command = Just c}) <-
+                pure $ find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions
+            executeCommand c
+            _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+            edited <- documentContents doc
+            let expected_name = spliceTestPath </> input <.> "expected"
+            -- Write golden tests if they don't already exist
+            liftIO $
+                (doesFileExist expected_name >>=) $
+                    flip unless $ do
+                        T.writeFile expected_name edited
+            expected <- liftIO $ T.readFile expected_name
+            liftIO $ edited @?= expected
+
+goldenTestWithEdit :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
+goldenTestWithEdit input tc line col =
+    testCase (input <> " (golden)") $ do
+        runSession hlsCommand fullCaps spliceTestPath $ do
+            doc <- openDoc input "haskell"
+            orig <- documentContents doc
+            let lns = T.lines orig
+                theRange =
+                    Range
+                        { _start = Position 0 0
+                        , _end = Position (length lns + 1) 1
+                        }
+            liftIO $ sleep 1
+            alt <- liftIO $ T.readFile (spliceTestPath </> input <.> "error")
+            void $ applyEdit doc $ TextEdit theRange alt
+            changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
+            void waitForDiagnostics
             actions <- getCodeActions doc $ pointRange line col
             Just (CACodeAction CodeAction {_command = Just c}) <-
                 pure $ find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions
