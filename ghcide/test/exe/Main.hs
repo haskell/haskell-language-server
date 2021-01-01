@@ -2475,45 +2475,45 @@ findDefinitionAndHoverTests = let
   mkFindTests
   --      def    hover  look       expect
   [ test  yes    yes    fffL4      fff           "field in record definition"
-  , test  yes    yes    fffL8      fff           "field in record construction     #71"
-  , test  yes    yes    fffL14     fff           "field name used as accessor"          -- 120 in Calculate.hs
-  , test  yes    yes    aaaL14     aaa           "top-level name"                       -- 120
-  , test  yes    yes    dcL7       tcDC          "data constructor record         #247"
-  , test  yes    yes    dcL12      tcDC          "data constructor plain"               -- 121
-  , test  yes    yes    tcL6       tcData        "type constructor                #248" -- 147
-  , test  broken yes    xtcL5      xtc           "type constructor external   #248,249"
-  , test  broken yes    xvL20      xvMsg         "value external package          #249" -- 120
-  , test  yes    yes    vvL16      vv            "plain parameter"                      -- 120
-  , test  yes    yes    aL18       apmp          "pattern match name"                   -- 120
-  , test  yes    yes    opL16      op            "top-level operator"                   -- 120, 123
-  , test  yes    yes    opL18      opp           "parameter operator"                   -- 120
-  , test  yes    yes    b'L19      bp            "name in backticks"                    -- 120
-  , test  yes    yes    clL23      cls           "class in instance declaration   #250"
-  , test  yes    yes    clL25      cls           "class in signature              #250" -- 147
-  , test  broken yes    eclL15     ecls          "external class in signature #249,250"
-  , test  yes    yes    dnbL29     dnb           "do-notation   bind"                   -- 137
+  , test  yes    yes    fffL8      fff           "field in record construction    #1102"
+  , test  yes    yes    fffL14     fff           "field name used as accessor"           -- https://github.com/haskell/ghcide/pull/120 in Calculate.hs
+  , test  yes    yes    aaaL14     aaa           "top-level name"                        -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    dcL7       tcDC          "data constructor record         #1029"
+  , test  yes    yes    dcL12      tcDC          "data constructor plain"                -- https://github.com/haskell/ghcide/pull/121
+  , test  yes    yes    tcL6       tcData        "type constructor                #1028" -- https://github.com/haskell/ghcide/pull/147
+  , test  broken yes    xtcL5      xtc           "type constructor external   #717,1028"
+  , test  broken yes    xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    vvL16      vv            "plain parameter"                       -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    aL18       apmp          "pattern match name"                    -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    opL16      op            "top-level operator               #713" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    opL18      opp           "parameter operator"                    -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    b'L19      bp            "name in backticks"                     -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    clL23      cls           "class in instance declaration   #1027"
+  , test  yes    yes    clL25      cls           "class in signature              #1027" -- https://github.com/haskell/ghcide/pull/147
+  , test  broken yes    eclL15     ecls          "external class in signature #717,1027"
+  , test  yes    yes    dnbL29     dnb           "do-notation   bind              #1073"
   , test  yes    yes    dnbL30     dnb           "do-notation lookup"
-  , test  yes    yes    lcbL33     lcb           "listcomp   bind"                      -- 137
+  , test  yes    yes    lcbL33     lcb           "listcomp   bind                 #1073"
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
-  , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #246"
+  , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
 #if MIN_GHC_API_VERSION(8,10,0)
-  , test  yes    yes    spaceL37   space         "top-level fn on space #315"
+  , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
 #else
-  , test  yes    broken spaceL37   space         "top-level fn on space #315"
+  , test  yes    broken spaceL37   space         "top-level fn on space           #1002"
 #endif
-  , test  no     yes    docL41     doc           "documentation                     #7"
-  , test  no     yes    eitL40     kindE         "kind of Either                  #273"
-  , test  no     yes    intL40     kindI         "kind of Int                     #273"
-  , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #273"
-  , test  no     broken intL41     litI          "literal Int  in hover info      #274"
-  , test  no     broken chrL36     litC          "literal Char in hover info      #274"
-  , test  no     broken txtL8      litT          "literal Text in hover info      #274"
-  , test  no     broken lstL43     litL          "literal List in hover info      #274"
-  , test  no     broken docL41     constr        "type constraint in hover info   #283"
-  , test  broken broken outL45     outSig        "top-level signature             #310"
-  , test  broken broken innL48     innSig        "inner     signature             #310"
-  , test  no     yes    holeL60    hleInfo       "hole without internal name      #847"
+  , test  no     yes    docL41     doc           "documentation                   #1129"
+  , test  no     yes    eitL40     kindE         "kind of Either                  #1017"
+  , test  no     yes    intL40     kindI         "kind of Int                     #1017"
+  , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #1017"
+  , test  no     broken intL41     litI          "literal Int  in hover info      #1016"
+  , test  no     broken chrL36     litC          "literal Char in hover info      #1016"
+  , test  no     broken txtL8      litT          "literal Text in hover info      #1016"
+  , test  no     broken lstL43     litL          "literal List in hover info      #1016"
+  , test  no     broken docL41     constr        "type constraint in hover info   #1012"
+  , test  broken broken outL45     outSig        "top-level signature              #767"
+  , test  broken broken innL48     innSig        "inner     signature              #767"
+  , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
@@ -2690,7 +2690,7 @@ thTests =
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
     , thReloadingTest
-    -- Regression test for https://github.com/haskell/ghcide/issues/614
+    -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
