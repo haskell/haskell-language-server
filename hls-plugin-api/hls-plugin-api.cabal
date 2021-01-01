@@ -26,10 +26,7 @@ source-repository head
 library
   exposed-modules:
     Ide.Logger
-    Ide.Plugin
     Ide.Plugin.Config
-    Ide.Plugin.Formatter
-    Ide.Plugin.GhcIde
     Ide.PluginUtils
     Ide.Types
 
@@ -40,9 +37,6 @@ library
     , containers
     , data-default
     , Diff
-    , ghc
-    , ghc-boot-th
-    , ghcide                >=0.5
     , haskell-lsp           ^>=0.22
     , hashable
     , hslogger
@@ -52,6 +46,13 @@ library
     , shake                 >=0.17.5
     , text
     , unordered-containers
+
+  if os(windows)
+      build-depends:
+        Win32
+  else
+      build-depends:
+        unix
 
   ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
 

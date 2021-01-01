@@ -9,6 +9,7 @@ module Development.IDE
 import Development.IDE.Core.RuleTypes as X
 import Development.IDE.Core.Rules as X
   (getAtPoint
+  ,getClientConfigAction
   ,getDefinition
   ,getParsedModule
   ,getTypeDefinition

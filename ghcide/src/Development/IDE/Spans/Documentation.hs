@@ -69,7 +69,7 @@ mkDocMap env sources rm this_mod =
 
 lookupKind :: HscEnv -> Module -> Name -> IO (Maybe TyThing)
 lookupKind env mod =
-    fmap (either (const Nothing) id) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
+    fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
 getDocumentationTryGhc :: HscEnv -> Module -> [ParsedModule] -> Name -> IO SpanDoc
 getDocumentationTryGhc env mod deps n = head <$> getDocumentationsTryGhc env mod deps [n]
@@ -88,7 +88,7 @@ getDocumentationsTryGhc env mod sources names = do
 
     mkSpanDocText name =
       SpanDocText (getDocumentation sources name) <$> getUris name
-   
+
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do
       let df = hsc_dflags env
@@ -221,6 +221,6 @@ lookupHtmlForModule mkDocPath df m = do
 
 lookupHtmls :: DynFlags -> UnitId -> Maybe [FilePath]
 lookupHtmls df ui =
-  -- use haddockInterfaces instead of haddockHTMLs: GHC treats haddockHTMLs as URL not path 
+  -- use haddockInterfaces instead of haddockHTMLs: GHC treats haddockHTMLs as URL not path
   -- and therefore doesn't expand $topdir on Windows
   map takeDirectory . haddockInterfaces <$> lookupPackage df ui

@@ -16,14 +16,14 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding             as T
 import           Development.IDE as D
 import           Floskell
-import           Ide.Plugin.Formatter
+import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.LSP.Types
 import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginFormattingProvider = Just provider
   }
@@ -33,7 +33,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- | Format provider of Floskell.
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
-provider :: FormattingProvider IO
+provider :: FormattingProvider IdeState IO
 provider _lf _ideState typ contents fp _ = do
     let file = fromNormalizedFilePath fp
     config <- findConfigOrDefault file

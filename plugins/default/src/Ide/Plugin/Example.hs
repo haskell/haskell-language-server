@@ -27,14 +27,14 @@ import Development.IDE.GHC.Compat (ParsedModule(ParsedModule))
 import Development.IDE.Core.Rules (useE)
 import Development.IDE.Core.Shake (getDiagnostics, getHiddenDiagnostics)
 import GHC.Generics
-import Ide.Plugin
+import Ide.PluginUtils
 import Ide.Types
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = exampleRules
   , pluginCommands = [PluginCommand "codelens.todo" "example adding" addTodoCmd]
@@ -99,7 +99,7 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 -- ---------------------------------------------------------------------
 
 -- | Generate code actions.
-codeAction :: CodeActionProvider
+codeAction :: CodeActionProvider IdeState
 codeAction _lf state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
     let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
     Just (ParsedModule{},_) <- runIdeAction "example" (shakeExtras state) $ useWithStaleFast GetParsedModule nfp
@@ -113,7 +113,7 @@ codeAction _lf state _pid (TextDocumentIdentifier uri) _range CodeActionContext{
 
 -- ---------------------------------------------------------------------
 
-codeLens :: CodeLensProvider
+codeLens :: CodeLensProvider IdeState
 codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
     logInfo (ideLogger ideState) "Example.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
@@ -140,7 +140,7 @@ data AddTodoParams = AddTodoParams
   }
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
-addTodoCmd :: CommandFunction AddTodoParams
+addTodoCmd :: CommandFunction IdeState AddTodoParams
 addTodoCmd _lf _ide (AddTodoParams uri todoText) = do
   let
     pos = Position 3 0
@@ -187,7 +187,7 @@ logAndRunRequest label getResults ide pos path = do
 
 -- ---------------------------------------------------------------------
 
-symbols :: SymbolsProvider
+symbols :: SymbolsProvider IdeState
 symbols _lf _ide (DocumentSymbolParams _doc _mt)
     = pure $ Right [r]
     where
@@ -202,7 +202,7 @@ symbols _lf _ide (DocumentSymbolParams _doc _mt)
 
 -- ---------------------------------------------------------------------
 
-completion :: CompletionProvider
+completion :: CompletionProvider IdeState
 completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
     = pure $ Right $ Completions $ List [r]
     where
