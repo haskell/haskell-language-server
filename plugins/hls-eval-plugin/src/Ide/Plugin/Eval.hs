@@ -17,6 +17,7 @@ module Ide.Plugin.Eval (
     descriptor,
 ) where
 
+import Development.IDE (IdeState)
 import qualified Ide.Plugin.Eval.CodeLens as CL
 import Ide.Types (
     PluginDescriptor (..),
@@ -25,7 +26,7 @@ import Ide.Types (
  )
 
 -- |Plugin descriptor
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
         { pluginCodeLensProvider = Just CL.codeLens

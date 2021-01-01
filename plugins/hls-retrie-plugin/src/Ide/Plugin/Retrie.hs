@@ -64,7 +64,7 @@ import           GhcPlugins                     (Outputable,
                                                  nameModule_maybe, nameRdrName,
                                                  occNameFS, occNameString,
                                                  rdrNameOcc, unpackFS)
-import           Ide.Plugin
+import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.LSP.Core      (LspFuncs (..), ProgressCancellable (Cancellable))
 import           Language.Haskell.LSP.Messages  (FromServerMessage (NotShowMessage))
@@ -88,7 +88,7 @@ import Control.Monad.Trans.Maybe
 import Development.IDE.Core.PositionMapping
 import qualified Data.Aeson as Aeson
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
     { pluginCodeActionProvider = Just provider,
@@ -98,7 +98,7 @@ descriptor plId =
 retrieCommandName :: T.Text
 retrieCommandName = "retrieCommand"
 
-retrieCommand :: PluginCommand
+retrieCommand :: PluginCommand IdeState
 retrieCommand =
   PluginCommand (coerce retrieCommandName) "run the refactoring" runRetrieCmd
 
@@ -177,7 +177,7 @@ extractImports _ _ _ = []
 
 -------------------------------------------------------------------------------
 
-provider :: CodeActionProvider
+provider :: CodeActionProvider IdeState
 provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
   let (J.CodeActionContext _diags _monly) = ca
       nuri = toNormalizedUri uri

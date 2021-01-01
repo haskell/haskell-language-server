@@ -33,6 +33,7 @@ import qualified Data.Text                        as Text
 import           Development.IDE.Core.FileStore   (setSomethingModified, setFileModified, typecheckParents)
 import           Development.IDE.Core.FileExists  (modifyFileExists, watchedGlobs)
 import           Development.IDE.Core.OfInterest
+import Ide.Plugin.Config (CheckParents(CheckOnClose))
 
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()

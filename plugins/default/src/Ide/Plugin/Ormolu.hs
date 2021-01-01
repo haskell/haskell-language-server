@@ -19,7 +19,6 @@ import qualified EnumSet                           as S
 import           GHC
 import           GHC.LanguageExtensions.Type
 import           GhcPlugins                        (HscEnv (hsc_dflags))
-import           Ide.Plugin.Formatter
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.LSP.Core         (LspFuncs (withIndefiniteProgress),
@@ -31,14 +30,14 @@ import           Text.Regex.TDFA.Text              ()
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginFormattingProvider = Just provider
   }
 
 -- ---------------------------------------------------------------------
 
-provider :: FormattingProvider IO
+provider :: FormattingProvider IdeState IO
 provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancellable $ do
   let
     fromDyn :: DynFlags -> IO [DynOption]

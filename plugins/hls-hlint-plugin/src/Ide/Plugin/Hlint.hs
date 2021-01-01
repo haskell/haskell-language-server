@@ -49,7 +49,6 @@ import Development.IDE.GHC.Compat hiding (DynFlags(..))
 
 import Ide.Logger
 import Ide.Types
-import Ide.Plugin
 import Ide.Plugin.Config
 import Ide.PluginUtils
 import Language.Haskell.HLint as Hlint
@@ -65,7 +64,7 @@ import GHC.Generics (Generic)
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = rules plId
   , pluginCommands =
@@ -236,7 +235,7 @@ getHlintSettingsRule usage =
 
 -- ---------------------------------------------------------------------
 
-codeActionProvider :: CodeActionProvider
+codeActionProvider :: CodeActionProvider IdeState
 codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CACodeAction <$> getCodeActions
   where
 
@@ -287,7 +286,7 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
 
 -- ---------------------------------------------------------------------
 
-applyAllCmd :: CommandFunction Uri
+applyAllCmd :: CommandFunction IdeState Uri
 applyAllCmd lf ide uri = do
   let file = maybe (error $ show uri ++ " is not a file.")
                     toNormalizedFilePath'
@@ -317,7 +316,7 @@ data OneHint = OneHint
   , oneHintTitle :: HintTitle
   } deriving (Eq, Show)
 
-applyOneCmd :: CommandFunction ApplyOneParams
+applyOneCmd :: CommandFunction IdeState ApplyOneParams
 applyOneCmd lf ide (AOP uri pos title) = do
   let oneHint = OneHint pos title
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'

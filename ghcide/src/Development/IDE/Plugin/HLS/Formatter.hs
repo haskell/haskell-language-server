@@ -1,23 +1,15 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
 
-module Ide.Plugin.Formatter
+module Development.IDE.Plugin.HLS.Formatter
   (
     formatting
   , rangeFormatting
-  , noneProvider
-  , responseError
-  , extractRange
-  , fullRange
   )
 where
 
 import qualified Data.Map  as Map
 import qualified Data.Text as T
 import           Development.IDE
+import           Ide.PluginUtils
 import           Ide.Types
 import           Ide.Plugin.Config
 import qualified Language.Haskell.LSP.Core as LSP
@@ -26,7 +18,7 @@ import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------
 
-formatting :: Map.Map PluginId (FormattingProvider IO)
+formatting :: Map.Map PluginId (FormattingProvider IdeState IO)
            -> LSP.LspFuncs Config -> IdeState -> DocumentFormattingParams
            -> IO (Either ResponseError (List TextEdit))
 formatting providers lf ideState
@@ -35,7 +27,7 @@ formatting providers lf ideState
 
 -- ---------------------------------------------------------------------
 
-rangeFormatting :: Map.Map PluginId (FormattingProvider IO)
+rangeFormatting :: Map.Map PluginId (FormattingProvider IdeState IO)
                 -> LSP.LspFuncs Config -> IdeState -> DocumentRangeFormattingParams
                 -> IO (Either ResponseError (List TextEdit))
 rangeFormatting providers lf ideState
@@ -44,7 +36,7 @@ rangeFormatting providers lf ideState
 
 -- ---------------------------------------------------------------------
 
-doFormatting :: LSP.LspFuncs Config -> Map.Map PluginId (FormattingProvider IO)
+doFormatting :: LSP.LspFuncs Config -> Map.Map PluginId (FormattingProvider IdeState IO)
              -> IdeState -> FormattingType -> Uri -> FormattingOptions
              -> IO (Either ResponseError (List TextEdit))
 doFormatting lf providers ideState ft uri params = do
@@ -76,35 +68,3 @@ doFormatting lf providers ideState ft uri params = do
           else ""
         ]
 
--- ---------------------------------------------------------------------
-
-noneProvider :: FormattingProvider IO
-noneProvider _ _ _ _ _ _ = return $ Right (List [])
-
--- ---------------------------------------------------------------------
-
-responseError :: T.Text -> ResponseError
-responseError txt = ResponseError InvalidParams txt Nothing
-
--- ---------------------------------------------------------------------
-
-extractRange :: Range -> T.Text -> T.Text
-extractRange (Range (Position sl _) (Position el _)) s = newS
-  where focusLines = take (el-sl+1) $ drop sl $ T.lines s
-        newS = T.unlines focusLines
-
--- | Gets the range that covers the entire text
-fullRange :: T.Text -> Range
-fullRange s = Range startPos endPos
-  where startPos = Position 0 0
-        endPos = Position lastLine 0
-        {-
-        In order to replace everything including newline characters,
-        the end range should extend below the last line. From the specification:
-        "If you want to specify a range that contains a line including
-        the line ending character(s) then use an end position denoting
-        the start of the next line"
-        -}
-        lastLine = length $ T.lines s
-
--- ---------------------------------------------------------------------

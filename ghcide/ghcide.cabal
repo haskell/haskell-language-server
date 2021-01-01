@@ -56,6 +56,8 @@ library
         haskell-lsp-types == 0.22.*,
         haskell-lsp == 0.22.*,
         hie-compat,
+        hls-plugin-api,
+        lens,
         mtl,
         network-uri,
         parallel,
@@ -127,7 +129,6 @@ library
         include
     exposed-modules:
         Development.IDE
-        Development.IDE.Compat
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
         Development.IDE.Core.IdeConfiguration
@@ -163,6 +164,8 @@ library
         Development.IDE.Plugin
         Development.IDE.Plugin.Completions
         Development.IDE.Plugin.CodeAction
+        Development.IDE.Plugin.HLS
+        Development.IDE.Plugin.HLS.GhcIde
         Development.IDE.Plugin.Test
 
     -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
@@ -190,6 +193,7 @@ library
         Development.IDE.Plugin.CodeAction.RuleTypes
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Plugin.Completions.Types
+        Development.IDE.Plugin.HLS.Formatter
         Development.IDE.Types.Action
     ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns
 
@@ -265,6 +269,7 @@ executable ghcide
         haskell-lsp-types,
         heapsize,
         hie-bios,
+        hls-plugin-api,
         ghcide,
         lens,
         optparse-applicative,

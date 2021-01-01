@@ -29,7 +29,7 @@ import Development.IDE.Core.PositionMapping
 import Development.IDE.GHC.Compat
 import Development.Shake.Classes
 import GHC.Generics (Generic)
-import Ide.Plugin
+import Ide.PluginUtils ( mkLspCommand )
 import Ide.Types
 import Language.Haskell.LSP.Types
 import PrelNames (pRELUDE)
@@ -44,7 +44,7 @@ importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
 
 -- | The "main" function of a plugin
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
     { -- This plugin provides code lenses
@@ -58,7 +58,7 @@ descriptor plId =
     }
 
 -- | The command descriptor
-importLensCommand :: PluginCommand
+importLensCommand :: PluginCommand IdeState
 importLensCommand =
   PluginCommand importCommandId "Explicit import command" runImportCommand
 
@@ -68,7 +68,7 @@ data ImportCommandParams = ImportCommandParams WorkspaceEdit
   deriving anyclass (FromJSON, ToJSON)
 
 -- | The actual command handler
-runImportCommand :: CommandFunction ImportCommandParams
+runImportCommand :: CommandFunction IdeState ImportCommandParams
 runImportCommand _lspFuncs _state (ImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
   return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edit))
@@ -83,7 +83,7 @@ runImportCommand _lspFuncs _state (ImportCommandParams edit) = do
 -- the provider should produce one code lens associated to the import statement:
 --
 -- > import Data.List (intercalate, sortBy)
-lensProvider :: CodeLensProvider
+lensProvider :: CodeLensProvider IdeState
 lensProvider
   _lspFuncs -- LSP functions, not used
   state -- ghcide state, used to retrieve typechecking artifacts
@@ -112,7 +112,7 @@ lensProvider
 
 -- | If there are any implicit imports, provide one code action to turn them all
 --   into explicit imports.
-codeActionProvider :: CodeActionProvider
+codeActionProvider :: CodeActionProvider IdeState
 codeActionProvider _lspFuncs ideState _pId docId range _context
   | TextDocumentIdentifier {_uri} <- docId,
     Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri =

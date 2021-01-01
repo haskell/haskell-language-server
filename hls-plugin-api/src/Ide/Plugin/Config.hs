@@ -1,3 +1,7 @@
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -7,6 +11,7 @@ module Ide.Plugin.Config
     , getConfigFromNotification
     , Config(..)
     , PluginConfig(..)
+    , CheckParents(..)
     ) where
 
 import           Control.Applicative
@@ -16,6 +21,7 @@ import           Data.Default
 import qualified Data.Text                     as T
 import           Language.Haskell.LSP.Types
 import qualified Data.Map as Map
+import GHC.Generics (Generic)
 
 -- ---------------------------------------------------------------------
 
@@ -37,13 +43,25 @@ getInitialConfig (RequestMessage _ _ _ InitializeParams{_initializationOptions =
     A.Error err -> Left $ T.pack err
 
 -- ---------------------------------------------------------------------
+data CheckParents
+    -- Note that ordering of constructors is meaningful and must be monotonically
+    -- increasing in the scenarios where parents are checked
+    = NeverCheck
+    | CheckOnClose
+    | CheckOnSaveAndClose
+    | AlwaysCheck
+  deriving stock (Eq, Ord, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
+
 
 -- | We (initially anyway) mirror the hie configuration, so that existing
 -- clients can simply switch executable and not have any nasty surprises.  There
 -- will be surprises relating to config options being ignored, initially though.
 data Config =
   Config
-    { hlintOn                     :: !Bool
+    { checkParents                :: CheckParents
+    , checkProject                :: !Bool
+    , hlintOn                     :: !Bool
     , diagnosticsOnChange         :: !Bool
     , maxNumberOfProblems         :: !Int
     , diagnosticsDebounceDuration :: !Int
@@ -56,7 +74,9 @@ data Config =
 
 instance Default Config where
   def = Config
-    { hlintOn                     = True
+    { checkParents                = CheckOnSaveAndClose
+    , checkProject                = True
+    , hlintOn                     = True
     , diagnosticsOnChange         = True
     , maxNumberOfProblems         = 100
     , diagnosticsDebounceDuration = 350000
@@ -77,15 +97,17 @@ instance A.FromJSON Config where
     -- backwards compatibility we also accept "languageServerHaskell"
     s <- v .: "haskell" <|> v .: "languageServerHaskell"
     flip (A.withObject "Config.settings") s $ \o -> Config
-      <$> o .:? "hlintOn"                     .!= hlintOn def
-      <*> o .:? "diagnosticsOnChange"         .!= diagnosticsOnChange def
-      <*> o .:? "maxNumberOfProblems"         .!= maxNumberOfProblems def
-      <*> o .:? "diagnosticsDebounceDuration" .!= diagnosticsDebounceDuration def
-      <*> o .:? "liquidOn"                    .!= liquidOn def
-      <*> o .:? "completionSnippetsOn"        .!= completionSnippetsOn def
-      <*> o .:? "formatOnImportOn"            .!= formatOnImportOn def
-      <*> o .:? "formattingProvider"          .!= formattingProvider def
-      <*> o .:? "plugin"                      .!= plugins def
+      <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents def
+      <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject def
+      <*> o .:? "hlintOn"                                 .!= hlintOn def
+      <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange def
+      <*> o .:? "maxNumberOfProblems"                     .!= maxNumberOfProblems def
+      <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration def
+      <*> o .:? "liquidOn"                                .!= liquidOn def
+      <*> o .:? "completionSnippetsOn"                    .!= completionSnippetsOn def
+      <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn def
+      <*> o .:? "formattingProvider"                      .!= formattingProvider def
+      <*> o .:? "plugin"                                  .!= plugins def
 
 -- 2017-10-09 23:22:00.710515298 [ThreadId 11] - ---> {"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"haskell":{"maxNumberOfProblems":100,"hlintOn":true}}}}
 -- 2017-10-09 23:22:00.710667381 [ThreadId 15] - reactor:got didChangeConfiguration notification:
@@ -97,17 +119,20 @@ instance A.FromJSON Config where
 --                                                                            ,("maxNumberOfProblems",Number 100.0)]))])}}
 
 instance A.ToJSON Config where
-  toJSON (Config h diag m d l c f fp p) = object [ "haskell" .= r ]
+  toJSON Config{..} =
+      object [ "haskell" .= r ]
     where
-      r = object [ "hlintOn"                     .= h
-                 , "diagnosticsOnChange"         .= diag
-                 , "maxNumberOfProblems"         .= m
-                 , "diagnosticsDebounceDuration" .= d
-                 , "liquidOn"                    .= l
-                 , "completionSnippetsOn"        .= c
-                 , "formatOnImportOn"            .= f
-                 , "formattingProvider"          .= fp
-                 , "plugin"                      .= p
+      r = object [ "checkParents"                .= checkParents
+                 , "checkProject"                .= checkProject
+                 , "hlintOn"                     .= hlintOn
+                 , "diagnosticsOnChange"         .= diagnosticsOnChange
+                 , "maxNumberOfProblems"         .= maxNumberOfProblems
+                 , "diagnosticsDebounceDuration" .= diagnosticsDebounceDuration
+                 , "liquidOn"                    .= liquidOn
+                 , "completionSnippetsOn"        .= completionSnippetsOn
+                 , "formatOnImportOn"            .= formatOnImportOn
+                 , "formattingProvider"          .= formattingProvider
+                 , "plugin"                      .= plugins
                  ]
 
 -- ---------------------------------------------------------------------
