@@ -3,12 +3,13 @@
 module Plugins where
 
 import           Ide.Types                 (IdePlugins)
-import           Ide.Plugin                (pluginDescToIdePlugins)
+import           Ide.PluginUtils           (pluginDescToIdePlugins)
 
 -- fixed plugins
 import           Ide.Plugin.Example        as Example
 import           Ide.Plugin.Example2       as Example2
-import           Ide.Plugin.GhcIde         as GhcIde
+import           Development.IDE           (IdeState)
+import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
 
 -- haskell-language-server optional plugins
 
@@ -73,7 +74,7 @@ import           Ide.Plugin.Brittany       as Brittany
 -- These can be freely added or removed to tailor the available
 -- features of the server.
 
-idePlugins :: Bool -> IdePlugins
+idePlugins :: Bool -> IdePlugins IdeState
 idePlugins includeExamples = pluginDescToIdePlugins allPlugins
   where
     allPlugins = if includeExamples

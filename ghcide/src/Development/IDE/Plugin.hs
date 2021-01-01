@@ -1,14 +1,17 @@
-
-module Development.IDE.Plugin(Plugin(..), codeActionPlugin, codeActionPluginWithRules,makeLspCommandId,getPid) where
+module Development.IDE.Plugin
+  ( Plugin(..)
+  , codeActionPlugin
+  , codeActionPluginWithRules
+  , makeLspCommandId
+  ) where
 
 import Data.Default
 import qualified Data.Text as T
 import Development.Shake
 import Development.IDE.LSP.Server
-
-import           Language.Haskell.LSP.Types
-import Development.IDE.Compat
 import Development.IDE.Core.Rules
+import Ide.PluginUtils
+import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 
@@ -50,11 +53,5 @@ codeActionPluginWithRules rr f = Plugin rr $ PartialHandlers $ \WithMessage{..} 
 --   on that.
 makeLspCommandId :: T.Text -> IO T.Text
 makeLspCommandId command = do
-    pid <- getPid
-    return $ pid <> ":ghcide:" <> command
-
--- | Get the operating system process id for the running server
--- instance. This should be the same for the lifetime of the instance,
--- and different from that of any other currently running instance.
-getPid :: IO T.Text
-getPid = T.pack . show <$> getProcessID
+    pid <- getProcessID
+    return $ T.pack (show pid) <> ":ghcide:" <> command

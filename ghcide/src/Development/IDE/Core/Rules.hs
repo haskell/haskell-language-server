@@ -27,11 +27,14 @@ module Development.IDE.Core.Rules(
     highlightAtPoint,
     getDependencies,
     getParsedModule,
+    getClientConfigAction,
     ) where
 
 import Fingerprint
 
+import Data.Aeson (fromJSON, Result(Success), FromJSON)
 import Data.Binary hiding (get, put)
+import Data.Default
 import Data.Tuple.Extra
 import Control.Monad.Extra
 import Control.Monad.Trans.Class
@@ -889,6 +892,15 @@ getClientSettingsRule = defineEarlyCutOffNoFile $ \GetClientSettings -> do
   alwaysRerun
   settings <- clientSettings <$> getIdeConfiguration
   return (BS.pack . show . hash $ settings, settings)
+
+-- | Returns the client configurarion stored in the IdeState.
+-- You can use this function to access it from shake Rules
+getClientConfigAction :: (Default a, FromJSON a) => Action a
+getClientConfigAction = do
+  mbVal <- unhashed <$> useNoFile_ GetClientSettings
+  case fromJSON <$> mbVal of
+    Just (Success c) -> return c
+    _ -> return def
 
 -- | For now we always use bytecode
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)

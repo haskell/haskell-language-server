@@ -29,7 +29,7 @@ import qualified Language.Haskell.LSP.VFS        as VFS
 
 -- ---------------------------------------------------------------------
 
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginCodeActionProvider = Just codeActionProvider
   , pluginCompletionProvider = Just completion
@@ -48,7 +48,6 @@ data AddPragmaParams = AddPragmaParams
 -- Pragma is added to the first line of the Uri.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
--- mkPragmaEdit :: CommandFunction AddPragmaParams
 mkPragmaEdit :: Uri -> T.Text -> WorkspaceEdit
 mkPragmaEdit uri pragmaName = res where
     pos = J.Position 0 0
@@ -63,7 +62,7 @@ mkPragmaEdit uri pragmaName = res where
 -- ---------------------------------------------------------------------
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
-codeActionProvider :: CodeActionProvider
+codeActionProvider :: CodeActionProvider IdeState
 codeActionProvider _ state _plId docId _ (J.CodeActionContext (J.List diags) _monly) = do
     let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
     pm <- fmap join $ runAction "addPragma" state $ getParsedModule `traverse` mFile
@@ -107,7 +106,7 @@ possiblePragmas = [name | FlagSpec{flagSpecName = T.pack -> name} <- xFlags, "St
 
 -- ---------------------------------------------------------------------
 
-completion :: CompletionProvider
+completion :: CompletionProvider IdeState
 completion lspFuncs _ide complParams = do
     let (TextDocumentIdentifier uri) = complParams ^. J.textDocument
         position = complParams ^. J.position
