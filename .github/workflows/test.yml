@@ -30,6 +30,9 @@ jobs:
             ghc-lib: true
 
     steps:
+      # Cancel queued workflows from earlier commits in this branch
+      - uses: fkirc/skip-duplicate-actions@master
+
       - uses: actions/checkout@v2
         with:
           submodules: true
