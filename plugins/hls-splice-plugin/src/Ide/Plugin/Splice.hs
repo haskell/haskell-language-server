@@ -135,29 +135,8 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                         use_ GhcSessionDeps fp
             let hscEnv0 = hscEnvWithImportPaths hscEnvEq
                 modSum = pm_mod_summary pm
-            hscEnv <- lift $
-                evalGhcEnv hscEnv0 $ do
-                    env <- getSession
-                    df <- liftIO $ setupDynFlagsForGHCiLike env $ ms_hspp_opts modSum
-
-                    let impPaths = fromMaybe (importPaths df) (envImportPaths hscEnvEq)
-
-                    -- Set the modified flags in the session
-                    _lp <- setSessionDynFlags df {importPaths = impPaths}
-
-                    -- copy the package state to the interactive DynFlags
-                    idflags <- getInteractiveDynFlags
-                    setInteractiveDynFlags $
-                        idflags
-                            { pkgState = pkgState df
-                            , pkgDatabase = pkgDatabase df
-                            , packageFlags = packageFlags df
-                            , useColor = Never
-                            , canUseColor = False
-                            }
-                    setContext [IIModule $ moduleName $ ms_mod modSum]
-                        `gcatch` \(_ :: SomeException) -> pure ()
-                    getSession
+            df' <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum
+            let hscEnv = hscEnv0 { hsc_dflags = df' }
 
             manualCalcEdit
                 lsp
