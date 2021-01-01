@@ -8,7 +8,6 @@ import Language.Haskell.TH ( mkName, clause, normalB, funD, sigD )
 $(sequence
     [sigD (mkName "foo") [t|Int|]
     ,funD (mkName "foo") [clause [] (normalB [|42|]) []]
-    ,sigD (mkName "bar") [t|Double|]
     ]
     )
 -- Bar
