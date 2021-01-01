@@ -67,32 +67,41 @@ experiments =
       bench "hover" 10 $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "edit" 10 $  allM $ \DocumentPositions{..} -> do
-        changeDoc doc [charEdit stringLiteralP]
-        waitForProgressDone
+      bench "edit" 10 $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        waitForProgressDone -- TODO check that this waits for all of them
         return True,
       ---------------------------------------------------------------------------------------
-      bench "hover after edit" 10 $ allWithIdentifierPos $ \DocumentPositions{..} -> do
-        changeDoc doc [charEdit stringLiteralP]
-        isJust <$> getHover doc (fromJust identifierP),
+      bench "hover after edit" 10 $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition" 10 $ allWithIdentifierPos $ \DocumentPositions{..} ->
         not . null <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "getDefinition after edit" 10 $ allWithIdentifierPos $ \DocumentPositions{..} -> do
-        changeDoc doc [charEdit stringLiteralP]
-        not . null <$> getDefinitions doc (fromJust identifierP),
+      bench "getDefinition after edit" 10 $ \docs -> do
+          forM_ docs $ \DocumentPositions{..} ->
+            changeDoc doc [charEdit stringLiteralP]
+          flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+            not . null <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" 100 $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
       ---------------------------------------------------------------------------------------
-      bench "documentSymbols after edit" 100 $ allM $ \DocumentPositions{..} -> do
-        changeDoc doc [charEdit stringLiteralP]
-        either (not . null) (not . null) <$> getDocumentSymbols doc,
+      bench "documentSymbols after edit" 100 $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        flip allM docs $ \DocumentPositions{..} ->
+          either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
-      bench "completions after edit" 10 $ allWithIdentifierPos $ \DocumentPositions{..} -> do
-        changeDoc doc [charEdit stringLiteralP]
-        not . null <$> getCompletions doc (fromJust identifierP),
+      bench "completions after edit" 10 $ \docs -> do
+        forM_ docs $ \DocumentPositions{..} ->
+          changeDoc doc [charEdit stringLiteralP]
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions"
@@ -102,11 +111,11 @@ experiments =
                 error "None of the example modules is suitable for this experiment"
             forM_ docs $ \DocumentPositions{..} ->
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
-                waitForProgressDone
+            waitForProgressDone
         )
-        ( allWithIdentifierPos $ \DocumentPositions{..} -> do
-            let p = fromJust identifierP
-            not . null <$> getCodeActions doc (Range p p)
+        ( \docs -> not . null . catMaybes <$> forM docs (\DocumentPositions{..} ->
+            forM identifierP $ \p ->
+              getCodeActions doc (Range p p))
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup
@@ -118,17 +127,13 @@ experiments =
             forM_ docs $ \DocumentPositions{..} ->
                 forM_ identifierP $ \p -> changeDoc doc [charEdit p]
         )
-        ( allWithIdentifierPos $ \DocumentPositions{..} -> do
-            changeDoc doc [charEdit stringLiteralP]
+        ( \docs -> do
+            forM_ docs $ \DocumentPositions{..} ->
+              changeDoc doc [charEdit stringLiteralP]
             waitForProgressDone
-            -- NOTE ghcide used to clear and reinstall the diagnostics here
-            -- new versions no longer do, but keep this logic around
-            -- to benchmark old versions sucessfully
-            diags <- getCurrentDiagnostics doc
-            when (null diags) $
-              whileM (null <$> waitForDiagnostics)
-            let p = fromJust identifierP
-            not . null <$> getCodeActions doc (Range p p)
+            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+              forM identifierP $ \p ->
+                getCodeActions doc (Range p p))
         )
     ]
 
