@@ -1,16 +1,11 @@
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PackageImports #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
 
 module Ide.TreeTransform
     ( Graft(..),
@@ -52,10 +47,9 @@ import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
-import Outputable (Outputable, ppr, showSDoc)
+import Outputable (Outputable, ppr, showSDoc, trace)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
-import qualified "ghc" SrcLoc
-
+import Control.Arrow (Arrow(second))
 ------------------------------------------------------------------------------
 
 -- | Get the latest version of the annotated parse source.
@@ -158,7 +152,7 @@ graft ::
     forall ast a.
     (Data a, ASTElement ast) =>
     SrcSpan ->
-    ToL ast GhcPs ->
+    Located ast ->
     Graft (Either String) a
 graft dst val = Graft $ \dflags a -> do
     (anns, val') <- annotate dflags $ maybeParensAST val
@@ -167,7 +161,7 @@ graft dst val = Graft $ \dflags a -> do
         everywhere'
             ( mkT $
                 \case
-                    (src :: ToL ast GhcPs) | location src == dst -> val'
+                    (L src _ :: Located ast) | src == dst -> val'
                     l -> l
             )
             a
@@ -178,14 +172,14 @@ graftWithM ::
     forall ast m a.
     (Fail.MonadFail m, Data a, ASTElement ast) =>
     SrcSpan ->
-    (ToL ast GhcPs -> TransformT m (Maybe (ToL ast GhcPs))) ->
+    (Located ast -> TransformT m (Maybe (Located ast))) ->
     Graft m a
 graftWithM dst trans = Graft $ \dflags a -> do
     everywhereM'
         ( mkM $
             \case
-                (val :: ToL ast GhcPs)
-                    | getLoc val == dst -> do
+                val@(L src _ :: Located ast)
+                    | src == dst -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -203,14 +197,14 @@ graftWithSmallestM ::
     forall ast m a.
     (Fail.MonadFail m, Data a, ASTElement ast) =>
     SrcSpan ->
-    (ToL ast GhcPs -> TransformT m (Maybe (ToL ast GhcPs))) ->
+    (Located ast -> TransformT m (Maybe (Located ast))) ->
     Graft m a
 graftWithSmallestM dst trans = Graft $ \dflags a -> do
     everywhereM'
         ( mkM $
             \case
-                (val :: ToL ast GhcPs)
-                    | dst `isSubspanOf` getLoc val -> do
+                val@(L src _ :: Located ast)
+                    | dst `isSubspanOf` src -> do
                         mval <- trans val
                         case mval of
                             Just val' -> do
@@ -270,64 +264,23 @@ everywhereM' f = go
         go :: GenericM m
         go = gmapM go <=< f
 
-class
-    (   Data (ast GhcPs), Outputable (ast GhcPs),
-        HasSrcSpan (ToL ast GhcPs), Data (ToL ast GhcPs),
-        Outputable (ToL ast GhcPs)
-    )
-    => ASTElement ast where
-    -- | This is to absorb the implementation difference of 'LPat',
-    --   which is equal to Located Pat in 8.6 and 8.10, but
-    --   is isomorphic to Pat in 8.8.
-    type ToL ast p = (r :: *) | r -> ast
-    type ToL ast p = Located (ast p)
-    withL :: SrcSpan -> ast GhcPs -> ToL ast GhcPs
-    default withL
-        :: ToL ast GhcPs ~ Located (ast GhcPs)
-        => SrcSpan -> ast GhcPs -> ToL ast GhcPs
-    withL = L
-    toLocated :: ToL ast GhcPs -> Located (ast GhcPs)
-    default toLocated
-        :: ToL ast GhcPs ~ Located (ast GhcPs) => ToL ast GhcPs -> Located (ast GhcPs)
-    toLocated = id
-    unLocated :: ToL ast GhcPs -> ast GhcPs
-    default unLocated
-        :: ToL ast GhcPs ~ Located (ast GhcPs) => ToL ast GhcPs -> ast GhcPs
-    unLocated = unLoc
-    location :: ToL ast GhcPs -> SrcSpan
-    location = SrcLoc.getLoc . toLocated
+class (Data ast, Outputable ast) => ASTElement ast where
+    parseAST :: Parser (Located ast)
+    maybeParensAST :: Located ast -> Located ast
 
-    parseAST :: Parser (ToL ast GhcPs)
-    maybeParensAST :: ToL ast GhcPs -> ToL ast GhcPs
-
-instance ASTElement HsExpr where
-    type ToL HsExpr p = LHsExpr p
+instance p ~ GhcPs => ASTElement (HsExpr p) where
     parseAST = parseExpr
     maybeParensAST = parenthesize
 
-instance ASTElement Pat where
-    type ToL Pat p = LPat p
-#if __GLASGOW_HASKELL__ == 808
-    toLocated p@(XPat (L loc _))= L loc p
-    toLocated p = L noSrcSpan p
-    unLocated = id
-    withL = flip const
-#else
-    toLocated = id
-    unLocated = unLoc
-#endif
-
+instance p ~ GhcPs => ASTElement (Pat p) where
     parseAST = parsePattern
     maybeParensAST = parenthesizePat appPrec
 
-
-instance ASTElement HsType where
-    type ToL HsType p = LHsType p
+instance p ~ GhcPs => ASTElement (HsType p) where
     parseAST = parseType
     maybeParensAST = parenthesizeHsType appPrec
 
-instance ASTElement HsDecl where
-    type ToL HsDecl p = LHsDecl p
+instance p ~ GhcPs => ASTElement (HsDecl p) where
     parseAST = parseDecl
     maybeParensAST = id
 
@@ -342,17 +295,12 @@ fixAnns ParsedModule {..} =
 ------------------------------------------------------------------------------
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
-annotate
-    :: forall ast. ASTElement ast
-    => DynFlags -> ToL ast GhcPs
-    -> TransformT (Either String) (Anns, ToL ast GhcPs)
+annotate :: ASTElement ast => DynFlags -> Located ast -> TransformT (Either String) (Anns, Located ast)
 annotate dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
     (anns, expr') <- lift $ either (Left . show) Right $ parseAST dflags uniq rendered
-    let anns' = setPrecedingLines
-            (toLocated expr' :: Located (ast GhcPs))
-            0 1 anns
+    let anns' = setPrecedingLines expr' 0 1 anns
     pure (anns', expr')
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.

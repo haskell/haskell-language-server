@@ -21,6 +21,7 @@ where
 
 import Control.Applicative (Alternative ((<|>)))
 import Control.Arrow (Arrow (first))
+import Control.Exception (SomeException)
 import qualified Control.Foldl as L
 import Control.Lens (ix, view, (%~), (<&>), (^.))
 import Control.Monad
@@ -166,7 +167,7 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                 graftSpliceWith ::
                     forall ast.
                     HasSplice ast =>
-                    Maybe (SrcSpan, ToL ast GhcPs) ->
+                    Maybe (SrcSpan, Located (ast GhcPs)) ->
                     Maybe (Either String WorkspaceEdit)
                 graftSpliceWith expandeds =
                     expandeds <&> \(_, expanded) ->
@@ -179,7 +180,7 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
             maybe (throwE "No splcie information found") (either throwE pure) $
                 case spliceContext of
                     Expr -> graftSpliceWith exprSuperSpans
-                    Pat -> graftSpliceWith @Pat patSuperSpans
+                    Pat -> graftSpliceWith patSuperSpans
                     HsType -> graftSpliceWith typeSuperSpans
                     HsDecl ->
                         declSuperSpans <&> \(_, expanded) ->
@@ -252,7 +253,7 @@ data SpliceClass where
     OneToOneAST :: HasSplice ast => Proxy# ast -> SpliceClass
     IsHsDecl :: SpliceClass
 
-class (Outputable (ast GhcRn), ASTElement ast) => HasSplice ast where
+class (Outputable (ast GhcRn), ASTElement (ast GhcPs)) => HasSplice ast where
     type SpliceOf ast :: Kinds.Type -> Kinds.Type
     type SpliceOf ast = HsSplice
     matchSplice :: Proxy# ast -> ast GhcPs -> Maybe (SpliceOf ast GhcPs)
@@ -321,7 +322,7 @@ manualCalcEdit lsp ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..
                         OneToOneAST astP ->
                             flip (transformM dflags (clientCapabilities lsp) uri) ps $
                                 graftWithM (RealSrcSpan srcSpan) $ \case
-                                    (toLocated -> L _spn (matchSplice astP -> Just spl)) -> do
+                                    (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
                                             either (fail . show) pure
                                                 =<< lift
@@ -329,7 +330,7 @@ manualCalcEdit lsp ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..
                                                         gtry @_ @SomeException $
                                                             (fst <$> expandSplice astP spl)
                                                     )
-                                        Just <$> either (pure . withL _spn) (unRenamedE dflags) eExpr
+                                        Just <$> either (pure . L _spn) (unRenamedE dflags) eExpr
                                     _ -> pure Nothing
             pure $ (warns,) <$> fromMaybe (Left $ show errs) eresl
 
@@ -352,14 +353,14 @@ unRenamedE ::
     (Fail.MonadFail m, HasSplice ast) =>
     DynFlags ->
     ast GhcRn ->
-    TransformT m (ToL ast GhcPs)
+    TransformT m (Located (ast GhcPs))
 unRenamedE dflags expr = do
     uniq <- show <$> uniqueSrcSpanT
-    (anns, expr' :: ToL ast GhcPs) <-
+    (anns, expr') <-
         either (fail . show) pure $
-            parseAST @ast dflags uniq $
+            parseAST @(ast GhcPs) dflags uniq $
                 showSDoc dflags $ ppr expr
-    let _anns' = setPrecedingLines (toLocated expr') 0 1 anns
+    let _anns' = setPrecedingLines expr' 0 1 anns
     pure expr'
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
@@ -396,20 +397,20 @@ codeAction _ state plId docId ran _ =
             mkQ
                 Nothing
                 ( \case
-                    ((toLocated @HsExpr -> L l@(RealSrcSpan spLoc) HsSpliceE {}) :: LHsExpr GhcPs)
+                    (L l@(RealSrcSpan spLoc) HsSpliceE {} :: LHsExpr GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, Expr)
                     _ -> Nothing
                 )
                 `extQ` \case
-                    ((toLocated @Pat -> L l@(RealSrcSpan spLoc) SplicePat {}) :: LPat GhcPs)
+                    (L l@(RealSrcSpan spLoc) SplicePat {} :: LPat GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, Pat)
                     _ -> Nothing
                 `extQ` \case
-                    ((toLocated @HsType -> L l@(RealSrcSpan spLoc) HsSpliceTy {}) :: LHsType GhcPs)
+                    (L l@(RealSrcSpan spLoc) HsSpliceTy {} :: LHsType GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, HsType)
                     _ -> Nothing
                 `extQ` \case
-                    ((toLocated @HsDecl -> L l@(RealSrcSpan spLoc) SpliceD {}) :: LHsDecl GhcPs)
+                    (L l@(RealSrcSpan spLoc) SpliceD {} :: LHsDecl GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, HsDecl)
                     _ -> Nothing
 
