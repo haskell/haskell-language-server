@@ -40,6 +40,7 @@ import Development.IDE.Core.RuleTypes
 import Development.IDE.Types.Options
 import qualified Data.Rope.UTF16 as Rope
 import Development.IDE.Import.DependencyInformation
+import Ide.Plugin.Config (CheckParents(..))
 
 #ifdef mingw32_HOST_OS
 import qualified System.Directory as Dir

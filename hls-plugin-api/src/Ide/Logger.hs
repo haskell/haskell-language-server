@@ -3,28 +3,14 @@
 -}
 module Ide.Logger
   (
-    hlsLogger
-  , logm
+    logm
   , debugm
   , warningm
   , errorm
   ) where
 
 import           Control.Monad.IO.Class
-import qualified Data.Text as T
-import qualified Development.IDE.Types.Logger as L
 import           System.Log.Logger
-
--- ---------------------------------------------------------------------
-
-hlsLogger :: L.Logger
-hlsLogger = L.Logger $ \pri txt ->
-    case pri of
-      L.Telemetry -> logm     (T.unpack txt)
-      L.Debug     -> debugm   (T.unpack txt)
-      L.Info      -> logm     (T.unpack txt)
-      L.Warning   -> warningm (T.unpack txt)
-      L.Error     -> errorm   (T.unpack txt)
 
 -- ---------------------------------------------------------------------
 

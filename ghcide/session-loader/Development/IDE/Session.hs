@@ -136,7 +136,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                       } <- getShakeExtras
 
     IdeOptions{ optTesting = IdeTesting optTesting
-              , optCheckProject = CheckProject checkProject
+              , optCheckProject = checkProject
               , optCustomDynFlags
               , optExtensions
               } <- getIdeOptions
@@ -329,7 +329,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                let res = (map (renderCradleError ncfp) err, Nothing)
                modifyVar_ fileToFlags $ \var -> do
                  pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
-               return (res,[])
+               return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
     -- Returns the Ghc session and the cradle dependencies
@@ -360,7 +360,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
         getOptions file = do
             hieYaml <- cradleLoc file
             sessionOpts (hieYaml, file) `catch` \e ->
-                return (([renderPackageSetupException file e], Nothing),[])
+                return (([renderPackageSetupException file e], Nothing), maybe [] pure hieYaml)
 
     returnWithVersion $ \file -> do
       opts <- liftIO $ join $ mask_ $ modifyVar runningCradle $ \as -> do
