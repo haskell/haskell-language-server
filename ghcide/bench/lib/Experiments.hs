@@ -53,31 +53,35 @@ charEdit p =
     }
 
 data DocumentPositions = DocumentPositions {
-    identifierP, stringLiteralP :: !Position,
+    identifierP :: Maybe Position,
+    stringLiteralP :: !Position,
     doc :: !TextDocumentIdentifier
 }
+
+allWithIdentifierPos :: Monad m => (DocumentPositions -> m Bool) -> [DocumentPositions] -> m Bool
+allWithIdentifierPos f docs = allM f (filter (isJust . identifierP) docs)
 
 experiments :: [Bench]
 experiments =
     [ ---------------------------------------------------------------------------------------
-      bench "hover" 10 $ allM $ \DocumentPositions{..} ->
-        isJust <$> getHover doc identifierP,
+      bench "hover" 10 $ allWithIdentifierPos $ \DocumentPositions{..} ->
+        isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "edit" 10 $  allM $ \DocumentPositions{..} -> do
         changeDoc doc [charEdit stringLiteralP]
         waitForProgressDone
         return True,
       ---------------------------------------------------------------------------------------
-      bench "hover after edit" 10 $ allM $ \DocumentPositions{..} -> do
+      bench "hover after edit" 10 $ allWithIdentifierPos $ \DocumentPositions{..} -> do
         changeDoc doc [charEdit stringLiteralP]
-        isJust <$> getHover doc identifierP,
+        isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "getDefinition" 10 $ allM $ \DocumentPositions{..} ->
-        not . null <$> getDefinitions doc identifierP,
+      bench "getDefinition" 10 $ allWithIdentifierPos $ \DocumentPositions{..} ->
+        not . null <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "getDefinition after edit" 10 $ allM $ \DocumentPositions{..} -> do
+      bench "getDefinition after edit" 10 $ allWithIdentifierPos $ \DocumentPositions{..} -> do
         changeDoc doc [charEdit stringLiteralP]
-        not . null <$> getDefinitions doc identifierP,
+        not . null <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" 100 $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
@@ -86,28 +90,35 @@ experiments =
         changeDoc doc [charEdit stringLiteralP]
         either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
-      bench "completions after edit" 10 $ allM $ \DocumentPositions{..} -> do
+      bench "completions after edit" 10 $ allWithIdentifierPos $ \DocumentPositions{..} -> do
         changeDoc doc [charEdit stringLiteralP]
-        not . null <$> getCompletions doc identifierP,
+        not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions"
         10
-        ( mapM_ $ \DocumentPositions{..} -> do
-            changeDoc doc [charEdit identifierP]
-            waitForProgressDone
+        ( \docs -> do
+            unless (any (isJust . identifierP) docs) $
+                error "None of the example modules is suitable for this experiment"
+            forM_ docs $ \DocumentPositions{..} ->
+                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+                waitForProgressDone
         )
-        ( allM $ \DocumentPositions{..} -> do
-            not . null <$> getCodeActions doc (Range identifierP identifierP)
+        ( allWithIdentifierPos $ \DocumentPositions{..} -> do
+            let p = fromJust identifierP
+            not . null <$> getCodeActions doc (Range p p)
         ),
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions after edit"
         10
-        ( mapM_ $ \DocumentPositions{..} ->
-            changeDoc doc [charEdit identifierP]
+        ( \docs -> do
+            unless (any (isJust . identifierP) docs) $
+                error "None of the example modules is suitable for this experiment"
+            forM_ docs $ \DocumentPositions{..} ->
+                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
         )
-        ( allM $ \DocumentPositions{..} -> do
+        ( allWithIdentifierPos $ \DocumentPositions{..} -> do
             changeDoc doc [charEdit stringLiteralP]
             waitForProgressDone
             -- NOTE ghcide used to clear and reinstall the diagnostics here
@@ -116,7 +127,8 @@ experiments =
             diags <- getCurrentDiagnostics doc
             when (null diags) $
               whileM (null <$> waitForDiagnostics)
-            not . null <$> getCodeActions doc (Range identifierP identifierP)
+            let p = fromJust identifierP
+            not . null <$> getCodeActions doc (Range p p)
         )
     ]
 
@@ -210,9 +222,9 @@ runBenchmarksFun dir allBenchmarks = do
   whenJust (otMemoryProfiling ?config) $ \eventlogDir ->
       createDirectoryIfMissing True eventlogDir
 
-  results <- forM benchmarks $ \b@Bench{name} ->
+  results <- forM benchmarks $ \b@Bench{name} -> do
                 let run = runSessionWithConfig conf (cmd name dir) lspTestCaps dir
-                in (b,) <$> runBench run b
+                (b,) <$> runBench run b
 
   -- output raw data as CSV
   let headers =
@@ -267,14 +279,16 @@ runBenchmarksFun dir allBenchmarks = do
   outputRow $ (map . map) (const '-') paddedHeaders
   forM_ rowsHuman $ \row -> outputRow $ zipWith pad pads row
   where
-    cmd name dir =
-      unwords $
+    ghcideCmd dir =
         [ ghcide ?config,
           "--lsp",
           "--test",
           "--cwd",
           dir
         ]
+    cmd name dir =
+      unwords $
+            ghcideCmd dir
           ++ case otMemoryProfiling ?config of
             Just dir -> ["-l", "-ol" ++ (dir </> map (\c -> if c == ' ' then '-' else c) name <.> "eventlog")]
             Nothing -> []
@@ -321,38 +335,8 @@ runBench ::
 runBench runSess b = handleAny (\e -> print e >> return badRun)
   $ runSess
   $ do
-    docs <- forM (exampleModules $ example ?config) $ \m -> do
-        doc <- openDoc m "haskell"
-
-        -- Setup the special positions used by the experiments
-        lastLine <- length . T.lines <$> documentContents doc
-        changeDoc doc [TextDocumentContentChangeEvent
-            { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
-            , _rangeLength = Nothing
-            , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
-            }]
-        let
-        -- Points to a string in the target file,
-        -- convenient for hygienic edits
-            stringLiteralP = Position lastLine 15
-
-        -- Find an identifier defined in another file in this project
-        Left [DocumentSymbol{_children = Just (List symbols)}] <- getDocumentSymbols doc
-
-        let endOfImports = case symbols of
-                DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
-                    Position (succ $ _line $ _end _range) 4
-                DocumentSymbol{_range} : _ -> _start _range
-                [] -> error "Module has no symbols"
-        contents <- documentContents doc
-
-        mb_identifierP <- searchSymbol doc contents endOfImports
-
-        let identifierP =
-              fromMaybe (error $ "Failed to find a benchmark position in document: " <> m)
-                        mb_identifierP
-        return $ DocumentPositions{..}
-
+    (d, docs) <- duration $ setupDocumentContents ?config
+    output $ "Setting up document contents took " <> showDuration d
     case b of
      Bench{..} -> do
       (startup, _) <- duration $ do
@@ -456,6 +440,39 @@ setup = do
       runBenchmarks = runBenchmarksFun benchDir
 
   return SetupResult{..}
+
+setupDocumentContents :: Config -> Session [DocumentPositions]
+setupDocumentContents config =
+        forM (exampleModules $ example config) $ \m -> do
+        doc <- openDoc m "haskell"
+
+        -- Setup the special positions used by the experiments
+        lastLine <- length . T.lines <$> documentContents doc
+        changeDoc doc [TextDocumentContentChangeEvent
+            { _range = Just (Range (Position lastLine 0) (Position lastLine 0))
+            , _rangeLength = Nothing
+            , _text = T.unlines [ "_hygienic = \"hygienic\"" ]
+            }]
+        let
+        -- Points to a string in the target file,
+        -- convenient for hygienic edits
+            stringLiteralP = Position lastLine 15
+
+        -- Find an identifier defined in another file in this project
+        Left [DocumentSymbol{_children = Just (List symbols)}] <- getDocumentSymbols doc
+
+        let endOfImports = case symbols of
+                DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
+                    Position (succ $ _line $ _end _range) 4
+                DocumentSymbol{_range} : _ -> _start _range
+                [] -> error "Module has no symbols"
+        contents <- documentContents doc
+
+        identifierP <- searchSymbol doc contents endOfImports
+
+        return $ DocumentPositions{..}
+
+
 
 --------------------------------------------------------------------------------------------
 
