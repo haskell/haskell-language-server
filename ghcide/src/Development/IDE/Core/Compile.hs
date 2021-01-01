@@ -184,14 +184,21 @@ mkHiFileResultCompile
 mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
   let session = session' { hsc_dflags = ms_hspp_opts ms }
       ms = pm_mod_summary $ tmrParsed tcm
+      tcGblEnv = tmrTypechecked tcm
   -- give variables unique OccNames
-  (guts, details) <- tidyProgram session simplified_guts
-
   let genLinkable = case ltype of
         ObjectLinkable -> generateObjectCode
         BCOLinkable -> generateByteCode
 
-  (diags, linkable) <- genLinkable session ms guts
+  (linkable, details, diags) <-
+    if mg_hsc_src simplified_guts == HsBootFile
+    then do
+        details <- mkBootModDetailsTc session tcGblEnv
+        pure (Nothing, details, [])
+    else do
+        (guts, details) <- tidyProgram session simplified_guts
+        (diags, linkable) <- genLinkable session ms guts
+        pure (linkable, details, diags)
 #if MIN_GHC_API_VERSION(8,10,0)
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface
