@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -47,9 +48,8 @@ import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
-import Outputable (Outputable, ppr, showSDoc, trace)
+import Outputable (Outputable, ppr, showSDoc)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
-import Control.Arrow (Arrow(second))
 ------------------------------------------------------------------------------
 
 -- | Get the latest version of the annotated parse source.
@@ -272,9 +272,11 @@ instance p ~ GhcPs => ASTElement (HsExpr p) where
     parseAST = parseExpr
     maybeParensAST = parenthesize
 
+#if __GLASGOW_HASKELL__ != 808
 instance p ~ GhcPs => ASTElement (Pat p) where
     parseAST = parsePattern
     maybeParensAST = parenthesizePat appPrec
+#endif
 
 instance p ~ GhcPs => ASTElement (HsType p) where
     parseAST = parseType

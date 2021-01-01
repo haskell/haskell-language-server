@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE CPP #-}
 
 module Splice (tests) where
 
@@ -29,6 +30,11 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 
+#if __GLASGOW_HASKELL__ == 808
+import Test.Tasty.ExpectedFailure
+#endif
+
+
 tests :: TestTree
 tests =
     testGroup
@@ -41,16 +47,22 @@ tests =
         , goldenTest "TQQExp.hs" Inplace 6 25
         , goldenTest "TQQExpError.hs" Inplace 6 13
         , goldenTest "TQQExpError.hs" Inplace 6 22
-        , goldenTest "TSimplePat.hs" Inplace 6 3
-        , goldenTest "TSimplePat.hs" Inplace 6 22
-        , goldenTest "TSimplePat.hs" Inplace 6 3
-        , goldenTest "TSimplePat.hs" Inplace 6 22
-        , goldenTest "TErrorPat.hs" Inplace 6 3
-        , goldenTest "TErrorPat.hs" Inplace 6 18
-        , goldenTest "TQQPat.hs" Inplace 6 3
-        , goldenTest "TQQPat.hs" Inplace 6 11
-        , goldenTest "TQQPatError.hs" Inplace 6 3
-        , goldenTest "TQQPatError.hs" Inplace 6 11
+        ,
+#if __GLASGOW_HASKELL__ == 808
+            expectFailBecause "Pattern splice expansions are unsupported on GHC 8.8, due to LPat = Pat problem" $
+#endif
+            testGroup "Pattern Splices"
+            [ goldenTest "TSimplePat.hs" Inplace 6 3
+            , goldenTest "TSimplePat.hs" Inplace 6 22
+            , goldenTest "TSimplePat.hs" Inplace 6 3
+            , goldenTest "TSimplePat.hs" Inplace 6 22
+            , goldenTest "TErrorPat.hs" Inplace 6 3
+            , goldenTest "TErrorPat.hs" Inplace 6 18
+            , goldenTest "TQQPat.hs" Inplace 6 3
+            , goldenTest "TQQPat.hs" Inplace 6 11
+            , goldenTest "TQQPatError.hs" Inplace 6 3
+            , goldenTest "TQQPatError.hs" Inplace 6 11
+            ]
         , goldenTest "TSimpleType.hs" Inplace 5 12
         , goldenTest "TSimpleType.hs" Inplace 5 22
         , goldenTest "TTypeTypeError.hs" Inplace 7 12
@@ -72,19 +84,20 @@ goldenTest input tc line col =
             doc <- openDoc input "haskell"
             _ <- waitForDiagnostics
             actions <- getCodeActions doc $ pointRange line col
-            Just (CACodeAction CodeAction {_command = Just c}) <-
-                pure $ find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions
-            executeCommand c
-            _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
-            edited <- documentContents doc
-            let expected_name = spliceTestPath </> input <.> "expected"
-            -- Write golden tests if they don't already exist
-            liftIO $
-                (doesFileExist expected_name >>=) $
-                    flip unless $ do
-                        T.writeFile expected_name edited
-            expected <- liftIO $ T.readFile expected_name
-            liftIO $ edited @?= expected
+            case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
+                Just (CACodeAction CodeAction {_command = Just c}) -> do
+                    executeCommand c
+                    _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+                    edited <- documentContents doc
+                    let expected_name = spliceTestPath </> input <.> "expected"
+                    -- Write golden tests if they don't already exist
+                    liftIO $
+                        (doesFileExist expected_name >>=) $
+                            flip unless $ do
+                                T.writeFile expected_name edited
+                    expected <- liftIO $ T.readFile expected_name
+                    liftIO $ edited @?= expected
+                _ -> liftIO $ assertFailure "No CodeAction detected"
 
 goldenTestWithEdit :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
 goldenTestWithEdit input tc line col =
@@ -104,19 +117,20 @@ goldenTestWithEdit input tc line col =
             changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
             void waitForDiagnostics
             actions <- getCodeActions doc $ pointRange line col
-            Just (CACodeAction CodeAction {_command = Just c}) <-
-                pure $ find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions
-            executeCommand c
-            _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
-            edited <- documentContents doc
-            let expected_name = spliceTestPath </> input <.> "expected"
-            -- Write golden tests if they don't already exist
-            liftIO $
-                (doesFileExist expected_name >>=) $
-                    flip unless $ do
-                        T.writeFile expected_name edited
-            expected <- liftIO $ T.readFile expected_name
-            liftIO $ edited @?= expected
+            case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
+                Just (CACodeAction CodeAction {_command = Just c}) -> do
+                    executeCommand c
+                    _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+                    edited <- documentContents doc
+                    let expected_name = spliceTestPath </> input <.> "expected"
+                    -- Write golden tests if they don't already exist
+                    liftIO $
+                        (doesFileExist expected_name >>=) $
+                            flip unless $ do
+                                T.writeFile expected_name edited
+                    expected <- liftIO $ T.readFile expected_name
+                    liftIO $ edited @?= expected
+                _ -> liftIO $ assertFailure "No CodeAction detected"
 
 spliceTestPath :: FilePath
 spliceTestPath = "test/testdata/splice"
