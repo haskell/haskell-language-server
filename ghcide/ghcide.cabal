@@ -166,7 +166,7 @@ library
         Development.IDE.Plugin.CodeAction
         Development.IDE.Plugin.HLS
         Development.IDE.Plugin.HLS.GhcIde
-        Development.IDE.Plugin.HLS.LocalCompletions
+        Development.IDE.Plugin.HLS.Completions
         Development.IDE.Plugin.Test
 
     -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses

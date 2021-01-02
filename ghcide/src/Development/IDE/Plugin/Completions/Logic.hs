@@ -524,7 +524,7 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
                 Just m -> Right $ ppr m
 
           compls = if T.null prefixModule
-            then []
+            then localCompls ++ unqualCompls
             else Map.findWithDefault [] prefixModule $ getQualCompls qualCompls
 
       filtListWith f list =
