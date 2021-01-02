@@ -97,6 +97,10 @@ experiments =
         flip allM docs $ \DocumentPositions{..} ->
           either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
+      bench "completions" 10 $ \docs -> do
+        flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
+          not . null <$> getCompletions doc (fromJust identifierP),
+      ---------------------------------------------------------------------------------------
       bench "completions after edit" 10 $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
