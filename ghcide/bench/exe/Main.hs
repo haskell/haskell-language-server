@@ -37,9 +37,12 @@
 import Control.Exception.Safe
 import Experiments
 import Options.Applicative
+import System.IO
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
   config <- execParser $ info (configP <**> helper) fullDesc
   let ?config = config
 
