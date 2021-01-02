@@ -195,7 +195,7 @@ instance Hashable LocalCompletions
 instance NFData   LocalCompletions
 instance Binary   LocalCompletions
 
--- | Generate code actions.
+-- | Generate Completions.
 getCompletionsLSP
     :: LSP.LspFuncs cofd
     -> IdeState
