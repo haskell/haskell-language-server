@@ -406,8 +406,7 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress clientCapabilitie
     let ideState = IdeState{..}
 
     IdeOptions{ optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled } <- getIdeOptionsIO shakeExtras
-    when otProfilingEnabled $
-        startTelemetry logger $ state shakeExtras
+    startTelemetry otProfilingEnabled logger $ state shakeExtras
 
     return ideState
     where
