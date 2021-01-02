@@ -28,8 +28,8 @@ descriptor plId = (defaultPluginDescriptor plId)
   , pluginCodeLensProvider   = Just codeLens'
   , pluginHoverProvider      = Just hover'
   , pluginSymbolsProvider    = Just symbolsProvider
-  , pluginCompletionProvider = Just getCompletionsLSP
-  , pluginRules              = Ghcide.pluginRules Completions.plugin <> Ghcide.pluginRules CodeAction.plugin
+  , pluginCompletionProvider = Nothing
+  , pluginRules              = Ghcide.pluginRules CodeAction.plugin
   }
 
 -- ---------------------------------------------------------------------

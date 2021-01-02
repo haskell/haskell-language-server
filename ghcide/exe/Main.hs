@@ -54,6 +54,7 @@ import Development.IDE.Core.Tracing
 import Development.IDE.Types.Shake (Key(Key))
 import Development.IDE.Plugin.HLS (asGhcIdePlugin)
 import Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import Development.IDE.Plugin.HLS.Completions as Completions
 import Ide.Plugin.Config
 import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 
@@ -86,7 +87,7 @@ main = do
 
     dir <- IO.getCurrentDirectory
 
-    let hlsPlugins = pluginDescToIdePlugins [GhcIde.descriptor "ghcide"]
+    let hlsPlugins = pluginDescToIdePlugins [GhcIde.descriptor "ghcide", Completions.descriptor "completions"]
 
     pid <- T.pack . show <$> getProcessID
     let hlsPlugin = asGhcIdePlugin hlsPlugins
