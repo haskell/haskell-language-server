@@ -212,7 +212,7 @@ completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
                            command xd
         label = "Example completion"
         kind = Nothing
-        tags = List []
+        tags = Nothing
         detail = Nothing
         documentation = Nothing
         deprecated = Nothing

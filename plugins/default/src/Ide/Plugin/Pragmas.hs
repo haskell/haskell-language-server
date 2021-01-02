@@ -126,7 +126,7 @@ completion lspFuncs _ide complParams = do
                     CompletionItem
                       { _label = p,
                         _kind = Just CiKeyword,
-                        _tags = List [],
+                        _tags = Nothing,
                         _detail = Nothing,
                         _documentation = Nothing,
                         _deprecated = Nothing,
