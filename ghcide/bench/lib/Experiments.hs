@@ -48,8 +48,8 @@ charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
     TextDocumentContentChangeEvent
     { _range = Just (Range p p),
-        _rangeLength = Nothing,
-        _text = "a"
+      _rangeLength = Nothing,
+      _text = "a"
     }
 
 data DocumentPositions = DocumentPositions {
