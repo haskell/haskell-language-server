@@ -13,7 +13,7 @@ import           Control.Concurrent.Extra       (Var, modifyVar_, newVar,
                                                  readVar, threadDelay)
 import           Control.Exception              (evaluate)
 import           Control.Exception.Safe         (catch, SomeException)
-import           Control.Monad                  (unless, forM_, forever, (>=>))
+import           Control.Monad                  (void, when, unless, forM_, forever, (>=>))
 import           Control.Monad.Extra            (whenJust)
 import           Control.Seq                    (r0, seqList, seqTuple2, using)
 import           Data.Dynamic                   (Dynamic)
@@ -28,12 +28,13 @@ import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
 import           Development.IDE.Types.Logger   (logInfo, Logger, logDebug)
 import           Development.IDE.Types.Shake    (Key (..), Value, Values)
 import           Development.Shake              (Action, actionBracket, liftIO)
+import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Language.Haskell.LSP.Types     (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (addEvent, beginSpan, endSpan,
+import           OpenTelemetry.Eventlog         (Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
 
@@ -71,36 +72,47 @@ otTracedAction key file success act = actionBracket
         unless (success res) $ setTag sp "error" "1"
         return res)
 
-startTelemetry :: Logger -> Var Values -> IO ()
-startTelemetry logger stateRef = do
+startTelemetry :: Bool -> Logger -> Var Values -> IO ()
+startTelemetry allTheTime logger stateRef = do
     instrumentFor <- getInstrumentCached
     mapCountInstrument <- mkValueObserver "values map count"
 
-    _ <- regularly (1 * seconds) $
-        withSpan_ "Measure length" $
-        readVar stateRef
-        >>= observe mapCountInstrument . length
+    installSigUsr1Handler $ do
+        logInfo logger "SIGUSR1 received: performing memory measurement"
+        performMeasurement logger stateRef instrumentFor mapCountInstrument
 
-    _ <- regularly (1 * seconds) $ do
-        values <- readVar stateRef
-        let keys = nub
-                     $ Key GhcSession : Key GhcSessionDeps
-                     : [ k | (_,k) <- HMap.keys values
-                           -- do GhcSessionIO last since it closes over stateRef itself
-                           , k /= Key GhcSessionIO]
-                     ++ [Key GhcSessionIO]
-        !groupedForSharing <- evaluate (keys `using` seqList r0)
-        measureMemory logger [groupedForSharing] instrumentFor stateRef
-          `catch` \(e::SomeException) ->
-            logInfo logger ("MEMORY PROFILING ERROR: " <> fromString (show e))
-    return ()
+    when allTheTime $ void $ regularly (1 * seconds) $
+        performMeasurement logger stateRef instrumentFor mapCountInstrument
   where
         seconds = 1000000
 
         regularly :: Int -> IO () -> IO (Async ())
         regularly delay act = async $ forever (act >> threadDelay delay)
 
-{-# ANN startTelemetry ("HLint: ignore Use nubOrd" :: String) #-}
+
+performMeasurement ::
+  Logger ->
+  Var (HMap.HashMap (NormalizedFilePath, Key) (Value Dynamic)) ->
+  (Maybe Key -> IO OurValueObserver) ->
+  Instrument 'Asynchronous a m' ->
+  IO ()
+performMeasurement logger stateRef instrumentFor mapCountInstrument = do
+    withSpan_ "Measure length" $ readVar stateRef >>= observe mapCountInstrument . length
+
+    values <- readVar stateRef
+    let keys = Key GhcSession
+             : Key GhcSessionDeps
+             : [ k | (_,k) <- HMap.keys values
+                        -- do GhcSessionIO last since it closes over stateRef itself
+                        , k /= Key GhcSession
+                        , k /= Key GhcSessionDeps
+                        , k /= Key GhcSessionIO
+             ] ++ [Key GhcSessionIO]
+    groupedForSharing <- evaluate (keys `using` seqList r0)
+    measureMemory logger [groupedForSharing] instrumentFor stateRef
+        `catch` \(e::SomeException) ->
+        logInfo logger ("MEMORY PROFILING ERROR: " <> fromString (show e))
+
 
 type OurValueObserver = Int -> IO ()
 
