@@ -14,15 +14,15 @@ examples:
   # Medium-sized project without TH
   - name: Cabal
     version: 3.0.0.0
-    module: Distribution/Simple.hs
-    module: Distribution/Types/Module.hs
+    modules:
+        - Distribution/Simple.hs
+        - Distribution/Types/Module.hs
   # Small-sized project with TH
   - name: lsp-types
     version: 1.0.0.1
-    module: src/Language/LSP/VFS.hs
-    module: src/Language/LSP/Types/Lens.hs
-# - path: path-to-example
-#   module: path-to-module
+    modules:
+        - src/Language/LSP/VFS.hs
+        - src/Language/LSP/Types/Lens.hs
 
 # The set of experiments to execute
 experiments:
