@@ -468,18 +468,21 @@ setupDocumentContents config =
             stringLiteralP = Position lastLine 15
 
         -- Find an identifier defined in another file in this project
-        Left [DocumentSymbol{_children = Just (List symbols)}] <- getDocumentSymbols doc
+        symbols <- getDocumentSymbols doc
+        case symbols of
+            Left [DocumentSymbol{_children = Just (List symbols)}] -> do
+                let endOfImports = case symbols of
+                        DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
+                            Position (succ $ _line $ _end _range) 4
+                        DocumentSymbol{_range} : _ -> _start _range
+                        [] -> error "Module has no symbols"
+                contents <- documentContents doc
 
-        let endOfImports = case symbols of
-                DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
-                    Position (succ $ _line $ _end _range) 4
-                DocumentSymbol{_range} : _ -> _start _range
-                [] -> error "Module has no symbols"
-        contents <- documentContents doc
+                identifierP <- searchSymbol doc contents endOfImports
 
-        identifierP <- searchSymbol doc contents endOfImports
-
-        return $ DocumentPositions{..}
+                return $ DocumentPositions{..}
+            other ->
+                error $ "symbols: " <> show other
 
 
 
