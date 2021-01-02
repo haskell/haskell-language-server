@@ -41,17 +41,9 @@ plugin = Plugin produceCompletions setHandlersCompletion
 produceCompletions :: Rules ()
 produceCompletions = do
     define $ \ProduceCompletions file -> do
-        local <- useWithStale LocalCompletions file
         nonLocal <- useWithStale NonLocalCompletions file
         let extract = fmap fst
-        return ([], extract local <> extract nonLocal)
-    define $ \LocalCompletions file -> do
-        pm <- useWithStale GetParsedModule file
-        case pm of
-            Just (pm, _) -> do
-                let cdata = localCompletionsForParsedModule pm
-                return ([], Just cdata)
-            _ -> return ([], Nothing)
+        return ([], extract nonLocal)
     define $ \NonLocalCompletions file -> do
         -- For non local completions we avoid depending on the parsed module,
         -- synthetizing a fake module with an empty body from the buffer
@@ -93,7 +85,6 @@ dropListFromImportDecl iDecl = let
 
 -- | Produce completions info for a file
 type instance RuleResult ProduceCompletions = CachedCompletions
-type instance RuleResult LocalCompletions = CachedCompletions
 type instance RuleResult NonLocalCompletions = CachedCompletions
 
 data ProduceCompletions = ProduceCompletions
@@ -101,12 +92,6 @@ data ProduceCompletions = ProduceCompletions
 instance Hashable ProduceCompletions
 instance NFData   ProduceCompletions
 instance Binary   ProduceCompletions
-
-data LocalCompletions = LocalCompletions
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable LocalCompletions
-instance NFData   LocalCompletions
-instance Binary   LocalCompletions
 
 data NonLocalCompletions = NonLocalCompletions
     deriving (Eq, Show, Typeable, Generic)
