@@ -3568,7 +3568,7 @@ bootTests = testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
 
   cdoc <- createDoc cPath "haskell" cSource
   locs <- getDefinitions cdoc (Position 7 4)
-  let floc = mkR 8 0 8 1
+  let floc = mkR 9 0 9 1
   checkDefs locs (pure [floc])
 
 -- | test that TH reevaluates across interfaces
