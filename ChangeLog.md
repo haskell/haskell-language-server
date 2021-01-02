@@ -1,5 +1,63 @@
 # Changelog for haskell-language-server
 
+## 0.8.0
+
+- This version adds support for ghc-8.10.3
+- It has a new brand plugin: hls-class-plugin, which helps to write class instances
+
+![gif](https://user-images.githubusercontent.com/12473268/103059293-af071f80-4572-11eb-963a-7e76b45f28b9.gif)
+
+- The eval plugin has been revamped, adding these new features:
+  - Tests in both plain comments and Haddock comments
+  - For Haddock comments: shows differences between latest and previous result
+  - Setup section, executed before every test
+  - Execution of a section/group of tests at the time
+  - Property testing
+  - Setup of GHC extensions
+- A new tactic to generate automatically `Arbitrary` instances has been added to tactic plugin
+- There had been lot of internal changes:
+  - ghcide lives now directly in this repository
+  - the test suite has been cleaned and improved (continuing the work done in 0.7.0)
+
+thanks to all contributors and happy new year!
+
+### Pull requests merged for 0.8.0
+
+- Ci fixes
+([#783)](https://github.com/haskell/haskell-language-server/pull/783) by @pepeiborra
+- Fix extend imports regression
+([#769)](https://github.com/haskell/haskell-language-server/pull/769) by @pepeiborra
+- Cleanup format testfiles
+([#765)](https://github.com/haskell/haskell-language-server/pull/765) by @peterwicksstringfield
+- Retry a failed cradle if the cradle descriptor changes
+([#762)](https://github.com/haskell/haskell-language-server/pull/762) by @pepeiborra
+- Perform memory measurement on SIGUSR1
+([#761)](https://github.com/haskell/haskell-language-server/pull/761) by @pepeiborra
+- Add ghc-8.10.3 support after merging ghcide repo
+([#721)](https://github.com/haskell/haskell-language-server/pull/721) by @jneira
+- Merge ghcide repository (replacing the submodule)
+([#702)](https://github.com/haskell/haskell-language-server/pull/702) by @pepeiborra
+- Invert the dependency between hls-plugin-api and ghcide
+([#701)](https://github.com/haskell/haskell-language-server/pull/701) by @pepeiborra
+- Move eval plugin to hls-eval-plugin
+([#700)](https://github.com/haskell/haskell-language-server/pull/700) by @tittoassini
+- Fix and enable progress message tests.
+([#698)](https://github.com/haskell/haskell-language-server/pull/698) by @peterwicksstringfield
+- Add a known tactic for writing arbitrary instances
+([#695)](https://github.com/haskell/haskell-language-server/pull/695) by @isovector
+- Introduce generic config for plugins
+([#691)](https://github.com/haskell/haskell-language-server/pull/691) by @alanz
+- Enable get type definition tests
+([#690)](https://github.com/haskell/haskell-language-server/pull/690) by @peterwicksstringfield
+- Fix ghc version for windows 8.10.2.2 in github build workflow
+([#688)](https://github.com/haskell/haskell-language-server/pull/688) by @jneira
+- Add plugins conditionally at compile time
+([#687)](https://github.com/haskell/haskell-language-server/pull/687) by @jneira
+- Implement basic Class plugin
+([#661)](https://github.com/haskell/haskell-language-server/pull/661) by @Ailrun
+- Extended Eval Plugin
+([#438)](https://github.com/haskell/haskell-language-server/pull/438) by @tittoassini
+
 ## 0.7.1
 
 - This is a minor bug fix release:
