@@ -19,13 +19,17 @@ Then, you can run `ghcide`, giving it a file to dump eventlog information into.
 ghcide +RTS -l -ol ghcide.eventlog -RTS
 ```
 
-You can also optionally enable reporting detailed memory data with `--ot-memory-profiling`
+# Profiling the Shake cache
+
+The flag `--ot-memory-profiling` profiles the values map repeatedly with 1s pauses in between.
 
 ```sh
 ghcide --ot-memory-profiling +RTS -A4G -l -ol ghcide.eventlog -RTS
 ```
 
 *Note:* This option, while functional, is extremely slow. You will notice this because the memory graph in the output will have datapoints spaced apart by a couple of minutes. The nursery must be big enough (-A1G or larger) or the measurements will self-abort.
+
+Another way to profile the heap is by sending a USR1 signal (`kill -s USR1`) to the process.
 
 ## Viewing with tracy
 
