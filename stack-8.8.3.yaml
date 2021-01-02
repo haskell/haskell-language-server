@@ -31,8 +31,8 @@ extra-deps:
   - fourmolu-0.3.0.0
   # - ghcide-0.6.0
   - ghc-exactprint-0.6.3.2
-  - ghc-lib-8.10.2.20200916
-  - ghc-lib-parser-8.10.2.20200916
+  - ghc-lib-8.10.3.20201220
+  - ghc-lib-parser-8.10.3.20201220
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
