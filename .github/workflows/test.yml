@@ -7,22 +7,46 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        ghc: ['8.10.3', "8.10.2", "8.10.1", "8.8.4", "8.8.3", "8.8.2", "8.6.5", "8.6.4"]
-        os: [ubuntu-latest, windows-latest]
-        exclude:
-          - os: windows-latest
-            ghc: "8.10.2" # broken due to https://gitlab.haskell.org/ghc/ghc/-/issues/18550
-          - os: windows-latest
-            ghc: "8.8.4" # also fails due to segfault :(
-          - os: windows-latest
-            ghc: "8.8.3" # fails due to segfault
-          - os: windows-latest
-            ghc: "8.8.2" # fails due to error with Cabal
-          - os: windows-latest
-            ghc: "8.6.4" # times out after 300m
+        ghc: ["8.10.3", "8.10.2", "8.10.1", "8.8.4", "8.8.3", "8.8.2", "8.6.5", "8.6.4"]
+        os: [ubuntu-latest, macOS-latest]
         include:
+          # one ghc-lib build
+          # should be renabled: #784
+          # - os: ubuntu-latest
+          #   ghc: '8.10.1'
+          #   ghc-lib: true
+          # only test supported ghc major versions
+          - os: macOS-latest
+            ghc: '8.10.3'
+            test: true
+          - os: ubuntu-latest
+            ghc: '8.10.3'
+            test: true
           - os: windows-latest
-            ghc: "8.10.2.2" # only available for windows and choco
+            ghc: '8.10.3'
+            test: true
+          - os: macOS-latest
+            ghc: '8.8.4'
+            test: true
+          - os: ubuntu-latest
+            ghc: '8.8.4'
+            test: true
+          - os: macOS-latest
+            ghc: '8.6.5'
+            test: true
+          - os: ubuntu-latest
+            ghc: '8.6.5'
+            test: true
+          - os: windows-latest
+            ghc: '8.6.5'
+            test: true
+          # only build rest of supported ghc versions for windows
+          - os: windows-latest
+            ghc: '8.10.2.2'
+          - os: windows-latest
+            ghc: '8.10.1'
+          - os: windows-latest
+            ghc: '8.6.4'
 
     steps:
       # Cancel queued workflows from earlier commits in this branch
@@ -71,11 +95,13 @@ jobs:
         run: cabal build || cabal build || cabal build
 
       - name: Test ghcide
+        if: ${{ !matrix.ghc-lib && matrix.test }}
         shell: bash
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ghcide --test-options="-j1 --rerun-update" || cabal test ghcide --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="-j1 --rerun"
 
       - name: Test func-test suite
+        if: ${{ !matrix.ghc-lib && matrix.test }}
         shell: bash
         env:
           HLS_TEST_EXE: hls
@@ -86,6 +112,7 @@ jobs:
         run: cabal test func-test --test-options="-j1 --rerun-update" || cabal test func-test --test-options="-j1 --rerun --rerun-update" || cabal test func-test --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test func-test --test-options="-j1 --rerun"
 
       - name: Test wrapper-test suite
+        if: ${{ !matrix.ghc-lib && matrix.test }}
         shell: bash
         env:
           HLS_TEST_EXE: hls
