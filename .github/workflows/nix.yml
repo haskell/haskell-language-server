@@ -8,7 +8,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ['default', 'ghc8102', 'ghc884', 'ghc865']
+        ghc: ['default']
         os: [ubuntu-latest, macOS-latest]
 
     steps:
