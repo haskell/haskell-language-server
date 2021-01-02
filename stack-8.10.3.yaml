@@ -1,11 +1,11 @@
-resolver: lts-16.25
+resolver: nightly-2021-01-01 # first ghc-8.10.3 nightly
 
 packages:
   - .
   - ./hie-compat
   - ./ghcide/
-  - ./shake-bench
   - ./hls-plugin-api
+  # - ./shake-bench
   - ./plugins/hls-class-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
@@ -17,49 +17,30 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - aeson-1.5.2.0
-  - apply-refact-0.8.2.1
   - brittany-0.13.1.0
-  - bytestring-trie-0.2.5.0
-  - cabal-plan-0.6.2.0
+  - Cabal-3.0.2.0
   - clock-0.7.2
-  - constrained-dynamic-0.1.0.0
+  - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  # - ghcide-0.6.0
-  - ghc-exactprint-0.6.3.2
-  - ghc-lib-8.10.3.20201220
-  - ghc-lib-parser-8.10.3.20201220
-  - ghc-trace-events-0.1.2.1
-  - haskell-src-exts-1.21.1
   - heapsize-0.3.0
-  - hie-bios-0.7.1
-  - hlint-3.2.3
-  - HsYAML-aeson-0.2.0.0@rev:2
-  - hoogle-5.0.17.11
-  - hsimport-0.11.0
-  - ilist-0.3.1.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
   - lsp-test-0.11.0.6
   - monad-dijkstra-0.1.1.2
-  - opentelemetry-0.6.1
-  - opentelemetry-extra-0.6.1
   - refinery-0.3.0.0
   - retrie-0.1.1.1
-  - semigroups-0.18.5
-  # - github: wz1000/shake
-  #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
   - stylish-haskell-0.12.2.0
+  - semigroups-0.18.5
   - temporary-1.2.1.1
 
 configure-options:
   ghcide:
-    - --disable-library-for-ghci
+      - --disable-library-for-ghci
   haskell-language-server:
-    - --disable-library-for-ghci
+      - --disable-library-for-ghci
   heapsize:
-    - --disable-library-for-ghci
+      - --disable-library-for-ghci
 
 flags:
   haskell-language-server:
@@ -67,9 +48,7 @@ flags:
   retrie:
     BuildExecutable: false
 
-# allow-newer: true
-
 nix:
-  packages: [icu libcxx zlib]
+  packages: [ icu libcxx zlib ]
 
 concurrent-tests: false
