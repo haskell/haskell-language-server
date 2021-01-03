@@ -3,8 +3,7 @@
 ## 0.8.0
 
 - This version adds support for ghc-8.10.3
-- `hls-plugin-api` is 0.6.0.0 and `ghcide`, 0.7.0.0
-  - so this include [changes from `ghcide-0.6.0.2`](https://github.com/haskell/haskell-language-server/blob/master/ghcide/CHANGELOG.md#0602-2020-12-26)
+- `hls-plugin-api` has been bumped to 0.6.0.0 and `ghcide` has been bumped from 0.6.0.1 to 0.7.0.0.
 - It has a new brand plugin: hls-class-plugin, which helps to write class instances
 
 ![gif](https://user-images.githubusercontent.com/12473268/103059293-af071f80-4572-11eb-963a-7e76b45f28b9.gif)
