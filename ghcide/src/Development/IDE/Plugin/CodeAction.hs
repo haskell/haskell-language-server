@@ -628,7 +628,14 @@ suggestExtendImport exportsMap contents Diagnostic{_range=_range,..}
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
           , [(ident, _)] <- filter (\(_,m) -> mod == m) (Set.toList match)
            = Just ident
-          | otherwise = Nothing
+
+            -- fallback to using GHC suggestion even though it is not always correct
+          | otherwise
+          = Just IdentInfo
+                { name = binding
+                , rendered = binding
+                , parent = Nothing
+                , isDatacon = False}
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestFixConstructorImport _ Diagnostic{_range=_range,..}
@@ -968,8 +975,8 @@ extractQualifiedModuleName :: T.Text -> Maybe T.Text
 extractQualifiedModuleName x
   | Just [m] <- matchRegexUnifySpaces x "module named [^‘]*‘([^’]*)’"
   = Just m
-  | otherwise 
-  = Nothing 
+  | otherwise
+  = Nothing
 
 -------------------------------------------------------------------------------------------------
 
