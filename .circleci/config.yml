@@ -62,10 +62,6 @@ defaults: &defaults
 
     - run:
         name: Build including tests
-        # Tasty by default will run all the tests in parallel. Which should
-        # work ok, but given that these CircleCI runners aren't the beefiest
-        # machine can cause some flakiness. So pass -j1 to Tasty (NOT Stack) to
-        # tell it to go slow and steady.
         command: stack --stack-yaml=${STACK_FILE} test --no-run-tests
         no_output_timeout: 120m
 
