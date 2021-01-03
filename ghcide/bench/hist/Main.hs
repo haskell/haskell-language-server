@@ -51,6 +51,7 @@ import Experiments.Types (Example, exampleToOptions)
 import qualified Experiments.Types as E
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
+import Development.Shake.Classes
 
 
 config :: FilePath
@@ -70,7 +71,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
       configStatic <- liftIO $ readConfigIO config
       let build = outputFolder configStatic
       buildRules build ghcideBuildRules
-      benchRules build resource (MkBenchRules (benchGhcide $ samples configStatic) "ghcide")
+      benchRules build resource (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
       csvRules build
       svgRules build
       action $ allTargets build
@@ -101,10 +102,14 @@ createBuildSystem userRules = do
   _ <- versioned 1 $ addOracle $ \GetExamples{} -> examples <$> readConfig config
   _ <- versioned 1 $ addOracle $ \(GetExample name) -> find (\e -> getExampleName e == name) . examples <$> readConfig config
   _ <- addOracle $ \GetBuildSystem {} -> buildTool <$> readConfig config
+  _ <- addOracle $ \GetSamples{} -> samples <$> readConfig config
 
   benchResource <- newResource "ghcide-bench" 1
 
   userRules benchResource
+
+newtype GetSamples = GetSamples () deriving newtype (Binary, Eq, Hashable, NFData, Show)
+type instance RuleResult GetSamples = Natural
 
 --------------------------------------------------------------------------------
 
@@ -130,7 +135,7 @@ buildGhcide Stack args out =
 
 benchGhcide
   :: Natural -> BuildSystem -> [CmdOption] -> BenchProject Example -> Action ()
-benchGhcide samples buildSystem args BenchProject{..} =
+benchGhcide samples buildSystem args BenchProject{..} = do
   command_ args "ghcide-bench" $
     [ "--timeout=3000",
         "-v",

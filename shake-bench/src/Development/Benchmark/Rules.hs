@@ -1,3 +1,4 @@
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE ConstraintKinds     #-}
@@ -198,8 +199,12 @@ buildRules build MkBuildRules{..} = do
         writeFile' ghcPath ghcLoc
 
 --------------------------------------------------------------------------------
-data MkBenchRules buildSystem example = MkBenchRules
-  { benchProject :: buildSystem -> [CmdOption] -> BenchProject example -> Action ()
+data MkBenchRules buildSystem example =  forall setup. MkBenchRules
+  {
+  -- | Workaround for Shake not allowing to call 'askOracle' from 'benchProject
+    setupProject :: Action setup
+  -- | An action that invokes the executable to run the benchmark
+  , benchProject :: setup -> buildSystem -> [CmdOption] -> BenchProject example -> Action ()
   -- | Name of the executable to benchmark. Should match the one used to 'MkBuildRules'
   , executableName :: String
   }
@@ -226,6 +231,7 @@ benchRules build benchResource MkBenchRules{..} = do
         example <- fromMaybe (error $ "Unknown example " <> exampleName)
                     <$> askOracle (GetExample exampleName)
         buildSystem <- askOracle  $ GetBuildSystem ()
+        setupRes    <- setupProject
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
         let exePath    = build </> "binaries" </> ver </> executableName
             exeExtraArgs = ["+RTS", "-I0.5", "-S" <> takeFileName outGc, "-RTS"]
@@ -234,7 +240,7 @@ benchRules build benchResource MkBenchRules{..} = do
         need [exePath, ghcPath]
         ghcPath <- readFile' ghcPath
         withResource benchResource 1 $ do
-          benchProject buildSystem
+          benchProject setupRes buildSystem
               [ EchoStdout False,
                 FileStdout outLog,
                 RemEnv "NIX_GHC_LIBDIR",
