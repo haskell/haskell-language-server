@@ -344,16 +344,17 @@ runBench ::
 runBench runSess b = handleAny (\e -> print e >> return badRun)
   $ runSess
   $ do
-    (d, docs) <- duration $ setupDocumentContents ?config
-    output $ "Setting up document contents took " <> showDuration d
     case b of
      Bench{..} -> do
-      (startup, _) <- duration $ do
+      (startup, docs) <- duration $ do
+        (d, docs) <- duration $ setupDocumentContents ?config
+        output $ "Setting up document contents took " <> showDuration d
         -- wait again, as the progress is restarted once while loading the cradle
         -- make an edit, to ensure this doesn't block
         let DocumentPositions{..} = head docs
         changeDoc doc [charEdit stringLiteralP]
         waitForProgressDone
+        return docs
 
       liftIO $ output $ "Running " <> name <> " benchmark"
       (runSetup, ()) <- duration $ benchSetup docs
