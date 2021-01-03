@@ -12,6 +12,9 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
+    # Cancel queued workflows from earlier commits in this branch
+    - uses: technote-space/auto-cancel-redundant-workflow@v1
+
     - uses: actions/checkout@v2
     - run: git fetch origin master # check the master branch for benchmarking
     - uses: haskell/actions/setup@v1
