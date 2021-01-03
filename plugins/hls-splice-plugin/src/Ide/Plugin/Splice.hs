@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
@@ -54,6 +55,7 @@ import qualified Language.Haskell.LSP.Types.Lens as J
 import Retrie.ExactPrint (Annotated)
 import RnSplice
 import TcRnMonad
+import Data.Foldable (Foldable(foldl'))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -384,6 +386,14 @@ unRenamedE dflags expr = do
     let _anns' = setPrecedingLines expr' 0 1 anns
     pure expr'
 
+data SearchResult r =
+    Continue | Stop | Here r
+    deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+fromSearchResult :: SearchResult a -> Maybe a
+fromSearchResult (Here r) = Just r
+fromSearchResult _ = Nothing
+
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
 codeAction :: CodeActionProvider IdeState
@@ -413,34 +423,53 @@ codeAction _ state plId docId ran _ =
         theUri = docId ^. J.uri
         detectSplice ::
             RealSrcSpan ->
-            GenericQ (Maybe (RealSrcSpan, SpliceContext))
+            GenericQ (SearchResult (RealSrcSpan, SpliceContext))
         detectSplice spn =
             mkQ
-                Nothing
+                Continue
                 ( \case
-                    (L l@(RealSrcSpan spLoc) HsSpliceE {} :: LHsExpr GhcPs)
-                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, Expr)
-                    _ -> Nothing
+                    (L l@(RealSrcSpan spLoc) expr :: LHsExpr GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l ->
+                            case expr of
+                                HsSpliceE {} -> Here (spLoc, Expr)
+                                _ -> Continue
+                    _ -> Stop
                 )
 #if __GLASGOW_HASKELL__ == 808
 #else
                 `extQ` \case
-                    (L l@(RealSrcSpan spLoc) SplicePat {} :: LPat GhcPs)
-                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, Pat)
-                    _ -> Nothing
+                    (L l@(RealSrcSpan spLoc) pat :: LPat GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l ->
+                            case pat of
+                                SplicePat{} -> Here (spLoc, Pat)
+                                _ -> Continue
+                    _ -> Stop
 #endif
                 `extQ` \case
-                    (L l@(RealSrcSpan spLoc) HsSpliceTy {} :: LHsType GhcPs)
-                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, HsType)
-                    _ -> Nothing
+                    (L l@(RealSrcSpan spLoc) ty :: LHsType GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l ->
+                            case ty of
+                                HsSpliceTy {} -> Here (spLoc, HsType)
+                                _ -> Continue
+                    _ -> Stop
                 `extQ` \case
-                    (L l@(RealSrcSpan spLoc) SpliceD {} :: LHsDecl GhcPs)
-                        | RealSrcSpan spn `isSubspanOf` l -> Just (spLoc, HsDecl)
-                    _ -> Nothing
+                    (L l@(RealSrcSpan spLoc) decl :: LHsDecl GhcPs)
+                        | RealSrcSpan spn `isSubspanOf` l ->
+                            case decl of
+                                SpliceD {} -> Here (spLoc, HsDecl)
+                                _ -> Continue
+                    _ -> Stop
 
--- | Like 'something', but performs in bottom-up manner.
-something' :: forall a. GenericQ (Maybe a) -> GenericQ (Maybe a)
-something' = everything (flip (<|>))
+-- | Like 'something', but performs top-down searching, cutoffs when 'Stop' received,
+--   and picks inenrmost result.
+something' :: forall a. GenericQ (SearchResult a) -> GenericQ (Maybe a)
+something' f =  go
+    where
+        go :: GenericQ (Maybe a)
+        go x =
+            case f x of
+              Stop -> Nothing
+              resl -> foldl' (flip (<|>)) (fromSearchResult resl) (gmapQ go x)
 
 posToRealSrcLoc :: Position -> FastString -> RealSrcLoc
 posToRealSrcLoc pos fs = mkRealSrcLoc fs (line + 1) (col + 1)
