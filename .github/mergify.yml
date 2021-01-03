@@ -35,8 +35,3 @@ pull_request_rules:
 
   - label=merge me
   - '#approved-reviews-by>=1'
-- actions:
-    delete_head_branch: {}
-  name: Delete head branch after merge
-  conditions:
-  - merged
