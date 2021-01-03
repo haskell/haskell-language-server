@@ -1,3 +1,9 @@
+### 0.7.0 (2020-01-03)
+
+* Retry a failed cradle if the cradle descriptor changes (#762) - (Pepe Iborra)
+* Fix extend imports regression (#769) - (Pepe Iborra)
+* Perform memory measurement on SIGUSR1 (#761) - (Pepe Iborra)
+
 ### 0.6.0.2 (2020-12-26)
 * Fix disappearing diagnostics bug (#959) - (Pepe Iborra)
 * Deduplicate module not found diagnostics (#952) - (Pepe Iborra)
