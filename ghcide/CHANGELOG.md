@@ -1,5 +1,6 @@
 ### 0.6.0.2 (2020-12-26)
 * Fix disappearing diagnostics bug (#959) - (Pepe Iborra)
+* Deduplicate module not found diagnostics (#952) - (Pepe Iborra)
 * Use qualified module name from diagnostics in suggestNewImport (#945) - (Potato Hatsue)
 * Disable auto extend import snippets in completions (these need a bit more work)
 
