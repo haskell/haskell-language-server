@@ -491,7 +491,17 @@ pad n (x:xx) = x : pad (n-1) xx
 --     - get definition works and returns a uri other than this file
 --     - get completions returns a non empty list
 searchSymbol :: TextDocumentIdentifier -> T.Text -> Position -> Session (Maybe Position)
-searchSymbol doc@TextDocumentIdentifier{_uri} fileContents = loop
+searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
+    -- this search is expensive, so we cache the result on disk
+    let cachedPath = fromJust (uriToFilePath _uri) <.> "identifierPosition"
+    cachedRes <- liftIO $ try @_ @IOException $ read <$> readFile cachedPath
+    case cachedRes of
+        Left _ -> do
+            result <- loop pos
+            liftIO $ writeFile cachedPath $ show result
+            return result
+        Right res ->
+            return res
   where
       loop pos
         | _line pos >= lll =
