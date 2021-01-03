@@ -1,7 +1,7 @@
 pull_request_rules:
 - actions:
     merge:
-      strict: smart
+      strict: smart+fasttrack
       method: merge
   name: Automatically merge pull requests
   conditions:
