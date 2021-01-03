@@ -5,10 +5,6 @@ defaults: &defaults
   steps:
     - checkout
     - run:
-        command: git submodule sync --recursive
-    - run:
-        command: git submodule update --recursive --init
-    - run:
         name: Write provided stack.yaml with predictable name
         command: cp ${STACK_FILE} stack-build.txt
 
@@ -147,45 +143,6 @@ jobs:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
 
-  cabal:
-    working_directory: ~/build
-    docker:
-      # We have to wait to a docker image with ghc-8.10.3
-      # See https://github.com/haskell/docker-haskell/issues/31
-      - image: haskell:8.10.2
-    steps:
-      - checkout
-      - run:
-          name: Sync submodules
-          command: git submodule sync --recursive
-      - run:
-          name: Update submodules
-          command: git submodule update --recursive --init
-      - restore-cache:
-          keys:
-            - cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-      - run:
-          name: Update
-          command: cabal new-update
-      - run:
-          name: Configure
-          command: cabal new-configure --enable-tests
-      - run:
-          name: Build dependencies
-          command: cabal new-build -j1 --dependencies-only # need j1, else ghc-lib-parser triggers OOM
-          no_output_timeout: 30m
-      - save_cache:
-          key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-          paths:
-            - ~/.cabal
-      - run:
-          name: Build
-          command: cabal new-build -j1 # need j1, else ghc-lib-parser triggers OOM
-          no_output_timeout: 30m
-      - save_cache:
-          key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-          paths:
-            - ~/.cabal
 
 workflows:
   version: 2
@@ -199,5 +156,3 @@ workflows:
       - ghc-8.10.1
       - ghc-8.10.2
       - ghc-8.10.3
-      - ghc-default
-      - cabal
