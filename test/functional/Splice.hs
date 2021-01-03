@@ -111,7 +111,7 @@ goldenTestWithEdit input tc line col =
                         { _start = Position 0 0
                         , _end = Position (length lns + 1) 1
                         }
-            liftIO $ sleep 1
+            liftIO $ sleep 3
             alt <- liftIO $ T.readFile (spliceTestPath </> input <.> "error")
             void $ applyEdit doc $ TextEdit theRange alt
             changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
