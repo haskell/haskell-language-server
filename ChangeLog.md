@@ -1,11 +1,70 @@
 # Changelog for haskell-language-server
 
+## 0.8.0
+
+- This version adds support for ghc-8.10.3
+- It has a new brand plugin: hls-class-plugin, which helps to write class instances
+
+![gif](https://user-images.githubusercontent.com/12473268/103059293-af071f80-4572-11eb-963a-7e76b45f28b9.gif)
+
+- The eval plugin has been revamped, adding these new features:
+  - Tests in both plain comments and Haddock comments
+  - For Haddock comments: shows differences between latest and previous result
+  - Setup section, executed before every test
+  - Execution of a section/group of tests at the time
+  - Property testing
+  - Setup of GHC extensions
+- A new tactic to generate automatically `Arbitrary` instances has been added to tactic plugin
+- There had been lot of internal changes:
+  - ghcide lives now directly in this repository
+  - the test suite has been cleaned and improved (continuing the work done in 0.7.0)
+
+thanks to all contributors and happy new year!
+
+### Pull requests merged for 0.8.0
+
+- Ci fixes
+([#783)](https://github.com/haskell/haskell-language-server/pull/783) by @pepeiborra
+- Fix extend imports regression
+([#769)](https://github.com/haskell/haskell-language-server/pull/769) by @pepeiborra
+- Cleanup format testfiles
+([#765)](https://github.com/haskell/haskell-language-server/pull/765) by @peterwicksstringfield
+- Retry a failed cradle if the cradle descriptor changes
+([#762)](https://github.com/haskell/haskell-language-server/pull/762) by @pepeiborra
+- Perform memory measurement on SIGUSR1
+([#761)](https://github.com/haskell/haskell-language-server/pull/761) by @pepeiborra
+- Add ghc-8.10.3 support after merging ghcide repo
+([#721)](https://github.com/haskell/haskell-language-server/pull/721) by @jneira
+- Merge ghcide repository (replacing the submodule)
+([#702)](https://github.com/haskell/haskell-language-server/pull/702) by @pepeiborra
+- Invert the dependency between hls-plugin-api and ghcide
+([#701)](https://github.com/haskell/haskell-language-server/pull/701) by @pepeiborra
+- Move eval plugin to hls-eval-plugin
+([#700)](https://github.com/haskell/haskell-language-server/pull/700) by @tittoassini
+- Fix and enable progress message tests.
+([#698)](https://github.com/haskell/haskell-language-server/pull/698) by @peterwicksstringfield
+- Add a known tactic for writing arbitrary instances
+([#695)](https://github.com/haskell/haskell-language-server/pull/695) by @isovector
+- Introduce generic config for plugins
+([#691)](https://github.com/haskell/haskell-language-server/pull/691) by @alanz
+- Enable get type definition tests
+([#690)](https://github.com/haskell/haskell-language-server/pull/690) by @peterwicksstringfield
+- Fix ghc version for windows 8.10.2.2 in github build workflow
+([#688)](https://github.com/haskell/haskell-language-server/pull/688) by @jneira
+- Add plugins conditionally at compile time
+([#687)](https://github.com/haskell/haskell-language-server/pull/687) by @jneira
+- Implement basic Class plugin
+([#661)](https://github.com/haskell/haskell-language-server/pull/661) by @Ailrun
+- Extended Eval Plugin
+([#438)](https://github.com/haskell/haskell-language-server/pull/438) by @tittoassini
+
 ## 0.7.1
 
 - This is a minor bug fix release:
   - It fixes an issue that removed accidentally desugarer warnings (#676).
   - It disables auto extend import lists in completions, see #679.
-### Pull requests merged
+
+### Pull requests merged for 0.7.1
 
 - Disable auto extend import lists in completions. It fixes #679.
 ([#685)](https://github.com/haskell/haskell-language-server/pull/685) by @pepeiborra
@@ -18,22 +77,22 @@
 
 ## 0.7.0
 
-* This version contains mainly refactors and updates of upstream packages
-* It bumps up some formatter versions:
-  * ormolu is 0.1.4.1
-  * fourmolu is 0.3.0.0
-  * brittany is 0.13.1.0
-* It uses last implicit-hie-cradle-0.3.0.2, with some [bug](https://github.com/Avi-D-coder/implicit-hie/issues/29) [fixes](https://github.com/Avi-D-coder/implicit-hie/issues/30)
-* It uses last ghcide-0.6.0.1 with [improvements and bug fixes](https://github.com/haskell/ghcide/blob/master/CHANGELOG.md#060-2020-12-06):
-  * Do not enable every "unnecessary" warning by default
-  * Improvements over completions:
-    * record fields
-    * identifiers not in explicit import lists
-    * extend explicit import list automatically
+- This version contains mainly refactors and updates of upstream packages
+- It bumps up some formatter versions:
+  - ormolu is 0.1.4.1
+  - fourmolu is 0.3.0.0
+  - brittany is 0.13.1.0
+- It uses last implicit-hie-cradle-0.3.0.2, with some [bug](https://github.com/Avi-D-coder/implicit-hie/issues/29) [fixes](https://github.com/Avi-D-coder/implicit-hie/issues/30)
+- It uses last ghcide-0.6.0.1 with [improvements and bug fixes](https://github.com/haskell/ghcide/blob/master/CHANGELOG.md#060-2020-12-06):
+  - Do not enable every "unnecessary" warning by default
+  - Improvements over completions:
+    - record fields
+    - identifiers not in explicit import lists
+    - extend explicit import list automatically
 
 Thanks to all haskell-language-server, ghcide and other upstream packages contributors (the list continue growing healthy) for make this release possible.
 
-### Pull requests merged
+### Pull requests merged for 0.7.0
 
 - Miscellanous fixes: correct tactic plugin package metadata and cabal.hie.yaml/stack.hie.yaml
 ([#672)](https://github.com/haskell/haskell-language-server/pull/672) by @berberman
@@ -57,7 +116,7 @@ Thanks to all haskell-language-server, ghcide and other upstream packages contri
 ([#650)](https://github.com/haskell/haskell-language-server/pull/650) by @berberman
 - [nix-shell] Actually use gitignore
 ([#649)](https://github.com/haskell/haskell-language-server/pull/649) by @pepeiborra
--  idempotent command and code cleanup
+- idempotent command and code cleanup
 ([#648)](https://github.com/haskell/haskell-language-server/pull/648) by @tittoassini
 - Split the Imports and Retrie plugins
 ([#647)](https://github.com/haskell/haskell-language-server/pull/647) by @pepeiborra
@@ -94,11 +153,11 @@ Thanks to all haskell-language-server, ghcide and other upstream packages contri
 
 0.6.0 includes two brand new plugins!
 
-* [Hlint Plugin](https://github.com/haskell/haskell-language-server/pull/166): it integrates hlint diagnostics and lets you apply suggestions to fix them.
+- [Hlint Plugin](https://github.com/haskell/haskell-language-server/pull/166): it integrates hlint diagnostics and lets you apply suggestions to fix them.
 
 ![hls-hlint-demo](https://user-images.githubusercontent.com/54035/98731058-6ff38500-239d-11eb-8176-e4f69ef76fc2.gif)
 
-* [Module Name Plugin](https://github.com/haskell/haskell-language-server/pull/480): it makes easier create new modules and modify them, suggesting the appropiate module name as a code lens.
+- [Module Name Plugin](https://github.com/haskell/haskell-language-server/pull/480): it makes easier create new modules and modify them, suggesting the appropiate module name as a code lens.
 
 ![module-name-demo](https://user-images.githubusercontent.com/54035/98731198-a7623180-239d-11eb-8af0-73bd32b9b0b2.gif)
 
@@ -106,62 +165,62 @@ This release also includes many improvements and bug fixes for the tactic plugin
 
 We have updated two essential tools used by the ide:
 
-* `implicit-hie`: [to fix a bug](https://github.com/haskell/haskell-language-server/issues/498) present when loading cabal based projects with executables containing `other-modules`
+- `implicit-hie`: [to fix a bug](https://github.com/haskell/haskell-language-server/issues/498) present when loading cabal based projects with executables containing `other-modules`
 
-* `ghcide`: the ide uses [the just released version 0.5](https://github.com/haskell/ghcide/blob/master/CHANGELOG.md#050-2020-10-08) with many bug fixes and improvements, including:
-  * code action to remove *all* redundant imports
-  * improved support for Template Haskell
-  * emit desugarer warnings
+- `ghcide`: the ide uses [the just released version 0.5](https://github.com/haskell/ghcide/blob/master/CHANGELOG.md#050-2020-10-08) with many bug fixes and improvements, including:
+  - code action to remove *all* redundant imports
+  - improved support for Template Haskell
+  - emit desugarer warnings
 
-### Pull requests merged
+### Pull requests merged for 0.6.0
 
-* Fix tasty rerun
+- Fix tasty rerun
 ([#570)](https://github.com/haskell/haskell-language-server/pull/570) by @jneira
-* Bump up ghcide submodule to version 0.5.0
+- Bump up ghcide submodule to version 0.5.0
 ([#568)](https://github.com/haskell/haskell-language-server/pull/568) by @jneira
-* Refactor tactics to track hypothesis provenance
+- Refactor tactics to track hypothesis provenance
 ([#557)](https://github.com/haskell/haskell-language-server/pull/557) by @isovector
-* Use bash shell to allow its idioms
+- Use bash shell to allow its idioms
 ([#552)](https://github.com/haskell/haskell-language-server/pull/552) by @jneira
-* Ignore flakey tactics test
+- Ignore flakey tactics test
 ([#546)](https://github.com/haskell/haskell-language-server/pull/546) by @isovector
-* Better scoring metric for deriving safeHead
+- Better scoring metric for deriving safeHead
 ([#545)](https://github.com/haskell/haskell-language-server/pull/545) by @isovector
-* Discover skolems in the hypothesis, not just goal
+- Discover skolems in the hypothesis, not just goal
 ([#542)](https://github.com/haskell/haskell-language-server/pull/542) by @isovector
-* [retrie] Fix code action title
+- [retrie] Fix code action title
 ([#538)](https://github.com/haskell/haskell-language-server/pull/538) by @pepeiborra
-* Tactics support for using given constraints
+- Tactics support for using given constraints
 ([#534)](https://github.com/haskell/haskell-language-server/pull/534) by @isovector
-* Add missing tactic subpackage in default stack.yaml
+- Add missing tactic subpackage in default stack.yaml
 ([#529)](https://github.com/haskell/haskell-language-server/pull/529) by @jneira
-* Use implicit-hie-0.1.2.0
+- Use implicit-hie-0.1.2.0
 ([#528)](https://github.com/haskell/haskell-language-server/pull/528) by @jneira
-* Wait for diagnostics in tactics tests
+- Wait for diagnostics in tactics tests
 ([#525)](https://github.com/haskell/haskell-language-server/pull/525) by @isovector
-* Fix a bug in tactics preventing split of split
+- Fix a bug in tactics preventing split of split
 ([#520)](https://github.com/haskell/haskell-language-server/pull/520) by @isovector
-* Use infix notation for destructing and splitting infix data cons
+- Use infix notation for destructing and splitting infix data cons
 ([#519)](https://github.com/haskell/haskell-language-server/pull/519) by @isovector
-* Retry the build three times
+- Retry the build three times
 ([#518)](https://github.com/haskell/haskell-language-server/pull/518) by @jneira
-* Separate tactics into its own package
+- Separate tactics into its own package
 ([#516)](https://github.com/haskell/haskell-language-server/pull/516) by @isovector
-* Add a Troubleshooting section to the README
+- Add a Troubleshooting section to the README
 ([#507)](https://github.com/haskell/haskell-language-server/pull/507) by @michaelpj
-* Add GitHub Actions CI for testing
+- Add GitHub Actions CI for testing
 ([#504)](https://github.com/haskell/haskell-language-server/pull/504) by @bubba
-* Fix stack build for ghc-8.8.3 failing on some machines
+- Fix stack build for ghc-8.8.3 failing on some machines
 ([#503)](https://github.com/haskell/haskell-language-server/pull/503) by @luntain
-* Expand explanation of how to configure HLS
+- Expand explanation of how to configure HLS
 ([#497)](https://github.com/haskell/haskell-language-server/pull/497) by @michaelpj
-* Module Name Plugin
+- Module Name Plugin
 ([#480)](https://github.com/haskell/haskell-language-server/pull/480) by @tittoassini
-* Allow hole filling to deal with recursion
+- Allow hole filling to deal with recursion
 ([#472)](https://github.com/haskell/haskell-language-server/pull/472) by @isovector
-* Restrict editor config to Haskell file, to avoid affecting Makefiles or other tab-based formats
+- Restrict editor config to Haskell file, to avoid affecting Makefiles or other tab-based formats
 ([#442)](https://github.com/haskell/haskell-language-server/pull/442) by @tittoassini
-* Hlint plugin using ghc-lib
+- Hlint plugin using ghc-lib
 ([#166)](https://github.com/haskell/haskell-language-server/pull/166) by @jneira
 
 ## 0.5.1
@@ -169,23 +228,23 @@ We have updated two essential tools used by the ide:
 0.5.1 is a minor bug fix release, mainly fixing an issue with the eval plugin
 as well as upgrading the ormolu and stylish-haskell dependencies.
 
-### Pull requests merged
+### Pull requests merged for 0.5.1
 
-* Minimal fix for eval regression
+- Minimal fix for eval regression
 ([#488)](https://github.com/haskell/haskell-language-server/pull/488) by @pepeiborra
-* Bump stylish-haskell to 0.12.2.0
+- Bump stylish-haskell to 0.12.2.0
 ([#482)](https://github.com/haskell/haskell-language-server/pull/482) by @maksbotan
-* Improve the emacs instructions a little
+- Improve the emacs instructions a little
 ([#479)](https://github.com/haskell/haskell-language-server/pull/479) by @michaelpj
-* Update README: HLS is no longer in *very* early stage
+- Update README: HLS is no longer in *very* early stage
 ([#475)](https://github.com/haskell/haskell-language-server/pull/475) by @Anrock
-* Tactic plugin: Excludes Dictionary arguments in GADTs in Destruct Tactic
+- Tactic plugin: Excludes Dictionary arguments in GADTs in Destruct Tactic
 ([#474)](https://github.com/haskell/haskell-language-server/pull/474) by @konn
-* Update doom emacs install instructions in README
+- Update doom emacs install instructions in README
 ([#470)](https://github.com/haskell/haskell-language-server/pull/470) by @iyefrat
-* Add ghc-8.10.2 to circleci
+- Add ghc-8.10.2 to circleci
 ([#464)](https://github.com/haskell/haskell-language-server/pull/464) by @jneira
-* Bump ormolu to 0.1.3.0
+- Bump ormolu to 0.1.3.0
 ([#422)](https://github.com/haskell/haskell-language-server/pull/422) by @AlistairB
 
 ## 0.5.0
@@ -204,11 +263,11 @@ The imports lens plugin also learnt a new code action to make all imports explic
 
 There's also plenty of bug fixes, improvements and updates to the underlying tools, including Fourmolu, implicit-hie-cradle and ghcide. [Some of the improvements from ghcide](https://github.com/haskell/ghcide/releases/tag/v0.4.0) include:
 
-* The entire project is typechecked on load
-* Reverse dependencies of a module are typechecked upon saving
-* Code completion includes local terms
-* Import code actions now also suggest open imports
-* Documentation on hover shows for symbols defined in the same module
+- The entire project is typechecked on load
+- Reverse dependencies of a module are typechecked upon saving
+- Code completion includes local terms
+- Import code actions now also suggest open imports
+- Documentation on hover shows for symbols defined in the same module
 
 If you're eager to try all this out, haskell-language-server is now also installable via [ghcup](https://www.haskell.org/ghcup/):
 
@@ -216,63 +275,63 @@ If you're eager to try all this out, haskell-language-server is now also install
 $ ghcup install hls
 ```
 
-### Pull requests merged
+### Pull requests merged for 0.5.0
 
-* Update GHC version 8.12 to 9.0 in README
+- Update GHC version 8.12 to 9.0 in README
 ([#460)](https://github.com/haskell/haskell-language-server/pull/460) by @maralorn
-* Update Fourmolu to 0.2
+- Update Fourmolu to 0.2
 ([#455)](https://github.com/haskell/haskell-language-server/pull/455) by @georgefst
-* Generate .gz tars of all the binaries for macOS and Linux in GitHub Actions
+- Generate .gz tars of all the binaries for macOS and Linux in GitHub Actions
 ([#454)](https://github.com/haskell/haskell-language-server/pull/454) by @bubba
-* install: create hls hardlinks instead of copies except on Windows
+- install: create hls hardlinks instead of copies except on Windows
 ([#451)](https://github.com/haskell/haskell-language-server/pull/451) by @juhp
-* wrapper: cd to --cwd earlier
+- wrapper: cd to --cwd earlier
 ([#448)](https://github.com/haskell/haskell-language-server/pull/448) by @ocharles
-* Update README.md
+- Update README.md
 ([#446)](https://github.com/haskell/haskell-language-server/pull/446) by @moodmosaic
-* Upate Emacs setup notes
+- Upate Emacs setup notes
 ([#440)](https://github.com/haskell/haskell-language-server/pull/440) by @gdevanla
-* Use ghcide master and prepare hls-plugin-api-0.4.1.0
+- Use ghcide master and prepare hls-plugin-api-0.4.1.0
 ([#439)](https://github.com/haskell/haskell-language-server/pull/439) by @jneira
-* Add a code action to make all imports explicit
+- Add a code action to make all imports explicit
 ([#436)](https://github.com/haskell/haskell-language-server/pull/436) by @pepeiborra
-* Add docs on how to choose a formatter
+- Add docs on how to choose a formatter
 ([#432)](https://github.com/haskell/haskell-language-server/pull/432) by @googleson78
-* Implement 'Attempt to fill hole' code action
+- Implement 'Attempt to fill hole' code action
 ([#431)](https://github.com/haskell/haskell-language-server/pull/431) by @TOTBWF
-* Clarify that eval is a lens
+- Clarify that eval is a lens
 ([#428)](https://github.com/haskell/haskell-language-server/pull/428) by @Anrock
-* Use implicit-hie-cradle-0.2.0.1
+- Use implicit-hie-cradle-0.2.0.1
 ([#427)](https://github.com/haskell/haskell-language-server/pull/427) by @jneira
-* [retrie] Fix uris in workspace edit
+- [retrie] Fix uris in workspace edit
 ([#424)](https://github.com/haskell/haskell-language-server/pull/424) by @pepeiborra
-* Separate paragraphs
+- Separate paragraphs
 ([#423)](https://github.com/haskell/haskell-language-server/pull/423) by @jneira
-* Include .editorconfig in the contributing section
+- Include .editorconfig in the contributing section
 ([#420)](https://github.com/haskell/haskell-language-server/pull/420) by @jneira
-* Mention the copy of executables wit ghc version
+- Mention the copy of executables wit ghc version
 ([#419)](https://github.com/haskell/haskell-language-server/pull/419) by @jneira
-* Eval plugin: proper multilined results handling and command-name abbreviations
+- Eval plugin: proper multilined results handling and command-name abbreviations
 ([#413)](https://github.com/haskell/haskell-language-server/pull/413) by @konn
-* Retrie - calculate imports in the command handler
+- Retrie - calculate imports in the command handler
 ([#408)](https://github.com/haskell/haskell-language-server/pull/408) by @pepeiborra
-* Progress reporting for Eval plugin
+- Progress reporting for Eval plugin
 ([#398)](https://github.com/haskell/haskell-language-server/pull/398) by @pepeiborra
-* bump ghcide submodule
+- bump ghcide submodule
 ([#396)](https://github.com/haskell/haskell-language-server/pull/396) by @wz1000
-* Fix cradles
+- Fix cradles
 ([#393)](https://github.com/haskell/haskell-language-server/pull/393) by @pepeiborra
-* Case splitting and lambda introduction
+- Case splitting and lambda introduction
 ([#391)](https://github.com/haskell/haskell-language-server/pull/391) by @isovector
-* Use stale data in explicit imports lens
+- Use stale data in explicit imports lens
 ([#383)](https://github.com/haskell/haskell-language-server/pull/383) by @pepeiborra
-* Create hls-plugin-api and move plugins to exe
+- Create hls-plugin-api and move plugins to exe
 ([#379)](https://github.com/haskell/haskell-language-server/pull/379) by @jneira
-* Rebase on ghcide HEAD
+- Rebase on ghcide HEAD
 ([#378)](https://github.com/haskell/haskell-language-server/pull/378) by @pepeiborra
-* README clarify how exactly to use code evaluation
+- README clarify how exactly to use code evaluation
 ([#377)](https://github.com/haskell/haskell-language-server/pull/377) by @DunetsNM
-* Revise README.md
+- Revise README.md
 ([#374)](https://github.com/haskell/haskell-language-server/pull/374) by @gihyeonsung
 
 ## 0.4.0
@@ -318,59 +377,59 @@ stack:  2.3.3
 ghc:    8.10.2
 ```
 
-### Pull requests merged
+### Pull requests merged for 0.4.0
 
-* Bring over https://github.com/pepeiborra/hls-tutorial
+- Bring over a [tutorial about how to add hls plugins](https://github.com/pepeiborra/hls-tutorial)
 ([#372](https://github.com/haskell/haskell-language-server/pull/372) by @bubba)
-* Update the ghcide upstream to be in haskell/ghcide
+- Update the ghcide upstream to be in haskell/ghcide
 ([#370](https://github.com/haskell/haskell-language-server/pull/370) by @alanz)
-* Add ISSUE_TEMPLATE for github
+- Add ISSUE_TEMPLATE for github
 ([#305](https://github.com/haskell/haskell-language-server/pull/305) by @fendor)
-* Add use-package to the list of emacs packages
+- Add use-package to the list of emacs packages
 ([#343](https://github.com/haskell/haskell-language-server/pull/343) by @rgleichman)
-* Implements `:type [+v/+d]` in Eval Plugin
+- Implements `:type [+v/+d]` in Eval Plugin
 ([#361](https://github.com/haskell/haskell-language-server/pull/361) by @konn)
-* Bump bounds of hie-bios to 0.7.0
+- Bump bounds of hie-bios to 0.7.0
 ([#357](https://github.com/haskell/haskell-language-server/pull/357) by @maralorn)
-* Fix ImportLens plugin to work with GHC 8.10
+- Fix ImportLens plugin to work with GHC 8.10
 ([#356](https://github.com/haskell/haskell-language-server/pull/356) by @Ailrun)
-* Add single file rewrites and ignore unknown files
+- Add single file rewrites and ignore unknown files
 ([#321](https://github.com/haskell/haskell-language-server/pull/321) by @pepeiborra)
-* Do not suggest explicit import lists for qualified imports
+- Do not suggest explicit import lists for qualified imports
 ([#354](https://github.com/haskell/haskell-language-server/pull/354) by @expipiplus1)
-* Explicit imports lens (as seen on Twitter)
+- Explicit imports lens (as seen on Twitter)
 ([#310](https://github.com/haskell/haskell-language-server/pull/310) by @pepeiborra)
-* Adds `:kind` and `:kind!` commands to Eval Plugin
+- Adds `:kind` and `:kind!` commands to Eval Plugin
 ([#345](https://github.com/haskell/haskell-language-server/pull/345) by @konn)
-* tech(nix): update niv and remove allowbroken
+- tech(nix): update niv and remove allowbroken
 ([#350](https://github.com/haskell/haskell-language-server/pull/350) by @willbush)
-* Update VS Code Haskell URL/repo
+- Update VS Code Haskell URL/repo
 ([#338](https://github.com/haskell/haskell-language-server/pull/338) by @Sir4ur0n)
-* doc(hack): Add explanation to hack and test HLS
+- doc(hack): Add explanation to hack and test HLS
 ([#329](https://github.com/haskell/haskell-language-server/pull/329) by @Sir4ur0n)
-* Apply the module pragmas for evaluation
+- Apply the module pragmas for evaluation
 ([#322](https://github.com/haskell/haskell-language-server/pull/322) by @pepeiborra)
-* Copy working stack-8.6.5.yaml to stack.yaml
+- Copy working stack-8.6.5.yaml to stack.yaml
 ([#332](https://github.com/haskell/haskell-language-server/pull/332) by @jneira)
-* tech(nix): Allow broken as retrie is marked as broken
+- tech(nix): Allow broken as retrie is marked as broken
 ([#331](https://github.com/haskell/haskell-language-server/pull/331) by @Sir4ur0n)
-* feat(git): Add install/hie.yaml to gitignore
+- feat(git): Add install/hie.yaml to gitignore
 ([#328](https://github.com/haskell/haskell-language-server/pull/328) by @Sir4ur0n)
-* Replace wrong occurrences of "engine" by "server"
+- Replace wrong occurrences of "engine" by "server"
 ([#319](https://github.com/haskell/haskell-language-server/pull/319) by @tchoutri)
-* Simplify coc.nvim instructions
+- Simplify coc.nvim instructions
 ([#315](https://github.com/haskell/haskell-language-server/pull/315) by @oblitum)
-* Coc config file requires a {} nesting everything
+- Coc config file requires a {} nesting everything
 ([#317](https://github.com/haskell/haskell-language-server/pull/317) by @hyiltiz)
-* Restrict opentelemetry version for stack builds
+- Restrict opentelemetry version for stack builds
 ([#312](https://github.com/haskell/haskell-language-server/pull/312) by @jneira)
-* Add support for ghc-8.10.2
+- Add support for ghc-8.10.2
 ([#308](https://github.com/haskell/haskell-language-server/pull/308) by @jneira)
-* Return nothing if tool is not on the PATH
+- Return nothing if tool is not on the PATH
 ([#309](https://github.com/haskell/haskell-language-server/pull/309) by @fendor)
-* Probe tools cli
+- Probe tools cli
 ([#306](https://github.com/haskell/haskell-language-server/pull/306) by @fendor)
-* Add fourmolu plugin (attempt 2) and add Brittany for ghc-8.10.1
+- Add fourmolu plugin (attempt 2) and add Brittany for ghc-8.10.1
 ([#264](https://github.com/haskell/haskell-language-server/pull/264) by @georgefst)
 
 ## 0.3.0
@@ -396,41 +455,41 @@ The Brittany formatter is now also available on GHC 8.10.1.
 
 ### Pull requests merged
 
-* Fix haddock parse error in install.hs
+- Fix haddock parse error in install.hs
 ([#255](https://github.com/haskell/haskell-language-server/pull/255) by @georgefst)
-* Ormolu flags
+- Ormolu flags
 ([#246](https://github.com/haskell/haskell-language-server/pull/246) by @pepeiborra)
-* Ormolu fix
+- Ormolu fix
 ([#257](https://github.com/haskell/haskell-language-server/pull/257) by @sureyeaah)
-* Remove redundant CircleCI steps
+- Remove redundant CircleCI steps
 ([#259](https://github.com/haskell/haskell-language-server/pull/259) by @bubba)
-* Slow down Tasty by limiting it to -j1
+- Slow down Tasty by limiting it to -j1
 ([#261](https://github.com/haskell/haskell-language-server/pull/261) by @bubba)
-* Remove hspec-expectations
+- Remove hspec-expectations
 ([#260](https://github.com/haskell/haskell-language-server/pull/260) by @bubba)
-* Remove a redundant caching step
+- Remove a redundant caching step
 ([#262](https://github.com/haskell/haskell-language-server/pull/262) by @Ailrun)
-* add hie.yaml to coc configuration
+- add hie.yaml to coc configuration
 ([#267](https://github.com/haskell/haskell-language-server/pull/267) by @sureyeaah)
-* Initial Retrie plugin
+- Initial Retrie plugin
 ([#266](https://github.com/haskell/haskell-language-server/pull/266) by @pepeiborra)
-* Add exe extension to win executables
+- Add exe extension to win executables
 ([#284](https://github.com/haskell/haskell-language-server/pull/284) by @jneira)
-* Use wz1000/hls-3 ghcide branch
+- Use wz1000/hls-3 ghcide branch
 ([#275](https://github.com/haskell/haskell-language-server/pull/275) by @alanz)
-* Fix rename capability being declared
+- Fix rename capability being declared
 ([#285](https://github.com/haskell/haskell-language-server/pull/285) by @bubba)
-* Add CI job for 8.8.4
+- Add CI job for 8.8.4
 ([#287](https://github.com/haskell/haskell-language-server/pull/287) by @bubba)
-* Make the AGPL flag manual in cabal
+- Make the AGPL flag manual in cabal
 ([#250](https://github.com/haskell/haskell-language-server/pull/250) by @fendor)
-* Bring in doc URL fix for Windows
+- Bring in doc URL fix for Windows
 ([#289](https://github.com/haskell/haskell-language-server/pull/289) by @bubba)
-* Bring in fix for libm on Linux static binaries
+- Bring in fix for libm on Linux static binaries
 ([#293](https://github.com/haskell/haskell-language-server/pull/293) by @bubba)
-* Add fourmolu plugin (attempt 2) and add Brittany for ghc-8.10.1
+- Add fourmolu plugin (attempt 2) and add Brittany for ghc-8.10.1
 ([#264](https://github.com/haskell/haskell-language-server/pull/264) by @georgefst)
-* Trying new hls-3 branch
+- Trying new hls-3 branch
 ([#300](https://github.com/haskell/haskell-language-server/pull/300) by @alanz)
 
 ## 0.2.2
@@ -458,27 +517,27 @@ to
 }
 ```
 
-### Pull requests merged
+### Pull requests merged for 0.2.2
 
-* Mention docs on hover feature in README
+- Mention docs on hover feature in README
 ([#209](https://github.com/haskell/haskell-language-server/pull/209) by @georgefst)
-* Add static binaries for ghc-8.8.4
+- Add static binaries for ghc-8.8.4
 ([#224](https://github.com/haskell/haskell-language-server/pull/224) by @bubba)
-* Rename the configuration section from languageServerHaskell => haskell
+- Rename the configuration section from languageServerHaskell => haskell
 ([#227](https://github.com/haskell/haskell-language-server/pull/227) by @bubba)
-* Use -haddock for cabal and stack
+- Use -haddock for cabal and stack
 ([#214](https://github.com/haskell/haskell-language-server/pull/214) by @jneira)
-* slightly better shell.nix for local development
+- slightly better shell.nix for local development
 ([#235](https://github.com/haskell/haskell-language-server/pull/235) by @pepeiborra)
-* Shell nix further steps
+- Shell nix further steps
 ([#240](https://github.com/haskell/haskell-language-server/pull/240) by @pepeiborra)
-* Add numeric-version option for wrapper and server
+- Add numeric-version option for wrapper and server
 ([#241](https://github.com/haskell/haskell-language-server/pull/241) by @fendor)
-* Accept the legacy "languageServerHaskell" config name
+- Accept the legacy "languageServerHaskell" config name
 ([#243](https://github.com/haskell/haskell-language-server/pull/243) by @bubba)
-* Fix for Eval plugin: Error from tests not reported
+- Fix for Eval plugin: Error from tests not reported
 ([#244](https://github.com/haskell/haskell-language-server/pull/244) by @tittoassini)
-* Rename binaries before uploading
+- Rename binaries before uploading
 ([#248](https://github.com/haskell/haskell-language-server/pull/248) by @bubba)
 
 ## 0.2.1
@@ -503,146 +562,109 @@ the fly, so either `ghc`, `cabal` or `stack` will need to be present on your
 PATH depending on your project. See `docs/releases.md` for more information. If
 you find any issues with this, please let us know!
 
-### Pull requests merged
+### Pull requests merged for 0.2.1
 
-* Bump ormolu to 0.1.2.0
+- Bump ormolu to 0.1.2.0
 ([#189](https://github.com/haskell/haskell-language-server/pull/189) by @AlistairB)
-* Remove dependency on Cabal
+- Remove dependency on Cabal
 ([#195](https://github.com/haskell/haskell-language-server/pull/195) by @bubba)
-* Fix extraneous extra-dep in stack-8.6.4.yaml
+- Fix extraneous extra-dep in stack-8.6.4.yaml
 ([#199](https://github.com/haskell/haskell-language-server/pull/199) by @bubba)
-* Fix install script stack targets
+- Fix install script stack targets
 ([#203](https://github.com/haskell/haskell-language-server/pull/203) by @jneira)
-* Add support for ghc-8.8.4
+- Add support for ghc-8.8.4
 ([#206](https://github.com/haskell/haskell-language-server/pull/206) by @jneira)
-* Simple Eval plugin
+- Simple Eval plugin
 ([#191](https://github.com/haskell/haskell-language-server/pull/191) by @pepeiborra)
-* Distributable binaries
+- Distributable binaries
 ([#165](https://github.com/haskell/haskell-language-server/pull/165) by @bubba)
 
 ## 0.2
 
-* Use cabal-plan from Hackage
+- Use cabal-plan from Hackage
 ([#185](https://github.com/haskell/haskell-language-server/pull/185) by @georgefst)
-
-* Bump ghcide to wz1000 hls-2 branch
+- Bump ghcide to wz1000 hls-2 branch
 ([#184](https://github.com/haskell/haskell-language-server/pull/184) by @alanz)
-
-* doc(preprocessor): Document the preprocessor limitation
+- doc(preprocessor): Document the preprocessor limitation
 ([#177](https://github.com/haskell/haskell-language-server/pull/177) by @Sir4ur0n)
-
-* Use shell.nix from Haskell-IDE-Engine
+- Use shell.nix from Haskell-IDE-Engine
 ([#169](https://github.com/haskell/haskell-language-server/pull/169) by @fendor)
-
-* Remove last occurrences of shake.yaml
+- Remove last occurrences of shake.yaml
 ([#163](https://github.com/haskell/haskell-language-server/pull/163) by @fendor)
-
-* Use an unique install/stack.yaml
+- Use an unique install/stack.yaml
 ([#154](https://github.com/haskell/haskell-language-server/pull/154) by @jneira)
-
-* Introduce golden testing
+- Introduce golden testing
 ([#152](https://github.com/haskell/haskell-language-server/pull/152) by @Ailrun)
-
-* Revert "Use bullet as separator instead of HR"
+- Revert "Use bullet as separator instead of HR"
 ([#150](https://github.com/haskell/haskell-language-server/pull/150) by @alanz)
-
-* feat(hie-bios): Multi-cradle, ignore directories
+- feat(hie-bios): Multi-cradle, ignore directories
 ([#147](https://github.com/haskell/haskell-language-server/pull/147) by @Sir4ur0n)
-
-* [Plugin] stylish-haskell formatter
+- [Plugin] stylish-haskell formatter
 ([#146](https://github.com/haskell/haskell-language-server/pull/146) by @Ailrun)
-
-* Separate ghcide tests and disable them for now
+- Separate ghcide tests and disable them for now
 ([#137](https://github.com/haskell/haskell-language-server/pull/137) by @jneira)
-
-* Convert private lib in common stanza
+- Convert private lib in common stanza
 ([#136](https://github.com/haskell/haskell-language-server/pull/136) by @jneira)
-
-* Add zlibc to readme
+- Add zlibc to readme
 ([#134](https://github.com/haskell/haskell-language-server/pull/134) by @Sir4ur0n)
-
-* Complete editor integrations
+- Complete editor integrations
 ([#132](https://github.com/haskell/haskell-language-server/pull/132) by @jneira)
-
-* Remove inexistent component from hie.yaml.stack
+- Remove inexistent component from hie.yaml.stack
 ([#131](https://github.com/haskell/haskell-language-server/pull/131) by @jneira)
-
-* Bump to new mpickering/ghcide
+- Bump to new mpickering/ghcide
 ([#130](https://github.com/haskell/haskell-language-server/pull/130) by @alanz)
-
-* Update ghc-lib-parser version
+- Update ghc-lib-parser version
 ([#129](https://github.com/haskell/haskell-language-server/pull/129) by @jneira)
-
-* Remove redundant import
+- Remove redundant import
 ([#128](https://github.com/haskell/haskell-language-server/pull/128) by @bubba)
-
-* Default the number of Shake threads to 0 (automatic)
+- Default the number of Shake threads to 0 (automatic)
 ([#127](https://github.com/haskell/haskell-language-server/pull/127) by @bubba)
-
-* Added kakoune integration instructions
+- Added kakoune integration instructions
 ([#125](https://github.com/haskell/haskell-language-server/pull/125) by @414owen)
-
-* Fix install script dev target
+- Fix install script dev target
 ([#124](https://github.com/haskell/haskell-language-server/pull/124) by @jneira)
-
-* Add plugin support for Rename providers
+- Add plugin support for Rename providers
 ([#123](https://github.com/haskell/haskell-language-server/pull/123) by @pepeiborra)
-
-* Add jobs for stack and cabal using ghc-8.10.1
+- Add jobs for stack and cabal using ghc-8.10.1
 ([#120](https://github.com/haskell/haskell-language-server/pull/120) by @jneira)
-
-* Add lower bound to tasty-ant-xml
+- Add lower bound to tasty-ant-xml
 ([#119](https://github.com/haskell/haskell-language-server/pull/119) by @jneira)
-
-* Fix build using brittany revision
+- Fix build using brittany revision
 ([#117](https://github.com/haskell/haskell-language-server/pull/117) by @jneira)
-
-* Use floskell released version 0.10.3
+- Use floskell released version 0.10.3
 ([#116](https://github.com/haskell/haskell-language-server/pull/116) by @jneira)
-
-* Add emacs/doom-emacs integration sub-section
+- Add emacs/doom-emacs integration sub-section
 ([#115](https://github.com/haskell/haskell-language-server/pull/115) by @yuanw)
-
-* Port hie README partially
+- Port hie README partially
 ([#112](https://github.com/haskell/haskell-language-server/pull/112) by @jneira)
-
-* Use cabal-helper-1.1, add stack-8.10.1.yaml and unify cabal.project's
+- Use cabal-helper-1.1, add stack-8.10.1.yaml and unify cabal.project's
 ([#108](https://github.com/haskell/haskell-language-server/pull/108) by @jneira)
-
-* [#87] Fix completion via ghcide's `getCompletionsLSP`
+- [#87] Fix completion via ghcide's `getCompletionsLSP`
 ([#107](https://github.com/haskell/haskell-language-server/pull/107) by @korayal)
-
-* Create specific project file for ghc-8.10.
+- Create specific project file for ghc-8.10.
 ([#106](https://github.com/haskell/haskell-language-server/pull/106) by @jneira)
-
-* Issue 5 - Move HIE Tests and convert to Tasty
+- Issue 5 - Move HIE Tests and convert to Tasty
 ([#105](https://github.com/haskell/haskell-language-server/pull/105) by @jeffwindsor)
-
-* Hls update latest hie bios
+- Hls update latest hie bios
 ([#100](https://github.com/haskell/haskell-language-server/pull/100) by @fendor)
-
-* Update extra-deps to use latest fork version of shake
+- Update extra-deps to use latest fork version of shake
 ([#98](https://github.com/haskell/haskell-language-server/pull/98) by @fendor)
-
-* Activate typechecking in non-lsp mode
+- Activate typechecking in non-lsp mode
 ([#95](https://github.com/haskell/haskell-language-server/pull/95) by @jneira)
-
-* Fix haddock parsing errors
+- Fix haddock parsing errors
 ([#92](https://github.com/haskell/haskell-language-server/pull/92) by @jneira)
-
-* Update for haskell-lsp 0.22
+- Update for haskell-lsp 0.22
 ([#89](https://github.com/haskell/haskell-language-server/pull/89) by @alanz)
-
-* Get building with ghc-8.10
+- Get building with ghc-8.10
 ([#83](https://github.com/haskell/haskell-language-server/pull/83) by @bubba)
 
 ## 0.1
 
 ### In this version
 
-* cabal to 2020-05-02T10:11:15Z
-* stack-8.8.3 to lts-15.10
-* stack to nightly-2020-05-01
+- cabal to 2020-05-02T10:11:15Z
+- stack-8.8.3 to lts-15.10
+- stack to nightly-2020-05-01
 
 ### Changes
 
