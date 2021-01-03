@@ -2,7 +2,7 @@ pull_request_rules:
 - actions:
     merge:
       strict: smart+fasttrack
-      method: merge
+      method: squash
   name: Automatically merge pull requests
   conditions:
   - status-success=bench (8.10.2, ubuntu-latest)
