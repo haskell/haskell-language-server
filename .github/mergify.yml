@@ -23,7 +23,6 @@ pull_request_rules:
   - status-success=test (8.6.4, ubuntu-latest)
   - status-success=test (windows-latest, 8.10.2.2)
 
-  - 'status-success=ci/circleci: cabal'
   - 'status-success=ci/circleci: ghc-8.10.1'
   - 'status-success=ci/circleci: ghc-8.10.3'
   - 'status-success=ci/circleci: ghc-8.6.4'
