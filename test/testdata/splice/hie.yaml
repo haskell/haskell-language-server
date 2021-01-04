@@ -4,6 +4,7 @@ cradle:
     - QQ.hs
     - TQQExpError.hs
     - TSimpleExp.hs
+    - TTypeAppExp.hs
     - TDeclKindError.hs
     - TQQPat.hs
     - TSimplePat.hs

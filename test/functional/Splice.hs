@@ -41,6 +41,7 @@ tests =
         "splice"
         [ goldenTest "TSimpleExp.hs" Inplace 6 15
         , goldenTest "TSimpleExp.hs" Inplace 6 24
+        , goldenTest "TTypeAppExp.hs" Inplace 7 5
         , goldenTest "TErrorExp.hs" Inplace 6 15
         , goldenTest "TErrorExp.hs" Inplace 6 51
         , goldenTest "TQQExp.hs" Inplace 6 17

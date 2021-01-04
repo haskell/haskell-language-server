@@ -137,15 +137,7 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                 liftIO $
                     runAction "expandTHSplice.fallback.GetParsedModule" ideState $
                         use_ GetParsedModule fp
-            let ps = annotateParsedSource pm
-            hscEnvEq <-
-                liftIO $
-                    runAction "expandTHSplice.fallback.ghcSessionDeps" ideState $
-                        use_ GhcSessionDeps fp
-            let hscEnv0 = hscEnvWithImportPaths hscEnvEq
-                modSum = pm_mod_summary pm
-            df' <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum
-            let hscEnv = hscEnv0 { hsc_dflags = df' }
+            (ps, hscEnv, _dflags) <- setupHscEnv ideState fp pm
 
             manualCalcEdit
                 lsp
@@ -157,14 +149,9 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                 _eStyle
                 params
         withTypeChecked fp TcModuleResult {..} = do
-            let ps = annotateParsedSource tmrParsed
-                Splices {..} = tmrTopLevelSplices
-            hscEnvEq <-
-                lift $
-                    runAction "expandTHSplice.ghcSessionDeps" ideState $
-                        use_ GhcSessionDeps fp
-            let dflags = hsc_dflags $ hscEnv hscEnvEq
-                exprSuperSpans =
+            (ps, _hscEnv, dflags) <- setupHscEnv ideState fp tmrParsed
+            let Splices {..} = tmrTopLevelSplices
+            let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
                 _patSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan patSplices
@@ -209,6 +196,23 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                                 <&>
                                 -- FIXME: Why ghc-exactprint sweeps preceeding comments?
                                 adjustToRange uri range
+
+setupHscEnv
+    :: IdeState
+    -> NormalizedFilePath
+    -> ParsedModule
+    -> ExceptT String IO (Annotated ParsedSource, HscEnv, DynFlags)
+setupHscEnv ideState fp pm = do
+    hscEnvEq <-
+        liftIO $
+            runAction "expandTHSplice.fallback.ghcSessionDeps" ideState $
+                use_ GhcSessionDeps fp
+    let ps = annotateParsedSource pm
+        hscEnv0 = hscEnvWithImportPaths hscEnvEq
+        modSum = pm_mod_summary pm
+    df' <- liftIO $ setupDynFlagsForGHCiLike hscEnv0 $ ms_hspp_opts modSum
+    let hscEnv = hscEnv0 { hsc_dflags = df' }
+    pure (ps, hscEnv, df')
 
 setupDynFlagsForGHCiLike :: HscEnv -> DynFlags -> IO DynFlags
 setupDynFlagsForGHCiLike env dflags = do
