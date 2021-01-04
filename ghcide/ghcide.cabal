@@ -2,7 +2,7 @@ cabal-version:      1.20
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            0.6.0.2
+version:            0.7.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -56,7 +56,7 @@ library
         haskell-lsp-types == 0.22.*,
         haskell-lsp == 0.22.*,
         hie-compat,
-        hls-plugin-api,
+        hls-plugin-api >= 0.6,
         lens,
         mtl,
         network-uri,
