@@ -25,8 +25,8 @@ jobs:
             ghc: "8.10.2.2" # only available for windows and choco
 
     steps:
-     # Cancel queued workflows from earlier commits in this branch
-      - uses: technote-space/auto-cancel-redundant-workflow@v1
+      # Cancel queued workflows from earlier commits in this branch
+      - uses: fkirc/skip-duplicate-actions@master
 
       - uses: actions/checkout@v2
         with:
