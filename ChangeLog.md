@@ -3,6 +3,7 @@
 ## 0.8.0
 
 - This version adds support for ghc-8.10.3
+- `hls-plugin-api` has been bumped to 0.6.0.0 and `ghcide` has been bumped from 0.6.0.1 to 0.7.0.0.
 - It has a new brand plugin: hls-class-plugin, which helps to write class instances
 
 ![gif](https://user-images.githubusercontent.com/12473268/103059293-af071f80-4572-11eb-963a-7e76b45f28b9.gif)
@@ -19,7 +20,8 @@
   - ghcide lives now directly in this repository
   - the test suite has been cleaned and improved (continuing the work done in 0.7.0)
 
-thanks to all contributors and happy new year!
+
+Thanks to all contributors and happy new year!
 
 ### Pull requests merged for 0.8.0
 
