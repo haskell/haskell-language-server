@@ -65,6 +65,13 @@ jobs:
         echo "LINUX_CABAL_ARGS=--enable-executable-static --ghc-options=-split-sections" >> $GITHUB_ENV
         echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
 
+    - name: Set some macOs specific things
+      if: matrix.os == 'macOS-latest'
+      env:
+        GHC_VER: ${{ matrix.ghc }}
+      run: |
+        echo "GHC_VERSION=$GHC_VER" >> $GITHUB_ENV
+
     - name: Build Server
       # Try building it twice in case of flakey builds on Windows
       run: |
