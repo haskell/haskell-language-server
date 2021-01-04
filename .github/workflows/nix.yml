@@ -12,6 +12,9 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
 
     steps:
+    # Cancel queued workflows from earlier commits in this branch
+    - uses: technote-space/auto-cancel-redundant-workflow@v1
+
     - uses: actions/checkout@v2
       with:
         submodules: true
