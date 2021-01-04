@@ -33,6 +33,11 @@ import Development.IDE.Types.Logger
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 import Data.Maybe (catMaybes)
+import Data.List.Extra (nubOrd)
+import Development.IDE.Import.DependencyInformation
+import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Class
+import Development.IDE.Types.Options
 
 newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
@@ -94,11 +99,22 @@ kick = do
     ShakeExtras{progressUpdate} <- getShakeExtras
     liftIO $ progressUpdate KickStarted
 
-    -- Update the exports map for the project
+    -- Update the exports map for FOIs
     (results, ()) <- par (uses GenerateCore files) (void $ uses GetHieAst files)
+
+    -- Update the exports map for non FOIs
+    -- We can skip this if checkProject is True, assuming they never change under our feet.
+    IdeOptions{ optCheckProject = checkProject } <- getIdeOptions
+    ifaces <- if checkProject then return Nothing else runMaybeT $ do
+        deps <- MaybeT $ sequence <$> uses GetDependencies files
+        hiResults <- lift $ uses GetModIface (nubOrd $ foldMap transitiveModuleDeps deps)
+        return $ map hirModIface $ catMaybes hiResults
+
     ShakeExtras{exportsMap} <- getShakeExtras
     let mguts = catMaybes results
         !exportsMap' = createExportsMapMg mguts
-    liftIO $ modifyVar_ exportsMap $ evaluate . (exportsMap' <>)
+        !exportsMap'' = maybe mempty createExportsMap ifaces
+    liftIO $ modifyVar_ exportsMap $ evaluate . (exportsMap'' <>) . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted
+
