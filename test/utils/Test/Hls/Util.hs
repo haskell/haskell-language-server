@@ -49,7 +49,6 @@ import           System.Directory
 import           System.Environment
 import           System.Time.Extra (Seconds, sleep)
 import           System.FilePath
-import qualified System.Log.Logger as L
 import           System.IO.Temp
 import           System.IO.Unsafe
 import           Test.Hspec.Runner
