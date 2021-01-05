@@ -11,7 +11,6 @@ maintainer:         berberman@yandex.com
 category:           Development
 build-type:         Simple
 extra-source-files:
-  include/ghc-api-version.h
   LICENSE
 
 library
@@ -30,4 +29,3 @@ library
     , unordered-containers
 
   default-language: Haskell2010
-  include-dirs:     include

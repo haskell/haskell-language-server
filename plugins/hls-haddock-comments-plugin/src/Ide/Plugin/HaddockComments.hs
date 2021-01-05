@@ -1,11 +1,8 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-
-#include "ghc-api-version.h"
 
 module Ide.Plugin.HaddockComments where
 
@@ -22,7 +19,7 @@ import Language.Haskell.GHC.ExactPrint.Utils
 import Language.Haskell.LSP.Types
 
 -----------------------------------------------------------------------------
-descriptor :: PluginId -> PluginDescriptor
+descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
     { pluginCodeActionProvider = Just codeActionProvider
@@ -31,7 +28,7 @@ descriptor plId =
 haddockCommentsId :: CommandId
 haddockCommentsId = "HaddockCommentsCommand"
 
-codeActionProvider :: CodeActionProvider
+codeActionProvider :: CodeActionProvider IdeState
 codeActionProvider _lspFuncs ideState _pId (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags} =
   do
     let noErr = and $ (/= Just DsError) . _severity <$> diags
@@ -62,12 +59,12 @@ runGenComments :: GenComments -> Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range ->
 runGenComments GenComments {..} mLocDecls mAnns range
   | Just locDecls <- mLocDecls,
     Just anns <- mAnns,
-    [(locDecl, src, x)] <- [(locDecl, l, x) | locDecl@(L l (fromDecl -> Just x)) <- locDecls, inRange range l],
+    [(locDecl, src, x)] <- [(locDecl, l, x) | locDecl@(L l (fromDecl -> Just x)) <- locDecls, range `isIntersectWith` l],
     annKeys <- collectKeys x,
     not $ null annKeys,
     and $ maybe False isFresh . flip Map.lookup anns <$> annKeys,
     anns' <- foldr (Map.adjust updateAnn) anns annKeys,
-    Just range' <- calcRange src range,
+    Just range' <- toRange src,
     result <- T.strip . T.pack $ exactPrint locDecl anns' =
     Just (title, TextEdit range' result)
   | otherwise = Nothing
@@ -97,7 +94,8 @@ genForRecord = GenComments {..}
   where
     title = "Generate fields comments"
 
-    fromDecl (TyClD _ DataDecl {tcdDataDefn = HsDataDefn {dd_cons = cons}}) = Just [x | (L _ ConDeclH98 {con_args = x}) <- cons]
+    fromDecl (TyClD _ DataDecl {tcdDataDefn = HsDataDefn {dd_cons = cons}}) =
+      Just [x | (L _ ConDeclH98 {con_args = x}) <- cons]
     fromDecl _ = Nothing
 
     updateAnn x = x {annEntryDelta = DP (1, -7), annPriorComments = [(comment, DP (1, -7))]}
@@ -121,16 +119,15 @@ toAction title uri edit = CodeAction {..}
     _documentChanges = Nothing
     _edit = Just WorkspaceEdit {..}
 
-calcRange :: SrcSpan -> Range -> Maybe Range
-calcRange src range
-  | inRange range src,
-    (RealSrcSpan span) <- src,
+toRange :: SrcSpan -> Maybe Range
+toRange src
+  | (RealSrcSpan span) <- src,
     range' <- realSrcSpanToRange span =
     Just range'
   | otherwise = Nothing
 
-inRange :: Range -> SrcSpan -> Bool
-inRange range x = isInsideSrcSpan (_start range) x || isInsideSrcSpan (_end range) x
+isIntersectWith :: Range -> SrcSpan -> Bool
+isIntersectWith Range {_start, _end} x = isInsideSrcSpan _start x || isInsideSrcSpan _end x
 
 -----------------------------------------------------------------------------
 
@@ -138,12 +135,9 @@ keyFromTyVar :: Int -> LHsType GhcPs -> [AnnKey]
 keyFromTyVar dep c@(L _ (HsFunTy _ x y))
   | dep < 1 = mkAnnKey c : keyFromTyVar dep x ++ keyFromTyVar dep y
   | otherwise = []
-#if MIN_GHC_API_VERSION(8,10,0)
-keyFromTyVar dep (L _ (HsForAllTy _ _ _ x)) = keyFromTyVar dep x
-#else
-keyFromTyVar dep (L _ (HsForAllTy _ _ x)) = keyFromTyVar dep x
-#endif
-keyFromTyVar dep (L _ (HsQualTy _ _ x)) = keyFromTyVar dep x
+keyFromTyVar dep (L _ t@HsForAllTy {}) = keyFromTyVar dep (hst_body t)
+keyFromTyVar dep (L _ t@HsQualTy {}) = keyFromTyVar dep (hst_body t)
+keyFromTyVar dep (L _ (HsKindSig _ x _)) = keyFromTyVar dep x
 keyFromTyVar dep (L _ (HsParTy _ x)) = keyFromTyVar (succ dep) x
 keyFromTyVar dep (L _ (HsBangTy _ _ x)) = keyFromTyVar dep x
 keyFromTyVar _ _ = []
