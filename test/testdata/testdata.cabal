@@ -8,6 +8,13 @@ executable codeactionrename
   main-is:             CodeActionRename.hs
   default-language:    Haskell2010
 
+executable codeactiononly
+  build-depends:       base
+  main-is:             CodeActionOnly.hs
+  default-language:    Haskell2010
+
+
+
 executable hover
   build-depends:       base
   main-is:             Hover.hs
