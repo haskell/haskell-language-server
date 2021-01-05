@@ -30,11 +30,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
 
-#if __GLASGOW_HASKELL__ == 808
-import Test.Tasty.ExpectedFailure
-#endif
-
-
 tests :: TestTree
 tests =
     testGroup
@@ -48,11 +43,7 @@ tests =
         , goldenTest "TQQExp.hs" Inplace 6 25
         , goldenTest "TQQExpError.hs" Inplace 6 13
         , goldenTest "TQQExpError.hs" Inplace 6 22
-        ,
-#if __GLASGOW_HASKELL__ == 808
-            expectFailBecause "Pattern splice expansions are unsupported on GHC 8.8, due to LPat = Pat problem" $
-#endif
-            testGroup "Pattern Splices"
+        , testGroup "Pattern Splices"
             [ goldenTest "TSimplePat.hs" Inplace 6 3
             , goldenTest "TSimplePat.hs" Inplace 6 22
             , goldenTest "TSimplePat.hs" Inplace 6 3

@@ -22,7 +22,7 @@ module Ide.Plugin.Splice
 where
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Arrow (Arrow (first))
+import Control.Arrow
 import qualified Control.Foldl as L
 import Control.Lens (ix, view, (%~), (<&>), (^.))
 import Control.Monad
@@ -85,16 +85,7 @@ expandTHSplice ::
 expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
     fmap (fromMaybe defaultResult) $
         runMaybeT $ do
-#if __GLASGOW_HASKELL__ == 808
-            case spliceContext of
-                Pat -> do
-                    reportEditor lsp MtInfo
-                        [ "On GHC 8.8, pattern splice expansion is not supported, due to the API change (see issue #759)."
-                        , "Please use GHC 8.6 or GHC 8.10+, or you can send a PR :-)"
-                        ]
-                    mzero
-                _ -> pure ()
-#endif
+
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
             eedits <-
                 ( lift . runExceptT . withTypeChecked fp
@@ -154,6 +145,9 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
             let exprSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan exprSplices
                 _patSuperSpans =
+#if __GLASGOW_HASKELL__ == 808
+                    fmap (second dL) $
+#endif
                     listToMaybe $ findSubSpansDesc srcSpan patSplices
                 typeSuperSpans =
                     listToMaybe $ findSubSpansDesc srcSpan typeSplices
@@ -177,13 +171,9 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                 case spliceContext of
                     Expr -> graftSpliceWith exprSuperSpans
                     Pat ->
-#if __GLASGOW_HASKELL__ == 808
-                        pure $
-                            Left "In GHC 8.8, pattern splice expansion is not supported due to the change of GHC API internal. You can use it in 8.6 and 8.10."
-#else
+
                         graftSpliceWith _patSuperSpans
 
-#endif
                     HsType -> graftSpliceWith typeSuperSpans
                     HsDecl ->
                         declSuperSpans <&> \(_, expanded) ->
@@ -284,12 +274,10 @@ instance HasSplice HsExpr where
     matchSplice _ _ = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceExpr
 
-#if __GLASGOW_HASKELL__ != 808
 instance HasSplice Pat where
     matchSplice _ (SplicePat _ spl) = Just spl
     matchSplice _ _ = Nothing
     expandSplice _ = rnSplicePat
-#endif
 
 
 instance HasSplice HsType where
@@ -301,11 +289,7 @@ classifyAST :: SpliceContext -> SpliceClass
 classifyAST = \case
     Expr -> OneToOneAST @HsExpr proxy#
     HsDecl -> IsHsDecl
-#if __GLASGOW_HASKELL__ == 808
-    Pat -> error "GHC 8.8"
-#else
     Pat -> OneToOneAST @Pat proxy#
-#endif
     HsType -> OneToOneAST @HsType proxy#
 
 reportEditor :: MonadIO m => LspFuncs a -> MessageType -> [T.Text] -> m ()
@@ -439,16 +423,17 @@ codeAction _ state plId docId ran _ =
                                 _ -> Continue
                     _ -> Stop
                 )
-#if __GLASGOW_HASKELL__ == 808
-#else
                 `extQ` \case
+#if __GLASGOW_HASKELL__ == 808
+                    (dL @(Pat GhcPs) -> L l@(RealSrcSpan spLoc) pat :: Located (Pat GhcPs))
+#else
                     (L l@(RealSrcSpan spLoc) pat :: LPat GhcPs)
+#endif
                         | RealSrcSpan spn `isSubspanOf` l ->
                             case pat of
                                 SplicePat{} -> Here (spLoc, Pat)
                                 _ -> Continue
                     _ -> Stop
-#endif
                 `extQ` \case
                     (L l@(RealSrcSpan spLoc) ty :: LHsType GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l ->
