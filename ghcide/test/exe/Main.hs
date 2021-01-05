@@ -1559,6 +1559,42 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = (1 :: Integer)"
                ])
 
+  , testSession "add default type to satisfy one contraint in nested expressions" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = 3"
+               , "    in x"
+               ])
+    [ (DsWarning, (4, 12), "Defaulting the following constraint") ]
+    "Add type annotation ‘Integer’ to ‘3’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = (3 :: Integer)"
+               , "    in x"
+               ])
+  , testSession "add default type to satisfy one contraint in more nested expressions" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = let y = 5 in y"
+               , "    in x"
+               ])
+    [ (DsWarning, (4, 20), "Defaulting the following constraint") ]
+    "Add type annotation ‘Integer’ to ‘5’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = let y = (5 :: Integer) in y"
+               , "    in x"
+               ])
   , testSession "add default type to satisfy one contraint with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
