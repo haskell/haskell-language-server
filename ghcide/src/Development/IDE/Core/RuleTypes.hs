@@ -3,6 +3,7 @@
 
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DerivingStrategies #-}
 
@@ -14,6 +15,7 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
+import Control.Lens
 import Data.Aeson.Types (Value)
 import Data.Binary
 import           Development.IDE.Import.DependencyInformation
@@ -40,6 +42,7 @@ import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Options (IdeGhcSession)
 import Data.Text (Text)
 import Data.Int (Int64)
+import GHC.Serialized (Serialized)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show)
@@ -90,13 +93,42 @@ newtype ImportMap = ImportMap
   } deriving stock Show
     deriving newtype NFData
 
+data Splices = Splices
+    { exprSplices :: [(LHsExpr GhcTc, LHsExpr GhcPs)]
+    , patSplices :: [(LHsExpr GhcTc, LPat GhcPs)]
+    , typeSplices :: [(LHsExpr GhcTc, LHsType GhcPs)]
+    , declSplices :: [(LHsExpr GhcTc, [LHsDecl GhcPs])]
+    , awSplices :: [(LHsExpr GhcTc, Serialized)]
+    }
+
+instance Semigroup Splices where
+    Splices e p t d aw <> Splices e' p' t' d' aw' =
+        Splices
+            (e <> e')
+            (p <> p')
+            (t <> t')
+            (d <> d')
+            (aw <> aw')
+
+instance Monoid Splices where
+    mempty = Splices mempty mempty mempty mempty mempty
+
+instance NFData Splices where
+    rnf Splices {..} =
+        liftRnf rwhnf exprSplices `seq`
+        liftRnf rwhnf patSplices `seq`
+        liftRnf rwhnf typeSplices `seq` liftRnf rwhnf declSplices `seq` ()
+
 -- | Contains the typechecked module and the OrigNameCache entry for
 -- that module.
 data TcModuleResult = TcModuleResult
     { tmrParsed :: ParsedModule
     , tmrRenamed :: RenamedSource
     , tmrTypechecked :: TcGblEnv
-    , tmrDeferedError :: !Bool -- ^ Did we defer any type errors for this module?
+    , tmrTopLevelSplices :: Splices
+    -- ^ Typechecked splice information
+    , tmrDeferedError :: !Bool
+    -- ^ Did we defer any type errors for this module?
     }
 instance Show TcModuleResult where
     show = show . pm_mod_summary . tmrParsed
@@ -398,3 +430,7 @@ data GhcSessionIO = GhcSessionIO deriving (Eq, Show, Typeable, Generic)
 instance Hashable GhcSessionIO
 instance NFData   GhcSessionIO
 instance Binary   GhcSessionIO
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''Splices

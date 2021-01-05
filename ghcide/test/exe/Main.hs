@@ -2520,7 +2520,7 @@ findDefinitionAndHoverTests = let
     , testGroup "hover"      $ mapMaybe snd tests
     , checkFileCompiles sourceFilePath $
         expectDiagnostics
-          [ ( "GotoHover.hs", [(DsError, (59, 7), "Found hole: _")]) ]
+          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")]) ]
     , testGroup "type-definition" typeDefinitionTests ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
@@ -2570,10 +2570,11 @@ findDefinitionAndHoverTests = let
   lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
-  holeL60 = Position 59 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
+  holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
+  thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   in
   mkFindTests
   --      def    hover  look       expect
@@ -2620,6 +2621,7 @@ findDefinitionAndHoverTests = let
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
+  , test  no     yes    thLocL57   thLoc         "TH Splice Hover"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
