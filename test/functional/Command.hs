@@ -11,10 +11,7 @@ import Language.Haskell.LSP.Types.Lens as LSP
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 
-
---TODO : Response Message no longer has 4 inputs
 tests :: TestTree
 tests = testGroup "commands" [
     testCase "are prefixed" $
@@ -25,13 +22,13 @@ tests = testGroup "commands" [
             liftIO $ do
                 all f cmds @? "All prefixed"
                 not (null cmds) @? "Commands aren't empty"
-    , ignoreTestBecause "Broken: Plugin package doesn't exist" $
-      testCase "get de-prefixed" $
+    , testCase "get de-prefixed" $
         runSession hlsCommand fullCaps "test/testdata/" $ do
             ResponseMessage _ _ (Left err) <- request
                 WorkspaceExecuteCommand
-                (ExecuteCommandParams "1234:package:add" (Just (List [])) Nothing) :: Session ExecuteCommandResponse
+                (ExecuteCommandParams "34133:eval:evalCommand" (Just (List [])) Nothing) :: Session ExecuteCommandResponse
             let ResponseError _ msg _ = err
-            -- We expect an error message about the dud arguments, but should pickup "add" and "package"
-            liftIO $ (msg `T.isInfixOf` "while parsing args for add in plugin package") @? "Has error message"
+            -- We expect an error message about the dud arguments, but we can
+            -- check that we found the right plugin.
+            liftIO $ "while parsing args for evalCommand in plugin eval" `T.isInfixOf` msg @? "Has error message"
     ]
