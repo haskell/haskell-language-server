@@ -20,11 +20,13 @@ let
             shake-bench = gitignoreSource ../shake-bench;
             hie-compat = gitignoreSource ../hie-compat;
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
+            hls-exactprint-utils = gitignoreSource ../hls-exactprint-utils;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
             hls-explicit-imports-plugin = gitignoreSource ../plugins/hls-explicit-imports-plugin;
             hls-hlint-plugin = gitignoreSource ../plugins/hls-hlint-plugin;
             hls-retrie-plugin = gitignoreSource ../plugins/hls-retrie-plugin;
+            hls-splice-plugin = gitignoreSource ../plugins/hls-splice-plugin;
             hls-tactics-plugin = gitignoreSource ../plugins/tactics;
           });
         in

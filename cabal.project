@@ -4,12 +4,14 @@ packages:
          ./shake-bench
          ./ghcide
          ./hls-plugin-api
+         ./hls-exactprint-utils
          ./plugins/tactics
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-hlint-plugin
          ./plugins/hls-retrie-plugin
+         ./plugins/hls-splice-plugin
 
 tests: true
 
