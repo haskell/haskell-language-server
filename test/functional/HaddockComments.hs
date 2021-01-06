@@ -31,6 +31,7 @@ tests =
       goldenTest "MultivariateFunction" Signature 2 8,
       goldenTest "QualFunction" Signature 2 10,
       goldenTest "Record.hs" Record 7 2,
+      expectedNothing "ConstFunction" Signature 2 2,
       expectedNothing "StaleFunction" Signature 3 3,
       expectedNothing "StaleRecord" Record 3 12
     ]
