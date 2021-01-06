@@ -475,15 +475,24 @@ unusedTermTests = testGroup "unused term code actions" [
         doc   <- openDoc "CodeActionOnly.hs" "haskell"
         _     <- waitForDiagnosticsFrom doc
         diags <- getCurrentDiagnostics doc
-        let params = CodeActionParams doc (Range (Position 2 10) (Position 4 0)) caContext Nothing
+        let params = CodeActionParams doc (Range (Position 1 0) (Position 4 0)) caContext Nothing
             caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactorInline]))
+            caContextAllActions = CodeActionContext (List diags) Nothing
+        -- Verify that we get code actions of at least two different kinds.
+        ResponseMessage _ _ (Right (List allCodeActions))
+          <- request TextDocumentCodeAction (params & L.context .~ caContextAllActions)
+        liftIO $ do
+            redundantId <- inspectCodeAction allCodeActions ["Redundant id"]
+            redundantId ^. L.kind @?= Just CodeActionQuickFix
+            unfoldFoo <- inspectCodeAction allCodeActions ["Unfold foo"]
+            unfoldFoo ^. L.kind @?= Just CodeActionRefactorInline
+        -- Verify that that when we set the only parameter, we only get actions
+        -- of the right kind.
         ResponseMessage _ _ (Right (List res)) <- request TextDocumentCodeAction params
         let cas = map fromAction res
             kinds = map (^. L.kind) cas
         liftIO $ do
-            -- TODO: When HaRe is back this should be uncommented
-            -- kinds `shouldNotSatisfy` null
-            not (any (Just CodeActionRefactorInline /=) kinds) @? "None not CodeActionRefactorInline"
+            not (null kinds) @? "We found an action of kind RefactorInline"
             all (Just CodeActionRefactorInline ==) kinds @? "All CodeActionRefactorInline"
     ]
 

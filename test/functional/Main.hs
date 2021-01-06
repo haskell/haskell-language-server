@@ -19,6 +19,7 @@ import Progress
 import Reference
 import Rename
 import Symbol
+import Splice
 import Tactic
 import Test.Tasty
 import Test.Tasty.Ingredients.Rerun
@@ -58,4 +59,5 @@ main =
             , Symbol.tests
             , Tactic.tests
             , TypeDefinition.tests
+            , Splice.tests
             ]

@@ -127,6 +127,11 @@ flag pragmas
   default:     False
   manual:      True
 
+flag splice
+  description: Enable splice plugin
+  default:     False
+  manual:      True
+
 -- formatters
 
 flag floskell
@@ -201,6 +206,11 @@ common pragmas
     other-modules: Ide.Plugin.Pragmas
     cpp-options: -Dpragmas
 
+common splice
+  if flag(splice) || flag(all-plugins)
+    build-depends: hls-splice-plugin
+    cpp-options: -Dsplice
+
 -- formatters
 
 common floskell
@@ -251,6 +261,7 @@ executable haskell-language-server
                     , hlint
                     , moduleName
                     , pragmas
+                    , splice
                     , floskell
                     , fourmolu
                     , ormolu
@@ -384,8 +395,9 @@ test-suite func-test
     , tasty-ant-xml           >=1.1.6
     , tasty-golden
     , tasty-rerun
+    , ghcide
 
-  hs-source-dirs:     test/functional plugins/tactics/src plugins/hls-eval-plugin/test
+  hs-source-dirs:     test/functional plugins/tactics/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src
 
   main-is:            Main.hs
   other-modules:
@@ -410,6 +422,8 @@ test-suite func-test
     Symbol
     TypeDefinition
     Tactic
+    Splice
+    Ide.Plugin.Splice.Types
     Ide.Plugin.Tactic.TestTypes
 
   ghc-options:

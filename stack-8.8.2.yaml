@@ -5,12 +5,14 @@ packages:
   - ./hie-compat
   - ./ghcide/
   - ./hls-plugin-api
+  - ./hls-exactprint-utils
   - ./shake-bench
   - ./plugins/hls-class-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
+  - ./plugins/hls-splice-plugin
   - ./plugins/tactics
 
 ghc-options:
