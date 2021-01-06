@@ -29,12 +29,14 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
                     p.shake-bench
                     p.hie-compat
                     p.hls-plugin-api
+                    p.hls-exactprint-utils
                     p.hls-class-plugin
                     p.hls-haddock-comments-plugin
                     p.hls-eval-plugin
                     p.hls-explicit-imports-plugin
                     p.hls-hlint-plugin
                     p.hls-retrie-plugin
+                    p.hls-splice-plugin
                     p.hls-tactics-plugin
                   ];
 

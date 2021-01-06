@@ -6,12 +6,14 @@ packages:
   - ./ghcide/
   - ./shake-bench
   - ./hls-plugin-api
+  - ./hls-exactprint-utils
   - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
+  - ./plugins/hls-splice-plugin
   - ./plugins/tactics
 
 ghc-options:

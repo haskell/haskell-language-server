@@ -53,15 +53,15 @@ mkIdentInfos (Avail n) =
 mkIdentInfos (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent
-    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) (Just $! parentP) True
+    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) (Just $! parentP) (isDataConName n)
         | n <- nn ++ map flSelector flds
       ] ++
-      [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing False]
+      [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n)]
     where
         parentP = pack $ prettyPrint parent
 
 mkIdentInfos (AvailTC _ nn flds)
-    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing True
+    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n)
         | n <- nn ++ map flSelector flds
       ]
 

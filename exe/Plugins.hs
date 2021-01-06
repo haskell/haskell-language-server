@@ -49,6 +49,10 @@ import           Ide.Plugin.ModuleName     as ModuleName
 import           Ide.Plugin.Pragmas        as Pragmas
 #endif
 
+#if splice
+import           Ide.Plugin.Splice        as Splice
+#endif
+
 -- formatters
 
 #if floskell
@@ -127,6 +131,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if hlint
       , Hlint.descriptor "hlint"
+#endif
+#if splice
+      , Splice.descriptor "splice"
 #endif
       ]
     examplePlugins =

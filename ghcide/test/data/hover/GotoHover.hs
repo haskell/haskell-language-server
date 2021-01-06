@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 {- HLINT ignore -}
 module GotoHover ( module GotoHover) where
 import Data.Text (Text, pack)
@@ -55,6 +55,9 @@ outer = undefined inner where
 
 imported :: Bar
 imported = foo
+
+aa2 :: Bool
+aa2 = $(id [| True |])
 
 hole :: Int
 hole = _

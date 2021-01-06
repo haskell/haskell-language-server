@@ -71,8 +71,11 @@ import           StringBuffer                   as SB
 import           TcRnMonad
 import           TcIface                        (typecheckIface)
 import           TidyPgm
+import           Hooks
+import           TcSplice
 
 import Control.Exception.Safe
+import Control.Lens hiding (List)
 import Control.Monad.Extra
 import Control.Monad.Except
 import Control.Monad.Trans.Except
@@ -85,10 +88,12 @@ import           Data.Maybe
 import qualified Data.Map.Strict                          as Map
 import           System.FilePath
 import           System.Directory
-import           System.IO.Extra
+import System.IO.Extra ( fixIO, newTempFileWithin )
 import Control.Exception (evaluate)
 import TcEnv (tcLookup)
+import qualified Data.DList as DL
 import Data.Time (UTCTime, getCurrentTime)
+import Bag
 import Linker (unload)
 import qualified GHC.LanguageExtensions as LangExt
 import PrelNames
@@ -144,21 +149,61 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
     where
         demoteIfDefer = if defer then demoteTypeErrorsToWarnings else id
 
+-- | Add a Hook to the DynFlags which captures and returns the
+-- typechecked splices before they are run. This information
+-- is used for hover.
+captureSplices :: DynFlags -> (DynFlags -> IO a) -> IO (a, Splices)
+captureSplices dflags k = do
+  splice_ref <- newIORef mempty
+  res <- k (dflags { hooks = addSpliceHook splice_ref (hooks dflags)})
+  splices <- readIORef splice_ref
+  return (res, splices)
+  where
+    addSpliceHook :: IORef Splices -> Hooks -> Hooks
+    addSpliceHook var h = h { runMetaHook = Just (splice_hook (runMetaHook h) var) }
+
+    splice_hook :: Maybe (MetaHook TcM) -> IORef Splices -> MetaHook TcM
+    splice_hook (fromMaybe defaultRunMeta -> hook) var metaReq e = case metaReq of
+        (MetaE f) -> do
+            expr' <- metaRequestE hook e
+            liftIO $ modifyIORef' var $ exprSplicesL %~ ((e, expr') :)
+            pure $ f expr'
+        (MetaP f) -> do
+            pat' <- metaRequestP hook e
+            liftIO $ modifyIORef' var $ patSplicesL %~ ((e, pat') :)
+            pure $ f pat'
+        (MetaT f) -> do
+            type' <- metaRequestT hook e
+            liftIO $ modifyIORef' var $ typeSplicesL %~ ((e, type') :)
+            pure $ f type'
+        (MetaD f) -> do
+            decl' <- metaRequestD hook e
+            liftIO $ modifyIORef' var $ declSplicesL %~ ((e, decl') :)
+            pure $ f decl'
+        (MetaAW f) -> do
+            aw' <- metaRequestAW hook e
+            liftIO $ modifyIORef' var $ awSplicesL %~ ((e, aw') :)
+            pure $ f aw'
+
+
 tcRnModule :: HscEnv -> [Linkable] -> ParsedModule -> IO TcModuleResult
 tcRnModule hsc_env keep_lbls pmod = do
   let ms = pm_mod_summary pmod
       hsc_env_tmp = hsc_env { hsc_dflags = ms_hspp_opts ms }
 
   unload hsc_env_tmp keep_lbls
-  (tc_gbl_env, mrn_info) <-
-      hscTypecheckRename hsc_env_tmp ms $
-                HsParsedModule { hpm_module = parsedSource pmod,
-                                 hpm_src_files = pm_extra_src_files pmod,
-                                 hpm_annotations = pm_annotations pmod }
+
+  ((tc_gbl_env, mrn_info), splices)
+      <- liftIO $ captureSplices (ms_hspp_opts ms) $ \dflags ->
+             do  let hsc_env_tmp = hsc_env { hsc_dflags = dflags }
+                 hscTypecheckRename hsc_env_tmp ms $
+                          HsParsedModule { hpm_module = parsedSource pmod,
+                                           hpm_src_files = pm_extra_src_files pmod,
+                                           hpm_annotations = pm_annotations pmod }
   let rn_info = case mrn_info of
         Just x -> x
         Nothing -> error "no renamed info tcRnModule"
-  pure (TcModuleResult pmod rn_info tc_gbl_env False)
+  pure (TcModuleResult pmod rn_info tc_gbl_env splices False)
 
 mkHiFileResultNoCompile :: HscEnv -> TcModuleResult -> IO HiFileResult
 mkHiFileResultNoCompile session tcm = do
@@ -184,14 +229,23 @@ mkHiFileResultCompile
 mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
   let session = session' { hsc_dflags = ms_hspp_opts ms }
       ms = pm_mod_summary $ tmrParsed tcm
-  -- give variables unique OccNames
-  (guts, details) <- tidyProgram session simplified_guts
+      tcGblEnv = tmrTypechecked tcm
 
   let genLinkable = case ltype of
         ObjectLinkable -> generateObjectCode
         BCOLinkable -> generateByteCode
 
-  (diags, linkable) <- genLinkable session ms guts
+  (linkable, details, diags) <-
+    if mg_hsc_src simplified_guts == HsBootFile
+    then do
+        -- give variables unique OccNames
+        details <- mkBootModDetailsTc session tcGblEnv
+        pure (Nothing, details, [])
+    else do
+        -- give variables unique OccNames
+        (guts, details) <- tidyProgram session simplified_guts
+        (diags, linkable) <- genLinkable session ms guts
+        pure (linkable, details, diags)
 #if MIN_GHC_API_VERSION(8,10,0)
   let !partial_iface = force (mkPartialIface session details simplified_guts)
   final_iface <- mkFullIface session partial_iface
@@ -385,10 +439,25 @@ atomicFileWrite targetPath write = do
 
 generateHieAsts :: HscEnv -> TcModuleResult -> IO ([FileDiagnostic], Maybe (HieASTs Type))
 generateHieAsts hscEnv tcm =
-  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $
-    Just <$> GHC.enrichHie (tcg_binds $ tmrTypechecked tcm) (tmrRenamed tcm)
+  handleGenerationErrors' dflags "extended interface generation" $ runHsc hscEnv $ do
+    -- These varBinds use unitDataConId but it could be anything as the id name is not used
+    -- during the hie file generation process. It's a workaround for the fact that the hie modules
+    -- don't export an interface which allows for additional information to be added to hie files.
+    let fake_splice_binds = listToBag (map (mkVarBind unitDataConId) (spliceExpresions $ tmrTopLevelSplices tcm))
+        real_binds = tcg_binds $ tmrTypechecked tcm
+    Just <$> GHC.enrichHie (fake_splice_binds `unionBags` real_binds) (tmrRenamed tcm)
   where
     dflags = hsc_dflags hscEnv
+
+spliceExpresions :: Splices -> [LHsExpr GhcTc]
+spliceExpresions Splices{..} =
+    DL.toList $ mconcat
+        [ DL.fromList $ map fst exprSplices
+        , DL.fromList $ map fst patSplices
+        , DL.fromList $ map fst typeSplices
+        , DL.fromList $ map fst declSplices
+        , DL.fromList $ map fst awSplices
+        ]
 
 writeHieFile :: HscEnv -> ModSummary -> [GHC.AvailInfo] -> HieASTs Type -> BS.ByteString -> IO [FileDiagnostic]
 writeHieFile hscEnv mod_summary exports ast source =

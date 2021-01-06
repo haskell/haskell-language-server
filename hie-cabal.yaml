@@ -103,6 +103,9 @@ cradle:
     - path: "./hls-plugin-api/src"
       component: "lib:hls-plugin-api"
 
+    - path: "./hls-exactprint-utils/src"
+      component: "lib:hls-exactprint-utils"
+
     - path: "./plugins/hls-class-plugin/src"
       component: "lib:hls-class-plugin"
 
@@ -120,6 +123,9 @@ cradle:
 
     - path: "./plugins/hls-retrie-plugin/src"
       component: "lib:hls-retrie-plugin"
+
+    - path: "./plugins/hls-splice-plugin/src"
+      component: "hls-splice-plugin:lib"
 
     - path: "./plugins/tactics/src"
       component: "lib:hls-tactics-plugin"
