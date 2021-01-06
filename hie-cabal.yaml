@@ -122,7 +122,7 @@ cradle:
       component: "lib:hls-retrie-plugin"
 
     - path: "./plugins/hls-splice-plugin/src"
-      component: "hls-splice-plugin:lib"
+      component: "lib:hls-splice-plugin"
 
     - path: "./plugins/tactics/src"
       component: "lib:hls-tactics-plugin"
