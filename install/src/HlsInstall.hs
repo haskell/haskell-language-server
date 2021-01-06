@@ -43,7 +43,6 @@ defaultMain = do
 
     want ["short-help"]
     -- general purpose targets
-    phony "submodules"  updateSubmodules
     phony "short-help"  shortHelpMessage
     phony "help"        (helpMessage toolsVersions)
 
@@ -51,7 +50,6 @@ defaultMain = do
 
     phony "data" $ do
       need ["show-options"]
-      need ["submodules"]
       need ["check"]
       liftIO $ putStrLn "Generation of hoogle data files is disabled for now."  
       -- if isRunFromStack then stackBuildData args else cabalBuildData args
@@ -60,7 +58,6 @@ defaultMain = do
       versions
       (\version -> phony ("hls-" ++ version) $ do
         need ["show-options"]
-        need ["submodules"]
         need ["check"]
         if isRunFromStack then
           stackInstallHlsWithErrMsg (Just version) args
@@ -104,9 +101,3 @@ buildIcuMacosFix version args = execStackWithGhc_
   , "--extra-lib-dirs=/usr/local/opt/icu4c/lib"
   , "--extra-include-dirs=/usr/local/opt/icu4c/include"
   ] ++ args
-
--- | update the submodules that the project is in the state as required by the `stack.yaml` files
-updateSubmodules :: Action ()
-updateSubmodules = do
-  command_ [] "git" ["submodule", "sync"]
-  command_ [] "git" ["submodule", "update", "--init"]

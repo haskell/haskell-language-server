@@ -5,10 +5,6 @@ defaults: &defaults
   steps:
     - checkout
     - run:
-        command: git submodule sync --recursive
-    - run:
-        command: git submodule update --recursive --init
-    - run:
         name: Write provided stack.yaml with predictable name
         command: cp ${STACK_FILE} stack-build.txt
 
@@ -57,13 +53,6 @@ defaults: &defaults
           - ~/build/ghcide/.stack-work
 
     - run:
-        name: Test ghcide
-        # Tests MUST run with -j1, since multiple ghc-mod sessions are not allowed
-        # command: stack -j 1 --stack-yaml=${STACK_FILE} test ghcide --dump-logs
-        command: echo "ghcide tests disabled until they got fixed, see https://github.com/mpickering/ghcide/issues/25"
-        no_output_timeout: 120m
-
-    - run:
         name: Setup stack eval hie.html
         command: cp plugins/hls-eval-plugin/test/testdata/hie-stack.yaml plugins/hls-eval-plugin/test/testdata/hie.yaml
 
@@ -72,29 +61,9 @@ defaults: &defaults
         command: grep '^resolver:\|^compiler:' stack-build.txt > plugins/hls-eval-plugin/test/testdata/stack.yaml
 
     - run:
-        name: Test haskell-language-server func-test suite
-        # Tasty by default will run all the tests in parallel. Which should
-        # work ok, but given that these CircleCI runners aren't the beefiest
-        # machine can cause some flakiness. So pass -j1 to Tasty (NOT Stack) to
-        # tell it to go slow and steady.
-        command: stack --stack-yaml=${STACK_FILE} test haskell-language-server:func-test --dump-logs --test-arguments="-j1 --rerun-update" || stack --stack-yaml=${STACK_FILE} test haskell-language-server:func-test --dump-logs --test-arguments="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true stack --stack-yaml=${STACK_FILE} test haskell-language-server:func-test --dump-logs --test-arguments="-j1 --rerun"
+        name: Build including tests
+        command: stack --stack-yaml=${STACK_FILE} test --no-run-tests
         no_output_timeout: 120m
-
-    - run:
-        name: Test haskell-language-server wrapper-test suite
-        command: stack --stack-yaml=${STACK_FILE} test haskell-language-server:wrapper-test --dump-logs --test-arguments="-j1" || stack --stack-yaml=${STACK_FILE} test haskell-language-server:wrapper-test --dump-logs --test-arguments="-j1"
-        no_output_timeout: 30m
-
-    - run:
-        name: Test hls-tactics-plugin
-        command: stack --stack-yaml=${STACK_FILE} test hls-tactics-plugin:test:tests --dump-logs --test-arguments="-j1"
-        no_output_timeout: 30m
-
-    - store_test_results:
-        path: test-results
-
-    - store_artifacts:
-        path: test-logs
 
     - save_cache:
         key: stack-cache-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-build.txt" }}-{{ checksum "all-cabal.txt" }}
@@ -137,48 +106,16 @@ jobs:
       - STACK_FILE: "stack-8.10.2.yaml"
     <<: *defaults
 
-  ghc-nightly:
+  ghc-8.10.3:
+    environment:
+      - STACK_FILE: "stack-8.10.3.yaml"
+    <<: *defaults
+
+  ghc-default:
     environment:
       - STACK_FILE: "stack.yaml"
     <<: *defaults
 
-  cabal:
-    working_directory: ~/build
-    docker:
-      - image: haskell:8.10.1
-    steps:
-      - checkout
-      - run:
-          name: Sync submodules
-          command: git submodule sync --recursive
-      - run:
-          name: Update submodules
-          command: git submodule update --recursive --init
-      - restore-cache:
-          keys:
-            - cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-      - run:
-          name: Update
-          command: cabal new-update
-      - run:
-          name: Configure
-          command: cabal new-configure --enable-tests
-      - run:
-          name: Build dependencies
-          command: cabal new-build -j1 --dependencies-only # need j1, else ghc-lib-parser triggers OOM
-          no_output_timeout: 30m
-      - save_cache:
-          key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-          paths:
-            - ~/.cabal
-      - run:
-          name: Build
-          command: cabal new-build -j1 # need j1, else ghc-lib-parser triggers OOM
-          no_output_timeout: 30m
-      - save_cache:
-          key: cabal-{{ .Environment.HIE_CACHE }}-{{ arch }}-{{ .Environment.CIRCLE_JOB }}
-          paths:
-            - ~/.cabal
 
 workflows:
   version: 2
@@ -191,5 +128,5 @@ workflows:
       - ghc-8.8.4
       - ghc-8.10.1
       - ghc-8.10.2
-      # - ghc-nightly
-      - cabal
+      - ghc-8.10.3
+      - ghc-default

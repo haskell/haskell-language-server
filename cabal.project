@@ -4,12 +4,14 @@ packages:
          ./shake-bench
          ./ghcide
          ./hls-plugin-api
+         ./hls-exactprint-utils
          ./plugins/tactics
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-hlint-plugin
          ./plugins/hls-retrie-plugin
+         ./plugins/hls-splice-plugin
 
 tests: true
 
@@ -23,7 +25,7 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2020-12-13T11:31:58Z
+index-state: 2021-01-03T11:58:44Z
 
 allow-newer:
 	active:base,

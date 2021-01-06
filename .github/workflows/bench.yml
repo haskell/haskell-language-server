@@ -9,12 +9,12 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ['8.10.2', '8.8.4', '8.6.5']
-        os: [ubuntu-latest, macOS-latest]
+        os: [ubuntu-latest]
 
     steps:
     - uses: actions/checkout@v2
     - run: git fetch origin master # check the master branch for benchmarking
-    - uses: actions/setup-haskell@v1
+    - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
@@ -26,7 +26,11 @@ jobs:
         path: |
           ~/.cabal/packages
           ~/.cabal/store
-        key: ${{ runner.os }}-${{ matrix.ghc }}-cabal-bench
+        key: ${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
+        restore-keys: |
+            ${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
+            ${{ runner.os }}-${{ matrix.ghc }}-bench-
+            ${{ runner.os }}-${{ matrix.ghc }}
 
     - run: cabal update
 
