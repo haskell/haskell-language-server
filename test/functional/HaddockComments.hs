@@ -30,7 +30,7 @@ tests =
       goldenTest "KindSigFunction" Signature 9 10,
       goldenTest "MultivariateFunction" Signature 2 8,
       goldenTest "QualFunction" Signature 2 10,
-      goldenTest "Record.hs" Record 7 2,
+      goldenTest "Record" Record 7 2,
       expectedNothing "ConstFunction" Signature 2 2,
       expectedNothing "StaleFunction" Signature 3 3,
       expectedNothing "StaleRecord" Record 3 12
@@ -54,7 +54,7 @@ goldenTest fp (toTitle -> expectedTitle) l c = goldenVsString fp goldenFilePath 
 expectedNothing :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 expectedNothing fp (toTitle -> expectedTitle) l c = testCase fp $
   runSession hlsCommand fullCaps haddockCommentsPath $ do
-    doc <- openDoc fp "haskell"
+    doc <- openDoc (fp <.> "hs") "haskell"
     _ <- waitForDiagnostics
     titles <- mapMaybe caTitle <$> getCodeActions doc (Range (Position l c) (Position l $ succ c))
     liftIO $ expectedTitle `notElem` titles @? "Unexpected CodeAction"
