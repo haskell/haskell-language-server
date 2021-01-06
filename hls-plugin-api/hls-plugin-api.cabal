@@ -37,7 +37,7 @@ library
     , containers
     , data-default
     , Diff
-    , haskell-lsp           ^>=0.22
+    , haskell-lsp           ^>=0.23
     , hashable
     , hslogger
     , lens

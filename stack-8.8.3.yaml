@@ -56,6 +56,8 @@ extra-deps:
   #   commit: fb3859dca2e54d1bbb2c873e68ed225fa179fbef
   - stylish-haskell-0.12.2.0
   - temporary-1.2.1.1
+  - haskell-lsp-0.23.0.0
+  - haskell-lsp-types-0.23.0.0
 
 configure-options:
   ghcide:

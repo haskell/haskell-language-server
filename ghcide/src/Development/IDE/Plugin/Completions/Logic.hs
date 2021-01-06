@@ -157,7 +157,7 @@ mkCompl :: IdeOptions -> CompItem -> CompletionItem
 mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs, additionalTextEdits} =
   CompletionItem {_label = label,
                   _kind = kind,
-                  _tags = List [],
+                  _tags = Nothing,
                   _detail = (colon <>) <$> typeText,
                   _documentation = documentation,
                   _deprecated = Nothing,
@@ -237,13 +237,13 @@ mkNameCompItem origName origMod thingType isInfix docs !imp = CI{..}
 
 mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
-  CompletionItem label (Just CiModule) (List []) Nothing
+  CompletionItem label (Just CiModule) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
-  CompletionItem m (Just CiModule) (List []) (Just label)
+  CompletionItem m (Just CiModule) Nothing (Just label)
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing
   where
@@ -251,13 +251,13 @@ mkImportCompl enteredQual label =
 
 mkExtCompl :: T.Text -> CompletionItem
 mkExtCompl label =
-  CompletionItem label (Just CiKeyword) (List []) Nothing
+  CompletionItem label (Just CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing
 
 mkPragmaCompl :: T.Text -> T.Text -> CompletionItem
 mkPragmaCompl label insertText =
-  CompletionItem label (Just CiKeyword) (List []) Nothing
+  CompletionItem label (Just CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
@@ -272,7 +272,7 @@ extendImportList name lDecl = let
             -- use to same start_pos to handle situation where we do not have latest edits due to caching of Rules
             new_range = Range new_start_pos new_start_pos
             -- we cannot wrap mapM_ inside (mapM_) but we need to wrap (<$)
-            alpha = all isAlphaNum $ filter (\c -> c /= '_') name
+            alpha = all isAlphaNum $ filter (/= '_') name
             result = if alpha then name ++ ", "
                 else "(" ++ name ++ "), "
             in Just [TextEdit new_range (T.pack result)]
