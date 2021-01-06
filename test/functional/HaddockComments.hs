@@ -9,43 +9,46 @@ module HaddockComments
 where
 
 import Control.Monad.IO.Class (liftIO)
+import qualified Data.ByteString.Lazy as LBS
 import Data.Foldable (find)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
-import qualified Data.Text.IO as T
+import Data.Text.Encoding (encodeUtf8)
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
 import System.FilePath ((<.>), (</>))
 import Test.Hls.Util
 import Test.Tasty
+import Test.Tasty.Golden
 import Test.Tasty.HUnit
 
 tests :: TestTree
 tests =
   testGroup
     "haddock comments"
-    [ normal "HigherRankFunction.hs" Signature 4 6,
-      normal "KindSigFunction.hs" Signature 9 10,
-      normal "MultivariateFunction.hs" Signature 2 8,
-      normal "QualFunction.hs" Signature 2 10,
-      normal "Record.hs" Record 7 2,
-      expectedNothing "StaleFunction.hs" Signature 3 3,
-      expectedNothing "StaleRecord.hs" Record 3 12
+    [ goldenTest "HigherRankFunction" Signature 4 6,
+      goldenTest "KindSigFunction" Signature 9 10,
+      goldenTest "MultivariateFunction" Signature 2 8,
+      goldenTest "QualFunction" Signature 2 10,
+      goldenTest "Record.hs" Record 7 2,
+      expectedNothing "StaleFunction" Signature 3 3,
+      expectedNothing "StaleRecord" Record 3 12
     ]
 
-normal :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
-normal fp (toTitle -> expectedTitle) l c = testCase fp $
+goldenTest :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
+goldenTest fp (toTitle -> expectedTitle) l c = goldenVsString fp goldenFilePath $
   runSession hlsCommand fullCaps haddockCommentsPath $ do
-    doc <- openDoc fp "haskell"
+    doc <- openDoc hsFilePath "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
     case find ((== Just expectedTitle) . caTitle) actions of
       Just (CACodeAction x) -> do
         executeCodeAction x
-        contentAfterAction <- documentContents doc
-        expected <- liftIO . T.readFile $ haddockCommentsPath </> fp <.> "expected"
-        liftIO $ contentAfterAction @?= expected
+        LBS.fromStrict . encodeUtf8 <$> documentContents doc
       _ -> liftIO $ assertFailure "Unable to find CodeAction"
+  where
+    hsFilePath = haddockCommentsPath </> fp <.> "hs"
+    goldenFilePath = haddockCommentsPath </> fp <.> "expected" <.> "hs"
 
 expectedNothing :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 expectedNothing fp (toTitle -> expectedTitle) l c = testCase fp $
@@ -66,4 +69,4 @@ caTitle (CACodeAction CodeAction {_title}) = Just _title
 caTitle _ = Nothing
 
 haddockCommentsPath :: String
-haddockCommentsPath = "test/testdata/haddockComments"
+haddockCommentsPath = "test" </> "testdata" </> "haddockComments"
