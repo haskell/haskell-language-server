@@ -78,11 +78,10 @@ genForSig = GenComments {..}
 
     fromDecl (SigD _ (TypeSig _ _ (HsWC _ (HsIB _ x)))) = Just x
     fromDecl _ = Nothing
+
     updateAnn x = x {annEntryDelta = DP (0, 1), annsDP = dp}
 
-    isFresh Ann {annsDP}
-      | null [() | (AnnComment _, _) <- annsDP] = True
-      | otherwise = False
+    isFresh Ann {annsDP} = null [() | (AnnComment _, _) <- annsDP]
 
     collectKeys = keyFromTyVar 0
 
