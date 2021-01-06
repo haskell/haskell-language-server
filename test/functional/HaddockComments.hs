@@ -47,7 +47,7 @@ goldenTest fp (toTitle -> expectedTitle) l c = goldenVsString fp goldenFilePath 
         LBS.fromStrict . encodeUtf8 <$> documentContents doc
       _ -> liftIO $ assertFailure "Unable to find CodeAction"
   where
-    hsFilePath = haddockCommentsPath </> fp <.> "hs"
+    hsFilePath = fp <.> "hs"
     goldenFilePath = haddockCommentsPath </> fp <.> "expected" <.> "hs"
 
 expectedNothing :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
