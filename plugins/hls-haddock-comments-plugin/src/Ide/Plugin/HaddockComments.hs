@@ -97,7 +97,7 @@ genForRecord = GenComments {..}
       Just [x | (L _ ConDeclH98 {con_args = x}) <- cons]
     fromDecl _ = Nothing
 
-    updateAnn x = x {annEntryDelta = DP (1, -7), annPriorComments = [(comment, DP (1, -7))]}
+    updateAnn x = x {annEntryDelta = DP (1, 2), annPriorComments = [(comment, DP (1, 2))]}
 
     isFresh Ann {annPriorComments} = null annPriorComments
 
