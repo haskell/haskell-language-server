@@ -12,6 +12,7 @@ import Format
 import FunctionalBadProject
 import FunctionalCodeAction
 import FunctionalLiquid
+import HaddockComments
 import HieBios
 import Highlight
 import ModuleName
@@ -60,4 +61,5 @@ main =
             , Tactic.tests
             , TypeDefinition.tests
             , Splice.tests
+            , HaddockComments.tests
             ]

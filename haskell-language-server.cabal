@@ -434,6 +434,7 @@ test-suite func-test
     TypeDefinition
     Tactic
     Splice
+    HaddockComments
     Ide.Plugin.Splice.Types
     Ide.Plugin.Tactic.TestTypes
 
