@@ -37,7 +37,7 @@ tests =
     ]
 
 goldenTest :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
-goldenTest fp (toTitle -> expectedTitle) l c = goldenVsString fp goldenFilePath $
+goldenTest fp (toTitle -> expectedTitle) l c = goldenVsStringDiff fp goldenGitDiff goldenFilePath $
   runSession hlsCommand fullCaps haddockCommentsPath $ do
     doc <- openDoc hsFilePath "haskell"
     _ <- waitForDiagnostics
@@ -71,3 +71,6 @@ caTitle _ = Nothing
 
 haddockCommentsPath :: String
 haddockCommentsPath = "test" </> "testdata" </> "haddockComments"
+
+goldenGitDiff :: FilePath -> FilePath -> [String]
+goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
