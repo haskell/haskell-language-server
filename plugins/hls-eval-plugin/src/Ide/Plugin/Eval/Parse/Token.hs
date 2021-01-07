@@ -95,7 +95,7 @@ contentOf _             = Nothing
 
 -}
 tokensFrom :: String -> [Loc (Token String)]
-tokensFrom = tokens . lines
+tokensFrom = tokens . lines . filter (/= '\r')
 
 {- |
 >>> tokens ["-- |$setup >>> 4+7","x=11"]
