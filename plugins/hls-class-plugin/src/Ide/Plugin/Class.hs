@@ -119,7 +119,7 @@ addMethodPlaceholders lf state AddMinimalMethodsParams{..} = fmap (fromMaybe err
 
     toMethodName n
       | Just (h, _) <- T.uncons n
-      , not (isAlpha h)
+      , not (isAlpha h || h == '_')
       = "(" <> n <> ")"
       | otherwise
       = n
