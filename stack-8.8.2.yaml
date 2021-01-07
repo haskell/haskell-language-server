@@ -39,8 +39,8 @@ extra-deps:
   - ghc-lib-parser-ex-8.10.0.17
   - ghc-trace-events-0.1.2.1
   - haddock-library-1.8.0
-  - haskell-lsp-0.22.0.0
-  - haskell-lsp-types-0.22.0.0
+  - haskell-lsp-0.23.0.0
+  - haskell-lsp-types-0.23.0.0
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
   - hie-bios-0.7.1

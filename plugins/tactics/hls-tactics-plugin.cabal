@@ -57,7 +57,7 @@ library
     , ghc-exactprint
     , ghc-source-gen
     , ghcide         >=0.1
-    , haskell-lsp    ^>=0.22
+    , haskell-lsp    ^>=0.23
     , hls-plugin-api
     , hls-exactprint-utils
     , lens

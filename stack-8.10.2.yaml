@@ -38,6 +38,8 @@ extra-deps:
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1
+  - haskell-lsp-0.23.0.0
+  - haskell-lsp-types-0.23.0.0
 
 configure-options:
   ghcide:

@@ -61,7 +61,7 @@ library
     , ghc
     , ghcide                >=0.7
     , gitrev
-    , haskell-lsp           ^>=0.22
+    , haskell-lsp           ^>=0.23
     , hls-plugin-api        >=0.6
     , hslogger
     , optparse-applicative
@@ -305,7 +305,7 @@ executable haskell-language-server
     , ghcide
     , hashable
     , haskell-language-server
-    , haskell-lsp              ^>=0.22
+    , haskell-lsp              ^>=0.23
     , lens
     , regex-tdfa
     , hslogger
