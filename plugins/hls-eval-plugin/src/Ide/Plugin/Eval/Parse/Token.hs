@@ -1,17 +1,29 @@
 {-# OPTIONS_GHC -Wwarn #-}
 
 -- | Parse source code into a list of line Tokens.
-module Ide.Plugin.Eval.Parse.Token(Token(..),TokenS,tokensFrom,unsafeContent,isStatement,isTextLine,isPropLine,isCodeLine,isBlockOpen,isBlockClose) where
+module Ide.Plugin.Eval.Parse.Token (
+    Token(..),
+    TokenS,
+    tokensFrom,
+    unsafeContent,
+    isStatement,
+    isTextLine,
+    isPropLine,
+    isCodeLine,
+    isBlockOpen,
+    isBlockClose
+) where
 
-import           Control.Monad.Combinators    (skipManyTill, many, optional, (<|>))
+import           Control.Monad.Combinators    (many, optional, skipManyTill,
+                                               (<|>))
+import           Data.Functor                 (($>))
 import           Data.List                    (foldl')
-import           Ide.Plugin.Eval.Parse.Parser (satisfy, Parser, alphaNumChar, char,
-                                               letterChar, runParser, space,
-                                               string, tillEnd)
+import           Ide.Plugin.Eval.Parse.Parser (Parser, alphaNumChar, char,
+                                               letterChar, runParser, satisfy,
+                                               space, string, tillEnd)
 import           Ide.Plugin.Eval.Types        (Format (..), Language (..), Loc,
                                                Located (Located))
 import           Maybes                       (fromJust, fromMaybe)
-import Data.Functor ( ($>) )
 
 type TParser = Parser Char (State, [TokenS])
 
@@ -60,7 +72,7 @@ isBlockOpen _                 = False
 
 isBlockClose :: Token s -> Bool
 isBlockClose BlockClose = True
-isBlockClose _            = False
+isBlockClose _          = False
 
 unsafeContent :: Token a -> a
 unsafeContent = fromJust . contentOf
@@ -135,9 +147,9 @@ tokens = concatMap (\(l, vs) -> map (Located l) vs) . zip [0 ..] . reverse . snd
 
 -- | Parse a line of input
 aline :: State -> TParser
-aline InCode = optionStart <|> multi <|> singleOpen <|> codeLine
+aline InCode          = optionStart <|> multi <|> singleOpen <|> codeLine
 aline InSingleComment = optionStart <|> multi <|> commentLine False <|> codeLine
-aline InMultiComment = multiClose <|> commentLine True
+aline InMultiComment  = multiClose <|> commentLine True
 
 multi :: TParser
 multi = multiOpenClose <|> multiOpen
