@@ -92,6 +92,11 @@ flag class
   default:     False
   manual:      True
 
+flag haddockComments
+  description: Enable haddockComments plugin
+  default:     False
+  manual:      True
+
 flag eval
   description: Enable eval plugin
   default:     False
@@ -168,6 +173,11 @@ common class
   if flag(class) || flag(all-plugins)
     build-depends: hls-class-plugin
     cpp-options: -Dclass
+
+common haddockComments
+  if flag(haddockComments) || flag(all-plugins)
+    build-depends: hls-haddock-comments-plugin
+    cpp-options: -DhaddockComments
 
 common eval
   if flag(eval) || flag(all-plugins)
@@ -254,6 +264,7 @@ executable haskell-language-server
                     -- plugins
                     , example-plugins
                     , class
+                    , haddockComments
                     , eval
                     , importLens
                     , retrie
@@ -423,6 +434,7 @@ test-suite func-test
     TypeDefinition
     Tactic
     Splice
+    HaddockComments
     Ide.Plugin.Splice.Types
     Ide.Plugin.Tactic.TestTypes
 

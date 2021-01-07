@@ -11,6 +11,7 @@ packages:
          ./plugins/hls-explicit-imports-plugin
          ./plugins/hls-hlint-plugin
          ./plugins/hls-retrie-plugin
+         ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
 
 tests: true

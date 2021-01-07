@@ -22,6 +22,7 @@ let
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
             hls-exactprint-utils = gitignoreSource ../hls-exactprint-utils;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
+            hls-haddock-comments-plugin = gitignoreSource ../plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
             hls-explicit-imports-plugin = gitignoreSource ../plugins/hls-explicit-imports-plugin;
             hls-hlint-plugin = gitignoreSource ../plugins/hls-hlint-plugin;
