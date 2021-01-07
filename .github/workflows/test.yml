@@ -1,5 +1,9 @@
 name: Testing
 
+defaults:
+  run:
+    shell: bash
+
 on: [pull_request]
 jobs:
   test:
@@ -63,14 +67,26 @@ jobs:
       - run: ./fmt.sh
         name: "HLint via ./fmt.sh"
 
+      - name: Set some window specific things
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
+
+      - name: Set some linux/macOS specific things
+        if: matrix.os != 'windows-latest'
+        run: |
+          echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
+          echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
+
       - name: Cache Cabal
         uses: actions/cache@v2
         env:
           cache-name: cache-cabal
         with:
           path: |
-            ~/.cabal/packages
-            ~/.cabal/store
+            ${{ env.CABAL_PKGS_DIR }}
+            ${{ env.CABAL_STORE_DIR }}
           key: ${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
@@ -81,7 +97,6 @@ jobs:
 
       # Need this to work around filepath length limits in Windows
       - name: Shorten binary names
-        shell: bash
         run: |
           sed -i.bak -e 's/haskell-language-server/hls/g' \
                      -e 's/haskell_language_server/hls/g' \
@@ -90,30 +105,26 @@ jobs:
                      src/**/*.hs exe/*.hs
 
       - name: Build
-        shell: bash
         # Retry it three times to workaround compiler segfaults in windows
         run: cabal build || cabal build || cabal build
 
       - name: Test ghcide
         if: ${{ !matrix.ghc-lib && matrix.test }}
-        shell: bash
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ghcide --test-options="-j1 --rerun-update" || cabal test ghcide --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="-j1 --rerun"
 
       - name: Test func-test suite
         if: ${{ !matrix.ghc-lib && matrix.test }}
-        shell: bash
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         # run the tests without parallelism, otherwise tasty will attempt to run
         # all functional test cases simultaneously which causes way too many hls
         # instances to be spun up for the poor github actions runner to handle
-        run: cabal test func-test --test-options="-j1 --rerun-update" || cabal test func-test --test-options="-j1 --rerun --rerun-update" || cabal test func-test --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test func-test --test-options="-j1 --rerun"
+        run: cabal test func-test --test-options="-j1 --rerun --rerun-update" || cabal test func-test --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test func-test --test-options="-j1 --rerun"
 
       - name: Test wrapper-test suite
         if: ${{ !matrix.ghc-lib && matrix.test }}
-        shell: bash
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
