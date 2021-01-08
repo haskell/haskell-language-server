@@ -48,6 +48,9 @@ tests = testGroup
   , glodenTest "Creates a placeholder for multiple methods 2" "T3" "2"
     $ \(_:mmAction:_) -> do
       executeCodeAction mmAction
+  , glodenTest "Creates a placeholder for a method starting with '_'" "T4" ""
+    $ \(_fAction:_) -> do
+      executeCodeAction _fAction
   ]
 
 _CACodeAction :: Prism' CAResult CodeAction
@@ -60,7 +63,7 @@ classPath = "test" </> "testdata" </> "class"
 
 glodenTest :: String -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 glodenTest name fp deco execute
-  = goldenVsStringDiff name goldenGitDiff (classPath </> fp <.> deco <.> "expected" <.> "hs")
+  = goldenVsStringDiff name goldenGitDiff (classPath </> fpWithDeco <.> "expected" <.> "hs")
     $ runSession hlsCommand fullCaps classPath
     $ do
       doc <- openDoc (fp <.> "hs") "haskell"
@@ -68,6 +71,10 @@ glodenTest name fp deco execute
       actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
       execute actions
       BS.fromStrict . T.encodeUtf8 <$> getDocumentEdit doc
+  where
+    fpWithDeco
+      | deco == "" = fp
+      | otherwise  = fp <.> deco
 
 goldenGitDiff :: FilePath -> FilePath -> [String]
 goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
