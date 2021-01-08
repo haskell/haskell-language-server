@@ -20,23 +20,14 @@ jobs:
           #   ghc: '8.10.1'
           #   ghc-lib: true
           # only test supported ghc major versions
-          - os: macOS-latest
-            ghc: '8.10.3'
-            test: true
           - os: ubuntu-latest
             ghc: '8.10.3'
             test: true
           - os: windows-latest
             ghc: '8.10.3'
             test: true
-          - os: macOS-latest
-            ghc: '8.8.4'
-            test: true
           - os: ubuntu-latest
             ghc: '8.8.4'
-            test: true
-          - os: macOS-latest
-            ghc: '8.6.5'
             test: true
           - os: ubuntu-latest
             ghc: '8.6.5'
