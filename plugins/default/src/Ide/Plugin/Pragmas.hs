@@ -2,7 +2,6 @@
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
@@ -68,19 +67,11 @@ codeActionProvider _ state _plId docId _ (J.CodeActionContext (J.List diags) _mo
     let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
     pm <- fmap join $ runAction "addPragma" state $ getParsedModule `traverse` mFile
     let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-    -- Filter diagnostics that are from GHC
-        ghcDiags = filter isGhcDiag diags
-    -- Get all potential Pragmas for all diagnostics.
-        pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) ghcDiags
+        -- Get all potential Pragmas for all diagnostics.
+        pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) diags
     cmds <- mapM mkCodeAction pragmas
     return $ Right $ List cmds
       where
-        isGhcDiag diag
-          | Just source <- diag ^. J.source
-          = source `elem` ["parser", "typecheck"]
-          | otherwise
-          = False
-
         mkCodeAction pragmaName = do
           let
             codeAction = J.CACodeAction $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) (Just edit) Nothing
