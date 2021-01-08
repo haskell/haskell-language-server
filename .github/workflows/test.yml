@@ -88,10 +88,6 @@ jobs:
             ${{ env.CABAL_PKGS_DIR }}
             ${{ env.CABAL_STORE_DIR }}
           key: ${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-            ${{ runner.os }}-${{ matrix.ghc }}-build-
-            ${{ runner.os }}-${{ matrix.ghc }}
 
       - run: cabal update
 
