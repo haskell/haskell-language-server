@@ -803,13 +803,13 @@ suggestFunctionConstraint ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecl
               | L _ (SigD _ (TypeSig _ identifiers (HsWC _ (HsIB _ locatedType)))) <- hsmodDecls
               , any (`isSameName` T.unpack typeSignatureName) $ fmap unLoc identifiers
               ]
-          srcSpanToRange $ case splitLHsForAllTy locatedType of
-            (_{-ignore `forall` if present-}, typeBody) -> case splitLHsQualTy typeBody of
-              (L contextSrcSpan _ , _) ->
-                if isGoodSrcSpan contextSrcSpan
-                  then contextSrcSpan -- The type signature has explicit context
-                  else -- No explicit context, return SrcSpan at the start of type (after a potential `forall`)
-                      let start = srcSpanStart $ getLoc typeBody in mkSrcSpan start start
+          let typeBody = dropForAll locatedType
+          srcSpanToRange $ case splitLHsQualTy typeBody of
+            (L contextSrcSpan _ , _) ->
+              if isGoodSrcSpan contextSrcSpan
+                then contextSrcSpan -- The type signature has explicit context
+                else -- No explicit context, return SrcSpan at the start of type (after a potential `forall`)
+                    let start = srcSpanStart $ getLoc typeBody in mkSrcSpan start start
 
       isSameName :: IdP GhcPs -> String -> Bool
       isSameName x name = showSDocUnsafe (ppr x) == name
