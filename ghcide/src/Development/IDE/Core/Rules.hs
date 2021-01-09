@@ -2,9 +2,9 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP                   #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE TypeFamilies          #-}
 #include "ghc-api-version.h"
 
 -- | A Shake implementation of the compiler service, built
@@ -30,74 +30,80 @@ module Development.IDE.Core.Rules(
     getClientConfigAction,
     ) where
 
-import Fingerprint
-
-import Data.Aeson (fromJSON, Result(Success), FromJSON)
-import Data.Binary hiding (get, put)
-import Data.Default
-import Data.Tuple.Extra
-import Control.Monad.Extra
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Maybe
-import Development.IDE.Core.Compile
-import Development.IDE.Core.OfInterest
-import Development.IDE.Types.Options
-import Development.IDE.Spans.Documentation
-import Development.IDE.Spans.LocalBindings
-import Development.IDE.Import.DependencyInformation
-import Development.IDE.Import.FindImports
-import           Development.IDE.Core.FileExists
-import           Development.IDE.Core.FileStore        (modificationTime, getFileContents)
-import           Development.IDE.Types.Diagnostics as Diag
-import Development.IDE.Types.Location
-import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile, TargetModule, TargetFile)
-import Development.IDE.GHC.Util
-import Data.Either.Extra
-import qualified Development.IDE.Types.Logger as L
-import Data.Maybe
+import           Control.Concurrent.Async                     (concurrently)
+import           Control.Concurrent.Extra
+import           Control.Exception
+import           Control.Monad.Extra
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Control.Monad.Trans.Except                   (runExceptT)
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson                                   (FromJSON,
+                                                               Result (Success),
+                                                               fromJSON)
+import           Data.Binary                                  hiding (get, put)
+import           Data.ByteString                              (ByteString)
+import qualified Data.ByteString.Char8                        as BS
+import           Data.Default
+import           Data.Either.Extra
 import           Data.Foldable
-import qualified Data.IntMap.Strict as IntMap
-import Data.IntMap.Strict (IntMap)
-import Data.List
-import qualified Data.Set                                 as Set
-import qualified Data.Map as M
-import qualified Data.Text                                as T
-import qualified Data.Text.Encoding                       as T
+import qualified Data.HashMap.Strict                          as HM
+import qualified Data.HashSet                                 as HashSet
+import           Data.Hashable
+import           Data.IORef
+import           Data.IntMap.Strict                           (IntMap)
+import qualified Data.IntMap.Strict                           as IntMap
+import           Data.List
+import qualified Data.Map                                     as M
+import           Data.Maybe
+import qualified Data.Set                                     as Set
+import qualified Data.Text                                    as T
+import qualified Data.Text.Encoding                           as T
+import           Data.Time                                    (UTCTime (..))
+import           Data.Tuple.Extra
+import           Development.IDE.Core.Compile
+import           Development.IDE.Core.FileExists
+import           Development.IDE.Core.FileStore               (getFileContents,
+                                                               modificationTime)
+import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat                   hiding
+                                                              (TargetFile,
+                                                               TargetModule,
+                                                               parseModule,
+                                                               typecheckModule,
+                                                               writeHieFile)
 import           Development.IDE.GHC.Error
-import           Development.Shake                        hiding (Diagnostic)
-import Development.IDE.Core.RuleTypes
-import qualified Data.ByteString.Char8 as BS
-import Development.IDE.Core.PositionMapping
-import           Language.Haskell.LSP.Types (DocumentHighlight (..))
-
-import qualified GHC.LanguageExtensions as LangExt
-import HscTypes hiding (TargetModule, TargetFile)
-import GHC.Generics(Generic)
-
-import qualified Development.IDE.Spans.AtPoint as AtPoint
-import Development.IDE.Core.IdeConfiguration
-import Development.IDE.Core.Service
-import Development.IDE.Core.Shake
-import Development.Shake.Classes hiding (get, put)
-import Control.Monad.Trans.Except (runExceptT)
-import Data.ByteString (ByteString)
-import Control.Concurrent.Async (concurrently)
-import System.Time.Extra
-import Control.Monad.Reader
-import System.Directory ( getModificationTime )
-import Control.Exception
-
-import Control.Monad.State
-import FastString (FastString(uniq))
-import qualified HeaderInfo as Hdr
-import Data.Time (UTCTime(..))
-import Data.Hashable
-import qualified Data.HashSet as HashSet
-import qualified Data.HashMap.Strict as HM
-import TcRnMonad (tcg_dependent_files)
-import Data.IORef
-import Control.Concurrent.Extra
-import Module
+import           Development.IDE.GHC.Util
+import           Development.IDE.Import.DependencyInformation
+import           Development.IDE.Import.FindImports
+import qualified Development.IDE.Spans.AtPoint                as AtPoint
+import           Development.IDE.Spans.Documentation
+import           Development.IDE.Spans.LocalBindings
+import           Development.IDE.Types.Diagnostics            as Diag
+import           Development.IDE.Types.Location
+import qualified Development.IDE.Types.Logger                 as L
+import           Development.IDE.Types.Options
+import           Development.Shake                            hiding
+                                                              (Diagnostic)
+import           Development.Shake.Classes                    hiding (get, put)
+import           FastString                                   (FastString (uniq))
+import           Fingerprint
+import           GHC.Generics                                 (Generic)
+import qualified GHC.LanguageExtensions                       as LangExt
+import qualified HeaderInfo                                   as Hdr
+import           HscTypes                                     hiding
+                                                              (TargetFile,
+                                                               TargetModule)
+import           Language.Haskell.LSP.Types                   (DocumentHighlight (..))
+import           Module
+import           System.Directory                             (getModificationTime)
+import           System.Time.Extra
+import           TcRnMonad                                    (tcg_dependent_files)
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -217,7 +223,7 @@ getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp
     case msource of
-        Nothing -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
+        Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
         Just source -> pure $ T.encodeUtf8 source
 
 getPackageHieFile :: ShakeExtras
@@ -361,7 +367,7 @@ getLocatedImportsRule =
                 Right (PackageImport pkgId) -> liftIO $ do
                     diagsOrPkgDeps <- computePackageDeps env pkgId
                     case diagsOrPkgDeps of
-                        Left diags -> pure (diags, Right Nothing)
+                        Left diags   -> pure (diags, Right Nothing)
                         Right pkgIds -> pure ([], Right $ Just $ pkgId : pkgIds)
         let (moduleImports, pkgImports) = partitionEithers imports'
         case sequence pkgImports of
@@ -386,7 +392,7 @@ rawDependencyInformation fs = do
     return (rdi { rawBootMap = bm })
   where
     go :: NormalizedFilePath -- ^ Current module being processed
-       -> StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action FilePathId
+       -> RawDepM FilePathId
     go f = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
@@ -452,7 +458,7 @@ rawDependencyInformation fs = do
                  -> ([Located ModuleName], [(Located ModuleName, ArtifactsLocation)])
     splitImports = foldr splitImportsLoop ([],[])
 
-    splitImportsLoop (imp, Nothing) (ns, ls) = (imp:ns, ls)
+    splitImportsLoop (imp, Nothing)       (ns, ls) = (imp:ns, ls)
     splitImportsLoop (imp, Just artifact) (ns, ls) = (ns, (imp,artifact) : ls)
 
     updateBootMap pm boot_mod_id ArtifactsLocation{..} bm =
@@ -813,11 +819,11 @@ getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
       liftIO $ modifyVar_ compiledLinkables $ \old -> pure $ extendModuleEnv old mod time
   pure res
 #else
-    tm <- use_ TypeCheck f
-    hsc <- hscEnv <$> use_ GhcSessionDeps f
-    (diags, !hiFile) <- liftIO $ compileToObjCodeIfNeeded hsc Nothing (error "can't compile with ghc-lib") tm
-    let fp = hiFileFingerPrint <$> hiFile
-    return (fp, (diags, hiFile))
+  tm <- use_ TypeCheck f
+  hsc <- hscEnv <$> use_ GhcSessionDeps f
+  (diags, !hiFile) <- liftIO $ compileToObjCodeIfNeeded hsc Nothing (error "can't compile with ghc-lib") tm
+  let fp = hiFileFingerPrint <$> hiFile
+  return (fp, (diags, hiFile))
 #endif
 
 getModIfaceWithoutLinkableRule :: Rules ()
@@ -900,7 +906,7 @@ getClientConfigAction = do
   mbVal <- unhashed <$> useNoFile_ GetClientSettings
   case fromJSON <$> mbVal of
     Just (Success c) -> return c
-    _ -> return def
+    _                -> return def
 
 -- | For now we always use bytecode
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
