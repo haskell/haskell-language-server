@@ -2004,7 +2004,7 @@ addFunctionConstraintTests = let
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 0 0) (Position 6 maxBound))
+    actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
