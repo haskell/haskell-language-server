@@ -67,10 +67,8 @@ codeActionProvider _ state _plId docId _ (J.CodeActionContext (J.List diags) _mo
     let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
     pm <- fmap join $ runAction "addPragma" state $ getParsedModule `traverse` mFile
     let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-    -- Filter diagnostics that are from ghcmod
-        ghcDiags = filter (\d -> d ^. J.source == Just "typecheck") diags
-    -- Get all potential Pragmas for all diagnostics.
-        pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) ghcDiags
+        -- Get all potential Pragmas for all diagnostics.
+        pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) diags
     cmds <- mapM mkCodeAction pragmas
     return $ Right $ List cmds
       where
@@ -81,13 +79,17 @@ codeActionProvider _ state _plId docId _ (J.CodeActionContext (J.List diags) _mo
             edit = mkPragmaEdit (docId ^. J.uri) pragmaName
           return codeAction
 
-        genPragma mDynflags target
-          | Just dynFlags <- mDynflags,
-            -- GHC does not export 'OnOff', so we have to view it as string
-            disabled <- [ e | Just e <- T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags]
-          = [ r | r <- findPragma target, r `notElem` disabled]
-          | otherwise = []
-
+        genPragma mDynflags target =
+            [ r | r <- findPragma target, r `notElem` disabled]
+          where
+            disabled
+              | Just dynFlags <- mDynflags
+                -- GHC does not export 'OnOff', so we have to view it as string
+              = [ e | Just e <- T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags]
+              | otherwise
+                -- When the module failed to parse, we don't have access to its
+                -- dynFlags. In that case, simply don't disable any pragmas.
+              = []
 
 -- ---------------------------------------------------------------------
 
