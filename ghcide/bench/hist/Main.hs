@@ -138,6 +138,7 @@ benchGhcide
 benchGhcide samples buildSystem args BenchProject{..} = do
   command_ args "ghcide-bench" $
     [ "--timeout=3000",
+      "--no-clean",
         "-v",
         "--samples=" <> show samples,
         "--csv="     <> outcsv,

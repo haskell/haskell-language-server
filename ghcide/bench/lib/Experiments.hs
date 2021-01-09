@@ -387,14 +387,15 @@ callCommandLogging cmd = do
 
 setup :: HasConfig => IO SetupResult
 setup = do
-  alreadyExists <- doesDirectoryExist examplesPath
-  when alreadyExists $ removeDirectoryRecursive examplesPath
+--   when alreadyExists $ removeDirectoryRecursive examplesPath
   benchDir <- case example ?config of
       UsePackage{..} -> return examplePath
       GetPackage{..} -> do
         let path = examplesPath </> package
             package = exampleName <> "-" <> showVersion exampleVersion
-        case buildTool ?config of
+        alreadySetup <- doesDirectoryExist path
+        unless alreadySetup $
+          case buildTool ?config of
             Cabal -> do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
                 callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath

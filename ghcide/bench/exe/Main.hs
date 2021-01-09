@@ -38,17 +38,22 @@ import Control.Exception.Safe
 import Experiments
 import Options.Applicative
 import System.IO
+import           Control.Monad
+
+optsP :: Parser (Config, Bool)
+optsP = (,) <$> configP <*> switch (long "no-clean")
 
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
-  config <- execParser $ info (configP <**> helper) fullDesc
+  (config, noClean) <- execParser $ info (optsP <**> helper) fullDesc
   let ?config = config
+
   hPrint stderr config
 
   output "starting test"
 
   SetupResult{..} <- setup
 
-  runBenchmarks experiments `finally` cleanUp
+  runBenchmarks experiments `finally` unless noClean cleanUp
