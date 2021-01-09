@@ -35,7 +35,7 @@ import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.Monad.Extra
 import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Control.Monad.Trans.Except                   (runExceptT)
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson                                   (FromJSON,
