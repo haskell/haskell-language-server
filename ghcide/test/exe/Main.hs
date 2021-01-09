@@ -1934,6 +1934,28 @@ addFunctionConstraintTests = let
     , "eq x y = x == y"
     ]
 
+  missingConstraintWithForAllSourceCode :: T.Text -> T.Text
+  missingConstraintWithForAllSourceCode constraint =
+    T.unlines
+    [ "{-# LANGUAGE ExplicitForAll #-}"
+    , "module Testing where"
+    , ""
+    , "eq :: forall a. " <> constraint <> "a -> a -> Bool"
+    , "eq x y = x == y"
+    ]
+
+  incompleteConstraintWithForAllSourceCode :: T.Text -> T.Text
+  incompleteConstraintWithForAllSourceCode constraint =
+    T.unlines
+    [ "{-# LANGUAGE ExplicitForAll #-}"
+    , "module Testing where"
+    , ""
+    , "data Pair a b = Pair a b"
+    , ""
+    , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
+    , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
+    ]
+
   incompleteConstraintSourceCode :: T.Text -> T.Text
   incompleteConstraintSourceCode constraint =
     T.unlines
@@ -1982,7 +2004,7 @@ addFunctionConstraintTests = let
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
+    actionsOrCommands <- getCodeActions doc (Range (Position 0 0) (Position 6 maxBound))
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -1994,6 +2016,10 @@ addFunctionConstraintTests = let
     (missingConstraintSourceCode "")
     (missingConstraintSourceCode "Eq a => ")
   , check
+    "Add `Eq a` to the context of the type signature for `eq`"
+    (missingConstraintWithForAllSourceCode "")
+    (missingConstraintWithForAllSourceCode "Eq a => ")
+  , check
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCode "Eq a")
     (incompleteConstraintSourceCode "(Eq a, Eq b)")
@@ -2001,6 +2027,10 @@ addFunctionConstraintTests = let
     "Add `Eq c` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCode2 "(Eq a, Eq b)")
     (incompleteConstraintSourceCode2 "(Eq a, Eq b, Eq c)")
+  , check 
+    "Add `Eq b` to the context of the type signature for `eq`"
+    (incompleteConstraintWithForAllSourceCode "Eq a")
+    (incompleteConstraintWithForAllSourceCode "(Eq a, Eq b)")
   , check
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCodeWithExtraCharsInContext "( Eq a )")
