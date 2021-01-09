@@ -77,6 +77,12 @@ library
 
   default-language: Haskell2010
 
+-- Plugin flags are designed for 'cabal install haskell-language-server':
+-- - Packaged plugins should be manual:False
+-- - Non packaged plugins and bulk flags should be manual:True
+-- - Bulk flags should be default:False
+-- - Individual flags should be default:True
+
 flag all-plugins
   description: Enable all non formatter plugins
   default:     False
