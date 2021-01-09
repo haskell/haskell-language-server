@@ -28,7 +28,7 @@ library
   build-depends:
     , aeson
     , apply-refact
-    , base
+    , base       >=4.12 && <5
     , binary
     , bytestring
     , containers
