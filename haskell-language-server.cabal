@@ -90,37 +90,37 @@ flag all-formatters
 flag class
   description: Enable class plugin
   default:     False
-  manual:      True
+  manual:      False
 
 flag haddockComments
   description: Enable haddockComments plugin
   default:     False
-  manual:      True
+  manual:      False
 
 flag eval
   description: Enable eval plugin
   default:     False
-  manual:      True
+  manual:      False
 
 flag importLens
   description: Enable importLens plugin
   default:     False
-  manual:      True
+  manual:      False
 
 flag retrie
   description: Enable retrie plugin
   default:     False
-  manual:      True
+  manual:      False
 
 flag tactic
   description: Enable tactic plugin
   default:     False
-  manual:      True
+  manual:      False
 
 flag hlint
   description: Enable hlint plugin
   default:     False
-  manual:      True
+  manual:      False
 
 flag moduleName
   description: Enable moduleName plugin
@@ -135,7 +135,7 @@ flag pragmas
 flag splice
   description: Enable splice plugin
   default:     False
-  manual:      True
+  manual:      False
 
 -- formatters
 
