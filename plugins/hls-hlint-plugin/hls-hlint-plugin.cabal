@@ -5,8 +5,8 @@ synopsis:      Hlint integration plugin with Haskell Language Server
 description:   Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
 license:       Apache-2.0
 license-file:  LICENSE
-author:        Many,TBD when we release
-maintainer:    alan.zimm@gmail.com
+author:        https://github.com/haskell/haskell-language-server/contributors
+maintainer:    https://github.com/haskell/haskell-language-server/contributors
 copyright:     Alan Zimmerman
 category:      Web
 build-type:    Simple
