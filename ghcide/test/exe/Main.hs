@@ -1934,6 +1934,28 @@ addFunctionConstraintTests = let
     , "eq x y = x == y"
     ]
 
+  missingConstraintWithForAllSourceCode :: T.Text -> T.Text
+  missingConstraintWithForAllSourceCode constraint =
+    T.unlines
+    [ "{-# LANGUAGE ExplicitForAll #-}"
+    , "module Testing where"
+    , ""
+    , "eq :: forall a. " <> constraint <> "a -> a -> Bool"
+    , "eq x y = x == y"
+    ]
+
+  incompleteConstraintWithForAllSourceCode :: T.Text -> T.Text
+  incompleteConstraintWithForAllSourceCode constraint =
+    T.unlines
+    [ "{-# LANGUAGE ExplicitForAll #-}"
+    , "module Testing where"
+    , ""
+    , "data Pair a b = Pair a b"
+    , ""
+    , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
+    , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
+    ]
+
   incompleteConstraintSourceCode :: T.Text -> T.Text
   incompleteConstraintSourceCode constraint =
     T.unlines
@@ -1978,8 +2000,8 @@ addFunctionConstraintTests = let
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
-  check :: T.Text -> T.Text -> T.Text -> TestTree
-  check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
+  check :: String -> T.Text -> T.Text -> T.Text -> TestTree
+  check testName actionTitle originalCode expectedCode = testSession testName $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
@@ -1990,22 +2012,37 @@ addFunctionConstraintTests = let
 
   in testGroup "add function constraint"
   [ check
+    "no preexisting constraint"
     "Add `Eq a` to the context of the type signature for `eq`"
     (missingConstraintSourceCode "")
     (missingConstraintSourceCode "Eq a => ")
   , check
+    "no preexisting constraint, with forall"
+    "Add `Eq a` to the context of the type signature for `eq`"
+    (missingConstraintWithForAllSourceCode "")
+    (missingConstraintWithForAllSourceCode "Eq a => ")
+  , check
+    "preexisting constraint, no parenthesis"
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCode "Eq a")
     (incompleteConstraintSourceCode "(Eq a, Eq b)")
   , check
+    "preexisting constraints in parenthesis"
     "Add `Eq c` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCode2 "(Eq a, Eq b)")
     (incompleteConstraintSourceCode2 "(Eq a, Eq b, Eq c)")
+  , check 
+    "preexisting constraints with forall"
+    "Add `Eq b` to the context of the type signature for `eq`"
+    (incompleteConstraintWithForAllSourceCode "Eq a")
+    (incompleteConstraintWithForAllSourceCode "(Eq a, Eq b)")
   , check
+    "preexisting constraint, with extra spaces in context"
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCodeWithExtraCharsInContext "( Eq a )")
     (incompleteConstraintSourceCodeWithExtraCharsInContext "(Eq a, Eq b)")
   , check
+    "preexisting constraint, with newlines in type signature"
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a)")
     (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a, Eq b)")

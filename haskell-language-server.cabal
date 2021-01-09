@@ -77,91 +77,97 @@ library
 
   default-language: Haskell2010
 
+-- Plugin flags are designed for 'cabal install haskell-language-server':
+-- - Packaged plugins should be manual:False
+-- - Non packaged plugins and bulk flags should be manual:True
+-- - Bulk flags should be default:False
+-- - Individual flags should be default:True
+
 flag all-plugins
   description: Enable all non formatter plugins
-  default:     True
+  default:     False
   manual:      True
 
 flag all-formatters
   description: Enable all fomatters
-  default:     True
+  default:     False
   manual:      True
 
 flag class
   description: Enable class plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag haddockComments
   description: Enable haddockComments plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag eval
   description: Enable eval plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag importLens
   description: Enable importLens plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag retrie
   description: Enable retrie plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag tactic
   description: Enable tactic plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag hlint
   description: Enable hlint plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag moduleName
   description: Enable moduleName plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag pragmas
   description: Enable pragmas plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag splice
   description: Enable splice plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 -- formatters
 
 flag floskell
   description: Enable floskell plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag fourmolu
   description: Enable fourmolu plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag ormolu
   description: Enable ormolu plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag stylishHaskell
   description: Enable stylishHaskell plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag brittany
   description: Enable brittany plugin
-  default:     False
+  default:     True
   manual:      True
 
 common example-plugins

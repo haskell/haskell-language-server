@@ -58,7 +58,7 @@ module Development.IDE.GHC.Compat(
     applyPluginsParsedResultAction,
     module Compat.HieTypes,
     module Compat.HieUtils,
-
+    dropForAll
     ) where
 
 #if MIN_GHC_API_VERSION(8,10,0)
@@ -283,3 +283,12 @@ pattern ExposePackage s a mr <- DynFlags.ExposePackage s a _ mr
 #else
 pattern ExposePackage s a mr = DynFlags.ExposePackage s a mr
 #endif
+
+-- | Take AST representation of type signature and drop `forall` part from it (if any), returning just type's body
+dropForAll :: LHsType pass -> LHsType pass
+#if MIN_GHC_API_VERSION(8,10,0)
+dropForAll = snd . GHC.splitLHsForAllTyInvis
+#else
+dropForAll = snd . GHC.splitLHsForAllTy
+#endif
+
