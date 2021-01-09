@@ -1,7 +1,7 @@
 cabal-version: 2.2
 name:          hls-exactprint-utils
 version:       0.5.0.1
-synopsis:      Common residence package of ExactPrint related tree-transformation utilities for HLS plugins (ported from tactics plugin).
+synopsis:      Common utilities to interaction between ghc-exactprint and HLS plugins.
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 homepage:      https://github.com/haskell/haskell-language-server/hls-exactprint-utils
