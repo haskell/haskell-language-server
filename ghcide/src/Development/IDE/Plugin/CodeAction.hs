@@ -808,7 +808,7 @@ suggestFunctionConstraint ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecl
               (L contextSrcSpan _ , _) ->
                 if isGoodSrcSpan contextSrcSpan
                   then contextSrcSpan -- The type signature has explicit context
-                  else -- No explicit context, return SrcSpanqq at the start of type body (the part of type which follows the optional `forall`)
+                  else -- No explicit context, return SrcSpan at the start of type (after a potential `forall`)
                       let start = srcSpanStart $ getLoc typeBody in mkSrcSpan start start
 
       isSameName :: IdP GhcPs -> String -> Bool
