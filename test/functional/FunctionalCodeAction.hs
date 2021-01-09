@@ -425,6 +425,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected = [ "{-# LANGUAGE TypeSynonymInstances #-}"
+                        , "module NeedsPragmas where"
                         , ""
                         , "import GHC.Generics"
                         , ""
@@ -441,6 +442,30 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                         , "data FFF a = FFF Int String a"
                         , "           deriving (Generic,Functor,Traversable)"
                         ]
+
+            liftIO $ (T.lines contents) @?= expected
+
+    , testCase "Adds TypeApplications pragma" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "TypeApplications.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"TypeApplications\"" `elem` map (^. L.title) cas @? "Contains TypeApplications code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "{-# LANGUAGE TypeApplications #-}"
+                    , "{-# LANGUAGE ScopedTypeVariables #-}"
+                    , "module TypeApplications where"
+                    , ""
+                    , "foo :: forall a. a -> a"
+                    , "foo = id @a"
+                    ]
 
             liftIO $ (T.lines contents) @?= expected
     ]
