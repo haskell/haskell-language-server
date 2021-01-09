@@ -18,7 +18,7 @@ library
   hs-source-dirs:   src
   ghc-options:      -Wall -Wno-name-shadowing -Wredundant-constraints
   build-depends:
-    , base
+    , base       >=4.12 && <5
     , containers
     , ghc
     , ghc-exactprint
