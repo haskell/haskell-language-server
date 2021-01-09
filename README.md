@@ -165,7 +165,6 @@ cd haskell-language-server
 
 #### Building
 
-
 Note, on first invocation of the build script with stack, a GHC is being installed for execution.
 The GHC used for the `install.hs` can be adjusted in `./install/stack.yaml` by using a different resolver.
 
