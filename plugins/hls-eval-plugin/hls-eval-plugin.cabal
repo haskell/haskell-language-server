@@ -25,7 +25,7 @@ library
 
   build-depends:
     , aeson
-    , base
+    , base       >=4.12 && <5
     , containers
     , deepseq
     , Diff
