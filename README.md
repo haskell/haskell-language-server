@@ -249,9 +249,9 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 
 ### Installation from Hackage
 
-Direct installation from Hackage is supported via `cabal install haskell-language-server`.
-This builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder.
-This binary will only work against the same GHC version that was used to build it.
+Direct installation from Hackage, while possible via `cabal install haskell-language-server`, is not recommended for most people.
+Said command builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder,
+but the binary will only work with projects that use the same GHC version that built it.
 
 ## Configuring `haskell-language-server`
 
