@@ -79,12 +79,12 @@ library
 
 flag all-plugins
   description: Enable all non formatter plugins
-  default:     True
+  default:     False
   manual:      True
 
 flag all-formatters
   description: Enable all fomatters
-  default:     True
+  default:     False
   manual:      True
 
 flag class
