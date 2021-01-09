@@ -27,6 +27,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
       - [Building](#building)
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
+    - [Installation from Hackage](#installation-from-hackage)
   - [Configuring haskell-language-server](#configuring-haskell-language-server)
   - [Configuring your project build](#configuring-your-project-build)
   - [Configuring your editor](#configuring-your-editor)
@@ -164,6 +165,7 @@ cd haskell-language-server
 
 #### Building
 
+
 Note, on first invocation of the build script with stack, a GHC is being installed for execution.
 The GHC used for the `install.hs` can be adjusted in `./install/stack.yaml` by using a different resolver.
 
@@ -244,6 +246,12 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 ```bash
 ./cabal-hls-install hls-8.6.5
 ```
+
+### Installation from Hackage
+
+Direct installation from Hackage is supported via `cabal install haskell-language-server`.
+This builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder.
+This binary will only work against the same GHC version that was used to build it.
 
 ## Configuring `haskell-language-server`
 
