@@ -96,12 +96,12 @@ jobs:
         run: cabal build || cabal build || cabal build
 
       - name: Test ghcide
-        if: ${{ !matrix.ghc-lib && matrix.test }}
+        if: ${{ matrix.test }}
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ghcide --test-options="-j1 --rerun-update" || cabal test ghcide --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="-j1 --rerun"
 
       - name: Test func-test suite
-        if: ${{ !matrix.ghc-lib && matrix.test }}
+        if: ${{ matrix.test }}
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
@@ -111,7 +111,7 @@ jobs:
         run: cabal test func-test --test-options="-j1 --rerun --rerun-update" || cabal test func-test --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test func-test --test-options="-j1 --rerun"
 
       - name: Test wrapper-test suite
-        if: ${{ !matrix.ghc-lib && matrix.test }}
+        if: ${{ matrix.test }}
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
