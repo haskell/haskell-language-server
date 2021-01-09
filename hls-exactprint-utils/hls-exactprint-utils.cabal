@@ -6,9 +6,11 @@ description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 homepage:      https://github.com/haskell/haskell-language-server/hls-exactprint-utils
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
-author:        Sandy Maguire, Reed Mullanix
-maintainer:    sandy@sandymaguire.me
-copyright:     Sandy Maguire, Reed Mullanix
+license:       Apache-2.0
+license-file:  LICENSE
+author:        Sandy Maguire, Hiromi ISHII
+maintainer:    Sandy Maguire <sandy@sandymaguire.me>, HiromiISHII <konn.jinro@gmail.com>
+copyright:     Sandy Maguire, Hiromi ISHII
 category:      Web
 build-type:    Simple
 
