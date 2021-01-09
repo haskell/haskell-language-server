@@ -1,3 +1,4 @@
+module NeedsPragmas where
 
 import GHC.Generics
 
