@@ -3,7 +3,7 @@ name:          hls-haddock-comments-plugin
 version:       0.1.0.0
 synopsis:      Haddock comments plugin for Haskell Language Server
 description:
-  Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
+  Please see [Haskell Language Server](https://github.com/haskell/haskell-language-server)
 
 license:       Apache-2.0
 license-file:  LICENSE
