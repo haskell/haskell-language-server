@@ -6,7 +6,7 @@ let
             mkDerivation = args: super.mkDerivation (args //
                 {
                     # skip running tests for Hackage packages
-                    doCheck = args.pname != "ghcide" && args.pname != "haskell-language-server";
+                    doCheck = args.pname == "ghcide" || args.pname == "haskell-language-server";
                     # relax upper bounds
                     jailbreak = args.pname != "jailbreak-cabal";
                 });
@@ -38,6 +38,7 @@ let
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)
                 ghc8101 = extended (pkgs.haskell.packages.ghc8101.override sharedOverrides);
                 ghc8102 = extended (pkgs.haskell.packages.ghc8102.override sharedOverrides);
+                ghc8103 = extended (pkgs.haskell.packages.ghc8103.override sharedOverrides);
             };
         };
         };
