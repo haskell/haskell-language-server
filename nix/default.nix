@@ -2,7 +2,10 @@
 let
   overlay = selfPkgs: pkgs:
     let sharedOverrides = {
-        overrides = _self: super: {
+        overrides = self: super: {
+            eventlog2html = self.callCabal2nix "eventlog2html" sources.eventlog2html {};
+            ghc-events = self.callCabal2nix "ghc-events" sources.ghc-events {};
+            hvega = self.callHackage "hvega" "0.6.0.0" {};
             mkDerivation = args: super.mkDerivation (args //
                 {
                     # skip running tests for Hackage packages
@@ -13,7 +16,7 @@ let
             };
             };
 
-        ghc8102-infotable-profiling = pkgs.callPackage "${sources.ghcs-nix}/ghc.nix" {
+        ghc8102-infotable-profiling-compiler = pkgs.callPackage "${sources.ghcs-nix}/ghc.nix" {
             version = "8.10.2.20210110";
             src = pkgs.fetchgit {
               url = "https://gitlab.haskell.org/mpickering/ghc.git";
@@ -26,6 +29,12 @@ let
             werror = false;
             sphinx = null;
           };
+        ghc8102-infotable-profiling-packages = callGhcPackage "${<nixpkgs>}/pkgs/development/haskell-modules" {
+          buildHaskellPackages = selfPkgs.buildPackages.ourHaskell.packages.ghc8102-infotable-profiling;
+          ghc = selfPkgs.buildPackages.ourHaskell.compiler.ghc8102-infotable-profiling;
+          compilerConfig = callGhcPackage "${<nixpkgs>}/pkgs/development/haskell-modules/configuration-ghc-8.10.x.nix" { };
+          };
+
 
         gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
         extended = haskellPackages:
@@ -54,19 +63,14 @@ let
         inherit gitignoreSource;
         ourHaskell = pkgs.haskell // {
             compiler = pkgs.haskell.compiler // {
-              ghc8102-infotable-profiling = ghc8102-infotable-profiling;
+              ghc8102-infotable-profiling = ghc8102-infotable-profiling-compiler;
                         };
             packages = pkgs.haskell.packages // {
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)
                 ghc8101 = extended (pkgs.haskell.packages.ghc8101.override sharedOverrides);
                 ghc8102 = extended (pkgs.haskell.packages.ghc8102.override sharedOverrides);
+                ghc8102-infotable-profiling = extended (ghc8102-infotable-profiling-packages.override sharedOverrides);
                 ghc8103 = extended (pkgs.haskell.packages.ghc8103.override sharedOverrides);
-                ghc8102-infotable-profiling = callGhcPackage "${<nixpkgs>}/pkgs/development/haskell-modules" {
-                        buildHaskellPackages = selfPkgs.buildPackages.ourHaskell.packages.ghc8102-infotable-profiling;
-                        ghc = selfPkgs.buildPackages.ourHaskell.compiler.ghc8102-infotable-profiling;
-                        compilerConfig = callGhcPackage "${<nixpkgs>}/pkgs/development/haskell-modules/configuration-ghc-8.10.x.nix" { };
-                                        };
-
             };
         };
         };

@@ -1,4 +1,28 @@
 {
+    "eventlog2html": {
+        "branch": "wip/profile-info-table",
+        "description": "Visualise eventlog events as a static webpage",
+        "homepage": "",
+        "owner": "mpickering",
+        "repo": "eventlog2html",
+        "rev": "30a78acde5414097c202dbb34bd39893e019957a",
+        "sha256": "16hkccs1b1kx9xabma5vizpv7igh8x8f9jrk2h2ran0vivaxylxm",
+        "type": "tarball",
+        "url": "https://github.com/mpickering/eventlog2html/archive/30a78acde5414097c202dbb34bd39893e019957a.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "ghc-events": {
+        "branch": "wip/info-table",
+        "description": "Library and tool for parsing .eventlog files from GHC",
+        "homepage": "http://www.haskell.org/haskellwiki/ThreadScope",
+        "owner": "mpickering",
+        "repo": "ghc-events",
+        "rev": "0d8a89d7b9f8f4600eba4f6e6c089d97a25d2295",
+        "sha256": "0b76h7bmkhx6iwpa8jcb3q3lfs4lrv3xkwp24i13bq9hw6lgb48j",
+        "type": "tarball",
+        "url": "https://github.com/mpickering/ghc-events/archive/0d8a89d7b9f8f4600eba4f6e6c089d97a25d2295.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "ghcs-nix": {
         "branch": "master",
         "repo": "https://gitlab.haskell.org/bgamari/ghcs-nix.git",

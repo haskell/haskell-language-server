@@ -54,6 +54,7 @@ haskellPackagesForProject.shellFor {
     tracy
 
     haskellPackages.cabal-install
+    ourHaskell.packages.${compiler}.eventlog2html
     haskellPackages.hlint
     haskellPackages.ormolu
     haskellPackages.stylish-haskell
