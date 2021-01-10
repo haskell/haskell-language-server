@@ -5,6 +5,7 @@ module Development.IDE.Types.Shake
   ( Q (..),
     A (..),
     Value (..),
+    ValueWithDiagnostics (..),
     Values,
     Key (..),
     BadDependency (..),
@@ -20,7 +21,9 @@ import qualified Data.ByteString.Char8 as BS
 import Data.Dynamic
 import Data.Hashable
 import Data.HashMap.Strict
+import Data.Vector (Vector)
 import Data.Typeable
+import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.Shake (RuleResult, ShakeException (shakeExceptionInner))
 import Development.Shake.Classes
@@ -42,8 +45,11 @@ currentValue (Succeeded _ v) = Just v
 currentValue (Stale _ _) = Nothing
 currentValue Failed = Nothing
 
--- | The state of the all values.
-type Values = HashMap (NormalizedFilePath, Key) (Value Dynamic)
+data ValueWithDiagnostics
+  = ValueWithDiagnostics !(Value Dynamic) !(Vector FileDiagnostic)
+
+-- | The state of the all values and diagnostics
+type Values = HashMap (NormalizedFilePath, Key) ValueWithDiagnostics
 
 -- | Key type
 data Key = forall k . (Typeable k, Hashable k, Eq k, Show k) => Key k

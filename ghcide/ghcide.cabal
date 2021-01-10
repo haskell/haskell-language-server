@@ -78,6 +78,7 @@ library
         transformers,
         unordered-containers >= 0.2.10.0,
         utf8-string,
+        vector,
         hslogger,
         opentelemetry >=0.6.1,
         heapsize ==0.3.*
