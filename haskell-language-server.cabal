@@ -294,9 +294,8 @@ executable haskell-language-server
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
-    -- disable parallel GC
     -- increase nursery size
-    "-with-rtsopts=-I0 -qg -A128M"
+    "-with-rtsopts=-I0 -A128M"
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -341,9 +340,8 @@ executable haskell-language-server-wrapper
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
-    -- disable parallel GC
     -- increase nursery size
-    "-with-rtsopts=-I0 -qg -A128M"
+    "-with-rtsopts=-I0 -A128M"
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -468,7 +466,3 @@ test-suite wrapper-test
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
   ghc-options:        -Wall
-
-
-
-
