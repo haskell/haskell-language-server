@@ -18,11 +18,11 @@ examples:
         - Distribution/Simple.hs
         - Distribution/Types/Module.hs
   # Small-sized project with TH
-  - name: lsp-types
-    version: 1.0.0.1
-    modules:
-        - src/Language/LSP/VFS.hs
-        - src/Language/LSP/Types/Lens.hs
+#   - name: lsp-types
+#     version: 1.0.0.1
+#     modules:
+#         - src/Language/LSP/VFS.hs
+#         - src/Language/LSP/Types/Lens.hs
 
 # The set of experiments to execute
 experiments:
@@ -36,9 +36,18 @@ experiments:
     - "code actions after edit"
     - "documentSymbols after edit"
 
-ghcOptions: []
 
-ghcideOptions: []
+ghcOptions:
+  - -eventlog
+  - -finfo-table-map
+  - -fdistinct-constructor-tables
+
+ghcideOptions:
+  - +RTS
+  - -l
+  - -i0.5
+  - -hi
+  - -RTS
 
 # An ordered list of versions to analyze
 versions:
@@ -62,5 +71,5 @@ versions:
 # - v0.4.0
 # - v0.5.0
 # - v0.6.0
-- upstream: origin/master
+# - upstream: origin/master
 - HEAD
