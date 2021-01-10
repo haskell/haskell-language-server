@@ -20,13 +20,12 @@ import           Data.Dynamic                   (Dynamic)
 import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
-import           Data.List                      (nub)
 import           Data.String                    (IsString (fromString))
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
 import           Development.IDE.Types.Logger   (logInfo, Logger, logDebug)
-import           Development.IDE.Types.Shake    (Key (..), Value, Values)
+import           Development.IDE.Types.Shake    (ValueWithDiagnostics(..), Key (..), Value, Values)
 import           Development.Shake              (Action, actionBracket, liftIO)
 import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Foreign.Storable               (Storable (sizeOf))
@@ -92,7 +91,7 @@ startTelemetry allTheTime logger stateRef = do
 
 performMeasurement ::
   Logger ->
-  Var (HMap.HashMap (NormalizedFilePath, Key) (Value Dynamic)) ->
+  Var Values ->
   (Maybe Key -> IO OurValueObserver) ->
   Instrument 'Asynchronous a m' ->
   IO ()
@@ -179,7 +178,7 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
             let !groupedValues =
                     [ [ (k, vv)
                       | k <- groupKeys
-                      , let vv = [ v | ((_,k'), v) <- HMap.toList values , k == k']
+                      , let vv = [ v | ((_,k'), ValueWithDiagnostics v _) <- HMap.toList values , k == k']
                       ]
                     | groupKeys <- groups
                     ]

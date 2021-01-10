@@ -77,6 +77,8 @@ import           Data.Map.Strict (Map)
 import           Data.List.Extra (partition, takeEnd)
 import qualified Data.Set as Set
 import qualified Data.Text as T
+import Data.Vector (Vector)
+import qualified Data.Vector as Vector
 import Data.Tuple.Extra
 import Data.Unique
 import Development.IDE.Core.Debouncer
@@ -313,10 +315,11 @@ setValues :: IdeRule k v
           -> k
           -> NormalizedFilePath
           -> Value v
+          -> Vector FileDiagnostic
           -> IO ()
-setValues state key file val = modifyVar_ state $ \vals -> do
+setValues state key file val diags = modifyVar_ state $ \vals -> do
     -- Force to make sure the old HashMap is not retained
-    evaluate $ HMap.insert (file, Key key) (fmap toDyn val) vals
+    evaluate $ HMap.insert (file, Key key) (ValueWithDiagnostics (fmap toDyn val) diags) vals
 
 -- | Delete the value stored for a given ide build key
 deleteValue
@@ -329,17 +332,23 @@ deleteValue IdeState{shakeExtras = ShakeExtras{state}} key file = modifyVar_ sta
     evaluate $ HMap.delete (file, Key key) vals
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
-getValues :: forall k v. IdeRule k v => Var Values -> k -> NormalizedFilePath -> IO (Maybe (Value v))
+getValues ::
+  forall k v.
+  IdeRule k v =>
+  Var Values ->
+  k ->
+  NormalizedFilePath ->
+  IO (Maybe (Value v, Vector FileDiagnostic))
 getValues state key file = do
     vs <- readVar state
     case HMap.lookup (file, Key key) vs of
         Nothing -> pure Nothing
-        Just v -> do
+        Just (ValueWithDiagnostics v diagsV) -> do
             let r = fmap (fromJust . fromDynamic @v) v
             -- Force to make sure we do not retain a reference to the HashMap
             -- and we blow up immediately if the fromJust should fail
             -- (which would be an internal error).
-            evaluate (r `seqValue` Just r)
+            evaluate (r `seqValue` Just (r, diagsV))
 
 -- | Get all the files in the project
 knownTargets :: Action (Hashed KnownTargets)
@@ -663,7 +672,7 @@ garbageCollect keep = do
            modifyVar_ publishedDiagnostics $ \diags -> return $! HMap.filterWithKey (\uri _ -> keep (fromUri uri)) diags
            let versionsForFile =
                    HMap.fromListWith Set.union $
-                   mapMaybe (\((file, _key), v) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
+                   mapMaybe (\((file, _key), ValueWithDiagnostics v _) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
                    HMap.toList newState
            modifyVar_ positionMapping $ \mappings -> return $! filterVersionMap versionsForFile mappings
 
@@ -743,11 +752,11 @@ useWithStaleFast' key file = do
       r <- getValues state key file
       case r of
         Nothing -> return $ FastResult Nothing (pure a)
-        Just v -> do
+        Just (v, _) -> do
           res <- lastValueIO s file v
           pure $ FastResult res (pure a)
     -- Otherwise, use the computed value even if it's out of date.
-    Just v -> do
+    Just (v, _) -> do
       res <- lastValueIO s file v
       pure $ FastResult res wait
 
@@ -766,45 +775,6 @@ uses_ key files = do
     case sequence res of
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
         Just v -> return v
-
-
--- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
---   which short-circuits the rest of the action
-data BadDependency = BadDependency String deriving Show
-instance Exception BadDependency
-
-isBadDependency :: SomeException -> Bool
-isBadDependency x
-    | Just (x :: ShakeException) <- fromException x = isBadDependency $ shakeExceptionInner x
-    | Just (_ :: BadDependency) <- fromException x = True
-    | otherwise = False
-
-newtype Q k = Q (k, NormalizedFilePath)
-    deriving newtype (Eq, Hashable, NFData)
-
-instance Binary k => Binary (Q k) where
-    put (Q (k, fp)) = put (k, fp)
-    get = do
-        (k, fp) <- get
-        -- The `get` implementation of NormalizedFilePath
-        -- does not handle empty file paths so we
-        -- need to handle this ourselves here.
-        pure (Q (k, toNormalizedFilePath' fp))
-
-instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
-
--- | Invariant: the 'v' must be in normal form (fully evaluated).
---   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
-newtype A v = A (Value v)
-    deriving Show
-
-instance NFData (A v) where rnf (A v) = v `seq` ()
-
--- In the Shake database we only store one type of key/result pairs,
--- namely Q (question) / A (answer).
-type instance RuleResult (Q k) = A (RuleResult k)
-
 
 -- | Plural version of 'use'
 uses :: IdeRule k v
@@ -833,7 +803,9 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                 case v of
                     -- No changes in the dependencies and we have
                     -- an existing result.
-                    Just v -> return $ Just $ RunResult ChangedNothing old $ A v
+                    Just (v, diags) -> do
+                        updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
+                        return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ -> return Nothing
         case val of
@@ -842,18 +814,21 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                 (bs, (diags, res)) <- actionCatch
                     (do v <- op key file; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
-                modTime <- liftIO $ (currentValue =<<) <$> getValues state GetModificationTime file
-                (bs, res) <- case res of
+                modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
+                (bs, diags, diagsV, res) <- case res of
                     Nothing -> do
                         staleV <- liftIO $ getValues state key file
                         pure $ case staleV of
-                            Nothing -> (toShakeValue ShakeResult bs, Failed)
+                            Nothing -> (toShakeValue ShakeResult bs, diags, Vector.fromList diags, Failed)
                             Just v -> case v of
-                                Succeeded ver v -> (toShakeValue ShakeStale bs, Stale ver v)
-                                Stale ver v -> (toShakeValue ShakeStale bs, Stale ver v)
-                                Failed -> (toShakeValue ShakeResult bs, Failed)
-                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
-                liftIO $ setValues state key file res
+                                (Succeeded ver v, diags) ->
+                                    (toShakeValue ShakeStale bs, Vector.toList diags, diags, Stale ver v)
+                                (Stale ver v, diags) ->
+                                    (toShakeValue ShakeStale bs, Vector.toList diags, diags, Stale ver v)
+                                (Failed, diags) ->
+                                    (toShakeValue ShakeResult bs, Vector.toList diags, diags, Failed)
+                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, diags, Vector.fromList diags, Succeeded (vfsVersion =<< modTime) v)
+                liftIO $ setValues state key file res diagsV
                 updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> a == b
@@ -952,36 +927,6 @@ needOnDisks k files = do
     successfulls <- apply $ map (QDisk k) files
     liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
 
-toShakeValue :: (BS.ByteString -> ShakeValue) -> Maybe BS.ByteString -> ShakeValue
-toShakeValue = maybe ShakeNoCutoff
-
-data ShakeValue
-    = ShakeNoCutoff
-    -- ^ This is what we use when we get Nothing from
-    -- a rule.
-    | ShakeResult !BS.ByteString
-    -- ^ This is used both for `Failed`
-    -- as well as `Succeeded`.
-    | ShakeStale !BS.ByteString
-    deriving (Generic, Show)
-
-instance NFData ShakeValue
-
-encodeShakeValue :: ShakeValue -> BS.ByteString
-encodeShakeValue = \case
-    ShakeNoCutoff -> BS.empty
-    ShakeResult r -> BS.cons 'r' r
-    ShakeStale r -> BS.cons 's' r
-
-decodeShakeValue :: BS.ByteString -> ShakeValue
-decodeShakeValue bs = case BS.uncons bs of
-    Nothing -> ShakeNoCutoff
-    Just (x, xs)
-      | x == 'r' -> ShakeResult xs
-      | x == 's' -> ShakeStale xs
-      | otherwise -> error $ "Failed to parse shake value " <> show bs
-
-
 updateFileDiagnostics :: MonadIO m
   => NormalizedFilePath
   -> Key
@@ -989,7 +934,7 @@ updateFileDiagnostics :: MonadIO m
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
 updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, eventer} current = liftIO $ do
-    modTime <- (currentValue =<<) <$> getValues state GetModificationTime fp
+    modTime <- (currentValue . fst =<<) <$> getValues state GetModificationTime fp
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
         ver = vfsVersion =<< modTime
@@ -1051,18 +996,9 @@ setStageDiagnostics
     -> [LSP.Diagnostic]
     -> DiagnosticStore
     -> DiagnosticStore
-setStageDiagnostics uri ver stage diags ds = newDiagsStore where
-    -- When 'ver' is a new version, updateDiagnostics throws away diagnostics from all stages
-    -- This interacts bady with early cutoff, so we make sure to preserve diagnostics
-    -- from other stages when calling updateDiagnostics
-    -- But this means that updateDiagnostics cannot be called concurrently
-    -- for different stages anymore
-    updatedDiags = Map.insert (Just stage) (SL.toSortedList diags) oldDiags
-    oldDiags = case HMap.lookup uri ds of
-            Just (StoreItem _ byStage) -> byStage
-            _ -> Map.empty
-    newDiagsStore = updateDiagnostics ds uri ver updatedDiags
-
+setStageDiagnostics uri ver stage diags ds = updateDiagnostics ds uri ver updatedDiags
+  where
+    updatedDiags = Map.singleton (Just stage) (SL.toSortedList diags)
 
 getAllDiagnostics ::
     DiagnosticStore ->
