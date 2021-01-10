@@ -32,8 +32,8 @@ data Config = Config
   deriving (Eq, Show)
 
 data Example
-    = GetPackage {exampleName, exampleModule :: String, exampleVersion :: Version}
-    | UsePackage {examplePath :: FilePath, exampleModule :: String}
+    = GetPackage {exampleName :: !String, exampleModules :: [FilePath], exampleVersion :: Version}
+    | UsePackage {examplePath :: FilePath, exampleModules :: [FilePath]}
   deriving (Eq, Generic, Show)
   deriving anyclass (Binary, Hashable, NFData)
 
@@ -48,7 +48,8 @@ getExampleName GetPackage{exampleName, exampleVersion} =
 
 instance FromJSON Example where
     parseJSON = withObject "example" $ \x -> do
-        exampleModule <- x .: "module"
+        exampleModules <- x .: "modules"
+
         path <- x .:? "path"
         case path of
             Just examplePath -> return UsePackage{..}
@@ -61,9 +62,9 @@ exampleToOptions :: Example -> [String]
 exampleToOptions GetPackage{..} =
     ["--example-package-name", exampleName
     ,"--example-package-version", showVersion exampleVersion
-    ,"--example-module", exampleModule
-    ]
+    ] ++
+    ["--example-module=" <> m | m <- exampleModules]
 exampleToOptions UsePackage{..} =
     ["--example-path", examplePath
-    ,"--example-module", exampleModule
-    ]
+    ] ++
+    ["--example-module=" <> m | m <- exampleModules]
