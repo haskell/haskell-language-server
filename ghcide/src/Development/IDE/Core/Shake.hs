@@ -767,45 +767,6 @@ uses_ key files = do
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
         Just v -> return v
 
-
--- | When we depend on something that reported an error, and we fail as a direct result, throw BadDependency
---   which short-circuits the rest of the action
-data BadDependency = BadDependency String deriving Show
-instance Exception BadDependency
-
-isBadDependency :: SomeException -> Bool
-isBadDependency x
-    | Just (x :: ShakeException) <- fromException x = isBadDependency $ shakeExceptionInner x
-    | Just (_ :: BadDependency) <- fromException x = True
-    | otherwise = False
-
-newtype Q k = Q (k, NormalizedFilePath)
-    deriving newtype (Eq, Hashable, NFData)
-
-instance Binary k => Binary (Q k) where
-    put (Q (k, fp)) = put (k, fp)
-    get = do
-        (k, fp) <- get
-        -- The `get` implementation of NormalizedFilePath
-        -- does not handle empty file paths so we
-        -- need to handle this ourselves here.
-        pure (Q (k, toNormalizedFilePath' fp))
-
-instance Show k => Show (Q k) where
-    show (Q (k, file)) = show k ++ "; " ++ fromNormalizedFilePath file
-
--- | Invariant: the 'v' must be in normal form (fully evaluated).
---   Otherwise we keep repeatedly 'rnf'ing values taken from the Shake database
-newtype A v = A (Value v)
-    deriving Show
-
-instance NFData (A v) where rnf (A v) = v `seq` ()
-
--- In the Shake database we only store one type of key/result pairs,
--- namely Q (question) / A (answer).
-type instance RuleResult (Q k) = A (RuleResult k)
-
-
 -- | Plural version of 'use'
 uses :: IdeRule k v
     => k -> [NormalizedFilePath] -> Action [Maybe v]
@@ -951,36 +912,6 @@ needOnDisks :: (Shake.ShakeValue k, RuleResult k ~ ()) => k -> [NormalizedFilePa
 needOnDisks k files = do
     successfulls <- apply $ map (QDisk k) files
     liftIO $ unless (and successfulls) $ throwIO $ BadDependency (show k)
-
-toShakeValue :: (BS.ByteString -> ShakeValue) -> Maybe BS.ByteString -> ShakeValue
-toShakeValue = maybe ShakeNoCutoff
-
-data ShakeValue
-    = ShakeNoCutoff
-    -- ^ This is what we use when we get Nothing from
-    -- a rule.
-    | ShakeResult !BS.ByteString
-    -- ^ This is used both for `Failed`
-    -- as well as `Succeeded`.
-    | ShakeStale !BS.ByteString
-    deriving (Generic, Show)
-
-instance NFData ShakeValue
-
-encodeShakeValue :: ShakeValue -> BS.ByteString
-encodeShakeValue = \case
-    ShakeNoCutoff -> BS.empty
-    ShakeResult r -> BS.cons 'r' r
-    ShakeStale r -> BS.cons 's' r
-
-decodeShakeValue :: BS.ByteString -> ShakeValue
-decodeShakeValue bs = case BS.uncons bs of
-    Nothing -> ShakeNoCutoff
-    Just (x, xs)
-      | x == 'r' -> ShakeResult xs
-      | x == 's' -> ShakeStale xs
-      | otherwise -> error $ "Failed to parse shake value " <> show bs
-
 
 updateFileDiagnostics :: MonadIO m
   => NormalizedFilePath
