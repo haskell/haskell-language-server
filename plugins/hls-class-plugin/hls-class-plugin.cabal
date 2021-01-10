@@ -1,11 +1,16 @@
 cabal-version:      2.2
 name:               hls-class-plugin
-version:            0.1.0.0
-synopsis:           Explicit imports plugin for Haskell Language Server
+version:            0.1.0.1
+synopsis:           Class/instance management plugin for Haskell Language Server
+description:
+    Class/instance management plugin for Haskell Language Server.
+    For usage, please see README of HLS on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Junyoung Clare Jang
 maintainer:         jjc9310@gmail.com
+homepage:           https://github.com/haskell/haskell-language-server#readme
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
 category:           Development
 build-type:         Simple
 
