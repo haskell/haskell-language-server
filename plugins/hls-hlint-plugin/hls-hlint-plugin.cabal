@@ -2,11 +2,11 @@ cabal-version: 2.2
 name:          hls-hlint-plugin
 version:       0.1.0.0
 synopsis:      Hlint integration plugin with Haskell Language Server
-description:   Please see README.md
+description:   Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
 license:       Apache-2.0
 license-file:  LICENSE
-author:        Many,TBD when we release
-maintainer:    alan.zimm@gmail.com (for now)
+author:        https://github.com/haskell/haskell-language-server/contributors
+maintainer:    https://github.com/haskell/haskell-language-server/contributors
 copyright:     Alan Zimmerman
 category:      Web
 build-type:    Simple
@@ -28,7 +28,7 @@ library
   build-depends:
     , aeson
     , apply-refact
-    , base       >=4.12 && <5
+    , base                   >=4.12 && <5
     , binary
     , bytestring
     , containers
