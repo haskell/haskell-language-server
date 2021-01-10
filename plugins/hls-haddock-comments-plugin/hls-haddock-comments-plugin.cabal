@@ -1,24 +1,25 @@
-cabal-version:      2.2
-name:               hls-haddock-comments-plugin
-version:            0.1.0.0
-synopsis:
-  Haddock comments generator plugin for Haskell Language Server
+cabal-version: 2.2
+name:          hls-haddock-comments-plugin
+version:       0.1.0.0
+synopsis:      Haddock comments plugin for Haskell Language Server
+description:
+  Please see [Haskell Language Server](https://github.com/haskell/haskell-language-server)
 
-license:            Apache-2.0
-license-file:       LICENSE
-author:             Potato Hatsue
-maintainer:         berberman@yandex.com
-category:           Development
-build-type:         Simple
-extra-source-files:
-  LICENSE
+license:       Apache-2.0
+license-file:  LICENSE
+author:        Potato Hatsue
+maintainer:    berberman@yandex.com
+category:      Development
+build-type:    Simple
+homepage:      https://github.com/haskell/haskell-language-server
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
 
 library
   exposed-modules:  Ide.Plugin.HaddockComments
   hs-source-dirs:   src
   ghc-options:      -Wall -Wno-name-shadowing -Wredundant-constraints
   build-depends:
-    , base       >=4.12 && <5
+    , base                  >=4.12 && <5
     , containers
     , ghc
     , ghc-exactprint
