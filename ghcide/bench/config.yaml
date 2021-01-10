@@ -36,6 +36,10 @@ experiments:
     - "code actions after edit"
     - "documentSymbols after edit"
 
+ghcOptions: []
+
+ghcideOptions: []
+
 # An ordered list of versions to analyze
 versions:
 # A version can be defined briefly:

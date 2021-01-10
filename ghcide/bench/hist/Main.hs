@@ -71,7 +71,11 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
       configStatic <- liftIO $ readConfigIO config
       let build = outputFolder configStatic
       buildRules build ghcideBuildRules
-      benchRules build resource (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
+      let setupBench = do
+            samples <- askOracle (GetSamples ())
+            ghcideOptions <- askOracle (GetGhcideOptions ())
+            return (samples, ghcideOptions)
+      benchRules build resource (MkBenchRules setupBench benchGhcide "ghcide")
       csvRules build
       svgRules build
       action $ allTargets build
@@ -88,7 +92,9 @@ data Config buildSystem = Config
     versions :: [GitCommit],
     -- | Output folder ('foo' works, 'foo/bar' does not)
     outputFolder :: String,
-    buildTool :: buildSystem
+    buildTool :: buildSystem,
+    ghcOptions :: [String],
+    ghcideOptions :: [String]
   }
   deriving (Generic, Show)
   deriving anyclass (FromJSON)
@@ -103,6 +109,8 @@ createBuildSystem userRules = do
   _ <- versioned 1 $ addOracle $ \(GetExample name) -> find (\e -> getExampleName e == name) . examples <$> readConfig config
   _ <- addOracle $ \GetBuildSystem {} -> buildTool <$> readConfig config
   _ <- addOracle $ \GetSamples{} -> samples <$> readConfig config
+  _ <- addOracle $ \GetGhcOptions{} -> ghcOptions <$> readConfig config
+  _ <- addOracle $ \GetGhcideOptions{} -> ghcideOptions <$> readConfig config
 
   benchResource <- newResource "ghcide-bench" 1
 
@@ -111,31 +119,40 @@ createBuildSystem userRules = do
 newtype GetSamples = GetSamples () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 type instance RuleResult GetSamples = Natural
 
+newtype GetGhcOptions = GetGhcOptions () deriving newtype (Binary, Eq, Hashable, NFData, Show)
+
+type instance RuleResult GetGhcOptions = [String]
+
+newtype GetGhcideOptions = GetGhcideOptions () deriving newtype (Binary, Eq, Hashable, NFData, Show)
+
+type instance RuleResult GetGhcideOptions = [String]
 --------------------------------------------------------------------------------
 
 buildGhcide :: BuildSystem -> [CmdOption] -> FilePath -> Action ()
 buildGhcide Cabal args out = do
+    extraOpts <- askOracle $ GetGhcOptions()
     command_ args "cabal"
         ["install"
         ,"exe:ghcide"
         ,"--installdir=" ++ out
         ,"--install-method=copy"
         ,"--overwrite-policy=always"
-        ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=" <> unwords ("-rtsopts" : extraOpts)
         ]
 
-buildGhcide Stack args out =
-    command_ args "stack"
+buildGhcide Stack args out = do
+  extraOpts <- askOracle $ GetGhcOptions ()
+  command_ args "stack"
         ["--local-bin-path=" <> out
         ,"build"
         ,"ghcide:ghcide"
         ,"--copy-bins"
-        ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=" <> unwords ("-rtsopts" : extraOpts)
         ]
 
 benchGhcide
-  :: Natural -> BuildSystem -> [CmdOption] -> BenchProject Example -> Action ()
-benchGhcide samples buildSystem args BenchProject{..} = do
+  :: (Natural, [String]) -> BuildSystem -> [CmdOption] -> BenchProject Example -> Action ()
+benchGhcide (samples, ghcideOptions) buildSystem args BenchProject {..} = do
   command_ args "ghcide-bench" $
     [ "--timeout=3000",
       "--no-clean",
@@ -143,6 +160,7 @@ benchGhcide samples buildSystem args BenchProject{..} = do
         "--samples=" <> show samples,
         "--csv="     <> outcsv,
         "--ghcide="  <> exePath,
+        "--ghcide-options=" <> unwords ghcideOptions,
         "--select",
         unescaped (unescapeExperiment experiment)
     ] ++
