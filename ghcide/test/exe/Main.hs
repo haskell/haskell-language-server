@@ -533,9 +533,11 @@ diagnosticTests = testGroup "diagnostics"
   , testCase "typecheck-all-parents-of-interest" $ runWithExtraFiles "recomp" $ \dir -> do
     let bPath = dir </> "B.hs"
         pPath = dir </> "P.hs"
+        aPath = dir </> "A.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
+    aSource <- liftIO $ readFileUtf8 aPath -- x = y :: Int
 
     bdoc <- createDoc bPath "haskell" bSource
     _pdoc <- createDoc pPath "haskell" pSource
@@ -548,7 +550,21 @@ diagnosticTests = testGroup "diagnostics"
     expectDiagnostics
       [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
       ]
-    expectNoMoreDiagnostics 2
+
+    -- Open A and edit to fix the type error
+    adoc <- createDoc aPath "haskell" aSource
+    changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing $
+                    T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
+
+    expectDiagnostics
+      [ ( "P.hs",
+          [ (DsError, (4, 6), "Couldn't match expected type 'Int' with actual type 'Bool'"),
+            (DsWarning, (4, 0), "Top-level binding")
+          ]
+        ),
+        ("A.hs", [])
+      ]
+    expectNoMoreDiagnostics 1
 
   , testSessionWait "deduplicate missing module diagnostics" $  do
       let fooContent = T.unlines [ "module Foo() where" , "import MissingModule" ]
@@ -2031,7 +2047,7 @@ addFunctionConstraintTests = let
     "Add `Eq c` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCode2 "(Eq a, Eq b)")
     (incompleteConstraintSourceCode2 "(Eq a, Eq b, Eq c)")
-  , check 
+  , check
     "preexisting constraints with forall"
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintWithForAllSourceCode "Eq a")
