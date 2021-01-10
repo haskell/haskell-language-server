@@ -1,3 +1,4 @@
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ApplicativeDo     #-}
 {-# LANGUAGE ConstraintKinds     #-}
@@ -67,7 +68,7 @@ import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
                                                             Value (..), (.!=),
                                                             (.:?))
-import           Data.List                                 (find, transpose)
+import           Data.List                                 (isInfixOf, find, transpose)
 import           Data.List.Extra                           (lower)
 import           Data.Maybe                                (fromMaybe)
 import           Data.Text                                 (Text)
@@ -88,6 +89,10 @@ import qualified Text.ParserCombinators.ReadP              as P
 import           Text.Read                                 (Read (..), get,
                                                             readMaybe,
                                                             readP_to_Prec)
+import Text.Printf
+import Control.Monad.Extra
+import qualified System.Directory as IO
+import Data.Char (isDigit)
 
 newtype GetExperiments = GetExperiments () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 newtype GetVersions = GetVersions () deriving newtype (Binary, Eq, Hashable, NFData, Show)
@@ -194,8 +199,12 @@ buildRules build MkBuildRules{..} = do
         writeFile' ghcPath ghcLoc
 
 --------------------------------------------------------------------------------
-data MkBenchRules buildSystem example = MkBenchRules
-  { benchProject :: buildSystem -> [CmdOption] -> BenchProject example -> Action ()
+data MkBenchRules buildSystem example =  forall setup. MkBenchRules
+  {
+  -- | Workaround for Shake not allowing to call 'askOracle' from 'benchProject
+    setupProject :: Action setup
+  -- | An action that invokes the executable to run the benchmark
+  , benchProject :: setup -> buildSystem -> [CmdOption] -> BenchProject example -> Action ()
   -- | Name of the executable to benchmark. Should match the one used to 'MkBuildRules'
   , executableName :: String
   }
@@ -222,6 +231,7 @@ benchRules build benchResource MkBenchRules{..} = do
         example <- fromMaybe (error $ "Unknown example " <> exampleName)
                     <$> askOracle (GetExample exampleName)
         buildSystem <- askOracle  $ GetBuildSystem ()
+        setupRes    <- setupProject
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
         let exePath    = build </> "binaries" </> ver </> executableName
             exeExtraArgs = ["+RTS", "-I0.5", "-S" <> takeFileName outGc, "-RTS"]
@@ -230,7 +240,7 @@ benchRules build benchResource MkBenchRules{..} = do
         need [exePath, ghcPath]
         ghcPath <- readFile' ghcPath
         withResource benchResource 1 $ do
-          benchProject buildSystem
+          benchProject setupRes buildSystem
               [ EchoStdout False,
                 FileStdout outLog,
                 RemEnv "NIX_GHC_LIBDIR",
@@ -239,6 +249,43 @@ benchRules build benchResource MkBenchRules{..} = do
               ]
               BenchProject{..}
           cmd_ Shell $ "mv *.benchmark-gcStats " <> dropFileName outcsv
+
+        -- extend csv output with allocation data
+        csvContents <- liftIO $ lines <$> readFile outcsv
+        let header = head csvContents
+            results = tail csvContents
+            header' = header <> ", maxResidency, allocatedBytes"
+        results' <- forM results $ \row -> do
+            -- assume that the gcStats file can be guessed from the row id
+            -- assume that the row id is the first column
+            let id = takeWhile (/= ',') row
+            let gcStatsPath = dropFileName outcsv </> escapeSpaces id <.> "benchmark-gcStats"
+            (maxResidency, allocations) <- liftIO $
+                ifM (IO.doesFileExist gcStatsPath)
+                    (parseMaxResidencyAndAllocations <$> readFile gcStatsPath)
+                    (pure (0,0))
+            return $ printf "%s, %s, %s" row (showMB maxResidency) (showMB allocations)
+        let csvContents' = header' : results'
+        writeFileLines outcsv csvContents'
+    where
+        escapeSpaces :: String -> String
+        escapeSpaces = map f where
+            f ' ' = '_'
+            f x = x
+
+        showMB :: Int -> String
+        showMB x = show (x `div` 2^(20::Int)) <> "MB"
+
+
+-- Parse the max residency and allocations in RTS -s output
+parseMaxResidencyAndAllocations :: String -> (Int, Int)
+parseMaxResidencyAndAllocations input =
+    (f "maximum residency", f "bytes allocated in the heap")
+  where
+    inps = reverse $ lines input
+    f label = case find (label `isInfixOf`) inps of
+        Just l -> read $ filter isDigit $ head $ words l
+        Nothing -> -1
 
 
 --------------------------------------------------------------------------------
