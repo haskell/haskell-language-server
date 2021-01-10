@@ -11,6 +11,8 @@ author:        Potato Hatsue
 maintainer:    berberman@yandex.com
 category:      Development
 build-type:    Simple
+homepage:      https://github.com/haskell/haskell-language-server
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
 
 library
   exposed-modules:  Ide.Plugin.HaddockComments
