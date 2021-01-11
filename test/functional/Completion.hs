@@ -296,8 +296,7 @@ snippetTests = testGroup "snippets" [
             item ^. insertTextFormat @?= Just Snippet
             item ^. insertText @?= Just "intersperse ${1:a} ${2:[a]}"
 
-    , ignoreTestBecause "ghcide does not support the completionSnippetsOn option" $
-      testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+    , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
 
         let config = object [ "haskell" .= (object ["completionSnippetsOn" .= False])]
