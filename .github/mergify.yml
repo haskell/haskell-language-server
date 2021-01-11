@@ -6,31 +6,42 @@ pull_request_rules:
   name: Automatically merge pull requests
   conditions:
   - status-success=bench (8.10.2, ubuntu-latest)
-  - status-success=bench (8.6.5, ubuntu-latest)
   - status-success=bench (8.8.4, ubuntu-latest)
-  - status-success=nix (default, macOS-latest)
-  - status-success=nix (default, ubuntu-latest)
-  - status-success=test (8.10.3, ubuntu-latest)
-  - status-success=test (8.10.3, windows-latest)
-  - status-success=test (8.10.2, ubuntu-latest)
-  - status-success=test (8.10.1, ubuntu-latest)
-  - status-success=test (8.10.1, windows-latest)
-  - status-success=test (8.8.4, ubuntu-latest)
-  - status-success=test (8.8.3, ubuntu-latest)
-  - status-success=test (8.8.2, ubuntu-latest)
-  - status-success=test (8.6.5, ubuntu-latest)
-  - status-success=test (8.6.5, windows-latest)
-  - status-success=test (8.6.4, ubuntu-latest)
-  - status-success=test (windows-latest, 8.10.2.2)
+  - status-success=bench (8.6.5, ubuntu-latest)
 
-  - 'status-success=ci/circleci: ghc-8.10.1'
+  - status-success=nix (default, ubuntu-latest)
+  - status-success=nix (default, macOS-latest)
+
+  - status-success=test (8.10.3, ubuntu-latest)
+  - status-success=test (8.10.3, macOS-latest)
+  - status-success=test (8.10.2, ubuntu-latest)
+  - status-success=test (8.10.2, macOS-latest)
+  - status-success=test (8.10.1, ubuntu-latest)
+  - status-success=test (8.10.1, macOS-latest)
+  - status-success=test (8.8.4, ubuntu-latest)
+  - status-success=test (8.8.4, macOS-latest)
+  - status-success=test (8.8.3, ubuntu-latest)
+  - status-success=test (8.8.3, macOS-latest)
+  - status-success=test (8.8.2, ubuntu-latest)
+  - status-success=test (8.8.2, macOS-latest)
+  - status-success=test (8.6.5, ubuntu-latest)
+  - status-success=test (8.6.5, macOS-latest)
+  - status-success=test (8.6.4, ubuntu-latest)
+  - status-success=test (8.6.4, macOS-latest)
+  - status-success=test (windows-latest, 8.10.3, true)
+  - status-success=test (windows-latest, 8.6.5, true)
+  - status-success=test (windows-latest, 8.10.2.2)
+  - status-success=test (windows-latest, 8.10.1)
+  - status-success=test (windows-latest, 8.6.4)
+
   - 'status-success=ci/circleci: ghc-8.10.3'
-  - 'status-success=ci/circleci: ghc-8.6.4'
-  - 'status-success=ci/circleci: ghc-8.8.2'
-  - 'status-success=ci/circleci: ghc-8.8.3'
   - 'status-success=ci/circleci: ghc-8.10.2'
-  - 'status-success=ci/circleci: ghc-8.6.5'
+  - 'status-success=ci/circleci: ghc-8.10.1'
   - 'status-success=ci/circleci: ghc-8.8.4'
+  - 'status-success=ci/circleci: ghc-8.8.3'
+  - 'status-success=ci/circleci: ghc-8.8.2'
+  - 'status-success=ci/circleci: ghc-8.6.5'
+  - 'status-success=ci/circleci: ghc-8.6.4'
   - 'status-success=ci/circleci: ghc-default'
 
   - label=merge me
