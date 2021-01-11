@@ -249,6 +249,8 @@ benchRules build benchResource MkBenchRules{..} = do
               ]
               BenchProject{..}
           cmd_ Shell $ "mv *.benchmark-gcStats " <> dropFileName outcsv
+          eventlogs <- getDirectoryFilesIO "." ["*.eventlog"]
+          forM_ eventlogs $ \e -> renameFile e (dropFileName out csv </> exampleName <> e)
 
         -- extend csv output with allocation data
         csvContents <- liftIO $ lines <$> readFile outcsv
