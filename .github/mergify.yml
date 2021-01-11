@@ -14,12 +14,10 @@ pull_request_rules:
   - status-success=test (8.10.3, windows-latest)
   - status-success=test (8.10.2, ubuntu-latest)
   - status-success=test (8.10.1, ubuntu-latest)
-  - status-success=test (8.10.1, windows-latest)
   - status-success=test (8.8.4, ubuntu-latest)
   - status-success=test (8.8.3, ubuntu-latest)
   - status-success=test (8.8.2, ubuntu-latest)
   - status-success=test (8.6.5, ubuntu-latest)
-  - status-success=test (8.6.5, windows-latest)
   - status-success=test (8.6.4, ubuntu-latest)
   - status-success=test (windows-latest, 8.10.2.2)
 
