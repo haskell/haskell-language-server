@@ -3,6 +3,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
@@ -16,8 +17,11 @@ module Development.IDE.GHC.ExactPrint
       transformM,
       useAnnotatedSource,
       annotateParsedSource,
+      getAnnotatedParsedSourceRule,
+      GetAnnotatedParsedSource(..),
       ASTElement (..),
       ExceptStringT (..),
+      Annotated(..),
     )
 where
 
@@ -39,6 +43,9 @@ import Development.IDE.Core.Rules
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.Types.Location
+import Development.Shake (RuleResult, Rules)
+import Development.Shake.Classes
+import qualified GHC.Generics as GHC
 import Generics.SYB
 import Ide.PluginUtils
 import Language.Haskell.GHC.ExactPrint
@@ -54,19 +61,30 @@ import Control.Arrow
 
 ------------------------------------------------------------------------------
 
+data GetAnnotatedParsedSource = GetAnnotatedParsedSource
+  deriving (Eq, Show, Typeable, GHC.Generic)
+
+instance Hashable GetAnnotatedParsedSource
+instance NFData GetAnnotatedParsedSource
+instance Binary GetAnnotatedParsedSource
+type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
+
 -- | Get the latest version of the annotated parse source.
-useAnnotatedSource ::
-    String ->
-    IdeState ->
-    NormalizedFilePath ->
-    IO (Maybe (Annotated ParsedSource))
-useAnnotatedSource herald state nfp =
-    fmap annotateParsedSource
-        <$> runAction herald state (use GetParsedModule nfp)
+getAnnotatedParsedSourceRule :: Rules ()
+getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
+  pm <- use GetParsedModule nfp
+  return ([], fmap annotateParsedSource pm)
 
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
 annotateParsedSource = fixAnns
 
+useAnnotatedSource ::
+  String ->
+  IdeState ->
+  NormalizedFilePath ->
+  IO (Maybe (Annotated ParsedSource))
+useAnnotatedSource herald state nfp =
+    runAction herald state (use GetAnnotatedParsedSource nfp)
 ------------------------------------------------------------------------------
 
 {- | A transformation for grafting source trees together. Use the semigroup
