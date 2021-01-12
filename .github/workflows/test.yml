@@ -40,8 +40,9 @@ jobs:
             ghc: '8.10.2.2'
           - os: windows-latest
             ghc: '8.10.1'
-          - os: windows-latest
-            ghc: '8.6.4'
+          # This build get stuck frequently
+          # - os: windows-latest
+          #   ghc: '8.6.4'
 
     steps:
       # Cancel queued workflows from earlier commits in this branch
