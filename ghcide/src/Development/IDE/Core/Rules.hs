@@ -250,7 +250,7 @@ getParsedModule = use GetParsedModule
 -- | Parse the contents of a haskell file,
 -- ensuring comments are preserved in annotations
 getParsedModuleWithComments :: NormalizedFilePath -> Action (Maybe ParsedModule)
-getParsedModuleWithComments = use GetParsedModule
+getParsedModuleWithComments = use GetParsedModuleWithComments
 
 ------------------------------------------------------------
 -- Rules
@@ -265,12 +265,15 @@ priorityGenerateCore = Priority (-1)
 priorityFilesOfInterest :: Priority
 priorityFilesOfInterest = Priority (-2)
 
--- | IMPORTANT FOR HLINT INTEGRATION:
+-- | WARNING:
 -- We currently parse the module both with and without Opt_Haddock, and
 -- return the one with Haddocks if it -- succeeds. However, this may not work
--- for hlint, and we might need to save the one without haddocks too.
+-- for hlint or any client code that might need the parsed source with all
+-- annotations, including comments.
+-- For that use case you might want to use `getParsedModuleWithCommentsRule`
 -- See https://github.com/haskell/ghcide/pull/350#discussion_r370878197
 -- and https://github.com/mpickering/ghcide/pull/22#issuecomment-625070490
+-- GHC wiki about: https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
 getParsedModuleRule :: Rules ()
 getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
     (ms, _) <- use_ GetModSummary file
@@ -330,6 +333,9 @@ mergeParseErrorsHaddock normal haddock = normal ++
     fixMessage x | "parse error " `T.isPrefixOf` x = "Haddock " <> x
                  | otherwise = "Haddock: " <> x
 
+-- | This rule provides a ParsedModule preserving all annotations,
+-- including keywords, punctuation and comments.
+-- So it is suitable for use cases where you need a perfect edit.
 getParsedModuleWithCommentsRule :: Rules ()
 getParsedModuleWithCommentsRule = defineEarlyCutoff $ \GetParsedModuleWithComments file -> do
     (ms, _) <- use_ GetModSummary file
