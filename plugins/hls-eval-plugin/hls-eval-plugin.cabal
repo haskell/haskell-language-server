@@ -1,13 +1,25 @@
 cabal-version:      2.2
 name:               hls-eval-plugin
-version:            0.1.0.0
+version:            0.1.0.1
 synopsis:           Eval plugin for Haskell Language Server
+description:     Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+category: Development
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:            Apache-2.0
 license-file:       LICENSE
-author:             pepeiborra@gmail.com,tittoassini@gmail.com
-maintainer:         pepeiborra@gmail.com,tittoassini@gmail.com
+author: https://github.com/haskell/haskell-language-server/contributors
+maintainer: https://github.com/haskell/haskell-language-server/contributors
 build-type:         Simple
 extra-source-files: LICENSE
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
 
 library
   exposed-modules:  Ide.Plugin.Eval
@@ -50,5 +62,10 @@ library
     , time
     , transformers
     , unordered-containers
+
+  ghc-options: -Wall -Wno-name-shadowing
+
+  if flag(pedantic)
+    ghc-options: -Werror
 
   default-language: Haskell2010
