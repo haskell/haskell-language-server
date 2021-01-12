@@ -201,6 +201,17 @@ diagnosticTests = testGroup "diagnostics"
             }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "parse error")])]
+  , testSessionWait "update syntax error" $ do
+      let content = T.unlines [ "module Testing(missing) where" ]
+      doc <- createDoc "Testing.hs" "haskell" content
+      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "Not in scope: 'missing'")])]
+      let change = TextDocumentContentChangeEvent
+            { _range = Just (Range (Position 0 15) (Position 0 16))
+            , _rangeLength = Nothing
+            , _text = "l"
+            }
+      changeDoc doc [change]
+      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "Not in scope: 'lissing'")])]
   , testSessionWait "variable not in scope" $ do
       let content = T.unlines
             [ "module Testing where"
