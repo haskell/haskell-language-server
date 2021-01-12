@@ -79,6 +79,9 @@ cradle:
     - path: "./test/functional"
       component: "haskell-language-server:test:func-test"
 
+    - path: "./plugins/hls-eval-plugin/test/Eval.hs"
+      component: "haskell-language-server:test:func-test"
+
     - path: "./plugins/tactics/src"
       component: "haskell-language-server:test:func-test"
 
