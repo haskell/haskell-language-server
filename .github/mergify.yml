@@ -32,7 +32,7 @@ pull_request_rules:
   - status-success=test (windows-latest, 8.6.5, true)
   - status-success=test (windows-latest, 8.10.2.2)
   - status-success=test (windows-latest, 8.10.1)
-  - status-success=test (windows-latest, 8.6.4)
+  # - status-success=test (windows-latest, 8.6.4)
 
   - 'status-success=ci/circleci: ghc-8.10.3'
   - 'status-success=ci/circleci: ghc-8.10.2'
