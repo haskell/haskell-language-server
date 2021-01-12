@@ -40,9 +40,6 @@ cradle:
             - path: "./hls-plugin-api/src"
               component: "hls-plugin-api:lib"
 
-            - path: "./hls-exactprint-utils/src"
-              component: "hls-exactprint-utils:lib"
-
             # Plugins:
 
             - path: "./plugins/hls-class-plugin/src"

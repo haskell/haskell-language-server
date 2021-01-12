@@ -103,9 +103,6 @@ cradle:
     - path: "./hls-plugin-api/src"
       component: "lib:hls-plugin-api"
 
-    - path: "./hls-exactprint-utils/src"
-      component: "lib:hls-exactprint-utils"
-
     - path: "./plugins/hls-class-plugin/src"
       component: "lib:hls-class-plugin"
 

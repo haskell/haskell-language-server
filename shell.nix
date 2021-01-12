@@ -29,7 +29,6 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
                     p.shake-bench
                     p.hie-compat
                     p.hls-plugin-api
-                    p.hls-exactprint-utils
                     p.hls-class-plugin
                     p.hls-haddock-comments-plugin
                     p.hls-eval-plugin

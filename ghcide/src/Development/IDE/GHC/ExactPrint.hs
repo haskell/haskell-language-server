@@ -8,7 +8,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Ide.TreeTransform
+module Development.IDE.GHC.ExactPrint
     ( Graft(..),
       graft,
       graftDecls,
