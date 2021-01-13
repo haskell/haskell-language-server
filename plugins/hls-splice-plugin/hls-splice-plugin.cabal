@@ -23,7 +23,6 @@ library
                   , hls-plugin-api
                   , ghc
                   , ghc-exactprint
-                  , hls-exactprint-utils
                   , ghcide
                   , lens
                   , dlist

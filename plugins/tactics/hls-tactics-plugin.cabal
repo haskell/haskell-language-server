@@ -59,7 +59,6 @@ library
     , ghcide         >=0.1
     , haskell-lsp    ^>=0.23
     , hls-plugin-api
-    , hls-exactprint-utils
     , lens
     , mtl
     , refinery       ^>=0.3

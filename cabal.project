@@ -4,7 +4,6 @@ packages:
          ./shake-bench
          ./ghcide
          ./hls-plugin-api
-         ./hls-exactprint-utils
          ./plugins/tactics
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
