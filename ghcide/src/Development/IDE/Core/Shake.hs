@@ -815,20 +815,20 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                     (do v <- op key file; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
                 modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
-                (bs, diags, diagsV, res) <- case res of
+                (bs, res) <- case res of
                     Nothing -> do
                         staleV <- liftIO $ getValues state key file
                         pure $ case staleV of
-                            Nothing -> (toShakeValue ShakeResult bs, diags, Vector.fromList diags, Failed)
+                            Nothing -> (toShakeValue ShakeResult bs, Failed)
                             Just v -> case v of
-                                (Succeeded ver v, diags) ->
-                                    (toShakeValue ShakeStale bs, Vector.toList diags, diags, Stale ver v)
-                                (Stale ver v, diags) ->
-                                    (toShakeValue ShakeStale bs, Vector.toList diags, diags, Stale ver v)
-                                (Failed, diags) ->
-                                    (toShakeValue ShakeResult bs, Vector.toList diags, diags, Failed)
-                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, diags, Vector.fromList diags, Succeeded (vfsVersion =<< modTime) v)
-                liftIO $ setValues state key file res diagsV
+                                (Succeeded ver v, _) ->
+                                    (toShakeValue ShakeStale bs, Stale ver v)
+                                (Stale ver v, _) ->
+                                    (toShakeValue ShakeStale bs, Stale ver v)
+                                (Failed, _) ->
+                                    (toShakeValue ShakeResult bs, Failed)
+                    Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
+                liftIO $ setValues state key file res (Vector.fromList diags)
                 updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> a == b
