@@ -21,7 +21,9 @@ ghc-options:
 
 extra-deps:
   - aeson-1.5.2.0
-  - apply-refact-0.8.2.1
+  # - apply-refact-0.8.2.1
+  - git: https://github.com/mpickering/apply-refact.git
+    commit: 58760460d31e89df82edf1d9048d95e707a39b69
   - brittany-0.13.1.0
   - bytestring-trie-0.2.5.0
   - cabal-plan-0.6.2.0

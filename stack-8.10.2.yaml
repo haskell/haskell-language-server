@@ -20,6 +20,8 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
+  - git: https://github.com/mpickering/apply-refact.git
+    commit: 58760460d31e89df82edf1d9048d95e707a39b69
   - brittany-0.13.1.0
   - Cabal-3.0.2.0
   - clock-0.7.2
