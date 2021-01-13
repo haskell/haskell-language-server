@@ -10,7 +10,9 @@ license-file:       LICENSE
 author: https://github.com/haskell/haskell-language-server/contributors
 maintainer: https://github.com/haskell/haskell-language-server/contributors
 build-type:         Simple
-extra-source-files: LICENSE
+extra-source-files:
+  LICENSE
+  README.md
 
 flag pedantic
   description: Enable -Werror
