@@ -5,7 +5,6 @@ packages:
   - ./hie-compat
   - ./ghcide/
   - ./hls-plugin-api
-  - ./hls-exactprint-utils
   - ./shake-bench
   - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin

@@ -54,7 +54,7 @@ import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils
-import           Ide.TreeTransform (transform, graft, useAnnotatedSource)
+import Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
