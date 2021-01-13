@@ -35,7 +35,7 @@ extra-deps:
   # - ghcide-0.6.0
   - ghc-check-0.5.0.1
   - ghc-events-0.13.0
-  - ghc-exactprint-0.6.3.2
+  - ghc-exactprint-0.6.3.3
   - ghc-lib-8.10.3.20201220
   - ghc-lib-parser-8.10.3.20201220
   - ghc-lib-parser-ex-8.10.0.17

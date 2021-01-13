@@ -33,7 +33,7 @@ extra-deps:
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   # - ghcide-0.6.0
-  - ghc-exactprint-0.6.3.2
+  - ghc-exactprint-0.6.3.3
   - ghc-lib-8.10.3.20201220
   - ghc-lib-parser-8.10.3.20201220
   - ghc-trace-events-0.1.2.1
