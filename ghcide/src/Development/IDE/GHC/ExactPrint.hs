@@ -1,12 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
@@ -34,6 +30,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 import Control.Monad.Zip
 import qualified Data.DList as DL
+import Data.Either.Extra (mapLeft)
 import Data.Functor.Classes
 import Data.Functor.Contravariant
 import qualified Data.Text as T
@@ -309,7 +306,7 @@ annotate :: ASTElement ast => DynFlags -> Located ast -> TransformT (Either Stri
 annotate dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-    (anns, expr') <- lift $ either (Left . show) Right $ parseAST dflags uniq rendered
+    (anns, expr') <- lift $ mapLeft show $ parseAST dflags uniq rendered
     let anns' = setPrecedingLines expr' 0 1 anns
     pure (anns', expr')
 
@@ -318,7 +315,7 @@ annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (Anns, L
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-    (anns, expr') <- lift $ either (Left . show) Right $ parseDecl dflags uniq rendered
+    (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
     pure (anns', expr')
 ------------------------------------------------------------------------------
