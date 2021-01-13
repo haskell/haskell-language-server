@@ -203,7 +203,7 @@ hlintTests = testGroup "hlint suggestions" [
                              , "{-# standalone annotation #-}", ""
                              , "-- standalone comment", ""
                              , "-- | haddock comment"
-                             , "f = {- inline comment -} 1 -- ending comment", ""
+                             , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
                              , "-- final comment"
                              ]
 
