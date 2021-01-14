@@ -79,11 +79,11 @@ jobs:
           path: |
             ${{ env.CABAL_PKGS_DIR }}
             ${{ env.CABAL_STORE_DIR }}
-          key: ${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
+          key: v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
-            ${{ runner.os }}-${{ matrix.ghc }}-build-
-            ${{ runner.os }}-${{ matrix.ghc }}
+            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
+            v2-${{ runner.os }}-${{ matrix.ghc }}-build-
+            v2-${{ runner.os }}-${{ matrix.ghc }}
 
       - run: cabal update
 

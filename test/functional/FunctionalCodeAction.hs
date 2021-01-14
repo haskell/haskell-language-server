@@ -83,6 +83,36 @@ hlintTests = testGroup "hlint suggestions" [
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo = id\n"
 
+    , testCase "changing configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let config' = def { hlintOn = False }
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
+
+    , testCase "changing document contents updates hlint diagnostics" $ runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let change = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "x"
+        changeDoc doc [change]
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+        let change' = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "id x"
+        changeDoc doc [change']
+        testHlintDiagnostics doc
+
     , knownBrokenForGhcVersions [GHC88, GHC86] "hlint doesn't take in account cpp flag as ghc -D argument" $
       testCase "hlint diagnostics works with CPP via ghc -XCPP argument (#554)" $ runHlintSession "cpp" $ do
         doc <- openDoc "ApplyRefact3.hs" "haskell"
@@ -97,8 +127,7 @@ hlintTests = testGroup "hlint suggestions" [
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
-    , knownBrokenForGhcVersions [GHC88, GHC86] "apply-refact doesn't take in account the -X argument" $
-      testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
+    , testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
         testRefactor "ApplyRefact1.hs" "Redundant bracket"
             expectedLambdaCase
 
@@ -128,11 +157,18 @@ hlintTests = testGroup "hlint suggestions" [
       testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact5.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
+
+    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+        testRefactor "ApplyRefact6.hs" "Redundant bracket" expectedComments
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
         runHlintSession subdir  =
             failIfSessionTimeout . runSession hlsCommand fullCaps ("test/testdata/hlint" </> subdir)
+
+        noHlintDiagnostics :: [Diagnostic] -> Assertion
+        noHlintDiagnostics diags =
+            Just "hlint" `notElem` map (^. L.source) diags @? "There are no hlint diagnostics"
 
         testHlintDiagnostics doc = do
             diags <- waitForDiagnosticsFromSource doc "hlint"
@@ -161,6 +197,14 @@ hlintTests = testGroup "hlint suggestions" [
                              , "#else"
                              , "g = 2"
                              , "#endif", ""
+                             ]
+        expectedComments =   [ "-- comment before header"
+                             , "module ApplyRefact6 where", ""
+                             , "{-# standalone annotation #-}", ""
+                             , "-- standalone comment", ""
+                             , "-- | haddock comment"
+                             , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
+                             , "-- final comment"
                              ]
 
 renameTests :: TestTree
