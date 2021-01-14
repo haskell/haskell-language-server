@@ -15,7 +15,7 @@ module Development.IDE.Types.Options
   , IdeResult
   , IdeGhcSession(..)
   , OptHaddockParse(..)
-  ) where
+  ,optShakeFiles) where
 
 import Data.Default
 import Development.Shake
@@ -50,12 +50,6 @@ data IdeOptions = IdeOptions
     -- ^ How to locate source and @.hie@ files given a module name.
   , optExtensions :: [String]
     -- ^ File extensions to search for code, defaults to Haskell sources (including @.hs@)
-
-  , optThreads :: Int
-    -- ^ Number of threads to use. Use 0 for number of threads on the machine.
-  , optShakeFiles :: Maybe FilePath
-  -- ^ Directory where the shake database should be stored. For ghcide this is always set to `Nothing` for now
-  -- meaning we keep everything in memory but the daml CLI compiler uses this for incremental builds.
   , optShakeProfiling :: Maybe FilePath
     -- ^ Set to 'Just' to create a directory of profiling reports.
   , optOTMemoryProfiling :: IdeOTMemoryProfiling
@@ -90,8 +84,16 @@ data IdeOptions = IdeOptions
   , optCustomDynFlags :: DynFlags -> DynFlags
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
+  , optShakeOptions :: ShakeOptions
   }
 
+optShakeFiles :: IdeOptions -> Maybe FilePath
+optShakeFiles opts
+  | value == defValue = Nothing
+  | otherwise = Just value
+  where
+    value = shakeFiles (optShakeOptions opts)
+    defValue = shakeFiles (optShakeOptions $ defaultIdeOptions undefined)
 data OptHaddockParse = HaddockParse | NoHaddockParse
   deriving (Eq,Ord,Show,Enum)
 
@@ -119,8 +121,10 @@ defaultIdeOptions session = IdeOptions
     ,optGhcSession = session
     ,optExtensions = ["hs", "lhs"]
     ,optPkgLocationOpts = defaultIdePkgLocationOptions
-    ,optThreads = 0
-    ,optShakeFiles = Nothing
+    ,optShakeOptions = shakeOptions
+        {shakeThreads = 0
+        ,shakeFiles = "/dev/null"
+        }
     ,optShakeProfiling = Nothing
     ,optOTMemoryProfiling = IdeOTMemoryProfiling False
     ,optReportProgress = IdeReportProgress False

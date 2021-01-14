@@ -30,6 +30,7 @@ import Development.IDE.Types.Logger
 import Development.IDE.Plugin
 import Development.IDE.Plugin.Test as Test
 import Development.IDE.Session (loadSession)
+import Development.Shake (ShakeOptions (shakeThreads), shakeOptions)
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
@@ -119,7 +120,7 @@ main = do
                     , optShakeProfiling    = argsShakeProfiling
                     , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                     , optTesting           = IdeTesting argsTesting
-                    , optThreads           = argsThreads
+                    , optShakeOptions      = shakeOptions{shakeThreads = argsThreads}
                     , optCheckParents      = checkParents config
                     , optCheckProject      = checkProject config
                     }
@@ -164,7 +165,7 @@ main = do
                     { optShakeProfiling    = argsShakeProfiling
                     -- , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                     , optTesting           = IdeTesting argsTesting
-                    , optThreads           = argsThreads
+                    , optShakeOptions      = shakeOptions{shakeThreads = argsThreads}
                     , optCheckParents      = NeverCheck
                     , optCheckProject      = False
                     }

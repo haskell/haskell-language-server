@@ -55,7 +55,7 @@ import System.FilePath
 import System.IO
 import qualified System.Log.Logger as L
 import System.Time.Extra
-import Development.Shake (action)
+import Development.Shake (shakeOptions, ShakeOptions (shakeThreads), action)
 
 ghcIdePlugins :: T.Text -> IdePlugins IdeState -> (Plugin Config, [T.Text])
 ghcIdePlugins pid ps = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
@@ -135,7 +135,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = IdeTesting argsTesting
-                    , optThreads        = argsThreads
+                    , optShakeOptions   = shakeOptions{shakeThreads = argsThreads}
                     -- , optCheckParents   = checkParents config
                     -- , optCheckProject   = checkProject config
                     }

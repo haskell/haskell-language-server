@@ -18,7 +18,6 @@ module Development.IDE.Core.Service(
     updatePositionMapping,
     ) where
 
-import Data.Maybe
 import Development.IDE.Types.Options (IdeOptions(..))
 import Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileStore  (VFSHandle, fileStoreRules)
@@ -62,10 +61,8 @@ initialise caps mainRule getLspId toDiags wProg wIndefProg logger debouncer opti
         (optShakeProfiling options)
         (optReportProgress options)
         (optTesting options)
-        shakeOptions
-          { shakeThreads = optThreads options
-          , shakeFiles   = fromMaybe "/dev/null" (optShakeFiles options)
-          } $ do
+        (optShakeOptions options)
+          $ do
             addIdeGlobal $ GlobalIdeOptions options
             fileStoreRules vfs
             ofInterestRules

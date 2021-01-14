@@ -277,6 +277,7 @@ executable ghcide
         ghcide,
         lens,
         optparse-applicative,
+        shake,
         text,
         unordered-containers
     other-modules:
