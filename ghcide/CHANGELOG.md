@@ -1,5 +1,20 @@
+### 0.7.1 (2020-01-13)
+
+* Fix sticky diagnostics bug (#1188) - (Pepe Iborra)
+* Use completionSnippetsOn flag (#1195) - (Yuya Kono)
+* Update tested-with GHC in cabal config - (jneira)
+* Do not disable parallel GC by default (#1190) - (Pepe Iborra)
+* Fix module outline becoming stale after switching branches (#1189) - (Pepe Iborra)
+* Make adding missing constraint work in presence of 'forall' (fixes #1164) (#1177) - (Jan Hrcek)
+* Bump haskell-lsp to 0.23 (#1146) - (Potato Hatsue)
+* Fix #723 (Instance declarations in hs-boot files result in GHC errors) (#781) - (Ben Simms)
+* Also suggest importing methods without parent class (#766) - (Thomas Winant)
+* Update links to issues/PRs in ghcide tests. (#1142) - (Peter Wicks Stringfield)
+* fix suggestAddTypeAnnotation regex (#760) - (Kostas Dermentzis)
+
 ### 0.7.0 (2020-01-03)
 
+* Ghcide now loads HLS plugins internally - (Pepe Iborra)
 * Retry a failed cradle if the cradle descriptor changes (#762) - (Pepe Iborra)
 * Fix extend imports regression (#769) - (Pepe Iborra)
 * Perform memory measurement on SIGUSR1 (#761) - (Pepe Iborra)

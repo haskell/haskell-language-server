@@ -11,8 +11,10 @@
 --   using the "Shaker" abstraction layer for in-memory use.
 --
 module Development.IDE.Core.Rules(
+    -- * Types
     IdeState, GetDependencies(..), GetParsedModule(..), TransitiveDependencies(..),
     Priority(..), GhcSessionIO(..), GetClientSettings(..),
+    -- * Functions
     priorityTypeCheck,
     priorityGenerateCore,
     priorityFilesOfInterest,
@@ -28,6 +30,30 @@ module Development.IDE.Core.Rules(
     getDependencies,
     getParsedModule,
     getClientConfigAction,
+    -- * Rules
+    CompiledLinkables(..),
+    IsHiFileStable(..),
+    getParsedModuleRule,
+    getLocatedImportsRule,
+    getDependencyInformationRule,
+    reportImportCyclesRule,
+    getDependenciesRule,
+    typeCheckRule,
+    getDocMapRule,
+    loadGhcSession,
+    getModIfaceFromDiskRule,
+    getModIfaceRule,
+    getModIfaceWithoutLinkableRule,
+    getModSummaryRule,
+    isHiFileStableRule,
+    getModuleGraphRule,
+    knownFilesRule,
+    getClientSettingsRule,
+    getHieAstsRule,
+    getBindingsRule,
+    needsCompilationRule,
+    generateCoreRule,
+    getImportMapRule
     ) where
 
 import Fingerprint
