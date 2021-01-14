@@ -34,14 +34,14 @@ cradle:
             - path: "./test/functional"
               component: "haskell-language-server:test:func-test"
 
+            - path: "./plugins/hls-eval-plugin/test/Eval.hs"
+              component: "haskell-language-server:test:func-test"
+
             - path: "./test/wrapper"
               component: "haskell-language-server:test:wrapper-test"
 
             - path: "./hls-plugin-api/src"
               component: "hls-plugin-api:lib"
-
-            - path: "./hls-exactprint-utils/src"
-              component: "hls-exactprint-utils:lib"
 
             # Plugins:
 

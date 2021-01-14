@@ -49,9 +49,9 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
 
 ## Features
 
- - Code evaluation codelens (inspired by [Dante](https://github.com/jyp/dante#-reploid)). You can evaluate code by writing it in a comment of the form -- >>>
+- Code evaluation codelens ([Tutorial](plugins/hls-eval-plugin/README.md)):
 
-   ![Eval](https://i.imgur.com/bh992sT.gif)
+   ![Eval Demo](plugins/hls-eval-plugin/demo.gif)
 
 - Type information and documentation on hover. Note that currently, in order for docs to be displayed for dependencies, they must have been built with GHC's `-haddock` flag:
 
@@ -295,7 +295,7 @@ Here is a list of the additional settings currently supported by `haskell-langua
 - Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import
 - Maximum number of problems to report (`haskell.maxNumberOfProblems`, default 100): the maximum number of problems the server will send to the client
 - Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused)
-- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets (currently unused until we have snippets to provide)
+- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets
 - Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again)
 - Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support
 

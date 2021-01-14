@@ -79,6 +79,9 @@ cradle:
     - path: "./test/functional"
       component: "haskell-language-server:test:func-test"
 
+    - path: "./plugins/hls-eval-plugin/test/Eval.hs"
+      component: "haskell-language-server:test:func-test"
+
     - path: "./plugins/tactics/src"
       component: "haskell-language-server:test:func-test"
 
@@ -102,9 +105,6 @@ cradle:
 
     - path: "./hls-plugin-api/src"
       component: "lib:hls-plugin-api"
-
-    - path: "./hls-exactprint-utils/src"
-      component: "lib:hls-exactprint-utils"
 
     - path: "./plugins/hls-class-plugin/src"
       component: "lib:hls-class-plugin"

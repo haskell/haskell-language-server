@@ -6,7 +6,6 @@ packages:
   - ./ghcide/
   - ./shake-bench
   - ./hls-plugin-api
-  - ./hls-exactprint-utils
   - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin

@@ -45,7 +45,7 @@ import GhcMonad
 import GhcPlugins hiding (Var, getLoc, (<>))
 import Ide.Plugin.Splice.Types
 import Ide.PluginUtils (mkLspCommand, responseError)
-import Ide.TreeTransform
+import Development.IDE.GHC.ExactPrint
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint (TransformT, setPrecedingLines, uniqueSrcSpanT)
 import Language.Haskell.LSP.Core
