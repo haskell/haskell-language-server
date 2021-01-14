@@ -1,5 +1,7 @@
-### 0.7.1 (2020-01-13)
+### 0.7.2 (2020-01-14)
+* Expose shakeOptions used - (Pepe Iborra)
 
+### 0.7.1 (2020-01-13)
 * Fix sticky diagnostics bug (#1188) - (Pepe Iborra)
 * Use completionSnippetsOn flag (#1195) - (Yuya Kono)
 * Update tested-with GHC in cabal config - (jneira)
@@ -13,7 +15,6 @@
 * fix suggestAddTypeAnnotation regex (#760) - (Kostas Dermentzis)
 
 ### 0.7.0 (2020-01-03)
-
 * Ghcide now loads HLS plugins internally - (Pepe Iborra)
 * Retry a failed cradle if the cradle descriptor changes (#762) - (Pepe Iborra)
 * Fix extend imports regression (#769) - (Pepe Iborra)

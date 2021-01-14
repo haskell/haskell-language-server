@@ -55,7 +55,7 @@ import System.FilePath
 import System.IO
 import qualified System.Log.Logger as L
 import System.Time.Extra
-import Development.Shake (action)
+import Development.Shake (ShakeOptions (shakeThreads), action)
 
 ghcIdePlugins :: T.Text -> IdePlugins IdeState -> (Plugin Config, [T.Text])
 ghcIdePlugins pid ps = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
@@ -131,14 +131,13 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             sessionLoader <- loadSession dir
             -- config <- fromMaybe defaultLspConfig <$> getConfig
-            let options = (defaultIdeOptions sessionLoader)
+            let options = defOptions
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = IdeTesting argsTesting
-                    , optThreads        = argsThreads
-                    -- , optCheckParents   = checkParents config
-                    -- , optCheckProject   = checkProject config
+                    , optShakeOptions   = (optShakeOptions defOptions){shakeThreads = argsThreads}
                     }
+                defOptions = defaultIdeOptions sessionLoader
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins >> action kick)
                 getLspId event wProg wIndefProg hlsLogger debouncer options vfs
