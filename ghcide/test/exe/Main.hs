@@ -1300,6 +1300,22 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA (bar)"
                     , "foo = bar"
                     ])
+        , testSession "extend import list with constructor of type operator" $ template
+            []
+            ("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
+            (Range (Position 3 17) (Position 3 18))
+            ["Add (:~:)(Refl) to the import list of Data.Type.Equality"]
+            (T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:)(Refl))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x

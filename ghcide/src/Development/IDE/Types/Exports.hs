@@ -58,7 +58,7 @@ mkIdentInfos (AvailTC parent (n:nn) flds)
       ] ++
       [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n)]
     where
-        parentP = pack $ prettyPrint parent
+        parentP = pack $ printName parent
 
 mkIdentInfos (AvailTC _ nn flds)
     = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n)
