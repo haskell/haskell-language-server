@@ -41,10 +41,12 @@ import Development.IDE.Core.Shake (getDiagnostics)
 import Data.List (nub)
 import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts)
 import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
+import "ghc" DynFlags as RealGHC.DynFlags (topDir)
 import "ghc" GHC as RealGHC (DynFlags(..))
 import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags, ms_hspp_opts)
 import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
+import System.Environment(setEnv, unsetEnv)
 import System.FilePath (takeFileName)
 import System.IO (hPutStr, noNewlineTranslation, hSetNewlineMode, utf8, hSetEncoding, IOMode(WriteMode), withFile, hClose)
 import System.IO.Temp
@@ -362,6 +364,8 @@ applyHint ide nfp mhint =
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
     oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
+    (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
+    let dflags = ms_hspp_opts modsum
     -- set Nothing as "position" for "applyRefactorings" because
     -- applyRefactorings expects the provided position to be _within_ the scope
     -- of each refactoring it will apply.
@@ -383,6 +387,17 @@ applyHint ide nfp mhint =
                 hSetEncoding h utf8
                 hSetNewlineMode h noNewlineTranslation
                 hPutStr h (T.unpack txt)
+    -- Setting a environment variable with the libdir used by ghc-exactprint.
+    -- It is a workaround for an error caused by the use of a hadcoded at compile time libdir
+    -- in ghc-exactprint that makes dependent executables non portables.
+    -- See https://github.com/alanz/ghc-exactprint/issues/96.
+    -- WARNING: this code is not thread safe, so if you try to apply several async refactorings
+    -- in files associated with ghc sessions with different libdir's within the same hls process,
+    -- it could fail.
+    -- That case is quite improbable so we assume the risk.
+    let withRuntimeLibdir :: IO a -> IO a
+        withRuntimeLibdir = bracket (setEnv key $ topDir dflags) (const $ unsetEnv key) . const
+            where key = "GHC_EXACTPRINT_GHC_LIBDIR"
     res <-
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
@@ -392,7 +407,7 @@ applyHint ide nfp mhint =
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> applyRefactorings Nothing commands temp refactExts)
+            (Right <$> withRuntimeLibdir (applyRefactorings Nothing commands temp refactExts))
                 `catches` errorHandlers
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
@@ -402,8 +417,6 @@ applyHint ide nfp mhint =
             Just pm -> do
                 let anns = pm_annotations pm
                 let modu = pm_parsed_source pm
-                (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
-                let dflags = ms_hspp_opts modsum
                 -- apply-refact uses RigidLayout
                 let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
