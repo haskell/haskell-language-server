@@ -54,6 +54,7 @@ import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable (Outputable, ppr, showSDoc)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
+import Parser (parseIdentifier)
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
 #endif
@@ -307,6 +308,10 @@ instance p ~ GhcPs => ASTElement (HsType p) where
 
 instance p ~ GhcPs => ASTElement (HsDecl p) where
     parseAST = parseDecl
+    maybeParensAST = id
+
+instance ASTElement RdrName where
+    parseAST df fp = parseWith df fp parseIdentifier
     maybeParensAST = id
 
 ------------------------------------------------------------------------------
