@@ -5,7 +5,7 @@ module Development.IDE.Core.Tracing
     , startTelemetry
     , measureMemory
     , getInstrumentCached
-    ,otTracedPlugin)
+    ,otTracedProvider,otSetUri)
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -33,18 +33,19 @@ import           HeapSize                       (recursiveSize, runHeapsize)
 import           Language.Haskell.LSP.Types     (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,
+import           OpenTelemetry.Eventlog         (SpanInFlight, Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
 import Data.ByteString (ByteString)
 import Data.Text.Encoding (encodeUtf8)
 import Ide.Types (PluginId (..))
+import Development.IDE.Types.Location (Uri (..))
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
     :: String -- ^ Message type
     -> String -- ^ Message label
-    -> IO a
+    -> (SpanInFlight -> IO a)
     -> IO a
 otTracedHandler requestType label act =
   let !name =
@@ -52,7 +53,10 @@ otTracedHandler requestType label act =
           then requestType
           else requestType <> ":" <> show label
    -- Add an event so all requests can be quickly seen in the viewer without searching
-   in withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> act)
+   in withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> act sp)
+
+otSetUri :: SpanInFlight -> Uri -> IO ()
+otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
 
 -- | Trace a Shake action using opentelemetry.
 otTracedAction
@@ -74,10 +78,11 @@ otTracedAction key file success act = actionBracket
         unless (success res) $ setTag sp "error" "1"
         return res)
 
-otTracedPlugin :: PluginId -> ByteString -> IO a -> IO a
-otTracedPlugin (PluginId pluginName) provider act =
-  let !msg = "plugin:" <> encodeUtf8 pluginName <> " " <> "provider:" <> provider
-   in withSpan msg (const act)
+otTracedProvider :: PluginId -> ByteString -> IO a -> IO a
+otTracedProvider (PluginId pluginName) provider act =
+  withSpan (provider <> " provider") $ \sp -> do
+    setTag sp "plugin" (encodeUtf8 pluginName)
+    act
 
 startTelemetry :: Bool -> Logger -> Var Values -> IO ()
 startTelemetry allTheTime logger stateRef = do
