@@ -10,6 +10,7 @@ module Development.IDE.GHC.ExactPrint
       graft,
       graftDecls,
       graftDeclsWithM,
+      annotate,
       hoistGraft,
       graftWithM,
       graftWithSmallestM,
@@ -22,6 +23,9 @@ module Development.IDE.GHC.ExactPrint
       ASTElement (..),
       ExceptStringT (..),
       Annotated(..),
+      TransformT,
+      Anns,
+      Annotate,
     )
 where
 
@@ -325,6 +329,7 @@ fixAnns ParsedModule {..} =
 ------------------------------------------------------------------------------
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
+--   Note that this function will throw away any existing annotations (and format)
 annotate :: ASTElement ast => DynFlags -> Located ast -> TransformT (Either String) (Anns, Located ast)
 annotate dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
