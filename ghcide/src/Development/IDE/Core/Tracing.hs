@@ -5,7 +5,7 @@ module Development.IDE.Core.Tracing
     , startTelemetry
     , measureMemory
     , getInstrumentCached
-    )
+    ,otTracedPlugin)
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -36,6 +36,9 @@ import           Numeric.Natural                (Natural)
 import           OpenTelemetry.Eventlog         (Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
+import Data.ByteString (ByteString)
+import Data.Text.Encoding (encodeUtf8)
+import Ide.Types (PluginId (..))
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
@@ -70,6 +73,11 @@ otTracedAction key file success act = actionBracket
         res <- act
         unless (success res) $ setTag sp "error" "1"
         return res)
+
+otTracedPlugin :: PluginId -> ByteString -> IO a -> IO a
+otTracedPlugin (PluginId pluginName) provider act =
+  let !msg = "plugin:" <> encodeUtf8 pluginName <> " " <> "provider:" <> provider
+   in withSpan msg (const act)
 
 startTelemetry :: Bool -> Logger -> Var Values -> IO ()
 startTelemetry allTheTime logger stateRef = do
