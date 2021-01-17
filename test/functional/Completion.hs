@@ -348,7 +348,7 @@ contextTests = testGroup "contexts" [
     , testCase "only provides value suggestions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
       doc <- openDoc "Context.hs" "haskell"
 
-      compls <- getCompletions doc (Position 3 9)
+      compls <- getCompletions doc (Position 3 10)
       liftIO $ do
         compls `shouldContainCompl` "abs"
         compls `shouldNotContainCompl` "Applicative"
