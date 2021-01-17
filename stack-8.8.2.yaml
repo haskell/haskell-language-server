@@ -20,9 +20,7 @@ ghc-options:
 
 extra-deps:
   - aeson-1.5.2.0
-  # - apply-refact-0.8.2.1
-  - git: https://github.com/mpickering/apply-refact.git
-    commit: 4fbd3a3a9b408bd31080848feb6b78e13c3eeb6d
+  - apply-refact-0.9.0.0
   - brittany-0.13.1.0
   - butcher-1.3.3.2
   - bytestring-trie-0.2.5.0
@@ -31,10 +29,11 @@ extra-deps:
   - extra-1.7.3
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  # - ghcide-0.6.0
   - ghc-check-0.5.0.1
   - ghc-events-0.13.0
-  - ghc-exactprint-0.6.3.3
+  # - ghc-exactprint-0.6.3.3
+  - git: https://github.com/alanz/ghc-exactprint.git
+    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
   - ghc-lib-8.10.3.20201220
   - ghc-lib-parser-8.10.3.20201220
   - ghc-lib-parser-ex-8.10.0.17
