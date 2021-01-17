@@ -2028,7 +2028,7 @@ addFunctionConstraintTests = let
     , ""
     , "data Pair a b = Pair a b"
     , ""
-    , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
+    , "eq :: ( " <> constraint <> " ) => Pair a b -> Pair a b -> Bool"
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
@@ -2038,7 +2038,7 @@ addFunctionConstraintTests = let
     [ "module Testing where"
     , "data Pair a b = Pair a b"
     , "eq "
-    , "    :: " <> constraint
+    , "    :: (" <> constraint <> ")"
     , "    => Pair a b -> Pair a b -> Bool"
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
@@ -2082,13 +2082,13 @@ addFunctionConstraintTests = let
   , check
     "preexisting constraint, with extra spaces in context"
     "Add `Eq b` to the context of the type signature for `eq`"
-    (incompleteConstraintSourceCodeWithExtraCharsInContext "( Eq a )")
-    (incompleteConstraintSourceCodeWithExtraCharsInContext "(Eq a, Eq b)")
+    (incompleteConstraintSourceCodeWithExtraCharsInContext "Eq a")
+    (incompleteConstraintSourceCodeWithExtraCharsInContext "Eq a, Eq b")
   , check
     "preexisting constraint, with newlines in type signature"
     "Add `Eq b` to the context of the type signature for `eq`"
-    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a)")
-    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a, Eq b)")
+    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a")
+    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a, Eq b")
   ]
 
 removeRedundantConstraintsTests :: TestTree
