@@ -6,6 +6,7 @@ module Development.IDE.Plugin.Completions
     (
       plugin
     , getCompletionsLSP
+    , maxCompletions
     ) where
 
 import Language.Haskell.LSP.Messages
@@ -115,6 +116,12 @@ data NonLocalCompletions = NonLocalCompletions
 instance Hashable NonLocalCompletions
 instance NFData   NonLocalCompletions
 instance Binary   NonLocalCompletions
+
+-- | 40 may seem conservative but note that most editors limit how many completions
+--   are displayed in the screen, and most users rarely scroll.
+--   For instance, VSCode only shows 12 completions in its popup, and Emacs has a similar limit.
+maxCompletions :: Int
+maxCompletions = 40
 
 -- | Generate code actions.
 getCompletionsLSP
