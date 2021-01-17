@@ -35,7 +35,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 hover' :: HoverProvider IdeState
 hover' ideState params = do
-    logInfo (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
+    logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState params
 
 -- ---------------------------------------------------------------------
