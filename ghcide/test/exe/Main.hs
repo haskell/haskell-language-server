@@ -60,8 +60,8 @@ import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import System.Time.Extra
-import Development.IDE.Plugin.Test (WaitForIdeRuleResult(..), TestRequest(BlockSeconds,GetInterfaceFilesDir))
 import Development.IDE.Plugin.CodeAction (matchRegExMultipleImports)
+import Development.IDE.Plugin.Test (TestRequest (BlockSeconds, GetInterfaceFilesDir), WaitForIdeRuleResult (..), blockCommandId)
 import Control.Monad.Extra (whenJust)
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Control.Lens ((^.))

@@ -88,9 +88,11 @@ main = do
 
     dir <- IO.getCurrentDirectory
 
-    let hlsPlugins = pluginDescToIdePlugins
+    let hlsPlugins = pluginDescToIdePlugins $
             [ GhcIde.descriptor "ghcide"
-            , TypeLenses.descriptor "type-lenses" ]
+            , TypeLenses.descriptor "type-lenses"
+            ] ++
+            [ Test.blockCommandDescriptor "block-command" | argsTesting]
 
     pid <- T.pack . show <$> getProcessID
     let hlsPlugin = asGhcIdePlugin hlsPlugins

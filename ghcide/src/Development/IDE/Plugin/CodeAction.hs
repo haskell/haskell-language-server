@@ -13,7 +13,6 @@ module Development.IDE.Plugin.CodeAction
     , rulePackageExports
 
     -- * For testing
-    , blockCommandId
     , matchRegExMultipleImports
     ) where
 
@@ -57,9 +56,6 @@ import Control.Concurrent.Extra (readVar)
 import Development.IDE.GHC.Util (printRdrName)
 import Ide.PluginUtils (subRange)
 
--- | a command that blocks forever. Used for testing
-blockCommandId :: T.Text
-blockCommandId = "ghcide.command.block"
 -- | Generate code actions.
 codeAction
     :: LSP.LspFuncs c
