@@ -43,7 +43,7 @@ import Data.Functor.Classes
 import Data.Functor.Contravariant
 import qualified Data.Text as T
 import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Rules
+import Development.IDE.Core.Service (runAction)
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.Types.Location

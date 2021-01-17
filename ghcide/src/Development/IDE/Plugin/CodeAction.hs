@@ -71,7 +71,6 @@ plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlers
 rules :: Rules ()
 rules = do
   rulePackageExports
-  getAnnotatedParsedSourceRule
 
 -- | a command that blocks forever. Used for testing
 blockCommandId :: T.Text
