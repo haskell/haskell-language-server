@@ -739,7 +739,7 @@ suggestConstraint df parsedModule diag@Diagnostic {..}
     where
       findMissingConstraint :: T.Text -> Maybe T.Text
       findMissingConstraint t =
-        let regex = "(No instance for|Could not deduce) \\((.+)\\) arising from a use of"
+        let regex = "(No instance for|Could not deduce) \\((.+)\\) arising from" -- a use of / a do statement
          in matchRegexUnifySpaces t regex <&> last
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.

@@ -2043,6 +2043,13 @@ addFunctionConstraintTests = let
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
+  missingMonadConstraint constraint = T.unlines
+    [ "module Testing where"
+    , "f :: " <> constraint <> "m ()"
+    , "f = do "
+    , "  return ()"
+    ]
+
   check :: String -> T.Text -> T.Text -> T.Text -> TestTree
   check testName actionTitle originalCode expectedCode = testSession testName $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
@@ -2089,6 +2096,11 @@ addFunctionConstraintTests = let
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a")
     (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a, Eq b")
+  , check
+    "missing Monad constraint"
+    "Add `Monad m` to the context of the type signature for `f`"
+    (missingMonadConstraint "")
+    (missingMonadConstraint "Monad m => ")
   ]
 
 removeRedundantConstraintsTests :: TestTree
