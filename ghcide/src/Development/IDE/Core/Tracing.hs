@@ -1,4 +1,6 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
+#include "ghc-api-version.h"
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
@@ -78,7 +80,11 @@ otTracedAction key file success act = actionBracket
         unless (success res) $ setTag sp "error" "1"
         return res)
 
+#if MIN_GHC_API_VERSION(8,8,0)
 otTracedProvider :: PluginId -> ByteString -> IO a -> IO a
+#else
+otTracedProvider :: PluginId -> String -> IO a -> IO a
+#endif
 otTracedProvider (PluginId pluginName) provider act =
   withSpan (provider <> " provider") $ \sp -> do
     setTag sp "plugin" (encodeUtf8 pluginName)
