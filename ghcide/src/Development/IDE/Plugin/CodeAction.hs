@@ -63,6 +63,7 @@ import Safe (atMay)
 import Bag (isEmptyBag)
 import qualified Data.HashSet as Set
 import Control.Concurrent.Extra (threadDelay, readVar)
+import Development.IDE.GHC.Util (printRdrName)
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
@@ -178,6 +179,7 @@ suggestExactAction ::
 suggestExactAction df ps x =
   concat
     [ suggestConstraint df (astA ps) x
+    , suggestImplicitParameter (astA ps) x
     ]
 
 suggestAction
@@ -740,7 +742,10 @@ suggestConstraint df parsedModule diag@Diagnostic {..}
       findMissingConstraint :: T.Text -> Maybe T.Text
       findMissingConstraint t =
         let regex = "(No instance for|Could not deduce) \\((.+)\\) arising from" -- a use of / a do statement
-         in matchRegexUnifySpaces t regex <&> last
+            regexImplicitParams = "Could not deduce: (\\?.+) arising from a use of"
+            match = matchRegexUnifySpaces t regex
+            matchImplicitParams = matchRegexUnifySpaces t regexImplicitParams
+        in match <|> matchImplicitParams <&> last
 
 -- | Suggests a constraint for an instance declaration for which a constraint is missing.
 suggestInstanceConstraint :: DynFlags -> ParsedSource -> Diagnostic -> T.Text -> [(T.Text, Rewrite)]
@@ -783,6 +788,19 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
       actionTitle :: T.Text -> T.Text
       actionTitle constraint = "Add `" <> constraint
         <> "` to the context of the instance declaration"
+
+suggestImplicitParameter ::
+  ParsedSource ->
+  Diagnostic ->
+  [(T.Text, Rewrite)]
+suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _range}
+  | Just [implicitT] <- matchRegexUnifySpaces _message "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
+    Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (_start _range) hsmodDecls,
+    Just (TypeSig _ _ HsWC {hswc_body = HsIB {hsib_body}}) <- findSigOfDecl (== funId) hsmodDecls
+    =
+      [( "Add " <> implicitT <> " to the context of " <> T.pack (printRdrName funId)
+        , appendConstraint (T.unpack implicitT) hsib_body)]
+  | otherwise = []
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
 findTypeSignatureName t = matchRegexUnifySpaces t "([^ ]+) :: " <&> head
