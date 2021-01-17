@@ -79,6 +79,7 @@ import           Development.IDE.Core.FileStore        (modificationTime, getFil
 import           Development.IDE.Types.Diagnostics as Diag
 import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile, TargetModule, TargetFile)
+import Development.IDE.GHC.ExactPrint
 import Development.IDE.GHC.Util
 import Data.Either.Extra
 import qualified Development.IDE.Types.Logger as L
@@ -1020,6 +1021,7 @@ mainRule = do
     needsCompilationRule
     generateCoreRule
     getImportMapRule
+    getAnnotatedParsedSourceRule
 
 -- | Given the path to a module src file, this rule returns True if the
 -- corresponding `.hi` file is stable, that is, if it is newer
