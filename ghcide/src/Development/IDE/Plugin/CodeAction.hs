@@ -8,10 +8,8 @@
 -- | Go to the definition of a variable.
 module Development.IDE.Plugin.CodeAction
     (
-      plugin
-
     -- * For haskell-language-server
-    , codeAction
+      codeAction
     , codeLens
     , rulePackageExports
     , commandHandler
@@ -23,7 +21,6 @@ module Development.IDE.Plugin.CodeAction
     ) where
 
 import Control.Monad (join, guard)
-import Development.IDE.Plugin
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
@@ -39,7 +36,6 @@ import Development.IDE.Plugin.CodeAction.Rules
 import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
-import Development.Shake (Rules)
 import qualified Data.HashMap.Strict as Map
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.VFS
@@ -65,13 +61,6 @@ import qualified Data.HashSet as Set
 import Control.Concurrent.Extra (threadDelay, readVar)
 import Development.IDE.GHC.Util (printRdrName)
 import Ide.PluginUtils (subRange)
-
-plugin :: Plugin c
-plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
-
-rules :: Rules ()
-rules = do
-  rulePackageExports
 
 -- | a command that blocks forever. Used for testing
 blockCommandId :: T.Text
@@ -135,7 +124,7 @@ codeLens
     -> CodeLensParams
     -> IO (Either ResponseError (List CodeLens))
 codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
-    commandId <- makeLspCommandId "typesignature.add"
+    let commandId = "typesignature.add"
     fmap (Right . List) $ case uriToFilePath' uri of
       Just (toNormalizedFilePath' -> filePath) -> do
         _ <- runAction "codeLens" ideState (use TypeCheck filePath)
@@ -1201,17 +1190,6 @@ matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegex message regex = case message =~~ regex of
     Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
     Nothing -> Nothing
-
-setHandlersCodeLens :: PartialHandlers c
-setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
-    LSP.codeLensHandler =
-        withResponse RspCodeLens codeLens,
-    LSP.executeCommandHandler =
-        withResponseAndRequest
-            RspExecuteCommand
-            ReqApplyWorkspaceEdit
-            commandHandler
-    }
 
 filterNewlines :: T.Text -> T.Text
 filterNewlines = T.concat  . T.lines

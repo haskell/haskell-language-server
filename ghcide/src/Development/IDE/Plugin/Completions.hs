@@ -4,11 +4,9 @@
 
 module Development.IDE.Plugin.Completions
     (
-      plugin
+      produceCompletions
     , getCompletionsLSP
     ) where
-
-import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.VFS as VFS
@@ -16,8 +14,6 @@ import qualified Language.Haskell.LSP.VFS as VFS
 import Development.Shake.Classes
 import Development.Shake
 import GHC.Generics
-
-import Development.IDE.Plugin
 import Development.IDE.Core.Service
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Plugin.Completions.Logic
@@ -27,7 +23,6 @@ import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat
 
 import Development.IDE.GHC.Util
-import Development.IDE.LSP.Server
 import TcRnDriver (tcRnImportDecls)
 import Data.Maybe
 import Ide.Plugin.Config (Config (completionSnippetsOn))
@@ -36,10 +31,6 @@ import Ide.PluginUtils (getClientConfig)
 #if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
 #endif
-
-plugin :: Plugin Config
-plugin = Plugin produceCompletions setHandlersCompletion
-
 produceCompletions :: Rules ()
 produceCompletions = do
     define $ \ProduceCompletions file -> do
@@ -150,7 +141,3 @@ getCompletionsLSP lsp ide
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
-setHandlersCompletion :: PartialHandlers Config
-setHandlersCompletion = PartialHandlers $ \WithMessage{..} x -> return x{
-    LSP.completionHandler = withResponse RspCompletion getCompletionsLSP
-    }
