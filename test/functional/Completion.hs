@@ -13,7 +13,6 @@ import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 import qualified Data.Text as T
-import System.Time.Extra (sleep)
 
 tests :: TestTree
 tests = testGroup "completions" [
@@ -54,12 +53,12 @@ tests = testGroup "completions" [
      , testCase "completes imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         liftIO $ sleep 4
+         _ <- waitForDiagnostics
 
          let te = TextEdit (Range (Position 1 17) (Position 1 26)) "Data.M"
          _ <- applyEdit doc te
 
-         compls <- getCompletions doc (Position 1 22)
+         compls <- getCompletions doc (Position 1 23)
          let item = head $ filter ((== "Maybe") . (^. label)) compls
          liftIO $ do
              item ^. label @?= "Maybe"
@@ -69,22 +68,22 @@ tests = testGroup "completions" [
      , testCase "completes qualified imports" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         liftIO $ sleep 4
+         _ <- waitForDiagnostics
 
-         let te = TextEdit (Range (Position 2 17) (Position 1 25)) "Dat"
+         let te = TextEdit (Range (Position 2 17) (Position 2 25)) "Data.L"
          _ <- applyEdit doc te
 
-         compls <- getCompletions doc (Position 1 19)
-         let item = head $ filter ((== "Data.List") . (^. label)) compls
+         compls <- getCompletions doc (Position 2 24)
+         let item = head $ filter ((== "List") . (^. label)) compls
          liftIO $ do
-             item ^. label @?= "Data.List"
+             item ^. label @?= "List"
              item ^. detail @?= Just "Data.List"
              item ^. kind @?= Just CiModule
 
      , testCase "completes language extensions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         liftIO $ sleep 4
+         _ <- waitForDiagnostics
 
          let te = TextEdit (Range (Position 0 24) (Position 0 31)) ""
          _ <- applyEdit doc te
@@ -98,7 +97,7 @@ tests = testGroup "completions" [
      , testCase "completes pragmas" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         liftIO $ sleep 4
+         _ <- waitForDiagnostics
 
          let te = TextEdit (Range (Position 0 4) (Position 0 34)) ""
          _ <- applyEdit doc te
@@ -128,7 +127,7 @@ tests = testGroup "completions" [
      , testCase "completes options pragma" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 
-         liftIO $ sleep 4
+         _ <- waitForDiagnostics
 
          let te = TextEdit (Range (Position 0 4) (Position 0 34)) "OPTIONS"
          _ <- applyEdit doc te
@@ -159,7 +158,7 @@ tests = testGroup "completions" [
          doc <- openDoc "Completion.hs" "haskell"
 
          compls <- getCompletions doc (Position 5 7)
-         liftIO $ any ((== "!!") . (^. label)) compls @? ""
+         liftIO $ assertBool "Expected completions" $ not $ null compls
 
      -- See https://github.com/haskell/haskell-ide-engine/issues/903
      , testCase "strips compiler generated stuff from completions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
