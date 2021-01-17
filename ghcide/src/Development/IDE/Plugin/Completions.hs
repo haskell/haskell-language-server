@@ -145,10 +145,18 @@ getCompletionsLSP lsp ide
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 snippets <- WithSnippets . completionSnippetsOn <$> getClientConfig lsp
-                Completions . List <$> getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
+                allCompletions <- getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
+                let topCompletions = List $ take 20 allCompletions
+                    isComplete = allCompletions `longerThan` 20
+                pure $ CompletionList (CompletionListType isComplete topCompletions)
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
+
+longerThan :: [a] -> Int -> Bool
+longerThan [] _ = False
+longerThan _ 0 = True
+longerThan (_ : aa) n = longerThan aa (n -1)
 
 setHandlersCompletion :: PartialHandlers Config
 setHandlersCompletion = PartialHandlers $ \WithMessage{..} x -> return x{
