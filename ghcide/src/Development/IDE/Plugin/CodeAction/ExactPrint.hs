@@ -151,7 +151,7 @@ appendConstraint constraintT = go
               ]
               | hsTypeNeedsParens sigPrec $ unLoc constraint
             ]
-      return $ L lTop $ HsQualTy NoExtField context (L l other)
+      return $ L lTop $ HsQualTy noExtField context (L l other)
 
 liftParseAST :: ASTElement ast => DynFlags -> String -> TransformT (Either String) (Located ast)
 liftParseAST df s = case parseAST df "" s of
