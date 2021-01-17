@@ -64,7 +64,6 @@ import Development.IDE.Plugin.Test (WaitForIdeRuleResult(..), TestRequest(BlockS
 import Control.Monad.Extra (whenJust)
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Control.Lens ((^.))
-import Development.IDE.Plugin.Completions (maxCompletions)
 
 main :: IO ()
 main = do
@@ -3224,7 +3223,7 @@ otherCompletionTests = [
             ]
         _ <- waitForDiagnostics
         compls <- getCompletions  doc (Position 3 13)
-        liftIO $ length compls @?= maxCompletions
+        liftIO $ length compls @?= maxCompletions def
   ]
 
 highlightTests :: TestTree

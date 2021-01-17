@@ -6,7 +6,6 @@ module Development.IDE.Plugin.Completions
     (
       plugin
     , getCompletionsLSP
-    , maxCompletions
     ) where
 
 import Language.Haskell.LSP.Messages
@@ -31,7 +30,7 @@ import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
 import TcRnDriver (tcRnImportDecls)
 import Data.Maybe
-import Ide.Plugin.Config (Config(completionSnippetsOn))
+import Ide.Plugin.Config (Config (completionSnippetsOn, maxCompletions))
 import Ide.PluginUtils (getClientConfig)
 
 #if defined(GHC_LIB)
@@ -116,13 +115,6 @@ data NonLocalCompletions = NonLocalCompletions
 instance Hashable NonLocalCompletions
 instance NFData   NonLocalCompletions
 instance Binary   NonLocalCompletions
-
--- | 40 may seem conservative but note that most editors limit how many completions
---   are displayed in the screen, and most users rarely scroll.
---   For instance, VSCode only shows 12 completions in its popup, and Emacs has a similar limit.
-maxCompletions :: Int
-maxCompletions = 40
-
 -- | Generate code actions.
 getCompletionsLSP
     :: LSP.LspFuncs Config
@@ -151,9 +143,10 @@ getCompletionsLSP lsp ide
                 -> return (Completions $ List [])
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
-                snippets <- WithSnippets . completionSnippetsOn <$> getClientConfig lsp
+                config <- getClientConfig lsp
+                let snippets = WithSnippets . completionSnippetsOn $ config
                 allCompletions <- getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
-                let (topCompletions, rest) = splitAt maxCompletions allCompletions
+                let (topCompletions, rest) = splitAt (maxCompletions config) allCompletions
                 pure $ CompletionList (CompletionListType (null rest) (List topCompletions))
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
