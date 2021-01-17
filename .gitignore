@@ -27,3 +27,6 @@ test/testdata/**/hie.yaml
 
 # metadata files on macOS
 .DS_Store
+
+# shake build folder (used in benchmark suite)
+.shake/
