@@ -169,6 +169,7 @@ library
         Development.IDE.Plugin
         Development.IDE.Plugin.Completions
         Development.IDE.Plugin.CodeAction
+        Development.IDE.Plugin.CodeAction.ExactPrint
         Development.IDE.Plugin.HLS
         Development.IDE.Plugin.HLS.GhcIde
         Development.IDE.Plugin.Test
