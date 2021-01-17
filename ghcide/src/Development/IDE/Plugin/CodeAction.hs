@@ -838,7 +838,7 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
   , Just (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
     <- findSigOfDecl ((T.unpack typeSignatureName ==) . showSDoc df . ppr) hsmodDecls
   , title <- actionTitle missingConstraint typeSignatureName
-  = [(title, appendConstraint (T.unpack $ missingConstraint) sig)]
+  = [(title, appendConstraint (T.unpack missingConstraint) sig)]
   | otherwise
   = []
     where

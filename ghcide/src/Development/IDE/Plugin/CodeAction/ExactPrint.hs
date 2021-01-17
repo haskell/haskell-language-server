@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -58,9 +57,8 @@ rewriteToEdit dflags uri anns (Rewrite dst f) = do
         HMap.fromList
           [ ( uri,
               List
-                [ ( TextEdit (fromJust $ srcSpanToRange dst) $
+                [ TextEdit (fromJust $ srcSpanToRange dst) $
                       T.pack $ tail $ exactPrint ast anns
-                  )
                 ]
             )
           ]
