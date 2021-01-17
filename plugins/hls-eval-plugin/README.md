@@ -74,6 +74,8 @@ double a = a + a
 
 Both plain Haskell and Literate Haskell (Bird-style only) source files are supported.
 
+CPP is also supported (for GHC >= 8.8).
+
 # Test Components
 
 In general, a test is a sequence of:
