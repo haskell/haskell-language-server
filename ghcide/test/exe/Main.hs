@@ -142,7 +142,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider  Nothing
     , chk "NO color"                         _colorProvider (Just $ ColorOptionsStatic False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ FoldingRangeOptionsStatic False)
-    , che "   execute command"      _executeCommandProvider (Just $ ExecuteCommandOptions $ List [typeLensCommandId, blockCommandId])
+    , che "   execute command"      _executeCommandProvider [blockCommandId, typeLensCommandId]
     , chk "   workspace"                         _workspace (Just $ WorkspaceOptions (Just WorkspaceFolderOptions{_supported = Just True, _changeNotifications = Just ( WorkspaceFolderChangeNotificationsBool True )}))
     , chk "NO experimental"                   _experimental  Nothing
     ] where
@@ -158,13 +158,13 @@ initializeResponseTests = withResource acquire release tests where
       chk title getActual expected =
         testCase title $ getInitializeResponse >>= \ir -> expected @=? (getActual . innerCaps) ir
 
-      che :: TestName -> (InitializeResponseCapabilitiesInner -> Maybe ExecuteCommandOptions) -> Maybe ExecuteCommandOptions -> TestTree
-      che title getActual _expected = testCase title doTest
+      che :: TestName -> (InitializeResponseCapabilitiesInner -> Maybe ExecuteCommandOptions) -> [T.Text] -> TestTree
+      che title getActual expected = testCase title doTest
         where
             doTest = do
                 ir <- getInitializeResponse
-                let Just ExecuteCommandOptions {_commands = List [command]} = getActual $ innerCaps ir
-                True @=? T.isSuffixOf "typesignature.add" command
+                let Just ExecuteCommandOptions {_commands = List commands} = getActual $ innerCaps ir
+                zipWithM_ (\e o -> T.isSuffixOf e o @? show (e,o)) expected commands
 
 
   innerCaps :: InitializeResponse -> InitializeResponseCapabilitiesInner
