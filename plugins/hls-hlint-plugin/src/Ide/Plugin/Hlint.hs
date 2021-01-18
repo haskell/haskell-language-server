@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PackageImports    #-}
 {-# LANGUAGE TypeFamilies      #-}
 
 module Ide.Plugin.Hlint
