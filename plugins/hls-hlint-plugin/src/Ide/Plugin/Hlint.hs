@@ -392,9 +392,7 @@ applyHint ide nfp mhint =
     -- in ghc-exactprint that makes dependent executables non portables.
     -- See https://github.com/alanz/ghc-exactprint/issues/96.
     -- WARNING: this code is not thread safe, so if you try to apply several async refactorings
-    -- in files associated with ghc sessions with different libdir's within the same hls process,
-    -- it could fail.
-    -- That case is quite improbable so we assume the risk.
+    -- it could fail. That case is not very likely so we assume the risk.
     let withRuntimeLibdir :: IO a -> IO a
         withRuntimeLibdir = bracket (setEnv key $ topDir dflags) (const $ unsetEnv key) . const
             where key = "GHC_EXACTPRINT_GHC_LIBDIR"
