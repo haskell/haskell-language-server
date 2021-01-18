@@ -22,7 +22,7 @@ import Data.Function    ( on )
 import Data.List        ( sortOn )
 import Data.Foldable    ( toList )
 
-ppHies :: Outputable a => (HieASTs a) -> SDoc
+ppHies :: Outputable a => HieASTs a -> SDoc
 ppHies (HieASTs asts) = M.foldrWithKey go "" asts
   where
     go k a rest = vcat $
@@ -112,7 +112,7 @@ validAst (Node _ span children) = do
           ]
     checkContainment [] = return ()
     checkContainment (x:xs)
-      | span `containsSpan` (nodeSpan x) = checkContainment xs
+      | span `containsSpan` nodeSpan x = checkContainment xs
       | otherwise = Left $ hsep
           [ ppr $ span
           , "does not contain"

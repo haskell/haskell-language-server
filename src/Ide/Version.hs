@@ -49,7 +49,7 @@ showProgramVersionOfInterest ProgramsOfInterest {..} =
     ]
   where
     showVersionWithDefault :: Maybe Version -> String
-    showVersionWithDefault = maybe ("Not found") showVersion
+    showVersionWithDefault = maybe "Not found" showVersion
 
 findProgramVersions :: IO ProgramsOfInterest
 findProgramVersions = ProgramsOfInterest

@@ -136,7 +136,7 @@ getRuntimeGhcVersion' cradle = do
 -- of the project that may or may not be accurate.
 findLocalCradle :: FilePath -> IO (Cradle Void)
 findLocalCradle fp = do
-  cradleConf <- (findCradle defaultLoadingOptions) fp
+  cradleConf <- findCradle defaultLoadingOptions fp
   crdl       <- case cradleConf of
     Just yaml -> do
       hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
@@ -144,4 +144,3 @@ findLocalCradle fp = do
     Nothing -> loadImplicitCradle fp
   hPutStrLn stderr $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
-

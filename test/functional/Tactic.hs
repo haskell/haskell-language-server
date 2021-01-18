@@ -154,7 +154,7 @@ goldenTest input line col tc occ =
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
-      Just (CACodeAction (CodeAction {_command = Just c}))
+      Just (CACodeAction CodeAction {_command = Just c})
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       executeCommand c
       _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
@@ -174,7 +174,7 @@ expectFail input line col tc occ =
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
-      Just (CACodeAction (CodeAction {_command = Just c}))
+      Just (CACodeAction CodeAction {_command = Just c})
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       resp <- executeCommandWithResp c
       liftIO $ unless (isLeft $ _result resp) $
@@ -190,4 +190,3 @@ executeCommandWithResp cmd = do
   let args = decode $ encode $ fromJust $ cmd ^. arguments
       execParams = ExecuteCommandParams (cmd ^. command) args Nothing
   request WorkspaceExecuteCommand execParams
-

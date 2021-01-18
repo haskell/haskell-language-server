@@ -30,4 +30,4 @@ langOptions = runParser (many space *> languageOpts <* many space)
 -- >>> runParser languageOpts ":set -XBinaryLiterals -XOverloadedStrings"
 -- Right ["BinaryLiterals","OverloadedStrings"]
 languageOpts :: Parser Char [[Char]]
-languageOpts = string ":set" *> many (many space *> string "-X" *> (many letterChar))
+languageOpts = string ":set" *> many (many space *> string "-X" *> many letterChar)

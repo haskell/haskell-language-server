@@ -370,7 +370,7 @@ redundantImportTests = testGroup "redundant import code actions" [
         CACommand cmd : _ <- getAllCodeActions doc
         executeCommand cmd
         contents <- documentContents doc
-        liftIO $ (T.lines contents) @?=
+        liftIO $ T.lines contents @?=
                 [ "{-# OPTIONS_GHC -Wunused-imports #-}"
                 , "module MultipleImports where"
                 , "import Data.Maybe"
@@ -435,7 +435,7 @@ signatureTests = testGroup "missing top level signature code actions" [
         _ <- waitForDiagnosticsFromSource doc "typecheck"
         cas <- map fromAction <$> getAllCodeActions doc
 
-        liftIO $ "add signature: main :: IO ()" `elem` (map (^. L.title) cas) @? "Contains code action"
+        liftIO $ "add signature: main :: IO ()" `elem` map (^. L.title) cas @? "Contains code action"
 
         executeCodeAction $ head cas
 
@@ -449,7 +449,7 @@ signatureTests = testGroup "missing top level signature code actions" [
                        , "  return ()"
                        ]
 
-        liftIO $ (T.lines contents) @?= expected
+        liftIO $ T.lines contents @?= expected
     ]
 
 missingPragmaTests :: TestTree
@@ -487,7 +487,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                         , "           deriving (Generic,Functor,Traversable)"
                         ]
 
-            liftIO $ (T.lines contents) @?= expected
+            liftIO $ T.lines contents @?= expected
 
     , testCase "Adds TypeApplications pragma" $ do
         runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
@@ -511,7 +511,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                     , "foo = id @a"
                     ]
 
-            liftIO $ (T.lines contents) @?= expected
+            liftIO $ T.lines contents @?= expected
     ]
 
 unusedTermTests :: TestTree

@@ -227,7 +227,7 @@ suggestBindRewrites ::
   GHC.Module ->
   HsBindLR GhcRn GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestBindRewrites originatingFile pos ms_mod (FunBind {fun_id = L l' rdrName})
+suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L l' rdrName}
   | pos `isInsideSrcSpan` l' =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
@@ -253,7 +253,7 @@ suggestTypeRewrites ::
   GHC.Module ->
   TyClDecl pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestTypeRewrites originatingFile ms_mod (SynDecl {tcdLName = L _ rdrName}) =
+suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName = L _ rdrName} =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
         unfoldRewrite restrictToOriginatingFile =
@@ -273,7 +273,7 @@ suggestRuleRewrites ::
   GHC.Module ->
   LRuleDecls pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
+suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
     concat
         [ [ forwardRewrite   ruleName True
           , forwardRewrite   ruleName False

@@ -297,7 +297,7 @@ getSymbolTable bh ncu = do
 getSymTabName :: SymbolTable -> BinHandle -> IO Name
 getSymTabName st bh = do
   i :: Word32 <- get bh
-  return $ st A.! (fromIntegral i)
+  return $ st A.! fromIntegral i
 
 putName :: HieSymbolTable -> BinHandle -> Name -> IO ()
 putName (HieSymbolTable next ref) bh name = do
