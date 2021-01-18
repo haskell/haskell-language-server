@@ -31,6 +31,8 @@ extra-deps:
     commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
   - ghc-lib-8.10.3.20201220
   - ghc-lib-parser-8.10.3.20201220
+  - haskell-lsp-0.23.0.0
+  - haskell-lsp-types-0.23.0.0
   - heapsize-0.3.0
   - hie-bios-0.7.1
   - hlint-3.2.3
@@ -47,8 +49,7 @@ extra-deps:
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1
-  - haskell-lsp-0.23.0.0
-  - haskell-lsp-types-0.23.0.0
+  - uniplate-1.6.13
 
 configure-options:
   ghcide:
