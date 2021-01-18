@@ -7,7 +7,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
 module Ide.Plugin.Tactic.Machinery
