@@ -298,6 +298,7 @@ Here is a list of the additional settings currently supported by `haskell-langua
 - Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets
 - Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again)
 - Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support
+- Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
 
 Settings like this are typically provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
 
