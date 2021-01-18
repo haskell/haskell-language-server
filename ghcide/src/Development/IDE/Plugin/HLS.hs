@@ -6,9 +6,10 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception(SomeException, catch)
-import           Control.Lens ( (^.) )
+import           Control.Lens ((^.))
 import           Control.Monad
 import qualified Data.Aeson as J
+import qualified Data.DList as DList
 import           Data.Either
 import qualified Data.List                     as List
 import qualified Data.Map  as Map
@@ -436,34 +437,54 @@ makeCompletions :: [(PluginId, CompletionProvider IdeState)]
 makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier doc) pos _context _mt)
   = do
       mprefix <- getPrefixAtPos lf doc pos
-      _snippets <- WithSnippets . completionSnippetsOn <$> getClientConfig lf
+      config <- getClientConfig lf
 
       let
           combine :: [CompletionResponseResult] -> CompletionResponseResult
-          combine cs = go (Completions $ List []) cs
-              where
-                  go acc [] = acc
-                  go (Completions (List ls)) (Completions (List ls2):rest)
-                      = go (Completions (List (ls <> ls2))) rest
-                  go (Completions (List ls)) (CompletionList (CompletionListType complete (List ls2)):rest)
-                      = go (CompletionList $ CompletionListType complete (List (ls <> ls2))) rest
-                  go (CompletionList (CompletionListType complete (List ls))) (CompletionList (CompletionListType complete2 (List ls2)):rest)
-                      = go (CompletionList $ CompletionListType (complete || complete2) (List (ls <> ls2))) rest
-                  go (CompletionList (CompletionListType complete (List ls))) (Completions (List ls2):rest)
-                      = go (CompletionList $ CompletionListType complete (List (ls <> ls2))) rest
-          makeAction (pid,p) = do
+          combine cs = go True mempty cs
+
+          go !comp acc [] =
+            CompletionList (CompletionListType comp (List $ DList.toList acc))
+          go comp acc (Completions (List ls) : rest) =
+            go comp (acc <> DList.fromList ls) rest
+          go comp acc (CompletionList (CompletionListType comp' (List ls)) : rest) =
+            go (comp && comp') (acc <> DList.fromList ls) rest
+
+          -- | Process a list of completion providers until we reach a max number of results
+          makeAction ::
+            Int ->
+            [(PluginId, CompletionProvider IdeState)] ->
+            IO [Either ResponseError CompletionResponseResult]
+          makeAction 0 _ = return []
+          makeAction _ [] = return []
+          makeAction n ((pid, p) : rest) = do
             pluginConfig <- getPluginConfig lf pid
-            if pluginEnabled pluginConfig plcCompletionOn
+            results <- if pluginEnabled pluginConfig plcCompletionOn
                then otTracedProvider pid "completions" $ p lf ideState params
                else return $ Right $ Completions $ List []
+            case results of
+              Right resp -> do
+                let (n', results') = consumeCompletionResponse n resp
+                (Right results' :) <$> makeAction n' rest
+              Left err ->
+                (Left err :) <$> makeAction n rest
 
       case mprefix of
           Nothing -> return $ Right $ Completions $ List []
           Just _prefix -> do
-            mhs <- mapM makeAction sps
+            mhs <- makeAction (maxCompletions config) sps
             case rights mhs of
                 [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
                 hs -> return $ Right $ combine hs
+
+-- | Crops a completion response. Returns the final number of completions and the cropped response
+consumeCompletionResponse :: Int -> CompletionResponseResult -> (Int, CompletionResponseResult)
+consumeCompletionResponse n it@(CompletionList (CompletionListType _ (List xx))) =
+  case splitAt n xx of
+    (_, []) -> (n - length xx, it)
+    (xx', _) -> (0, CompletionList (CompletionListType False (List xx')))
+consumeCompletionResponse n (Completions (List xx)) =
+  consumeCompletionResponse n (CompletionList (CompletionListType False (List xx)))
 
 getPrefixAtPos :: LSP.LspFuncs Config -> Uri -> Position -> IO (Maybe VFS.PosPrefixInfo)
 getPrefixAtPos lf uri pos = do
