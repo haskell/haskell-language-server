@@ -73,7 +73,7 @@ launchHaskellLanguageServer LspArguments{..} = do
   hPutStrLn stderr $ showProgramVersionOfInterest programsOfInterest
   hPutStrLn stderr ""
   -- Get the ghc version -- this might fail!
-  hPutStrLn stderr $ "Consulting the cradle to get project GHC version..."
+  hPutStrLn stderr "Consulting the cradle to get project GHC version..."
   ghcVersion <- getRuntimeGhcVersion' cradle
   hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
 

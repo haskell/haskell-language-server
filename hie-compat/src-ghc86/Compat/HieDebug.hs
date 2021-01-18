@@ -25,7 +25,7 @@ import Data.Foldable    ( toList )
 ppHies :: Outputable a => HieASTs a -> SDoc
 ppHies (HieASTs asts) = M.foldrWithKey go "" asts
   where
-    go k a rest = vcat $
+    go k a rest = vcat
       [ "File: " <> ppr k
       , ppHie a
       , rest
@@ -114,7 +114,7 @@ validAst (Node _ span children) = do
     checkContainment (x:xs)
       | span `containsSpan` nodeSpan x = checkContainment xs
       | otherwise = Left $ hsep
-          [ ppr $ span
+          [ ppr span
           , "does not contain"
           , ppr $ nodeSpan x
           ]
@@ -139,7 +139,7 @@ validateScopes asts = M.foldrWithKey (\k a b -> valid k a ++ b) [] refMap
               [] -> []
               _ -> if any (`scopeContainsSpan` sp) scopes
                    then []
-                   else return $ hsep $
+                   else return $ hsep
                      [ "Name", ppr n, "at position", ppr sp
                      , "doesn't occur in calculated scope", ppr scopes]
           | otherwise = []

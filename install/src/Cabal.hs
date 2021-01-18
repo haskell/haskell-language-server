@@ -46,7 +46,7 @@ getGhcPathOfOrThrowError versionNumber =
 
 cabalInstallHls :: VersionNumber -> [String] -> Action ()
 cabalInstallHls versionNumber args = do
-  localBin <- liftIO $ getInstallDir
+  localBin <- liftIO getInstallDir
   cabalVersion <- getCabalVersion args
   ghcPath <- getGhcPathOfOrThrowError versionNumber
 

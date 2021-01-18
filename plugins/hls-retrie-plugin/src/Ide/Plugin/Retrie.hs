@@ -121,7 +121,7 @@ runRetrieCmd lsp state RunRetrieParams{originatingFile = uri, ..} =
         nfp <- MaybeT $ return $ uriToNormalizedFilePath $ toNormalizedUri uri
         (session, _) <- MaybeT $
             runAction "Retrie.GhcSessionDeps" state $
-                useWithStale GhcSessionDeps $
+                useWithStale GhcSessionDeps
                 nfp
         (ms, binds, _, _, _) <- MaybeT $ runAction "Retrie.getBinds" state $ getBinds nfp
         let importRewrites = concatMap (extractImports ms binds) rewrites
