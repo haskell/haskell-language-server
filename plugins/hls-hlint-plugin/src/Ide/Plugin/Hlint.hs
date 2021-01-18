@@ -394,7 +394,7 @@ applyHint ide nfp mhint =
     -- WARNING: this code is not thread safe, so if you try to apply several async refactorings
     -- it could fail. That case is not very likely so we assume the risk.
     let withRuntimeLibdir :: IO a -> IO a
-        withRuntimeLibdir = bracket (setEnv key $ topDir dflags) (const $ unsetEnv key) . const
+        withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
             where key = "GHC_EXACTPRINT_GHC_LIBDIR"
     res <-
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
