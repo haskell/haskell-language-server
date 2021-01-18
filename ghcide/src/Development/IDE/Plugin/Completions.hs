@@ -30,7 +30,7 @@ import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
 import TcRnDriver (tcRnImportDecls)
 import Data.Maybe
-import Ide.Plugin.Config (Config(completionSnippetsOn))
+import Ide.Plugin.Config (Config (completionSnippetsOn, maxCompletions))
 import Ide.PluginUtils (getClientConfig)
 
 #if defined(GHC_LIB)
@@ -115,7 +115,6 @@ data NonLocalCompletions = NonLocalCompletions
 instance Hashable NonLocalCompletions
 instance NFData   NonLocalCompletions
 instance Binary   NonLocalCompletions
-
 -- | Generate code actions.
 getCompletionsLSP
     :: LSP.LspFuncs Config
@@ -144,12 +143,14 @@ getCompletionsLSP lsp ide
                 -> return (Completions $ List [])
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
-                snippets <- WithSnippets . completionSnippetsOn <$> getClientConfig lsp
-                Completions . List <$> getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
+                config <- getClientConfig lsp
+                let snippets = WithSnippets . completionSnippetsOn $ config
+                allCompletions <- getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
+                let (topCompletions, rest) = splitAt (maxCompletions config) allCompletions
+                pure $ CompletionList (CompletionListType (null rest) (List topCompletions))
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
-
 setHandlersCompletion :: PartialHandlers Config
 setHandlersCompletion = PartialHandlers $ \WithMessage{..} x -> return x{
     LSP.completionHandler = withResponse RspCompletion getCompletionsLSP

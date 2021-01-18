@@ -3262,7 +3262,17 @@ otherCompletionTests = [
       -- This should be sufficient to detect that we are in a
       -- type context and only show the completion to the type.
       (Position 3 11)
-      [("Integer", CiStruct, "Integer ", True, True, Nothing)]
+      [("Integer", CiStruct, "Integer ", True, True, Nothing)],
+
+    testSessionWait "maxCompletions" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "a = Prelude."
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions  doc (Position 3 13)
+        liftIO $ length compls @?= maxCompletions def
   ]
 
 highlightTests :: TestTree
