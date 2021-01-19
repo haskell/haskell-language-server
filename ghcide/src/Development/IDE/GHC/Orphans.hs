@@ -21,6 +21,7 @@ import           GhcPlugins
 import qualified StringBuffer               as SB
 import Data.Text (Text)
 import Data.String (IsString(fromString))
+import Retrie.ExactPrint (Annotated)
 
 
 -- Orphan instances for types from the GHC API.
@@ -144,3 +145,9 @@ instance NFData ModGuts where
 
 instance NFData (ImportDecl GhcPs) where
     rnf = rwhnf
+
+instance Show (Annotated ParsedSource) where
+  show _ = "<Annotated ParsedSource>"
+
+instance NFData (Annotated ParsedSource) where
+  rnf = rwhnf

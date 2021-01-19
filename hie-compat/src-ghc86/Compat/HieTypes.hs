@@ -5,7 +5,6 @@ For more information see https://gitlab.haskell.org/ghc/ghc/wikis/hie-files
 -}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -168,7 +167,7 @@ data HieType a
 type HieTypeFlat = HieType TypeIndex
 
 -- | Roughly isomorphic to the original core 'Type'.
-newtype HieTypeFix = Roll (HieType (HieTypeFix))
+newtype HieTypeFix = Roll (HieType HieTypeFix)
 
 instance Binary (HieType TypeIndex) where
   put_ bh (HTyVarTy n) = do
@@ -200,7 +199,7 @@ instance Binary (HieType TypeIndex) where
   put_ bh (HCastTy a) = do
     putByte bh 7
     put_ bh a
-  put_ bh (HCoercionTy) = putByte bh 8
+  put_ bh HCoercionTy = putByte bh 8
 
   get bh = do
     (t :: Word8) <- get bh
@@ -228,7 +227,7 @@ instance Binary (HieArgs TypeIndex) where
 
 -- | Mapping from filepaths (represented using 'FastString') to the
 -- corresponding AST
-newtype HieASTs a = HieASTs { getAsts :: (M.Map FastString (HieAST a)) }
+newtype HieASTs a = HieASTs { getAsts :: M.Map FastString (HieAST a) }
   deriving (Functor, Foldable, Traversable)
 
 instance Binary (HieASTs TypeIndex) where
@@ -276,9 +275,9 @@ instance Binary (NodeInfo TypeIndex) where
     put_ bh $ nodeType ni
     put_ bh $ M.toList $ nodeIdentifiers ni
   get bh = NodeInfo
-    <$> fmap (S.fromDistinctAscList) (get bh)
+    <$> fmap S.fromDistinctAscList (get bh)
     <*> get bh
-    <*> fmap (M.fromList) (get bh)
+    <*> fmap M.fromList (get bh)
 
 type Identifier = Either ModuleName Name
 
@@ -309,7 +308,7 @@ instance Binary (IdentifierDetails TypeIndex) where
     put_ bh $ S.toAscList $ identInfo dets
   get bh =  IdentifierDetails
     <$> get bh
-    <*> fmap (S.fromDistinctAscList) (get bh)
+    <*> fmap S.fromDistinctAscList (get bh)
 
 
 -- | Different contexts under which identifiers exist
@@ -419,7 +418,7 @@ data IEType
 
 instance Binary IEType where
   put_ bh b = putByte bh (fromIntegral (fromEnum b))
-  get bh = do x <- getByte bh; pure $! (toEnum (fromIntegral x))
+  get bh = do x <- getByte bh; pure $! toEnum (fromIntegral x)
 
 
 data RecFieldContext
@@ -431,7 +430,7 @@ data RecFieldContext
 
 instance Binary RecFieldContext where
   put_ bh b = putByte bh (fromIntegral (fromEnum b))
-  get bh = do x <- getByte bh; pure $! (toEnum (fromIntegral x))
+  get bh = do x <- getByte bh; pure $! toEnum (fromIntegral x)
 
 
 data BindType
@@ -441,7 +440,7 @@ data BindType
 
 instance Binary BindType where
   put_ bh b = putByte bh (fromIntegral (fromEnum b))
-  get bh = do x <- getByte bh; pure $! (toEnum (fromIntegral x))
+  get bh = do x <- getByte bh; pure $! toEnum (fromIntegral x)
 
 
 data DeclType
@@ -456,7 +455,7 @@ data DeclType
 
 instance Binary DeclType where
   put_ bh b = putByte bh (fromIntegral (fromEnum b))
-  get bh = do x <- getByte bh; pure $! (toEnum (fromIntegral x))
+  get bh = do x <- getByte bh; pure $! toEnum (fromIntegral x)
 
 
 data Scope

@@ -147,21 +147,25 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled
                 case msg of
-                    Notification x@NotificationMessage{_params, _method} act -> otTracedHandler "Notification" (show _method) $ do
-                        catch (act lspFuncs ide _params) $ \(e :: SomeException) ->
+                    Notification x@NotificationMessage{_params, _method} act ->
+                        otTracedHandler "Notification" (show _method) $ \sp -> do
+                          traceWithSpan sp _params
+                          catch (act lspFuncs ide _params) $ \(e :: SomeException) ->
                             logError (ideLogger ide) $ T.pack $
                                 "Unexpected exception on notification, please report!\n" ++
                                 "Message: " ++ show x ++ "\n" ++
                                 "Exception: " ++ show e
                     Response x@RequestMessage{_id, _method, _params} wrap act -> void $ async $
-                        otTracedHandler "Request" (show _method) $
-                        checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
+                        otTracedHandler "Request" (show _method) $ \sp -> do
+                          traceWithSpan sp _params
+                          checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
                             \case
                               Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Left e)
                               Right r -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Right r)
                     ResponseAndRequest x@RequestMessage{_id, _method, _params} wrap wrapNewReq act -> void $ async $
-                        otTracedHandler "Request" (show _method) $
-                        checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
+                        otTracedHandler "Request" (show _method) $ \sp -> do
+                          traceWithSpan sp _params
+                          checkCancelled ide clearReqId waitForCancel lspFuncs wrap act x _id _params $
                             \(res, newReq) -> do
                                 case res of
                                     Left e  -> sendFunc $ wrap $ ResponseMessage "2.0" (responseId _id) (Left e)
@@ -170,8 +174,9 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
                                     reqId <- getNextReqId
                                     sendFunc $ wrapNewReq $ RequestMessage "2.0" reqId rm newReqParams
                     InitialParams x@RequestMessage{_id, _method, _params} act ->
-                        otTracedHandler "Initialize" (show _method) $
-                        catch (act lspFuncs ide _params) $ \(e :: SomeException) ->
+                        otTracedHandler "Initialize" (show _method) $ \sp -> do
+                          traceWithSpan sp _params
+                          catch (act lspFuncs ide _params) $ \(e :: SomeException) ->
                             logError (ideLogger ide) $ T.pack $
                                 "Unexpected exception on InitializeRequest handler, please report!\n" ++
                                 "Message: " ++ show x ++ "\n" ++
@@ -238,14 +243,17 @@ exitHandler exit = PartialHandlers $ \_ x -> return x
 -- | A message that we need to deal with - the pieces are split up with existentials to gain additional type safety
 --   and defer precise processing until later (allows us to keep at a higher level of abstraction slightly longer)
 data Message c
-    = forall m req resp . (Show m, Show req) => Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (LSP.LspFuncs c -> IdeState -> req -> IO (Either ResponseError resp))
-    -- | Used for cases in which we need to send not only a response,
+  = forall m req resp . (Show m, Show req, HasTracing req) =>
+    Response (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (LSP.LspFuncs c -> IdeState -> req -> IO (Either ResponseError resp))
+  | -- | Used for cases in which we need to send not only a response,
     --   but also an additional request to the client.
     --   For example, 'executeCommand' may generate an 'applyWorkspaceEdit' request.
-    | forall m rm req resp newReqParams newReqBody . (Show m, Show rm, Show req) => ResponseAndRequest (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (RequestMessage rm newReqParams newReqBody -> FromServerMessage) (LSP.LspFuncs c -> IdeState -> req -> IO (Either ResponseError resp, Maybe (rm, newReqParams)))
-    | forall m req . (Show m, Show req) => Notification (NotificationMessage m req) (LSP.LspFuncs c -> IdeState -> req -> IO ())
-    -- | Used for the InitializeRequest only, where the response is generated by the LSP core handler.
-    | InitialParams InitializeRequest (LSP.LspFuncs c -> IdeState -> InitializeParams -> IO ())
+    forall m rm req resp newReqParams newReqBody. (Show m, Show rm, Show req, HasTracing req) =>
+    ResponseAndRequest (RequestMessage m req resp) (ResponseMessage resp -> FromServerMessage) (RequestMessage rm newReqParams newReqBody -> FromServerMessage) (LSP.LspFuncs c -> IdeState -> req -> IO (Either ResponseError resp, Maybe (rm, newReqParams)))
+  | forall m req . (Show m, Show req, HasTracing req) =>
+    Notification (NotificationMessage m req) (LSP.LspFuncs c -> IdeState -> req -> IO ())
+  | -- | Used for the InitializeRequest only, where the response is generated by the LSP core handler.
+    InitialParams InitializeRequest (LSP.LspFuncs c -> IdeState -> InitializeParams -> IO ())
 
 modifyOptions :: LSP.Options -> LSP.Options
 modifyOptions x = x{ LSP.textDocumentSync   = Just $ tweakTDS origTDS

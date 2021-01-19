@@ -168,7 +168,7 @@ checkDiagnosticsForDoc :: TextDocumentIdentifier -> [(DiagnosticSeverity, Cursor
 checkDiagnosticsForDoc TextDocumentIdentifier {_uri} expected obtained = do
     let expected' = Map.fromList [(nuri, map (\(ds, c, t) -> (ds, c, t, Nothing)) expected)]
         nuri = toNormalizedUri _uri
-    expectDiagnosticsWithTags' (return $ (_uri, List obtained)) expected'
+    expectDiagnosticsWithTags' (return (_uri, List obtained)) expected'
 
 canonicalizeUri :: Uri -> IO Uri
 canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePath uri))
