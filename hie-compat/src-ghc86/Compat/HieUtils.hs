@@ -62,11 +62,11 @@ resolveVisibility kind ty_args
         ts' = go (extendTvSubst env tv t) res ts
 
     go env (FunTy _ res) (t:ts) -- No type-class args in tycon apps
-      = (True,t) : (go env res ts)
+      = (True,t) : go env res ts
 
     go env (TyVarTy tv) ts
       | Just ki <- lookupTyVar env tv = go env ki ts
-    go env kind (t:ts) = (True, t) : (go env kind ts) -- Ill-kinded
+    go env kind (t:ts) = (True, t) : go env kind ts -- Ill-kinded
 
 foldType :: (HieType a -> a) -> HieTypeFix -> a
 foldType f (Roll t) = f $ fmap (foldType f) t
@@ -114,7 +114,7 @@ compressTypes
   -> (HieASTs TypeIndex, A.Array TypeIndex HieTypeFlat)
 compressTypes asts = (a, arr)
   where
-    (a, (HTS _ m i)) = flip runState initialHTS $
+    (a, HTS _ m i) = flip runState initialHTS $
       for asts $ \typ -> do
         i <- getTypeIndex typ
         return i

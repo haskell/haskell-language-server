@@ -49,7 +49,7 @@ showProgramVersionOfInterest ProgramsOfInterest {..} =
     ]
   where
     showVersionWithDefault :: Maybe Version -> String
-    showVersionWithDefault = maybe ("Not found") showVersion
+    showVersionWithDefault = maybe "Not found" showVersion
 
 findProgramVersions :: IO ProgramsOfInterest
 findProgramVersions = ProgramsOfInterest
@@ -67,7 +67,7 @@ findVersionOf tool =
     Just path ->
       readProcessWithExitCode path ["--numeric-version"] "" >>= \case
         (ExitSuccess, sout, _) -> pure $ consumeParser myVersionParser sout
-        _ -> pure $ Nothing
+        _ -> pure Nothing
   where
     myVersionParser = do
       skipSpaces
