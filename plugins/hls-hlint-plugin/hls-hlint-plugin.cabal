@@ -5,10 +5,10 @@ synopsis:      Hlint integration plugin with Haskell Language Server
 description:   Please see README.md
 license:       Apache-2.0
 license-file:  LICENSE
-author:        Many,TBD when we release
-maintainer:    alan.zimm@gmail.com (for now)
-copyright:     Alan Zimmerman
-category:      Web
+author:        The Haskell IDE Team
+maintainer:    alan.zimm@gmail.com
+copyright:     The Haskell IDE Team
+category:      Development
 build-type:    Simple
 
 flag pedantic

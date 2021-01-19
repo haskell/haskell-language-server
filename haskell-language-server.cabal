@@ -8,11 +8,12 @@ description:
 
 homepage:           https://github.com/haskell/haskell-language-server#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-author:             Alan Zimmerman
+author:             The Haskell IDE Team
 maintainer:         alan.zimm@gmail.com
-copyright:          Alan Zimmerman
+copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
+category:           Development
 build-type:         Simple
 extra-source-files:
   README.md
