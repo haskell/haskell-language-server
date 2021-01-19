@@ -414,7 +414,7 @@ test-suite func-test
     , tasty-rerun
     , ghcide
 
-  hs-source-dirs:     test/functional plugins/tactics/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src
+  hs-source-dirs:     test/functional plugins/hls-tactics-plugin/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src
 
   main-is:            Main.hs
   other-modules:

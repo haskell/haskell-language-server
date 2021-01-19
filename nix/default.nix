@@ -27,7 +27,7 @@ let
             hls-hlint-plugin = gitignoreSource ../plugins/hls-hlint-plugin;
             hls-retrie-plugin = gitignoreSource ../plugins/hls-retrie-plugin;
             hls-splice-plugin = gitignoreSource ../plugins/hls-splice-plugin;
-            hls-tactics-plugin = gitignoreSource ../plugins/tactics;
+            hls-tactics-plugin = gitignoreSource ../plugins/hls-tactics-plugin;
           });
         in
         {
