@@ -1,7 +1,4 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DerivingVia           #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -9,8 +6,6 @@
 {-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE TypeSynonymInstances  #-}
-{-# LANGUAGE ViewPatterns          #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
@@ -92,7 +87,7 @@ runTactic ctx jdg t =
           . flip runReader ctx
           . unExtractM
           $ runTacticT t jdg tacticState of
-      (errs, []) -> Left $ take 50 $ errs
+      (errs, []) -> Left $ take 50 errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
               flip sortBy solns $ comparing $ \((_, ext), (jdg, holes)) ->
@@ -174,7 +169,7 @@ scoreSolution ext TacticState{..} holes
     , Penalize $ S.size ts_unused_top_vals
     , Penalize $ S.size ts_intro_vals
     , Reward   $ S.size ts_used_vals
-    , Penalize $ ts_recursion_count
+    , Penalize ts_recursion_count
     , Penalize $ solutionSize ext
     )
 
@@ -251,4 +246,3 @@ requireConcreteHole m = do
   case S.size $ vars S.\\ skolems of
     0 -> m
     _ -> throwError TooPolymorphic
-

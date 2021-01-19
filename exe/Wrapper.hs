@@ -73,7 +73,7 @@ launchHaskellLanguageServer LspArguments{..} = do
   hPutStrLn stderr $ showProgramVersionOfInterest programsOfInterest
   hPutStrLn stderr ""
   -- Get the ghc version -- this might fail!
-  hPutStrLn stderr $ "Consulting the cradle to get project GHC version..."
+  hPutStrLn stderr "Consulting the cradle to get project GHC version..."
   ghcVersion <- getRuntimeGhcVersion' cradle
   hPutStrLn stderr $ "Project GHC version: " ++ ghcVersion
 
@@ -136,7 +136,7 @@ getRuntimeGhcVersion' cradle = do
 -- of the project that may or may not be accurate.
 findLocalCradle :: FilePath -> IO (Cradle Void)
 findLocalCradle fp = do
-  cradleConf <- (findCradle defaultLoadingOptions) fp
+  cradleConf <- findCradle defaultLoadingOptions fp
   crdl       <- case cradleConf of
     Just yaml -> do
       hPutStrLn stderr $ "Found \"" ++ yaml ++ "\" for \"" ++ fp ++ "\""
@@ -144,4 +144,3 @@ findLocalCradle fp = do
     Nothing -> loadImplicitCradle fp
   hPutStrLn stderr $ "Module \"" ++ fp ++ "\" is loaded by Cradle: " ++ show crdl
   return crdl
-

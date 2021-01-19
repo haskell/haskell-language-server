@@ -3,10 +3,8 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
 -- | A plugin that uses tactics to synthesize code
@@ -365,4 +363,3 @@ getRhsPosVals rss tcs
 -- TODO(sandy): Make this more robust
 isHole :: OccName -> Bool
 isHole = isPrefixOf "_" . occNameString
-

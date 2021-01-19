@@ -38,7 +38,7 @@ defaultMain = do
     let args = [verbosityArg (shakeVerbosity shakeOptionsRules)]
 
     phony "show-options" $ do
-      putNormal $ "Options:"
+      putNormal "Options:"
       putNormal $ "    Verbosity level: " ++ show (shakeVerbosity shakeOptionsRules)
 
     want ["short-help"]
@@ -51,7 +51,7 @@ defaultMain = do
     phony "data" $ do
       need ["show-options"]
       need ["check"]
-      liftIO $ putStrLn "Generation of hoogle data files is disabled for now."  
+      liftIO $ putStrLn "Generation of hoogle data files is disabled for now."
       -- if isRunFromStack then stackBuildData args else cabalBuildData args
 
     forM_
@@ -90,7 +90,7 @@ defaultMain = do
       need ["icu-macos-fix-build"]
 
     phony "icu-macos-fix-install" (command_ [] "brew" ["install", "icu4c"])
-    phony "icu-macos-fix-build" $ mapM_ (flip buildIcuMacosFix $ args) versions
+    phony "icu-macos-fix-build" $ mapM_ (flip buildIcuMacosFix args) versions
 
 
 buildIcuMacosFix :: VersionNumber -> [String] -> Action ()

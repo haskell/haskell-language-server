@@ -78,7 +78,7 @@ freshTyvars t = do
   reps <- fmap M.fromList
         $ for tvs $ \tv -> do
             uniq <- freshUnique
-            pure $ (tv, setTyVarUnique tv uniq)
+            pure (tv, setTyVarUnique tv uniq)
   pure $
     everywhere
       (mkT $ \tv ->

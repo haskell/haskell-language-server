@@ -178,7 +178,7 @@ destructLambdaCase' f jdg = do
   let g  = jGoal jdg
   case splitFunTy_maybe (unCType g) of
     Just (arg, _) | isAlgType arg ->
-      fmap (fmap noLoc $ lambdaCase) <$>
+      fmap (fmap noLoc lambdaCase) <$>
         destructMatches f Nothing (CType arg) jdg
     _ -> throwError $ GoalMismatch "destructLambdaCase'" g
 
@@ -214,7 +214,7 @@ mkCon dcon (fmap unLoc -> args)
   , (lhs : rhs : args') <- args =
       noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
   | otherwise =
-      noLoc $ foldl' (@@) (bvar' $ occName $ dcon_name) args
+      noLoc $ foldl' (@@) (bvar' $ occName dcon_name) args
   where
     dcon_name = dataConName dcon
 
@@ -259,4 +259,3 @@ infixCall s = flip op (fromString s)
 -- | Like '(@@)', but uses a dollar instead of parentheses.
 appDollar :: HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
 appDollar = infixCall "$"
-
