@@ -1,14 +1,16 @@
 module Ide.Plugin.Brittany where
 
+import           Control.Exception (bracket_)
 import           Control.Lens
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
 import           Data.Coerce
+import           Data.Maybe (maybeToList)
 import           Data.Semigroup
 import           Data.Text                             (Text)
 import qualified Data.Text                             as T
 import           Development.IDE
--- import           Development.IDE.Plugin.Formatter
+import           Development.IDE.GHC.Compat (topDir, ModSummary(ms_hspp_opts))
 import           Language.Haskell.Brittany
 import           Language.Haskell.LSP.Types            as J
 import qualified Language.Haskell.LSP.Types.Lens       as J
@@ -16,7 +18,7 @@ import           Ide.PluginUtils
 import           Ide.Types
 
 import           System.FilePath
-import           Data.Maybe (maybeToList)
+import           System.Environment (setEnv, unsetEnv)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -28,14 +30,17 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- If the provider fails an error is returned that can be displayed to the user.
 provider
   :: FormattingProvider IdeState IO
-provider _lf _ideState typ contents fp opts = do
+provider _lf ide typ contents nfp opts = do
 -- text uri formatType opts = pluginGetFile "brittanyCmd: " uri $ \fp -> do
-  confFile <- liftIO $ getConfFile fp
+  confFile <- liftIO $ getConfFile nfp
   let (range, selectedContents) = case typ of
         FormatText    -> (fullRange contents, contents)
         FormatRange r -> (normalize r, extractRange r contents)
-
-  res <- formatText confFile opts selectedContents
+  (modsum, _) <- runAction "brittany" ide $ use_ GetModSummary nfp
+  let dflags = ms_hspp_opts modsum
+  let withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
+        where key = "GHC_EXACTPRINT_GHC_LIBDIR"
+  res <- withRuntimeLibdir $ formatText confFile opts selectedContents
   case res of
     Left err -> return $ Left $ responseError (T.pack $ "brittanyCmd: " ++ unlines (map showErr err))
     Right newText -> return $ Right $ J.List [TextEdit range newText]
