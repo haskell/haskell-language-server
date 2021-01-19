@@ -32,6 +32,7 @@ import           Text.Regex.TDFA.Text()
 import Development.Shake (Rules)
 import Ide.PluginUtils (getClientConfig, pluginEnabled, getPluginConfig, responseError, getProcessID)
 import Development.IDE.Types.Logger (logInfo)
+import Development.IDE.Core.Tracing
 
 -- ---------------------------------------------------------------------
 
@@ -94,7 +95,7 @@ makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
         makeAction (pid,provider) = do
           pluginConfig <- getPluginConfig lf pid
           if pluginEnabled pluginConfig plcCodeActionsOn
-            then provider lf ideState pid docId range context
+            then otTracedProvider pid "codeAction" $ provider lf ideState pid docId range context
             else return $ Right (List [])
     r <- mapM makeAction cas
     let actions = filter wasRequested . foldMap unL $ rights r
@@ -158,7 +159,7 @@ makeCodeLens cas lf ideState params = do
       makeLens (pid, provider) = do
           pluginConfig <- getPluginConfig lf pid
           r <- if pluginEnabled pluginConfig plcCodeLensOn
-                 then provider lf ideState pid params
+                 then otTracedProvider pid "codeLens" $ provider lf ideState pid params
                  else return $ Right (List [])
           return (pid, r)
       breakdown :: [(PluginId, Either ResponseError a)] -> ([(PluginId, ResponseError)], [(PluginId, a)])
@@ -303,7 +304,7 @@ makeHover hps lf ideState params
         makeHover(pid,p) = do
           pluginConfig <- getPluginConfig lf pid
           if pluginEnabled pluginConfig plcHoverOn
-             then p ideState params
+             then otTracedProvider pid "hover" $ p ideState params
              else return $ Right Nothing
       mhs <- mapM makeHover hps
       -- TODO: We should support ServerCapabilities and declare that
@@ -358,7 +359,7 @@ makeSymbols sps lf ideState params
           makeSymbols (pid,p) = do
             pluginConfig <- getPluginConfig lf pid
             if pluginEnabled pluginConfig plcSymbolsOn
-              then p lf ideState params
+              then otTracedProvider pid "symbols" $ p lf ideState params
               else return $ Right []
       mhs <- mapM makeSymbols sps
       case rights mhs of
@@ -387,7 +388,7 @@ renameWith providers lspFuncs state params = do
         makeAction (pid,p) = do
           pluginConfig <- getPluginConfig lspFuncs pid
           if pluginEnabled pluginConfig plcRenameOn
-             then p lspFuncs state params
+             then otTracedProvider pid "rename" $ p lspFuncs state params
              else return $ Right $ WorkspaceEdit Nothing Nothing
     -- TODO:AZ: we need to consider the right way to combine possible renamers
     results <- mapM makeAction providers
@@ -453,7 +454,7 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
           makeAction (pid,p) = do
             pluginConfig <- getPluginConfig lf pid
             if pluginEnabled pluginConfig plcCompletionOn
-               then p lf ideState params
+               then otTracedProvider pid "completions" $ p lf ideState params
                else return $ Right $ Completions $ List []
 
       case mprefix of

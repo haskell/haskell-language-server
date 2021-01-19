@@ -89,8 +89,7 @@ getFunBindId _ = []
 
 
 getCurrentDefinitions :: MonadReader Context m => m [(OccName, CType)]
-getCurrentDefinitions = asks $ ctxDefiningFuncs
+getCurrentDefinitions = asks ctxDefiningFuncs
 
 getModuleHypothesis :: MonadReader Context m => m [(OccName, CType)]
 getModuleHypothesis = asks ctxModuleFuncs
-

@@ -3,12 +3,14 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
       graft,
       graftDecls,
       graftDeclsWithM,
+      annotate,
       hoistGraft,
       graftWithM,
       graftWithSmallestM,
@@ -16,8 +18,14 @@ module Development.IDE.GHC.ExactPrint
       transformM,
       useAnnotatedSource,
       annotateParsedSource,
+      getAnnotatedParsedSourceRule,
+      GetAnnotatedParsedSource(..),
       ASTElement (..),
       ExceptStringT (..),
+      Annotated(..),
+      TransformT,
+      Anns,
+      Annotate,
     )
 where
 
@@ -35,10 +43,13 @@ import Data.Functor.Classes
 import Data.Functor.Contravariant
 import qualified Data.Text as T
 import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Rules
+import Development.IDE.Core.Service (runAction)
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.Types.Location
+import Development.Shake (RuleResult, Rules)
+import Development.Shake.Classes
+import qualified GHC.Generics as GHC
 import Generics.SYB
 import Ide.PluginUtils
 import Language.Haskell.GHC.ExactPrint
@@ -47,6 +58,7 @@ import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable (Outputable, ppr, showSDoc)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
+import Parser (parseIdentifier)
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
 #endif
@@ -54,19 +66,30 @@ import Control.Arrow
 
 ------------------------------------------------------------------------------
 
+data GetAnnotatedParsedSource = GetAnnotatedParsedSource
+  deriving (Eq, Show, Typeable, GHC.Generic)
+
+instance Hashable GetAnnotatedParsedSource
+instance NFData GetAnnotatedParsedSource
+instance Binary GetAnnotatedParsedSource
+type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
+
 -- | Get the latest version of the annotated parse source.
-useAnnotatedSource ::
-    String ->
-    IdeState ->
-    NormalizedFilePath ->
-    IO (Maybe (Annotated ParsedSource))
-useAnnotatedSource herald state nfp =
-    fmap annotateParsedSource
-        <$> runAction herald state (use GetParsedModule nfp)
+getAnnotatedParsedSourceRule :: Rules ()
+getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
+  pm <- use GetParsedModule nfp
+  return ([], fmap annotateParsedSource pm)
 
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
 annotateParsedSource = fixAnns
 
+useAnnotatedSource ::
+  String ->
+  IdeState ->
+  NormalizedFilePath ->
+  IO (Maybe (Annotated ParsedSource))
+useAnnotatedSource herald state nfp =
+    runAction herald state (use GetAnnotatedParsedSource nfp)
 ------------------------------------------------------------------------------
 
 {- | A transformation for grafting source trees together. Use the semigroup
@@ -291,6 +314,10 @@ instance p ~ GhcPs => ASTElement (HsDecl p) where
     parseAST = parseDecl
     maybeParensAST = id
 
+instance ASTElement RdrName where
+    parseAST df fp = parseWith df fp parseIdentifier
+    maybeParensAST = id
+
 ------------------------------------------------------------------------------
 
 -- | Dark magic I stole from retrie. No idea what it does.
@@ -302,6 +329,7 @@ fixAnns ParsedModule {..} =
 ------------------------------------------------------------------------------
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
+--   Note that this function will throw away any existing annotations (and format)
 annotate :: ASTElement ast => DynFlags -> Located ast -> TransformT (Either String) (Anns, Located ast)
 annotate dflags ast = do
     uniq <- show <$> uniqueSrcSpanT

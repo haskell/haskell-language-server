@@ -69,6 +69,7 @@ data Config =
     , completionSnippetsOn        :: !Bool
     , formatOnImportOn            :: !Bool
     , formattingProvider          :: !T.Text
+    , maxCompletions              :: !Int
     , plugins                     :: !(Map.Map T.Text PluginConfig)
     } deriving (Show,Eq)
 
@@ -87,6 +88,7 @@ instance Default Config where
     , formattingProvider          = "ormolu"
     -- , formattingProvider          = "floskell"
     -- , formattingProvider          = "stylish-haskell"
+    , maxCompletions              = 40
     , plugins                     = Map.empty
     }
 
@@ -107,6 +109,7 @@ instance A.FromJSON Config where
       <*> o .:? "completionSnippetsOn"                    .!= completionSnippetsOn def
       <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn def
       <*> o .:? "formattingProvider"                      .!= formattingProvider def
+      <*> o .:? "maxCompletions"                          .!= maxCompletions def
       <*> o .:? "plugin"                                  .!= plugins def
 
 -- 2017-10-09 23:22:00.710515298 [ThreadId 11] - ---> {"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"haskell":{"maxNumberOfProblems":100,"hlintOn":true}}}}

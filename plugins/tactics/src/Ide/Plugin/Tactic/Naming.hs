@@ -22,7 +22,7 @@ mkTyName :: Type -> String
 mkTyName (tcSplitFunTys -> ([a@(isFunTy -> False)], b))
   = "f" ++ mkTyName a ++ mkTyName b
 -- eg. mkTyName (a -> b -> C) = "f_C"
-mkTyName (tcSplitFunTys -> ((_:_), b))
+mkTyName (tcSplitFunTys -> (_:_, b))
   = "f_" ++ mkTyName b
 -- eg. mkTyName (Either A B) = "eab"
 mkTyName (splitTyConApp_maybe -> Just (c, args))
@@ -31,7 +31,7 @@ mkTyName (splitTyConApp_maybe -> Just (c, args))
 mkTyName (getTyVar_maybe -> Just tv)
   = occNameString $ occName tv
 -- eg. mkTyName (forall x. y) = "y"
-mkTyName (tcSplitSigmaTy -> ((_:_), _, t))
+mkTyName (tcSplitSigmaTy -> (_:_, _, t))
   = mkTyName t
 mkTyName _ = "x"
 
@@ -90,4 +90,3 @@ mkManyGoodNames hy args =
 -- | Which names are in scope?
 getInScope :: Map OccName a -> [OccName]
 getInScope = M.keys
-

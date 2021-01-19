@@ -4,11 +4,9 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE TypeSynonymInstances       #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
 
 module Ide.Plugin.Tactic.Types
@@ -77,7 +75,7 @@ instance Show Class where
 data TacticState = TacticState
     { ts_skolems   :: !(Set TyVar)
       -- ^ The known skolems.
-    , ts_unifier   :: !(TCvSubst)
+    , ts_unifier   :: !TCvSubst
       -- ^ The current substitution of univars.
     , ts_used_vals :: !(Set OccName)
       -- ^ Set of values used by tactics.
@@ -236,10 +234,10 @@ overProvenance f (HyInfo prv ty) = HyInfo (f prv) ty
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
   { _jHypothesis :: !(Map OccName (HyInfo a))
-  , _jBlacklistDestruct :: !(Bool)
-  , _jWhitelistSplit :: !(Bool)
+  , _jBlacklistDestruct :: !Bool
+  , _jWhitelistSplit :: !Bool
   , _jIsTopHole    :: !Bool
-  , _jGoal         :: !(a)
+  , _jGoal         :: !a
   }
   deriving stock (Eq, Generic, Functor, Show)
 
@@ -364,4 +362,3 @@ data RunTacticResults = RunTacticResults
   , rtr_extract     :: LHsExpr GhcPs
   , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
   } deriving Show
-
