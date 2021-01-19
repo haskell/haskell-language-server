@@ -11,11 +11,13 @@ module Ide.Plugin.Eval.Types (
     Format (..),
     Language (..),
     Section (..),
+    Sections(..),
     hasTests,
     hasPropertyTest,
     splitSections,
     Loc,
     Located (..),
+    Comments(..),
     unLoc,
     Txt,
 ) where
@@ -26,6 +28,8 @@ import Data.List (partition)
 import Data.List.NonEmpty (NonEmpty)
 import Data.String (IsString (..))
 import GHC.Generics (Generic)
+import Data.Map.Strict (Map)
+import Development.IDE.GHC.Compat (RealSrcSpan)
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
@@ -50,6 +54,14 @@ locate0 = locate . Located 0
 
 type Txt = String
 
+data Sections =
+    Sections
+    { setupSections :: [Section]
+    , lineSecions :: [Section]
+    , multilneSections :: [Section]
+    }
+    deriving (Show, Eq, Generic)
+
 data Section = Section
     { sectionName :: Txt
     , sectionTests :: [Loc Test]
@@ -72,6 +84,19 @@ data Test
     = Example {testLines :: NonEmpty Txt, testOutput :: [Txt]}
     | Property {testline :: Txt, testOutput :: [Txt]}
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
+
+data Comments =
+    Comments
+        { lineComments :: Map RealSrcSpan String
+        , blockComments :: Map RealSrcSpan String
+        }
+    deriving (Show, Eq, Ord, Generic)
+
+instance Semigroup Comments where
+    Comments ls bs <> Comments ls' bs' = Comments (ls <> ls') (bs <> bs')
+
+instance Monoid Comments where
+    mempty = Comments mempty mempty
 
 isProperty :: Test -> Bool
 isProperty (Property _ _) = True

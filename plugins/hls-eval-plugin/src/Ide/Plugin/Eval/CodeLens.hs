@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -42,13 +43,13 @@ import Data.Aeson (
  )
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import qualified Data.HashMap.Strict as Map
+import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Map.Strict as Map
 import Data.List (
     dropWhileEnd,
     find,
  )
-import Data.Maybe (
-    catMaybes,
+import Data.Maybe (catMaybes,
     fromMaybe,
  )
 import Data.String (IsString)
@@ -57,7 +58,7 @@ import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8)
 import Data.Time (getCurrentTime)
 import Data.Typeable (Typeable)
-import Development.IDE (
+import Development.IDE (fromNormalizedFilePath, GetParsedModuleWithComments(..),
     GetModSummary (..),
     GhcSession (..),
     HscEnvEq (envImportPaths, hscEnv),
@@ -75,11 +76,12 @@ import Development.IDE (
     toNormalizedUri,
     uriToFilePath',
     use_,
+    useWithStale_
  )
 import Development.IDE.Core.Preprocessor (
     preprocessor,
  )
-import Development.IDE.GHC.Compat (HscEnv)
+import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), srcSpanFile, GenLocated(L), ParsedModule(..), HscEnv)
 import DynamicLoading (initializePlugins)
 import GHC (
     ExecOptions (
@@ -163,6 +165,7 @@ import Ide.Plugin.Eval.Parse.Section (
  )
 import Ide.Plugin.Eval.Parse.Token (tokensFrom)
 import Ide.Plugin.Eval.Types (
+    Comments(..),
     Format (SingleLine),
     Loc,
     Located (Located),
@@ -217,7 +220,7 @@ import Language.Haskell.LSP.Types (
     WorkspaceEdit (WorkspaceEdit),
  )
 import Language.Haskell.LSP.VFS (virtualFileText)
-import Outputable (
+import Outputable (showSDocUnsafe,
     nest,
     ppr,
     showSDoc,
@@ -230,6 +233,8 @@ import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
 import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
+import Development.IDE.GHC.Compat (SrcSpan(RealSrcSpan))
+import FastString (unpackFS)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -242,14 +247,35 @@ codeLens lsp st plId CodeLensParams{_textDocument} =
             response $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
+                let nfp = toNormalizedFilePath' fp
                 dbg "fp" fp
+                (ParsedModule{..}, _posMap) <- liftIO $
+                    runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
+                dbg "comments" $ showSDocUnsafe $ ppr $ snd pm_annotations
+                let comments = foldMap
+                        ( foldMap (\case
+                            L (RealSrcSpan real) bdy
+                                | unpackFS (srcSpanFile real) ==
+                                    fromNormalizedFilePath nfp ->
+                                    -- since Haddock parsing is off,
+                                    -- we can concentrate on these two
+                                    case bdy of
+                                        AnnLineComment cmt ->
+                                            mempty { lineComments = Map.singleton real cmt }
+                                        AnnBlockComment cmt ->
+                                            mempty { blockComments = Map.singleton real cmt }
+                                        _ -> mempty
+                            _ -> mempty
+                            )
+                        )
+                        $ snd pm_annotations
+
                 mdlText <- moduleText lsp uri
 
                 {- Normalise CPP/LHS files/custom preprocessed files.
                    Used to extract tests correctly from CPP and LHS (Bird-style).
                 -}
-                session :: HscEnvEq <-
-                    runGetSession st $ toNormalizedFilePath' fp
+                session :: HscEnvEq <- runGetSession st nfp
 
                 Right (ppContent, _dflags) <-
                     perf "preprocessor" $
@@ -415,7 +441,7 @@ runEvalCmd lsp st EvalParams{..} =
                                 (st, fp)
                                 tests
 
-            let workspaceEditsMap = Map.fromList [(_uri, List edits)]
+            let workspaceEditsMap = HashMap.fromList [(_uri, List edits)]
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
 
             return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)

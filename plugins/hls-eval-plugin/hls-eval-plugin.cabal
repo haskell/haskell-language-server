@@ -33,6 +33,7 @@ library
     Ide.Plugin.Eval.Parse.Option
     Ide.Plugin.Eval.Parse.Parser
     Ide.Plugin.Eval.Parse.Section
+    Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Token
     Ide.Plugin.Eval.Types
     Ide.Plugin.Eval.Util
@@ -54,6 +55,7 @@ library
     , haskell-lsp
     , haskell-lsp-types
     , hls-plugin-api
+    , megaparsec >= 0.9
     , parser-combinators
     , pretty-simple
     , QuickCheck
