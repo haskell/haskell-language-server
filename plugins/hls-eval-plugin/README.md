@@ -72,7 +72,7 @@ double a = a + a
 -- 22
 ```
 
-Both plain Haskell and Literate Haskell (Bird-style only) source files are supported.
+Modules that use CPP and Literate Haskell (Bird-style only) modules are also supported (for GHC >= 8.8).
 
 # Test Components
 
