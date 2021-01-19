@@ -198,10 +198,16 @@ getIdeas nfp = do
               then return Nothing
               else do
                      flags' <- setExtensions flags
-                     (_, contents) <- getFileContents nfp
-                     let fp = fromNormalizedFilePath nfp
-                     let contents' = T.unpack <$> contents
-                     Just <$> (liftIO $ parseModuleEx flags' fp contents')
+                     (fp, contents) <- getPathAndContents
+                     Just <$> (liftIO $ parseModuleEx flags' fp contents)
+
+        getPathAndContents = do
+            (_, contents) <- getFileContents nfp
+            let fp = fromNormalizedFilePath nfp
+            return (fp, T.unpack <$> contents)
+
+        getPreprocessedPathAndContents m= do
+            let modsum = pm_mod_summary
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
