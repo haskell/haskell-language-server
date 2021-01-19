@@ -14,7 +14,7 @@ import Control.Applicative.Combinators
 import Control.Exception (bracket_, catch)
 import qualified Control.Lens as Lens
 import Control.Monad
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (FromJSON, Value, toJSON)
 import qualified Data.Binary as Binary
 import Data.Default
@@ -881,9 +881,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -907,9 +906,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -936,9 +934,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove stuffA, stuffC from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove stuffA, stuffC from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -965,9 +962,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove !!, <?> from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove !!, <?> from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -993,9 +989,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove A from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove A from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1020,9 +1015,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove A, E, F from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove A, E, F from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1044,9 +1038,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1069,9 +1062,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       doc <- createDoc "ModuleC.hs" "haskell" content
       _ <- waitForDiagnostics
-      [_, _, _, _, CACodeAction action@CodeAction { _title = actionTitle }]
-          <- getCodeActions doc (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove all redundant imports" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove all redundant imports")
+        =<< getCodeActions doc (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -1087,6 +1079,10 @@ removeImportTests = testGroup "remove import actions"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
+  where
+    caWithTitle t = \case
+      CACodeAction a@CodeAction{_title} -> guard (_title == t) >> Just a
+      _ -> Nothing
 
 extendImportTests :: TestTree
 extendImportTests = testGroup "extend import actions"
@@ -4425,3 +4421,9 @@ withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   dir' <- canonicalizePath dir
   f dir'
+
+-- | Assert that a value is not 'Nothing', and extract the value.
+assertJust :: MonadIO m => String -> Maybe a -> m a
+assertJust s = \case
+  Nothing -> liftIO $ assertFailure s
+  Just x -> pure x
