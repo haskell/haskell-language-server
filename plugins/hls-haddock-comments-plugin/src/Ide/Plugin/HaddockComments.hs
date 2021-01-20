@@ -1,10 +1,11 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Ide.Plugin.HaddockComments where
+module Ide.Plugin.HaddockComments (descriptor) where
 
 import Control.Monad (join)
 import qualified Data.HashMap.Strict as HashMap
@@ -12,6 +13,7 @@ import qualified Data.Map as Map
 import qualified Data.Text as T
 import Development.IDE
 import Development.IDE.GHC.Compat
+import Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource (..), annsA, astA)
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
@@ -25,17 +27,14 @@ descriptor plId =
     { pluginCodeActionProvider = Just codeActionProvider
     }
 
-haddockCommentsId :: CommandId
-haddockCommentsId = "HaddockCommentsCommand"
-
 codeActionProvider :: CodeActionProvider IdeState
 codeActionProvider _lspFuncs ideState _pId (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags} =
   do
     let noErr = and $ (/= Just DsError) . _severity <$> diags
         nfp = uriToNormalizedFilePath $ toNormalizedUri uri
-    (join -> pm) <- runAction "HaddockComments.GetParsedModule" ideState $ use GetParsedModule `traverse` nfp
-    let locDecls = hsmodDecls . unLoc . pm_parsed_source <$> pm
-        anns = relativiseApiAnns <$> (pm_parsed_source <$> pm) <*> (pm_annotations <$> pm)
+    (join -> pm) <- runAction "HaddockComments.GetAnnotatedParsedSource" ideState $ use GetAnnotatedParsedSource `traverse` nfp
+    let locDecls = hsmodDecls . unLoc . astA <$> pm
+        anns = annsA <$> pm
         edits = [runGenComments gen locDecls anns range | noErr, gen <- genList]
     return $ Right $ List [CACodeAction $ toAction title uri edit | (Just (title, edit)) <- edits]
 
@@ -46,13 +45,16 @@ genList =
   ]
 
 -----------------------------------------------------------------------------
+
+-- | Defines how to generate haddock comments by tweaking annotations of AST
 data GenComments = forall a.
   GenComments
   { title :: T.Text,
     fromDecl :: HsDecl GhcPs -> Maybe a,
     collectKeys :: a -> [AnnKey],
     isFresh :: Annotation -> Bool,
-    updateAnn :: Annotation -> Annotation
+    updateAnn :: Annotation -> Annotation,
+    updateDeclAnn :: Annotation -> Annotation
   }
 
 runGenComments :: GenComments -> Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)
@@ -63,7 +65,8 @@ runGenComments GenComments {..} mLocDecls mAnns range
     annKeys <- collectKeys x,
     not $ null annKeys,
     and $ maybe False isFresh . flip Map.lookup anns <$> annKeys,
-    anns' <- foldr (Map.adjust updateAnn) anns annKeys,
+    declKey <- mkAnnKey locDecl,
+    anns' <- Map.adjust updateDeclAnn declKey $ foldr (Map.adjust updateAnn) anns annKeys,
     Just range' <- toRange src,
     result <- T.strip . T.pack $ exactPrint locDecl anns' =
     Just (title, TextEdit range' result)
@@ -80,9 +83,9 @@ genForSig = GenComments {..}
     fromDecl _ = Nothing
 
     updateAnn x = x {annEntryDelta = DP (0, 1), annsDP = dp}
+    updateDeclAnn = cleanPriorComments
 
     isFresh Ann {annsDP} = null [() | (AnnComment _, _) <- annsDP]
-
     collectKeys = keyFromTyVar 0
 
     comment = mkComment "-- ^ " noSrcSpan
@@ -98,6 +101,7 @@ genForRecord = GenComments {..}
     fromDecl _ = Nothing
 
     updateAnn x = x {annEntryDelta = DP (1, 2), annPriorComments = [(comment, DP (1, 2))]}
+    updateDeclAnn = cleanPriorComments
 
     isFresh Ann {annPriorComments} = null annPriorComments
 
@@ -120,13 +124,17 @@ toAction title uri edit = CodeAction {..}
 
 toRange :: SrcSpan -> Maybe Range
 toRange src
-  | (RealSrcSpan span) <- src,
-    range' <- realSrcSpanToRange span =
+  | (RealSrcSpan s) <- src,
+    range' <- realSrcSpanToRange s =
     Just range'
   | otherwise = Nothing
 
 isIntersectWith :: Range -> SrcSpan -> Bool
 isIntersectWith Range {_start, _end} x = isInsideSrcSpan _start x || isInsideSrcSpan _end x
+
+-- clean prior comments, since src span we get from 'LHsDecl' does not include them
+cleanPriorComments :: Annotation -> Annotation
+cleanPriorComments x = x {annPriorComments = []}
 
 -----------------------------------------------------------------------------
 

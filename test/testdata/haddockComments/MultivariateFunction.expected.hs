@@ -1,5 +1,7 @@
 module MultivariateFunction where
 
+-- | some
+-- docs
 f :: a -- ^ 
   -> b -- ^ 
   -> c -- ^ 
