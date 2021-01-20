@@ -64,6 +64,7 @@ import Bag (isEmptyBag)
 import qualified Data.HashSet as Set
 import Control.Concurrent.Extra (threadDelay, readVar)
 import Development.IDE.GHC.Util (printRdrName)
+import Ide.PluginUtils (subRange)
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
@@ -107,7 +108,8 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
         [ mkCA title  [x] edit
         | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-        ] <> caRemoveRedundantImports parsedModule text diag xs uri
+        ] <> caRemoveInvalidExports parsedModule text diag xs uri
+          <> caRemoveRedundantImports parsedModule text diag xs uri
 
       actions' =
           [mkCA title [x] edit
@@ -232,8 +234,8 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L l _) -> srcSpanToRange l == Just _range ) hsmodImports
     , Just c <- contents
-    , ranges <- map (rangesForBinding impDecl . T.unpack) (T.splitOn ", " bindings)
-    , ranges' <- extendAllToIncludeCommaIfPossible (indexedByPosition $ T.unpack c) (concat ranges)
+    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
+    , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
     , not (null ranges')
     = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
 
@@ -268,6 +270,69 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
+
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [CAResult]
+caRemoveInvalidExports m contents digs ctxDigs uri
+  | Just pm <- m,
+    Just txt <- contents,
+    txt' <- indexedByPosition $ T.unpack txt,
+    r <- mapMaybe (groupDiag pm) digs,
+    r' <- map (\(t,d,rs) -> (t,d,extend txt' rs)) r,
+    caRemoveCtx <- mapMaybe removeSingle r',
+    allRanges <- nubOrd $ [ range | (_,_,ranges) <- r, range <- ranges],
+    allRanges' <- extend txt' allRanges,
+    Just caRemoveAll <- removeAll allRanges',
+    ctxEdits <- [ x | x@(_, d, _) <- r, d `elem` ctxDigs],
+    not $ null ctxEdits
+      = caRemoveCtx ++ [caRemoveAll]
+  | otherwise = []
+  where
+    extend txt ranges = extendAllToIncludeCommaIfPossible True txt ranges
+
+    groupDiag pm dig
+      | Just (title, ranges) <- suggestRemoveRedundantExport pm dig
+      = Just (title, dig, ranges)
+      | otherwise = Nothing
+
+    removeSingle (_, _, []) = Nothing
+    removeSingle (title, diagnostic, ranges) = Just $ CACodeAction CodeAction{..} where
+        tedit = concatMap (\r -> [TextEdit r ""]) $ nubOrd ranges
+        _changes = Just $ Map.singleton uri $ List tedit
+        _title = title
+        _kind = Just CodeActionQuickFix
+        _diagnostics = Just $ List [diagnostic]
+        _documentChanges = Nothing
+        _edit = Just WorkspaceEdit{..}
+        _command = Nothing
+    removeAll [] = Nothing
+    removeAll ranges = Just $ CACodeAction CodeAction {..} where
+        tedit = concatMap (\r -> [TextEdit r ""]) ranges
+        _changes = Just $ Map.singleton uri $ List tedit
+        _title = "Remove all redundant exports"
+        _kind = Just CodeActionQuickFix
+        _diagnostics = Nothing
+        _documentChanges = Nothing
+        _edit = Just WorkspaceEdit{..}
+        _command = Nothing
+
+suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Range])
+suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
+  | msg <- unifySpaces _message
+  , Just export <- hsmodExports
+  , Just exportRange <- getLocatedRange export
+  , exports <- unLoc export
+  , Just (removeFromExport, !ranges) <- fmap (getRanges exports . notInScope) (extractNotInScopeName msg)
+                         <|> (,[_range]) <$> matchExportItem msg
+                         <|> (,[_range]) <$> matchDupExport msg
+  , subRange _range exportRange
+    = Just ("Remove ‘" <> removeFromExport <> "’ from export", ranges)
+  where
+    matchExportItem msg = regexSingleMatch msg "The export item ‘([^’]+)’"
+    matchDupExport msg = regexSingleMatch msg "Duplicate ‘([^’]+)’ in export list"
+    getRanges exports txt = case smallerRangesForBindingExport exports (T.unpack txt) of
+      [] -> (txt, [_range])
+      ranges -> (txt, ranges)
+suggestRemoveRedundantExport _ _ = Nothing
 
 suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestDeleteUnusedBinding
@@ -385,6 +450,9 @@ suggestDeleteUnusedBinding
 data ExportsAs = ExportName | ExportPattern | ExportAll
   deriving (Eq)
 
+getLocatedRange :: Located a -> Maybe Range
+getLocatedRange = srcSpanToRange . getLoc
+
 suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
 -- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
@@ -424,9 +492,6 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     parenthesizeIfNeeds needsTypeKeyword x
       | T.head x `elem` opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <>")"
       | otherwise = x
-
-    getLocatedRange :: Located a -> Maybe Range
-    getLocatedRange = srcSpanToRange . getLoc
 
     matchWithDiagnostic :: Range -> Located (IdP GhcPs) -> Bool
     matchWithDiagnostic Range{_start=l,_end=r} x =
@@ -1076,17 +1141,30 @@ textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
       linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
 -- | Returns the ranges for a binding in an import declaration
-rangesForBinding :: ImportDecl GhcPs -> String -> [Range]
-rangesForBinding ImportDecl{ideclHiding = Just (False, L _ lies)} b =
+rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
+rangesForBindingImport ImportDecl{ideclHiding = Just (False, L _ lies)} b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
-    b' = wrapOperatorInParens (unqualify b)
+    b' = modifyBinding b
+rangesForBindingImport _ _ = []
 
+modifyBinding :: String -> String
+modifyBinding = wrapOperatorInParens . unqualify
+  where
     wrapOperatorInParens x = if isAlpha (head x) then x else "(" <> x <> ")"
-
     unqualify x = snd $ breakOnEnd "." x
 
-rangesForBinding _ _ = []
+smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
+smallerRangesForBindingExport lies b =
+    concatMap (mapMaybe srcSpanToRange . ranges') lies
+  where
+    b' = modifyBinding b
+    ranges' (L _ (IEThingWith _ thing _  inners labels))
+      | showSDocUnsafe (ppr thing) == b' = []
+      | otherwise =
+          [ l' | L l' x <- inners, showSDocUnsafe (ppr x) == b'] ++
+          [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b']
+    ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
 rangesForBinding' b (L l x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
