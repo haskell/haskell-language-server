@@ -1,23 +1,29 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Ide.Plugin.Eval.Parse.Comments where
 
-import Control.Arrow ((&&&), (>>>))
-import Control.Monad.Combinators
+import qualified Control.Applicative.Combinators.NonEmpty as NE
+import Control.Arrow (second, (&&&), (>>>))
+import Control.Monad.Combinators ()
+import qualified Data.Char as C
+import Data.Coerce (coerce)
+import qualified Data.List as L
 import Data.List.NonEmpty (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (fromMaybe)
+import Data.Semigroup
+import qualified Data.Set as Set
+import Data.Void (Void)
 import Development.IDE.GHC.Compat
 import Ide.Plugin.Eval.Types
-import Text.Megaparsec (Parsec)
-import Data.Void (Void)
-import qualified Data.Char as C
-import qualified Data.List as L
+import SrcLoc (mkRealSrcLoc, mkRealSrcSpan, realSrcSpanEnd, realSrcSpanStart)
+import Text.Megaparsec
 import qualified Text.Megaparsec as P
-import qualified Data.Set as Set
-import qualified Control.Applicative.Combinators.NonEmpty as NE
+import Text.Megaparsec.Char (char, space, space1)
 
 parseSections ::
     Comments -> Sections
@@ -31,45 +37,97 @@ groupLineComments =
 
 type Parser inputs = Parsec Void inputs
 
--- >>> readPropLine $ dropLineComment "-- prop> foo"
--- Just (PropLine {runPropLine = "foo"})
-
-dropLineComment
-    :: String -> String
-dropLineComment =
-    L.dropWhile C.isSpace .
-    drop 2 .
-    L.dropWhile C.isSpace
-
--- | Example line, with ">>>" stripped off
-newtype ExampleLine = ExampleLine { getExampleLine :: String }
+data LineCommentSection
+    = SingleProp RealSrcSpan PropLine
+    | Examples RealSrcSpan (NonEmpty ExampleLine)
+    | NormalCommentLines RealSrcSpan String
     deriving (Show)
 
-exampleLinesP :: Parser [String] (NonEmpty ExampleLine)
-exampleLinesP = NE.some exampleLineP
+data CommentFlavour = Vanilla | HaddockNext | HaddockPrev | Named String
+    deriving (Read, Show, Eq, Ord)
 
-exampleLineP :: Parser [String] ExampleLine
-exampleLineP = P.token readExampleLine mempty
+-- >>> parse lineCommentFlavour "" "-- $a a"
+-- Right (Named "a")
 
-propLineP :: Parser [String] PropLine
-propLineP = P.token readPropLine mempty
+lineCommentFlavour :: Parser String CommentFlavour
+lineCommentFlavour =
+    commentHeadP
+        -- N.B. Haddock assumes at most one space before modifiers:
+        *> space
+        *> P.option
+            Vanilla
+            ( HaddockNext <$ char '|'
+                <|> HaddockPrev <$ char '^'
+                <|> Named <$ char '$'
+                    <* optional space
+                    <*> P.takeWhile1P (Just "alphabet number") C.isAlphaNum
+            )
 
-readExampleLine
-    :: String -> Maybe ExampleLine
-readExampleLine ('>' : '>' : '>' : rest@(c : _))
-    | c /= '>' = Just $ ExampleLine $ L.dropWhile C.isSpace rest
-readExampleLine _ = Nothing
+commentHeadP :: Parser String ()
+commentHeadP =
+    space *> chunk "--"
+        *> P.notFollowedBy (oneOf "!#$%&*.+=/<>?@\\~^-:|")
+
+lineCommentSectionsP ::
+    Parser [(RealSrcSpan, String)] [LineCommentSection]
+lineCommentSectionsP =
+    many $
+        toExamples <$> exampleLinesP
+            <|> uncurry SingleProp . second snd <$> propLineP
+            <|> uncurry NormalCommentLines <$> anySingle
+
+toExamples :: NonEmpty (RealSrcSpan, ExampleLine) -> LineCommentSection
+toExamples lns =
+    Examples (convexHullSpan $ fst <$> lns) $ snd <$> lns
+
+convexHullSpan :: NonEmpty RealSrcSpan -> RealSrcSpan
+convexHullSpan lns@(headSpan :| _) =
+    let aFile = srcSpanFile headSpan
+        (mbeg, mend) =
+            foldMap
+                ( (fmap (Just . Min) . mkRealSrcLoc aFile <$> srcSpanStartLine <*> srcSpanStartCol)
+                    &&& (fmap (Just . Max) . mkRealSrcLoc aFile <$> srcSpanEndLine <*> srcSpanEndCol)
+                )
+                lns
+        beg = maybe (realSrcSpanStart headSpan) coerce mbeg
+        end = maybe (realSrcSpanEnd headSpan) coerce mend
+     in mkRealSrcSpan beg end
+
+dropLineComment ::
+    String -> String
+dropLineComment =
+    L.dropWhile C.isSpace
+        . drop 2
+        . L.dropWhile C.isSpace
+
+-- | Example line, with @>>>@ stripped off
+newtype ExampleLine = ExampleLine {getExampleLine :: String}
+    deriving (Show)
+
+exampleLinesP :: Parser [(RealSrcSpan, String)] (NonEmpty (RealSrcSpan,  ExampleLine))
+exampleLinesP = NE.some $ second snd <$> exampleLineP
+
+exampleLineP :: Parser [(RealSrcSpan, String)] (RealSrcSpan, (CommentFlavour, ExampleLine))
+exampleLineP = P.token (mapM $ parseMaybe exampleLineStrP) mempty
+
+propLineP :: Parser [(RealSrcSpan, String)] (RealSrcSpan, (CommentFlavour, PropLine))
+propLineP = P.token (mapM $ parseMaybe propLineStrP) mempty
+
+exampleLineStrP :: Parser String (CommentFlavour, ExampleLine)
+exampleLineStrP =
+    (,) <$> lineCommentFlavour
+        <*  chunk ">>>" <* P.notFollowedBy (char '>')
+        <*> (ExampleLine <$> P.takeRest)
+
+propLineStrP :: Parser String (CommentFlavour, PropLine)
+propLineStrP =
+    (,) <$> lineCommentFlavour
+        <*  chunk "prop>" <* P.notFollowedBy (char '>')
+        <*> (PropLine <$> P.takeRest)
 
 -- | Prop line, with "prop>" stripped off
-newtype PropLine = PropLine { runPropLine :: String }
+newtype PropLine = PropLine {runPropLine :: String}
     deriving (Show)
-
-readPropLine
-    :: String -> Maybe PropLine
-readPropLine ('p' : 'r' : 'o' : 'p' : '>' : rest@(c : _))
-    | c /= '>' = Just $ PropLine $ L.dropWhile C.isSpace rest
-readPropLine _ = Nothing
-
 
 {- |
 Given a sequence of tokens increasing in their starting position,
