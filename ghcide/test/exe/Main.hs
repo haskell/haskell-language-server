@@ -49,6 +49,7 @@ import System.IO.Extra hiding (withTempDir)
 import qualified System.IO.Extra
 import System.Directory
 import System.Exit (ExitCode(ExitSuccess))
+import System.Process.Extra (readCreateProcessWithExitCode, CreateProcess(cwd), proc)
 import System.Info.Extra (isWindows)
 import Test.QuickCheck
 import Test.QuickCheck.Instances ()
