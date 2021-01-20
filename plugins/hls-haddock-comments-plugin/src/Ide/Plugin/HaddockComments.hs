@@ -13,6 +13,7 @@ import qualified Data.Map as Map
 import qualified Data.Text as T
 import Development.IDE
 import Development.IDE.GHC.Compat
+import Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource (..), annsA, astA)
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
@@ -31,9 +32,9 @@ codeActionProvider _lspFuncs ideState _pId (TextDocumentIdentifier uri) range Co
   do
     let noErr = and $ (/= Just DsError) . _severity <$> diags
         nfp = uriToNormalizedFilePath $ toNormalizedUri uri
-    (join -> pm) <- runAction "HaddockComments.GetParsedModule" ideState $ use GetParsedModule `traverse` nfp
-    let locDecls = hsmodDecls . unLoc . pm_parsed_source <$> pm
-        anns = relativiseApiAnns <$> (pm_parsed_source <$> pm) <*> (pm_annotations <$> pm)
+    (join -> pm) <- runAction "HaddockComments.GetAnnotatedParsedSource" ideState $ use GetAnnotatedParsedSource `traverse` nfp
+    let locDecls = hsmodDecls . unLoc . astA <$> pm
+        anns = annsA <$> pm
         edits = [runGenComments gen locDecls anns range | noErr, gen <- genList]
     return $ Right $ List [CACodeAction $ toAction title uri edit | (Just (title, edit)) <- edits]
 
