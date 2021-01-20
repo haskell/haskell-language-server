@@ -147,6 +147,13 @@ tests =
         , testCase
             "Prelude has no special treatment, it is imported as stated in the module"
             $ goldenTest "TPrelude.hs"
+        , testCase "Test on last line insert results correctly" $ do
+            runSession hlsCommand fullCaps evalPath $
+                liftIO $ do
+                    let mdl = "TLastLine.hs"
+                    -- Write the test file, to make sure that it has no final line return
+                    writeFile (evalPath </> mdl) $ "module TLastLine where\n\n-- >>> take 3 [1..]"
+                    goldenTest mdl
 #if __GLASGOW_HASKELL__ >= 808
             , testCase "CPP support" $ goldenTest "TCPP.hs"
             , testCase "Literate Haskell Bird Style" $ goldenTest "TLHS.lhs"
@@ -161,11 +168,11 @@ goldenTest = goldenTestBy isEvalTest
  Compare results with the contents of corresponding '.expected' file (and creates it, if missing)
 -}
 goldenTestBy :: (CodeLens -> Bool) -> FilePath -> IO ()
-goldenTestBy f input = runSession hlsCommand fullCaps evalPath $ do
+goldenTestBy fltr input = runSession hlsCommand fullCaps evalPath $ do
     doc <- openDoc input "haskell"
 
     -- Execute lenses backwards, to avoid affecting their position in the source file
-    codeLenses <- reverse <$> getCodeLensesBy f doc
+    codeLenses <- reverse <$> getCodeLensesBy fltr doc
     -- liftIO $ print codeLenses
 
     -- Execute sequentially
@@ -180,9 +187,8 @@ goldenTestBy f input = runSession hlsCommand fullCaps evalPath $ do
         -- Write expected file if missing
         missingExpected <- not <$> doesFileExist expectedFile
         when missingExpected $ T.writeFile expectedFile edited
-
-    expected <- liftIO $ T.readFile expectedFile
-    liftIO $ edited @?= expected
+        expected <- T.readFile expectedFile
+        edited @?= expected
 
 getEvalCodeLenses :: TextDocumentIdentifier -> Session [CodeLens]
 getEvalCodeLenses = getCodeLensesBy isEvalTest

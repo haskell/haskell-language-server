@@ -13,7 +13,7 @@ packages:
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
-  - ./plugins/tactics
+  - ./plugins/hls-tactics-plugin
 
 ghc-options:
   "$everything": -haddock
@@ -22,9 +22,7 @@ ghc-options:
 
 extra-deps:
   - aeson-1.5.2.0
-  # - apply-refact-0.8.2.1
-  - git: https://github.com/mpickering/apply-refact.git
-    commit: 4fbd3a3a9b408bd31080848feb6b78e13c3eeb6d
+  - apply-refact-0.9.0.0
   - ansi-terminal-0.10.3
   - base-compat-0.10.5
   - brittany-0.13.1.0
@@ -37,10 +35,11 @@ extra-deps:
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   - fuzzy-0.1.0.0
-  # - ghcide-0.1.0
   - ghc-check-0.5.0.1
   - ghc-events-0.13.0
-  - ghc-exactprint-0.6.3.3
+  # - ghc-exactprint-0.6.3.3
+  - git: https://github.com/alanz/ghc-exactprint.git
+    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
   - ghc-lib-8.10.3.20201220
   - ghc-lib-parser-8.10.3.20201220
   - ghc-lib-parser-ex-8.10.0.17
@@ -82,6 +81,7 @@ extra-deps:
   - these-1.1.1.1
   - type-equality-1
   - topograph-1
+  - uniplate-1.6.13
   - with-utf8-1.0.2.1@sha256:95c02fffa643ddbeb092359802a512007c3e644cd509809f4716ad54592c437b,3057
   - th-env-0.1.0.2@sha256:d8f1f37f42a8f1a22404d7d0579528af18f5dac7232cca6bdbd5117c115a0ad5,1370
 

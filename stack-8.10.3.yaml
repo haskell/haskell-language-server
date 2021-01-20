@@ -1,4 +1,4 @@
-resolver: nightly-2021-01-01 # first ghc-8.10.3 nightly
+resolver: nightly-2021-01-17
 
 packages:
   - .
@@ -13,20 +13,21 @@ packages:
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
-  - ./plugins/tactics
+  - ./plugins/hls-tactics-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - git: https://github.com/mpickering/apply-refact.git
-    commit: 4fbd3a3a9b408bd31080848feb6b78e13c3eeb6d
+  - apply-refact-0.9.0.0
   - brittany-0.13.1.0
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
+  - git: https://github.com/alanz/ghc-exactprint.git
+    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
   - heapsize-0.3.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5

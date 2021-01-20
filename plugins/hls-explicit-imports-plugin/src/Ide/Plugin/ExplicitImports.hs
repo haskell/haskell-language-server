@@ -3,13 +3,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
 
 #include "ghc-api-version.h"
 
@@ -189,10 +187,10 @@ minimalImportsRule = define $ \MinimalImports nfp -> do
 
 -- | Use the ghc api to extract a minimal, explicit set of imports for this module
 extractMinimalImports ::
-  Maybe (HscEnvEq) ->
-  Maybe (TcModuleResult) ->
+  Maybe HscEnvEq ->
+  Maybe TcModuleResult ->
   IO ([LImportDecl GhcRn], Maybe [LImportDecl GhcRn])
-extractMinimalImports (Just (hsc)) (Just (TcModuleResult {..})) = do
+extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
   -- extract the original imports and the typechecking environment
   let tcEnv = tmrTypechecked
       (_, imports, _, _) = tmrRenamed

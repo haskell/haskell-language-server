@@ -1,5 +1,4 @@
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Ide.Plugin.Tactic.KnownStrategies.QuickCheck where
 
@@ -109,4 +108,3 @@ mkArbitraryCall recursive_tc n ty =
                     (n == 1)
             @@ arbitrary
         False -> arbitrary
-

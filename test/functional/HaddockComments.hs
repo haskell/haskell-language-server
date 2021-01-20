@@ -1,6 +1,6 @@
+{-# LANGUAGE DisambiguateRecordFields #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module HaddockComments
@@ -28,7 +28,7 @@ tests =
     "haddock comments"
     [ goldenTest "HigherRankFunction" Signature 4 6,
       goldenTest "KindSigFunction" Signature 9 10,
-      goldenTest "MultivariateFunction" Signature 2 8,
+      goldenTest "MultivariateFunction" Signature 4 8,
       goldenTest "QualFunction" Signature 2 10,
       goldenTest "Record" Record 7 2,
       expectedNothing "ConstFunction" Signature 2 2,
@@ -37,7 +37,7 @@ tests =
     ]
 
 goldenTest :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
-goldenTest fp (toTitle -> expectedTitle) l c = goldenVsStringDiff fp goldenGitDiff goldenFilePath $
+goldenTest fp (toTitle -> expectedTitle) l c = goldenVsStringDiff (fp <> " (golden)") goldenGitDiff goldenFilePath $
   runSession hlsCommand fullCaps haddockCommentsPath $ do
     doc <- openDoc hsFilePath "haskell"
     _ <- waitForDiagnostics

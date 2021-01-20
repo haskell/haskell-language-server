@@ -4,7 +4,7 @@ packages:
          ./shake-bench
          ./ghcide
          ./hls-plugin-api
-         ./plugins/tactics
+         ./plugins/hls-tactics-plugin
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
@@ -15,8 +15,8 @@ packages:
 
 source-repository-package
   type: git
-  location: https://github.com/mpickering/apply-refact.git
-  tag: 4fbd3a3a9b408bd31080848feb6b78e13c3eeb6d
+  location: https://github.com/alanz/ghc-exactprint.git
+  tag: 6748e24da18a6cea985d20cc3e1e7920cb743795
 
 tests: true
 
@@ -30,7 +30,7 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2021-01-14T12:49:26Z
+index-state: 2021-01-17T17:47:48Z
 
 allow-newer:
 	active:base,
