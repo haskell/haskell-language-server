@@ -5,7 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Ide.Plugin.HaddockComments where
+module Ide.Plugin.HaddockComments (descriptor) where
 
 import Control.Monad (join)
 import qualified Data.HashMap.Strict as HashMap
@@ -25,9 +25,6 @@ descriptor plId =
   (defaultPluginDescriptor plId)
     { pluginCodeActionProvider = Just codeActionProvider
     }
-
-haddockCommentsId :: CommandId
-haddockCommentsId = "HaddockCommentsCommand"
 
 codeActionProvider :: CodeActionProvider IdeState
 codeActionProvider _lspFuncs ideState _pId (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags} =
@@ -133,9 +130,6 @@ toRange src
 
 isIntersectWith :: Range -> SrcSpan -> Bool
 isIntersectWith Range {_start, _end} x = isInsideSrcSpan _start x || isInsideSrcSpan _end x
-
-getAnnConName :: AnnKey -> String
-getAnnConName (AnnKey _ (unConName -> name)) = name
 
 -- clean prior comments, since src span we get from 'LHsDecl' does not include them
 cleanPriorComments :: Annotation -> Annotation
