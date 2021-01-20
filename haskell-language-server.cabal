@@ -8,11 +8,12 @@ description:
 
 homepage:           https://github.com/haskell/haskell-language-server#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-author:             Alan Zimmerman
+author:             The Haskell IDE Team
 maintainer:         alan.zimm@gmail.com
-copyright:          Alan Zimmerman
+copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
+category:           Development
 build-type:         Simple
 tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.1 || == 8.10.2 || == 8.10.3
 extra-source-files:
@@ -413,7 +414,7 @@ test-suite func-test
     , tasty-rerun
     , ghcide
 
-  hs-source-dirs:     test/functional plugins/tactics/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src
+  hs-source-dirs:     test/functional plugins/hls-tactics-plugin/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src
 
   main-is:            Main.hs
   other-modules:

@@ -14,7 +14,7 @@ packages:
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
-  - ./plugins/tactics
+  - ./plugins/hls-tactics-plugin
 
 ghc-options:
   "$everything": -haddock
