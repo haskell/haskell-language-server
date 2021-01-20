@@ -1,5 +1,6 @@
 module Record where
 
+-- | A record
 data Record a b c d e f
   = RecordA
       {

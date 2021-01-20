@@ -5,6 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Ide.Plugin.HaddockComments where
 
@@ -48,24 +49,28 @@ genList =
   ]
 
 -----------------------------------------------------------------------------
+
+-- | Defines how to generate haddock comments by tweaking annotations of AST
 data GenComments = forall a.
   GenComments
   { title :: T.Text,
-    fromDecl :: LHsDecl GhcPs -> Maybe a,
+    fromDecl :: HsDecl GhcPs -> Maybe a,
     collectKeys :: a -> [AnnKey],
     isFresh :: Annotation -> Bool,
-    updateAnn :: AnnKey -> Annotation -> Annotation
+    updateAnn :: Annotation -> Annotation,
+    updateDeclAnn :: Annotation -> Annotation
   }
 
 runGenComments :: GenComments -> Maybe [LHsDecl GhcPs] -> Maybe Anns -> Range -> Maybe (T.Text, TextEdit)
 runGenComments GenComments {..} mLocDecls mAnns range
   | Just locDecls <- mLocDecls,
     Just anns <- mAnns,
-    [(locDecl, src, x)] <- [(locDecl, l, x) | Just (locDecl@(L l _), x) <- (\d -> (d,) <$> fromDecl d) <$> locDecls, range `isIntersectWith` l],
+    [(locDecl, src, x)] <- [(locDecl, l, x) | locDecl@(L l (fromDecl -> Just x)) <- locDecls, range `isIntersectWith` l],
     annKeys <- collectKeys x,
     not $ null annKeys,
     and $ maybe False isFresh . flip Map.lookup anns <$> annKeys,
-    anns' <- foldr (Map.adjustWithKey updateAnn) anns annKeys,
+    declKey <- mkAnnKey locDecl,
+    anns' <- Map.adjust updateDeclAnn declKey $ foldr (Map.adjust updateAnn) anns annKeys,
     Just range' <- toRange src,
     result <- T.strip . T.pack $ exactPrint locDecl anns' =
     Just (title, TextEdit range' result)
@@ -78,18 +83,14 @@ genForSig = GenComments {..}
   where
     title = "Generate signature comments"
 
-    fromDecl d@(L _ (SigD _ (TypeSig _ _ (HsWC _ (HsIB _ x))))) = Just (d, x)
+    fromDecl (SigD _ (TypeSig _ _ (HsWC _ (HsIB _ x)))) = Just x
     fromDecl _ = Nothing
 
-    updateAnn k x
-      | (AnnKey _ (unConName -> "TypeSig")) <- k =
-        -- clean prior comments, since src span we get from 'LHsDecl' does not include them
-        x {annPriorComments = []}
-      | otherwise = x {annEntryDelta = DP (0, 1), annsDP = dp}
+    updateAnn x = x {annEntryDelta = DP (0, 1), annsDP = dp}
+    updateDeclAnn = cleanPriorComments
 
     isFresh Ann {annsDP} = null [() | (AnnComment _, _) <- annsDP]
-
-    collectKeys (d, x) = mkAnnKey d : keyFromTyVar 0 x
+    collectKeys = keyFromTyVar 0
 
     comment = mkComment "-- ^ " noSrcSpan
     dp = [(AnnComment comment, DP (0, 1)), (G AnnRarrow, DP (1, 2))]
@@ -99,11 +100,12 @@ genForRecord = GenComments {..}
   where
     title = "Generate fields comments"
 
-    fromDecl (L _ (TyClD _ DataDecl {tcdDataDefn = HsDataDefn {dd_cons = cons}})) =
+    fromDecl (TyClD _ DataDecl {tcdDataDefn = HsDataDefn {dd_cons = cons}}) =
       Just [x | (L _ ConDeclH98 {con_args = x}) <- cons]
     fromDecl _ = Nothing
 
-    updateAnn _ x = x {annEntryDelta = DP (1, 2), annPriorComments = [(comment, DP (1, 2))]}
+    updateAnn x = x {annEntryDelta = DP (1, 2), annPriorComments = [(comment, DP (1, 2))]}
+    updateDeclAnn = cleanPriorComments
 
     isFresh Ann {annPriorComments} = null annPriorComments
 
@@ -126,13 +128,20 @@ toAction title uri edit = CodeAction {..}
 
 toRange :: SrcSpan -> Maybe Range
 toRange src
-  | (RealSrcSpan span) <- src,
-    range' <- realSrcSpanToRange span =
+  | (RealSrcSpan s) <- src,
+    range' <- realSrcSpanToRange s =
     Just range'
   | otherwise = Nothing
 
 isIntersectWith :: Range -> SrcSpan -> Bool
 isIntersectWith Range {_start, _end} x = isInsideSrcSpan _start x || isInsideSrcSpan _end x
+
+getAnnConName :: AnnKey -> String
+getAnnConName (AnnKey _ (unConName -> name)) = name
+
+-- clean prior comments, since src span we get from 'LHsDecl' does not include them
+cleanPriorComments :: Annotation -> Annotation
+cleanPriorComments x = x {annPriorComments = []}
 
 -----------------------------------------------------------------------------
 
