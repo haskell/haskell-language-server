@@ -49,7 +49,7 @@ import System.IO.Extra hiding (withTempDir)
 import qualified System.IO.Extra
 import System.Directory
 import System.Exit (ExitCode(ExitSuccess))
-import System.Process.Extra (readCreateProcessWithExitCode, CreateProcess(cwd), proc)
+import System.Process.Extra (readProcess, readCreateProcessWithExitCode, CreateProcess(cwd), proc)
 import System.Info.Extra (isWindows)
 import Test.QuickCheck
 import Test.QuickCheck.Instances ()
@@ -2241,7 +2241,12 @@ removeRedundantConstraintsTests = let
     doc <- createDoc "Testing.hs" "haskell" code
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
-    liftIO $ assertBool "Found some actions (other than \"disable warning\")" $ length actionsOrCommands == 1
+    liftIO $ assertBool "Found some actions (other than \"disable warnings\")"
+      $ all isDisableWarningAction actionsOrCommands
+    where
+      isDisableWarningAction = \case
+        CACodeAction CodeAction{_title} -> "Disable" `T.isPrefixOf` _title && "warnings" `T.isSuffixOf` _title
+        _ -> False
 
   in testGroup "remove redundant function constraints"
   [ check
