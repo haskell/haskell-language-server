@@ -26,221 +26,209 @@ module Ide.Plugin.Eval.CodeLens (
 import Control.Applicative (Alternative ((<|>)))
 import Control.Arrow (second)
 import qualified Control.Exception as E
-import Control.Monad (
-    void,
-    when,
- )
+import Control.Monad
+    ( void,
+      when,
+    )
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Trans.Except (
-    ExceptT (..),
-    runExceptT,
- )
-import Data.Aeson (
-    FromJSON,
-    ToJSON,
-    toJSON,
- )
+import Control.Monad.Trans.Except
+    ( ExceptT (..),
+    )
+import Data.Aeson
+    ( FromJSON,
+      ToJSON,
+      toJSON,
+    )
 import Data.Char (isSpace)
 import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
+import Data.List
+    ( dropWhileEnd,
+      find,
+    )
 import qualified Data.Map.Strict as Map
-import Data.List (
-    dropWhileEnd,
-    find,
- )
-import Data.Maybe (catMaybes,
-    fromMaybe,
- )
+import Data.Maybe
+    ( catMaybes,
+      fromMaybe,
+    )
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8)
 import Data.Time (getCurrentTime)
 import Data.Typeable (Typeable)
-import Development.IDE (fromNormalizedFilePath, GetParsedModuleWithComments(..),
-    GetModSummary (..),
-    GhcSession (..),
-    HscEnvEq (envImportPaths, hscEnv),
-    IdeState,
-    List (List),
-    NormalizedFilePath,
-    Range (Range),
-    Uri,
-    evalGhcEnv,
-    hscEnvWithImportPaths,
-    runAction,
-    stringBufferToByteString,
-    textToStringBuffer,
-    toNormalizedFilePath',
-    toNormalizedUri,
-    uriToFilePath',
-    use_,
-    useWithStale_
- )
-import Development.IDE.Core.Preprocessor (
-    preprocessor,
- )
-import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), srcSpanFile, GenLocated(L), ParsedModule(..), HscEnv)
+import Development.IDE
+    ( GetModSummary (..),
+      GetParsedModuleWithComments (..),
+      GhcSession (..),
+      HscEnvEq (envImportPaths),
+      IdeState,
+      List (List),
+      NormalizedFilePath,
+      Range (Range),
+      Uri,
+      evalGhcEnv,
+      fromNormalizedFilePath,
+      hscEnvWithImportPaths,
+      runAction,
+      textToStringBuffer,
+      toNormalizedFilePath',
+      toNormalizedUri,
+      uriToFilePath',
+      useWithStale_,
+      use_,
+    )
+import Development.IDE.GHC.Compat (AnnotationComment (AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
 import DynamicLoading (initializePlugins)
-import GHC (
-    ExecOptions (
-        execLineNumber,
-        execSourceFile
-    ),
-    ExecResult (..),
-    GeneralFlag (..),
-    Ghc,
-    GhcLink (LinkInMemory),
-    GhcMode (CompManager),
-    GhcMonad (getSession),
-    HscTarget (HscInterpreted),
-    LoadHowMuch (LoadAllTargets),
-    ModSummary (ms_hspp_opts),
-    Module (moduleName),
-    SuccessFlag (Failed, Succeeded),
-    TcRnExprMode (..),
-    execOptions,
-    execStmt,
-    exprType,
-    getInteractiveDynFlags,
-    getSessionDynFlags,
-    isImport,
-    isStmt,
-    load,
-    runDecls,
-    setContext,
-    setInteractiveDynFlags,
-    setLogAction,
-    setSessionDynFlags,
-    setTargets,
-    typeKind,
- )
+import FastString (unpackFS)
+import GHC
+    ( ExecOptions
+        ( execLineNumber,
+          execSourceFile
+        ),
+      ExecResult (..),
+      GeneralFlag (..),
+      Ghc,
+      GhcLink (LinkInMemory),
+      GhcMode (CompManager),
+      GhcMonad (getSession),
+      HscTarget (HscInterpreted),
+      LoadHowMuch (LoadAllTargets),
+      ModSummary (ms_hspp_opts),
+      Module (moduleName),
+      SuccessFlag (Failed, Succeeded),
+      TcRnExprMode (..),
+      execOptions,
+      execStmt,
+      exprType,
+      getInteractiveDynFlags,
+      getSessionDynFlags,
+      isImport,
+      isStmt,
+      load,
+      runDecls,
+      setContext,
+      setInteractiveDynFlags,
+      setLogAction,
+      setSessionDynFlags,
+      setTargets,
+      typeKind,
+    )
 import GHC.Generics (Generic)
 import qualified GHC.LanguageExtensions.Type as LangExt
-import GhcPlugins (
-    DynFlags (..),
-    defaultLogActionHPutStrDoc,
-    gopt_set,
-    gopt_unset,
-    interpWays,
-    targetPlatform,
-    updateWays,
-    wayGeneralFlags,
-    wayUnsetGeneralFlags,
-    xopt_set,
- )
-import HscTypes (
-    InteractiveImport (IIModule),
-    ModSummary (ms_mod),
-    Target (Target),
-    TargetId (TargetFile),
- )
-import Ide.Plugin.Eval.Code (
-    Statement,
-    asStatements,
-    evalExpr,
-    evalExtensions,
-    evalSetup,
-    propSetup,
-    resultRange,
-    testCheck,
-    testRanges,
- )
-import Ide.Plugin.Eval.GHC (
-    addExtension,
-    addImport,
-    addPackages,
-    hasPackage,
-    isExpr,
-    showDynFlags,
- )
+import GhcPlugins
+    ( DynFlags (..),
+      defaultLogActionHPutStrDoc,
+      gopt_set,
+      gopt_unset,
+      interpWays,
+      targetPlatform,
+      updateWays,
+      wayGeneralFlags,
+      wayUnsetGeneralFlags,
+      xopt_set,
+    )
+import HscTypes
+    ( InteractiveImport (IIModule),
+      ModSummary (ms_mod),
+      Target (Target),
+      TargetId (TargetFile),
+    )
+import Ide.Plugin.Eval.Code
+    ( Statement,
+      asStatements,
+      evalExpr,
+      evalExtensions,
+      evalSetup,
+      propSetup,
+      resultRange,
+      testCheck,
+      testRanges,
+    )
+import Ide.Plugin.Eval.GHC
+    ( addExtension,
+      addImport,
+      addPackages,
+      hasPackage,
+      isExpr,
+      showDynFlags,
+    )
+import Ide.Plugin.Eval.Parse.Comments (commentsToSections, groupLineComments)
 import Ide.Plugin.Eval.Parse.Option (langOptions)
-import Ide.Plugin.Eval.Parse.Section (
-    Section (
-        sectionFormat,
-        sectionTests
-    ),
-    allSections,
- )
-import Ide.Plugin.Eval.Parse.Token (tokensFrom)
-import Ide.Plugin.Eval.Types (
-    Comments(..),
-    Format (SingleLine),
-    Loc,
-    Located (Located),
-    Test,
-    hasTests,
-    isProperty,
-    splitSections,
-    unLoc,
- )
-import Ide.Plugin.Eval.Util (
-    asS,
-    gStrictTry,
-    handleMaybe,
-    handleMaybeM,
-    isLiterate,
-    logWith,
-    response,
-    response',
-    timed,
- )
+import Ide.Plugin.Eval.Types
+    ( Comments (..),
+      Format (SingleLine),
+      Loc,
+      Located (Located),
+      Section (..),
+      Sections (..),
+      Test,
+      isProperty,
+      unLoc,
+    )
+import Ide.Plugin.Eval.Util
+    ( asS,
+      gStrictTry,
+      handleMaybe,
+      handleMaybeM,
+      isLiterate,
+      logWith,
+      response,
+      response',
+      timed,
+    )
 import Ide.PluginUtils (mkLspCommand)
-import Ide.Types (
-    CodeLensProvider,
-    CommandFunction,
-    CommandId,
-    PluginCommand (PluginCommand),
- )
-import Language.Haskell.LSP.Core (
-    LspFuncs (
-        getVirtualFileFunc,
-        withIndefiniteProgress
-    ),
-    ProgressCancellable (
-        Cancellable
-    ),
- )
-import Language.Haskell.LSP.Types (
-    ApplyWorkspaceEditParams (
-        ApplyWorkspaceEditParams
-    ),
-    CodeLens (CodeLens),
-    CodeLensParams (
-        CodeLensParams,
-        _textDocument
-    ),
-    Command (_arguments, _title),
-    Position (..),
-    ServerMethod (
-        WorkspaceApplyEdit
-    ),
-    TextDocumentIdentifier (..),
-    TextEdit (TextEdit),
-    WorkspaceEdit (WorkspaceEdit),
- )
+import Ide.Types
+    ( CodeLensProvider,
+      CommandFunction,
+      CommandId,
+      PluginCommand (PluginCommand),
+    )
+import Language.Haskell.LSP.Core
+    ( LspFuncs
+        ( getVirtualFileFunc,
+          withIndefiniteProgress
+        ),
+      ProgressCancellable
+        ( Cancellable
+        ),
+    )
+import Language.Haskell.LSP.Types
+    ( ApplyWorkspaceEditParams
+        ( ApplyWorkspaceEditParams
+        ),
+      CodeLens (CodeLens),
+      CodeLensParams
+        ( CodeLensParams,
+          _textDocument
+        ),
+      Command (_arguments, _title),
+      Position (..),
+      ServerMethod
+        ( WorkspaceApplyEdit
+        ),
+      TextDocumentIdentifier (..),
+      TextEdit (TextEdit),
+      WorkspaceEdit (WorkspaceEdit),
+    )
 import Language.Haskell.LSP.VFS (virtualFileText)
-import Outputable (showSDocUnsafe,
-    nest,
-    ppr,
-    showSDoc,
-    text,
-    ($$),
-    (<+>),
- )
+import Outputable
+    ( nest,
+      ppr,
+      showSDoc,
+      text,
+      ($$),
+      (<+>),
+    )
 import System.FilePath (takeFileName)
 import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
 import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
-import Development.IDE.GHC.Compat (SrcSpan(RealSrcSpan))
-import FastString (unpackFS)
-
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
 codeLens :: CodeLensProvider IdeState
-codeLens lsp st plId CodeLensParams{_textDocument} =
+codeLens _lsp st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
@@ -251,7 +239,6 @@ codeLens lsp st plId CodeLensParams{_textDocument} =
                 dbg "fp" fp
                 (ParsedModule{..}, _posMap) <- liftIO $
                     runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
-                dbg "comments" $ showSDocUnsafe $ ppr $ snd pm_annotations
                 let comments = foldMap
                         ( foldMap (\case
                             L (RealSrcSpan real) bdy
@@ -269,40 +256,19 @@ codeLens lsp st plId CodeLensParams{_textDocument} =
                             )
                         )
                         $ snd pm_annotations
-
-                mdlText <- moduleText lsp uri
-
-                {- Normalise CPP/LHS files/custom preprocessed files.
-                   Used to extract tests correctly from CPP and LHS (Bird-style).
-                -}
-                session :: HscEnvEq <- runGetSession st nfp
-
-                Right (ppContent, _dflags) <-
-                    perf "preprocessor" $
-                        liftIO $
-                            runExceptT $
-                                preprocessor (hscEnv session) fp (Just $ textToStringBuffer mdlText)
-                let text =
-                        cleanSource (isLiterate fp) . decodeUtf8 $
-                            stringBufferToByteString
-                                ppContent
-                -- dbg "PREPROCESSED CONTENT" text
+                dbg "comments" $ show comments
+                dbg "groups" $ groupLineComments $ lineComments comments
 
                 -- Extract tests from source code
-                let Right (setups, nonSetups) =
-                        (splitSections . filter hasTests <$>)
-                            . allSections
-                            . tokensFrom
-                            . T.unpack
-                            $ text
-                let tests = testsBySection nonSetups
-
+                let Sections{..} = commentsToSections comments
+                    tests = testsBySection nonSetups
+                    nonSetups = lineSections ++ multilineSections
                 cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
                         [ CodeLens testRange (Just cmd') Nothing
                         | (section, test) <- tests
                         , let (testRange, resultRange) = testRanges test
-                              args = EvalParams (setups ++ [section]) _textDocument
+                              args = EvalParams (setupSections ++ [section]) _textDocument
                               cmd' =
                                 (cmd :: Command)
                                     { _arguments = Just (List [toJSON args])
@@ -320,7 +286,7 @@ codeLens lsp st plId CodeLensParams{_textDocument} =
                             , "tests in"
                             , show (length nonSetups)
                             , "sections"
-                            , show (length setups)
+                            , show (length setupSections)
                             , "setups"
                             , show (length lenses)
                             , "lenses."
@@ -714,27 +680,6 @@ convertBlank x
 padPrefix :: IsString p => Format -> p
 padPrefix SingleLine = "-- "
 padPrefix _ = ""
-
-{-
-Normalise preprocessed source code (from a CPP/LHS or other processed file) so that tests are on the same lines as in the original source.
-
->>> cleanSource True $ T.pack "#line 1 \nA comment\n> module X where"
-"comment\nmodule X where\n"
-
->>> cleanSource False $ T.pack "#1  \nmodule X where"
-"module X where\n"
--}
-cleanSource :: Bool -> Text -> Text
-cleanSource isLit =
-    T.unlines
-        . reverse
-        . (if isLit then map cleanBirdCode else id)
-        . takeWhile (\t -> T.null t || (T.head t /= '#'))
-        . reverse
-        . T.lines
-
-cleanBirdCode :: Text -> Text
-cleanBirdCode = T.drop 2
 
 {- | Resulting @Text@ MUST NOT prefix each line with @--@
    Such comment-related post-process will be taken place

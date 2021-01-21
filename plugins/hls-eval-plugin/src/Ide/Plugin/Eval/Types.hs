@@ -57,8 +57,8 @@ type Txt = String
 data Sections =
     Sections
     { setupSections :: [Section]
-    , lineSecions :: [Section]
-    , multilneSections :: [Section]
+    , lineSections :: [Section]
+    , multilineSections :: [Section]
     }
     deriving (Show, Eq, Generic)
 

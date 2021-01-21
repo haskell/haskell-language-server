@@ -32,9 +32,7 @@ library
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Option
     Ide.Plugin.Eval.Parse.Parser
-    Ide.Plugin.Eval.Parse.Section
     Ide.Plugin.Eval.Parse.Comments
-    Ide.Plugin.Eval.Parse.Token
     Ide.Plugin.Eval.Types
     Ide.Plugin.Eval.Util
 
@@ -45,6 +43,7 @@ library
     , deepseq
     , Diff
     , directory
+    , dlist
     , extra
     , filepath
     , ghc
