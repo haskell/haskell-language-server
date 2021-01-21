@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -8,6 +9,7 @@ module Ide.Plugin.Eval.Parse.Comments where
 
 import qualified Control.Applicative.Combinators.NonEmpty as NE
 import Control.Arrow (first, second, (&&&), (>>>))
+import Control.Lens (view, (^.))
 import Control.Monad (guard, void)
 import Control.Monad.Combinators ()
 import qualified Data.Char as C
@@ -18,26 +20,31 @@ import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, isJust, isNothing, mapMaybe)
+import Data.Maybe (isJust, isNothing)
 import Data.Semigroup
-import qualified Data.Set as Set
 import Data.Void (Void)
-import Development.IDE.GHC.Compat
+import Development.IDE (Range)
+import Development.IDE.Types.Location (Range (Range))
 import GHC.Generics
 import Ide.Plugin.Eval.Types
-import SrcLoc (mkRealSrcLoc, mkRealSrcSpan, realSrcSpanEnd, realSrcSpanStart)
+import Language.Haskell.LSP.Types.Lens
+    ( character,
+      end,
+      line,
+      start,
+    )
 import Text.Megaparsec
 import qualified Text.Megaparsec as P
-import Text.Megaparsec.Char (char, space, space1)
+import Text.Megaparsec.Char (char, space)
 
 parseSections ::
     Comments -> Sections
 parseSections Comments {..} = undefined
 
 groupLineComments ::
-    Map RealSrcSpan String -> [NonEmpty (RealSrcSpan, String)]
+    Map Range String -> [NonEmpty (Range, String)]
 groupLineComments =
-    contiguousGroupOn (fst >>> srcSpanStartLine &&& srcSpanStartCol)
+    contiguousGroupOn (fst >>> view start >>> view line &&& view character)
         . Map.toList
 
 type Parser inputs = Parsec Void inputs
@@ -52,14 +59,14 @@ newtype ExampleLine = ExampleLine {getExampleLine :: String}
 
 data LineCommentTest
     = AProp
-        { lineCommentSectionSpan :: RealSrcSpan
+        { lineCommentSectionSpan :: Range
         , lineProp :: PropLine
-        , propResults :: [(RealSrcSpan, String)]
+        , propResults :: [(Range, String)]
         }
     | AnExample
-        { lineCommentSectionSpan :: RealSrcSpan
+        { lineCommentSectionSpan :: Range
         , lineExamples :: NonEmpty ExampleLine
-        , exampleResults :: [(RealSrcSpan, String)]
+        , exampleResults :: [(Range, String)]
         }
     deriving (Show)
 
@@ -79,8 +86,7 @@ commentsToSections Comments {..} =
                         Just (mls, rs) ->
                             (maybe DL.empty DL.singleton mls, DL.fromList rs)
                 )
-                $ groupLineComments
-                    lineComments
+                $ groupLineComments lineComments
         (multilineSections, blockSetups) = ([], [])
         lineSections =
             map (uncurry linesToSection) $
@@ -90,7 +96,6 @@ commentsToSections Comments {..} =
      in Sections {..}
 
 linesToSection ::
-    -- | Nothing if setup section
     CommentFlavour ->
     [LineCommentTest] ->
     Section
@@ -109,20 +114,26 @@ linesToSection flav tests =
 fromLineTest :: LineCommentTest -> Loc Test
 fromLineTest AProp {..} =
     Located
-        (srcSpanStartLine lineCommentSectionSpan - 1)
+        (lineCommentSectionSpan ^. start . line)
         Property
             { testline = getPropLine lineProp
             , testOutput = map snd propResults
             }
 fromLineTest AnExample {..} =
     Located
-        (srcSpanStartLine lineCommentSectionSpan - 1)
+        (lineCommentSectionSpan ^. start . line)
         Example
             { testLines = getExampleLine <$> lineExamples
             , testOutput = map snd exampleResults
             }
 
--- >>> parseMaybe
+-- >>> :set -XOverloadedStrings
+-- >>> import Language.Haskell.LSP.Types (Position(..))
+-- >>> dummyLoc = Position 0 0
+-- >>> dummySpan = Range dummyLoc dummyLoc
+-- >>> import Control.Arrow
+-- >>> parse lineCommentSectionsP "" [(dummySpan,  "-- >>> 12"), (dummySpan, "--")]
+-- Right [AnExample {lineCommentSectionSpan = Range {_start = Position {_line = 0, _character = 0}, _end = Position {_line = 0, _character = 0}}, lineExamples = ExampleLine {getExampleLine = " 12"} :| [], exampleResults = []}]
 
 {- |
 Result: a tuple of ordinary line tests and setting sections.
@@ -140,7 +151,7 @@ but for future extension for this, we use a tuple here instead of 'Either'.
 -}
 lineGroupP ::
     Parser
-        [(RealSrcSpan, String)]
+        [(Range, String)]
         (Maybe (CommentFlavour, [LineCommentTest]), [LineCommentTest])
 lineGroupP = do
     (_, flav) <-
@@ -183,13 +194,13 @@ lineCommentHeadP =
         *> P.notFollowedBy (oneOf "!#$%&*.+=/<>?@\\~^-:|")
 
 {- $setup
- >>> :set -XOverloadedStrings
- >>> dummyLoc = mkRealSrcLoc "<afile>" 0 0
- >>> dummySpan = mkRealSrcSpan dummyLoc dummyLoc
+>>> :set -XOverloadedStrings
+>>> dummyLoc = mkRealSrcLoc "<afile>" 0 0
+>>> dummySpan = mkRealSrcSpan dummyLoc dummyLoc
 -}
 
 lineCommentSectionsP ::
-    Parser [(RealSrcSpan, String)] [LineCommentTest]
+    Parser [(Range, String)] [LineCommentTest]
 lineCommentSectionsP = do
     skipMany normalCommentP
     lexemeLine $
@@ -198,45 +209,44 @@ lineCommentSectionsP = do
                 <|> uncurry AProp . second snd <$> propLineP <*> resultLinesP
                     <* skipMany normalCommentP
 
-lexemeLine :: Parser [(RealSrcSpan, String)] a -> Parser [(RealSrcSpan, String)] a
+lexemeLine :: Parser [(Range, String)] a -> Parser [(Range, String)] a
 lexemeLine p = p <* skipMany normalCommentP
 
-resultLinesP :: Parser [(RealSrcSpan, String)] [(RealSrcSpan, String)]
+resultLinesP :: Parser [(Range, String)] [(Range, String)]
 resultLinesP = many nonEmptyCommentP
 
-emptyLineP :: Parser [(RealSrcSpan, String)] ()
+emptyLineP :: Parser [(Range, String)] ()
 emptyLineP =
     void $
         satisfy $
             isJust . parseMaybe (lineCommentHeadP *> space) . snd
 
-normalCommentP :: Parser [(RealSrcSpan, String)] (RealSrcSpan, String)
+normalCommentP :: Parser [(Range, String)] (Range, String)
 normalCommentP =
     P.token
-        (mapM $ \ln -> do
+        ( mapM $ \ln -> do
             guard $ isNothing $ parseMaybe (void (try exampleLineStrP) <|> void propLineStrP) ln
             pure $ dropWhile C.isSpace $ drop 2 ln
         )
         mempty
 
-nonEmptyCommentP :: Parser [(RealSrcSpan, String)] (RealSrcSpan, String)
-nonEmptyCommentP = do
+nonEmptyCommentP :: Parser [(Range, String)] (Range, String)
+nonEmptyCommentP = try $ do
     (spn, str) <- normalCommentP
     guard $ not $ null str
     pure (spn, str)
 
-convexHullSpan :: NonEmpty RealSrcSpan -> RealSrcSpan
+convexHullSpan :: NonEmpty Range -> Range
 convexHullSpan lns@(headSpan :| _) =
-    let aFile = srcSpanFile headSpan
-        (mbeg, mend) =
+    let (mbeg, mend) =
             foldMap
-                ( (fmap (Just . Min) . mkRealSrcLoc aFile <$> srcSpanStartLine <*> srcSpanStartCol)
-                    &&& (fmap (Just . Max) . mkRealSrcLoc aFile <$> srcSpanEndLine <*> srcSpanEndCol)
+                ( (Just . Min . view start)
+                    &&& (Just . Max . view end)
                 )
                 lns
-        beg = maybe (realSrcSpanStart headSpan) coerce mbeg
-        end = maybe (realSrcSpanEnd headSpan) coerce mend
-     in mkRealSrcSpan beg end
+        beg = maybe (headSpan ^. start) coerce mbeg
+        end_ = maybe (headSpan ^. end) coerce mend
+     in Range beg end_
 
 dropLineComment ::
     String -> String
@@ -245,18 +255,18 @@ dropLineComment =
         . drop 2
         . L.dropWhile C.isSpace
 
-exampleLinesP :: Parser [(RealSrcSpan, String)] LineCommentTest
+exampleLinesP :: Parser [(Range, String)] LineCommentTest
 exampleLinesP =
     lexemeLine $
         uncurry AnExample . first convexHullSpan . NE.unzip
             <$> NE.some (second snd <$> exampleLineP)
             <*> resultLinesP
 
-exampleLineP :: Parser [(RealSrcSpan, String)] (RealSrcSpan, (CommentFlavour, ExampleLine))
+exampleLineP :: Parser [(Range, String)] (Range, (CommentFlavour, ExampleLine))
 exampleLineP = do
     P.token (mapM $ parseMaybe exampleLineStrP) mempty
 
-propLineP :: Parser [(RealSrcSpan, String)] (RealSrcSpan, (CommentFlavour, PropLine))
+propLineP :: Parser [(Range, String)] (Range, (CommentFlavour, PropLine))
 propLineP = P.token (mapM $ parseMaybe propLineStrP) mempty
 
 -- >>> either (error . errorBundlePretty) id $ parse exampleLineStrP "" "-- | >>> 12"

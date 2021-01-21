@@ -30,6 +30,7 @@ import Data.String (IsString (..))
 import GHC.Generics (Generic)
 import Data.Map.Strict (Map)
 import Development.IDE.GHC.Compat (RealSrcSpan)
+import Development.IDE (Range(Range))
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
@@ -87,8 +88,8 @@ data Test
 
 data Comments =
     Comments
-        { lineComments :: Map RealSrcSpan String
-        , blockComments :: Map RealSrcSpan String
+        { lineComments :: Map Range String
+        , blockComments :: Map Range String
         }
     deriving (Show, Eq, Ord, Generic)
 

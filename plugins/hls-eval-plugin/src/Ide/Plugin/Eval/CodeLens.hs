@@ -57,7 +57,7 @@ import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import Data.Typeable (Typeable)
 import Development.IDE
-    ( GetModSummary (..),
+    (realSrcSpanToRange,  GetModSummary (..),
       GetParsedModuleWithComments (..),
       GhcSession (..),
       HscEnvEq (envImportPaths),
@@ -224,6 +224,8 @@ import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
 import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
+import Development.IDE.Core.PositionMapping (toCurrentRange)
+
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
@@ -237,20 +239,23 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
                 let nfp = toNormalizedFilePath' fp
                 dbg "fp" fp
-                (ParsedModule{..}, _posMap) <- liftIO $
+                (ParsedModule{..}, posMap) <- liftIO $
                     runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
                 let comments = foldMap
                         ( foldMap (\case
                             L (RealSrcSpan real) bdy
                                 | unpackFS (srcSpanFile real) ==
                                     fromNormalizedFilePath nfp ->
+                                    let ran0 = realSrcSpanToRange real
+                                        curRan = fromMaybe ran0 $ toCurrentRange posMap ran0
+                                    in
                                     -- since Haddock parsing is off,
                                     -- we can concentrate on these two
                                     case bdy of
                                         AnnLineComment cmt ->
-                                            mempty { lineComments = Map.singleton real cmt }
+                                            mempty { lineComments = Map.singleton curRan cmt }
                                         AnnBlockComment cmt ->
-                                            mempty { blockComments = Map.singleton real cmt }
+                                            mempty { blockComments = Map.singleton curRan cmt }
                                         _ -> mempty
                             _ -> mempty
                             )

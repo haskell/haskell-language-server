@@ -53,6 +53,7 @@ library
     , haskell-lsp
     , haskell-lsp-types
     , hls-plugin-api
+    , lens
     , megaparsec >= 0.9
     , parser-combinators
     , pretty-simple
