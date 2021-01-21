@@ -367,7 +367,7 @@ redundantImportTests = testGroup "redundant import code actions" [
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
         _   <- waitForDiagnosticsFromSource doc "typecheck"
-        CACommand cmd : _ <- getAllCodeActions doc
+        _ : CACommand cmd : _ <- getAllCodeActions doc
         executeCommand cmd
         contents <- documentContents doc
         liftIO $ T.lines contents @?=

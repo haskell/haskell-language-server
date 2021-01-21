@@ -3,14 +3,16 @@
 
 module Development.IDE.GHC.Warnings(withWarnings) where
 
+import Data.List
 import ErrUtils
-import GhcPlugins as GHC hiding (Var)
+import GhcPlugins as GHC hiding (Var, (<>))
 
 import           Control.Concurrent.Extra
 import qualified           Data.Text as T
 
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.GHC.Error
+import           Language.Haskell.LSP.Types (NumberOrString (StringValue))
 
 
 -- | Take a GHC monadic action (e.g. @typecheckModule pm@ for some
@@ -27,8 +29,19 @@ withWarnings diagSource action = do
   warnings <- newVar []
   let newAction :: DynFlags -> WarnReason -> Severity -> SrcSpan -> PprStyle -> SDoc -> IO ()
       newAction dynFlags wr _ loc style msg = do
-        let wr_d = fmap (wr,) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc (queryQual style) msg
+        let wr_d = map ((wr,) . third3 (attachReason wr)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc (queryQual style) msg
         modifyVar_ warnings $ return . (wr_d:)
   res <- action $ \x -> x{ms_hspp_opts = (ms_hspp_opts x){log_action = newAction}}
   warns <- readVar warnings
   return (reverse $ concat warns, res)
+
+attachReason :: WarnReason -> Diagnostic -> Diagnostic
+attachReason wr d = d{_code = StringValue <$> showReason wr}
+ where
+  showReason = \case
+    NoReason -> Nothing
+    Reason flag -> showFlag flag
+    ErrReason flag -> showFlag =<< flag
+
+showFlag :: WarningFlag -> Maybe T.Text
+showFlag flag = ("-W" <>) . T.pack . flagSpecName <$> find ((== flag) . flagSpecFlag) wWarningFlags
