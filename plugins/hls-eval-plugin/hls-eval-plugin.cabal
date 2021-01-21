@@ -31,7 +31,6 @@ library
     Ide.Plugin.Eval.CodeLens
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Option
-    Ide.Plugin.Eval.Parse.Parser
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Types
     Ide.Plugin.Eval.Util
