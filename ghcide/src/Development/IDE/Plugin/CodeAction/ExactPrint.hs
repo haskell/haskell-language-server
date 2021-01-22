@@ -197,7 +197,7 @@ extendImportTopLevel df idnetifier (L l it@ImportDecl {..})
     top <- uniqueSrcSpanT
     rdr <- liftParseAST df idnetifier
     let lie = L src $ IEName rdr
-        x = L top $ IEVar NoExtField lie
+        x = L top $ IEVar noExtField lie
     when hasSibling $
       addTrailingCommaT (last lies)
     addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
@@ -224,7 +224,7 @@ extendImportViaParent df parent child (L l it@ImportDecl {..})
         srcChild <- uniqueSrcSpanT
         childRdr <- liftParseAST df child
         let childLIE = L srcChild $ IEName childRdr
-            x :: LIE GhcPs = L ll' $ IEThingWith NoExtField absIE NoIEWildcard [childLIE] []
+            x :: LIE GhcPs = L ll' $ IEThingWith noExtField absIE NoIEWildcard [childLIE] []
         modifyAnnsT $ \anns ->
           let oldKey = mkAnnKey lAbs
               oldValue = anns Map.! oldKey
@@ -243,7 +243,7 @@ extendImportViaParent df parent child (L l it@ImportDecl {..})
             addTrailingCommaT (last lies')
           let childLIE = L srcChild $ IEName childRdr
           addSimpleAnnT childRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, dp00)]
-          return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith NoExtField twIE NoIEWildcard (lies' ++ [childLIE]) [])] ++ xs)}
+          return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith noExtField twIE NoIEWildcard (lies' ++ [childLIE]) [])] ++ xs)}
     go hide l' pre (x : xs) = go hide l' (x : pre) xs
     go hide l' pre []
       | hasSibling <- not $ null pre = do
@@ -257,7 +257,7 @@ extendImportViaParent df parent child (L l it@ImportDecl {..})
           addTrailingCommaT (head pre)
         let parentLIE = L srcParent $ IEName parentRdr
             childLIE = L srcChild $ IEName childRdr
-            x :: LIE GhcPs = L l'' $ IEThingWith NoExtField parentLIE NoIEWildcard [childLIE] []
+            x :: LIE GhcPs = L l'' $ IEThingWith noExtField parentLIE NoIEWildcard [childLIE] []
         addSimpleAnnT parentRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, DP (0, 0))]
         addSimpleAnnT childRdr (DP (0, 0)) [(G AnnVal, DP (0, 0))]
         addSimpleAnnT x (DP (0, 0)) [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, DP (0, 0))]
