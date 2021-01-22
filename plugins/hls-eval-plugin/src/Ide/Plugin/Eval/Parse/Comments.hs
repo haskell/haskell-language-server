@@ -268,12 +268,6 @@ lineGroupP = do
         Named "setup" -> (Nothing,) <$> lineCommentSectionsP
         flav -> (,mempty) . Just . (flav,) <$> lineCommentSectionsP
 
-{- $setup
->>> dummyPos = Position 0 0
->>> dummyPosition = Position dummyPos dummyPos
-Couldn't match expected type ‘Int’ with actual type ‘Position’
-Couldn't match expected type ‘Int’ with actual type ‘Position’
--}
 
 -- >>>  parse (lineGroupP <*eof) "" $ (dummyPosition, ) . RawLineComment <$> ["-- a", "-- b"]
 -- Variable not in scope: dummyPosition :: Position

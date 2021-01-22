@@ -45,7 +45,7 @@ import Data.Char (isSpace)
 import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
-    (mapAccumL,  dropWhileEnd,
+    (dropWhileEnd,
       find,
     )
 import qualified Data.Map.Strict as Map
@@ -79,11 +79,11 @@ import Development.IDE
       useWithStale_,
       use_,
     )
-import Development.IDE.GHC.Compat (AnnotationComment(AnnDocCommentNext, AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
+import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
 import DynamicLoading (initializePlugins)
 import FastString (unpackFS)
 import GHC
-    (AnnotationComment(AnnDocCommentNamed, AnnDocCommentPrev),  ExecOptions
+    (ExecOptions
         ( execLineNumber,
           execSourceFile
         ),
@@ -168,7 +168,7 @@ import Ide.Plugin.Eval.Util
       response',
       timed,
     )
-import Ide.PluginUtils (extractRange, mkLspCommand)
+import Ide.PluginUtils (mkLspCommand)
 import Ide.Types
     ( CodeLensProvider,
       CommandFunction,
@@ -218,8 +218,8 @@ import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
-import Control.Lens ((.~), (+~), (&), (^.))
-import Language.Haskell.LSP.Types.Lens (end, line, character, start)
+import Control.Lens ((^.))
+import Language.Haskell.LSP.Types.Lens (start)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -232,7 +232,6 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
             response $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
-                content <- moduleText _lsp uri
                 let nfp = toNormalizedFilePath' fp
                 dbg "fp" fp
                 (ParsedModule{..}, posMap) <- liftIO $
@@ -246,48 +245,14 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                         curRan = fromMaybe ran0 $ toCurrentRange posMap ran0
                                         -- used to detect whether haddock comment is a line comment or not, in a brutal way
                                         begin = curRan ^. start
-                                        fin = curRan ^. end
-                                        isLine =
-                                            extractRange
-                                                (Range begin
-                                                $ begin & character +~ 1
-                                                ) content
-                                            == "--"
                                     in
-                                    -- since Haddock parsing is off,
+                                    -- since Haddock parsing is unset explicitly in 'getParsedModuleWithComments',
                                     -- we can concentrate on these two
                                     case bdy of
                                         AnnLineComment cmt ->
                                             mempty { lineComments = Map.singleton begin (RawLineComment cmt) }
                                         AnnBlockComment cmt ->
                                             mempty { blockComments = Map.singleton begin $ RawBlockComment cmt }
-                                        AnnDocCommentNext txt
-                                            | isLine -> mimicLine '|' begin fin txt
-                                            | otherwise ->
-                                            mempty {
-                                                blockComments =
-                                                    Map.singleton begin
-                                                    $ RawBlockComment $
-                                                    "{- | " <> txt <> "-}"
-                                                }
-                                        AnnDocCommentPrev txt
-                                            | isLine -> mimicLine '^' begin fin txt
-                                            | otherwise ->
-                                            mempty {
-                                                blockComments =
-                                                    Map.singleton begin
-                                                    $ RawBlockComment $
-                                                    "{- ^ " <> txt <> "-}"
-                                                }
-                                        AnnDocCommentNamed txt
-                                            | isLine -> mimicLine '$' begin fin txt
-                                            | otherwise ->
-                                            mempty {
-                                                blockComments =
-                                                    Map.singleton begin
-                                                    $ RawBlockComment $
-                                                    "{- $ " <> txt <> "-}"
-                                                }
                                         _ -> mempty
                             _ -> mempty
                             )
@@ -341,24 +306,6 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 return $ List lenses
   where
     trivial (Range p p') = p == p'
-
-mimicLine :: Char -> Position -> Position -> String -> Comments
-mimicLine prefix beg fin content =
-    let prfx' = "-- " ++ [prefix, ' ' ]
-        (next, alls) = mapAccumL
-                        ( \ !pos l ->
-                            ( pos & line +~ 1 & character .~ 0
-                            , (pos, RawLineComment $ prfx' ++ l)
-                            )
-                        )
-                        beg
-                        $ lines content
-        pads = map ((, RawLineComment prfx') . flip Position 0)
-                    [next^.line .. fin^.line]
-    in mempty
-        { lineComments =
-            Map.fromList $ alls ++ pads
-        }
 
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"

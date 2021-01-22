@@ -349,6 +349,9 @@ withOptHaddock = withOption Opt_Haddock
 withOption :: GeneralFlag -> ModSummary -> ModSummary
 withOption opt ms = ms{ms_hspp_opts= gopt_set (ms_hspp_opts ms) opt}
 
+withoutOption :: GeneralFlag -> ModSummary -> ModSummary
+withoutOption opt ms = ms{ms_hspp_opts= gopt_unset (ms_hspp_opts ms) opt}
+
 -- | Given some normal parse errors (first) and some from Haddock (second), merge them.
 --   Ignore Haddock errors that are in both. Demote Haddock-only errors to warnings.
 mergeParseErrorsHaddock :: [FileDiagnostic] -> [FileDiagnostic] -> [FileDiagnostic]
@@ -370,7 +373,7 @@ getParsedModuleWithCommentsRule = defineEarlyCutoff $ \GetParsedModuleWithCommen
     sess <- use_ GhcSession file
     opt <- getIdeOptions
 
-    let ms' = withOption Opt_KeepRawTokenStream ms
+    let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
 
     liftIO $ getParsedModuleDefinition (hscEnv sess) opt file ms'
 
