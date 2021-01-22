@@ -635,6 +635,13 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 These are known to be somewhat buggy at the moment: https://github.com/haskell/haskell-language-server/issues/478.
 This issue should be fixed in Stack versions >= 2.5.
 
+#### Problems with dynamic linking
+
+As haskell-language-server prebuilt binaries are statically linked, they don't play well with projects using dynamic linking.
+An usual symptom is the presence of errors containing `unknown symbol` and it is typical in arch linux, where a dynamically linked version of ghc is used. 
+
+The workaround is to use a version of haskell-language-server compiled from source with `-dynamic` enabled`. See more details [here](https://github.com/haskell/haskell-language-server/issues/1160#issuecomment-756566273).
+
 ### Troubleshooting the server
 
 #### Diagnostic mode
