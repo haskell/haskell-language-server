@@ -268,7 +268,6 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                     )
                     $ snd pm_annotations
                 dbg "comments" $ show comments
-                dbg "groups" $ groupLineComments $ lineComments comments
 
                 -- Extract tests from source code
                 let Sections{..} = commentsToSections comments
