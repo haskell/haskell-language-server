@@ -38,6 +38,7 @@ library
       T24
       T25
       T26
+      T27
       TMulti
       TPlainComment
       THaddock
@@ -50,6 +51,7 @@ library
       TPrelude
       TCPP
       TLHS
+      TSetup
       Util
 
   build-depends:       base >= 4.7 && < 5, QuickCheck

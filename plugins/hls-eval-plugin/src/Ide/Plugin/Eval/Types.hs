@@ -1,3 +1,6 @@
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -18,6 +21,8 @@ module Ide.Plugin.Eval.Types (
     Loc,
     Located (..),
     Comments(..),
+    RawBlockComment(..),
+    RawLineComment(..),
     unLoc,
     Txt,
 ) where
@@ -29,8 +34,8 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.String (IsString (..))
 import GHC.Generics (Generic)
 import Data.Map.Strict (Map)
-import Development.IDE.GHC.Compat (RealSrcSpan)
-import Development.IDE (Range(Range))
+import Development.IDE (Range(..))
+import qualified Text.Megaparsec as P
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
@@ -88,10 +93,32 @@ data Test
 
 data Comments =
     Comments
-        { lineComments :: Map Range String
-        , blockComments :: Map Range String
+        { lineComments :: Map Range RawLineComment
+        , blockComments :: Map Range RawBlockComment
         }
     deriving (Show, Eq, Ord, Generic)
+
+newtype RawBlockComment = RawBlockComment {getRawBlockComment :: String}
+    deriving (Show, Eq, Ord)
+    deriving newtype
+        ( IsString
+        , P.Stream
+        , P.TraversableStream
+        , P.VisualStream
+        , Semigroup
+        , Monoid
+        )
+
+newtype RawLineComment = RawLineComment {getRawLineComment :: String}
+    deriving (Show, Eq, Ord)
+    deriving newtype
+        ( IsString
+        , P.Stream
+        , P.TraversableStream
+        , P.VisualStream
+        , Semigroup
+        , Monoid
+        )
 
 instance Semigroup Comments where
     Comments ls bs <> Comments ls' bs' = Comments (ls <> ls') (bs <> bs')

@@ -155,16 +155,6 @@ import Ide.Plugin.Eval.GHC
 import Ide.Plugin.Eval.Parse.Comments (commentsToSections, groupLineComments)
 import Ide.Plugin.Eval.Parse.Option (langOptions)
 import Ide.Plugin.Eval.Types
-    ( Comments (..),
-      Format (SingleLine),
-      Loc,
-      Located (Located),
-      Section (..),
-      Sections (..),
-      Test,
-      isProperty,
-      unLoc,
-    )
 import Ide.Plugin.Eval.Util
     ( asS,
       gStrictTry,
@@ -225,6 +215,7 @@ import System.IO.Temp (withSystemTempFile)
 import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
+import qualified Data.DList as DL
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -253,15 +244,24 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                     -- we can concentrate on these two
                                     case bdy of
                                         AnnLineComment cmt ->
-                                            mempty { lineComments = Map.singleton curRan cmt }
+                                            mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
                                         AnnBlockComment cmt ->
-                                            mempty { blockComments = Map.singleton curRan cmt }
+                                            mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
                                         _ -> mempty
                             _ -> mempty
                             )
                         )
                         $ snd pm_annotations
-                dbg "comments" $ show comments
+                dbg "comments" $ show $  DL.toList $
+                    foldMap
+                    (foldMap $ \(L a b) ->
+                        case b of
+                            AnnLineComment{} -> mempty
+                            AnnBlockComment{} -> mempty
+                            _ -> DL.singleton (a, b)
+                    )
+                    $ snd pm_annotations
+                dbg "excluded comments" $ show comments
                 dbg "groups" $ groupLineComments $ lineComments comments
 
                 -- Extract tests from source code
@@ -307,7 +307,9 @@ evalCommandName = "evalCommand"
 evalCommand :: PluginCommand IdeState
 evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 
--- |Specify the test section to execute
+-- | Specify the test section to execute
+--
+-- >>> 12
 data EvalParams = EvalParams
     { sections :: [Section]
     , module_ :: !TextDocumentIdentifier
