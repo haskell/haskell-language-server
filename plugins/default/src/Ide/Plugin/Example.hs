@@ -128,7 +128,7 @@ codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier u
           -- edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
           range = Range (Position 3 0) (Position 4 0)
         let cmdParams = AddTodoParams uri "do abc"
-        cmd <- mkLspCommand plId "codelens.todo" title (Just [(toJSON cmdParams)])
+        cmd <- mkLspCommand plId "codelens.todo" title (Just [toJSON cmdParams])
         pure $ Right $ List [ CodeLens range (Just cmd) Nothing ]
       Nothing -> pure $ Right $ List []
 
@@ -212,7 +212,7 @@ completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
                            command xd
         label = "Example completion"
         kind = Nothing
-        tags = List []
+        tags = Nothing
         detail = Nothing
         documentation = Nothing
         deprecated = Nothing

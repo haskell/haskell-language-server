@@ -97,7 +97,7 @@ writeHieFile hie_file_path hiefile = do
   -- hieVersion and the GHC version used to generate this file
   mapM_ (putByte bh0) hieMagic
   putBinLine bh0 $ BSC.pack $ show hieVersion
-  putBinLine bh0 $ ghcVersion
+  putBinLine bh0 ghcVersion
 
   -- remember where the dictionary pointer will go
   dict_p_p <- tellBin bh0
@@ -297,7 +297,7 @@ getSymbolTable bh ncu = do
 getSymTabName :: SymbolTable -> BinHandle -> IO Name
 getSymTabName st bh = do
   i :: Word32 <- get bh
-  return $ st A.! (fromIntegral i)
+  return $ st A.! fromIntegral i
 
 putName :: HieSymbolTable -> BinHandle -> Name -> IO ()
 putName (HieSymbolTable next ref) bh name = do

@@ -8,10 +8,10 @@ homepage:      https://github.com/haskell/haskell-language-server/hls-plugin-api
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0
 license-file:  LICENSE
-author:        Many,TBD when we release
-maintainer:    alan.zimm@gmail.com (for now)
-copyright:     Alan Zimmerman
-category:      Web
+author:        The Haskell IDE Team
+maintainer:    alan.zimm@gmail.com
+copyright:     The Haskell IDE Team
+category:      Development
 build-type:    Simple
 
 flag pedantic
@@ -37,7 +37,7 @@ library
     , containers
     , data-default
     , Diff
-    , haskell-lsp           ^>=0.22
+    , haskell-lsp           ^>=0.23
     , hashable
     , hslogger
     , lens

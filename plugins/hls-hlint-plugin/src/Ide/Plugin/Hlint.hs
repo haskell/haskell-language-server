@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE DeriveAnyClass    #-}
 {-# LANGUAGE DeriveGeneric     #-}
@@ -6,10 +7,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports    #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE ViewPatterns      #-}
 
 module Ide.Plugin.Hlint
   (
@@ -33,18 +31,27 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Typeable
 import Development.IDE
-import Development.IDE.Core.Rules (defineNoFile)
+import Development.IDE.Core.Rules (getParsedModuleWithComments, defineNoFile)
 import Development.IDE.Core.Shake (getDiagnostics)
 
-#ifdef GHC_LIB
+#ifdef HLINT_ON_GHC_LIB
 import Data.List (nub)
-import "ghc-lib" GHC hiding (DynFlags(..))
+import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts)
+import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
+import "ghc" DynFlags as RealGHC.DynFlags (topDir)
 import "ghc" GHC as RealGHC (DynFlags(..))
-import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
+import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags, ms_hspp_opts)
 import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
+import System.Environment(setEnv, unsetEnv)
+import System.FilePath (takeFileName)
+import System.IO (hPutStr, noNewlineTranslation, hSetNewlineMode, utf8, hSetEncoding, IOMode(WriteMode), withFile, hClose)
+import System.IO.Temp
 #else
 import Development.IDE.GHC.Compat hiding (DynFlags(..))
+import Language.Haskell.GHC.ExactPrint.Parsers (postParseTransform)
+import Language.Haskell.GHC.ExactPrint.Delta (deltaOptions)
+import Language.Haskell.GHC.ExactPrint.Types (Rigidity(..))
 #endif
 
 import Ide.Logger
@@ -53,12 +60,12 @@ import Ide.Plugin.Config
 import Ide.PluginUtils
 import Language.Haskell.HLint as Hlint
 import Language.Haskell.LSP.Core
+    ( LspFuncs(withIndefiniteProgress),
+      ProgressCancellable(Cancellable) )
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as LSP
 import qualified Language.Haskell.LSP.Types.Lens as LSP
-import System.FilePath (takeFileName)
-import System.IO (hPutStr, noNewlineTranslation, hSetNewlineMode, utf8, hSetEncoding, IOMode(WriteMode), withFile, hClose)
-import System.IO.Temp
+
 import Text.Regex.TDFA.Text()
 import GHC.Generics (Generic)
 
@@ -176,7 +183,14 @@ getIdeas nfp = do
   fmap applyHints' (moduleEx flags)
 
   where moduleEx :: ParseFlags -> Action (Maybe (Either ParseError ModuleEx))
-#ifdef GHC_LIB
+#ifndef HLINT_ON_GHC_LIB
+        moduleEx _flags = do
+          mbpm <- getParsedModule nfp
+          return $ createModule <$> mbpm
+          where createModule pm = Right (createModuleEx anns modu)
+                  where anns = pm_annotations pm
+                        modu = pm_parsed_source pm
+#else
         moduleEx flags = do
           mbpm <- getParsedModule nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
@@ -190,20 +204,21 @@ getIdeas nfp = do
                      Just <$> (liftIO $ parseModuleEx flags' fp contents')
 
         setExtensions flags = do
-          hsc <- hscEnv <$> use_ GhcSession nfp
-          let dflags = hsc_dflags hsc
-          let hscExts = EnumSet.toList (extensionFlags dflags)
-          let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
-          let hlintExts = nub $ enabledExtensions flags ++ hscExts'
+          hlintExts <- getExtensions flags nfp
           logm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
-#else
-        moduleEx _flags = do
-          mbpm <- getParsedModule nfp
-          return $ createModule <$> mbpm
-          where createModule pm = Right (createModuleEx anns modu)
-                  where anns = pm_annotations pm
-                        modu = pm_parsed_source pm
+
+getExtensions :: ParseFlags -> NormalizedFilePath -> Action [Extension]
+getExtensions pflags nfp = do
+    dflags <- getFlags
+    let hscExts = EnumSet.toList (extensionFlags dflags)
+    let hscExts' = mapMaybe (GhclibParserEx.readExtension . show) hscExts
+    let hlintExts = nub $ enabledExtensions pflags ++ hscExts'
+    return hlintExts
+  where getFlags :: Action DynFlags
+        getFlags = do
+          (modsum, _) <- use_ GetModSummary nfp
+          return $ ms_hspp_opts modsum
 #endif
 
 -- ---------------------------------------------------------------------
@@ -334,10 +349,20 @@ applyOneCmd lf ide (AOP uri pos title) = do
 applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
 applyHint ide nfp mhint =
   runExceptT $ do
-    ideas <- bimapExceptT showParseError id $ ExceptT $ liftIO $ runAction "applyHint" ide $ getIdeas nfp
+    let runAction' :: Action a -> IO a
+        runAction' = runAction "applyHint" ide
+    let errorHandlers = [ Handler $ \e -> return (Left (show (e :: IOException)))
+                        , Handler $ \e -> return (Left (show (e :: ErrorCall)))
+                        ]
+    ideas <- bimapExceptT showParseError id $ ExceptT $ runAction' $ getIdeas nfp
     let ideas' = maybe ideas (`filterIdeas` ideas) mhint
-    let commands = map (show &&& ideaRefactoring) ideas'
+    let commands = map ideaRefactoring ideas'
     liftIO $ logm $ "applyHint:apply=" ++ show commands
+    let fp = fromNormalizedFilePath nfp
+    (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
+    oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
+    (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
+    let dflags = ms_hspp_opts modsum
     -- set Nothing as "position" for "applyRefactorings" because
     -- applyRefactorings expects the provided position to be _within_ the scope
     -- of each refactoring it will apply.
@@ -353,19 +378,47 @@ applyHint ide nfp mhint =
     -- If we provide "applyRefactorings" with "Just (1,13)" then
     -- the "Redundant bracket" hint will never be executed
     -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
-    let fp = fromNormalizedFilePath nfp
-    (_, mbOldContent) <- liftIO $ runAction "hlint" ide $ getFileContents nfp
-    oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
-    -- We need to save a file with last edited contents cause `apply-refact`
-    -- doesn't expose a function taking directly contents instead a file path.
-    -- Ideally we should try to expose that function upstream and remove this.
-    res <- liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
+#ifdef HLINT_ON_GHC_LIB
+    let writeFileUTF8NoNewLineTranslation file txt =
+            withFile file WriteMode $ \h -> do
+                hSetEncoding h utf8
+                hSetNewlineMode h noNewlineTranslation
+                hPutStr h (T.unpack txt)
+    -- Setting a environment variable with the libdir used by ghc-exactprint.
+    -- It is a workaround for an error caused by the use of a hadcoded at compile time libdir
+    -- in ghc-exactprint that makes dependent executables non portables.
+    -- See https://github.com/alanz/ghc-exactprint/issues/96.
+    -- WARNING: this code is not thread safe, so if you try to apply several async refactorings
+    -- it could fail. That case is not very likely so we assume the risk.
+    let withRuntimeLibdir :: IO a -> IO a
+        withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
+            where key = "GHC_EXACTPRINT_GHC_LIBDIR"
+    res <-
+        liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
             writeFileUTF8NoNewLineTranslation temp oldContent
-            (Right <$> applyRefactorings Nothing commands temp) `catches`
-                    [ Handler $ \e -> return (Left (show (e :: IOException)))
-                    , Handler $ \e -> return (Left (show (e :: ErrorCall)))
-                    ]
+            (pflags, _, _) <- runAction' $ useNoFile_ GetHlintSettings
+            exts <- runAction' $ getExtensions pflags nfp
+            -- We have to reparse extensions to remove the invalid ones
+            let (enabled, disabled, _invalid) = parseExtensions $ map show exts
+            let refactExts = map show $ enabled ++ disabled
+            (Right <$> withRuntimeLibdir (applyRefactorings Nothing commands temp refactExts))
+                `catches` errorHandlers
+#else
+    mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
+    res <-
+        case mbParsedModule of
+            Nothing -> throwE "Apply hint: error parsing the module"
+            Just pm -> do
+                let anns = pm_annotations pm
+                let modu = pm_parsed_source pm
+                -- apply-refact uses RigidLayout
+                let rigidLayout = deltaOptions RigidLayout
+                (anns', modu') <-
+                    ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
+                liftIO $ (Right <$> applyRefactorings' Nothing commands anns' modu')
+                            `catches` errorHandlers
+#endif
     case res of
       Right appliedFile -> do
         let uri = fromNormalizedUri (filePathToUri' nfp)
@@ -373,7 +426,7 @@ applyHint ide nfp mhint =
         liftIO $ logm $ "hlint:applyHint:diff=" ++ show wsEdit
         ExceptT $ return (Right wsEdit)
       Left err ->
-        throwE (show err)
+        throwE err
     where
           -- | If we are only interested in applying a particular hint then
           -- let's filter out all the irrelevant ideas
@@ -396,10 +449,3 @@ bimapExceptT f g (ExceptT m) = ExceptT (fmap h m) where
   h (Left e)  = Left (f e)
   h (Right a) = Right (g a)
 {-# INLINE bimapExceptT #-}
-
-writeFileUTF8NoNewLineTranslation :: FilePath -> T.Text -> IO()
-writeFileUTF8NoNewLineTranslation file txt =
-  withFile file WriteMode $ \h -> do
-    hSetEncoding h utf8
-    hSetNewlineMode h noNewlineTranslation
-    hPutStr h (T.unpack txt)

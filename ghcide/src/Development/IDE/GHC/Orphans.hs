@@ -12,12 +12,16 @@ module Development.IDE.GHC.Orphans() where
 
 import           Bag
 import           Control.DeepSeq
+import Data.Aeson
 import           Data.Hashable
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 import           GHC                        ()
 import           GhcPlugins
 import qualified StringBuffer               as SB
+import Data.Text (Text)
+import Data.String (IsString(fromString))
+import Retrie.ExactPrint (Annotated)
 
 
 -- Orphan instances for types from the GHC API.
@@ -94,6 +98,37 @@ instance NFData a => NFData (IdentifierDetails a) where
 instance NFData RealSrcSpan where
     rnf = rwhnf
 
+srcSpanFileTag, srcSpanStartLineTag, srcSpanStartColTag,
+    srcSpanEndLineTag, srcSpanEndColTag :: Text
+srcSpanFileTag = "srcSpanFile"
+srcSpanStartLineTag = "srcSpanStartLine"
+srcSpanStartColTag = "srcSpanStartCol"
+srcSpanEndLineTag = "srcSpanEndLine"
+srcSpanEndColTag = "srcSpanEndCol"
+
+instance ToJSON RealSrcSpan where
+  toJSON spn =
+      object
+        [ srcSpanFileTag .= unpackFS (srcSpanFile spn)
+        , srcSpanStartLineTag .= srcSpanStartLine spn
+        , srcSpanStartColTag .= srcSpanStartCol spn
+        , srcSpanEndLineTag .= srcSpanEndLine spn
+        , srcSpanEndColTag .= srcSpanEndCol spn
+        ]
+
+instance FromJSON RealSrcSpan where
+  parseJSON = withObject "object" $ \obj -> do
+      file <- fromString <$> (obj .: srcSpanFileTag)
+      mkRealSrcSpan
+        <$> (mkRealSrcLoc file
+                <$> obj .: srcSpanStartLineTag
+                <*> obj .: srcSpanStartColTag
+            )
+        <*> (mkRealSrcLoc file
+                <$> obj .: srcSpanEndLineTag
+                <*> obj .: srcSpanEndColTag
+            )
+
 instance NFData Type where
     rnf = rwhnf
 
@@ -110,3 +145,9 @@ instance NFData ModGuts where
 
 instance NFData (ImportDecl GhcPs) where
     rnf = rwhnf
+
+instance Show (Annotated ParsedSource) where
+  show _ = "<Annotated ParsedSource>"
+
+instance NFData (Annotated ParsedSource) where
+  rnf = rwhnf

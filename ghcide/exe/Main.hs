@@ -30,6 +30,7 @@ import Development.IDE.Types.Logger
 import Development.IDE.Plugin
 import Development.IDE.Plugin.Test as Test
 import Development.IDE.Session (loadSession)
+import Development.Shake (ShakeOptions (shakeThreads))
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
@@ -114,15 +115,16 @@ main = do
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             sessionLoader <- loadSession $ fromMaybe dir rootPath
             config <- fromMaybe def <$> getConfig
-            let options = (defaultIdeOptions sessionLoader)
+            let options = defOptions
                     { optReportProgress    = clientSupportsProgress caps
                     , optShakeProfiling    = argsShakeProfiling
                     , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                     , optTesting           = IdeTesting argsTesting
-                    , optThreads           = argsThreads
+                    , optShakeOptions      = (optShakeOptions defOptions){shakeThreads = argsThreads}
                     , optCheckParents      = checkParents config
                     , optCheckProject      = checkProject config
                     }
+                defOptions = defaultIdeOptions sessionLoader
                 logLevel = if argsVerbose then minBound else Info
             debouncer <- newAsyncDebouncer
             let rules = do
@@ -160,14 +162,15 @@ main = do
         debouncer <- newAsyncDebouncer
         let dummyWithProg _ _ f = f (const (pure ()))
         sessionLoader <- loadSession dir
-        let options = (defaultIdeOptions sessionLoader)
+        let options = defOptions
                     { optShakeProfiling    = argsShakeProfiling
                     -- , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                     , optTesting           = IdeTesting argsTesting
-                    , optThreads           = argsThreads
+                    , optShakeOptions      = (optShakeOptions defOptions){shakeThreads = argsThreads}
                     , optCheckParents      = NeverCheck
                     , optCheckProject      = False
                     }
+            defOptions = defaultIdeOptions sessionLoader
             logLevel = if argsVerbose then minBound else Info
         ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs
 

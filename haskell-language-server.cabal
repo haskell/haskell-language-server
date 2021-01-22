@@ -8,12 +8,14 @@ description:
 
 homepage:           https://github.com/haskell/haskell-language-server#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
-author:             Alan Zimmerman
+author:             The Haskell IDE Team
 maintainer:         alan.zimm@gmail.com
-copyright:          Alan Zimmerman
+copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
+category:           Development
 build-type:         Simple
+tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.1 || == 8.10.2 || == 8.10.3
 extra-source-files:
   README.md
   ChangeLog.md
@@ -61,7 +63,7 @@ library
     , ghc
     , ghcide                >=0.7
     , gitrev
-    , haskell-lsp           ^>=0.22
+    , haskell-lsp           ^>=0.23
     , hls-plugin-api        >=0.6
     , hslogger
     , optparse-applicative
@@ -77,81 +79,97 @@ library
 
   default-language: Haskell2010
 
+-- Plugin flags are designed for 'cabal install haskell-language-server':
+-- - Packaged plugins should be manual:False
+-- - Non packaged plugins and bulk flags should be manual:True
+-- - Bulk flags should be default:False
+-- - Individual flags should be default:True
+
 flag all-plugins
   description: Enable all non formatter plugins
-  default:     True
+  default:     False
   manual:      True
 
 flag all-formatters
   description: Enable all fomatters
-  default:     True
+  default:     False
   manual:      True
 
 flag class
   description: Enable class plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
+
+flag haddockComments
+  description: Enable haddockComments plugin
+  default:     True
+  manual:      False
 
 flag eval
   description: Enable eval plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag importLens
   description: Enable importLens plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag retrie
   description: Enable retrie plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag tactic
   description: Enable tactic plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag hlint
   description: Enable hlint plugin
-  default:     False
-  manual:      True
+  default:     True
+  manual:      False
 
 flag moduleName
   description: Enable moduleName plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag pragmas
   description: Enable pragmas plugin
-  default:     False
+  default:     True
   manual:      True
+
+flag splice
+  description: Enable splice plugin
+  default:     True
+  manual:      False
 
 -- formatters
 
 flag floskell
   description: Enable floskell plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag fourmolu
   description: Enable fourmolu plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag ormolu
   description: Enable ormolu plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag stylishHaskell
   description: Enable stylishHaskell plugin
-  default:     False
+  default:     True
   manual:      True
 
 flag brittany
   description: Enable brittany plugin
-  default:     False
+  default:     True
   manual:      True
 
 common example-plugins
@@ -163,6 +181,11 @@ common class
   if flag(class) || flag(all-plugins)
     build-depends: hls-class-plugin
     cpp-options: -Dclass
+
+common haddockComments
+  if flag(haddockComments) || flag(all-plugins)
+    build-depends: hls-haddock-comments-plugin
+    cpp-options: -DhaddockComments
 
 common eval
   if flag(eval) || flag(all-plugins)
@@ -200,6 +223,11 @@ common pragmas
     hs-source-dirs: plugins/default/src
     other-modules: Ide.Plugin.Pragmas
     cpp-options: -Dpragmas
+
+common splice
+  if flag(splice) || flag(all-plugins)
+    build-depends: hls-splice-plugin
+    cpp-options: -Dsplice
 
 -- formatters
 
@@ -244,6 +272,7 @@ executable haskell-language-server
                     -- plugins
                     , example-plugins
                     , class
+                    , haddockComments
                     , eval
                     , importLens
                     , retrie
@@ -251,6 +280,7 @@ executable haskell-language-server
                     , hlint
                     , moduleName
                     , pragmas
+                    , splice
                     , floskell
                     , fourmolu
                     , ormolu
@@ -266,9 +296,8 @@ executable haskell-language-server
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
-    -- disable parallel GC
     -- increase nursery size
-    "-with-rtsopts=-I0 -qg -A128M"
+    "-with-rtsopts=-I0 -A128M"
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -283,7 +312,7 @@ executable haskell-language-server
     , ghcide
     , hashable
     , haskell-language-server
-    , haskell-lsp              ^>=0.22
+    , haskell-lsp              ^>=0.23
     , lens
     , regex-tdfa
     , hslogger
@@ -313,9 +342,8 @@ executable haskell-language-server-wrapper
     -- allow user RTS overrides
     -rtsopts
     -- disable idle GC
-    -- disable parallel GC
     -- increase nursery size
-    "-with-rtsopts=-I0 -qg -A128M"
+    "-with-rtsopts=-I0 -A128M"
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -384,8 +412,9 @@ test-suite func-test
     , tasty-ant-xml           >=1.1.6
     , tasty-golden
     , tasty-rerun
+    , ghcide
 
-  hs-source-dirs:     test/functional plugins/tactics/src plugins/hls-eval-plugin/test
+  hs-source-dirs:     test/functional plugins/hls-tactics-plugin/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src
 
   main-is:            Main.hs
   other-modules:
@@ -410,6 +439,9 @@ test-suite func-test
     Symbol
     TypeDefinition
     Tactic
+    Splice
+    HaddockComments
+    Ide.Plugin.Splice.Types
     Ide.Plugin.Tactic.TestTypes
 
   ghc-options:
@@ -436,7 +468,3 @@ test-suite wrapper-test
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs
   ghc-options:        -Wall
-
-
-
-

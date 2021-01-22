@@ -78,7 +78,9 @@
     - Development.IDE.Core.FileStore
     - Development.IDE.Core.Compile
     - Development.IDE.Core.Rules
+    - Development.IDE.Core.Tracing
     - Development.IDE.GHC.Compat
+    - Development.IDE.GHC.ExactPrint
     - Development.IDE.GHC.Orphans
     - Development.IDE.GHC.Util
     - Development.IDE.Import.FindImports

@@ -12,6 +12,7 @@ import Format
 import FunctionalBadProject
 import FunctionalCodeAction
 import FunctionalLiquid
+import HaddockComments
 import HieBios
 import Highlight
 import ModuleName
@@ -19,6 +20,7 @@ import Progress
 import Reference
 import Rename
 import Symbol
+import Splice
 import Tactic
 import Test.Tasty
 import Test.Tasty.Ingredients.Rerun
@@ -58,4 +60,6 @@ main =
             , Symbol.tests
             , Tactic.tests
             , TypeDefinition.tests
+            , Splice.tests
+            , HaddockComments.tests
             ]

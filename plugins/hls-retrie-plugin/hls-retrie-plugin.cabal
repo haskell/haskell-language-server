@@ -16,7 +16,7 @@ library
   exposed-modules:  Ide.Plugin.Retrie
   hs-source-dirs:   src
   build-depends:    aeson
-               ,    base
+               ,    base       >=4.12 && <5
                ,    containers
                ,    deepseq
                ,    directory

@@ -201,6 +201,17 @@ diagnosticTests = testGroup "diagnostics"
             }
       changeDoc doc [change]
       expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "parse error")])]
+  , testSessionWait "update syntax error" $ do
+      let content = T.unlines [ "module Testing(missing) where" ]
+      doc <- createDoc "Testing.hs" "haskell" content
+      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "Not in scope: 'missing'")])]
+      let change = TextDocumentContentChangeEvent
+            { _range = Just (Range (Position 0 15) (Position 0 16))
+            , _rangeLength = Nothing
+            , _text = "l"
+            }
+      changeDoc doc [change]
+      expectDiagnostics [("Testing.hs", [(DsError, (0, 15), "Not in scope: 'lissing'")])]
   , testSessionWait "variable not in scope" $ do
       let content = T.unlines
             [ "module Testing where"
@@ -533,9 +544,11 @@ diagnosticTests = testGroup "diagnostics"
   , testCase "typecheck-all-parents-of-interest" $ runWithExtraFiles "recomp" $ \dir -> do
     let bPath = dir </> "B.hs"
         pPath = dir </> "P.hs"
+        aPath = dir </> "A.hs"
 
     bSource <- liftIO $ readFileUtf8 bPath -- y :: Int
     pSource <- liftIO $ readFileUtf8 pPath -- bar = x :: Int
+    aSource <- liftIO $ readFileUtf8 aPath -- x = y :: Int
 
     bdoc <- createDoc bPath "haskell" bSource
     _pdoc <- createDoc pPath "haskell" pSource
@@ -548,7 +561,21 @@ diagnosticTests = testGroup "diagnostics"
     expectDiagnostics
       [("A.hs", [(DsError, (5, 4), "Couldn't match expected type 'Int' with actual type 'Bool'")])
       ]
-    expectNoMoreDiagnostics 2
+
+    -- Open A and edit to fix the type error
+    adoc <- createDoc aPath "haskell" aSource
+    changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing $
+                    T.unlines ["module A where", "import B", "x :: Bool", "x = y"]]
+
+    expectDiagnostics
+      [ ( "P.hs",
+          [ (DsError, (4, 6), "Couldn't match expected type 'Int' with actual type 'Bool'"),
+            (DsWarning, (4, 0), "Top-level binding")
+          ]
+        ),
+        ("A.hs", [])
+      ]
+    expectNoMoreDiagnostics 1
 
   , testSessionWait "deduplicate missing module diagnostics" $  do
       let fooContent = T.unlines [ "module Foo() where" , "import MissingModule" ]
@@ -660,6 +687,7 @@ codeActionTests = testGroup "code actions"
   , removeRedundantConstraintsTests
   , addTypeAnnotationsToLiteralsTest
   , exportUnusedTests
+  , addImplicitParamsConstraintTests
   ]
 
 codeActionHelperFunctionTests :: TestTree
@@ -1207,6 +1235,46 @@ extendImportTests = testGroup "extend import actions"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
+        , testSession "extend single line import with method within class" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "class C a where"
+                    , "  m1 :: a -> a"
+                    , "  m2 :: a -> a"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m1))"
+                    , "b = m2"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            ["Add C(m2) to the import list of ModuleA",
+             "Add m2 to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m2, m1))"
+                    , "b = m2"
+                    ])
+        , testSession "extend single line import with method without class" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "class C a where"
+                    , "  m1 :: a -> a"
+                    , "  m2 :: a -> a"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (C(m1))"
+                    , "b = m2"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            ["Add m2 to the import list of ModuleA",
+             "Add C(m2) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (m2, C(m1))"
+                    , "b = m2"
+                    ])
         , testSession "extend import list with multiple choices" $ template
             [("ModuleA.hs", T.unlines
                     --  this is just a dummy module to help the arguments needed for this test
@@ -1233,9 +1301,27 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA (bar)"
                     , "foo = bar"
                     ])
+        , testSession "extend import list with constructor of type operator" $ template
+            []
+            ("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
+            (Range (Position 3 17) (Position 3 18))
+            ["Add (:~:)(Refl) to the import list of Data.Type.Equality"]
+            (T.unlines
+                    [ "module ModuleA where"
+                    , "import Data.Type.Equality ((:~:)(Refl))"
+                    , "x :: (:~:) [] []"
+                    , "x = Refl"
+                    ])
         ]
       where
-        template setUpModules moduleUnderTest range expectedActions expectedContentB = do
+        codeActionTitle CodeAction{_title=x} = x
+
+        template setUpModules moduleUnderTest range expectedTitles expectedContentB = do
             sendNotification WorkspaceDidChangeConfiguration
                 (DidChangeConfigurationParams $ toJSON
                   def{checkProject = overrideCheckProject})
@@ -1245,14 +1331,23 @@ extendImportTests = testGroup "extend import actions"
             docB <- createDoc (fst moduleUnderTest) "haskell" (snd moduleUnderTest)
             _  <- waitForDiagnostics
             void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
-            codeActions <- filter (\(CACodeAction CodeAction{_title=x}) -> T.isPrefixOf "Add" x)
-                <$>  getCodeActions docB range
-            let expectedTitles = (\(CACodeAction CodeAction{_title=x}) ->x) <$> codeActions
-            liftIO $ expectedActions @=? expectedTitles
+            actionsOrCommands <- getCodeActions docB range
+            let codeActions =
+                  filter
+                    (T.isPrefixOf "Add" . codeActionTitle)
+                    [ca | CACodeAction ca <- actionsOrCommands]
+                actualTitles = codeActionTitle <$> codeActions
+            -- Note that we are not testing the order of the actions, as the
+            -- order of the expected actions indicates which one we'll execute
+            -- in this test, i.e., the first one.
+            liftIO $ sort expectedTitles @=? sort actualTitles
 
-            -- Get the first action and execute the first action
-            let CACodeAction action :  _
-                        = sortOn (\(CACodeAction CodeAction{_title=x}) -> x) codeActions
+            -- Execute the action with the same title as the first expected one.
+            -- Since we tested that both lists have the same elements (possibly
+            -- in a different order), this search cannot fail.
+            let firstTitle:_ = expectedTitles
+                action = fromJust $
+                  find ((firstTitle ==) . codeActionTitle) codeActions
             executeCodeAction action
             contentAfterAction <- documentContents docB
             liftIO $ expectedContentB @=? contentAfterAction
@@ -1285,6 +1380,8 @@ suggestImportTests = testGroup "suggest import actions"
     , test False []         "f :: Typeable a => a"        ["f = undefined"] "import Data.Typeable.Internal (Typeable)"
       -- package not in scope
     , test False []         "f = quickCheck"              []                "import Test.QuickCheck (quickCheck)"
+      -- don't omit the parent data type of a constructor
+    , test False []         "f ExitSuccess = ()"          []                "import System.Exit (ExitSuccess)"
     ]
   , testGroup "want suggestion"
     [ wantWait  []          "f = foo"                     []                "import Foo (foo)"
@@ -1305,6 +1402,7 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f :: Alternative f => f ()"  ["f = undefined"] "import Control.Applicative (Alternative)"
     , test True []          "f :: Alternative f => f ()"  ["f = undefined"] "import Control.Applicative"
     , test True []          "f = empty"                   []                "import Control.Applicative (Alternative(empty))"
+    , test True []          "f = empty"                   []                "import Control.Applicative (empty)"
     , test True []          "f = empty"                   []                "import Control.Applicative"
     , test True []          "f = (&)"                     []                "import Data.Function ((&))"
     , test True []          "f = NE.nonEmpty"             []                "import qualified Data.List.NonEmpty as NE"
@@ -1315,6 +1413,7 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = [] & id"                 []                "import Data.Function ((&))"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
+    , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
     ]
   ]
   where
@@ -1559,6 +1658,42 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = (1 :: Integer)"
                ])
 
+  , testSession "add default type to satisfy one contraint in nested expressions" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = 3"
+               , "    in x"
+               ])
+    [ (DsWarning, (4, 12), "Defaulting the following constraint") ]
+    "Add type annotation ‘Integer’ to ‘3’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = (3 :: Integer)"
+               , "    in x"
+               ])
+  , testSession "add default type to satisfy one contraint in more nested expressions" $
+    testFor
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = let y = 5 in y"
+               , "    in x"
+               ])
+    [ (DsWarning, (4, 20), "Defaulting the following constraint") ]
+    "Add type annotation ‘Integer’ to ‘5’"
+    (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
+               , "module A where"
+               , ""
+               , "f ="
+               , "    let x = let y = (5 :: Integer) in y"
+               , "    in x"
+               ])
   , testSession "add default type to satisfy one contraint with duplicate literals" $
     testFor
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
@@ -1843,6 +1978,28 @@ addFunctionConstraintTests = let
     , "eq x y = x == y"
     ]
 
+  missingConstraintWithForAllSourceCode :: T.Text -> T.Text
+  missingConstraintWithForAllSourceCode constraint =
+    T.unlines
+    [ "{-# LANGUAGE ExplicitForAll #-}"
+    , "module Testing where"
+    , ""
+    , "eq :: forall a. " <> constraint <> "a -> a -> Bool"
+    , "eq x y = x == y"
+    ]
+
+  incompleteConstraintWithForAllSourceCode :: T.Text -> T.Text
+  incompleteConstraintWithForAllSourceCode constraint =
+    T.unlines
+    [ "{-# LANGUAGE ExplicitForAll #-}"
+    , "module Testing where"
+    , ""
+    , "data Pair a b = Pair a b"
+    , ""
+    , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
+    , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
+    ]
+
   incompleteConstraintSourceCode :: T.Text -> T.Text
   incompleteConstraintSourceCode constraint =
     T.unlines
@@ -1872,7 +2029,7 @@ addFunctionConstraintTests = let
     , ""
     , "data Pair a b = Pair a b"
     , ""
-    , "eq :: " <> constraint <> " => Pair a b -> Pair a b -> Bool"
+    , "eq :: ( " <> constraint <> " ) => Pair a b -> Pair a b -> Bool"
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
@@ -1882,44 +2039,107 @@ addFunctionConstraintTests = let
     [ "module Testing where"
     , "data Pair a b = Pair a b"
     , "eq "
-    , "    :: " <> constraint
+    , "    :: (" <> constraint <> ")"
     , "    => Pair a b -> Pair a b -> Bool"
     , "eq (Pair x y) (Pair x' y') = x == x' && y == y'"
     ]
 
-  check :: T.Text -> T.Text -> T.Text -> TestTree
-  check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
-    doc <- createDoc "Testing.hs" "haskell" originalCode
-    _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
-    chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
-    executeCodeAction chosenAction
-    modifiedCode <- documentContents doc
-    liftIO $ expectedCode @=? modifiedCode
+  missingMonadConstraint constraint = T.unlines
+    [ "module Testing where"
+    , "f :: " <> constraint <> "m ()"
+    , "f = do "
+    , "  return ()"
+    ]
 
   in testGroup "add function constraint"
-  [ check
+  [ checkCodeAction
+    "no preexisting constraint"
     "Add `Eq a` to the context of the type signature for `eq`"
     (missingConstraintSourceCode "")
     (missingConstraintSourceCode "Eq a => ")
-  , check
+  , checkCodeAction
+    "no preexisting constraint, with forall"
+    "Add `Eq a` to the context of the type signature for `eq`"
+    (missingConstraintWithForAllSourceCode "")
+    (missingConstraintWithForAllSourceCode "Eq a => ")
+  , checkCodeAction
+    "preexisting constraint, no parenthesis"
     "Add `Eq b` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCode "Eq a")
     (incompleteConstraintSourceCode "(Eq a, Eq b)")
-  , check
+  , checkCodeAction
+    "preexisting constraints in parenthesis"
     "Add `Eq c` to the context of the type signature for `eq`"
     (incompleteConstraintSourceCode2 "(Eq a, Eq b)")
     (incompleteConstraintSourceCode2 "(Eq a, Eq b, Eq c)")
-  , check
+  , checkCodeAction
+    "preexisting constraints with forall"
     "Add `Eq b` to the context of the type signature for `eq`"
-    (incompleteConstraintSourceCodeWithExtraCharsInContext "( Eq a )")
-    (incompleteConstraintSourceCodeWithExtraCharsInContext "(Eq a, Eq b)")
-  , check
+    (incompleteConstraintWithForAllSourceCode "Eq a")
+    (incompleteConstraintWithForAllSourceCode "(Eq a, Eq b)")
+  , checkCodeAction
+    "preexisting constraint, with extra spaces in context"
     "Add `Eq b` to the context of the type signature for `eq`"
-    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a)")
-    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "(Eq a, Eq b)")
+    (incompleteConstraintSourceCodeWithExtraCharsInContext "Eq a")
+    (incompleteConstraintSourceCodeWithExtraCharsInContext "Eq a, Eq b")
+  , checkCodeAction
+    "preexisting constraint, with newlines in type signature"
+    "Add `Eq b` to the context of the type signature for `eq`"
+    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a")
+    (incompleteConstraintSourceCodeWithNewlinesInTypeSignature "Eq a, Eq b")
+  , checkCodeAction
+    "missing Monad constraint"
+    "Add `Monad m` to the context of the type signature for `f`"
+    (missingMonadConstraint "")
+    (missingMonadConstraint "Monad m => ")
   ]
 
+checkCodeAction :: String -> T.Text -> T.Text -> T.Text -> TestTree
+checkCodeAction testName actionTitle originalCode expectedCode = testSession testName $ do
+  doc <- createDoc "Testing.hs" "haskell" originalCode
+  _ <- waitForDiagnostics
+  actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
+  chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
+  executeCodeAction chosenAction
+  modifiedCode <- documentContents doc
+  liftIO $ expectedCode @=? modifiedCode
+
+addImplicitParamsConstraintTests :: TestTree
+addImplicitParamsConstraintTests =
+  testGroup
+    "add missing implicit params constraints"
+    [ testGroup
+        "introduced"
+        [ let ex ctxtA = exampleCode "?a" ctxtA ""
+           in checkCodeAction "at top level" "Add ?a::() to the context of fBase" (ex "") (ex "?a::()"),
+          let ex ctxA = exampleCode "x where x = ?a" ctxA ""
+           in checkCodeAction "in nested def" "Add ?a::() to the context of fBase" (ex "") (ex "?a::()")
+        ],
+      testGroup
+        "inherited"
+        [ let ex = exampleCode "()" "?a::()"
+           in checkCodeAction
+                "with preexisting context"
+                "Add `?a::()` to the context of the type signature for `fCaller`"
+                (ex "Eq ()")
+                (ex "Eq (), ?a::()"),
+          let ex = exampleCode "()" "?a::()"
+           in checkCodeAction "without preexisting context" "Add ?a::() to the context of fCaller" (ex "") (ex "?a::()")
+        ]
+    ]
+  where
+    mkContext "" = ""
+    mkContext contents = "(" <> contents <> ") => "
+
+    exampleCode bodyBase contextBase contextCaller =
+      T.unlines
+        [ "{-# LANGUAGE FlexibleContexts, ImplicitParams #-}",
+          "module Testing where",
+          "fBase :: " <> mkContext contextBase <> "()",
+          "fBase = " <> bodyBase,
+          "fCaller :: " <> mkContext contextCaller <> "()",
+          "fCaller = fBase"
+        ]
 removeRedundantConstraintsTests :: TestTree
 removeRedundantConstraintsTests = let
   header =
@@ -2429,7 +2649,7 @@ findDefinitionAndHoverTests = let
     , testGroup "hover"      $ mapMaybe snd tests
     , checkFileCompiles sourceFilePath $
         expectDiagnostics
-          [ ( "GotoHover.hs", [(DsError, (59, 7), "Found hole: _")]) ]
+          [ ( "GotoHover.hs", [(DsError, (62, 7), "Found hole: _")]) ]
     , testGroup "type-definition" typeDefinitionTests ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
@@ -2479,56 +2699,58 @@ findDefinitionAndHoverTests = let
   lstL43 = Position 47 12  ;  litL   = [ExpectHoverText ["[8391 :: Int, 6268]"]]
   outL45 = Position 49  3  ;  outSig = [ExpectHoverText ["outer", "Bool"], mkR 46 0 46 5]
   innL48 = Position 52  5  ;  innSig = [ExpectHoverText ["inner", "Char"], mkR 49 2 49 7]
-  holeL60 = Position 59 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
+  holeL60 = Position 62 7  ;  hleInfo = [ExpectHoverText ["_ ::"]]
   cccL17 = Position 17 16  ;  docLink = [ExpectHoverText ["[Documentation](file:///"]]
   imported = Position 56 13 ; importedSig = getDocUri "Foo.hs" >>= \foo -> return [ExpectHoverText ["foo", "Foo", "Haddock"], mkL foo 5 0 5 3]
   reexported = Position 55 14 ; reexportedSig = getDocUri "Bar.hs" >>= \bar -> return [ExpectHoverText ["Bar", "Bar", "Haddock"], mkL bar 3 0 3 14]
+  thLocL57 = Position 59 10 ; thLoc = [ExpectHoverText ["Identity"]]
   in
   mkFindTests
   --      def    hover  look       expect
   [ test  yes    yes    fffL4      fff           "field in record definition"
-  , test  yes    yes    fffL8      fff           "field in record construction     #71"
-  , test  yes    yes    fffL14     fff           "field name used as accessor"          -- 120 in Calculate.hs
-  , test  yes    yes    aaaL14     aaa           "top-level name"                       -- 120
-  , test  yes    yes    dcL7       tcDC          "data constructor record         #247"
-  , test  yes    yes    dcL12      tcDC          "data constructor plain"               -- 121
-  , test  yes    yes    tcL6       tcData        "type constructor                #248" -- 147
-  , test  broken yes    xtcL5      xtc           "type constructor external   #248,249"
-  , test  broken yes    xvL20      xvMsg         "value external package          #249" -- 120
-  , test  yes    yes    vvL16      vv            "plain parameter"                      -- 120
-  , test  yes    yes    aL18       apmp          "pattern match name"                   -- 120
-  , test  yes    yes    opL16      op            "top-level operator"                   -- 120, 123
-  , test  yes    yes    opL18      opp           "parameter operator"                   -- 120
-  , test  yes    yes    b'L19      bp            "name in backticks"                    -- 120
-  , test  yes    yes    clL23      cls           "class in instance declaration   #250"
-  , test  yes    yes    clL25      cls           "class in signature              #250" -- 147
-  , test  broken yes    eclL15     ecls          "external class in signature #249,250"
-  , test  yes    yes    dnbL29     dnb           "do-notation   bind"                   -- 137
+  , test  yes    yes    fffL8      fff           "field in record construction    #1102"
+  , test  yes    yes    fffL14     fff           "field name used as accessor"           -- https://github.com/haskell/ghcide/pull/120 in Calculate.hs
+  , test  yes    yes    aaaL14     aaa           "top-level name"                        -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    dcL7       tcDC          "data constructor record         #1029"
+  , test  yes    yes    dcL12      tcDC          "data constructor plain"                -- https://github.com/haskell/ghcide/pull/121
+  , test  yes    yes    tcL6       tcData        "type constructor                #1028" -- https://github.com/haskell/ghcide/pull/147
+  , test  broken yes    xtcL5      xtc           "type constructor external   #717,1028"
+  , test  broken yes    xvL20      xvMsg         "value external package           #717" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    vvL16      vv            "plain parameter"                       -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    aL18       apmp          "pattern match name"                    -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    opL16      op            "top-level operator               #713" -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    opL18      opp           "parameter operator"                    -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    b'L19      bp            "name in backticks"                     -- https://github.com/haskell/ghcide/pull/120
+  , test  yes    yes    clL23      cls           "class in instance declaration   #1027"
+  , test  yes    yes    clL25      cls           "class in signature              #1027" -- https://github.com/haskell/ghcide/pull/147
+  , test  broken yes    eclL15     ecls          "external class in signature #717,1027"
+  , test  yes    yes    dnbL29     dnb           "do-notation   bind              #1073"
   , test  yes    yes    dnbL30     dnb           "do-notation lookup"
-  , test  yes    yes    lcbL33     lcb           "listcomp   bind"                      -- 137
+  , test  yes    yes    lcbL33     lcb           "listcomp   bind                 #1073"
   , test  yes    yes    lclL33     lcb           "listcomp lookup"
   , test  yes    yes    mclL36     mcl           "top-level fn 1st clause"
-  , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #246"
+  , test  yes    yes    mclL37     mcl           "top-level fn 2nd clause         #1030"
 #if MIN_GHC_API_VERSION(8,10,0)
-  , test  yes    yes    spaceL37   space         "top-level fn on space #315"
+  , test  yes    yes    spaceL37   space         "top-level fn on space           #1002"
 #else
-  , test  yes    broken spaceL37   space         "top-level fn on space #315"
+  , test  yes    broken spaceL37   space         "top-level fn on space           #1002"
 #endif
-  , test  no     yes    docL41     doc           "documentation                     #7"
-  , test  no     yes    eitL40     kindE         "kind of Either                  #273"
-  , test  no     yes    intL40     kindI         "kind of Int                     #273"
-  , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #273"
-  , test  no     broken intL41     litI          "literal Int  in hover info      #274"
-  , test  no     broken chrL36     litC          "literal Char in hover info      #274"
-  , test  no     broken txtL8      litT          "literal Text in hover info      #274"
-  , test  no     broken lstL43     litL          "literal List in hover info      #274"
-  , test  no     broken docL41     constr        "type constraint in hover info   #283"
-  , test  broken broken outL45     outSig        "top-level signature             #310"
-  , test  broken broken innL48     innSig        "inner     signature             #310"
-  , test  no     yes    holeL60    hleInfo       "hole without internal name      #847"
+  , test  no     yes    docL41     doc           "documentation                   #1129"
+  , test  no     yes    eitL40     kindE         "kind of Either                  #1017"
+  , test  no     yes    intL40     kindI         "kind of Int                     #1017"
+  , test  no     broken tvrL40     kindV         "kind of (* -> *) type variable  #1017"
+  , test  no     broken intL41     litI          "literal Int  in hover info      #1016"
+  , test  no     broken chrL36     litC          "literal Char in hover info      #1016"
+  , test  no     broken txtL8      litT          "literal Text in hover info      #1016"
+  , test  no     broken lstL43     litL          "literal List in hover info      #1016"
+  , test  no     broken docL41     constr        "type constraint in hover info   #1012"
+  , test  broken broken outL45     outSig        "top-level signature              #767"
+  , test  broken broken innL48     innSig        "inner     signature              #767"
+  , test  no     yes    holeL60    hleInfo       "hole without internal name       #831"
   , test  no     skip   cccL17     docLink       "Haddock html links"
   , testM yes    yes    imported   importedSig   "Imported symbol"
   , testM yes    yes    reexported reexportedSig "Imported symbol (reexported)"
+  , test  no     yes    thLocL57   thLoc         "TH Splice Hover"
   ]
   where yes, broken :: (TestTree -> Maybe TestTree)
         yes    = Just -- test should run and pass
@@ -2702,7 +2924,7 @@ thTests =
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
     , thReloadingTest
-    -- Regression test for https://github.com/haskell/ghcide/issues/614
+    -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
@@ -3040,7 +3262,17 @@ otherCompletionTests = [
       -- This should be sufficient to detect that we are in a
       -- type context and only show the completion to the type.
       (Position 3 11)
-      [("Integer", CiStruct, "Integer ", True, True, Nothing)]
+      [("Integer", CiStruct, "Integer ", True, True, Nothing)],
+
+    testSessionWait "maxCompletions" $ do
+        doc <- createDoc "A.hs" "haskell" $ T.unlines
+            [ "{-# OPTIONS_GHC -Wunused-binds #-}",
+                "module A () where",
+                "a = Prelude."
+            ]
+        _ <- waitForDiagnostics
+        compls <- getCompletions  doc (Position 3 13)
+        liftIO $ length compls @?= maxCompletions def
   ]
 
 highlightTests :: TestTree
@@ -3580,7 +3812,7 @@ bootTests = testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
 
   cdoc <- createDoc cPath "haskell" cSource
   locs <- getDefinitions cdoc (Position 7 4)
-  let floc = mkR 7 0 7 1
+  let floc = mkR 9 0 9 1
   checkDefs locs (pure [floc])
 
 -- | test that TH reevaluates across interfaces

@@ -1,11 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 {-# LANGUAGE CPP #-} -- To get precise GHC version
-{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -55,7 +51,7 @@ import System.FilePath
 import System.IO
 import qualified System.Log.Logger as L
 import System.Time.Extra
-import Development.Shake (action)
+import Development.Shake (ShakeOptions (shakeThreads), action)
 
 ghcIdePlugins :: T.Text -> IdePlugins IdeState -> (Plugin Config, [T.Text])
 ghcIdePlugins pid ps = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
@@ -131,14 +127,13 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
             sessionLoader <- loadSession dir
             -- config <- fromMaybe defaultLspConfig <$> getConfig
-            let options = (defaultIdeOptions sessionLoader)
+            let options = defOptions
                     { optReportProgress = clientSupportsProgress caps
                     , optShakeProfiling = argsShakeProfiling
                     , optTesting        = IdeTesting argsTesting
-                    , optThreads        = argsThreads
-                    -- , optCheckParents   = checkParents config
-                    -- , optCheckProject   = checkProject config
+                    , optShakeOptions   = (optShakeOptions defOptions){shakeThreads = argsThreads}
                     }
+                defOptions = defaultIdeOptions sessionLoader
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins >> action kick)
                 getLspId event wProg wIndefProg hlsLogger debouncer options vfs

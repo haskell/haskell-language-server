@@ -1,4 +1,4 @@
-resolver: nightly-2021-01-01 # first ghc-8.10.3 nightly
+resolver: nightly-2021-01-17
 
 packages:
   - .
@@ -7,22 +7,27 @@ packages:
   - ./hls-plugin-api
   # - ./shake-bench
   - ./plugins/hls-class-plugin
+  - ./plugins/hls-haddock-comments-plugin
   - ./plugins/hls-eval-plugin
   - ./plugins/hls-explicit-imports-plugin
   - ./plugins/hls-hlint-plugin
   - ./plugins/hls-retrie-plugin
-  - ./plugins/tactics
+  - ./plugins/hls-splice-plugin
+  - ./plugins/hls-tactics-plugin
 
 ghc-options:
   "$everything": -haddock
 
 extra-deps:
+  - apply-refact-0.9.0.0
   - brittany-0.13.1.0
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
+  - git: https://github.com/alanz/ghc-exactprint.git
+    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
   - heapsize-0.3.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
@@ -33,6 +38,8 @@ extra-deps:
   - stylish-haskell-0.12.2.0
   - semigroups-0.18.5
   - temporary-1.2.1.1
+  - haskell-lsp-0.23.0.0
+  - haskell-lsp-types-0.23.0.0
 
 configure-options:
   ghcide:

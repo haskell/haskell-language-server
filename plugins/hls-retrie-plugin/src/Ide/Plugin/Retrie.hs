@@ -8,7 +8,6 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
 
@@ -106,32 +105,22 @@ retrieCommand =
 data RunRetrieParams = RunRetrieParams
   { description               :: T.Text,
     rewrites                  :: [RewriteSpec],
-    originatingFile           :: NormalizedUriJSON,
+    originatingFile           :: Uri,
     restrictToOriginatingFile :: Bool
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
-
-newtype NormalizedUriJSON = NormalizedUriJSON NormalizedUri
-  deriving (Eq, Show)
-
-instance FromJSON NormalizedUriJSON where
-    parseJSON = fmap NormalizedUriJSON . genericParseJSON Aeson.defaultOptions
-
-instance ToJSON NormalizedUriJSON where
-    toJSON (NormalizedUriJSON x) = Aeson.genericToJSON Aeson.defaultOptions x
-
 runRetrieCmd ::
   LspFuncs a ->
   IdeState ->
   RunRetrieParams ->
   IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-runRetrieCmd lsp state RunRetrieParams{originatingFile = NormalizedUriJSON nuri, ..} =
+runRetrieCmd lsp state RunRetrieParams{originatingFile = uri, ..} =
   withIndefiniteProgress lsp description Cancellable $ do
     res <- runMaybeT $ do
-        nfp <- MaybeT $ return $ uriToNormalizedFilePath nuri
+        nfp <- MaybeT $ return $ uriToNormalizedFilePath $ toNormalizedUri uri
         (session, _) <- MaybeT $
             runAction "Retrie.GhcSessionDeps" state $
-                useWithStale GhcSessionDeps $
+                useWithStale GhcSessionDeps
                 nfp
         (ms, binds, _, _, _) <- MaybeT $ runAction "Retrie.getBinds" state $ getBinds nfp
         let importRewrites = concatMap (extractImports ms binds) rewrites
@@ -181,7 +170,6 @@ provider :: CodeActionProvider IdeState
 provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
   let (J.CodeActionContext _diags _monly) = ca
       nuri = toNormalizedUri uri
-      nuriJson = NormalizedUriJSON nuri
   nfp <- handleMaybe "uri" $ uriToNormalizedFilePath nuri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
@@ -189,12 +177,12 @@ provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
 
   pos <- handleMaybe "pos" $ _start <$> fromCurrentRange posMapping range
   let rewrites =
-        concatMap (suggestBindRewrites nuriJson pos ms_mod) topLevelBinds
-          ++ concatMap (suggestRuleRewrites nuriJson pos ms_mod) hs_ruleds
+        concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
+          ++ concatMap (suggestRuleRewrites uri pos ms_mod) hs_ruleds
           ++ [ r
                | TyClGroup {group_tyclds} <- hs_tyclds,
                  L l g <- group_tyclds,
-                 r <- suggestTypeRewrites nuriJson ms_mod g,
+                 r <- suggestTypeRewrites uri ms_mod g,
                  pos `isInsideSrcSpan` l
 
              ]
@@ -233,12 +221,12 @@ getBinds nfp = runMaybeT $ do
   return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
 
 suggestBindRewrites ::
-  NormalizedUriJSON ->
+  Uri ->
   Position ->
   GHC.Module ->
   HsBindLR GhcRn GhcRn ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestBindRewrites originatingFile pos ms_mod (FunBind {fun_id = L l' rdrName})
+suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L l' rdrName}
   | pos `isInsideSrcSpan` l' =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
@@ -260,11 +248,11 @@ describeRestriction restrictToOriginatingFile =
 
 suggestTypeRewrites ::
   (Outputable (IdP pass)) =>
-  NormalizedUriJSON ->
+  Uri ->
   GHC.Module ->
   TyClDecl pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestTypeRewrites originatingFile ms_mod (SynDecl {tcdLName = L _ rdrName}) =
+suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName = L _ rdrName} =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
         unfoldRewrite restrictToOriginatingFile =
@@ -279,12 +267,12 @@ suggestTypeRewrites originatingFile ms_mod (SynDecl {tcdLName = L _ rdrName}) =
 suggestTypeRewrites _ _ _ = []
 
 suggestRuleRewrites ::
-  NormalizedUriJSON ->
+  Uri ->
   Position ->
   GHC.Module ->
   LRuleDecls pass ->
   [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestRuleRewrites originatingFile pos ms_mod (L _ (HsRules {rds_rules})) =
+suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
     concat
         [ [ forwardRewrite   ruleName True
           , forwardRewrite   ruleName False
@@ -351,7 +339,6 @@ callRetrie ::
   IO ([CallRetrieError], WorkspaceEdit)
 callRetrie state session rewrites origin restrictToOriginatingFile = do
   knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
-  print knownFiles
   let reuseParsedModule f = do
         pm <-
           useOrFail "GetParsedModule" NoParse GetParsedModule f

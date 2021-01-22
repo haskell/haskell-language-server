@@ -24,7 +24,6 @@ tests = testGroup "behaviour on malformed projects" [
 
     -- testCase "deals with cabal file with unsatisfiable dependency" $
     --     runSession hlsCommandExamplePlugin codeActionSupportCaps "test/testdata/badProjects/cabal" $ do
-    --     -- runSessionWithConfig logConfig hlsCommandExamplePlugin codeActionSupportCaps "test/testdata" $ do
     --         _doc <- openDoc "Foo.hs" "haskell"
 
     --         diags@(d:_) <- waitForDiagnosticsSource "bios"

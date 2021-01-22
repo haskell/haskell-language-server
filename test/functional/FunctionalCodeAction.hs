@@ -83,6 +83,36 @@ hlintTests = testGroup "hlint suggestions" [
         contents <- skipManyTill anyMessage $ getDocumentEdit doc
         liftIO $ contents @?= "main = undefined\nfoo = id\n"
 
+    , testCase "changing configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
+        let config = def { hlintOn = True }
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let config' = def { hlintOn = False }
+        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+
+        diags' <- waitForDiagnosticsFrom doc
+
+        liftIO $ noHlintDiagnostics diags'
+
+    , testCase "changing document contents updates hlint diagnostics" $ runHlintSession "" $ do
+        doc <- openDoc "ApplyRefact2.hs" "haskell"
+        testHlintDiagnostics doc
+
+        let change = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "x"
+        changeDoc doc [change]
+        expectNoMoreDiagnostics 3 doc "hlint"
+
+        let change' = TextDocumentContentChangeEvent
+                        (Just (Range (Position 1 8) (Position 1 12)))
+                         Nothing "id x"
+        changeDoc doc [change']
+        testHlintDiagnostics doc
+
     , knownBrokenForGhcVersions [GHC88, GHC86] "hlint doesn't take in account cpp flag as ghc -D argument" $
       testCase "hlint diagnostics works with CPP via ghc -XCPP argument (#554)" $ runHlintSession "cpp" $ do
         doc <- openDoc "ApplyRefact3.hs" "haskell"
@@ -97,8 +127,7 @@ hlintTests = testGroup "hlint suggestions" [
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
-    , knownBrokenForGhcVersions [GHC88, GHC86] "apply-refact doesn't take in account the -X argument" $
-      testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
+    , testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
         testRefactor "ApplyRefact1.hs" "Redundant bracket"
             expectedLambdaCase
 
@@ -128,11 +157,18 @@ hlintTests = testGroup "hlint suggestions" [
       testCase "hlint diagnostics ignore hints honouring HLINT annotations" $ runHlintSession "" $ do
         doc <- openDoc "ApplyRefact5.hs" "haskell"
         expectNoMoreDiagnostics 3 doc "hlint"
+
+    , testCase "apply-refact preserve regular comments" $ runHlintSession "" $ do
+        testRefactor "ApplyRefact6.hs" "Redundant bracket" expectedComments
     ]
     where
         runHlintSession :: FilePath -> Session a -> IO a
         runHlintSession subdir  =
             failIfSessionTimeout . runSession hlsCommand fullCaps ("test/testdata/hlint" </> subdir)
+
+        noHlintDiagnostics :: [Diagnostic] -> Assertion
+        noHlintDiagnostics diags =
+            Just "hlint" `notElem` map (^. L.source) diags @? "There are no hlint diagnostics"
 
         testHlintDiagnostics doc = do
             diags <- waitForDiagnosticsFromSource doc "hlint"
@@ -161,6 +197,14 @@ hlintTests = testGroup "hlint suggestions" [
                              , "#else"
                              , "g = 2"
                              , "#endif", ""
+                             ]
+        expectedComments =   [ "-- comment before header"
+                             , "module ApplyRefact6 where", ""
+                             , "{-# standalone annotation #-}", ""
+                             , "-- standalone comment", ""
+                             , "-- | haddock comment"
+                             , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
+                             , "-- final comment"
                              ]
 
 renameTests :: TestTree
@@ -326,7 +370,7 @@ redundantImportTests = testGroup "redundant import code actions" [
         CACommand cmd : _ <- getAllCodeActions doc
         executeCommand cmd
         contents <- documentContents doc
-        liftIO $ (T.lines contents) @?=
+        liftIO $ T.lines contents @?=
                 [ "{-# OPTIONS_GHC -Wunused-imports #-}"
                 , "module MultipleImports where"
                 , "import Data.Maybe"
@@ -391,7 +435,7 @@ signatureTests = testGroup "missing top level signature code actions" [
         _ <- waitForDiagnosticsFromSource doc "typecheck"
         cas <- map fromAction <$> getAllCodeActions doc
 
-        liftIO $ "add signature: main :: IO ()" `elem` (map (^. L.title) cas) @? "Contains code action"
+        liftIO $ "add signature: main :: IO ()" `elem` map (^. L.title) cas @? "Contains code action"
 
         executeCodeAction $ head cas
 
@@ -405,7 +449,7 @@ signatureTests = testGroup "missing top level signature code actions" [
                        , "  return ()"
                        ]
 
-        liftIO $ (T.lines contents) @?= expected
+        liftIO $ T.lines contents @?= expected
     ]
 
 missingPragmaTests :: TestTree
@@ -425,6 +469,7 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected = [ "{-# LANGUAGE TypeSynonymInstances #-}"
+                        , "module NeedsPragmas where"
                         , ""
                         , "import GHC.Generics"
                         , ""
@@ -442,7 +487,31 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                         , "           deriving (Generic,Functor,Traversable)"
                         ]
 
-            liftIO $ (T.lines contents) @?= expected
+            liftIO $ T.lines contents @?= expected
+
+    , testCase "Adds TypeApplications pragma" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "TypeApplications.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"TypeApplications\"" `elem` map (^. L.title) cas @? "Contains TypeApplications code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "{-# LANGUAGE TypeApplications #-}"
+                    , "{-# LANGUAGE ScopedTypeVariables #-}"
+                    , "module TypeApplications where"
+                    , ""
+                    , "foo :: forall a. a -> a"
+                    , "foo = id @a"
+                    ]
+
+            liftIO $ T.lines contents @?= expected
     ]
 
 unusedTermTests :: TestTree
@@ -475,15 +544,24 @@ unusedTermTests = testGroup "unused term code actions" [
         doc   <- openDoc "CodeActionOnly.hs" "haskell"
         _     <- waitForDiagnosticsFrom doc
         diags <- getCurrentDiagnostics doc
-        let params = CodeActionParams doc (Range (Position 2 10) (Position 4 0)) caContext Nothing
+        let params = CodeActionParams doc (Range (Position 1 0) (Position 4 0)) caContext Nothing
             caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactorInline]))
+            caContextAllActions = CodeActionContext (List diags) Nothing
+        -- Verify that we get code actions of at least two different kinds.
+        ResponseMessage _ _ (Right (List allCodeActions))
+          <- request TextDocumentCodeAction (params & L.context .~ caContextAllActions)
+        liftIO $ do
+            redundantId <- inspectCodeAction allCodeActions ["Redundant id"]
+            redundantId ^. L.kind @?= Just CodeActionQuickFix
+            unfoldFoo <- inspectCodeAction allCodeActions ["Unfold foo"]
+            unfoldFoo ^. L.kind @?= Just CodeActionRefactorInline
+        -- Verify that that when we set the only parameter, we only get actions
+        -- of the right kind.
         ResponseMessage _ _ (Right (List res)) <- request TextDocumentCodeAction params
         let cas = map fromAction res
             kinds = map (^. L.kind) cas
         liftIO $ do
-            -- TODO: When HaRe is back this should be uncommented
-            -- kinds `shouldNotSatisfy` null
-            not (any (Just CodeActionRefactorInline /=) kinds) @? "None not CodeActionRefactorInline"
+            not (null kinds) @? "We found an action of kind RefactorInline"
             all (Just CodeActionRefactorInline ==) kinds @? "All CodeActionRefactorInline"
     ]
 

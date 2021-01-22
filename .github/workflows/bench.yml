@@ -12,9 +12,6 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
-    # Cancel queued workflows from earlier commits in this branch
-    - uses: technote-space/auto-cancel-redundant-workflow@v1
-
     - uses: actions/checkout@v2
     - run: git fetch origin master # check the master branch for benchmarking
     - uses: haskell/actions/setup@v1
@@ -29,11 +26,11 @@ jobs:
         path: |
           ~/.cabal/packages
           ~/.cabal/store
-        key: ${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
+        key: v2-${{ runner.os }}-${{ matrix.ghc }}-bench-${{ hashFiles('cabal.project') }}
         restore-keys: |
-            ${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
-            ${{ runner.os }}-${{ matrix.ghc }}-bench-
-            ${{ runner.os }}-${{ matrix.ghc }}
+            v2-${{ runner.os }}-${{ matrix.ghc }}-build-${{ hashFiles('cabal.project') }}
+            v2-${{ runner.os }}-${{ matrix.ghc }}-bench-
+            v2-${{ runner.os }}-${{ matrix.ghc }}
 
     - run: cabal update
 

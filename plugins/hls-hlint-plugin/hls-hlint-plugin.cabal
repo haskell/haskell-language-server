@@ -2,13 +2,13 @@ cabal-version: 2.2
 name:          hls-hlint-plugin
 version:       0.1.0.0
 synopsis:      Hlint integration plugin with Haskell Language Server
-description:   Please see README.md
+description:   Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
 license:       Apache-2.0
 license-file:  LICENSE
-author:        Many,TBD when we release
-maintainer:    alan.zimm@gmail.com (for now)
-copyright:     Alan Zimmerman
-category:      Web
+author:        The Haskell IDE Team
+maintainer:    alan.zimm@gmail.com
+copyright:     The Haskell IDE Team
+category:      Development
 build-type:    Simple
 
 flag pedantic
@@ -28,7 +28,7 @@ library
   build-depends:
     , aeson
     , apply-refact
-    , base
+    , base                   >=4.12 && <5
     , binary
     , bytestring
     , containers
@@ -38,6 +38,7 @@ library
     , directory
     , extra
     , filepath
+    , ghc-exactprint
     , ghcide
     , hashable
     , haskell-lsp
@@ -61,7 +62,7 @@ library
       , ghc-lib            ^>= 8.10.2.20200916
       , ghc-lib-parser-ex  ^>= 8.10
 
-    cpp-options:   -DGHC_LIB
+    cpp-options:   -DHLINT_ON_GHC_LIB
 
   ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
 

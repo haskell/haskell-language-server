@@ -17,6 +17,10 @@ import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import           Ide.Plugin.Class          as Class
 #endif
 
+#if haddockComments
+import           Ide.Plugin.HaddockComments as HaddockComments
+#endif
+
 #if eval
 import           Ide.Plugin.Eval           as Eval
 #endif
@@ -43,6 +47,10 @@ import           Ide.Plugin.ModuleName     as ModuleName
 
 #if pragmas
 import           Ide.Plugin.Pragmas        as Pragmas
+#endif
+
+#if splice
+import           Ide.Plugin.Splice        as Splice
 #endif
 
 -- formatters
@@ -109,6 +117,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if class
       , Class.descriptor "class"
 #endif
+#if haddockComments
+      , HaddockComments.descriptor "haddockComments"
+#endif
 #if eval
       , Eval.descriptor "eval"
 #endif
@@ -120,6 +131,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if hlint
       , Hlint.descriptor "hlint"
+#endif
+#if splice
+      , Splice.descriptor "splice"
 #endif
       ]
     examplePlugins =

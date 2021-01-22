@@ -1,11 +1,13 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
+#include "ghc-api-version.h"
 module Development.IDE.Core.Tracing
     ( otTracedHandler
     , otTracedAction
     , startTelemetry
     , measureMemory
     , getInstrumentCached
-    )
+    ,otTracedProvider,otSetUri)
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -20,13 +22,12 @@ import           Data.Dynamic                   (Dynamic)
 import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
-import           Data.List                      (nub)
 import           Data.String                    (IsString (fromString))
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
 import           Development.IDE.Types.Logger   (logInfo, Logger, logDebug)
-import           Development.IDE.Types.Shake    (Key (..), Value, Values)
+import           Development.IDE.Types.Shake    (ValueWithDiagnostics(..), Key (..), Value, Values)
 import           Development.Shake              (Action, actionBracket, liftIO)
 import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Foreign.Storable               (Storable (sizeOf))
@@ -34,15 +35,19 @@ import           HeapSize                       (recursiveSize, runHeapsize)
 import           Language.Haskell.LSP.Types     (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,
+import           OpenTelemetry.Eventlog         (SpanInFlight, Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
+import Data.ByteString (ByteString)
+import Data.Text.Encoding (encodeUtf8)
+import Ide.Types (PluginId (..))
+import Development.IDE.Types.Location (Uri (..))
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
     :: String -- ^ Message type
     -> String -- ^ Message label
-    -> IO a
+    -> (SpanInFlight -> IO a)
     -> IO a
 otTracedHandler requestType label act =
   let !name =
@@ -50,7 +55,10 @@ otTracedHandler requestType label act =
           then requestType
           else requestType <> ":" <> show label
    -- Add an event so all requests can be quickly seen in the viewer without searching
-   in withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> act)
+   in withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> act sp)
+
+otSetUri :: SpanInFlight -> Uri -> IO ()
+otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
 
 -- | Trace a Shake action using opentelemetry.
 otTracedAction
@@ -72,6 +80,16 @@ otTracedAction key file success act = actionBracket
         unless (success res) $ setTag sp "error" "1"
         return res)
 
+#if MIN_GHC_API_VERSION(8,8,0)
+otTracedProvider :: PluginId -> ByteString -> IO a -> IO a
+#else
+otTracedProvider :: PluginId -> String -> IO a -> IO a
+#endif
+otTracedProvider (PluginId pluginName) provider act =
+  withSpan (provider <> " provider") $ \sp -> do
+    setTag sp "plugin" (encodeUtf8 pluginName)
+    act
+
 startTelemetry :: Bool -> Logger -> Var Values -> IO ()
 startTelemetry allTheTime logger stateRef = do
     instrumentFor <- getInstrumentCached
@@ -92,7 +110,7 @@ startTelemetry allTheTime logger stateRef = do
 
 performMeasurement ::
   Logger ->
-  Var (HMap.HashMap (NormalizedFilePath, Key) (Value Dynamic)) ->
+  Var Values ->
   (Maybe Key -> IO OurValueObserver) ->
   Instrument 'Asynchronous a m' ->
   IO ()
@@ -179,7 +197,7 @@ measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" 
             let !groupedValues =
                     [ [ (k, vv)
                       | k <- groupKeys
-                      , let vv = [ v | ((_,k'), v) <- HMap.toList values , k == k']
+                      , let vv = [ v | ((_,k'), ValueWithDiagnostics v _) <- HMap.toList values , k == k']
                       ]
                     | groupKeys <- groups
                     ]

@@ -38,12 +38,11 @@ defaultMain = do
     let args = [verbosityArg (shakeVerbosity shakeOptionsRules)]
 
     phony "show-options" $ do
-      putNormal $ "Options:"
+      putNormal "Options:"
       putNormal $ "    Verbosity level: " ++ show (shakeVerbosity shakeOptionsRules)
 
     want ["short-help"]
     -- general purpose targets
-    phony "submodules"  updateSubmodules
     phony "short-help"  shortHelpMessage
     phony "help"        (helpMessage toolsVersions)
 
@@ -51,16 +50,14 @@ defaultMain = do
 
     phony "data" $ do
       need ["show-options"]
-      need ["submodules"]
       need ["check"]
-      liftIO $ putStrLn "Generation of hoogle data files is disabled for now."  
+      liftIO $ putStrLn "Generation of hoogle data files is disabled for now."
       -- if isRunFromStack then stackBuildData args else cabalBuildData args
 
     forM_
       versions
       (\version -> phony ("hls-" ++ version) $ do
         need ["show-options"]
-        need ["submodules"]
         need ["check"]
         if isRunFromStack then
           stackInstallHlsWithErrMsg (Just version) args
@@ -93,7 +90,7 @@ defaultMain = do
       need ["icu-macos-fix-build"]
 
     phony "icu-macos-fix-install" (command_ [] "brew" ["install", "icu4c"])
-    phony "icu-macos-fix-build" $ mapM_ (flip buildIcuMacosFix $ args) versions
+    phony "icu-macos-fix-build" $ mapM_ (flip buildIcuMacosFix args) versions
 
 
 buildIcuMacosFix :: VersionNumber -> [String] -> Action ()
@@ -104,9 +101,3 @@ buildIcuMacosFix version args = execStackWithGhc_
   , "--extra-lib-dirs=/usr/local/opt/icu4c/lib"
   , "--extra-include-dirs=/usr/local/opt/icu4c/include"
   ] ++ args
-
--- | update the submodules that the project is in the state as required by the `stack.yaml` files
-updateSubmodules :: Action ()
-updateSubmodules = do
-  command_ [] "git" ["submodule", "sync"]
-  command_ [] "git" ["submodule", "update", "--init"]

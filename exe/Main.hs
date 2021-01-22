@@ -16,7 +16,7 @@ main = withUtf8 $ do
 
     let withExamples =
             case args of
-                LspMode (LspArguments{..}) -> argsExamplePlugin
-                _                          -> False
+                LspMode LspArguments{..} -> argsExamplePlugin
+                _                        -> False
 
     defaultMain args (idePlugins withExamples)

@@ -27,6 +27,7 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
       - [Building](#building)
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
+    - [Installation from Hackage](#installation-from-hackage)
   - [Configuring haskell-language-server](#configuring-haskell-language-server)
   - [Configuring your project build](#configuring-your-project-build)
   - [Configuring your editor](#configuring-your-editor)
@@ -48,9 +49,9 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
 
 ## Features
 
- - Code evaluation codelens (inspired by [Dante](https://github.com/jyp/dante#-reploid)). You can evaluate code by writing it in a comment of the form -- >>>
+- Code evaluation codelens ([Tutorial](plugins/hls-eval-plugin/README.md)):
 
-   ![Eval](https://i.imgur.com/bh992sT.gif)
+   ![Eval Demo](plugins/hls-eval-plugin/demo.gif)
 
 - Type information and documentation on hover. Note that currently, in order for docs to be displayed for dependencies, they must have been built with GHC's `-haddock` flag:
 
@@ -245,6 +246,12 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 ./cabal-hls-install hls-8.6.5
 ```
 
+### Installation from Hackage
+
+Direct installation from Hackage, while possible via `cabal install haskell-language-server`, is not recommended for most people.
+Said command builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder,
+but the binary will only work with projects that use the same GHC version that built it.
+
 ## Configuring `haskell-language-server`
 
 Language servers like `haskell-language-server` expose most of their configuration via the client (i.e. the editor).
@@ -288,9 +295,10 @@ Here is a list of the additional settings currently supported by `haskell-langua
 - Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import
 - Maximum number of problems to report (`haskell.maxNumberOfProblems`, default 100): the maximum number of problems the server will send to the client
 - Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused)
-- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets (currently unused until we have snippets to provide)
+- Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets
 - Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again)
 - Hlint (`haskell.hlintOn`, default true): whether to enable Hlint support
+- Max completions (`haskell.maxCompletions`, default 40): maximum number of completions sent to the LSP client.
 
 Settings like this are typically provided by the language-specific LSP client support for your editor, for example in Emacs by `lsp-haskell`.
 
