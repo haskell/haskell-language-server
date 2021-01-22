@@ -9,6 +9,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
 
     -- * Utilities
     appendConstraint,
+    extendImport,
   )
 where
 
@@ -28,6 +29,8 @@ import GhcPlugins (realSrcSpanEnd, realSrcSpanStart, sigPrec)
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
 import Language.Haskell.LSP.Types
+import OccName
+import RdrName
 
 ------------------------------------------------------------------------------
 
@@ -58,7 +61,7 @@ rewriteToEdit dflags uri anns (Rewrite dst f) = do
           [ ( uri,
               List
                 [ TextEdit (fromJust $ srcSpanToRange dst) $
-                      T.pack $ tail $ exactPrint ast anns
+                    T.pack $ tail $ exactPrint ast anns
                 ]
             )
           ]
@@ -173,3 +176,103 @@ headMaybe (a : _) = Just a
 lastMaybe :: [a] -> Maybe a
 lastMaybe [] = Nothing
 lastMaybe other = Just $ last other
+
+------------------------------------------------------------------------------
+extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
+extendImport mparent identifier lDecl@(L l _) = Rewrite l $ \_ -> do
+  go lDecl
+  where
+    go decl
+      | Just parent <- mparent =
+        extendImportViaParent parent identifier decl
+      | otherwise = extendImportTopLevel identifier decl
+
+-- | Add an identifier to import list
+--
+-- extendImportTopLevel "foo" AST:
+--
+-- import A --> Error
+-- import A (bar) --> import A (bar, foo)
+extendImportTopLevel :: String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
+extendImportTopLevel idnetifier (L l it@ImportDecl {..})
+  | Just (hide, L l' lies) <- ideclHiding,
+    hasSibling <- not $ null lies = do
+    src <- uniqueSrcSpanT
+    top <- uniqueSrcSpanT
+    let rdr = L src $ mkVarName idnetifier
+        lie = L src $ IEName rdr
+        x = L top $ IEVar NoExtField lie
+    when hasSibling $
+      addTrailingCommaT (last lies)
+    addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
+    addSimpleAnnT rdr dp00 [(G AnnVal, dp00)]
+    return $ L l it {ideclHiding = Just (hide, L l' $ lies ++ [x])}
+extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
+
+-- | Add an identifier with its parent to import list
+--
+-- extendImportViaParent "Bar" "Cons" AST:
+--
+-- import A --> Error
+-- import A () --> import A (Bar(Cons))
+-- import A (Foo, Bar) --> import A (Foo, Bar(Cons))
+-- import A (Foo, Bar()) --> import A (Foo, Bar(Cons))
+extendImportViaParent :: String -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
+extendImportViaParent parent child (L l it@ImportDecl {..})
+  | Just (hide, L l' lies) <- ideclHiding = go hide l' [] lies
+  where
+    go :: Bool -> SrcSpan -> [LIE GhcPs] -> [LIE GhcPs] -> TransformT (Either String) (LImportDecl GhcPs)
+    go hide l' pre (lAbs@(L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
+      -- ThingAbs => ThingWith ie child
+      | parent == unIEWrappedName ie = do
+        srcChild <- uniqueSrcSpanT
+        let childRdr = L srcChild $ mkVarName child
+            childLIE = L srcChild $ IEName childRdr
+            x :: LIE GhcPs = L ll' $ IEThingWith NoExtField absIE NoIEWildcard [childLIE] []
+        modifyAnnsT $ \anns ->
+          let oldKey = mkAnnKey lAbs
+              oldValue = anns Map.! oldKey
+              newKey = mkAnnKey x
+           in Map.insert newKey oldValue {annsDP = annsDP oldValue ++ [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, dp00)]} $ Map.delete oldKey anns
+        addSimpleAnnT childRdr dp00 [(G AnnVal, dp00)]
+        return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
+    go hide l' pre ((L l'' (IEThingWith _ twIE@(L _ ie) _ lies' _)) : xs)
+      -- ThingWith ie => ThingWith ie (lies' ++ [child])
+      | parent == unIEWrappedName ie,
+        hasSibling <- not $ null lies' =
+        do
+          srcChild <- uniqueSrcSpanT
+          when hasSibling $
+            addTrailingCommaT (last lies')
+          let childRdr = L srcChild $ mkVarName child
+              childLIE = L srcChild $ IEName childRdr
+          addSimpleAnnT childRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, dp00)]
+          return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith NoExtField twIE NoIEWildcard (lies' ++ [childLIE]) [])] ++ xs)}
+    go hide l' pre (x : xs) = go hide l' (x : pre) xs
+    go hide l' pre []
+      | hasSibling <- not $ null pre = do
+        -- [] => ThingWith parent [child]
+        l'' <- uniqueSrcSpanT
+        srcParent <- uniqueSrcSpanT
+        srcChild <- uniqueSrcSpanT
+        when hasSibling $
+          addTrailingCommaT (head pre)
+        let parentRdr = L srcParent $ mkTcClsName parent
+            parentLIE = L srcParent $ IEName parentRdr
+            childRdr = L srcChild $ mkVarName child
+            childLIE = L srcChild $ IEName childRdr
+            x :: LIE GhcPs = L l'' $ IEThingWith NoExtField parentLIE NoIEWildcard [childLIE] []
+        addSimpleAnnT parentRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, DP (0, 0))]
+        addSimpleAnnT childRdr (DP (0, 0)) [(G AnnVal, DP (0, 0))]
+        addSimpleAnnT x (DP (0, 0)) [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, DP (0, 0))]
+        return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [x])}
+extendImportViaParent _ _ _ = lift $ Left "Unable to extend the import list via parent"
+
+mkTcClsName :: String -> RdrName
+mkTcClsName = mkRdrUnqual . mkOccName tcClsName
+
+mkVarName :: String -> RdrName
+mkVarName = mkRdrUnqual . mkOccName varName
+
+unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
+unIEWrappedName = occNameString . occName

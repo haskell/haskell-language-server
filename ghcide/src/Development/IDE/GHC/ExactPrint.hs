@@ -314,6 +314,10 @@ instance p ~ GhcPs => ASTElement (HsDecl p) where
     parseAST = parseDecl
     maybeParensAST = id
 
+instance p ~ GhcPs => ASTElement (ImportDecl p) where
+    parseAST = parseImport
+    maybeParensAST = id
+
 instance ASTElement RdrName where
     parseAST df fp = parseWith df fp parseIdentifier
     maybeParensAST = id
