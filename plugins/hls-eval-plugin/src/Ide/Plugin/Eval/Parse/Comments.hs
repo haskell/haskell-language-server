@@ -35,7 +35,7 @@ import Language.Haskell.LSP.Types.Lens
     )
 import Text.Megaparsec
 import qualified Text.Megaparsec as P
-import Text.Megaparsec.Char (char, space)
+import Text.Megaparsec.Char (hspace, char)
 
 parseSections ::
     Comments -> Sections
@@ -183,10 +183,10 @@ lineCommentFlavour =
             ( HaddockNext <$ char '|'
                 <|> HaddockPrev <$ char '^'
                 <|> Named <$ char '$'
-                    <* optional space
+                    <* optional hspace
                     <*> P.takeWhile1P (Just "alphabet number") C.isAlphaNum
             )
-        <* space
+        <* hspace
 
 lineCommentHeadP :: Parser String ()
 lineCommentHeadP =
@@ -219,7 +219,7 @@ emptyLineP :: Parser [(Range, String)] ()
 emptyLineP =
     void $
         satisfy $
-            isJust . parseMaybe (lineCommentHeadP *> space) . snd
+            isJust . parseMaybe (lineCommentHeadP *> hspace) . snd
 
 normalCommentP :: Parser [(Range, String)] (Range, String)
 normalCommentP =
