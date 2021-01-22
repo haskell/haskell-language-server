@@ -32,6 +32,7 @@ tests = testGroup
           @?=
           [ Just "Add placeholders for '=='"
           , Just "Add placeholders for '/='"
+          , Just "Disable \"missing-methods\" warnings"
           ]
   , glodenTest "Creates a placeholder for '=='" "T1" "eq"
     $ \(eqAction:_) -> do
