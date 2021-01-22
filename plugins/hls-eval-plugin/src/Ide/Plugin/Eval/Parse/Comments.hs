@@ -190,7 +190,7 @@ lineCommentFlavour =
 
 lineCommentHeadP :: Parser String ()
 lineCommentHeadP =
-    space *> chunk "--"
+    chunk "--"
         *> P.notFollowedBy (oneOf "!#$%&*.+=/<>?@\\~^-:|")
 
 {- $setup
