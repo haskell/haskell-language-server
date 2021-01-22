@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -43,7 +45,7 @@ import Data.Char (isSpace)
 import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
-    ( dropWhileEnd,
+    (mapAccumL,  dropWhileEnd,
       find,
     )
 import qualified Data.Map.Strict as Map
@@ -216,8 +218,8 @@ import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
-import Control.Lens ((+~), (&), (^.))
-import Language.Haskell.LSP.Types.Lens (character, start)
+import Control.Lens ((.~), (+~), (&), (^.))
+import Language.Haskell.LSP.Types.Lens (end, line, character, start)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -244,6 +246,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                         curRan = fromMaybe ran0 $ toCurrentRange posMap ran0
                                         -- used to detect whether haddock comment is a line comment or not, in a brutal way
                                         begin = curRan ^. start
+                                        fin = curRan ^. end
                                         isLine =
                                             extractRange
                                                 (Range begin
@@ -259,7 +262,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                         AnnBlockComment cmt ->
                                             mempty { blockComments = Map.singleton begin $ RawBlockComment cmt }
                                         AnnDocCommentNext txt
-                                            | isLine -> mempty
+                                            | isLine -> mimicLine '|' begin fin txt
                                             | otherwise ->
                                             mempty {
                                                 blockComments =
@@ -268,7 +271,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                                     "{- | " <> txt <> "-}"
                                                 }
                                         AnnDocCommentPrev txt
-                                            | isLine -> mempty
+                                            | isLine -> mimicLine '^' begin fin txt
                                             | otherwise ->
                                             mempty {
                                                 blockComments =
@@ -277,7 +280,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                                     "{- ^ " <> txt <> "-}"
                                                 }
                                         AnnDocCommentNamed txt
-                                            | isLine -> mempty
+                                            | isLine -> mimicLine '$' begin fin txt
                                             | otherwise ->
                                             mempty {
                                                 blockComments =
@@ -338,6 +341,24 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 return $ List lenses
   where
     trivial (Range p p') = p == p'
+
+mimicLine :: Char -> Position -> Position -> String -> Comments
+mimicLine prefix beg fin content =
+    let prfx' = "-- " ++ [prefix, ' ' ]
+        (next, alls) = mapAccumL
+                        ( \ !pos l ->
+                            ( pos & line +~ 1 & character .~ 0
+                            , (pos, RawLineComment $ prfx' ++ l)
+                            )
+                        )
+                        beg
+                        $ lines content
+        pads = map ((, RawLineComment prfx') . flip Position 0)
+                    [next^.line .. fin^.line]
+    in mempty
+        { lineComments =
+            Map.fromList $ alls ++ pads
+        }
 
 evalCommandName :: CommandId
 evalCommandName = "evalCommand"
