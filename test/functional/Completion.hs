@@ -94,6 +94,34 @@ tests = testGroup "completions" [
              item ^. label @?= "OverloadedStrings"
              item ^. kind @?= Just CiKeyword
 
+     , testCase "completes the Strict language extension" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "Completion.hs" "haskell"
+
+         _ <- waitForDiagnostics
+
+         let te = TextEdit (Range (Position 0 13) (Position 0 31)) "Str"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 0 24)
+         let item = head $ filter ((== "Strict") . (^. label)) compls
+         liftIO $ do
+             item ^. label @?= "Strict"
+             item ^. kind @?= Just CiKeyword
+
+     , testCase "completes No- language extensions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "Completion.hs" "haskell"
+
+         _ <- waitForDiagnostics
+
+         let te = TextEdit (Range (Position 0 13) (Position 0 31)) "NoOverload"
+         _ <- applyEdit doc te
+
+         compls <- getCompletions doc (Position 0 24)
+         let item = head $ filter ((== "NoOverloadedStrings") . (^. label)) compls
+         liftIO $ do
+             item ^. label @?= "NoOverloadedStrings"
+             item ^. kind @?= Just CiKeyword
+
      , testCase "completes pragmas" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
          doc <- openDoc "Completion.hs" "haskell"
 

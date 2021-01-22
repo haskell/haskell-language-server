@@ -1,8 +1,8 @@
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
@@ -99,12 +99,40 @@ findPragma str = concatMap check possiblePragmas
   where
     check p = [p | T.isInfixOf p str]
 
+    -- We exclude the Strict extension as it causes many false positives, see
+    -- the discussion at https://github.com/haskell/ghcide/pull/638
+    --
+    -- We don't include the No- variants, as GHC never suggests disabling an
+    -- extension in an error message.
+    possiblePragmas :: [T.Text]
+    possiblePragmas =
+       [ name
+       | FlagSpec{flagSpecName = T.pack -> name} <- xFlags
+       , "Strict" /= name
+       ]
+
 -- ---------------------------------------------------------------------
 
--- | Possible Pragma names.
--- See discussion at https://github.com/haskell/ghcide/pull/638
-possiblePragmas :: [T.Text]
-possiblePragmas = [name | FlagSpec{flagSpecName = T.pack -> name} <- xFlags, "Strict" /= name]
+-- | All language pragmas, including the No- variants
+allPragmas :: [T.Text]
+allPragmas =
+  concat
+    [ [name, "No" <> name]
+    | FlagSpec{flagSpecName = T.pack -> name} <- xFlags
+    ]
+  <>
+  -- These pragmas are not part of xFlags as they are not reversable
+  -- by prepending "No".
+  [ -- Safe Haskell
+    "Unsafe"
+  , "Trustworthy"
+  , "Safe"
+
+    -- Language Version Extensions
+  , "Haskell98"
+  , "Haskell2010"
+    -- Maybe, GHC 2021 after its release?
+  ]
 
 -- ---------------------------------------------------------------------
 
@@ -120,7 +148,7 @@ completion lspFuncs _ide complParams = do
             where
                 result (Just pfix)
                     | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
-                    = Completions $ List $ map buildCompletion possiblePragmas
+                    = Completions $ List $ map buildCompletion allPragmas
                     | otherwise
                     = Completions $ List []
                 result Nothing = Completions $ List []
