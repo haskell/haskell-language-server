@@ -77,11 +77,11 @@ import Development.IDE
       useWithStale_,
       use_,
     )
-import Development.IDE.GHC.Compat (AnnotationComment (AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
+import Development.IDE.GHC.Compat (AnnotationComment(AnnDocCommentNext, AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
 import DynamicLoading (initializePlugins)
 import FastString (unpackFS)
 import GHC
-    ( ExecOptions
+    (AnnotationComment(AnnDocCommentNamed, AnnDocCommentPrev),  ExecOptions
         ( execLineNumber,
           execSourceFile
         ),
@@ -166,7 +166,7 @@ import Ide.Plugin.Eval.Util
       response',
       timed,
     )
-import Ide.PluginUtils (mkLspCommand)
+import Ide.PluginUtils (extractRange, mkLspCommand)
 import Ide.Types
     ( CodeLensProvider,
       CommandFunction,
@@ -216,6 +216,8 @@ import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
+import Control.Lens ((+~), (&), (^.))
+import Language.Haskell.LSP.Types.Lens (character, start)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -228,6 +230,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
             response $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
+                content <- moduleText _lsp uri
                 let nfp = toNormalizedFilePath' fp
                 dbg "fp" fp
                 (ParsedModule{..}, posMap) <- liftIO $
@@ -239,14 +242,49 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                     fromNormalizedFilePath nfp ->
                                     let ran0 = realSrcSpanToRange real
                                         curRan = fromMaybe ran0 $ toCurrentRange posMap ran0
+                                        -- used to detect whether haddock comment is a line comment or not, in a brutal way
+                                        begin = curRan ^. start
+                                        isLine =
+                                            extractRange
+                                                (Range begin
+                                                $ begin & character +~ 1
+                                                ) content
+                                            == "--"
                                     in
                                     -- since Haddock parsing is off,
                                     -- we can concentrate on these two
                                     case bdy of
                                         AnnLineComment cmt ->
-                                            mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
+                                            mempty { lineComments = Map.singleton begin (RawLineComment cmt) }
                                         AnnBlockComment cmt ->
-                                            mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
+                                            mempty { blockComments = Map.singleton begin $ RawBlockComment cmt }
+                                        AnnDocCommentNext txt
+                                            | isLine -> mempty
+                                            | otherwise ->
+                                            mempty {
+                                                blockComments =
+                                                    Map.singleton begin
+                                                    $ RawBlockComment $
+                                                    "{- | " <> txt <> "-}"
+                                                }
+                                        AnnDocCommentPrev txt
+                                            | isLine -> mempty
+                                            | otherwise ->
+                                            mempty {
+                                                blockComments =
+                                                    Map.singleton begin
+                                                    $ RawBlockComment $
+                                                    "{- ^ " <> txt <> "-}"
+                                                }
+                                        AnnDocCommentNamed txt
+                                            | isLine -> mempty
+                                            | otherwise ->
+                                            mempty {
+                                                blockComments =
+                                                    Map.singleton begin
+                                                    $ RawBlockComment $
+                                                    "{- $ " <> txt <> "-}"
+                                                }
                                         _ -> mempty
                             _ -> mempty
                             )

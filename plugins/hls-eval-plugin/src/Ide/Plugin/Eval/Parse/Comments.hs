@@ -178,8 +178,12 @@ fromTestComment AnExample {..} =
 
 -- * Block comment parser
 
--- >>> parseMaybe (blockCommentBP $ Position 0 0) "{- $setup\n>>> dummyPos = Position 0 0\n>>> dummyPosition = Position dummyPos dummyPos\n-}"
--- Just (Named "setup",[AnExample {commentSectionStart = Position {_start = Position {_line = 1, _character = 0}, _end = Position {_line = 3, _character = 0}}, lineExamples = ExampleLine {getExampleLine = " dummyPos = Position 0 0"} :| [ExampleLine {getExampleLine = " dummyPosition = Position dummyPos dummyPos"}], exampleResults = []}])
+{- $setup
+>>> dummyPos = Position 0 0
+-}
+
+-- >>> parseMaybe (blockCommentBP $ dummyPos) "{- $setup\n>>> dummyPos = Position 0 0\n>>> dummyPosition = Position dummyPos dummyPos\n-}"
+-- Just (Named "setup",[AnExample {commentSectionStart = Position {_line = 1, _character = 0}, lineExamples = ExampleLine {getExampleLine = " dummyPos = Position 0 0"} :| [ExampleLine {getExampleLine = " dummyPosition = Position dummyPos dummyPos"}], exampleResults = []}])
 
 blockCommentBP ::
     Position -> BlockCommentParser (CommentFlavour, [TestComment])
@@ -267,6 +271,8 @@ lineGroupP = do
 {- $setup
 >>> dummyPos = Position 0 0
 >>> dummyPosition = Position dummyPos dummyPos
+Couldn't match expected type ‘Int’ with actual type ‘Position’
+Couldn't match expected type ‘Int’ with actual type ‘Position’
 -}
 
 -- >>>  parse (lineGroupP <*eof) "" $ (dummyPosition, ) . RawLineComment <$> ["-- a", "-- b"]
@@ -333,13 +339,15 @@ fails if the input does not start with "--".
 
 __N.B.__ We don't strip comment flavours.
 
->>> parseMaybe (parseLine $ takeRest) $ map (:[]) ["-- >>> A"]
+>>> pck = (:[]).(:[]) . RawLineComment
+
+>>> parseMaybe (parseLine $ takeRest) $ pck "-- >>> A"
 Just [">>> A"]
 
->>> parseMaybe (parseLine $ takeRest) $ map (:[]) ["---  >>> A"]
+>>> parseMaybe (parseLine $ takeRest) $ pck "---  >>> A"
 Just [" >>> A"]
 
->>> parseMaybe (parseLine takeRest) $ map (:[]) [""]
+>>> parseMaybe (parseLine takeRest) $ pck ""
 Nothing
 -}
 parseLine ::
@@ -368,8 +376,6 @@ normalLineP style = do
     notFollowedBy (try $ exampleSymbol <|> propSymbol)
     consume style
 
--- >>> parse (skipMany (consume Block)) "" "foo\nbar"
--- Right ()
 consume :: CommentStyle -> Parser String String
 consume style =
     case style of
@@ -405,7 +411,7 @@ Two adjacent tokens are considered to be contiguous if
     * they have same starting column.
 
 >>> contiguousGroupOn id [(1,2),(2,2),(3,4),(4,4),(5,4),(7,0),(8,0)]
-NOW [(1,2) :| [(2,2)],(3,4) :| [(4,4),(5,4)],(7,0) :| [(8,0)]]
+[(1,2) :| [(2,2)],(3,4) :| [(4,4),(5,4)],(7,0) :| [(8,0)]]
 -}
 contiguousGroupOn :: (a -> (Int, Int)) -> [a] -> [NonEmpty a]
 contiguousGroupOn toLineCol = foldr step []
