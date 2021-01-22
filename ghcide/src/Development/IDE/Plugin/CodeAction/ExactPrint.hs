@@ -30,7 +30,6 @@ import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
 import Language.Haskell.LSP.Types
 import OccName
-import RdrName
 
 ------------------------------------------------------------------------------
 
@@ -179,13 +178,10 @@ lastMaybe other = Just $ last other
 
 ------------------------------------------------------------------------------
 extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
-extendImport mparent identifier lDecl@(L l _) = Rewrite l $ \_ -> do
-  go lDecl
-  where
-    go decl
-      | Just parent <- mparent =
-        extendImportViaParent parent identifier decl
-      | otherwise = extendImportTopLevel identifier decl
+extendImport mparent identifier lDecl@(L l _) = Rewrite l $ \df -> do
+  case mparent of
+    Just parent -> extendImportViaParent df parent identifier lDecl
+    _ -> extendImportTopLevel df identifier lDecl
 
 -- | Add an identifier to import list
 --
@@ -193,21 +189,21 @@ extendImport mparent identifier lDecl@(L l _) = Rewrite l $ \_ -> do
 --
 -- import A --> Error
 -- import A (bar) --> import A (bar, foo)
-extendImportTopLevel :: String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
-extendImportTopLevel idnetifier (L l it@ImportDecl {..})
+extendImportTopLevel :: DynFlags -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
+extendImportTopLevel df idnetifier (L l it@ImportDecl {..})
   | Just (hide, L l' lies) <- ideclHiding,
     hasSibling <- not $ null lies = do
     src <- uniqueSrcSpanT
     top <- uniqueSrcSpanT
-    let rdr = L src $ mkVarName idnetifier
-        lie = L src $ IEName rdr
+    rdr <- liftParseAST df idnetifier
+    let lie = L src $ IEName rdr
         x = L top $ IEVar NoExtField lie
     when hasSibling $
       addTrailingCommaT (last lies)
     addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
     addSimpleAnnT rdr dp00 [(G AnnVal, dp00)]
     return $ L l it {ideclHiding = Just (hide, L l' $ lies ++ [x])}
-extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
+extendImportTopLevel _ _ _ = lift $ Left "Unable to extend the import list"
 
 -- | Add an identifier with its parent to import list
 --
@@ -217,8 +213,8 @@ extendImportTopLevel _ _ = lift $ Left "Unable to extend the import list"
 -- import A () --> import A (Bar(Cons))
 -- import A (Foo, Bar) --> import A (Foo, Bar(Cons))
 -- import A (Foo, Bar()) --> import A (Foo, Bar(Cons))
-extendImportViaParent :: String -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
-extendImportViaParent parent child (L l it@ImportDecl {..})
+extendImportViaParent :: DynFlags -> String -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
+extendImportViaParent df parent child (L l it@ImportDecl {..})
   | Just (hide, L l' lies) <- ideclHiding = go hide l' [] lies
   where
     go :: Bool -> SrcSpan -> [LIE GhcPs] -> [LIE GhcPs] -> TransformT (Either String) (LImportDecl GhcPs)
@@ -226,8 +222,8 @@ extendImportViaParent parent child (L l it@ImportDecl {..})
       -- ThingAbs => ThingWith ie child
       | parent == unIEWrappedName ie = do
         srcChild <- uniqueSrcSpanT
-        let childRdr = L srcChild $ mkVarName child
-            childLIE = L srcChild $ IEName childRdr
+        childRdr <- liftParseAST df child
+        let childLIE = L srcChild $ IEName childRdr
             x :: LIE GhcPs = L ll' $ IEThingWith NoExtField absIE NoIEWildcard [childLIE] []
         modifyAnnsT $ \anns ->
           let oldKey = mkAnnKey lAbs
@@ -242,10 +238,10 @@ extendImportViaParent parent child (L l it@ImportDecl {..})
         hasSibling <- not $ null lies' =
         do
           srcChild <- uniqueSrcSpanT
+          childRdr <- liftParseAST df child
           when hasSibling $
             addTrailingCommaT (last lies')
-          let childRdr = L srcChild $ mkVarName child
-              childLIE = L srcChild $ IEName childRdr
+          let childLIE = L srcChild $ IEName childRdr
           addSimpleAnnT childRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, dp00)]
           return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith NoExtField twIE NoIEWildcard (lies' ++ [childLIE]) [])] ++ xs)}
     go hide l' pre (x : xs) = go hide l' (x : pre) xs
@@ -255,24 +251,18 @@ extendImportViaParent parent child (L l it@ImportDecl {..})
         l'' <- uniqueSrcSpanT
         srcParent <- uniqueSrcSpanT
         srcChild <- uniqueSrcSpanT
+        parentRdr <- liftParseAST df parent
+        childRdr <- liftParseAST df child
         when hasSibling $
           addTrailingCommaT (head pre)
-        let parentRdr = L srcParent $ mkTcClsName parent
-            parentLIE = L srcParent $ IEName parentRdr
-            childRdr = L srcChild $ mkVarName child
+        let parentLIE = L srcParent $ IEName parentRdr
             childLIE = L srcChild $ IEName childRdr
             x :: LIE GhcPs = L l'' $ IEThingWith NoExtField parentLIE NoIEWildcard [childLIE] []
         addSimpleAnnT parentRdr (DP (0, if hasSibling then 1 else 0)) [(G AnnVal, DP (0, 0))]
         addSimpleAnnT childRdr (DP (0, 0)) [(G AnnVal, DP (0, 0))]
         addSimpleAnnT x (DP (0, 0)) [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, DP (0, 0))]
         return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [x])}
-extendImportViaParent _ _ _ = lift $ Left "Unable to extend the import list via parent"
-
-mkTcClsName :: String -> RdrName
-mkTcClsName = mkRdrUnqual . mkOccName tcClsName
-
-mkVarName :: String -> RdrName
-mkVarName = mkRdrUnqual . mkOccName varName
+extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
 
 unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
 unIEWrappedName = occNameString . occName
