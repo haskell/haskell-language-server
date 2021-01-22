@@ -34,7 +34,7 @@ import Data.List.NonEmpty (NonEmpty)
 import Data.String (IsString (..))
 import GHC.Generics (Generic)
 import Data.Map.Strict (Map)
-import Development.IDE (Range(..))
+import Development.IDE (Position(..))
 import qualified Text.Megaparsec as P
 
 -- | A thing with a location attached.
@@ -93,8 +93,8 @@ data Test
 
 data Comments =
     Comments
-        { lineComments :: Map Range RawLineComment
-        , blockComments :: Map Range RawBlockComment
+        { lineComments :: Map Position RawLineComment
+        , blockComments :: Map Position RawBlockComment
         }
     deriving (Show, Eq, Ord, Generic)
 

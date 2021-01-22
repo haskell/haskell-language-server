@@ -12,24 +12,20 @@ import Control.Lens (view, (^.))
 import Control.Monad (guard, void)
 import Control.Monad.Combinators ()
 import qualified Data.Char as C
-import Data.Coerce (coerce)
 import qualified Data.DList as DL
 import qualified Data.Foldable as F
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.Semigroup
 import Data.Void (Void)
-import Development.IDE (Range)
-import Development.IDE.Types.Location (Position (..), Range (Range))
+import Development.IDE (Position)
+import Development.IDE.Types.Location (Position (..), Position (Position))
 import GHC.Generics
 import Ide.Plugin.Eval.Types
 import Language.Haskell.LSP.Types.Lens
     ( character,
-      end,
       line,
-      start,
     )
 import Text.Megaparsec
 import qualified Text.Megaparsec as P
@@ -50,7 +46,7 @@ We build parsers combining the following three kinds of them:
         doesn't include starting @--@ and @{\-@ and no ending @-\}@
 
     *   Line comment group parser: parses a contiguous group of
-        tuples of range and line comment into sections of line comments.
+        tuples of position and line comment into sections of line comments.
         Each input MUST start with @--@.
 
     *   Block comment parser: Parsing entire block comment into sections.
@@ -62,7 +58,7 @@ type Parser inputs = Parsec Void inputs
 type LineParser = Parser String
 
 -- | Line comment group parser
-type LineGroupParser = Parser [(Range, RawLineComment)]
+type LineGroupParser = Parser [(Position, RawLineComment)]
 
 -- | Block comment parser
 type BlockCommentParser = Parser String
@@ -77,12 +73,12 @@ newtype ExampleLine = ExampleLine {getExampleLine :: String}
 
 data TestComment
     = AProp
-        { lineCommentSectionSpan :: Range
+        { commentSectionStart :: Position
         , lineProp :: PropLine
         , propResults :: [String]
         }
     | AnExample
-        { lineCommentSectionSpan :: Range
+        { commentSectionStart :: Position
         , lineExamples :: NonEmpty ExampleLine
         , exampleResults :: [String]
         }
@@ -117,7 +113,7 @@ commentsToSections Comments {..} =
         (blockSeed, blockSetupSeeds) =
             foldMap
                 ( \(ran, lcs) ->
-                    case parseMaybe (blockCommentBP $ ran ^. start) $ getRawBlockComment lcs of
+                    case parseMaybe (blockCommentBP ran) $ getRawBlockComment lcs of
                         Nothing -> mempty
                         Just (Named "setup", grp) ->
                             -- orders setup sections in ascending order
@@ -167,14 +163,14 @@ testsToSection style flav tests =
 fromTestComment :: TestComment -> Loc Test
 fromTestComment AProp {..} =
     Located
-        (lineCommentSectionSpan ^. start . line)
+        (commentSectionStart ^. line)
         Property
             { testline = getPropLine lineProp
             , testOutput = propResults
             }
 fromTestComment AnExample {..} =
     Located
-        (lineCommentSectionSpan ^. start . line)
+        (commentSectionStart ^. line)
         Example
             { testLines = getExampleLine <$> lineExamples
             , testOutput = exampleResults
@@ -182,8 +178,8 @@ fromTestComment AnExample {..} =
 
 -- * Block comment parser
 
--- >>> parseMaybe (blockCommentBP $ Position 0 0) "{- $setup\n>>> dummyPos = Position 0 0\n>>> dummyRange = Range dummyPos dummyPos\n-}"
--- Just (Named "setup",[AnExample {lineCommentSectionSpan = Range {_start = Position {_line = 1, _character = 0}, _end = Position {_line = 3, _character = 0}}, lineExamples = ExampleLine {getExampleLine = " dummyPos = Position 0 0"} :| [ExampleLine {getExampleLine = " dummyRange = Range dummyPos dummyPos"}], exampleResults = []}])
+-- >>> parseMaybe (blockCommentBP $ Position 0 0) "{- $setup\n>>> dummyPos = Position 0 0\n>>> dummyPosition = Position dummyPos dummyPos\n-}"
+-- Just (Named "setup",[AnExample {commentSectionStart = Position {_start = Position {_line = 1, _character = 0}, _end = Position {_line = 3, _character = 0}}, lineExamples = ExampleLine {getExampleLine = " dummyPos = Position 0 0"} :| [ExampleLine {getExampleLine = " dummyPosition = Position dummyPos dummyPos"}], exampleResults = []}])
 
 blockCommentBP ::
     Position -> BlockCommentParser (CommentFlavour, [TestComment])
@@ -216,18 +212,17 @@ eob = eof <|> try (optional (chunk "-}") *> eof) <|> void eol
 
 blockExamples, blockProp :: BlockCommentParser TestComment
 blockExamples = do
-    (ran, examples) <- withRange $ NE.some $ exampleLineStrP Block
+    (ran, examples) <- withPosition $ NE.some $ exampleLineStrP Block
     AnExample ran examples <$> resultBlockP
 blockProp = do
-    (ran, prop) <- withRange $ propLineStrP Block
+    (ran, prop) <- withPosition $ propLineStrP Block
     AProp ran prop <$> resultBlockP
 
-withRange :: (TraversableStream s, Stream s) => Parser s a -> Parser s (Range, a)
-withRange p = do
+withPosition :: (TraversableStream s, Stream s) => Parser s a -> Parser s (Position, a)
+withPosition p = do
     beg <- sourcePosToPosition <$> getSourcePos
     a <- p
-    fin <- sourcePosToPosition <$> getSourcePos
-    pure (Range beg fin, a)
+    pure (beg, a)
 
 resultBlockP :: BlockCommentParser [String]
 resultBlockP = many $ nonEmptyNormalLineP Block
@@ -271,11 +266,11 @@ lineGroupP = do
 
 {- $setup
 >>> dummyPos = Position 0 0
->>> dummyRange = Range dummyPos dummyPos
+>>> dummyPosition = Position dummyPos dummyPos
 -}
 
--- >>>  parse (lineGroupP <*eof) "" $ (dummyRange, ) . RawLineComment <$> ["-- a", "-- b"]
--- Variable not in scope: dummyRange :: Range
+-- >>>  parse (lineGroupP <*eof) "" $ (dummyPosition, ) . RawLineComment <$> ["-- a", "-- b"]
+-- Variable not in scope: dummyPosition :: Position
 
 commentFlavourP :: LineParser CommentFlavour
 commentFlavourP =
@@ -311,7 +306,7 @@ lexemeLine p = p <* skipMany normalLineCommentP
 resultLinesP :: LineGroupParser [String]
 resultLinesP = many nonEmptyLGP
 
-normalLineCommentP :: LineGroupParser (Range, String)
+normalLineCommentP :: LineGroupParser (Position, String)
 normalLineCommentP =
     parseLine (commentFlavourP *> normalLineP Line)
 
@@ -321,14 +316,14 @@ nonEmptyLGP = try $ fmap snd $ parseLine $ commentFlavourP *> nonEmptyNormalLine
 exampleLinesGP :: LineGroupParser TestComment
 exampleLinesGP =
     lexemeLine $
-        uncurry AnExample . first convexHullSpan . NE.unzip
+        uncurry AnExample . first NE.head . NE.unzip
             <$> NE.some exampleLineGP
             <*> resultLinesP
 
-exampleLineGP :: LineGroupParser (Range, ExampleLine)
+exampleLineGP :: LineGroupParser (Position, ExampleLine)
 exampleLineGP = parseLine (commentFlavourP *> exampleLineStrP Line)
 
-propLineGP :: LineGroupParser (Range, PropLine)
+propLineGP :: LineGroupParser (Position, PropLine)
 propLineGP = parseLine (commentFlavourP *> propLineStrP Line)
 
 {- |
@@ -423,23 +418,11 @@ contiguousGroupOn toLineCol = foldr step []
                 (a :| b : bs) : bss
             | otherwise = pure a : bss0
 
-convexHullSpan :: NonEmpty Range -> Range
-convexHullSpan lns@(headSpan :| _) =
-    let (mbeg, mend) =
-            foldMap
-                ( (Just . Min . view start)
-                    &&& (Just . Max . view end)
-                )
-                lns
-        beg = maybe (headSpan ^. start) coerce mbeg
-        end_ = maybe (headSpan ^. end) coerce mend
-     in Range beg end_
-
-{- | Given a map from ranges, divides them into subgroup
+{- | Given a map from positions, divides them into subgroup
  with contiguous line and columns.
 -}
 groupLineComments ::
-    Map Range a -> [NonEmpty (Range, a)]
+    Map Position a -> [NonEmpty (Position, a)]
 groupLineComments =
-    contiguousGroupOn (fst >>> view start >>> view line &&& view character)
+    contiguousGroupOn (fst >>> view line &&& view character)
         . Map.toList
