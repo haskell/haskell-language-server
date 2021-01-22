@@ -258,7 +258,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                             )
                         )
                         $ snd pm_annotations
-                dbg "comments" $ show $  DL.toList $
+                dbg "excluded comments" $ show $  DL.toList $
                     foldMap
                     (foldMap $ \(L a b) ->
                         case b of
@@ -267,7 +267,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                             _ -> DL.singleton (a, b)
                     )
                     $ snd pm_annotations
-                dbg "excluded comments" $ show comments
+                dbg "comments" $ show comments
                 dbg "groups" $ groupLineComments $ lineComments comments
 
                 -- Extract tests from source code
