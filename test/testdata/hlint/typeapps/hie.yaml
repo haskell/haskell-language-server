@@ -1,0 +1,5 @@
+cradle:
+  direct:
+    arguments:
+      - "-XTypeApplications"
+      - "ApplyRefact1"

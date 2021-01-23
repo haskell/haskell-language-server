@@ -127,9 +127,13 @@ hlintTests = testGroup "hlint suggestions" [
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
-    , testCase "apply-refact works with LambdaCase via ghc -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
+    , testCase "apply-refact works with -XLambdaCase argument (#590)" $ runHlintSession "lambdacase" $ do
         testRefactor "ApplyRefact1.hs" "Redundant bracket"
             expectedLambdaCase
+
+    , testCase "apply-refact works with -XTypeApplications argument (#1242)" $ runHlintSession "typeapps" $ do
+        testRefactor "ApplyRefact1.hs" "Redundant bracket"
+            expectedTypeApp
 
     , testCase "apply hints works with LambdaCase via language pragma" $ runHlintSession "" $ do
         testRefactor "ApplyRefact1.hs" "Redundant bracket"
@@ -206,7 +210,9 @@ hlintTests = testGroup "hlint suggestions" [
                              , "f = {- inline comment -}{- inline comment inside refactored code -} 1 -- ending comment", ""
                              , "-- final comment"
                              ]
-
+        expectedTypeApp =    [ "module ApplyRefact1 where", ""
+                             , "a = id @Int 1"
+                             ]
 renameTests :: TestTree
 renameTests = testGroup "rename suggestions" [
     testCase "works" $ runSession hlsCommand noLiteralCaps "test/testdata" $ do
