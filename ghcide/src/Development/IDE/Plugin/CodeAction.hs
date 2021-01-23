@@ -860,10 +860,7 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         = Nothing
 
       readPositionNumber :: T.Text -> Int
-      readPositionNumber = T.unpack 
-      
-      
-      read
+      readPositionNumber = T.unpack >>> read
 
       actionTitle :: T.Text -> T.Text
       actionTitle constraint = "Add `" <> constraint
