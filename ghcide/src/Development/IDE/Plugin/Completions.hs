@@ -4,7 +4,6 @@
 
 module Development.IDE.Plugin.Completions
     ( descriptor
-    , ProduceCompletions(..)
     , LocalCompletions(..)
     , NonLocalCompletions(..)
     ) where
@@ -49,11 +48,6 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 produceCompletions :: Rules ()
 produceCompletions = do
-    define $ \ProduceCompletions file -> do
-        local <- useWithStale LocalCompletions file
-        nonLocal <- useWithStale NonLocalCompletions file
-        let extract = fmap fst
-        return ([], extract local <> extract nonLocal)
     define $ \LocalCompletions file -> do
         let uri = fromNormalizedUri $ normalizedFilePathToUri file
         pm <- useWithStale GetParsedModule file
@@ -103,15 +97,8 @@ dropListFromImportDecl iDecl = let
     in f <$> iDecl
 
 -- | Produce completions info for a file
-type instance RuleResult ProduceCompletions = CachedCompletions
 type instance RuleResult LocalCompletions = CachedCompletions
 type instance RuleResult NonLocalCompletions = CachedCompletions
-
-data ProduceCompletions = ProduceCompletions
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable ProduceCompletions
-instance NFData   ProduceCompletions
-instance Binary   ProduceCompletions
 
 data LocalCompletions = LocalCompletions
     deriving (Eq, Show, Typeable, Generic)
@@ -142,12 +129,13 @@ getCompletionsLSP plId lsp ide
         let npath = toNormalizedFilePath' path
         (ideOpts, compls) <- runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-            compls <- useWithStaleFast ProduceCompletions npath
+            localCompls <- useWithStaleFast LocalCompletions npath
+            nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-            pure (opts, fmap (,pm,binds) compls )
+            pure (opts, fmap (,pm,binds) ((fst <$> localCompls) <> (fst <$> nonLocalCompls)))
         case compls of
-          Just ((cci', _), parsedMod, bindMap) -> do
+          Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
             case (pfix, completionContext) of
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
