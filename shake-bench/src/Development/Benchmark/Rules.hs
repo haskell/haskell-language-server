@@ -84,7 +84,7 @@ import           GHC.Stack                                 (HasCallStack)
 import qualified Graphics.Rendering.Chart.Backend.Diagrams as E
 import           Graphics.Rendering.Chart.Easy             ((.=))
 import qualified Graphics.Rendering.Chart.Easy             as E
-import           System.Directory                          (findExecutable, createDirectoryIfMissing)
+import           System.Directory (createDirectoryIfMissing, findExecutable, renameFile)
 import           System.FilePath
 import qualified Text.ParserCombinators.ReadP              as P
 import           Text.Read                                 (Read (..), get,
@@ -251,7 +251,7 @@ benchRules build benchResource MkBenchRules{..} = do
                 AddPath [takeDirectory ghcPath, "."] []
               ]
               BenchProject {..}
-          cmd_ Shell $ "mv ghcide.hp " <> dropFileName outcsv </> dropExtension exp <.> "hp"
+          liftIO $ renameFile "ghcide.hp" $ dropFileName outcsv </> dropExtension exp <.> "hp"
 
         -- extend csv output with allocation data
         csvContents <- liftIO $ lines <$> readFile outcsv
@@ -385,7 +385,7 @@ eventlogRules :: FilePattern -> Rules ()
 eventlogRules build = do
   build -/- "*/*/*.eventlog.html" %> \out -> do
     need [dropExtension out]
-    cmd_ $ "eventlog2html " <> dropExtension out
+    cmd_ ("eventlog2html" :: String) [dropExtension out]
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
