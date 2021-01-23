@@ -3,9 +3,10 @@
 #include "ghc-api-version.h"
 
 module Development.IDE.Plugin.Completions
-    (
-      produceCompletions
-    , getCompletionsLSP
+    ( descriptor
+    , ProduceCompletions(..)
+    , LocalCompletions(..)
+    , NonLocalCompletions(..)
     ) where
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Core as LSP
@@ -27,10 +28,18 @@ import TcRnDriver (tcRnImportDecls)
 import Data.Maybe
 import Ide.Plugin.Config (Config (completionSnippetsOn))
 import Ide.PluginUtils (getClientConfig)
+import Ide.Types
 
 #if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
 #endif
+
+descriptor :: PluginId -> PluginDescriptor IdeState
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginRules = produceCompletions
+  , pluginCompletionProvider = Just getCompletionsLSP
+  }
+
 produceCompletions :: Rules ()
 produceCompletions = do
     define $ \ProduceCompletions file -> do

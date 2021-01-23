@@ -7,7 +7,6 @@ module Development.IDE.Plugin.HLS.GhcIde
     descriptor
   ) where
 import Development.IDE
-import Development.IDE.Plugin.Completions as Completions
 import Development.IDE.Plugin.CodeAction as CodeAction
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Outline
@@ -23,8 +22,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   { pluginCodeActionProvider = Just codeAction'
   , pluginHoverProvider      = Just hover'
   , pluginSymbolsProvider    = Just symbolsProvider
-  , pluginCompletionProvider = Just getCompletionsLSP
-  , pluginRules              = produceCompletions <> rulePackageExports
+  , pluginRules              = rulePackageExports
   }
 
 -- ---------------------------------------------------------------------

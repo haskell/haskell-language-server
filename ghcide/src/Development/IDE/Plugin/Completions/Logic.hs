@@ -49,11 +49,11 @@ import Development.IDE.GHC.Util
 import Outputable (Outputable)
 import qualified Data.Set as Set
 import ConLike
-
 import GhcPlugins (
     flLabel,
     unpackFS)
 import Data.Either (fromRight)
+import Ide.Types(WithSnippets(..))
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -442,8 +442,6 @@ findRecordCompl _ _ _ = []
 
 ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
-
-newtype WithSnippets = WithSnippets Bool
 
 toggleSnippets :: ClientCapabilities -> WithSnippets -> CompletionItem -> CompletionItem
 toggleSnippets ClientCapabilities { _textDocument } (WithSnippets with) x
