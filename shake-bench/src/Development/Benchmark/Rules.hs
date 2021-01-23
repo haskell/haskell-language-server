@@ -188,14 +188,14 @@ buildRules build MkBuildRules{..} = do
   [build -/- "binaries/*/" <> executableName
    ,build -/- "binaries/*/ghc.path"
    ] &%> \[out, ghcPath] -> do
-      let [_, _binaries, _ver, _] = splitDirectories out
+      let [_, _binaries, ver, _] = splitDirectories out
       liftIO $ createDirectoryIfMissing True $ dropFileName out
       commitid <- readFile' $ takeDirectory out </> "commitid"
-      cmd_ $ "git worktree add bench-temp " ++ commitid
+      cmd_ $ "git worktree add bench-temp-" ++ ver ++ " " ++ commitid
       buildSystem <- askOracle $ GetBuildSystem ()
-      flip actionFinally (cmd_ ("git worktree remove bench-temp --force" :: String)) $ do
-        ghcLoc <- liftIO $ findGhc buildSystem "bench-temp"
-        buildProject buildSystem [Cwd "bench-temp"] (".." </> takeDirectory out)
+      flip actionFinally (cmd_ ("git worktree remove bench-temp-" <> ver <> " --force" :: String)) $ do
+        ghcLoc <- liftIO $ findGhc buildSystem ver
+        buildProject buildSystem [Cwd $ "bench-temp-" <> ver] (".." </> takeDirectory out)
         writeFile' ghcPath ghcLoc
 
 --------------------------------------------------------------------------------
