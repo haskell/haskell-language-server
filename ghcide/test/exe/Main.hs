@@ -1170,6 +1170,25 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA (A (Constructor))"
                     , "b :: A"
                     , "b = Constructor"
+                    ])        
+        , testSession "extend single line import with constructor (with comments)" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data A = Constructor"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A ({-Constructor-}))"
+                    , "b :: A"
+                    , "b = Constructor"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            ["Add A(Constructor) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A (Constructor{-Constructor-}))"
+                    , "b :: A"
+                    , "b = Constructor"
                     ])
         , testSession "extend single line import with mixed constructors" $ template
             [("ModuleA.hs", T.unlines
