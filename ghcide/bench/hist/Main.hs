@@ -146,11 +146,11 @@ benchGhcide samples buildSystem args BenchProject{..} = do
         "--samples=" <> show samples,
         "--csv="     <> outcsv,
         "--ghcide="  <> exePath,
+        "--ghcide-options=" <> unwords exeExtraArgs,
         "--select",
         unescaped (unescapeExperiment experiment)
     ] ++
     exampleToOptions example ++
     [ "--stack" | Stack == buildSystem
-    ] ++
-    exeExtraArgs
+    ]
 
