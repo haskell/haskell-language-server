@@ -49,6 +49,7 @@ module Development.Benchmark.Rules
       benchRules, MkBenchRules(..), BenchProject(..),
       csvRules,
       svgRules,
+      eventlogRules,
       allTargets,
       GetExample(..), GetExamples(..),
       IsExample(..), RuleResultForExample,
@@ -83,7 +84,7 @@ import           GHC.Stack                                 (HasCallStack)
 import qualified Graphics.Rendering.Chart.Backend.Diagrams as E
 import           Graphics.Rendering.Chart.Easy             ((.=))
 import qualified Graphics.Rendering.Chart.Easy             as E
-import           System.Directory                          (findExecutable, createDirectoryIfMissing)
+import           System.Directory (createDirectoryIfMissing, findExecutable, renameFile)
 import           System.FilePath
 import qualified Text.ParserCombinators.ReadP              as P
 import           Text.Read                                 (Read (..), get,
@@ -134,11 +135,11 @@ allTargets buildFolder = do
         ++ [ buildFolder </>
              getExampleName ex </>
              T.unpack (humanName ver) </>
-             escaped (escapeExperiment e) <.> mode <.> "svg"
+             escaped (escapeExperiment e) <.> mode
              | e <- experiments,
                ex <- examples,
                ver <- versions,
-               mode <- ["", "diff"]
+               mode <- ["svg", "diff.svg","eventlog.html"]
            ]
 
 --------------------------------------------------------------------------------
@@ -188,14 +189,14 @@ buildRules build MkBuildRules{..} = do
   [build -/- "binaries/*/" <> executableName
    ,build -/- "binaries/*/ghc.path"
    ] &%> \[out, ghcPath] -> do
-      let [_, _binaries, _ver, _] = splitDirectories out
+      let [_, _binaries, ver, _] = splitDirectories out
       liftIO $ createDirectoryIfMissing True $ dropFileName out
       commitid <- readFile' $ takeDirectory out </> "commitid"
-      cmd_ $ "git worktree add bench-temp " ++ commitid
+      cmd_ $ "git worktree add bench-temp-" ++ ver ++ " " ++ commitid
       buildSystem <- askOracle $ GetBuildSystem ()
-      flip actionFinally (cmd_ ("git worktree remove bench-temp --force" :: String)) $ do
-        ghcLoc <- liftIO $ findGhc buildSystem "bench-temp"
-        buildProject buildSystem [Cwd "bench-temp"] (".." </> takeDirectory out)
+      flip actionFinally (cmd_ ("git worktree remove bench-temp-" <> ver <> " --force" :: String)) $ do
+        ghcLoc <- liftIO $ findGhc buildSystem ver
+        buildProject buildSystem [Cwd $ "bench-temp-" <> ver] (".." </> takeDirectory out)
         writeFile' ghcPath ghcLoc
 
 --------------------------------------------------------------------------------
@@ -224,9 +225,11 @@ benchRules build benchResource MkBenchRules{..} = do
   priority 0 $
     [ build -/- "*/*/*.csv",
       build -/- "*/*/*.benchmark-gcStats",
+      build -/- "*/*/*.eventlog",
+      build -/- "*/*/*.hp",
       build -/- "*/*/*.log"
     ]
-      &%> \[outcsv, outGc, outLog] -> do
+      &%> \[outcsv, outGc, outEventLog, outHp, outLog] -> do
         let [_, exampleName, ver, exp] = splitDirectories outcsv
         example <- fromMaybe (error $ "Unknown example " <> exampleName)
                     <$> askOracle (GetExample exampleName)
@@ -234,7 +237,7 @@ benchRules build benchResource MkBenchRules{..} = do
         setupRes    <- setupProject
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
         let exePath    = build </> "binaries" </> ver </> executableName
-            exeExtraArgs = ["+RTS", "-I0.5", "-S" <> takeFileName outGc, "-RTS"]
+            exeExtraArgs = ["+RTS", "-l-a", "-h", "-ol" <> outEventLog, "-S" <> outGc, "-RTS"]
             ghcPath    = build </> "binaries" </> ver </> "ghc.path"
             experiment = Escaped $ dropExtension exp
         need [exePath, ghcPath]
@@ -247,8 +250,8 @@ benchRules build benchResource MkBenchRules{..} = do
                 RemEnv "GHC_PACKAGE_PATH",
                 AddPath [takeDirectory ghcPath, "."] []
               ]
-              BenchProject{..}
-          cmd_ Shell $ "mv *.benchmark-gcStats " <> dropFileName outcsv
+              BenchProject {..}
+          liftIO $ renameFile "ghcide.hp" $ dropFileName outcsv </> dropExtension exp <.> "hp"
 
         -- extend csv output with allocation data
         csvContents <- liftIO $ lines <$> readFile outcsv
@@ -378,6 +381,11 @@ svgRules build = do
         title = show (unescapeExperiment exp) <> " - live bytes over time"
     plotDiagram False diagram out
 
+eventlogRules :: FilePattern -> Rules ()
+eventlogRules build = do
+  build -/- "*/*/*.eventlog.html" %> \out -> do
+    need [dropExtension out]
+    cmd_ ("eventlog2html" :: String) [dropExtension out]
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------

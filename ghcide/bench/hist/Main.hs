@@ -66,7 +66,7 @@ type instance RuleResult GetExample = Maybe Example
 type instance RuleResult GetExamples = [Example]
 
 main :: IO ()
-main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
+main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest, shakeThreads = 0} $ do
   createBuildSystem $ \resource -> do
       configStatic <- liftIO $ readConfigIO config
       let build = outputFolder configStatic
@@ -74,6 +74,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest} $ do
       benchRules build resource (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
       csvRules build
       svgRules build
+      eventlogRules build
       action $ allTargets build
 
 ghcideBuildRules :: MkBuildRules BuildSystem
@@ -122,6 +123,7 @@ buildGhcide Cabal args out = do
         ,"--install-method=copy"
         ,"--overwrite-policy=always"
         ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=-eventlog"
         ]
 
 buildGhcide Stack args out =
@@ -131,23 +133,24 @@ buildGhcide Stack args out =
         ,"ghcide:ghcide"
         ,"--copy-bins"
         ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=-eventlog"
         ]
 
 benchGhcide
   :: Natural -> BuildSystem -> [CmdOption] -> BenchProject Example -> Action ()
 benchGhcide samples buildSystem args BenchProject{..} = do
   command_ args "ghcide-bench" $
-    [ "--timeout=3000",
+    [ "--timeout=300",
       "--no-clean",
         "-v",
         "--samples=" <> show samples,
         "--csv="     <> outcsv,
         "--ghcide="  <> exePath,
+        "--ghcide-options=" <> unwords exeExtraArgs,
         "--select",
         unescaped (unescapeExperiment experiment)
     ] ++
     exampleToOptions example ++
     [ "--stack" | Stack == buildSystem
-    ] ++
-    exeExtraArgs
+    ]
 

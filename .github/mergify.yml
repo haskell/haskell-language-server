@@ -7,7 +7,6 @@ pull_request_rules:
   conditions:
   - status-success=bench (8.10.2, ubuntu-latest)
   - status-success=bench (8.8.4, ubuntu-latest)
-  - status-success=bench (8.6.5, ubuntu-latest)
 
   - status-success=nix (default, ubuntu-latest)
   - status-success=nix (default, macOS-latest)
