@@ -219,7 +219,8 @@ benchmark benchHist
     hs-source-dirs: bench/hist bench/lib
     other-modules: Experiments.Types
     build-tool-depends:
-        ghcide:ghcide-bench
+        ghcide:ghcide-bench,
+        eventlog2html:eventlog2html
     default-extensions:
         BangPatterns
         DeriveFunctor

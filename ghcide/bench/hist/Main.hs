@@ -74,6 +74,7 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest, shakeThread
       benchRules build resource (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
       csvRules build
       svgRules build
+      eventlogRules build
       action $ allTargets build
 
 ghcideBuildRules :: MkBuildRules BuildSystem
@@ -122,6 +123,7 @@ buildGhcide Cabal args out = do
         ,"--install-method=copy"
         ,"--overwrite-policy=always"
         ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=-eventlog"
         ]
 
 buildGhcide Stack args out =
@@ -131,6 +133,7 @@ buildGhcide Stack args out =
         ,"ghcide:ghcide"
         ,"--copy-bins"
         ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=-eventlog"
         ]
 
 benchGhcide
