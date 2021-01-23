@@ -690,6 +690,7 @@ codeActionTests = testGroup "code actions"
   , addTypeAnnotationsToLiteralsTest
   , exportUnusedTests
   , addImplicitParamsConstraintTests
+  , removeExportTests
   ]
 
 codeActionHelperFunctionTests :: TestTree
@@ -2498,7 +2499,7 @@ exportUnusedTests = testGroup "export unused actions"
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A (f) where"
               , "a `f` b = ()"])
-   , testSession "function operator" $ template
+    , testSession "function operator" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A () where"
@@ -2578,19 +2579,199 @@ exportUnusedTests = testGroup "export unused actions"
               , "data (:<) = Foo ()"])
     ]
   ]
-    where
-      template initialContent range expectedAction expectedContents = do
-        doc <- createDoc "A.hs" "haskell" initialContent
-        _ <- waitForDiagnostics
-        actions <- getCodeActions doc range
-        case expectedContents of
-          Just content -> do
-            action <- liftIO $ pickActionWithTitle expectedAction actions
-            executeCodeAction action
-            contentAfterAction <- documentContents doc
-            liftIO $ content @=? contentAfterAction
-          Nothing ->
-            liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == expectedAction ] @?= []
+  where
+    template doc range = exportTemplate (Just range) doc
+
+exportTemplate :: Maybe Range -> T.Text -> T.Text -> Maybe T.Text -> Session ()
+exportTemplate mRange initialContent expectedAction expectedContents = do
+  doc <- createDoc "A.hs" "haskell" initialContent
+  _ <- waitForDiagnostics
+  actions <- case mRange of
+    Nothing -> getAllCodeActions doc
+    Just range -> getCodeActions doc range
+  case expectedContents of
+    Just content -> do
+      action <- liftIO $ pickActionWithTitle expectedAction actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ content @=? contentAfterAction
+    Nothing ->
+      liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == expectedAction ] @?= []
+
+removeExportTests :: TestTree
+removeExportTests = testGroup "remove export actions"
+    [ testSession "single export" $ template
+        (T.unlines
+              [ "module A (  a   ) where"
+              , "b :: ()"
+              , "b = ()"])
+        "Remove ‘a’ from export"
+        (Just $ T.unlines
+              [ "module A (     ) where"
+              , "b :: ()"
+              , "b = ()"])
+    , testSession "ending comma" $ template
+        (T.unlines
+              [ "module A (  a,   ) where"
+              , "b :: ()"
+              , "b = ()"])
+        "Remove ‘a’ from export"
+        (Just $ T.unlines
+              [ "module A (  ) where"
+              , "b :: ()"
+              , "b = ()"])
+    , testSession "multiple exports" $ template
+        (T.unlines
+              [ "module A (a  ,   c,    b ) where"
+              , "a, c :: ()"
+              , "a = ()"
+              , "c = ()"])
+        "Remove ‘b’ from export"
+        (Just $ T.unlines
+              [ "module A (a  ,   c ) where"
+              , "a, c :: ()"
+              , "a = ()"
+              , "c = ()"])
+    , testSession "not in scope constructor" $ template
+        (T.unlines
+              [ "module A (A (X,Y,Z,(:<)), ab) where"
+              , "data A = X Int | Y | (:<) Int"
+              , "ab :: ()"
+              , "ab = ()"
+              ])
+        "Remove ‘Z’ from export"
+        (Just $ T.unlines
+              [ "module A (A (X,Y,(:<)), ab) where"
+              , "data A = X Int | Y | (:<) Int"
+              , "ab :: ()"
+              , "ab = ()"])
+    , testSession "multiline export" $ template
+        (T.unlines
+              [ "module A (a"
+              , " ,  b"
+              , " , (:*:)"
+              , " , ) where"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+        "Remove ‘:*:’ from export"
+        (Just $ T.unlines
+              [ "module A (a"
+              , " ,  b"
+              , " "
+              , " , ) where"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+    , testSession "qualified re-export" $ template
+        (T.unlines
+              [ "module A (M.x,a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘M.x’ from export"
+        (Just $ T.unlines
+              [ "module A (a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "export module" $ template
+        (T.unlines
+              [ "module A (module B) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘module B’ from export"
+        (Just $ T.unlines
+              [ "module A () where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "dodgy export" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (A (..)) where"
+              , "data X = X"
+              , "type A = X"])
+        "Remove ‘A(..)’ from export"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A () where"
+              , "data X = X"
+              , "type A = X"])
+    , testSession "dodgy export" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (A (..)) where"
+              , "data X = X"
+              , "type A = X"])
+        "Remove ‘A(..)’ from export"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A () where"
+              , "data X = X"
+              , "type A = X"])
+    , testSession "duplicate module export" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (module L,module L) where"
+              , "import Data.List as L"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘Module L’ from export"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (module L) where"
+              , "import Data.List as L"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports single" $ template
+        (T.unlines
+              [ "module A (x) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A () where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports two" $ template
+        (T.unlines
+              [ "module A (x,y) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A () where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports three" $ template
+        (T.unlines
+              [ "module A (a,x,y) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A (a) where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports composite" $ template
+        (T.unlines
+              [ "module A (x,y,b, module Ls, a, A(X,getW, Y, Z,(:-),getV), (-+), B(B)) where"
+              , "data A = X {getV :: Int} | Y {getV :: Int}"
+              , "data B = B"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A (b, a, A(X, Y,getV), B(B)) where"
+              , "data A = X {getV :: Int} | Y {getV :: Int}"
+              , "data B = B"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+    ]
+  where
+    template = exportTemplate Nothing
 
 addSigLensesTests :: TestTree
 addSigLensesTests = let
