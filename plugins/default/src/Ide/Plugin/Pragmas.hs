@@ -1,8 +1,8 @@
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas
@@ -115,10 +115,24 @@ findPragma str = concatMap check possiblePragmas
 
 -- | All language pragmas, including the No- variants
 allPragmas :: [T.Text]
-allPragmas = concat
+allPragmas =
+  concat
     [ [name, "No" <> name]
     | FlagSpec{flagSpecName = T.pack -> name} <- xFlags
     ]
+  <>
+  -- These pragmas are not part of xFlags as they are not reversable
+  -- by prepending "No".
+  [ -- Safe Haskell
+    "Unsafe"
+  , "Trustworthy"
+  , "Safe"
+
+    -- Language Version Extensions
+  , "Haskell98"
+  , "Haskell2010"
+    -- Maybe, GHC 2021 after its release?
+  ]
 
 -- ---------------------------------------------------------------------
 
