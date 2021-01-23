@@ -1111,7 +1111,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA as A (stuffA, stuffB)"
+                    , "import ModuleA as A (stuffB, stuffA)"
                     , "main = print (stuffA, stuffB)"
                     ])
         , testSession "extend single line import with operator" $ template
@@ -1131,7 +1131,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add (.*) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA as A ((.*), stuffB)"
+                    , "import ModuleA as A (stuffB, (.*))"
                     , "main = print (stuffB .* stuffB)"
                     ])
         , testSession "extend single line import with type" $ template
@@ -1168,7 +1168,26 @@ extendImportTests = testGroup "extend import actions"
             ["Add A(Constructor) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (A(Constructor))"
+                    , "import ModuleA (A (Constructor))"
+                    , "b :: A"
+                    , "b = Constructor"
+                    ])        
+        , testSession "extend single line import with constructor (with comments)" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data A = Constructor"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A ({-Constructor-}))"
+                    , "b :: A"
+                    , "b = Constructor"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            ["Add A(Constructor) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A (Constructor{-Constructor-}))"
                     , "b :: A"
                     , "b = Constructor"
                     ])
@@ -1180,7 +1199,7 @@ extendImportTests = testGroup "extend import actions"
                     ])]
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (A(ConstructorBar), a)"
+                    , "import ModuleA (A (ConstructorBar), a)"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
@@ -1188,7 +1207,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add A(ConstructorFoo) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (A(ConstructorFoo, ConstructorBar), a)"
+                    , "import ModuleA (A (ConstructorBar, ConstructorFoo), a)"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
@@ -1209,7 +1228,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import qualified ModuleA as A (stuffA, stuffB)"
+                    , "import qualified ModuleA as A (stuffB, stuffA)"
                     , "main = print (A.stuffA, A.stuffB)"
                     ])
         , testSession "extend multi line import with value" $ template
@@ -1230,7 +1249,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (stuffA, stuffB"
+                    , "import ModuleA (stuffB, stuffA"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
@@ -1251,7 +1270,7 @@ extendImportTests = testGroup "extend import actions"
              "Add m2 to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (C(m2, m1))"
+                    , "import ModuleA (C(m1, m2))"
                     , "b = m2"
                     ])
         , testSession "extend single line import with method without class" $ template
@@ -1271,7 +1290,7 @@ extendImportTests = testGroup "extend import actions"
              "Add C(m2) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (m2, C(m1))"
+                    , "import ModuleA (C(m1), m2)"
                     , "b = m2"
                     ])
         , testSession "extend import list with multiple choices" $ template
@@ -1312,7 +1331,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add (:~:)(Refl) to the import list of Data.Type.Equality"]
             (T.unlines
                     [ "module ModuleA where"
-                    , "import Data.Type.Equality ((:~:)(Refl))"
+                    , "import Data.Type.Equality ((:~:) (Refl))"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
