@@ -74,10 +74,10 @@ instance NFData GetAnnotatedParsedSource
 instance Binary GetAnnotatedParsedSource
 type instance RuleResult GetAnnotatedParsedSource = Annotated ParsedSource
 
--- | Get the latest version of the annotated parse source.
+-- | Get the latest version of the annotated parse source with comments.
 getAnnotatedParsedSourceRule :: Rules ()
 getAnnotatedParsedSourceRule = define $ \GetAnnotatedParsedSource nfp -> do
-  pm <- use GetParsedModule nfp
+  pm <- use GetParsedModuleWithComments nfp
   return ([], fmap annotateParsedSource pm)
 
 annotateParsedSource :: ParsedModule -> Annotated ParsedSource
