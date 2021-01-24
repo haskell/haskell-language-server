@@ -7,10 +7,7 @@
 
 -- | Go to the definition of a variable.
 module Development.IDE.Plugin.CodeAction
-    (
-    -- * For haskell-language-server
-      codeAction
-    , rulePackageExports
+    ( descriptor
 
     -- * For testing
     , matchRegExMultipleImports
@@ -55,16 +52,25 @@ import qualified Data.HashSet as Set
 import Control.Concurrent.Extra (readVar)
 import Development.IDE.GHC.Util (printRdrName)
 import Ide.PluginUtils (subRange)
+import Ide.Types
+
+descriptor :: PluginId -> PluginDescriptor IdeState
+descriptor plId =
+  (defaultPluginDescriptor plId)
+    { pluginRules = rulePackageExports,
+      pluginCodeActionProvider = Just codeAction
+    }
 
 -- | Generate code actions.
 codeAction
     :: LSP.LspFuncs c
     -> IdeState
+    -> PluginId
     -> TextDocumentIdentifier
     -> Range
     -> CodeActionContext
-    -> IO (Either ResponseError [CAResult])
-codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
+    -> IO (Either ResponseError (List CAResult))
+codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
@@ -98,7 +104,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
                <> actions
                <> actions'
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right actions''
+    pure $ Right $ List actions''
 
 mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
 mkCA title diags edit =

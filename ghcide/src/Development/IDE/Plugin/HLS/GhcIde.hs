@@ -7,7 +7,6 @@ module Development.IDE.Plugin.HLS.GhcIde
     descriptor
   ) where
 import Development.IDE
-import Development.IDE.Plugin.CodeAction as CodeAction
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Outline
 import Ide.PluginUtils
@@ -19,10 +18,8 @@ import Text.Regex.TDFA.Text()
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginCodeActionProvider = Just codeAction'
-  , pluginHoverProvider      = Just hover'
+  { pluginHoverProvider      = Just hover'
   , pluginSymbolsProvider    = Just symbolsProvider
-  , pluginRules              = rulePackageExports
   }
 
 -- ---------------------------------------------------------------------
@@ -31,9 +28,6 @@ hover' :: HoverProvider IdeState
 hover' ideState params = do
     logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState params
-
-codeAction' :: CodeActionProvider IdeState
-codeAction' lf ide _ doc range context = fmap List <$> codeAction lf ide doc range context
 
 -- ---------------------------------------------------------------------
 symbolsProvider :: SymbolsProvider IdeState
