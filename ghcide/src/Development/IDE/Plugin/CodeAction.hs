@@ -64,6 +64,7 @@ import Bag (isEmptyBag)
 import qualified Data.HashSet as Set
 import Control.Concurrent.Extra (threadDelay, readVar)
 import Development.IDE.GHC.Util (printRdrName)
+import Ide.PluginUtils (subRange)
 
 plugin :: Plugin c
 plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
@@ -107,14 +108,15 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
         [ mkCA title  [x] edit
         | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-        ] <> caRemoveRedundantImports parsedModule text diag xs uri
+        ] <> caRemoveInvalidExports parsedModule text diag xs uri
+          <> caRemoveRedundantImports parsedModule text diag xs uri
 
       actions' =
           [mkCA title [x] edit
           | x <- xs
           , Just ps <- [annotatedPS]
           , Just dynflags <- [df]
-          , (title, graft) <- suggestExactAction dynflags ps x
+          , (title, graft) <- suggestExactAction exportsMap dynflags ps x
           , let edit = either error id $
                         rewriteToEdit dynflags uri (annsA ps) graft
           ]
@@ -171,14 +173,16 @@ commandHandler lsp _ideState ExecuteCommandParams{..}
     = return (Right Null, Nothing)
 
 suggestExactAction ::
+  ExportsMap ->
   DynFlags ->
   Annotated ParsedSource ->
   Diagnostic ->
   [(T.Text, Rewrite)]
-suggestExactAction df ps x =
+suggestExactAction exportsMap df ps x =
   concat
     [ suggestConstraint df (astA ps) x
     , suggestImplicitParameter (astA ps) x
+    , suggestExtendImport exportsMap (astA ps) x
     ]
 
 suggestAction
@@ -191,7 +195,6 @@ suggestAction
 suggestAction packageExports ideOptions parsedModule text diag = concat
    -- Order these suggestions by priority
     [ suggestSignature True diag
-    , suggestExtendImport packageExports text diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
@@ -203,6 +206,7 @@ suggestAction packageExports ideOptions parsedModule text diag = concat
     ++ suggestNewImport packageExports pm diag
     ++ suggestDeleteUnusedBinding pm text diag
     ++ suggestExportUnusedTopBinding text pm diag
+    ++ suggestDisableWarning pm text diag
     | Just pm <- [parsedModule]
     ] ++
     suggestFillHole diag                   -- Lowest priority
@@ -226,14 +230,23 @@ findInstanceHead df instanceHead decls =
 findDeclContainingLoc :: Position -> [Located a] -> Maybe (Located a)
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
 
+suggestDisableWarning :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestDisableWarning pm contents Diagnostic{..}
+    | Just (StringValue (T.stripPrefix "-W" -> Just w)) <- _code =
+        pure
+            ( "Disable \"" <> w <> "\" warnings"
+            , [TextEdit (endOfModuleHeader pm contents) $ "{-# OPTIONS_GHC -Wno-" <> w <> " #-}\n"]
+            )
+    | otherwise = []
+
 suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
     , Just (L _ impDecl) <- find (\(L l _) -> srcSpanToRange l == Just _range ) hsmodImports
     , Just c <- contents
-    , ranges <- map (rangesForBinding impDecl . T.unpack) (T.splitOn ", " bindings)
-    , ranges' <- extendAllToIncludeCommaIfPossible (indexedByPosition $ T.unpack c) (concat ranges)
+    , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
+    , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
     , not (null ranges')
     = [( "Remove " <> bindings <> " from import" , [ TextEdit r "" | r <- ranges' ] )]
 
@@ -268,6 +281,69 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
+
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [CAResult]
+caRemoveInvalidExports m contents digs ctxDigs uri
+  | Just pm <- m,
+    Just txt <- contents,
+    txt' <- indexedByPosition $ T.unpack txt,
+    r <- mapMaybe (groupDiag pm) digs,
+    r' <- map (\(t,d,rs) -> (t,d,extend txt' rs)) r,
+    caRemoveCtx <- mapMaybe removeSingle r',
+    allRanges <- nubOrd $ [ range | (_,_,ranges) <- r, range <- ranges],
+    allRanges' <- extend txt' allRanges,
+    Just caRemoveAll <- removeAll allRanges',
+    ctxEdits <- [ x | x@(_, d, _) <- r, d `elem` ctxDigs],
+    not $ null ctxEdits
+      = caRemoveCtx ++ [caRemoveAll]
+  | otherwise = []
+  where
+    extend txt ranges = extendAllToIncludeCommaIfPossible True txt ranges
+
+    groupDiag pm dig
+      | Just (title, ranges) <- suggestRemoveRedundantExport pm dig
+      = Just (title, dig, ranges)
+      | otherwise = Nothing
+
+    removeSingle (_, _, []) = Nothing
+    removeSingle (title, diagnostic, ranges) = Just $ CACodeAction CodeAction{..} where
+        tedit = concatMap (\r -> [TextEdit r ""]) $ nubOrd ranges
+        _changes = Just $ Map.singleton uri $ List tedit
+        _title = title
+        _kind = Just CodeActionQuickFix
+        _diagnostics = Just $ List [diagnostic]
+        _documentChanges = Nothing
+        _edit = Just WorkspaceEdit{..}
+        _command = Nothing
+    removeAll [] = Nothing
+    removeAll ranges = Just $ CACodeAction CodeAction {..} where
+        tedit = concatMap (\r -> [TextEdit r ""]) ranges
+        _changes = Just $ Map.singleton uri $ List tedit
+        _title = "Remove all redundant exports"
+        _kind = Just CodeActionQuickFix
+        _diagnostics = Nothing
+        _documentChanges = Nothing
+        _edit = Just WorkspaceEdit{..}
+        _command = Nothing
+
+suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Range])
+suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
+  | msg <- unifySpaces _message
+  , Just export <- hsmodExports
+  , Just exportRange <- getLocatedRange export
+  , exports <- unLoc export
+  , Just (removeFromExport, !ranges) <- fmap (getRanges exports . notInScope) (extractNotInScopeName msg)
+                         <|> (,[_range]) <$> matchExportItem msg
+                         <|> (,[_range]) <$> matchDupExport msg
+  , subRange _range exportRange
+    = Just ("Remove ‘" <> removeFromExport <> "’ from export", ranges)
+  where
+    matchExportItem msg = regexSingleMatch msg "The export item ‘([^’]+)’"
+    matchDupExport msg = regexSingleMatch msg "Duplicate ‘([^’]+)’ in export list"
+    getRanges exports txt = case smallerRangesForBindingExport exports (T.unpack txt) of
+      [] -> (txt, [_range])
+      ranges -> (txt, ranges)
+suggestRemoveRedundantExport _ _ = Nothing
 
 suggestDeleteUnusedBinding :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestDeleteUnusedBinding
@@ -385,6 +461,9 @@ suggestDeleteUnusedBinding
 data ExportsAs = ExportName | ExportPattern | ExportAll
   deriving (Eq)
 
+getLocatedRange :: Located a -> Maybe Range
+getLocatedRange = srcSpanToRange . getLoc
+
 suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
 -- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
@@ -424,9 +503,6 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
     parenthesizeIfNeeds needsTypeKeyword x
       | T.head x `elem` opLetter = (if needsTypeKeyword then "type " else "") <> "(" <> x <>")"
       | otherwise = x
-
-    getLocatedRange :: Located a -> Maybe Range
-    getLocatedRange = srcSpanToRange . getLoc
 
     matchWithDiagnostic :: Range -> Located (IdP GhcPs) -> Bool
     matchWithDiagnostic Range{_start=l,_end=r} x =
@@ -650,32 +726,31 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
-suggestExtendImport :: ExportsMap -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestExtendImport exportsMap contents Diagnostic{_range=_range,..}
+suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
+suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
       "Perhaps you want to add ‘([^’]*)’ to the import list in the import of ‘([^’]*)’ *\\((.*)\\).$"
-    , Just c <- contents
-    = suggestions c binding mod srcspan
+    = suggestions hsmodImports binding mod srcspan
     | Just (binding, mod_srcspan) <-
       matchRegExMultipleImports _message
-    , Just c <- contents
-    = mod_srcspan >>= (\(x, y) -> suggestions c binding x y)
+    = mod_srcspan >>= uncurry (suggestions hsmodImports binding)
     | otherwise = []
     where
-        suggestions c binding mod srcspan
+        unImportStyle (ImportTopLevel x) = (Nothing, T.unpack x)
+        unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
+        suggestions decls binding mod srcspan
           |  range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
                 [s] -> let x = realSrcSpanToRange s
                    in x{_end = (_end x){_character = succ (_character (_end x))}}
                 _ -> error "bug in srcspan parser",
-            importLine <- textInRange range c,
+            Just decl <- findImportDeclByRange decls range,
             Just ident <- lookupExportMap binding mod
-          = [ ( "Add " <> rendered <> " to the import list of " <> mod
-              , [TextEdit range result]
+          = [ ( "Add " <> renderImportStyle importStyle <> " to the import list of " <> mod
+              , uncurry extendImport (unImportStyle importStyle) decl
               )
             | importStyle <- NE.toList $ importStyles ident
-            , let rendered = renderImportStyle importStyle
-            , result <- maybeToList $ addBindingToImportList importStyle importLine]
+            ]
           | otherwise = []
         lookupExportMap binding mod
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
@@ -689,6 +764,9 @@ suggestExtendImport exportsMap contents Diagnostic{_range=_range,..}
                 , rendered = binding
                 , parent = Nothing
                 , isDatacon = False}
+
+findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
+findImportDeclByRange xs range = find (\(L l _)-> srcSpanToRange l == Just range) xs
 
 suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestFixConstructorImport _ Diagnostic{_range=_range,..}
@@ -1076,17 +1154,30 @@ textInRange (Range (Position startRow startCol) (Position endRow endCol)) text =
       linesBeginningWithStartLine = drop startRow (T.splitOn "\n" text)
 
 -- | Returns the ranges for a binding in an import declaration
-rangesForBinding :: ImportDecl GhcPs -> String -> [Range]
-rangesForBinding ImportDecl{ideclHiding = Just (False, L _ lies)} b =
+rangesForBindingImport :: ImportDecl GhcPs -> String -> [Range]
+rangesForBindingImport ImportDecl{ideclHiding = Just (False, L _ lies)} b =
     concatMap (mapMaybe srcSpanToRange . rangesForBinding' b') lies
   where
-    b' = wrapOperatorInParens (unqualify b)
+    b' = modifyBinding b
+rangesForBindingImport _ _ = []
 
+modifyBinding :: String -> String
+modifyBinding = wrapOperatorInParens . unqualify
+  where
     wrapOperatorInParens x = if isAlpha (head x) then x else "(" <> x <> ")"
-
     unqualify x = snd $ breakOnEnd "." x
 
-rangesForBinding _ _ = []
+smallerRangesForBindingExport :: [LIE GhcPs] -> String -> [Range]
+smallerRangesForBindingExport lies b =
+    concatMap (mapMaybe srcSpanToRange . ranges') lies
+  where
+    b' = modifyBinding b
+    ranges' (L _ (IEThingWith _ thing _  inners labels))
+      | showSDocUnsafe (ppr thing) == b' = []
+      | otherwise =
+          [ l' | L l' x <- inners, showSDocUnsafe (ppr x) == b'] ++
+          [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b']
+    ranges' _ = []
 
 rangesForBinding' :: String -> LIE GhcPs -> [SrcSpan]
 rangesForBinding' b (L l x@IEVar{}) | showSDocUnsafe (ppr x) == b = [l]
@@ -1098,49 +1189,6 @@ rangesForBinding' b (L l (IEThingWith _ thing _  inners labels))
         [ l' | L l' x <- inners, showSDocUnsafe (ppr x) == b] ++
         [ l' | L l' x <- labels, showSDocUnsafe (ppr x) == b]
 rangesForBinding' _ _ = []
-
--- | Extends an import list with a new binding.
---   Assumes an import statement of the form:
---       import (qualified) A (..) ..
---   Places the new binding first, preserving whitespace.
---   Copes with multi-line import lists
-addBindingToImportList :: ImportStyle -> T.Text -> Maybe T.Text
-addBindingToImportList importStyle importLine =
-  case T.breakOn "(" importLine of
-    (pre, T.uncons -> Just (_, rest)) ->
-      case importStyle of
-        ImportTopLevel rendered ->
-          -- the binding has no parent, add it to the head of import list
-          Just $ T.concat [pre, "(", rendered, addCommaIfNeeds rest]
-        ImportViaParent rendered parent -> case T.breakOn parent rest of
-          -- the binding has a parent, and the current import list contains the
-          -- parent
-          --
-          -- `rest'` could be 1. `,...)`
-          --               or 2. `(),...)`
-          --               or 3. `(ConsA),...)`
-          --               or 4. `)`
-          (leading, T.stripPrefix parent -> Just rest') -> case T.uncons (T.stripStart rest') of
-            -- case 1: no children and parentheses, e.g. `import A(Foo,...)` --> `import A(Foo(Cons), ...)`
-            Just (',', rest'') -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ")", addCommaIfNeeds rest'']
-            -- case 2: no children but parentheses, e.g. `import A(Foo(),...)` --> `import A(Foo(Cons), ...)`
-            Just ('(', T.uncons -> Just (')', rest'')) -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ")", rest'']
-            -- case 3: children with parentheses, e.g. `import A(Foo(ConsA),...)` --> `import A(Foo(Cons, ConsA), ...)`
-            Just ('(', T.breakOn ")" -> (children, rest''))
-              | not (T.null children),
-                -- ignore A(Foo({-...-}), ...)
-                not $ "{-" `T.isPrefixOf` T.stripStart children
-              -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ", ", children, rest'']
-            -- case 4: no trailing, e.g. `import A(..., Foo)` --> `import A(..., Foo(Cons))`
-            Just (')', _) -> Just $ T.concat [pre, "(", leading, parent, "(", rendered, ")", rest']
-            _ -> Nothing
-          -- current import list does not contain the parent, e.g. `import A(...)` --> `import A(Foo(Cons), ...)`
-          _ -> Just $ T.concat [pre, "(", parent, "(", rendered, ")", addCommaIfNeeds rest]
-    _ -> Nothing
-  where
-    addCommaIfNeeds r = case T.uncons (T.stripStart r) of
-      Just (')', _) -> r
-      _ -> ", " <> r
 
 -- | 'matchRegex' combined with 'unifySpaces'
 matchRegexUnifySpaces :: T.Text -> T.Text -> Maybe [T.Text]
@@ -1233,6 +1281,7 @@ data ImportStyle
       --
       -- @P@ and @?@ can be a data type and a constructor, a class and a method,
       -- a class and an associated type/data family, etc.
+  deriving Show
 
 importStyles :: IdentInfo -> NonEmpty ImportStyle
 importStyles IdentInfo {parent, rendered, isDatacon}
@@ -1247,3 +1296,17 @@ importStyles IdentInfo {parent, rendered, isDatacon}
 renderImportStyle :: ImportStyle -> T.Text
 renderImportStyle (ImportTopLevel x) = x
 renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
+
+-- | Find the first non-blank line before the first of (module name / imports / declarations).
+-- Useful for inserting pragmas.
+endOfModuleHeader :: ParsedModule -> Maybe T.Text -> Range
+endOfModuleHeader pm contents =
+    let mod = unLoc $ pm_parsed_source pm
+        modNameLoc = getLoc <$> hsmodName mod
+        firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
+        firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
+        line = fromMaybe 0 $ firstNonBlankBefore . _line . _start =<< srcSpanToRange =<<
+            modNameLoc <|> firstImportLoc <|> firstDeclLoc
+        firstNonBlankBefore n = (n -) . fromMaybe 0 . findIndex (not . T.null) . reverse . take n . T.lines <$> contents
+        loc = Position line 0
+     in Range loc loc

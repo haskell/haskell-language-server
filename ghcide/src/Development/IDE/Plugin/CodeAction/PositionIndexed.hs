@@ -83,20 +83,27 @@ mergeRanges other = other
 --   a,  b,  |c| ===> a,  b|,  c|
 --   a, |b|, |c| ===> a|, b||, c|
 -- @
-extendAllToIncludeCommaIfPossible :: PositionIndexedString -> [Range] -> [Range]
-extendAllToIncludeCommaIfPossible indexedString =
+--
+-- If 'acceptNoComma' is enabled, additional ranges are returned
+--
+-- @
+--   |a|       ===> |a|
+--   |a|,  |b| ===> |a,|  |b|
+-- @
+extendAllToIncludeCommaIfPossible :: Bool -> PositionIndexedString -> [Range] -> [Range]
+extendAllToIncludeCommaIfPossible acceptNoComma indexedString =
   mergeRanges . go indexedString . sortOn _start
  where
   go _ [] = []
   go input (r : rr)
-    | r' : _ <- extendToIncludeCommaIfPossible input r
+    | r' : _ <- extendToIncludeCommaIfPossible acceptNoComma input r
     , Just input' <- stripRange r' input
     = r' : go input' rr
     | otherwise
     = go input rr
 
-extendToIncludeCommaIfPossible :: PositionIndexedString -> Range -> [Range]
-extendToIncludeCommaIfPossible indexedString range
+extendToIncludeCommaIfPossible :: Bool -> PositionIndexedString -> Range -> [Range]
+extendToIncludeCommaIfPossible acceptNoComma indexedString range
   | Just (before, _, after) <- unconsRange range indexedString
   , after' <- dropWhile (isSpace . snd) after
   , before' <- dropWhile (isSpace . snd) (reverse before)
@@ -109,6 +116,8 @@ extendToIncludeCommaIfPossible indexedString range
     | (_, ',') : rest <- [after']
     , (end', _) : _ <- pure $ dropWhile (isSpace . snd) rest
     ]
+    ++
+    ([range | acceptNoComma])
   | otherwise
   = [range]
 

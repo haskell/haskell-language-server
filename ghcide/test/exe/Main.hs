@@ -14,7 +14,7 @@ import Control.Applicative.Combinators
 import Control.Exception (bracket_, catch)
 import qualified Control.Lens as Lens
 import Control.Monad
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson (FromJSON, Value, toJSON)
 import qualified Data.Binary as Binary
 import Data.Default
@@ -64,6 +64,7 @@ import Development.IDE.Plugin.Test (WaitForIdeRuleResult(..), TestRequest(BlockS
 import Control.Monad.Extra (whenJust)
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Control.Lens ((^.))
+import Data.Functor
 
 main :: IO ()
 main = do
@@ -676,6 +677,7 @@ codeActionTests = testGroup "code actions"
   , removeImportTests
   , extendImportTests
   , suggestImportTests
+  , disableWarningTests
   , fixConstructorImportTests
   , importRenameActionTests
   , fillTypedHoleTests
@@ -688,6 +690,7 @@ codeActionTests = testGroup "code actions"
   , addTypeAnnotationsToLiteralsTest
   , exportUnusedTests
   , addImplicitParamsConstraintTests
+  , removeExportTests
   ]
 
 codeActionHelperFunctionTests :: TestTree
@@ -881,9 +884,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -907,9 +909,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -936,9 +937,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove stuffA, stuffC from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove stuffA, stuffC from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -965,9 +965,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove !!, <?> from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove !!, <?> from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -993,9 +992,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove A from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove A from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1020,9 +1018,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove A, E, F from import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove A, E, F from import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1044,9 +1041,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      [CACodeAction action@CodeAction { _title = actionTitle }, _]
-          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove import" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
+        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1069,9 +1065,8 @@ removeImportTests = testGroup "remove import actions"
             ]
       doc <- createDoc "ModuleC.hs" "haskell" content
       _ <- waitForDiagnostics
-      [_, _, _, _, CACodeAction action@CodeAction { _title = actionTitle }]
-          <- getCodeActions doc (Range (Position 2 0) (Position 2 5))
-      liftIO $ "Remove all redundant imports" @=? actionTitle
+      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove all redundant imports")
+        =<< getCodeActions doc (Range (Position 2 0) (Position 2 5))
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -1087,6 +1082,10 @@ removeImportTests = testGroup "remove import actions"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
+  where
+    caWithTitle t = \case
+      CACodeAction a@CodeAction{_title} -> guard (_title == t) >> Just a
+      _ -> Nothing
 
 extendImportTests :: TestTree
 extendImportTests = testGroup "extend import actions"
@@ -1112,7 +1111,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA as A (stuffA, stuffB)"
+                    , "import ModuleA as A (stuffB, stuffA)"
                     , "main = print (stuffA, stuffB)"
                     ])
         , testSession "extend single line import with operator" $ template
@@ -1132,7 +1131,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add (.*) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA as A ((.*), stuffB)"
+                    , "import ModuleA as A (stuffB, (.*))"
                     , "main = print (stuffB .* stuffB)"
                     ])
         , testSession "extend single line import with type" $ template
@@ -1169,7 +1168,26 @@ extendImportTests = testGroup "extend import actions"
             ["Add A(Constructor) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (A(Constructor))"
+                    , "import ModuleA (A (Constructor))"
+                    , "b :: A"
+                    , "b = Constructor"
+                    ])        
+        , testSession "extend single line import with constructor (with comments)" $ template
+            [("ModuleA.hs", T.unlines
+                    [ "module ModuleA where"
+                    , "data A = Constructor"
+                    ])]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A ({-Constructor-}))"
+                    , "b :: A"
+                    , "b = Constructor"
+                    ])
+            (Range (Position 2 5) (Position 2 5))
+            ["Add A(Constructor) to the import list of ModuleA"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import ModuleA (A (Constructor{-Constructor-}))"
                     , "b :: A"
                     , "b = Constructor"
                     ])
@@ -1181,7 +1199,7 @@ extendImportTests = testGroup "extend import actions"
                     ])]
             ("ModuleB.hs", T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (A(ConstructorBar), a)"
+                    , "import ModuleA (A (ConstructorBar), a)"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
@@ -1189,7 +1207,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add A(ConstructorFoo) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (A(ConstructorFoo, ConstructorBar), a)"
+                    , "import ModuleA (A (ConstructorBar, ConstructorFoo), a)"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
@@ -1210,7 +1228,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import qualified ModuleA as A (stuffA, stuffB)"
+                    , "import qualified ModuleA as A (stuffB, stuffA)"
                     , "main = print (A.stuffA, A.stuffB)"
                     ])
         , testSession "extend multi line import with value" $ template
@@ -1231,7 +1249,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (stuffA, stuffB"
+                    , "import ModuleA (stuffB, stuffA"
                     , "               )"
                     , "main = print (stuffA, stuffB)"
                     ])
@@ -1252,7 +1270,7 @@ extendImportTests = testGroup "extend import actions"
              "Add m2 to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (C(m2, m1))"
+                    , "import ModuleA (C(m1, m2))"
                     , "b = m2"
                     ])
         , testSession "extend single line import with method without class" $ template
@@ -1272,7 +1290,7 @@ extendImportTests = testGroup "extend import actions"
              "Add C(m2) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
-                    , "import ModuleA (m2, C(m1))"
+                    , "import ModuleA (C(m1), m2)"
                     , "b = m2"
                     ])
         , testSession "extend import list with multiple choices" $ template
@@ -1313,7 +1331,7 @@ extendImportTests = testGroup "extend import actions"
             ["Add (:~:)(Refl) to the import list of Data.Type.Equality"]
             (T.unlines
                     [ "module ModuleA where"
-                    , "import Data.Type.Equality ((:~:)(Refl))"
+                    , "import Data.Type.Equality ((:~:) (Refl))"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
@@ -1440,6 +1458,57 @@ suggestImportTests = testGroup "suggest import actions"
              liftIO $ after @=? contentAfterAction
           else
               liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
+
+disableWarningTests :: TestTree
+disableWarningTests =
+  testGroup "disable warnings" $
+    [
+      ( "missing-signatures"
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , "main = putStrLn \"hello\""
+          ]
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , "{-# OPTIONS_GHC -Wno-missing-signatures #-}"
+          , "main = putStrLn \"hello\""
+          ]
+      )
+    ,
+      ( "unused-imports"
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , ""
+          , ""
+          , "module M where"
+          , ""
+          , "import Data.Functor"
+          ]
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
+          , ""
+          , ""
+          , "module M where"
+          , ""
+          , "import Data.Functor"
+          ]
+      )
+    ]
+      <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
+        doc <- createDoc "Module.hs" "haskell" initialContent
+        _ <- waitForDiagnostics
+        codeActs <- mapMaybe caResultToCodeAct <$> getCodeActions doc (Range (Position 0 0) (Position 0 0))
+        case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
+          Nothing -> liftIO $ assertFailure "No code action with expected title"
+          Just action -> do
+            executeCodeAction action
+            contentAfterAction <- documentContents doc
+            liftIO $ expectedContent @=? contentAfterAction
+ where
+  caResultToCodeAct = \case
+    CACommand _ -> Nothing
+    CACodeAction c -> Just c
 
 insertNewDefinitionTests :: TestTree
 insertNewDefinitionTests = testGroup "insert new definition actions"
@@ -2192,7 +2261,12 @@ removeRedundantConstraintsTests = let
     doc <- createDoc "Testing.hs" "haskell" code
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
-    liftIO $ assertBool "Found some actions" (null actionsOrCommands)
+    liftIO $ assertBool "Found some actions (other than \"disable warnings\")"
+      $ all isDisableWarningAction actionsOrCommands
+    where
+      isDisableWarningAction = \case
+        CACodeAction CodeAction{_title} -> "Disable" `T.isPrefixOf` _title && "warnings" `T.isSuffixOf` _title
+        _ -> False
 
   in testGroup "remove redundant function constraints"
   [ check
@@ -2425,7 +2499,7 @@ exportUnusedTests = testGroup "export unused actions"
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A (f) where"
               , "a `f` b = ()"])
-   , testSession "function operator" $ template
+    , testSession "function operator" $ template
         (T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
               , "module A () where"
@@ -2505,19 +2579,199 @@ exportUnusedTests = testGroup "export unused actions"
               , "data (:<) = Foo ()"])
     ]
   ]
-    where
-      template initialContent range expectedAction expectedContents = do
-        doc <- createDoc "A.hs" "haskell" initialContent
-        _ <- waitForDiagnostics
-        actions <- getCodeActions doc range
-        case expectedContents of
-          Just content -> do
-            action <- liftIO $ pickActionWithTitle expectedAction actions
-            executeCodeAction action
-            contentAfterAction <- documentContents doc
-            liftIO $ content @=? contentAfterAction
-          Nothing ->
-            liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == expectedAction ] @?= []
+  where
+    template doc range = exportTemplate (Just range) doc
+
+exportTemplate :: Maybe Range -> T.Text -> T.Text -> Maybe T.Text -> Session ()
+exportTemplate mRange initialContent expectedAction expectedContents = do
+  doc <- createDoc "A.hs" "haskell" initialContent
+  _ <- waitForDiagnostics
+  actions <- case mRange of
+    Nothing -> getAllCodeActions doc
+    Just range -> getCodeActions doc range
+  case expectedContents of
+    Just content -> do
+      action <- liftIO $ pickActionWithTitle expectedAction actions
+      executeCodeAction action
+      contentAfterAction <- documentContents doc
+      liftIO $ content @=? contentAfterAction
+    Nothing ->
+      liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == expectedAction ] @?= []
+
+removeExportTests :: TestTree
+removeExportTests = testGroup "remove export actions"
+    [ testSession "single export" $ template
+        (T.unlines
+              [ "module A (  a   ) where"
+              , "b :: ()"
+              , "b = ()"])
+        "Remove ‘a’ from export"
+        (Just $ T.unlines
+              [ "module A (     ) where"
+              , "b :: ()"
+              , "b = ()"])
+    , testSession "ending comma" $ template
+        (T.unlines
+              [ "module A (  a,   ) where"
+              , "b :: ()"
+              , "b = ()"])
+        "Remove ‘a’ from export"
+        (Just $ T.unlines
+              [ "module A (  ) where"
+              , "b :: ()"
+              , "b = ()"])
+    , testSession "multiple exports" $ template
+        (T.unlines
+              [ "module A (a  ,   c,    b ) where"
+              , "a, c :: ()"
+              , "a = ()"
+              , "c = ()"])
+        "Remove ‘b’ from export"
+        (Just $ T.unlines
+              [ "module A (a  ,   c ) where"
+              , "a, c :: ()"
+              , "a = ()"
+              , "c = ()"])
+    , testSession "not in scope constructor" $ template
+        (T.unlines
+              [ "module A (A (X,Y,Z,(:<)), ab) where"
+              , "data A = X Int | Y | (:<) Int"
+              , "ab :: ()"
+              , "ab = ()"
+              ])
+        "Remove ‘Z’ from export"
+        (Just $ T.unlines
+              [ "module A (A (X,Y,(:<)), ab) where"
+              , "data A = X Int | Y | (:<) Int"
+              , "ab :: ()"
+              , "ab = ()"])
+    , testSession "multiline export" $ template
+        (T.unlines
+              [ "module A (a"
+              , " ,  b"
+              , " , (:*:)"
+              , " , ) where"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+        "Remove ‘:*:’ from export"
+        (Just $ T.unlines
+              [ "module A (a"
+              , " ,  b"
+              , " "
+              , " , ) where"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+    , testSession "qualified re-export" $ template
+        (T.unlines
+              [ "module A (M.x,a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘M.x’ from export"
+        (Just $ T.unlines
+              [ "module A (a) where"
+              , "import qualified Data.List as M"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "export module" $ template
+        (T.unlines
+              [ "module A (module B) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘module B’ from export"
+        (Just $ T.unlines
+              [ "module A () where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "dodgy export" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (A (..)) where"
+              , "data X = X"
+              , "type A = X"])
+        "Remove ‘A(..)’ from export"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A () where"
+              , "data X = X"
+              , "type A = X"])
+    , testSession "dodgy export" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (A (..)) where"
+              , "data X = X"
+              , "type A = X"])
+        "Remove ‘A(..)’ from export"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A () where"
+              , "data X = X"
+              , "type A = X"])
+    , testSession "duplicate module export" $ template
+        (T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (module L,module L) where"
+              , "import Data.List as L"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove ‘Module L’ from export"
+        (Just $ T.unlines
+              [ "{-# OPTIONS_GHC -Wall #-}"
+              , "module A (module L) where"
+              , "import Data.List as L"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports single" $ template
+        (T.unlines
+              [ "module A (x) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A () where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports two" $ template
+        (T.unlines
+              [ "module A (x,y) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A () where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports three" $ template
+        (T.unlines
+              [ "module A (a,x,y) where"
+              , "a :: ()"
+              , "a = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A (a) where"
+              , "a :: ()"
+              , "a = ()"])
+    , testSession "remove all exports composite" $ template
+        (T.unlines
+              [ "module A (x,y,b, module Ls, a, A(X,getW, Y, Z,(:-),getV), (-+), B(B)) where"
+              , "data A = X {getV :: Int} | Y {getV :: Int}"
+              , "data B = B"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+        "Remove all redundant exports"
+        (Just $ T.unlines
+              [ "module A (b, a, A(X, Y,getV), B(B)) where"
+              , "data A = X {getV :: Int} | Y {getV :: Int}"
+              , "data B = B"
+              , "a,b :: ()"
+              , "a = ()"
+              , "b = ()"])
+    ]
+  where
+    template = exportTemplate Nothing
 
 addSigLensesTests :: TestTree
 addSigLensesTests = let
@@ -4037,7 +4291,10 @@ asyncTests = testGroup "async"
               ]
             void waitForDiagnostics
             actions <- getCodeActions doc (Range (Position 1 0) (Position 1 0))
-            liftIO $ [ _title | CACodeAction CodeAction{_title} <- actions] @=? ["add signature: foo :: a -> a"]
+            liftIO $ [ _title | CACodeAction CodeAction{_title} <- actions] @=?
+              [ "add signature: foo :: a -> a"
+              , "Disable \"missing-signatures\" warnings"
+              ]
     , testSession "request" $ do
             -- Execute a custom request that will block for 1000 seconds
             void $ sendRequest (CustomClientMethod "test") $ BlockSeconds 1000
@@ -4048,7 +4305,10 @@ asyncTests = testGroup "async"
               ]
             void waitForDiagnostics
             actions <- getCodeActions doc (Range (Position 0 0) (Position 0 0))
-            liftIO $ [ _title | CACodeAction CodeAction{_title} <- actions] @=? ["add signature: foo :: a -> a"]
+            liftIO $ [ _title | CACodeAction CodeAction{_title} <- actions] @=?
+              [ "add signature: foo :: a -> a"
+              , "Disable \"missing-signatures\" warnings"
+              ]
     ]
 
 
@@ -4425,3 +4685,9 @@ withTempDir :: (FilePath -> IO a) -> IO a
 withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
   dir' <- canonicalizePath dir
   f dir'
+
+-- | Assert that a value is not 'Nothing', and extract the value.
+assertJust :: MonadIO m => String -> Maybe a -> m a
+assertJust s = \case
+  Nothing -> liftIO $ assertFailure s
+  Just x -> pure x

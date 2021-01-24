@@ -9,6 +9,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
 
     -- * Utilities
     appendConstraint,
+    extendImport,
   )
 where
 
@@ -28,6 +29,8 @@ import GhcPlugins (realSrcSpanEnd, realSrcSpanStart, sigPrec)
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
 import Language.Haskell.LSP.Types
+import OccName
+import Outputable (ppr, showSDocUnsafe)
 
 ------------------------------------------------------------------------------
 
@@ -58,7 +61,7 @@ rewriteToEdit dflags uri anns (Rewrite dst f) = do
           [ ( uri,
               List
                 [ TextEdit (fromJust $ srcSpanToRange dst) $
-                      T.pack $ tail $ exactPrint ast anns
+                    T.pack $ tail $ exactPrint ast anns
                 ]
             )
           ]
@@ -173,3 +176,125 @@ headMaybe (a : _) = Just a
 lastMaybe :: [a] -> Maybe a
 lastMaybe [] = Nothing
 lastMaybe other = Just $ last other
+
+liftMaybe :: String -> Maybe a -> TransformT (Either String) a
+liftMaybe _ (Just x) = return x
+liftMaybe s _ = lift $ Left s
+
+-- | Copy anns attached to a into b with modification, then delete anns of a
+transferAnn :: (Data a, Data b) => Located a -> Located b -> (Annotation -> Annotation) -> TransformT (Either String) ()
+transferAnn la lb f = do
+  anns <- getAnnsT
+  let oldKey = mkAnnKey la
+      newKey = mkAnnKey lb
+  oldValue <- liftMaybe "Unable to find ann" $ Map.lookup oldKey anns
+  putAnnsT $ Map.delete oldKey $ Map.insert newKey (f oldValue) anns
+
+------------------------------------------------------------------------------
+extendImport :: Maybe String -> String -> LImportDecl GhcPs -> Rewrite
+extendImport mparent identifier lDecl@(L l _) =
+  Rewrite l $ \df -> do
+    case mparent of
+      Just parent -> extendImportViaParent df parent identifier lDecl
+      _ -> extendImportTopLevel df identifier lDecl
+
+-- | Add an identifier to import list
+--
+-- extendImportTopLevel "foo" AST:
+--
+-- import A --> Error
+-- import A (bar) --> import A (bar, foo)
+extendImportTopLevel :: DynFlags -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
+extendImportTopLevel df idnetifier (L l it@ImportDecl {..})
+  | Just (hide, L l' lies) <- ideclHiding,
+    hasSibling <- not $ null lies = do
+    src <- uniqueSrcSpanT
+    top <- uniqueSrcSpanT
+    rdr <- liftParseAST df idnetifier
+    let lie = L src $ IEName rdr
+        x = L top $ IEVar noExtField lie
+    when hasSibling $
+      addTrailingCommaT (last lies)
+    addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
+    addSimpleAnnT rdr dp00 $ unqalDP $ hasParen idnetifier
+    -- Parens are attachted to `lies`, so if `lies` was empty previously,
+    -- we need change the ann key from `[]` to `:` to keep parens and other anns.
+    unless hasSibling $
+      transferAnn (L l' lies) (L l' [x]) id
+    return $ L l it {ideclHiding = Just (hide, L l' $ lies ++ [x])}
+extendImportTopLevel _ _ _ = lift $ Left "Unable to extend the import list"
+
+-- | Add an identifier with its parent to import list
+--
+-- extendImportViaParent "Bar" "Cons" AST:
+--
+-- import A --> Error
+-- import A () --> import A (Bar(Cons))
+-- import A (Foo, Bar) --> import A (Foo, Bar(Cons))
+-- import A (Foo, Bar()) --> import A (Foo, Bar(Cons))
+extendImportViaParent :: DynFlags -> String -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
+extendImportViaParent df parent child (L l it@ImportDecl {..})
+  | Just (hide, L l' lies) <- ideclHiding = go hide l' [] lies
+  where
+    go :: Bool -> SrcSpan -> [LIE GhcPs] -> [LIE GhcPs] -> TransformT (Either String) (LImportDecl GhcPs)
+    go hide l' pre (lAbs@(L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
+      -- ThingAbs ie => ThingWith ie child
+      | parent == unIEWrappedName ie = do
+        srcChild <- uniqueSrcSpanT
+        childRdr <- liftParseAST df child
+        let childLIE = L srcChild $ IEName childRdr
+            x :: LIE GhcPs = L ll' $ IEThingWith noExtField absIE NoIEWildcard [childLIE] []
+        -- take anns from ThingAbs, and attatch parens to it
+        transferAnn lAbs x $ \old -> old {annsDP = annsDP old ++ [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, dp00)]}
+        addSimpleAnnT childRdr dp00 [(G AnnVal, dp00)]
+        return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [x] ++ xs)}
+    go hide l' pre ((L l'' (IEThingWith _ twIE@(L _ ie) _ lies' _)) : xs)
+      -- ThingWith ie lies' => ThingWith ie (lies' ++ [child])
+      | parent == unIEWrappedName ie,
+        hasSibling <- not $ null lies' =
+        do
+          srcChild <- uniqueSrcSpanT
+          childRdr <- liftParseAST df child
+          when hasSibling $
+            addTrailingCommaT (last lies')
+          let childLIE = L srcChild $ IEName childRdr
+          addSimpleAnnT childRdr (DP (0, if hasSibling then 1 else 0)) $ unqalDP $ hasParen child
+          return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [L l'' (IEThingWith noExtField twIE NoIEWildcard (lies' ++ [childLIE]) [])] ++ xs)}
+    go hide l' pre (x : xs) = go hide l' (x : pre) xs
+    go hide l' pre []
+      | hasSibling <- not $ null pre = do
+        -- [] => ThingWith parent [child]
+        l'' <- uniqueSrcSpanT
+        srcParent <- uniqueSrcSpanT
+        srcChild <- uniqueSrcSpanT
+        parentRdr <- liftParseAST df parent
+        childRdr <- liftParseAST df child
+        when hasSibling $
+          addTrailingCommaT (head pre)
+        let parentLIE = L srcParent $ IEName parentRdr
+            childLIE = L srcChild $ IEName childRdr
+            x :: LIE GhcPs = L l'' $ IEThingWith noExtField parentLIE NoIEWildcard [childLIE] []
+        addSimpleAnnT parentRdr (DP (0, if hasSibling then 1 else 0)) $ unqalDP $ hasParen parent
+        addSimpleAnnT childRdr (DP (0, 0)) $ unqalDP $ hasParen child
+        addSimpleAnnT x (DP (0, 0)) [(G AnnOpenP, DP (0, 1)), (G AnnCloseP, DP (0, 0))]
+        -- Parens are attachted to `pre`, so if `pre` was empty previously,
+        -- we need change the ann key from `[]` to `:` to keep parens and other anns.
+        unless hasSibling $
+          transferAnn (L l' $ reverse pre) (L l' [x]) id
+        return $ L l it {ideclHiding = Just (hide, L l' $ reverse pre ++ [x])}
+extendImportViaParent _ _ _ _ = lift $ Left "Unable to extend the import list via parent"
+
+unIEWrappedName :: IEWrappedName (IdP GhcPs) -> String
+unIEWrappedName (occName -> occ) = showSDocUnsafe $ parenSymOcc occ (ppr occ)
+
+hasParen :: String -> Bool
+hasParen ('(' : _) = True
+hasParen _ = False
+
+unqalDP :: Bool -> [(KeywordId, DeltaPos)]
+unqalDP paren =
+  ( if paren
+      then \x -> (G AnnOpenP, dp00) : x : [(G AnnCloseP, dp00)]
+      else pure
+  )
+    (G AnnVal, dp00)
