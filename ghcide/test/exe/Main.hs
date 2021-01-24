@@ -28,6 +28,7 @@ import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
 import Data.Typeable
+import Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import Development.IDE.Spans.Common
 import Development.IDE.Test
 import Development.IDE.Test.Runfiles
@@ -59,8 +60,8 @@ import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.HUnit
 import Test.Tasty.QuickCheck
 import System.Time.Extra
-import Development.IDE.Plugin.CodeAction (typeSignatureCommandId, blockCommandId, matchRegExMultipleImports)
 import Development.IDE.Plugin.Test (WaitForIdeRuleResult(..), TestRequest(BlockSeconds,GetInterfaceFilesDir))
+import Development.IDE.Plugin.CodeAction (matchRegExMultipleImports)
 import Control.Monad.Extra (whenJust)
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Control.Lens ((^.))
@@ -141,7 +142,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider  Nothing
     , chk "NO color"                         _colorProvider (Just $ ColorOptionsStatic False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ FoldingRangeOptionsStatic False)
-    , che "   execute command"      _executeCommandProvider (Just $ ExecuteCommandOptions $ List [typeSignatureCommandId, blockCommandId])
+    , che "   execute command"      _executeCommandProvider (Just $ ExecuteCommandOptions $ List [typeLensCommandId, blockCommandId])
     , chk "   workspace"                         _workspace (Just $ WorkspaceOptions (Just WorkspaceFolderOptions{_supported = Just True, _changeNotifications = Just ( WorkspaceFolderChangeNotificationsBool True )}))
     , chk "NO experimental"                   _experimental  Nothing
     ] where
@@ -1171,7 +1172,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA (A (Constructor))"
                     , "b :: A"
                     , "b = Constructor"
-                    ])        
+                    ])
         , testSession "extend single line import with constructor (with comments)" $ template
             [("ModuleA.hs", T.unlines
                     [ "module ModuleA where"

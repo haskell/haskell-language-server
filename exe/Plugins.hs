@@ -10,6 +10,7 @@ import           Ide.Plugin.Example        as Example
 import           Ide.Plugin.Example2       as Example2
 import           Development.IDE           (IdeState)
 import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import           Development.IDE.Plugin.TypeLenses as TypeLenses
 
 -- haskell-language-server optional plugins
 
@@ -90,6 +91,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
                    else basePlugins
     basePlugins =
       [ GhcIde.descriptor  "ghcide"
+      , TypeLenses.descriptor "type-lenses"
 #if pragmas
       , Pragmas.descriptor  "pragmas"
 #endif

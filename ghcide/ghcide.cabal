@@ -173,6 +173,7 @@ library
         Development.IDE.Plugin.HLS
         Development.IDE.Plugin.HLS.GhcIde
         Development.IDE.Plugin.Test
+        Development.IDE.Plugin.TypeLenses
 
     -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
     -- the real GHC library and the types are incompatible. Furthermore, when

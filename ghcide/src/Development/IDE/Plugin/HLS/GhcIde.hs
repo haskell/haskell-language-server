@@ -6,8 +6,6 @@ module Development.IDE.Plugin.HLS.GhcIde
   (
     descriptor
   ) where
-
-import Data.Aeson
 import Development.IDE
 import Development.IDE.Plugin.Completions as Completions
 import Development.IDE.Plugin.CodeAction as CodeAction
@@ -22,9 +20,7 @@ import Text.Regex.TDFA.Text()
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginCommands = [PluginCommand (CommandId "typesignature.add") "adds a signature" commandAddSignature]
-  , pluginCodeActionProvider = Just codeAction'
-  , pluginCodeLensProvider   = Just codeLens'
+  { pluginCodeActionProvider = Just codeAction'
   , pluginHoverProvider      = Just hover'
   , pluginSymbolsProvider    = Just symbolsProvider
   , pluginCompletionProvider = Just getCompletionsLSP
@@ -38,24 +34,10 @@ hover' ideState params = do
     logDebug (ideLogger ideState) "GhcIde.hover entered (ideLogger)" -- AZ
     hover ideState params
 
--- ---------------------------------------------------------------------
-
-commandAddSignature :: CommandFunction IdeState WorkspaceEdit
-commandAddSignature lf ide params
-    = commandHandler lf ide (ExecuteCommandParams "typesignature.add" (Just (List [toJSON params])) Nothing)
-
--- ---------------------------------------------------------------------
-
 codeAction' :: CodeActionProvider IdeState
 codeAction' lf ide _ doc range context = fmap List <$> codeAction lf ide doc range context
 
 -- ---------------------------------------------------------------------
-
-codeLens' :: CodeLensProvider IdeState
-codeLens' lf ide _ params = codeLens lf ide params
-
--- ---------------------------------------------------------------------
-
 symbolsProvider :: SymbolsProvider IdeState
 symbolsProvider ls ide params = do
     ds <- moduleOutline ls ide params
