@@ -99,7 +99,7 @@ makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
           if pluginEnabled pluginConfig plcCodeActionsOn
             then otTracedProvider pid "codeAction" $ provider lf ideState pid docId range context
             else return $ Right (List [])
-    r <- mapM makeAction cas
+    r <- mapConcurrently makeAction cas
     let actions = filter wasRequested . foldMap unL $ rights r
     res <- send caps actions
     return $ Right res
@@ -173,7 +173,7 @@ makeCodeLens cas lf ideState params = do
           doOneRight (pid, Right a) = [(pid,a)]
           doOneRight (_, Left _) = []
 
-    r <- mapM makeLens cas
+    r <- mapConcurrently makeLens cas
     case breakdown r of
         ([],[]) -> return $ Right $ List []
         (es,[]) -> return $ Left $ ResponseError InternalError (T.pack $ "codeLens failed:" ++ show es) Nothing
@@ -308,7 +308,7 @@ makeHover hps lf ideState params
           if pluginEnabled pluginConfig plcHoverOn
              then otTracedProvider pid "hover" $ p ideState params
              else return $ Right Nothing
-      mhs <- mapM makeHover hps
+      mhs <- mapConcurrently makeHover hps
       -- TODO: We should support ServerCapabilities and declare that
       -- we don't support hover requests during initialization if we
       -- don't have any hover providers
@@ -363,7 +363,7 @@ makeSymbols sps lf ideState params
             if pluginEnabled pluginConfig plcSymbolsOn
               then otTracedProvider pid "symbols" $ p lf ideState params
               else return $ Right []
-      mhs <- mapM makeSymbols sps
+      mhs <- mapConcurrently makeSymbols sps
       case rights mhs of
           [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
           hs -> return $ Right $ convertSymbols $ concat hs
@@ -393,7 +393,7 @@ renameWith providers lspFuncs state params = do
              then otTracedProvider pid "rename" $ p lspFuncs state params
              else return $ Right $ WorkspaceEdit Nothing Nothing
     -- TODO:AZ: we need to consider the right way to combine possible renamers
-    results <- mapM makeAction providers
+    results <- mapConcurrently makeAction providers
     case partitionEithers results of
         (errors, []) -> return $ Left $ responseError $ T.pack $ show errors
         (_, edits) -> return $ Right $ mconcat edits
