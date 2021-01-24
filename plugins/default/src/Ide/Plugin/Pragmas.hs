@@ -8,7 +8,6 @@
 module Ide.Plugin.Pragmas
   (
       descriptor
-  -- ,   commands -- TODO: get rid of this
   ) where
 
 import           Control.Lens                    hiding (List)
@@ -25,7 +24,8 @@ import qualified Language.Haskell.LSP.Types.Lens as J
 import           Control.Monad                   (join)
 import           Development.IDE.GHC.Compat
 import qualified Language.Haskell.LSP.Core       as LSP
-import qualified Language.Haskell.LSP.VFS        as VFS
+import qualified Language.Haskell.LSP.VFS as VFS
+import qualified Text.Fuzzy as Fuzzy
 
 -- ---------------------------------------------------------------------
 
@@ -142,13 +142,13 @@ completion lspFuncs _ide complParams = do
         position = complParams ^. J.position
     contents <- LSP.getVirtualFileFunc lspFuncs $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
-        (Just cnts, Just _path) -> do
-            pfix <- VFS.getCompletionPrefix position cnts
-            return $ result pfix
+        (Just cnts, Just _path) ->
+            result <$> VFS.getCompletionPrefix position cnts
             where
                 result (Just pfix)
                     | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
-                    = Completions $ List $ map buildCompletion allPragmas
+                    = Completions $ List $ map buildCompletion
+                        (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
                     | otherwise
                     = Completions $ List []
                 result Nothing = Completions $ List []
