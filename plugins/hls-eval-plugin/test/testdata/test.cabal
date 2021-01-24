@@ -39,6 +39,7 @@ library
       T25
       T26
       T27
+      TEndingMulti
       TMulti
       TPlainComment
       THaddock

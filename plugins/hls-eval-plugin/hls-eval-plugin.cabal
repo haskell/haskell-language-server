@@ -64,6 +64,7 @@ library
     , text
     , time
     , transformers
+    , mtl
     , unordered-containers
 
   ghc-options: -Wall -Wno-name-shadowing

@@ -18,7 +18,9 @@ module TMulti () where
 -- >>> "a"++"b"
 -- "ab"
 
-  {-| >>> IGNORED -}
+  {-| >>> "NOT IGNORED"
+"NOT IGNORED"
+-}
 
 -- this should work fine if previous multi comment is parsed correctly
 -- >>> "a"++"b"

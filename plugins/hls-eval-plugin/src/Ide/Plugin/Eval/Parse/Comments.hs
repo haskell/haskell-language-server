@@ -1,31 +1,40 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
 module Ide.Plugin.Eval.Parse.Comments where
 
 import qualified Control.Applicative.Combinators.NonEmpty as NE
 import Control.Arrow (first, (&&&), (>>>))
-import Control.Lens (view, (^.))
-import Control.Monad (guard, void, when)
+import Control.Lens (lensField, lensRules, view, (.~), (^.))
+import Control.Lens.Extras (is)
+import Control.Lens.TH (makeLensesWith, makePrisms, mappingNamer)
+import Control.Monad (guard, join, void, when)
 import Control.Monad.Combinators ()
+import Control.Monad.Reader (ask)
+import Control.Monad.Trans.Reader (Reader, runReader)
 import qualified Data.Char as C
 import qualified Data.DList as DL
 import qualified Data.Foldable as F
+import Data.Function ((&))
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Void (Void)
-import Development.IDE (Position)
+import Development.IDE (Position, Range (Range))
 import Development.IDE.Types.Location (Position (..))
 import GHC.Generics
 import Ide.Plugin.Eval.Types
 import Language.Haskell.LSP.Types.Lens
     ( character,
+      end,
       line,
+      start,
     )
 import Text.Megaparsec
 import qualified Text.Megaparsec as P
@@ -55,13 +64,23 @@ We build parsers combining the following three kinds of them:
 type Parser inputs = Parsec Void inputs
 
 -- | Line parser
-type LineParser = Parser String
+type LineParser a = forall m. Monad m => ParsecT Void String m a
 
 -- | Line comment group parser
-type LineGroupParser = Parser [(Position, RawLineComment)]
+type LineGroupParser = Parser [(Range, RawLineComment)]
+
+data BlockEnv = BlockEnv
+    { isLhs :: Bool
+    , blockRange :: Range
+    }
+    deriving (Read, Show, Eq, Ord)
+
+makeLensesWith
+    (lensRules & lensField .~ mappingNamer (pure . (++ "L")))
+    ''BlockEnv
 
 -- | Block comment parser
-type BlockCommentParser = Parser String
+type BlockCommentParser = ParsecT Void String (Reader BlockEnv)
 
 -- | Prop line, with "prop>" stripped off
 newtype PropLine = PropLine {getPropLine :: String}
@@ -89,8 +108,10 @@ data CommentFlavour = Vanilla | HaddockNext | HaddockPrev | Named String
     deriving (Read, Show, Eq, Ord)
 
 -- | Single line or block comments?
-data CommentStyle = Line | Block
+data CommentStyle = Line | Block Range
     deriving (Read, Show, Eq, Ord, Generic)
+
+makePrisms ''CommentStyle
 
 commentsToSections ::
     -- | True if it is literate Haskell
@@ -101,17 +122,21 @@ commentsToSections isLHS Comments {..} =
     let (lineSectionSeeds, lineSetupSeeds) =
             foldMap
                 ( \lcs ->
-                    case parseMaybe lineGroupP $ NE.toList lcs of
-                        Nothing -> mempty
-                        Just (mls, rs) ->
-                            ( maybe DL.empty DL.singleton mls
-                            , -- orders setup sections in ascending order
-                              if null rs
-                                then mempty
-                                else
-                                    Map.singleton (fst $ NE.head lcs) $
-                                        DL.singleton (Line, rs)
-                            )
+                    let theRan =
+                            Range
+                                (view start $ fst $ NE.head lcs)
+                                (view end $ fst $ NE.last lcs)
+                     in case parseMaybe lineGroupP $ NE.toList lcs of
+                            Nothing -> mempty
+                            Just (mls, rs) ->
+                                ( maybe DL.empty DL.singleton ((theRan,) <$> mls)
+                                , -- orders setup sections in ascending order
+                                  if null rs
+                                    then mempty
+                                    else
+                                        Map.singleton theRan $
+                                            DL.singleton (Line, rs)
+                                )
                 )
                 $ groupLineComments $
                     Map.filterWithKey
@@ -122,23 +147,24 @@ commentsToSections isLHS Comments {..} =
                         -- non-zero base indentation level!
                         ( \pos _ ->
                             if isLHS
-                                then pos ^. character == 2
-                                else pos ^. character == 0
+                                then pos ^. start . character == 2
+                                else pos ^. start . character == 0
                         )
                         lineComments
         (blockSeed, blockSetupSeeds) =
             foldMap
                 ( \(ran, lcs) ->
-                    case parseMaybe (blockCommentBP isLHS ran) $ getRawBlockComment lcs of
+                    case parseBlockMaybe isLHS ran blockCommentBP
+                        $ getRawBlockComment lcs of
                         Nothing -> mempty
                         Just (Named "setup", grp) ->
                             -- orders setup sections in ascending order
                             ( mempty
                             , Map.singleton ran $
-                                DL.singleton (Block, grp)
+                                DL.singleton (Block ran, grp)
                             )
                         Just grp ->
-                            ( DL.singleton grp
+                            ( DL.singleton (ran, grp)
                             , mempty
                             )
                 )
@@ -148,24 +174,53 @@ commentsToSections isLHS Comments {..} =
                 -- block comment body.
                 $ Map.toList blockComments
         lineSections =
-            map (uncurry $ testsToSection Line) $
+            map (\(pos, (flav, cmd)) -> testsToSection Line flav pos cmd) $
                 DL.toList lineSectionSeeds
         multilineSections =
-            map (uncurry $ testsToSection Block) $
+            map (\(ran, (flav, cmd)) -> testsToSection (Block ran) flav ran cmd) $
                 DL.toList blockSeed
         setupSections =
-            map (uncurry (`testsToSection` Named "setup")) $
-                DL.toList $
+            -- Setups doesn't need Dummy position
+            map
+                ( \(style, tests) ->
+                    testsToSection
+                        style
+                        (Named "setup")
+                        (join Range (Position 0 0)) -- Just dummy for setup sections
+                        tests
+                )
+                $ DL.toList $
                     F.fold $
                         Map.unionWith (<>) lineSetupSeeds blockSetupSeeds
      in Sections {..}
 
+parseBlockMaybe :: Bool -> Range -> BlockCommentParser a -> String -> Maybe a
+parseBlockMaybe isLhs blockRange p i =
+    case runReader (runParserT p' "" i) BlockEnv {..} of
+        Left {} -> Nothing
+        Right a -> Just a
+    where
+        p' = do
+            updateParserState $ \st ->
+                st
+                    { statePosState =
+                        (statePosState st)
+                            { pstateSourcePos = positionToSourcePos $ blockRange ^. start
+                            }
+                    }
+            p
+
+type CommentRange = Range
+
+type SectionRange = Range
+
 testsToSection ::
     CommentStyle ->
     CommentFlavour ->
+    SectionRange ->
     [TestComment] ->
     Section
-testsToSection style flav tests =
+testsToSection style flav sectionRange tests =
     let sectionName
             | Named name <- flav = name
             | otherwise = ""
@@ -177,7 +232,7 @@ testsToSection style flav tests =
         sectionFormat =
             case style of
                 Line -> SingleLine
-                Block -> MultiLine
+                Block ran -> MultiLine ran
      in Section {..}
 
 fromTestComment :: TestComment -> Loc Test
@@ -208,70 +263,64 @@ fromTestComment AnExample {..} =
 
 blockCommentBP ::
     -- | True if Literate Haskell
-    Bool ->
-    Position ->
     BlockCommentParser (CommentFlavour, [TestComment])
-blockCommentBP isLHS pos = do
-    updateParserState $ \st ->
-        st
-            { statePosState =
-                (statePosState st)
-                    { pstateSourcePos = positionToSourcePos pos
-                    }
-            }
+blockCommentBP = do
     skipCount 2 anySingle -- "{-"
     void $ optional $ char ' '
     flav <- commentFlavourP
-    hit <- skipNormalCommentBlock isLHS
+    hit <- skipNormalCommentBlock
     if hit
         then do
-            body <- many $ (blockExamples isLHS <|> blockProp isLHS)
-                <* skipNormalCommentBlock isLHS
+            body <-
+                many $
+                    (blockExamples <|> blockProp)
+                        <* skipNormalCommentBlock
             void takeRest -- just consume the rest
             pure (flav, body)
         else pure (flav, [])
 
-skipNormalCommentBlock ::
-    -- | True if Literate Haskell
-    Bool ->
-    Parser String Bool
-skipNormalCommentBlock isLHS =
-    skipManyTill (normalLineP isLHS Block) $
+skipNormalCommentBlock :: BlockCommentParser Bool
+skipNormalCommentBlock = do
+    BlockEnv {..} <- ask
+    skipManyTill (normalLineP isLhs $ Block blockRange) $
         False <$ try (optional (chunk "-}") *> eof)
-            <|> True <$ lookAhead (try $ testSymbol isLHS Block)
+            <|> True <$ lookAhead (try $ testSymbol isLhs $ Block blockRange)
 
-testSymbol :: Bool -> CommentStyle -> Parser String ()
+testSymbol :: Bool -> CommentStyle -> LineParser ()
 testSymbol isLHS style =
     -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
     -- it must skip one space after a comment!
     -- This prevents Eval Plugin from working on
     -- modules with non-standard base indentation-level.
-    when (isLHS && style == Block) (void $ count' 0 2 $ char ' ')
+    when (isLHS && is _Block style) (void $ count' 0 2 $ char ' ')
         *> (exampleSymbol <|> propSymbol)
 
-eob :: BlockCommentParser ()
+eob :: LineParser ()
 eob = eof <|> try (optional (chunk "-}") *> eof) <|> void eol
 
 blockExamples
     , blockProp ::
-        -- | True if Literate Haskell
-        Bool ->
         BlockCommentParser TestComment
-blockExamples isLHS = do
-    (ran, examples) <- withPosition $ NE.some $ exampleLineStrP isLHS Block
+blockExamples = do
+    BlockEnv {..} <- ask
+    (ran, examples) <- withPosition $ NE.some $ exampleLineStrP isLhs $ Block blockRange
     AnExample ran examples <$> resultBlockP
-blockProp isLHS = do
-    (ran, prop) <- withPosition $ propLineStrP isLHS Block
+blockProp = do
+    BlockEnv {..} <- ask
+    (ran, prop) <- withPosition $ propLineStrP isLhs $ Block blockRange
     AProp ran prop <$> resultBlockP
 
-withPosition :: (TraversableStream s, Stream s) => Parser s a -> Parser s (Position, a)
+withPosition ::
+    (TraversableStream s, Stream s, Monad m, Ord v) =>
+    ParsecT v s m a ->
+    ParsecT v s m (Position, a)
 withPosition p = do
     beg <- sourcePosToPosition <$> getSourcePos
     a <- p
     pure (beg, a)
 
 resultBlockP :: BlockCommentParser [String]
-resultBlockP = many $ nonEmptyNormalLineP Block
+resultBlockP = many $ nonEmptyNormalLineP . Block =<< view blockRangeL
 
 positionToSourcePos :: Position -> SourcePos
 positionToSourcePos pos =
@@ -338,7 +387,7 @@ lineCommentSectionsP = do
     skipMany normalLineCommentP
     many $
         exampleLinesGP
-            <|> uncurry AProp <$> propLineGP <*> resultLinesP
+            <|> uncurry (AProp . view start) <$> propLineGP <*> resultLinesP
                 <* skipMany normalLineCommentP
 
 lexemeLine :: LineGroupParser a -> LineGroupParser a
@@ -347,7 +396,7 @@ lexemeLine p = p <* skipMany normalLineCommentP
 resultLinesP :: LineGroupParser [String]
 resultLinesP = many nonEmptyLGP
 
-normalLineCommentP :: LineGroupParser (Position, String)
+normalLineCommentP :: LineGroupParser (Range, String)
 normalLineCommentP =
     parseLine (commentFlavourP *> normalLineP False Line)
 
@@ -357,16 +406,16 @@ nonEmptyLGP = try $ fmap snd $ parseLine $ commentFlavourP *> nonEmptyNormalLine
 exampleLinesGP :: LineGroupParser TestComment
 exampleLinesGP =
     lexemeLine $
-        uncurry AnExample . first NE.head . NE.unzip
+        uncurry AnExample . first (view start . NE.head) . NE.unzip
             <$> NE.some exampleLineGP
             <*> resultLinesP
 
-exampleLineGP :: LineGroupParser (Position, ExampleLine)
+exampleLineGP :: LineGroupParser (Range, ExampleLine)
 exampleLineGP =
     -- In line-comments, indentation-level inside comment doesn't matter.
     parseLine (commentFlavourP *> exampleLineStrP False Line)
 
-propLineGP :: LineGroupParser (Position, PropLine)
+propLineGP :: LineGroupParser (Range, PropLine)
 propLineGP =
     -- In line-comments, indentation-level inside comment doesn't matter.
     parseLine (commentFlavourP *> propLineStrP False Line)
@@ -420,11 +469,11 @@ normalLineP isLHS style = do
         (try $ testSymbol isLHS style)
     consume style
 
-consume :: CommentStyle -> Parser String String
+consume :: CommentStyle -> LineParser String
 consume style =
     case style of
         Line -> takeRest
-        Block -> manyTill anySingle eob
+        Block {} -> manyTill anySingle eob
 
 -- | Parses example test line.
 exampleLineStrP ::
@@ -432,20 +481,21 @@ exampleLineStrP ::
     Bool ->
     CommentStyle ->
     LineParser ExampleLine
-exampleLineStrP isLHS style = try $
-    -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
-    -- it must skip one space after a comment!
-    -- This prevents Eval Plugin from working on
-    -- modules with non-standard base indentation-level.
-    when (isLHS && style == Block) (void $ count' 0 2 $ char ' ')
-        *> exampleSymbol
-        *> (ExampleLine <$> consume style)
+exampleLineStrP isLHS style =
+    try $
+        -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
+        -- it must skip one space after a comment!
+        -- This prevents Eval Plugin from working on
+        -- modules with non-standard base indentation-level.
+        when (isLHS && is _Block style) (void $ count' 0 2 $ char ' ')
+            *> exampleSymbol
+            *> (ExampleLine <$> consume style)
 
-exampleSymbol :: Parser String ()
+exampleSymbol :: LineParser ()
 exampleSymbol =
     chunk ">>>" *> P.notFollowedBy (char '>')
 
-propSymbol :: Parser String ()
+propSymbol :: LineParser ()
 propSymbol = chunk "prop>" *> P.notFollowedBy (char '>')
 
 -- | Parses prop test line.
@@ -459,7 +509,7 @@ propLineStrP isLHS style =
     -- it must skip one space after a comment!
     -- This prevents Eval Plugin from working on
     -- modules with non-standard base indentation-level.
-    when (isLHS && style == Block) (void $ count' 0 2 $ char ' ')
+    when (isLHS && is _Block style) (void $ count' 0 2 $ char ' ')
         *> chunk "prop>"
         *> P.notFollowedBy (char '>')
         *> (PropLine <$> consume style)
@@ -492,7 +542,7 @@ contiguousGroupOn toLineCol = foldr step []
  with contiguous line and columns.
 -}
 groupLineComments ::
-    Map Position a -> [NonEmpty (Position, a)]
+    Map Range a -> [NonEmpty (Range, a)]
 groupLineComments =
-    contiguousGroupOn (fst >>> view line &&& view character)
+    contiguousGroupOn (fst >>> view start >>> view line &&& view character)
         . Map.toList

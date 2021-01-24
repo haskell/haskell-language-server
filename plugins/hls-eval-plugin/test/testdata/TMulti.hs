@@ -15,7 +15,7 @@ module TMulti () where
 -- this should work fine if previous multi comment is parsed correctly
 -- >>> "a"++"b"
 
-  {-| >>> IGNORED -}
+  {-| >>> "NOT IGNORED" -}
 
 -- this should work fine if previous multi comment is parsed correctly
 -- >>> "a"++"b"

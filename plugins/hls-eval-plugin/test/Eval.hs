@@ -128,6 +128,9 @@ tests =
             "Multi line comments"
             $ goldenTest "TMulti.hs"
         , testCase
+            "Multi line comments, with the last test line ends without newline"
+            $ goldenTest "TEndingMulti.hs"
+        , testCase
             "Evaluate expressions in Plain comments in both single line and multi line format"
             $ goldenTest "TPlainComment.hs"
         , testCase

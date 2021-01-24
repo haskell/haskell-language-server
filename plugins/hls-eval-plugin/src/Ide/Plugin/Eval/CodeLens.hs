@@ -216,8 +216,9 @@ import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
-import Control.Lens ((^.))
-import Language.Haskell.LSP.Types.Lens (start)
+import Control.Lens ((^.), (-~), view)
+import Language.Haskell.LSP.Types.Lens (line, end, character)
+import Data.Function ((&))
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -242,16 +243,14 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                     fromNormalizedFilePath nfp ->
                                     let ran0 = realSrcSpanToRange real
                                         curRan = fromMaybe ran0 $ toCurrentRange posMap ran0
-                                        -- used to detect whether haddock comment is a line comment or not, in a brutal way
-                                        begin = curRan ^. start
                                     in
                                     -- since Haddock parsing is unset explicitly in 'getParsedModuleWithComments',
                                     -- we can concentrate on these two
                                     case bdy of
                                         AnnLineComment cmt ->
-                                            mempty { lineComments = Map.singleton begin (RawLineComment cmt) }
+                                            mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
                                         AnnBlockComment cmt ->
-                                            mempty { blockComments = Map.singleton begin $ RawBlockComment cmt }
+                                            mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
                                         _ -> mempty
                             _ -> mempty
                             )
@@ -429,11 +428,12 @@ runEvalCmd lsp st EvalParams{..} =
 {-
 >>> import Language.Haskell.LSP.Types(applyTextEdit)
 >>> aTest = Located 1 (Example (pure " 2 + 2") [])
+>>> ending = Position 1 10
 >>> mdl = "module Test where\n-- >>> 2+2"
 
 To avoid https://github.com/haskell/haskell-language-server/issues/1213, `addFinalReturn` adds, if necessary, a final empty line to the document before inserting the tests' results.
 
->>> let [e1,e2] = addFinalReturn mdl [asEdit aTest ["4"]] in applyTextEdit e2 (applyTextEdit e1 mdl)
+>>> let [e1,e2] = addFinalReturn mdl [asEdit aTest Line () ["4"]] in applyTextEdit e2 (applyTextEdit e1 mdl)
 "module Test where\n-- >>> 2+2\n4\n"
 
 >>> applyTextEdit (head $ addFinalReturn mdl [asEdit aTest ["4"]]) mdl
@@ -492,7 +492,8 @@ runTests e@(_st, _) tests = do
 
         let checkedResult = testCheck (section, unLoc test) rs
 
-        let edit = asEdit test (map pad checkedResult)
+        let edit = asEdit (sectionFormat section) (sectionRange section)
+                test (map pad checkedResult)
         dbg "TEST EDIT" edit
         return edit
 
@@ -504,8 +505,18 @@ runTests e@(_st, _) tests = do
                     "Add QuickCheck to your cabal dependencies to run this test."
     runTest e df test = evals e df (asStatements test)
 
-asEdit :: Loc Test -> [Text] -> TextEdit
-asEdit test resultLines = TextEdit (resultRange test) (T.unlines resultLines)
+asEdit :: Format -> Range -> Loc Test -> [Text] -> TextEdit
+asEdit (MultiLine commRange) testRange test resultLines
+    -- A test in a block comment, ending with @-\}@ without newline in-between.
+    | testRange ^. end.line == commRange ^. end . line =
+    TextEdit
+        (Range
+            (view end testRange & character -~ 2)
+            (resultRange test ^. end)
+        )
+        ("\n" <> T.unlines (resultLines <> ["-}"]))
+asEdit _ _ test resultLines =
+    TextEdit (resultRange test) (T.unlines resultLines)
 
 {-
 The result of evaluating a test line can be:
