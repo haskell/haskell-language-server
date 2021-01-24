@@ -511,7 +511,7 @@ asEdit (MultiLine commRange) test resultLines
     =
     TextEdit
         (Range
-            (view end (testRange test) & character -~ 2)
+            (testRange test ^. end)
             (resultRange test ^. end)
         )
         ("\n" <> T.unlines (resultLines <> ["-}"]))
