@@ -428,21 +428,21 @@ runEvalCmd lsp st EvalParams{..} =
 
 {-
 >>> import Language.Haskell.LSP.Types(applyTextEdit)
->>> aTest s = let Right [sec] = allSections (tokensFrom s) in head. sectionTests $ sec
+>>> aTest = Located 1 (Example (pure " 2 + 2") [])
 >>> mdl = "module Test where\n-- >>> 2+2"
 
 To avoid https://github.com/haskell/haskell-language-server/issues/1213, `addFinalReturn` adds, if necessary, a final empty line to the document before inserting the tests' results.
 
->>> let [e1,e2] = addFinalReturn mdl [asEdit (aTest mdl) ["4"]] in applyTextEdit e2 (applyTextEdit e1 mdl)
+>>> let [e1,e2] = addFinalReturn mdl [asEdit aTest ["4"]] in applyTextEdit e2 (applyTextEdit e1 mdl)
 "module Test where\n-- >>> 2+2\n4\n"
 
->>> applyTextEdit (head $ addFinalReturn mdl [asEdit (aTest mdl) ["4"]]) mdl
+>>> applyTextEdit (head $ addFinalReturn mdl [asEdit aTest ["4"]]) mdl
 "module Test where\n-- >>> 2+2\n"
 
->>> addFinalReturn mdl [asEdit (aTest mdl) ["4"]]
+>>> addFinalReturn mdl [asEdit aTest ["4"]]
 [TextEdit {_range = Range {_start = Position {_line = 1, _character = 10}, _end = Position {_line = 1, _character = 10}}, _newText = "\n"},TextEdit {_range = Range {_start = Position {_line = 2, _character = 0}, _end = Position {_line = 2, _character = 0}}, _newText = "4\n"}]
 
->>> asEdit (aTest mdl) ["4"]
+>>> asEdit aTest ["4"]
 TextEdit {_range = Range {_start = Position {_line = 2, _character = 0}, _end = Position {_line = 2, _character = 0}}, _newText = "4\n"}
 -}
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
@@ -545,7 +545,7 @@ A, possibly multi line, error is returned for a wrong declaration, directive or 
 Unknown extension: "NonExistent"
 
 >>> cls C
-Variable not in scope: cls :: t0 -> f0
+Variable not in scope: cls :: t0 -> ()
 Data constructor not in scope: C
 
 >>> "A
