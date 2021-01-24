@@ -11,6 +11,7 @@ module Development.IDE.Test
   , expectDiagnostics
   , expectDiagnosticsWithTags
   , expectNoMoreDiagnostics
+  , expectMessages
   , expectCurrentDiagnostics
   , checkDiagnosticsForDoc
   , canonicalizeUri
@@ -35,6 +36,8 @@ import Test.Tasty.HUnit
 import System.Directory (canonicalizePath)
 import Data.Maybe (fromJust)
 import Development.IDE.Plugin.Test (WaitForIdeRuleResult, TestRequest(WaitForIdeRule))
+import Data.Aeson (FromJSON)
+import Data.Typeable (Typeable)
 
 
 -- | (0-based line number, 0-based column number)
@@ -66,7 +69,18 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag) 
 -- |wait for @timeout@ seconds and report an assertion failure
 -- if any diagnostic messages arrive in that period
 expectNoMoreDiagnostics :: Seconds -> Session ()
-expectNoMoreDiagnostics timeout = do
+expectNoMoreDiagnostics timeout =
+  expectMessages @PublishDiagnosticsNotification timeout $ \diagsNot -> do
+    let fileUri = diagsNot ^. params . uri
+        actual = diagsNot ^. params . diagnostics
+    liftIO $
+      assertFailure $
+        "Got unexpected diagnostics for " <> show fileUri
+          <> " got "
+          <> show actual
+
+expectMessages :: (FromJSON msg, Typeable msg) => Seconds -> (msg -> Session ()) -> Session ()
+expectMessages timeout handle = do
     -- Give any further diagnostic messages time to arrive.
     liftIO $ sleep timeout
     -- Send a dummy message to provoke a response from the server.
@@ -75,14 +89,7 @@ expectNoMoreDiagnostics timeout = do
     void $ sendRequest (CustomClientMethod "non-existent-method") ()
     handleMessages
   where
-    handleMessages = handleDiagnostic <|> handleCustomMethodResponse <|> ignoreOthers
-    handleDiagnostic = do
-        diagsNot <- LspTest.message :: Session PublishDiagnosticsNotification
-        let fileUri = diagsNot ^. params . uri
-            actual = diagsNot ^. params . diagnostics
-        liftIO $ assertFailure $
-            "Got unexpected diagnostics for " <> show fileUri <>
-            " got " <> show actual
+    handleMessages = (LspTest.message >>= handle) <|> handleCustomMethodResponse <|> ignoreOthers
     ignoreOthers = void anyMessage >> handleMessages
 
 handleCustomMethodResponse :: Session ()
