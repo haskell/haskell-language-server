@@ -1,40 +1,41 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wwarn #-}
 
-module Ide.Plugin.Eval.Types (
-    locate,
-    locate0,
-    Test (..),
-    isProperty,
-    Format (..),
-    Language (..),
-    Section (..),
-    Sections(..),
-    hasTests,
-    hasPropertyTest,
-    splitSections,
-    Loc,
-    Located (..),
-    Comments(..),
-    RawBlockComment(..),
-    RawLineComment(..),
-    unLoc,
-    Txt,
-) where
+module Ide.Plugin.Eval.Types
+    ( locate,
+      locate0,
+      Test (..),
+      isProperty,
+      Format (..),
+      Language (..),
+      Section (..),
+      Sections (..),
+      hasTests,
+      hasPropertyTest,
+      splitSections,
+      Loc,
+      Located (..),
+      Comments (..),
+      RawBlockComment (..),
+      RawLineComment (..),
+      unLoc,
+      Txt,
+    )
+where
 
 import Control.DeepSeq (NFData (rnf), deepseq)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.List (partition)
 import Data.List.NonEmpty (NonEmpty)
-import Data.String (IsString (..))
-import GHC.Generics (Generic)
 import Data.Map.Strict (Map)
+import Data.String (IsString (..))
 import Development.IDE (Range)
+import GHC.Generics (Generic)
 import qualified Text.Megaparsec as P
 
 -- | A thing with a location attached.
@@ -60,44 +61,40 @@ locate0 = locate . Located 0
 
 type Txt = String
 
-data Sections =
-    Sections
+data Sections = Sections
     { setupSections :: [Section]
     , lineSections :: [Section]
     , multilineSections :: [Section]
     }
     deriving (Show, Eq, Generic)
 
-data Section
-    = Section
-        { sectionName :: Txt
-        , sectionTests :: [Loc Test]
-        , sectionLanguage :: Language
-        , sectionFormat :: Format
-        , sectionRange :: Range
-        }
+data Section = Section
+    { sectionName :: Txt
+    , sectionTests :: [Test]
+    , sectionLanguage :: Language
+    , sectionFormat :: Format
+    }
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
 hasTests :: Section -> Bool
 hasTests = not . null . sectionTests
 
 hasPropertyTest :: Section -> Bool
-hasPropertyTest = any (isProperty . unLoc) . sectionTests
+hasPropertyTest = any isProperty . sectionTests
 
 -- |Split setup and normal sections
 splitSections :: [Section] -> ([Section], [Section])
 splitSections = partition ((== "setup") . sectionName)
 
 data Test
-    = Example {testLines :: NonEmpty Txt, testOutput :: [Txt]}
-    | Property {testline :: Txt, testOutput :: [Txt]}
+    = Example {testLines :: NonEmpty Txt, testOutput :: [Txt], testRange :: Range}
+    | Property {testline :: Txt, testOutput :: [Txt], testRange :: Range}
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
-data Comments =
-    Comments
-        { lineComments :: Map Range RawLineComment
-        , blockComments :: Map Range RawBlockComment
-        }
+data Comments = Comments
+    { lineComments :: Map Range RawLineComment
+    , blockComments :: Map Range RawBlockComment
+    }
     deriving (Show, Eq, Ord, Generic)
 
 newtype RawBlockComment = RawBlockComment {getRawBlockComment :: String}
@@ -129,7 +126,7 @@ instance Monoid Comments where
     mempty = Comments mempty mempty
 
 isProperty :: Test -> Bool
-isProperty (Property _ _) = True
+isProperty Property {} = True
 isProperty _ = False
 
 data Format
@@ -138,6 +135,7 @@ data Format
       -- Used for detecting no-newline test commands.
       MultiLine Range
     deriving (Eq, Show, Ord, Generic, FromJSON, ToJSON, NFData)
+
 data Language = Plain | Haddock deriving (Eq, Show, Generic, Ord, FromJSON, ToJSON, NFData)
 
 data ExpectedLine = ExpectedLine [LineChunk] | WildCardLine

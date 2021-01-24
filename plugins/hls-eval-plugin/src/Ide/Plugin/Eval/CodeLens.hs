@@ -468,13 +468,13 @@ moduleText lsp uri =
                     lsp
                     (toNormalizedUri uri)
 
-testsBySection :: [Section] -> [(Section, Loc Test)]
+testsBySection :: [Section] -> [(Section, Test)]
 testsBySection sections =
     [(section, test) | section <- sections, test <- sectionTests section]
 
 type TEnv = (IdeState, String)
 
-runTests :: TEnv -> [(Section, Loc Test)] -> Ghc [TextEdit]
+runTests :: TEnv -> [(Section, Test)] -> Ghc [TextEdit]
 runTests e@(_st, _) tests = do
     df <- getInteractiveDynFlags
     evalSetup
@@ -482,7 +482,7 @@ runTests e@(_st, _) tests = do
 
     mapM (processTest e df) tests
   where
-    processTest :: TEnv -> DynFlags -> (Section, Loc Test) -> Ghc TextEdit
+    processTest :: TEnv -> DynFlags -> (Section, Test) -> Ghc TextEdit
     processTest e@(st, fp) df (section, test) = do
         let dbg = logWith st
         let pad = pad_ $ (if isLiterate fp then ("> " `T.append`) else id) $ padPrefix (sectionFormat section)
@@ -490,32 +490,32 @@ runTests e@(_st, _) tests = do
         rs <- runTest e df test
         dbg "TEST RESULTS" rs
 
-        let checkedResult = testCheck (section, unLoc test) rs
+        let checkedResult = testCheck (section, test) rs
 
-        let edit = asEdit (sectionFormat section) (sectionRange section)
-                test (map pad checkedResult)
+        let edit = asEdit (sectionFormat section) test (map pad checkedResult)
         dbg "TEST EDIT" edit
         return edit
 
     -- runTest :: String -> DynFlags -> Loc Test -> Ghc [Text]
     runTest _ df test
-        | not (hasQuickCheck df) && (isProperty . unLoc $ test) =
+        | not (hasQuickCheck df) && isProperty test =
             return $
                 singleLine
                     "Add QuickCheck to your cabal dependencies to run this test."
     runTest e df test = evals e df (asStatements test)
 
-asEdit :: Format -> Range -> Loc Test -> [Text] -> TextEdit
-asEdit (MultiLine commRange) testRange test resultLines
+asEdit :: Format -> Test -> [Text] -> TextEdit
+asEdit (MultiLine commRange) test resultLines
     -- A test in a block comment, ending with @-\}@ without newline in-between.
-    | testRange ^. end.line == commRange ^. end . line =
+    | testRange test ^. end.line == commRange ^. end . line
+    =
     TextEdit
         (Range
-            (view end testRange & character -~ 2)
+            (view end (testRange test) & character -~ 2)
             (resultRange test ^. end)
         )
         ("\n" <> T.unlines (resultLines <> ["-}"]))
-asEdit _ _ test resultLines =
+asEdit _ test resultLines =
     TextEdit (resultRange test) (T.unlines resultLines)
 
 {-
@@ -649,8 +649,8 @@ runGetSession st nfp =
                 -- GhcSessionDeps
                 nfp
 
-needsQuickCheck :: [(Section, Loc Test)] -> Bool
-needsQuickCheck = any (isProperty . unLoc . snd)
+needsQuickCheck :: [(Section, Test)] -> Bool
+needsQuickCheck = any (isProperty . snd)
 
 hasQuickCheck :: DynFlags -> Bool
 hasQuickCheck df = hasPackage df "QuickCheck"
