@@ -13,6 +13,8 @@ import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 import qualified Data.Text as T
+import Data.Default (def)
+import Ide.Plugin.Config (Config (maxCompletions))
 
 tests :: TestTree
 tests = testGroup "completions" [
@@ -220,6 +222,12 @@ tests = testGroup "completions" [
          let item = head $ filter ((== "flip") . (^. label)) compls
          liftIO $
              item ^. detail @?= Just ":: (a -> b -> c) -> b -> a -> c"
+
+     , testCase "maxCompletions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "Completion.hs" "haskell"
+
+         compls <- getCompletions doc (Position 5 7)
+         liftIO $ length compls @?= maxCompletions def
 
      , contextTests
      , snippetTests
