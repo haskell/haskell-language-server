@@ -34,6 +34,7 @@ import Development.Shake (Rules)
 import Ide.PluginUtils (getClientConfig, pluginEnabled, getPluginConfig, responseError, getProcessID)
 import Development.IDE.Types.Logger (logInfo)
 import Development.IDE.Core.Tracing
+import Control.Concurrent.Async (mapConcurrently)
 
 -- ---------------------------------------------------------------------
 
@@ -437,7 +438,7 @@ makeCompletions :: [(PluginId, CompletionProvider IdeState)]
 makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier doc) pos _context _mt)
   = do
       mprefix <- getPrefixAtPos lf doc pos
-      config <- getClientConfig lf
+      maxCompletions <- maxCompletions <$> getClientConfig lf
 
       let
           combine :: [CompletionResponseResult] -> CompletionResponseResult
@@ -450,37 +451,28 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
           go comp acc (CompletionList (CompletionListType comp' (List ls)) : rest) =
             go (comp && comp') (acc <> DList.fromList ls) rest
 
-          -- | Process a list of completion providers until we reach a max number of results
           makeAction ::
-            Int ->
-            [(PluginId, CompletionProvider IdeState)] ->
-            IO [Either ResponseError CompletionResponseResult]
-          makeAction 0 _ = return []
-          makeAction _ [] = return []
-          makeAction limit ((pid, p) : rest) = do
+            (PluginId, CompletionProvider IdeState) ->
+            IO (Either ResponseError CompletionResponseResult)
+          makeAction (pid, p) = do
             pluginConfig <- getPluginConfig lf pid
-            results <- if pluginEnabled pluginConfig plcCompletionOn
+            if pluginEnabled pluginConfig plcCompletionOn
                then otTracedProvider pid "completions" $ p lf ideState params
                else return $ Right $ Completions $ List []
-            case results of
-              Right resp -> do
-                let (limit', results') = consumeCompletionResponse limit resp
-                (Right results' :) <$> makeAction limit' rest
-              Left err ->
-                (Left err :) <$> makeAction limit rest
 
       case mprefix of
           Nothing -> return $ Right $ Completions $ List []
           Just _prefix -> do
-            mhs <- makeAction (maxCompletions config) sps
+            mhs <- mapConcurrently makeAction sps
             case rights mhs of
                 [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
-                hs -> return $ Right $ combine hs
+                hs -> return $ Right $ snd $ consumeCompletionResponse maxCompletions $ combine hs
 
 -- | Crops a completion response. Returns the final number of completions and the cropped response
 consumeCompletionResponse :: Int -> CompletionResponseResult -> (Int, CompletionResponseResult)
 consumeCompletionResponse limit it@(CompletionList (CompletionListType _ (List xx))) =
   case splitAt limit xx of
+    (_, []) -> (limit - length xx, it)
     (xx', _) -> (0, CompletionList (CompletionListType False (List xx')))
 consumeCompletionResponse n (Completions (List xx)) =
   consumeCompletionResponse n (CompletionList (CompletionListType False (List xx)))
