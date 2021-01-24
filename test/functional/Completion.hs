@@ -116,7 +116,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 0 13) (Position 0 31)) "NoOverload"
          _ <- applyEdit doc te
 
-         compls <- getCompletions doc (Position 0 24)
+         compls <- getCompletions doc (Position 0 23)
          let item = head $ filter ((== "NoOverloadedStrings") . (^. label)) compls
          liftIO $ do
              item ^. label @?= "NoOverloadedStrings"
