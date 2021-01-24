@@ -457,17 +457,17 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
             IO [Either ResponseError CompletionResponseResult]
           makeAction 0 _ = return []
           makeAction _ [] = return []
-          makeAction n ((pid, p) : rest) = do
+          makeAction limit ((pid, p) : rest) = do
             pluginConfig <- getPluginConfig lf pid
             results <- if pluginEnabled pluginConfig plcCompletionOn
                then otTracedProvider pid "completions" $ p lf ideState params
                else return $ Right $ Completions $ List []
             case results of
               Right resp -> do
-                let (n', results') = consumeCompletionResponse n resp
-                (Right results' :) <$> makeAction n' rest
+                let (limit', results') = consumeCompletionResponse limit resp
+                (Right results' :) <$> makeAction limit' rest
               Left err ->
-                (Left err :) <$> makeAction n rest
+                (Left err :) <$> makeAction limit rest
 
       case mprefix of
           Nothing -> return $ Right $ Completions $ List []
@@ -479,9 +479,8 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
 
 -- | Crops a completion response. Returns the final number of completions and the cropped response
 consumeCompletionResponse :: Int -> CompletionResponseResult -> (Int, CompletionResponseResult)
-consumeCompletionResponse n it@(CompletionList (CompletionListType _ (List xx))) =
-  case splitAt n xx of
-    (_, []) -> (n - length xx, it)
+consumeCompletionResponse limit it@(CompletionList (CompletionListType _ (List xx))) =
+  case splitAt limit xx of
     (xx', _) -> (0, CompletionList (CompletionListType False (List xx')))
 consumeCompletionResponse n (Completions (List xx)) =
   consumeCompletionResponse n (CompletionList (CompletionListType False (List xx)))
