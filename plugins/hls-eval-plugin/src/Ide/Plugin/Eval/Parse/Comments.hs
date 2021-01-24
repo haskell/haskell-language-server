@@ -9,7 +9,7 @@ module Ide.Plugin.Eval.Parse.Comments where
 import qualified Control.Applicative.Combinators.NonEmpty as NE
 import Control.Arrow (first, (&&&), (>>>))
 import Control.Lens (view, (^.))
-import Control.Monad (guard, void)
+import Control.Monad (guard, void, when)
 import Control.Monad.Combinators ()
 import qualified Data.Char as C
 import qualified Data.DList as DL
@@ -20,7 +20,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Void (Void)
 import Development.IDE (Position)
-import Development.IDE.Types.Location (Position (..), Position (Position))
+import Development.IDE.Types.Location (Position (..))
 import GHC.Generics
 import Ide.Plugin.Eval.Types
 import Language.Haskell.LSP.Types.Lens
@@ -92,8 +92,12 @@ data CommentFlavour = Vanilla | HaddockNext | HaddockPrev | Named String
 data CommentStyle = Line | Block
     deriving (Read, Show, Eq, Ord, Generic)
 
-commentsToSections :: Comments -> Sections
-commentsToSections Comments {..} =
+commentsToSections ::
+    -- | True if it is literate Haskell
+    Bool ->
+    Comments ->
+    Sections
+commentsToSections isLHS Comments {..} =
     let (lineSectionSeeds, lineSetupSeeds) =
             foldMap
                 ( \lcs ->
@@ -109,11 +113,23 @@ commentsToSections Comments {..} =
                                         DL.singleton (Line, rs)
                             )
                 )
-                $ groupLineComments lineComments
+                $ groupLineComments $
+                    Map.filterWithKey
+                        -- FIXME:
+                        -- To comply with the initial behaviour of
+                        -- Extended Eval Plugin;
+                        -- but it also rejects modules with
+                        -- non-zero base indentation level!
+                        ( \pos _ ->
+                            if isLHS
+                                then pos ^. character == 2
+                                else pos ^. character == 0
+                        )
+                        lineComments
         (blockSeed, blockSetupSeeds) =
             foldMap
                 ( \(ran, lcs) ->
-                    case parseMaybe (blockCommentBP ran) $ getRawBlockComment lcs of
+                    case parseMaybe (blockCommentBP isLHS ran) $ getRawBlockComment lcs of
                         Nothing -> mempty
                         Just (Named "setup", grp) ->
                             -- orders setup sections in ascending order
@@ -126,6 +142,10 @@ commentsToSections Comments {..} =
                             , mempty
                             )
                 )
+                -- It seems Extended Eval Plugin doesn't constraint
+                -- starting indentation level for block comments.
+                -- Rather, it constrains the indentation level /inside/
+                -- block comment body.
                 $ Map.toList blockComments
         lineSections =
             map (uncurry $ testsToSection Line) $
@@ -136,8 +156,8 @@ commentsToSections Comments {..} =
         setupSections =
             map (uncurry (`testsToSection` Named "setup")) $
                 DL.toList $
-                F.fold $
-                    Map.unionWith (<>) lineSetupSeeds blockSetupSeeds
+                    F.fold $
+                        Map.unionWith (<>) lineSetupSeeds blockSetupSeeds
      in Sections {..}
 
 testsToSection ::
@@ -186,8 +206,11 @@ fromTestComment AnExample {..} =
 -- Just (Named "setup",[AnExample {commentSectionStart = Position {_line = 1, _character = 0}, lineExamples = ExampleLine {getExampleLine = " dummyPos = Position 0 0"} :| [ExampleLine {getExampleLine = " dummyPosition = Position dummyPos dummyPos"}], exampleResults = []}])
 
 blockCommentBP ::
-    Position -> BlockCommentParser (CommentFlavour, [TestComment])
-blockCommentBP pos = do
+    -- | True if Literate Haskell
+    Bool ->
+    Position ->
+    BlockCommentParser (CommentFlavour, [TestComment])
+blockCommentBP isLHS pos = do
     updateParserState $ \st ->
         st
             { statePosState =
@@ -201,7 +224,7 @@ blockCommentBP pos = do
     hit <- skipNormalCommentBlock
     if hit
         then do
-            body <- many $ (blockExamples <|> blockProp) <* skipNormalCommentBlock
+            body <- many $ (blockExamples isLHS <|> blockProp isLHS) <* skipNormalCommentBlock
             void takeRest -- just consume the rest
             pure (flav, body)
         else pure (Vanilla, [])
@@ -214,12 +237,16 @@ skipNormalCommentBlock =
 eob :: BlockCommentParser ()
 eob = eof <|> try (optional (chunk "-}") *> eof) <|> void eol
 
-blockExamples, blockProp :: BlockCommentParser TestComment
-blockExamples = do
-    (ran, examples) <- withPosition $ NE.some $ exampleLineStrP Block
+blockExamples
+    , blockProp ::
+        -- | True if Literate Haskell
+        Bool ->
+        BlockCommentParser TestComment
+blockExamples isLHS = do
+    (ran, examples) <- withPosition $ NE.some $ exampleLineStrP isLHS Block
     AnExample ran examples <$> resultBlockP
-blockProp = do
-    (ran, prop) <- withPosition $ propLineStrP Block
+blockProp isLHS = do
+    (ran, prop) <- withPosition $ propLineStrP isLHS Block
     AProp ran prop <$> resultBlockP
 
 withPosition :: (TraversableStream s, Stream s) => Parser s a -> Parser s (Position, a)
@@ -267,7 +294,6 @@ lineGroupP = do
     case flav of
         Named "setup" -> (Nothing,) <$> lineCommentSectionsP
         flav -> (,mempty) . Just . (flav,) <$> lineCommentSectionsP
-
 
 -- >>>  parse (lineGroupP <*eof) "" $ (dummyPosition, ) . RawLineComment <$> ["-- a", "-- b"]
 -- Variable not in scope: dummyPosition :: Position
@@ -321,10 +347,14 @@ exampleLinesGP =
             <*> resultLinesP
 
 exampleLineGP :: LineGroupParser (Position, ExampleLine)
-exampleLineGP = parseLine (commentFlavourP *> exampleLineStrP Line)
+exampleLineGP =
+    -- In line-comments, indentation-level inside comment doesn't matter.
+    parseLine (commentFlavourP *> exampleLineStrP False Line)
 
 propLineGP :: LineGroupParser (Position, PropLine)
-propLineGP = parseLine (commentFlavourP *> propLineStrP Line)
+propLineGP =
+    -- In line-comments, indentation-level inside comment doesn't matter.
+    parseLine (commentFlavourP *> propLineStrP False Line)
 
 {- |
 Turning a line parser into line group parser consuming a single line comment.
@@ -377,20 +407,40 @@ consume style =
         Block -> manyTill anySingle eob
 
 -- | Parses example test line.
-exampleLineStrP :: CommentStyle -> LineParser ExampleLine
-exampleLineStrP style =
-    exampleSymbol *> (ExampleLine <$> consume style)
+exampleLineStrP ::
+    -- | True if Literate Haskell
+    Bool ->
+    CommentStyle ->
+    LineParser ExampleLine
+exampleLineStrP isLHS style =
+    -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
+    -- it must skip one space after a comment!
+    -- This prevents Eval Plugin from working on
+    -- modules with non-standard base indentation-level.
+    when (isLHS && style == Block) (void $ optional $ char ' ')
+        *> exampleSymbol
+        *> (ExampleLine <$> consume style)
 
 exampleSymbol :: Parser String ()
-exampleSymbol = chunk ">>>" *> P.notFollowedBy (char '>')
+exampleSymbol =
+    chunk ">>>" *> P.notFollowedBy (char '>')
 
 propSymbol :: Parser String ()
 propSymbol = chunk "prop>" *> P.notFollowedBy (char '>')
 
 -- | Parses prop test line.
-propLineStrP :: CommentStyle -> LineParser PropLine
-propLineStrP style =
-    chunk "prop>"
+propLineStrP ::
+    -- | True if Literate HAskell
+    Bool ->
+    CommentStyle ->
+    LineParser PropLine
+propLineStrP isLHS style =
+    -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
+    -- it must skip one space after a comment!
+    -- This prevents Eval Plugin from working on
+    -- modules with non-standard base indentation-level.
+    when (isLHS && style == Block) (void $ optional $ char ' ')
+        *> chunk "prop>"
         *> P.notFollowedBy (char '>')
         *> (PropLine <$> consume style)
 

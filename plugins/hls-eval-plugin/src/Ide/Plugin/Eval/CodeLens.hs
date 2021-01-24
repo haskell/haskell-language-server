@@ -1,5 +1,3 @@
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -154,7 +152,7 @@ import Ide.Plugin.Eval.GHC
       isExpr,
       showDynFlags,
     )
-import Ide.Plugin.Eval.Parse.Comments (commentsToSections, groupLineComments)
+import Ide.Plugin.Eval.Parse.Comments (commentsToSections)
 import Ide.Plugin.Eval.Parse.Option (langOptions)
 import Ide.Plugin.Eval.Types
 import Ide.Plugin.Eval.Util
@@ -233,6 +231,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
                 let nfp = toNormalizedFilePath' fp
+                    isLHS = isLiterate fp
                 dbg "fp" fp
                 (ParsedModule{..}, posMap) <- liftIO $
                     runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
@@ -270,7 +269,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 dbg "comments" $ show comments
 
                 -- Extract tests from source code
-                let Sections{..} = commentsToSections comments
+                let Sections{..} = commentsToSections isLHS comments
                     tests = testsBySection nonSetups
                     nonSetups = lineSections ++ multilineSections
                 cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
