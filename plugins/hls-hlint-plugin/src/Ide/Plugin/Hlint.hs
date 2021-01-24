@@ -197,17 +197,18 @@ getIdeas nfp = do
           if isNothing mbpm
               then return Nothing
               else do
-                     flags' <- setExtensions flags
-                     (fp, contents) <- getPathAndContents
-                     Just <$> (liftIO $ parseModuleEx flags' fp contents)
+                flags' <- setExtensions flags
+                (fp, contents) <- fromMaybe getPathAndContents getHsppPathAndContents
+                Just <$> (liftIO $ parseModuleEx flags' fp contents)
 
         getPathAndContents = do
             (_, contents) <- getFileContents nfp
             let fp = fromNormalizedFilePath nfp
             return (fp, T.unpack <$> contents)
 
-        getPreprocessedPathAndContents m= do
-            let modsum = pm_mod_summary
+        getHsppPathAndContents m = do
+            let modsum = pm_mod_summary m
+            sequence (ms_hspp_file modsum, show <$> ms_hspp_buf modsum)
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
