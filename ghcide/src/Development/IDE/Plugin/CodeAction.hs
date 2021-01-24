@@ -108,9 +108,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
         [ mkCA title  [x] edit
         | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-        ] <> caRemoveInvalidExports parsedModule text diag xs uri
-          <> caRemoveRedundantImports parsedModule text diag xs uri
-
+        ]
       actions' =
           [mkCA title [x] edit
           | x <- xs
@@ -120,7 +118,11 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
           , let edit = either error id $
                         rewriteToEdit dynflags uri (annsA ps) graft
           ]
-    pure $ Right $ actions' <> actions
+      actions'' = caRemoveRedundantImports parsedModule text diag xs uri
+               <> actions
+               <> actions'
+               <> caRemoveInvalidExports parsedModule text diag xs uri
+    pure $ Right actions''
 
 mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
 mkCA title diags edit =
