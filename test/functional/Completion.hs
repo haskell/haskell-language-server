@@ -104,7 +104,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 0 13) (Position 0 31)) "Str"
          _ <- applyEdit doc te
 
-         compls <- getCompletions doc (Position 0 24)
+         compls <- getCompletions doc (Position 0 16)
          let item = head $ filter ((== "Strict") . (^. label)) compls
          liftIO $ do
              item ^. label @?= "Strict"
