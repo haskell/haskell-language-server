@@ -200,10 +200,11 @@ fromTestComment AnExample {..} =
 
 {- $setup
 >>> dummyPos = Position 0 0
+>>> parseE p = either (error . errorBundlePretty) id . parse p ""
 -}
 
--- >>> parseMaybe (blockCommentBP $ dummyPos) "{- $setup\n>>> dummyPos = Position 0 0\n>>> dummyPosition = Position dummyPos dummyPos\n-}"
--- Just (Named "setup",[AnExample {commentSectionStart = Position {_line = 1, _character = 0}, lineExamples = ExampleLine {getExampleLine = " dummyPos = Position 0 0"} :| [ExampleLine {getExampleLine = " dummyPosition = Position dummyPos dummyPos"}], exampleResults = []}])
+-- >>> parseE (blockCommentBP True dummyPos) "{- |\n  >>> 5+5\n  11\n  -}"
+-- (HaddockNext,[AnExample {commentSectionStart = Position {_line = 1, _character = 0}, lineExamples = ExampleLine {getExampleLine = " 5+5"} :| [], exampleResults = ["  11"]}])
 
 blockCommentBP ::
     -- | True if Literate Haskell
@@ -221,18 +222,32 @@ blockCommentBP isLHS pos = do
     skipCount 2 anySingle -- "{-"
     void $ optional $ char ' '
     flav <- commentFlavourP
-    hit <- skipNormalCommentBlock
+    hit <- skipNormalCommentBlock isLHS
     if hit
         then do
-            body <- many $ (blockExamples isLHS <|> blockProp isLHS) <* skipNormalCommentBlock
+            body <- many $ (blockExamples isLHS <|> blockProp isLHS)
+                <* skipNormalCommentBlock isLHS
             void takeRest -- just consume the rest
             pure (flav, body)
-        else pure (Vanilla, [])
+        else pure (flav, [])
 
-skipNormalCommentBlock :: Parser String Bool
-skipNormalCommentBlock =
-    skipManyTill (normalLineP Block) $
-        False <$ try (optional (chunk "-}") *> eof) <|> True <$ lookAhead (propSymbol <|> exampleSymbol)
+skipNormalCommentBlock ::
+    -- | True if Literate Haskell
+    Bool ->
+    Parser String Bool
+skipNormalCommentBlock isLHS =
+    skipManyTill (normalLineP isLHS Block) $
+        False <$ try (optional (chunk "-}") *> eof)
+            <|> True <$ lookAhead (try $ testSymbol isLHS Block)
+
+testSymbol :: Bool -> CommentStyle -> Parser String ()
+testSymbol isLHS style =
+    -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
+    -- it must skip one space after a comment!
+    -- This prevents Eval Plugin from working on
+    -- modules with non-standard base indentation-level.
+    when (isLHS && style == Block) (void $ count' 0 2 $ char ' ')
+        *> (exampleSymbol <|> propSymbol)
 
 eob :: BlockCommentParser ()
 eob = eof <|> try (optional (chunk "-}") *> eof) <|> void eol
@@ -334,7 +349,7 @@ resultLinesP = many nonEmptyLGP
 
 normalLineCommentP :: LineGroupParser (Position, String)
 normalLineCommentP =
-    parseLine (commentFlavourP *> normalLineP Line)
+    parseLine (commentFlavourP *> normalLineP False Line)
 
 nonEmptyLGP :: LineGroupParser String
 nonEmptyLGP = try $ fmap snd $ parseLine $ commentFlavourP *> nonEmptyNormalLineP Line
@@ -388,16 +403,21 @@ parseLine p =
 -- | Non-empty normal line.
 nonEmptyNormalLineP :: CommentStyle -> LineParser String
 nonEmptyNormalLineP style = try $ do
-    ln <- normalLineP style
+    ln <- normalLineP False style
     guard $ not $ all C.isSpace ln
     pure ln
 
 {- | Normal line is a line neither a example nor prop.
  Empty line is normal.
 -}
-normalLineP :: CommentStyle -> LineParser String
-normalLineP style = do
-    notFollowedBy (try $ exampleSymbol <|> propSymbol)
+normalLineP ::
+    -- | True if Literate Haskell
+    Bool ->
+    CommentStyle ->
+    LineParser String
+normalLineP isLHS style = do
+    notFollowedBy
+        (try $ testSymbol isLHS style)
     consume style
 
 consume :: CommentStyle -> Parser String String
@@ -412,12 +432,12 @@ exampleLineStrP ::
     Bool ->
     CommentStyle ->
     LineParser ExampleLine
-exampleLineStrP isLHS style =
+exampleLineStrP isLHS style = try $
     -- FIXME: To comply with existing Extended Eval Plugin Behaviour;
     -- it must skip one space after a comment!
     -- This prevents Eval Plugin from working on
     -- modules with non-standard base indentation-level.
-    when (isLHS && style == Block) (void $ optional $ char ' ')
+    when (isLHS && style == Block) (void $ count' 0 2 $ char ' ')
         *> exampleSymbol
         *> (ExampleLine <$> consume style)
 
@@ -439,7 +459,7 @@ propLineStrP isLHS style =
     -- it must skip one space after a comment!
     -- This prevents Eval Plugin from working on
     -- modules with non-standard base indentation-level.
-    when (isLHS && style == Block) (void $ optional $ char ' ')
+    when (isLHS && style == Block) (void $ count' 0 2 $ char ' ')
         *> chunk "prop>"
         *> P.notFollowedBy (char '>')
         *> (PropLine <$> consume style)
