@@ -50,6 +50,7 @@ import Test.Tasty.HUnit (
     testCase,
     (@?=),
  )
+import System.Time.Extra (sleep)
 
 tests :: TestTree
 tests =
@@ -178,8 +179,10 @@ goldenTestBy fltr input = runSession hlsCommand fullCaps evalPath $ do
     codeLenses <- reverse <$> getCodeLensesBy fltr doc
     -- liftIO $ print codeLenses
 
-    -- Execute sequentially
-    mapM_ executeCmd $ [c | CodeLens{_command = Just c} <- codeLenses]
+    -- Execute sequentially, waiting for a moment to
+    -- avoid mis-insertion due to staled location info.
+    mapM_ (\cmd -> liftIO (sleep 0.5) *> executeCmd cmd)
+        [c | CodeLens{_command = Just c} <- codeLenses]
 
     edited <- replaceUnicodeQuotes <$> documentContents doc
     -- liftIO $ T.putStrLn edited
