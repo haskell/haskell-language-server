@@ -122,7 +122,7 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
                <> actions
                <> actions'
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right $ actions''
+    pure $ Right actions''
 
 mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
 mkCA title diags edit =
