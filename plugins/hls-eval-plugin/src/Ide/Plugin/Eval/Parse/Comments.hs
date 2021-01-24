@@ -21,6 +21,7 @@ import qualified Data.Char as C
 import qualified Data.DList as DL
 import qualified Data.Foldable as F
 import Data.Function ((&))
+import Data.Functor.Identity
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import Data.Map.Strict (Map)
@@ -45,7 +46,6 @@ import Text.Megaparsec.Char
       hspace,
       letterChar,
     )
-import Data.Functor.Identity
 
 {- |
 We build parsers combining the following three kinds of them:
@@ -314,14 +314,17 @@ withRange ::
 withRange p = do
     beg <- sourcePosToPosition <$> getSourcePos
     as <- p
-    let fin | null as = beg
+    let fin
+            | null as = beg
             | otherwise = snd $ last $ F.toList as
     pure (Range beg fin, fst <$> as)
 
 resultBlockP :: BlockCommentParser [String]
-resultBlockP = many $
-    fmap fst . nonEmptyNormalLineP
-    . Block =<< view blockRangeL
+resultBlockP = do
+    BlockEnv {..} <- ask
+    many $
+        fmap fst . nonEmptyNormalLineP isLhs $
+            Block blockRange
 
 positionToSourcePos :: Position -> SourcePos
 positionToSourcePos pos =
@@ -402,8 +405,11 @@ normalLineCommentP =
     parseLine (fst <$ commentFlavourP <*> normalLineP False Line)
 
 nonEmptyLGP :: LineGroupParser String
-nonEmptyLGP = try $ fmap snd $ parseLine $
-    fst <$ commentFlavourP <*> nonEmptyNormalLineP Line
+nonEmptyLGP =
+    try $
+        fmap snd $
+            parseLine $
+                fst <$ commentFlavourP <*> nonEmptyNormalLineP False Line
 
 exampleLinesGP :: LineGroupParser TestComment
 exampleLinesGP =
@@ -456,9 +462,13 @@ parseLine p =
 -- * Line Parsers
 
 -- | Non-empty normal line.
-nonEmptyNormalLineP :: CommentStyle -> LineParser (String, Position)
-nonEmptyNormalLineP style = try $ do
-    (ln, pos) <- normalLineP False style
+nonEmptyNormalLineP ::
+    -- | True if Literate Haskell
+    Bool ->
+    CommentStyle ->
+    LineParser (String, Position)
+nonEmptyNormalLineP isLHS style = try $ do
+    (ln, pos) <- normalLineP isLHS style
     guard $ not $ all C.isSpace ln
     pure (ln, pos)
 
@@ -473,6 +483,8 @@ normalLineP ::
 normalLineP isLHS style = do
     notFollowedBy
         (try $ testSymbol isLHS style)
+    when (isLHS && is _Block style) $
+        void $ count' 0 2 $ char ' '
     consume style
 
 consume :: CommentStyle -> LineParser (String, Position)
