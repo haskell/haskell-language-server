@@ -30,7 +30,7 @@ import Development.IDE.GHC.Util
 import Development.IDE.LSP.Server
 import TcRnDriver (tcRnImportDecls)
 import Data.Maybe
-import Ide.Plugin.Config (Config (completionSnippetsOn, maxCompletions))
+import Ide.Plugin.Config (Config (completionSnippetsOn))
 import Ide.PluginUtils (getClientConfig)
 
 #if defined(GHC_LIB)
@@ -146,8 +146,7 @@ getCompletionsLSP lsp ide
                 config <- getClientConfig lsp
                 let snippets = WithSnippets . completionSnippetsOn $ config
                 allCompletions <- getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
-                let (topCompletions, rest) = splitAt (maxCompletions config) allCompletions
-                pure $ CompletionList (CompletionListType (null rest) (List topCompletions))
+                pure $ Completions (List allCompletions)
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])

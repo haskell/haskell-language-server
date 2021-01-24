@@ -6,9 +6,10 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception(SomeException, catch)
-import           Control.Lens ( (^.) )
+import           Control.Lens ((^.))
 import           Control.Monad
 import qualified Data.Aeson as J
+import qualified Data.DList as DList
 import           Data.Either
 import qualified Data.List                     as List
 import qualified Data.Map  as Map
@@ -33,6 +34,7 @@ import Development.Shake (Rules)
 import Ide.PluginUtils (getClientConfig, pluginEnabled, getPluginConfig, responseError, getProcessID)
 import Development.IDE.Types.Logger (logInfo)
 import Development.IDE.Core.Tracing
+import Control.Concurrent.Async (mapConcurrently)
 
 -- ---------------------------------------------------------------------
 
@@ -97,7 +99,7 @@ makeCodeAction cas lf ideState (CodeActionParams docId range context _) = do
           if pluginEnabled pluginConfig plcCodeActionsOn
             then otTracedProvider pid "codeAction" $ provider lf ideState pid docId range context
             else return $ Right (List [])
-    r <- mapM makeAction cas
+    r <- mapConcurrently makeAction cas
     let actions = filter wasRequested . foldMap unL $ rights r
     res <- send caps actions
     return $ Right res
@@ -171,7 +173,7 @@ makeCodeLens cas lf ideState params = do
           doOneRight (pid, Right a) = [(pid,a)]
           doOneRight (_, Left _) = []
 
-    r <- mapM makeLens cas
+    r <- mapConcurrently makeLens cas
     case breakdown r of
         ([],[]) -> return $ Right $ List []
         (es,[]) -> return $ Left $ ResponseError InternalError (T.pack $ "codeLens failed:" ++ show es) Nothing
@@ -306,7 +308,7 @@ makeHover hps lf ideState params
           if pluginEnabled pluginConfig plcHoverOn
              then otTracedProvider pid "hover" $ p ideState params
              else return $ Right Nothing
-      mhs <- mapM makeHover hps
+      mhs <- mapConcurrently makeHover hps
       -- TODO: We should support ServerCapabilities and declare that
       -- we don't support hover requests during initialization if we
       -- don't have any hover providers
@@ -361,7 +363,7 @@ makeSymbols sps lf ideState params
             if pluginEnabled pluginConfig plcSymbolsOn
               then otTracedProvider pid "symbols" $ p lf ideState params
               else return $ Right []
-      mhs <- mapM makeSymbols sps
+      mhs <- mapConcurrently makeSymbols sps
       case rights mhs of
           [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
           hs -> return $ Right $ convertSymbols $ concat hs
@@ -391,7 +393,7 @@ renameWith providers lspFuncs state params = do
              then otTracedProvider pid "rename" $ p lspFuncs state params
              else return $ Right $ WorkspaceEdit Nothing Nothing
     -- TODO:AZ: we need to consider the right way to combine possible renamers
-    results <- mapM makeAction providers
+    results <- mapConcurrently makeAction providers
     case partitionEithers results of
         (errors, []) -> return $ Left $ responseError $ T.pack $ show errors
         (_, edits) -> return $ Right $ mconcat edits
@@ -436,22 +438,23 @@ makeCompletions :: [(PluginId, CompletionProvider IdeState)]
 makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier doc) pos _context _mt)
   = do
       mprefix <- getPrefixAtPos lf doc pos
-      _snippets <- WithSnippets . completionSnippetsOn <$> getClientConfig lf
+      maxCompletions <- maxCompletions <$> getClientConfig lf
 
       let
           combine :: [CompletionResponseResult] -> CompletionResponseResult
-          combine cs = go (Completions $ List []) cs
-              where
-                  go acc [] = acc
-                  go (Completions (List ls)) (Completions (List ls2):rest)
-                      = go (Completions (List (ls <> ls2))) rest
-                  go (Completions (List ls)) (CompletionList (CompletionListType complete (List ls2)):rest)
-                      = go (CompletionList $ CompletionListType complete (List (ls <> ls2))) rest
-                  go (CompletionList (CompletionListType complete (List ls))) (CompletionList (CompletionListType complete2 (List ls2)):rest)
-                      = go (CompletionList $ CompletionListType (complete || complete2) (List (ls <> ls2))) rest
-                  go (CompletionList (CompletionListType complete (List ls))) (Completions (List ls2):rest)
-                      = go (CompletionList $ CompletionListType complete (List (ls <> ls2))) rest
-          makeAction (pid,p) = do
+          combine cs = go True mempty cs
+
+          go !comp acc [] =
+            CompletionList (CompletionListType comp (List $ DList.toList acc))
+          go comp acc (Completions (List ls) : rest) =
+            go comp (acc <> DList.fromList ls) rest
+          go comp acc (CompletionList (CompletionListType comp' (List ls)) : rest) =
+            go (comp && comp') (acc <> DList.fromList ls) rest
+
+          makeAction ::
+            (PluginId, CompletionProvider IdeState) ->
+            IO (Either ResponseError CompletionResponseResult)
+          makeAction (pid, p) = do
             pluginConfig <- getPluginConfig lf pid
             if pluginEnabled pluginConfig plcCompletionOn
                then otTracedProvider pid "completions" $ p lf ideState params
@@ -460,10 +463,19 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
       case mprefix of
           Nothing -> return $ Right $ Completions $ List []
           Just _prefix -> do
-            mhs <- mapM makeAction sps
+            mhs <- mapConcurrently makeAction sps
             case rights mhs of
                 [] -> return $ Left $ responseError $ T.pack $ show $ lefts mhs
-                hs -> return $ Right $ combine hs
+                hs -> return $ Right $ snd $ consumeCompletionResponse maxCompletions $ combine hs
+
+-- | Crops a completion response. Returns the final number of completions and the cropped response
+consumeCompletionResponse :: Int -> CompletionResponseResult -> (Int, CompletionResponseResult)
+consumeCompletionResponse limit it@(CompletionList (CompletionListType _ (List xx))) =
+  case splitAt limit xx of
+    (_, []) -> (limit - length xx, it)
+    (xx', _) -> (0, CompletionList (CompletionListType False (List xx')))
+consumeCompletionResponse n (Completions (List xx)) =
+  consumeCompletionResponse n (CompletionList (CompletionListType False (List xx)))
 
 getPrefixAtPos :: LSP.LspFuncs Config -> Uri -> Position -> IO (Maybe VFS.PosPrefixInfo)
 getPrefixAtPos lf uri pos = do
