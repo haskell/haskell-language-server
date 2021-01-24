@@ -4,7 +4,7 @@
 -- | Exposes the ghcide features as an HLS plugin
 module Development.IDE.Plugin.HLS.GhcIde
   (
-    descriptor
+    descriptors
   ) where
 import Development.IDE
 import Development.IDE.LSP.HoverDefinition
@@ -13,6 +13,17 @@ import Ide.PluginUtils
 import Ide.Types
 import Language.Haskell.LSP.Types
 import Text.Regex.TDFA.Text()
+import qualified Development.IDE.Plugin.CodeAction as CodeAction
+import qualified Development.IDE.Plugin.Completions as Completions
+import qualified Development.IDE.Plugin.TypeLenses as TypeLenses
+
+descriptors :: [PluginDescriptor IdeState]
+descriptors =
+  [ descriptor "ghcide-hover-and-symbols",
+    CodeAction.descriptor "ghcide-code-actions",
+    Completions.descriptor "ghcide-completions",
+    TypeLenses.descriptor "ghcide-type-lenses"
+  ]
 
 -- ---------------------------------------------------------------------
 

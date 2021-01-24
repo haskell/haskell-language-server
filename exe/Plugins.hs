@@ -2,16 +2,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Plugins where
 
-import           Ide.Types                 (IdePlugins)
+import Ide.Types (IdePlugins)
 import           Ide.PluginUtils           (pluginDescToIdePlugins)
 
 -- fixed plugins
 import           Ide.Plugin.Example        as Example
 import           Ide.Plugin.Example2       as Example2
 import           Development.IDE           (IdeState)
-import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import           Development.IDE.Plugin.Completions as Completions
-import           Development.IDE.Plugin.TypeLenses as TypeLenses
+import Development.IDE.Plugin.HLS.GhcIde as GhcIde
 
 -- haskell-language-server optional plugins
 
@@ -91,55 +89,53 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
                    then basePlugins ++ examplePlugins
                    else basePlugins
     basePlugins =
-      [ GhcIde.descriptor  "ghcide"
-      , TypeLenses.descriptor "type-lenses"
-      , Completions.descriptor "completions"
+      GhcIde.descriptors ++
 #if pragmas
-      , Pragmas.descriptor  "pragmas"
+      Pragmas.descriptor  "pragmas" :
 #endif
 #if floskell
-      , Floskell.descriptor "floskell"
+      Floskell.descriptor "floskell" :
 #endif
 #if fourmolu
-      , Fourmolu.descriptor "fourmolu"
+      Fourmolu.descriptor "fourmolu" :
 #endif
 #if tactic
-      , Tactic.descriptor "tactic"
+      Tactic.descriptor "tactic" :
 #endif
 #if ormolu
-      , Ormolu.descriptor   "ormolu"
+      Ormolu.descriptor   "ormolu" :
 #endif
 #if stylishHaskell
-      , StylishHaskell.descriptor "stylish-haskell"
+      StylishHaskell.descriptor "stylish-haskell" :
 #endif
 #if retrie
-      , Retrie.descriptor "retrie"
+      Retrie.descriptor "retrie" :
 #endif
 #if AGPL && brittany
-      , Brittany.descriptor "brittany"
+      Brittany.descriptor "brittany" :
 #endif
 #if class
-      , Class.descriptor "class"
+      Class.descriptor "class" :
 #endif
 #if haddockComments
-      , HaddockComments.descriptor "haddockComments"
+      HaddockComments.descriptor "haddockComments" :
 #endif
 #if eval
-      , Eval.descriptor "eval"
+      Eval.descriptor "eval" :
 #endif
 #if importLens
-      , ExplicitImports.descriptor "importLens"
+      ExplicitImports.descriptor "importLens" :
 #endif
 #if moduleName
-      , ModuleName.descriptor "moduleName"
+      ModuleName.descriptor "moduleName" :
 #endif
 #if hlint
-      , Hlint.descriptor "hlint"
+      Hlint.descriptor "hlint" :
 #endif
 #if splice
-      , Splice.descriptor "splice"
+      Splice.descriptor "splice" :
 #endif
-      ]
+      []
     examplePlugins =
       [Example.descriptor  "eg"
       ,Example2.descriptor "eg2"

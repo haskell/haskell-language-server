@@ -28,8 +28,6 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Options
 import Development.IDE.Types.Logger
 import Development.IDE.Plugin
-import Development.IDE.Plugin.Completions as Completions
-import Development.IDE.Plugin.TypeLenses as TypeLenses
 import Development.IDE.Plugin.Test as Test
 import Development.IDE.Session (loadSession)
 import Development.Shake (ShakeOptions (shakeThreads))
@@ -90,10 +88,7 @@ main = do
     dir <- IO.getCurrentDirectory
 
     let hlsPlugins = pluginDescToIdePlugins $
-            [ GhcIde.descriptor "ghcide"
-            , TypeLenses.descriptor "type-lenses"
-            , Completions.descriptor "ghcide-completions"
-            ] ++
+            GhcIde.descriptors ++
             [ Test.blockCommandDescriptor "block-command" | argsTesting]
 
     pid <- T.pack . show <$> getProcessID
