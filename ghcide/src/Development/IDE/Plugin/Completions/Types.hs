@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingStrategies #-}
 module Development.IDE.Plugin.Completions.Types (
   module Development.IDE.Plugin.Completions.Types
 ) where
@@ -8,13 +10,24 @@ import qualified Data.Text as T
 import SrcLoc
 
 import Development.IDE.Spans.Common
-import Language.Haskell.LSP.Types (TextEdit, CompletionItemKind)
-
--- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
-
+import Data.Aeson (FromJSON, ToJSON)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Language.Haskell.LSP.Types (CompletionItemKind, Uri)
 data Backtick = Surrounded | LeftSide
   deriving (Eq, Ord, Show)
 
+extendImportCommandId :: Text
+extendImportCommandId = "extendImport"
+
+data ExtendImport = ExtendImport
+  { doc :: !Uri,
+    newThing :: !T.Text,
+    thingParent :: !(Maybe T.Text),
+    importName :: !T.Text
+  }
+  deriving (Eq, Show, Generic)
+  deriving anyclass (FromJSON, ToJSON)
 data CompItem = CI
   { compKind     :: CompletionItemKind
   , insertText   :: T.Text         -- ^ Snippet for the completion
@@ -25,7 +38,7 @@ data CompItem = CI
                                    -- in the context of an infix notation.
   , docs         :: SpanDoc        -- ^ Available documentation.
   , isTypeCompl  :: Bool
-  , additionalTextEdits :: Maybe [TextEdit]
+  , additionalTextEdits :: Maybe ExtendImport
   }
   deriving (Eq, Show)
 

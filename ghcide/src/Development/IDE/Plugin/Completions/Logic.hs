@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs#-}
 
@@ -13,12 +14,12 @@ module Development.IDE.Plugin.Completions.Logic (
 ) where
 
 import Control.Applicative
-import Data.Char (isAlphaNum, isUpper)
+import Data.Char (isUpper)
 import Data.Generics
 import Data.List.Extra as List hiding (stripPrefix)
 import qualified Data.Map  as Map
 
-import Data.Maybe (listToMaybe, fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Text as T
 import qualified Text.Fuzzy as Fuzzy
 
@@ -53,7 +54,11 @@ import GhcPlugins (
     flLabel,
     unpackFS)
 import Data.Either (fromRight)
-import Ide.Types(WithSnippets(..))
+import Data.Aeson (ToJSON (toJSON))
+import Data.Functor
+import Ide.PluginUtils (mkLspCommand)
+import Ide.Types (CommandId (..), PluginId, WithSnippets (..))
+import Control.Monad
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -153,9 +158,11 @@ showModName = T.pack . moduleNameString
 --     Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
 --     Nothing Nothing Nothing Nothing Nothing
 
-mkCompl :: IdeOptions -> CompItem -> CompletionItem
-mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs, additionalTextEdits} =
-  CompletionItem {_label = label,
+mkCompl :: PluginId -> IdeOptions -> CompItem -> IO CompletionItem
+mkCompl pId IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs, additionalTextEdits} = do
+  mbCommand <- mkAdditionalEditsCommand pId `traverse` additionalTextEdits
+  return CompletionItem
+                 {_label = label,
                   _kind = kind,
                   _tags = Nothing,
                   _detail = (colon <>) <$> typeText,
@@ -167,9 +174,9 @@ mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs,
                   _insertText = Just insertText,
                   _insertTextFormat = Just Snippet,
                   _textEdit = Nothing,
-                  _additionalTextEdits = List <$> additionalTextEdits,
+                  _additionalTextEdits = Nothing,
                   _commitCharacters = Nothing,
-                  _command = Nothing,
+                  _command = mbCommand,
                   _xdata = Nothing}
 
   where kind = Just compKind
@@ -182,8 +189,12 @@ mkCompl IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs,
                         MarkupContent MkMarkdown $
                         T.intercalate sectionSeparator docs'
 
-mkNameCompItem :: Name -> ModuleName -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
-mkNameCompItem origName origMod thingType isInfix docs !imp = CI{..}
+mkAdditionalEditsCommand :: PluginId -> ExtendImport -> IO Command
+mkAdditionalEditsCommand pId edits =
+  mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
+
+mkNameCompItem :: Uri -> Maybe T.Text -> Name -> ModuleName -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
+mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI {..}
   where
     compKind = occNameToComKind typeText $ occName origName
     importedFrom = Right $ showModName origMod
@@ -199,7 +210,14 @@ mkNameCompItem origName origMod thingType isInfix docs !imp = CI{..}
     typeText
           | Just t <- thingType = Just . stripForall $ showGhc t
           | otherwise = Nothing
-    additionalTextEdits = imp >>= extendImportList (showGhc origName)
+    additionalTextEdits =
+      imp <&> \x ->
+        ExtendImport
+          { doc,
+            thingParent,
+            importName = showModName $ unLoc $ ideclName $ unLoc x,
+            newThing = showNameWithoutUniques origName
+          }
 
     stripForall :: T.Text -> T.Text
     stripForall t
@@ -261,30 +279,8 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-extendImportList :: T.Text -> LImportDecl GhcPs -> Maybe [TextEdit]
-extendImportList name lDecl = let
-    f (Just range) ImportDecl {ideclHiding} = case ideclHiding of
-        Just (False, x)
-          | Set.notMember name (Set.fromList [T.pack (show y) | y <- unLoc x])
-          -> let
-            start_pos = _end range
-            new_start_pos = start_pos {_character = _character start_pos - 1}
-            -- use to same start_pos to handle situation where we do not have latest edits due to caching of Rules
-            new_range = Range new_start_pos new_start_pos
-            -- we cannot wrap mapM_ inside (mapM_) but we need to wrap (<$)
-            alpha = T.all isAlphaNum $ T.filter (\c -> c /= '_') name
-            result = if alpha then name <> ", "
-                else "(" <> name <> "), "
-            in Just [TextEdit new_range result]
-          | otherwise -> Nothing
-        _ -> Nothing  -- hiding import list and no list
-    f _ _ = Nothing
-    src_span = srcSpanToRange . getLoc $ lDecl
-    in f src_span . unLoc $ lDecl
-
-
-cacheDataProducer :: HscEnv -> Module -> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
-cacheDataProducer packageState curMod rdrEnv limports deps = do
+cacheDataProducer :: Uri -> HscEnv -> Module -> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer uri packageState curMod rdrEnv limports deps = do
   let dflags = hsc_dflags packageState
       curModName = moduleName curMod
 
@@ -312,9 +308,9 @@ cacheDataProducer packageState curMod rdrEnv limports deps = do
       getCompls = foldMapM getComplsForOne
 
       getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
-      getComplsForOne (GRE n _ True _) =
-          (, mempty) <$> toCompItem curMod curModName n Nothing
-      getComplsForOne (GRE n _ False prov) =
+      getComplsForOne (GRE n par True _) =
+          (, mempty) <$> toCompItem par curMod curModName n Nothing
+      getComplsForOne (GRE n par False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
           compItem <- toCompItem curMod (is_mod spec) n Nothing
           let unqual
@@ -327,25 +323,27 @@ cacheDataProducer packageState curMod rdrEnv limports deps = do
               origMod = showModName (is_mod spec)
           return (unqual,QualCompls qual)
 
-      toCompItem :: Module -> ModuleName -> Name -> Maybe (LImportDecl GhcPs) -> IO [CompItem]
-      toCompItem m mn n imp' = do
+      toCompItem :: Parent -> Module -> ModuleName -> Name -> Maybe (LImportDecl GhcPs) -> IO [CompItem]
+      toCompItem par m mn n imp' = do
         docs <- getDocumentationTryGhc packageState curMod deps n
-        ty <- catchSrcErrors (hsc_dflags packageState) "completion" $ do
+        let mbParent = case par of
+                            NoParent -> Nothing
+                            ParentIs n -> Just (showNameWithoutUniques n)
+                            FldParent n _ -> Just (showNameWithoutUniques n)
+        tys <- catchSrcErrors (hsc_dflags packageState) "completion" $ do
                 name' <- lookupName packageState m n
-                return $ name' >>= safeTyThingType
-        -- use the same pass to also capture any Record snippets that we can collect
-        record_ty <- catchSrcErrors (hsc_dflags packageState) "record-completion" $ do
-                name' <- lookupName packageState m n
-                return $ name' >>= safeTyThingForRecord
+                return ( name' >>= safeTyThingType
+                       , guard (isJust mbParent) >> name' >>= safeTyThingForRecord
+                       )
+        let (ty, record_ty) = fromRight (Nothing, Nothing) tys
 
-        let recordCompls = case fromRight Nothing record_ty of
-                Just (ctxStr, flds) -> case flds of
-                    [] -> []
-                    _ -> [mkRecordSnippetCompItem ctxStr flds (ppr mn) docs imp']
-                Nothing -> []
+        let recordCompls = case record_ty of
+                Just (ctxStr, flds) | not (null flds) ->
+                    [mkRecordSnippetCompItem uri mbParent  ctxStr flds (ppr mn) docs imp']
+                _ -> []
 
-        return $ mkNameCompItem n mn (fromRight Nothing ty) Nothing docs imp'
-                 : recordCompls
+        return $ mkNameCompItem uri mbParent n mn ty Nothing docs imp'
+               : recordCompls
 
   (unquals,quals) <- getCompls rdrElts
 
@@ -358,8 +356,8 @@ cacheDataProducer packageState curMod rdrEnv limports deps = do
 
 
 -- | Produces completions from the top level declarations of a module.
-localCompletionsForParsedModule :: ParsedModule -> CachedCompletions
-localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls, hsmodName}} =
+localCompletionsForParsedModule :: Uri -> ParsedModule -> CachedCompletions
+localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls, hsmodName}} =
     CC { allModNamesAsNS = mempty
        , unqualCompls = compls
        , qualCompls = mempty
@@ -394,7 +392,7 @@ localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{
                         | id <- listify (\(_ :: Located(IdP GhcPs)) -> True) x
                         , let cl = occNameToComKind Nothing (rdrNameOcc $ unLoc id)]
                     -- here we only have to look at the outermost type
-                    recordCompls = findRecordCompl pm thisModName x
+                    recordCompls = findRecordCompl uri pm thisModName x
                 in
                    -- the constructors and snippets will be duplicated here giving the user 2 choices.
                    generalCompls ++ recordCompls
@@ -414,10 +412,11 @@ localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{
 
     thisModName = ppr hsmodName
 
-findRecordCompl :: ParsedModule -> T.Text -> TyClDecl GhcPs -> [CompItem]
-findRecordCompl pmod mn DataDecl {tcdLName, tcdDataDefn} = result
+findRecordCompl :: Uri -> ParsedModule -> T.Text -> TyClDecl GhcPs -> [CompItem]
+findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
     where
-        result = [mkRecordSnippetCompItem (showGhc . unLoc $ con_name) field_labels mn doc Nothing
+        result = [mkRecordSnippetCompItem uri (Just $ showNameWithoutUniques $ unLoc tcdLName)
+                        (showGhc . unLoc $ con_name) field_labels mn doc Nothing
                  | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
                  , Just  con_details <- [getFlds con_args]
                  , let field_names = mapMaybe extract con_details
@@ -438,7 +437,7 @@ findRecordCompl pmod mn DataDecl {tcdLName, tcdDataDefn} = result
             | otherwise = Nothing
         -- XConDeclField
         extract _ = Nothing
-findRecordCompl _ _ _ = []
+findRecordCompl _ _ _ _ = []
 
 ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
@@ -455,7 +454,8 @@ toggleSnippets ClientCapabilities { _textDocument } (WithSnippets with) x
 
 -- | Returns the cached completions for the given module and position.
 getCompletions
-    :: IdeOptions
+    :: PluginId
+    -> IdeOptions
     -> CachedCompletions
     -> Maybe (ParsedModule, PositionMapping)
     -> (Bindings, PositionMapping)
@@ -463,7 +463,7 @@ getCompletions
     -> ClientCapabilities
     -> WithSnippets
     -> IO [CompletionItem]
-getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importableModules}
+getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, importableModules}
                maybe_parsed (localBindings, bmapping) prefixInfo caps withSnippets = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
@@ -550,25 +550,23 @@ getCompletions ideOpts CC { allModNamesAsNS, unqualCompls, qualCompls, importabl
         | s == c = ss
         | otherwise = s:ss
 
-      result
-        | "import " `T.isPrefixOf` fullLine
-        = filtImportCompls
-        -- we leave this condition here to avoid duplications and return empty list
-        -- since HLS implements this completion (#haskell-language-server/pull/662)
-        | "{-# language" `T.isPrefixOf` T.toLower fullLine
-        = []
-        | "{-# options_ghc" `T.isPrefixOf` T.toLower fullLine
-        = filtOptsCompls (map (T.pack . stripLeading '-') $ flagsForCompletion False)
-        | "{-# " `T.isPrefixOf` fullLine
-        = filtPragmaCompls (pragmaSuffix fullLine)
-        | otherwise
-        = let uniqueFiltCompls = nubOrdOn insertText filtCompls
-          in filtModNameCompls
-          ++ filtKeywordCompls
-          ++ map ( toggleSnippets caps withSnippets
-                 . mkCompl ideOpts . stripAutoGenerated
-                 ) uniqueFiltCompls
-  return result
+  if
+    | "import " `T.isPrefixOf` fullLine
+    -> return filtImportCompls
+    -- we leave this condition here to avoid duplications and return empty list
+    -- since HLS implements this completion (#haskell-language-server/pull/662)
+    | "{-# language" `T.isPrefixOf` T.toLower fullLine
+    -> return []
+    | "{-# options_ghc" `T.isPrefixOf` T.toLower fullLine
+    -> return $ filtOptsCompls (map (T.pack . stripLeading '-') $ flagsForCompletion False)
+    | "{-# " `T.isPrefixOf` fullLine
+    -> return $ filtPragmaCompls (pragmaSuffix fullLine)
+    | otherwise -> do
+        let uniqueFiltCompls = nubOrdOn insertText filtCompls
+        compls <- mapM (mkCompl plId ideOpts . stripAutoGenerated) uniqueFiltCompls
+        return $ filtModNameCompls
+              ++ filtKeywordCompls
+              ++ map ( toggleSnippets caps withSnippets) compls
 
 
 -- ---------------------------------------------------------------------
@@ -704,8 +702,8 @@ safeTyThingForRecord (AConLike dc) =
         Just (ctxStr, field_names)
 safeTyThingForRecord _ = Nothing
 
-mkRecordSnippetCompItem :: T.Text -> [T.Text] -> T.Text -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
-mkRecordSnippetCompItem ctxStr compl mn docs imp = r
+mkRecordSnippetCompItem :: Uri -> Maybe T.Text -> T.Text -> [T.Text] -> T.Text -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem
+mkRecordSnippetCompItem uri parent ctxStr compl mn docs imp = r
   where
       r  = CI {
             compKind = CiSnippet
@@ -716,7 +714,13 @@ mkRecordSnippetCompItem ctxStr compl mn docs imp = r
           , isInfix = Nothing
           , docs = docs
           , isTypeCompl = False
-          , additionalTextEdits = imp >>= extendImportList ctxStr
+          , additionalTextEdits = imp <&> \x ->
+            ExtendImport
+                { doc = uri,
+                  thingParent = parent,
+                  importName = showModName $ unLoc $ ideclName $ unLoc x,
+                  newThing = ctxStr
+                }
           }
 
       placeholder_pairs = zip compl ([1..]::[Int])
