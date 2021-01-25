@@ -13,6 +13,8 @@ import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
 import qualified Data.Text as T
+import Data.Default (def)
+import Ide.Plugin.Config (Config (maxCompletions))
 
 tests :: TestTree
 tests = testGroup "completions" [
@@ -102,7 +104,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 0 13) (Position 0 31)) "Str"
          _ <- applyEdit doc te
 
-         compls <- getCompletions doc (Position 0 24)
+         compls <- getCompletions doc (Position 0 16)
          let item = head $ filter ((== "Strict") . (^. label)) compls
          liftIO $ do
              item ^. label @?= "Strict"
@@ -116,7 +118,7 @@ tests = testGroup "completions" [
          let te = TextEdit (Range (Position 0 13) (Position 0 31)) "NoOverload"
          _ <- applyEdit doc te
 
-         compls <- getCompletions doc (Position 0 24)
+         compls <- getCompletions doc (Position 0 23)
          let item = head $ filter ((== "NoOverloadedStrings") . (^. label)) compls
          liftIO $ do
              item ^. label @?= "NoOverloadedStrings"
@@ -220,6 +222,12 @@ tests = testGroup "completions" [
          let item = head $ filter ((== "flip") . (^. label)) compls
          liftIO $
              item ^. detail @?= Just ":: (a -> b -> c) -> b -> a -> c"
+
+     , testCase "maxCompletions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
+         doc <- openDoc "Completion.hs" "haskell"
+
+         compls <- getCompletions doc (Position 5 7)
+         liftIO $ length compls @?= maxCompletions def
 
      , contextTests
      , snippetTests
