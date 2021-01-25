@@ -269,7 +269,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
 
                 -- Extract tests from source code
                 let Sections{..} = commentsToSections isLHS comments
-                    tests = testsBySection nonSetups
+                    tests = sortOn (testRange . snd) $ testsBySection nonSetups
                     nonSetups = lineSections ++ multilineSections
                 cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
