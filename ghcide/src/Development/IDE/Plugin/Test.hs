@@ -5,6 +5,8 @@ module Development.IDE.Plugin.Test
   ( TestRequest(..)
   , WaitForIdeRuleResult(..)
   , plugin
+  , blockCommandDescriptor
+  , blockCommandId
   ) where
 
 import Control.Monad.STM
@@ -32,6 +34,9 @@ import Data.Bifunctor
 import Data.Text (pack, Text)
 import Data.String
 import Development.IDE.Types.Location (fromUri)
+import Control.Concurrent (threadDelay)
+import Ide.Types
+import qualified Language.Haskell.LSP.Core as LSP
 
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null
@@ -104,3 +109,20 @@ parseAction "gethieast" fp = Right . isJust <$> use GetHieAst fp
 parseAction "getDependencies" fp = Right . isJust <$> use GetDependencies fp
 parseAction "getFileContents" fp = Right . isJust <$> use GetFileContents fp
 parseAction other _ = return $ Left $ "Cannot parse ide rule: " <> pack (original other)
+
+-- | a command that blocks forever. Used for testing
+blockCommandId :: Text
+blockCommandId = "ghcide.command.block"
+
+blockCommandDescriptor :: PluginId -> PluginDescriptor state
+blockCommandDescriptor plId = (defaultPluginDescriptor plId) {
+    pluginCommands = [PluginCommand (CommandId blockCommandId) "blocks forever" blockCommandHandler]
+}
+
+blockCommandHandler :: CommandFunction state ExecuteCommandParams
+blockCommandHandler lsp _ideState _params
+    = do
+        LSP.sendFunc lsp $ NotCustomServer $
+            NotificationMessage "2.0" (CustomServerMethod "ghcide/blocking/command") Null
+        threadDelay maxBound
+        return (Right Null, Nothing)

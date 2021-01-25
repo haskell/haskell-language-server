@@ -7,23 +7,13 @@
 
 -- | Go to the definition of a variable.
 module Development.IDE.Plugin.CodeAction
-    (
-      plugin
-
-    -- * For haskell-language-server
-    , codeAction
-    , codeLens
-    , rulePackageExports
-    , commandHandler
+    ( descriptor
 
     -- * For testing
-    , blockCommandId
-    , typeSignatureCommandId
     , matchRegExMultipleImports
     ) where
 
 import Control.Monad (join, guard)
-import Development.IDE.Plugin
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
@@ -31,22 +21,19 @@ import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Error
 import Development.IDE.GHC.ExactPrint
-import Development.IDE.LSP.Server
 import Development.IDE.Plugin.CodeAction.ExactPrint
 import Development.IDE.Plugin.CodeAction.PositionIndexed
 import Development.IDE.Plugin.CodeAction.RuleTypes
 import Development.IDE.Plugin.CodeAction.Rules
+import Development.IDE.Plugin.TypeLenses (suggestSignature)
 import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
-import Development.Shake (Rules)
 import qualified Data.HashMap.Strict as Map
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.VFS
-import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Data.Rope.UTF16 as Rope
-import Data.Aeson.Types (toJSON, fromJSON, Value(..), Result(..))
 import Data.Char
 import Data.Maybe
 import Data.List.Extra
@@ -62,33 +49,28 @@ import Control.Applicative ((<|>))
 import Safe (atMay)
 import Bag (isEmptyBag)
 import qualified Data.HashSet as Set
-import Control.Concurrent.Extra (threadDelay, readVar)
+import Control.Concurrent.Extra (readVar)
 import Development.IDE.GHC.Util (printRdrName)
 import Ide.PluginUtils (subRange)
+import Ide.Types
 
-plugin :: Plugin c
-plugin = codeActionPluginWithRules rules codeAction <> Plugin mempty setHandlersCodeLens
-
-rules :: Rules ()
-rules = do
-  rulePackageExports
-
--- | a command that blocks forever. Used for testing
-blockCommandId :: T.Text
-blockCommandId = "ghcide.command.block"
-
-typeSignatureCommandId :: T.Text
-typeSignatureCommandId = "typesignature.add"
+descriptor :: PluginId -> PluginDescriptor IdeState
+descriptor plId =
+  (defaultPluginDescriptor plId)
+    { pluginRules = rulePackageExports,
+      pluginCodeActionProvider = Just codeAction
+    }
 
 -- | Generate code actions.
 codeAction
     :: LSP.LspFuncs c
     -> IdeState
+    -> PluginId
     -> TextDocumentIdentifier
     -> Range
     -> CodeActionContext
-    -> IO (Either ResponseError [CAResult])
-codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
+    -> IO (Either ResponseError (List CAResult))
+codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
     contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
@@ -122,57 +104,11 @@ codeAction lsp state (TextDocumentIdentifier uri) _range CodeActionContext{_diag
                <> actions
                <> actions'
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right actions''
+    pure $ Right $ List actions''
 
 mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
 mkCA title diags edit =
   CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) (Just edit) Nothing
-
--- | Generate code lenses.
-codeLens
-    :: LSP.LspFuncs c
-    -> IdeState
-    -> CodeLensParams
-    -> IO (Either ResponseError (List CodeLens))
-codeLens _lsp ideState CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
-    commandId <- makeLspCommandId "typesignature.add"
-    fmap (Right . List) $ case uriToFilePath' uri of
-      Just (toNormalizedFilePath' -> filePath) -> do
-        _ <- runAction "codeLens" ideState (use TypeCheck filePath)
-        diag <- getDiagnostics ideState
-        hDiag <- getHiddenDiagnostics ideState
-        pure
-          [ CodeLens _range (Just (Command title commandId (Just $ List [toJSON edit]))) Nothing
-          | (dFile, _, dDiag@Diagnostic{_range=_range}) <- diag ++ hDiag
-          , dFile == filePath
-          , (title, tedit) <- suggestSignature False dDiag
-          , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-          ]
-      Nothing -> pure []
-
--- | Execute the "typesignature.add" command.
-commandHandler
-    :: LSP.LspFuncs c
-    -> IdeState
-    -> ExecuteCommandParams
-    -> IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-commandHandler lsp _ideState ExecuteCommandParams{..}
-    -- _command is prefixed with a process ID, because certain clients
-    -- have a global command registry, and all commands must be
-    -- unique. And there can be more than one ghcide instance running
-    -- at a time against the same client.
-    | T.isSuffixOf blockCommandId _command
-    = do
-        LSP.sendFunc lsp $ NotCustomServer $
-            NotificationMessage "2.0" (CustomServerMethod "ghcide/blocking/command") Null
-        threadDelay maxBound
-        return (Right Null, Nothing)
-    | T.isSuffixOf typeSignatureCommandId _command
-    , Just (List [edit]) <- _arguments
-    , Success wedit <- fromJSON edit
-    = return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
-    | otherwise
-    = return (Right Null, Nothing)
 
 suggestExactAction ::
   ExportsMap ->
@@ -783,31 +719,6 @@ suggestFixConstructorImport _ Diagnostic{_range=_range,..}
   = let fixedImport = typ <> "(" <> constructor <> ")"
     in [("Fix import of " <> fixedImport, [TextEdit _range fixedImport])]
   | otherwise = []
-
-suggestSignature :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix Diagnostic{_range=_range@Range{..},..}
-    | _message =~
-      ("(Top-level binding|Polymorphic local binding|Pattern synonym) with no type signature" :: T.Text) = let
-      signature      = removeInitialForAll
-                     $ T.takeWhile (\x -> x/='*' && x/='•')
-                     $ T.strip $ unifySpaces $ last $ T.splitOn "type signature: " $ filterNewlines _message
-      startOfLine    = Position (_line _start) startCharacter
-      beforeLine     = Range startOfLine startOfLine
-      title          = if isQuickFix then "add signature: " <> signature else signature
-      action         = TextEdit beforeLine $ signature <> "\n" <> T.replicate startCharacter " "
-      in [(title, [action])]
-    where removeInitialForAll :: T.Text -> T.Text
-          removeInitialForAll (T.breakOnEnd " :: " -> (nm, ty))
-              | "forall" `T.isPrefixOf` ty = nm <> T.drop 2 (snd (T.breakOn "." ty))
-              | otherwise                  = nm <> ty
-          startCharacter
-            | "Polymorphic local binding" `T.isPrefixOf` _message
-            = _character _start
-            | otherwise
-            = 0
-
-suggestSignature _ _ = []
-
 -- | Suggests a constraint for a declaration for which a constraint is missing.
 suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
 suggestConstraint df parsedModule diag@Diagnostic {..}
@@ -1201,21 +1112,6 @@ matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegex message regex = case message =~~ regex of
     Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
     Nothing -> Nothing
-
-setHandlersCodeLens :: PartialHandlers c
-setHandlersCodeLens = PartialHandlers $ \WithMessage{..} x -> return x{
-    LSP.codeLensHandler =
-        withResponse RspCodeLens codeLens,
-    LSP.executeCommandHandler =
-        withResponseAndRequest
-            RspExecuteCommand
-            ReqApplyWorkspaceEdit
-            commandHandler
-    }
-
-filterNewlines :: T.Text -> T.Text
-filterNewlines = T.concat  . T.lines
-
 unifySpaces :: T.Text -> T.Text
 unifySpaces    = T.unwords . T.words
 
