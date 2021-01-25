@@ -16,7 +16,7 @@ module TMulti () where
 -- >>> "a"++"b"
 -- "ab"
 
-  {-| >>> "NOT IGNORED"
+  {-| >>> "NOT IGNORED" 
 "NOT IGNORED"
 -}
 
