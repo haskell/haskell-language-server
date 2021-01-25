@@ -62,9 +62,8 @@ locate0 = locate . Located 0
 type Txt = String
 
 data Sections = Sections
-    { setupSections :: [Section]
-    , lineSections :: [Section]
-    , multilineSections :: [Section]
+    { nonSetupSections :: [Section]
+    , setupSections :: [Section]
     }
     deriving (Show, Eq, Generic)
 

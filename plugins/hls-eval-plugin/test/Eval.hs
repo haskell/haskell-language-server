@@ -155,7 +155,7 @@ tests =
                 liftIO $ do
                     let mdl = "TLastLine.hs"
                     -- Write the test file, to make sure that it has no final line return
-                    writeFile (evalPath </> mdl) $ "module TLastLine where\n\n-- >>> take 3 [1..]"
+                    writeFile (evalPath </> mdl) "module TLastLine where\n\n-- >>> take 3 [1..]"
                     goldenTest mdl
 #if __GLASGOW_HASKELL__ >= 808
             , testCase "CPP support" $ goldenTest "TCPP.hs"

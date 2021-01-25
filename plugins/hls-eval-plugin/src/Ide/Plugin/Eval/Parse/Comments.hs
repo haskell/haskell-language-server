@@ -46,6 +46,7 @@ import Text.Megaparsec.Char
       hspace,
       letterChar,
     )
+import Data.Functor ((<&>))
 
 {- |
 We build parsers combining the following three kinds of them:
@@ -130,7 +131,7 @@ commentsToSections isLHS Comments {..} =
                      in case parseMaybe lineGroupP $ NE.toList lcs of
                             Nothing -> mempty
                             Just (mls, rs) ->
-                                ( maybe DL.empty DL.singleton ((theRan,) <$> mls)
+                                ( maybe mempty (uncurry Map.singleton) ((theRan,) <$> mls)
                                 , -- orders setup sections in ascending order
                                   if null rs
                                     then mempty
@@ -165,7 +166,7 @@ commentsToSections isLHS Comments {..} =
                                 DL.singleton (Block ran, grp)
                             )
                         Just grp ->
-                            ( DL.singleton (ran, grp)
+                            ( Map.singleton ran grp
                             , mempty
                             )
                 )
@@ -175,11 +176,11 @@ commentsToSections isLHS Comments {..} =
                 -- block comment body.
                 $ Map.toList blockComments
         lineSections =
-            map (\(_, (flav, cmd)) -> testsToSection Line flav cmd) $
-                DL.toList lineSectionSeeds
+            lineSectionSeeds <&> uncurry (testsToSection Line)
         multilineSections =
-            map (\(ran, (flav, cmd)) -> testsToSection (Block ran) flav cmd) $
-                DL.toList blockSeed
+            Map.mapWithKey
+                (uncurry . testsToSection . Block)
+                blockSeed
         setupSections =
             -- Setups doesn't need Dummy position
             map
@@ -192,6 +193,7 @@ commentsToSections isLHS Comments {..} =
                 $ DL.toList $
                     F.fold $
                         Map.unionWith (<>) lineSetupSeeds blockSetupSeeds
+        nonSetupSections = F.toList $ lineSections `Map.union` multilineSections
      in Sections {..}
 
 parseBlockMaybe :: Bool -> Range -> BlockCommentParser a -> String -> Maybe a

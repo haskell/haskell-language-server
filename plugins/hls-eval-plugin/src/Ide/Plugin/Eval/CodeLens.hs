@@ -44,7 +44,7 @@ import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
     (dropWhileEnd,
-      find, sortOn
+      find
     )
 import qualified Data.Map.Strict as Map
 import Data.Maybe
@@ -216,9 +216,8 @@ import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
-import Control.Lens ((^.), (-~), view)
-import Language.Haskell.LSP.Types.Lens (line, end, character)
-import Data.Function ((&))
+import Control.Lens ((^.))
+import Language.Haskell.LSP.Types.Lens (line, end)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -269,8 +268,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
 
                 -- Extract tests from source code
                 let Sections{..} = commentsToSections isLHS comments
-                    tests = sortOn (testRange . snd) $ testsBySection nonSetups
-                    nonSetups = lineSections ++ multilineSections
+                    tests = testsBySection nonSetupSections
                 cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
                         [ CodeLens testRange (Just cmd') Nothing
@@ -292,7 +290,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                         unwords
                             [ show (length tests)
                             , "tests in"
-                            , show (length nonSetups)
+                            , show (length nonSetupSections)
                             , "sections"
                             , show (length setupSections)
                             , "setups"
