@@ -44,7 +44,7 @@ import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
     (dropWhileEnd,
-      find,
+      find, sortOn
     )
 import qualified Data.Map.Strict as Map
 import Data.Maybe
