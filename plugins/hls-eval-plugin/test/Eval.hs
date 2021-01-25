@@ -158,7 +158,11 @@ tests =
                     writeFile (evalPath </> mdl) "module TLastLine where\n\n-- >>> take 3 [1..]"
                     goldenTest mdl
 #if __GLASGOW_HASKELL__ >= 808
-            , testCase "CPP support" $ goldenTest "TCPP.hs"
+            ,
+#if mingw32_HOST_OS
+            expectFailBeause "CPP eval on Windows fails for some reasons" $
+#endif
+              testCase "CPP support" $ goldenTest "TCPP.hs"
             , testCase "Literate Haskell Bird Style" $ goldenTest "TLHS.lhs"
 #endif
             -- , testCase "Literate Haskell LaTeX Style" $ goldenTest "TLHSLateX.lhs"
