@@ -160,7 +160,7 @@ tests =
 #if __GLASGOW_HASKELL__ >= 808
             ,
 #if mingw32_HOST_OS
-            expectFailBeause "CPP eval on Windows fails for some reasons" $
+            expectFailBecause "CPP eval on Windows fails for some reasons" $
 #endif
               testCase "CPP support" $ goldenTest "TCPP.hs"
             , testCase "Literate Haskell Bird Style" $ goldenTest "TLHS.lhs"
