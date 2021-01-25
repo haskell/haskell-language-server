@@ -4,8 +4,7 @@
 
 -- | Display information on hover.
 module Development.IDE.LSP.HoverDefinition
-    ( setHandlersHover
-    , setHandlersDefinition
+    ( setHandlersDefinition
     , setHandlersTypeDefinition
     , setHandlersDocHighlight
     -- * For haskell-language-server
@@ -38,13 +37,11 @@ foundHover :: (Maybe Range, [T.Text]) -> Maybe Hover
 foundHover (mbRange, contents) =
   Just $ Hover (HoverContents $ MarkupContent MkMarkdown $ T.intercalate sectionSeparator contents) mbRange
 
-setHandlersDefinition, setHandlersHover, setHandlersTypeDefinition, setHandlersDocHighlight :: PartialHandlers c
+setHandlersDefinition, setHandlersTypeDefinition, setHandlersDocHighlight :: PartialHandlers c
 setHandlersDefinition = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.definitionHandler = withResponse RspDefinition $ const gotoDefinition}
 setHandlersTypeDefinition = PartialHandlers $ \WithMessage{..} x ->
-  return x{LSP.typeDefinitionHandler = withResponse RspDefinition $ const gotoTypeDefinition}
-setHandlersHover      = PartialHandlers $ \WithMessage{..} x ->
-  return x{LSP.hoverHandler      = withResponse RspHover      $ const hover}
+  return x {LSP.typeDefinitionHandler = withResponse RspDefinition $ const gotoTypeDefinition}
 setHandlersDocHighlight = PartialHandlers $ \WithMessage{..} x ->
   return x{LSP.documentHighlightHandler = withResponse RspDocumentHighlights $ const documentHighlight}
 

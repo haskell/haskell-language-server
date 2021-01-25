@@ -108,7 +108,7 @@ runLanguageServer options userHandlers onInitialConfig onConfigChange getIdeStat
     let PartialHandlers parts =
             initializeRequestHandler <>
             setHandlersIgnore <> -- least important
-            setHandlersDefinition <> setHandlersHover <> setHandlersTypeDefinition <>
+            setHandlersDefinition <> setHandlersTypeDefinition <>
             setHandlersDocHighlight <>
             setHandlersOutline <>
             userHandlers <>
