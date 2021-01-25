@@ -36,11 +36,10 @@ import Development.IDE.Core.Shake (getDiagnostics)
 
 #ifdef HLINT_ON_GHC_LIB
 import Data.List (nub)
-import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts)
+import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts, pm_mod_summary, ms_hspp_file, ms_hspp_buf)
 import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
-import "ghc" DynFlags as RealGHC.DynFlags (topDir)
-import "ghc" GHC as RealGHC (DynFlags(..))
-import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags, ms_hspp_opts)
+import Development.IDE.GHC.Compat (DynFlags(..), topDir, ms_hspp_opts, pm_mod_summary, ms_hspp_file, ms_hspp_buf)
+import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
 import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
 import System.Environment(setEnv, unsetEnv)
@@ -194,21 +193,16 @@ getIdeas nfp = do
         moduleEx flags = do
           mbpm <- getParsedModule nfp
           -- If ghc was not able to parse the module, we disable hlint diagnostics
-          if isNothing mbpm
-              then return Nothing
-              else do
+          case mbpm of
+            Nothing -> return Nothing
+            Just pm -> do
                 flags' <- setExtensions flags
-                (fp, contents) <- fromMaybe getPathAndContents getHsppPathAndContents
+                let (fp, contents) = getHsppPathAndContents pm
                 Just <$> (liftIO $ parseModuleEx flags' fp contents)
 
-        getPathAndContents = do
-            (_, contents) <- getFileContents nfp
-            let fp = fromNormalizedFilePath nfp
-            return (fp, T.unpack <$> contents)
-
-        getHsppPathAndContents m = do
-            let modsum = pm_mod_summary m
-            sequence (ms_hspp_file modsum, show <$> ms_hspp_buf modsum)
+        getHsppPathAndContents m =
+            (ms_hspp_file modsum, show <$> ms_hspp_buf modsum)
+          where modsum = pm_mod_summary m
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
