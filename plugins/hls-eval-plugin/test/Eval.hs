@@ -180,7 +180,7 @@ goldenTestBy fltr input = runSession hlsCommand fullCaps evalPath $ do
 
     -- Execute sequentially, waiting for a moment to
     -- avoid mis-insertion due to staled location info.
-    mapM_ executeCommand
+    mapM_ executeCmd
         [c | CodeLens{_command = Just c} <- codeLenses]
 
     edited <- replaceUnicodeQuotes <$> documentContents doc
