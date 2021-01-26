@@ -14,6 +14,7 @@ import Data.Aeson (FromJSON, ToJSON)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Language.Haskell.LSP.Types (CompletionItemKind, Uri)
+
 data Backtick = Surrounded | LeftSide
   deriving (Eq, Ord, Show)
 
@@ -28,6 +29,7 @@ data ExtendImport = ExtendImport
   }
   deriving (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
+
 data CompItem = CI
   { compKind     :: CompletionItemKind
   , insertText   :: T.Text         -- ^ Snippet for the completion

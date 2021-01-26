@@ -159,9 +159,21 @@ showModName = T.pack . moduleNameString
 --     Nothing Nothing Nothing Nothing Nothing
 
 mkCompl :: PluginId -> IdeOptions -> CompItem -> IO CompletionItem
-mkCompl pId IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,docs, additionalTextEdits} = do
+mkCompl
+  pId
+  IdeOptions {..}
+  CI
+    { compKind,
+      isInfix,
+      insertText,
+      importedFrom,
+      typeText,
+      label,
+      docs,
+      additionalTextEdits
+    } = do
   mbCommand <- mkAdditionalEditsCommand pId `traverse` additionalTextEdits
-  return CompletionItem
+  let ci = CompletionItem
                  {_label = label,
                   _kind = kind,
                   _tags = Nothing,
@@ -178,6 +190,7 @@ mkCompl pId IdeOptions{..} CI{compKind,insertText, importedFrom,typeText,label,d
                   _commitCharacters = Nothing,
                   _command = mbCommand,
                   _xdata = Nothing}
+  return $ removeSnippetsWhen (isJust isInfix) ci
 
   where kind = Just compKind
         docs' = imported : spanDocToMarkdown docs
@@ -446,14 +459,21 @@ ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
 
 toggleSnippets :: ClientCapabilities -> WithSnippets -> CompletionItem -> CompletionItem
-toggleSnippets ClientCapabilities { _textDocument } (WithSnippets with) x
-  | with && supported = x
-  | otherwise = x { _insertTextFormat = Just PlainText
-                  , _insertText       = Nothing
-                  }
+toggleSnippets ClientCapabilities {_textDocument} (WithSnippets with) =
+  removeSnippetsWhen (not $ with && supported)
   where
     supported =
       Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
+
+removeSnippetsWhen :: Bool -> CompletionItem -> CompletionItem
+removeSnippetsWhen condition x =
+  if condition
+    then
+      x
+        { _insertTextFormat = Just PlainText,
+          _insertText = Nothing
+        }
+    else x
 
 -- | Returns the cached completions for the given module and position.
 getCompletions
