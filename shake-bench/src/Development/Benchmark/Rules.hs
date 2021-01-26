@@ -49,7 +49,7 @@ module Development.Benchmark.Rules
       benchRules, MkBenchRules(..), BenchProject(..),
       csvRules,
       svgRules,
-      eventlogRules,
+      heapProfileRules,
       allTargets,
       GetExample(..), GetExamples(..),
       IsExample(..), RuleResultForExample,
@@ -139,7 +139,7 @@ allTargets buildFolder = do
              | e <- experiments,
                ex <- examples,
                ver <- versions,
-               mode <- ["svg", "diff.svg","eventlog.html"]
+               mode <- ["svg", "diff.svg","heap.svg"]
            ]
 
 --------------------------------------------------------------------------------
@@ -225,11 +225,10 @@ benchRules build benchResource MkBenchRules{..} = do
   priority 0 $
     [ build -/- "*/*/*.csv",
       build -/- "*/*/*.benchmark-gcStats",
-      build -/- "*/*/*.eventlog",
       build -/- "*/*/*.hp",
       build -/- "*/*/*.log"
     ]
-      &%> \[outcsv, outGc, outEventLog, outHp, outLog] -> do
+      &%> \[outcsv, outGc, outHp, outLog] -> do
         let [_, exampleName, ver, exp] = splitDirectories outcsv
         example <- fromMaybe (error $ "Unknown example " <> exampleName)
                     <$> askOracle (GetExample exampleName)
@@ -237,7 +236,7 @@ benchRules build benchResource MkBenchRules{..} = do
         setupRes    <- setupProject
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
         let exePath    = build </> "binaries" </> ver </> executableName
-            exeExtraArgs = ["+RTS", "-l-a", "-h", "-ol" <> outEventLog, "-S" <> outGc, "-RTS"]
+            exeExtraArgs = ["+RTS", "-h", "-S" <> outGc, "-RTS"]
             ghcPath    = build </> "binaries" </> ver </> "ghc.path"
             experiment = Escaped $ dropExtension exp
         need [exePath, ghcPath]
@@ -381,11 +380,14 @@ svgRules build = do
         title = show (unescapeExperiment exp) <> " - live bytes over time"
     plotDiagram False diagram out
 
-eventlogRules :: FilePattern -> Rules ()
-eventlogRules build = do
-  build -/- "*/*/*.eventlog.html" %> \out -> do
-    need [dropExtension out]
-    cmd_ ("eventlog2html" :: String) [dropExtension out]
+heapProfileRules :: FilePattern -> Rules ()
+heapProfileRules build = do
+  priority 3 $
+    build -/- "*/*/*.heap.svg" %> \out -> do
+      let hpFile = dropExtension (dropExtension out) <.> "hp"
+      need [hpFile]
+      cmd_ ("hp2pretty" :: String) [hpFile]
+      liftIO $ renameFile (dropExtension hpFile <.> "svg") out
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
