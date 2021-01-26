@@ -3,7 +3,6 @@
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE CPP                   #-}
-{-# LANGUAGE LambdaCase #-}
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
@@ -316,8 +315,8 @@ suggestDeleteUnusedBinding
             let findSig (L (RealSrcSpan l) (SigD _ sig)) = findRelatedSigSpan indexedContent name l sig
                 findSig _ = []
             in
-              [extendForSpaces indexedContent $ toRange l]
-              ++ concatMap findSig hsmodDecls
+              extendForSpaces indexedContent (toRange l) :
+              concatMap findSig hsmodDecls
           _ -> concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpans _ _ _ = []
 
@@ -392,7 +391,7 @@ suggestDeleteUnusedBinding
         then
           let findSig (L (RealSrcSpan l) sig) = findRelatedSigSpan indexedContent name l sig
               findSig _ = []
-          in [extendForSpaces indexedContent $ toRange l] ++ concatMap findSig lsigs
+          in extendForSpaces indexedContent (toRange l) : concatMap findSig lsigs
         else concatMap (findRelatedSpanForMatch indexedContent name) matches
       findRelatedSpanForHsBind _ _ _ _ = []
 
@@ -727,7 +726,7 @@ suggestImportDisambiguation (L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
             _message
-            "^Ambiguous occurrence ‘([^’]+)’"
+            "Ambiguous occurrence ‘([^’]+)’"
       , Just modules <-
             map last
                 <$> allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’" =
@@ -773,7 +772,7 @@ disambiguateSymbol ::
     GenLocated SrcSpan (ImportDecl GhcPs) ->
     HidingMode ->
     [Rewrite]
-disambiguateSymbol Diagnostic {..} (T.unpack -> symbol) (L loc _) = \case
+disambiguateSymbol Diagnostic {..} (T.unpack -> symbol) (L loc _) h = case h of
     (HideOthers hiddens0) ->
         [ hideSymbol symbol idecl
         | idecl <- sortOn (Down . getLoc) hiddens0

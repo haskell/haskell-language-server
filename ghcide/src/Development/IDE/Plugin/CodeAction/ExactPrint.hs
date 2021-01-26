@@ -150,9 +150,8 @@ appendConstraint constraintT = go
       lTop <- uniqueSrcSpanT
       let context = L lContext [constraint]
       addSimpleAnnT context (DP (0, 1)) $
-        [ (G AnnDarrow, DP (0, 1))
-        ]
-          ++ concat
+        (G AnnDarrow, DP (0, 1))
+        : concat
             [ [ (G AnnOpenP, dp00),
                 (G AnnCloseP, dp00)
               ]
