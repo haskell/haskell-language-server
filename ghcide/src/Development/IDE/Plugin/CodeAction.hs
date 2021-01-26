@@ -787,7 +787,7 @@ disambiguateSymbol ::
     GenLocated SrcSpan (ImportDecl GhcPs) ->
     HidingMode ->
     [Rewrite]
-disambiguateSymbol Diagnostic {..} symbol (L loc _) = \case
+disambiguateSymbol Diagnostic {..} (T.unpack -> symbol) (L loc _) = \case
     (HideOthers hiddens0) ->
         [ hideSymbol symbol idecl
         | idecl <- sortOn (Down . getLoc) hiddens0
@@ -799,7 +799,7 @@ disambiguateSymbol Diagnostic {..} symbol (L loc _) = \case
                 ( L spn $
                     HsVar NoExt $
                         L spn $
-                            Qual qualMod (mkVarOcc $ T.unpack symbol) ::
+                            Qual qualMod (mkVarOcc symbol) ::
                     LHsExpr GhcPs
                 )
         ]

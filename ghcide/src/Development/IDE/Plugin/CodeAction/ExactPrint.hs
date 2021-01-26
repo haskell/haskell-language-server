@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyCase #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -22,7 +23,7 @@ import Data.Data (Data)
 import Data.Functor
 import qualified Data.HashMap.Strict as HMap
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, mapMaybe)
 import qualified Data.Text as T
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.GHC.ExactPrint
@@ -33,6 +34,8 @@ import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAn
 import Language.Haskell.LSP.Types
 import OccName
 import Outputable (ppr, showSDocUnsafe)
+import Retrie.GHC (unpackFS)
+import FieldLabel (flLabel)
 
 ------------------------------------------------------------------------------
 
@@ -303,7 +306,69 @@ unqalDP paren =
 
 ------------------------------------------------------------------------------
 -- | Hide a symbol from import declaration
-hideSymbol
-    :: String -> LImportDecl GhcPs -> Rewrite
-hideSymbol symbol (L loc ImportDecl{..}) = Rewrite loc $ \df ->
-    pure (undefined :: LImportDecl GhcPs)
+hideSymbol ::
+    String -> LImportDecl GhcPs -> Rewrite
+hideSymbol symbol lidecl@(L loc ImportDecl {..}) =
+    case ideclHiding of
+        Nothing -> Rewrite loc $ extendHiding symbol lidecl Nothing
+        Just (True, hides) -> Rewrite loc $ extendHiding symbol lidecl (Just hides)
+        Just (False, imports) -> Rewrite loc $ deleteFromImport symbol lidecl imports
+hideSymbol _ (L _ (XImportDecl _)) =
+    error "cannot happen"
+
+extendHiding ::
+    String ->
+    LImportDecl GhcPs ->
+    Maybe (Located [LIE GhcPs]) ->
+    DynFlags ->
+    TransformT (Either String) (LImportDecl GhcPs)
+extendHiding symbol (L l idecls) mlies df = do
+    L l' lies <- case mlies of
+        Nothing -> flip L [] <$> uniqueSrcSpanT
+        Just pr -> pure pr
+    let hasSibling = not $ null lies
+    src <- uniqueSrcSpanT
+    top <- uniqueSrcSpanT
+    rdr <- liftParseAST df symbol
+    let lie = L src $ IEName rdr
+        x = L top $ IEVar noExtField lie
+    when hasSibling $
+      addTrailingCommaT (last lies)
+    addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
+    addSimpleAnnT rdr dp00 $ unqalDP $ hasParen symbol
+    -- Parens are attachted to `lies`, so if `lies` was empty previously,
+    -- we need change the ann key from `[]` to `:` to keep parens and other anns.
+    unless hasSibling $
+      transferAnn (L l' lies) (L l' [x]) id
+    return $ L l idecls {ideclHiding = Just (True, L l' $ lies ++ [x])}
+
+deleteFromImport ::
+    String ->
+    LImportDecl GhcPs ->
+    Located [LIE GhcPs] ->
+    DynFlags ->
+    TransformT (Either String) (LImportDecl GhcPs)
+deleteFromImport symbol (L l idecls) (L lieLoc lies) _ =
+    pure $ L l $ idecls
+        { ideclHiding = Just (False, L lieLoc deletedLies)
+        }
+    where
+        deletedLies =
+            mapMaybe killLie lies
+        killLie :: LIE GhcPs -> Maybe (LIE GhcPs)
+        killLie v@(L _ (IEVar _ (L _ (unIEWrappedName -> nam))))
+            | nam == symbol  = Nothing
+            | otherwise = Just v
+        killLie v@(L _ (IEThingAbs _ (L _ (unIEWrappedName -> nam))))
+            | nam == symbol = Nothing
+            | otherwise = Just v
+
+        killLie (L lieL (IEThingWith xt ty@(L _ (unIEWrappedName -> nam)) wild cons flds))
+            | nam == symbol = Nothing
+            | otherwise = Just $
+                L lieL $ IEThingWith xt ty wild
+                  (filter ((/= symbol) . unIEWrappedName . unLoc) cons)
+                  (filter ((/= symbol) . unpackFS . flLabel . unLoc) flds)
+        killLie v = Just v
+
+
