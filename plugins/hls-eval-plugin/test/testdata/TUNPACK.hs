@@ -1,5 +1,4 @@
-{- | Multi line comments are parsed correctly.
--}
+{- | Won't panic on UNPACKs -}
 module TUNPACK (THStatus(..)) where
 
 type ByteString = String
