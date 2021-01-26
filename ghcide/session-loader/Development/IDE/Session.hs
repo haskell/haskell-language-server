@@ -136,6 +136,8 @@ runWithDb fp k = do
     `catch` \IncompatibleSchemaVersion{} -> removeFile fp
   withHieDb fp $ \writedb -> do
     initConn writedb
+    -- Clear the index of any files that might have been deleted since the last run
+    deleteMissingRealFiles writedb
     _ <- garbageCollectTypeNames writedb
     chan <- newTQueueIO
     withAsync (writerThread writedb chan) $ \_ -> do

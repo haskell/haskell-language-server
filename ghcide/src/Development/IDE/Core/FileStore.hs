@@ -20,6 +20,8 @@ module Development.IDE.Core.FileStore(
 import Development.IDE.GHC.Orphans()
 import           Development.IDE.Core.Shake
 import Control.Concurrent.Extra
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TQueue (writeTQueue)
 import qualified Data.Map.Strict as Map
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe
@@ -41,6 +43,7 @@ import Development.IDE.Types.Options
 import qualified Data.Rope.UTF16 as Rope
 import Development.IDE.Import.DependencyInformation
 import Ide.Plugin.Config (CheckParents(..))
+import HieDb.Create (deleteMissingRealFiles)
 
 #ifdef mingw32_HOST_OS
 import qualified System.Directory as Dir
@@ -232,4 +235,6 @@ setSomethingModified state = do
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setSomethingModified can't be called on this type of VFSHandle"
+    -- Update database to remove any files that might have been renamed/deleted
+    atomically $ writeTQueue (indexQueue $ hiedbWriter $ shakeExtras state) deleteMissingRealFiles
     void $ shakeRestart state []
