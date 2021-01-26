@@ -767,19 +767,6 @@ suggestImportDisambiguation exportsMap (L _ HsModule {hsmodImports}) diag@Diagno
                 <> T.pack (moduleNameString qual)
                 <> "."
                 <> symbol
-        lookupExportMap binding mod
-            | Just match <- Map.lookup binding (getExportsMap exportsMap)
-              , [(ident, _)] <- filter (\(_, m) -> mod == m) (Set.toList match) =
-                Just ident
-            -- fallback to using GHC suggestion even though it is not always correct
-            | otherwise =
-                Just
-                    IdentInfo
-                        { name = binding
-                        , rendered = binding
-                        , parent = Nothing
-                        , isDatacon = False
-                        }
 
 disambiguateSymbol ::
     Diagnostic ->
