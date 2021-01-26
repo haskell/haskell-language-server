@@ -221,7 +221,7 @@ benchmark benchHist
     other-modules: Experiments.Types
     build-tool-depends:
         ghcide:ghcide-bench,
-        eventlog2html:eventlog2html
+        hp2pretty:hp2pretty
     default-extensions:
         BangPatterns
         DeriveFunctor
