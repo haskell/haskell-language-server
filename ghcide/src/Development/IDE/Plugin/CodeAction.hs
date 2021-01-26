@@ -49,16 +49,16 @@ import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import Ide.PluginUtils (subRange)
 import Ide.Types
+import Language.Haskell.GHC.ExactPrint.Transform (uniqueSrcSpanT)
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.VFS
 import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
-import Retrie.GHC (fsLit, mkRealSrcLoc, mkRealSrcSpan)
+import Retrie (unpackFS)
+import Retrie.GHC (fsLit, mkRealSrcLoc, mkRealSrcSpan, mkVarOcc)
 import Safe (atMay)
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
-import Retrie (unpackFS)
-import Retrie.GHC (mkVarOcc)
-import Language.Haskell.GHC.ExactPrint.Transform (uniqueSrcSpanT)
+
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
@@ -126,7 +126,7 @@ suggestExactAction exportsMap df ps x =
     [ suggestConstraint df (astA ps) x
     , suggestImplicitParameter (astA ps) x
     , suggestExtendImport exportsMap (astA ps) x
-    , suggestImportDisambiguation exportsMap (astA ps) x
+    , suggestImportDisambiguation (astA ps) x
     ]
 
 suggestAction
@@ -720,11 +720,10 @@ oneAndOthers = go
 
 -- | Suggests disambiguation for ambiguous symbols.
 suggestImportDisambiguation ::
-    ExportsMap ->
     ParsedSource ->
     Diagnostic ->
     [(T.Text, [Rewrite])]
-suggestImportDisambiguation exportsMap (L _ HsModule {hsmodImports}) diag@Diagnostic {..}
+suggestImportDisambiguation (L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
             _message
