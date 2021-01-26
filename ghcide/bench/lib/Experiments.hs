@@ -332,9 +332,7 @@ waitForProgressDone = loop
     loop = do
       void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
       done <- null <$> getIncompleteProgressSessions
-      if done
-      then pure ()
-      else do loop
+      unless done loop
 
 runBench ::
   (?config :: Config) =>
