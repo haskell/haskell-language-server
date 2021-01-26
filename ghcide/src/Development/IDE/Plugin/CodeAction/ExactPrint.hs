@@ -10,6 +10,8 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
     -- * Utilities
     appendConstraint,
     extendImport,
+    hideSymbol,
+    liftParseAST,
   )
 where
 
@@ -298,3 +300,10 @@ unqalDP paren =
       else pure
   )
     (G AnnVal, dp00)
+
+------------------------------------------------------------------------------
+-- | Hide a symbol from import declaration
+hideSymbol
+    :: String -> LImportDecl GhcPs -> Rewrite
+hideSymbol symbol (L loc ImportDecl{..}) = Rewrite loc $ \df ->
+    pure (undefined :: LImportDecl GhcPs)
