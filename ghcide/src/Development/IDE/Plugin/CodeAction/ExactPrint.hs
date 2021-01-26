@@ -334,10 +334,8 @@ extendHiding symbol (L l idecls) mlies df = do
       addTrailingCommaT (last lies)
     addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
     addSimpleAnnT rdr dp00 $ unqalDP $ hasParen symbol
-    -- Parens are attachted to `lies`, so if `lies` was empty previously,
-    -- we need change the ann key from `[]` to `:` to keep parens and other anns.
-    unless hasSibling $
-      transferAnn (L l' lies) (L l' [x]) id
+    unless hasSibling $ forM_ mlies $ \lies0 ->
+      transferAnn lies0 (L l' [x]) id
     return $ L l idecls {ideclHiding = Just (True, L l' $ lies ++ [x])}
 
 deleteFromImport ::
