@@ -150,6 +150,9 @@ tests =
         , testCase
             "Prelude has no special treatment, it is imported as stated in the module"
             $ goldenTest "TPrelude.hs"
+        , testCase
+            "Don't panic on {-# UNPACK #-} pragma"
+            $ goldenTest "TUNPACK.hs"
         , testCase "Test on last line insert results correctly" $ do
             runSession hlsCommand fullCaps evalPath $
                 liftIO $ do
