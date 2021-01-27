@@ -472,10 +472,17 @@ makeCompletions sps lf ideState params@(CompletionParams (TextDocumentIdentifier
 consumeCompletionResponse :: Int -> CompletionResponseResult -> (Int, CompletionResponseResult)
 consumeCompletionResponse limit it@(CompletionList (CompletionListType _ (List xx))) =
   case splitAt limit xx of
+    -- consumed all the items, return the result as is
     (_, []) -> (limit - length xx, it)
-    (xx', _) -> (0, CompletionList (CompletionListType False (List xx')))
+    -- need to crop the response, set the 'isIncomplete' flag
+    (xx', _) -> (0, CompletionList (CompletionListType isIncompleteResponse (List xx')))
 consumeCompletionResponse n (Completions (List xx)) =
-  consumeCompletionResponse n (CompletionList (CompletionListType False (List xx)))
+  consumeCompletionResponse n (CompletionList (CompletionListType isCompleteResponse (List xx)))
+
+-- boolean disambiguators
+isCompleteResponse, isIncompleteResponse :: Bool
+isIncompleteResponse = True
+isCompleteResponse = False
 
 getPrefixAtPos :: LSP.LspFuncs Config -> Uri -> Position -> IO (Maybe VFS.PosPrefixInfo)
 getPrefixAtPos lf uri pos = do
