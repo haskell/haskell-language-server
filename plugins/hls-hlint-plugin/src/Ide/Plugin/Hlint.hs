@@ -39,6 +39,7 @@ import Data.List (nub)
 import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts, pm_mod_summary, ms_hspp_file, ms_hspp_buf)
 import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
 import Development.IDE.GHC.Compat (DynFlags(..), topDir, ms_hspp_opts, pm_mod_summary, ms_hspp_file, ms_hspp_buf)
+import Development.IDE.GHC.Util (stringBufferToString)
 import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags)
 import qualified "ghc" EnumSet as EnumSet
 import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
@@ -197,12 +198,20 @@ getIdeas nfp = do
             Nothing -> return Nothing
             Just pm -> do
                 flags' <- setExtensions flags
-                let (fp, contents) = getHsppPathAndContents pm
-                Just <$> (liftIO $ parseModuleEx flags' fp contents)
+                let hspp@(fp, contents) = getHsppPathAndContents pm
+                (fp', contents') <- case contents of
+                                      Just c -> return hspp
+                                      Nothing -> getPathAndContents
+                Just <$> (liftIO $ parseModuleEx flags' fp' contents')
 
         getHsppPathAndContents m =
-            (ms_hspp_file modsum, show <$> ms_hspp_buf modsum)
+            (ms_hspp_file modsum, stringBufferToString <$> ms_hspp_buf modsum)
           where modsum = pm_mod_summary m
+
+        getPathAndContents = do
+            (_, contents) <- getFileContents nfp
+            let fp = fromNormalizedFilePath nfp
+            return (fp, T.unpack <$> contents)
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
