@@ -1,10 +1,13 @@
 # haskell-language-server
 
+![haskell-language-server][logo]
+
 [![License Apache 2.0][badge-license]][license]
 [![CircleCI][badge-circleci]][circleci]
 ![Github Testing Workflow](https://github.com/haskell/haskell-language-server/workflows/Testing/badge.svg)
 ![Github Nix Workflow](https://github.com/haskell/haskell-language-server/workflows/Nix/badge.svg)
 
+[logo]: ./docs/logos/logo-256.png
 [badge-license]: https://img.shields.io/badge/license-Apache2-green.svg?dummy
 [license]: https://github.com/haskell/haskell-language-server/blob/master/LICENSE
 [badge-circleci]: https://img.shields.io/circleci/project/github/haskell/haskell-language-server/master.svg
