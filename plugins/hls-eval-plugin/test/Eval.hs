@@ -153,6 +153,9 @@ tests =
         , testCase
             "Don't panic on {-# UNPACK #-} pragma"
             $ goldenTest "TUNPACK.hs"
+        , testCase
+            "Can handle eval inside nested comment properly"
+            $ goldenTest "TNested.hs"
         , testCase "Test on last line insert results correctly" $ do
             runSession hlsCommand fullCaps evalPath $
                 liftIO $ do

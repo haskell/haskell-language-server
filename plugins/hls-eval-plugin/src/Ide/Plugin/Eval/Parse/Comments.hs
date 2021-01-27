@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
@@ -47,6 +48,7 @@ import Text.Megaparsec.Char
       letterChar,
     )
 import Data.Functor ((<&>))
+import qualified Data.Text as T
 
 {- |
 We build parsers combining the following three kinds of them:
@@ -471,7 +473,10 @@ nonEmptyNormalLineP ::
     LineParser (String, Position)
 nonEmptyNormalLineP isLHS style = try $ do
     (ln, pos) <- normalLineP isLHS style
-    guard $ not $ all C.isSpace ln
+    guard $
+        case style of
+            Block{} -> T.strip (T.pack ln) `notElem` ["{-", "-}", ""]
+            _ -> not $ all C.isSpace ln
     pure (ln, pos)
 
 {- | Normal line is a line neither a example nor prop.
