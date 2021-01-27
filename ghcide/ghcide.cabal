@@ -60,7 +60,7 @@ library
         hie-compat,
         hls-plugin-api >= 0.6,
         lens,
-        hiedb == 0.3.0.*,
+        hiedb == 0.3.0.1,
         mtl,
         network-uri,
         parallel,

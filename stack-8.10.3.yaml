@@ -41,7 +41,7 @@ extra-deps:
   - haskell-lsp-0.23.0.0
   - haskell-lsp-types-0.23.0.0
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
-  - hiedb-0.3.0.0@sha256:79cc1dfb6e6f8df3ecc1004597435e0d7491278a9bb619d7222ab2389398cd67,2593
+  - hiedb-0.3.0.1
 
 configure-options:
   ghcide:
