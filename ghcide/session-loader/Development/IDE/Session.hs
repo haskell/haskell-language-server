@@ -136,20 +136,21 @@ runWithDb fp k = do
     `catch` \IncompatibleSchemaVersion{} -> removeFile fp
   withHieDb fp $ \writedb -> do
     initConn writedb
-    -- Clear the index of any files that might have been deleted since the last run
-    deleteMissingRealFiles writedb
-    _ <- garbageCollectTypeNames writedb
     chan <- newTQueueIO
     withAsync (writerThread writedb chan) $ \_ -> do
       withHieDb fp (flip k chan)
   where
-    writerThread db chan = forever $ do
-      k <- atomically $ readTQueue chan
-      k db
-        `catch` \e@SQLError{} -> do
-          hPutStrLn stderr $ "SQLite error in worker, ignoring: " ++ show e
-        `catchAny` \e -> do
-          hPutStrLn stderr $ "Uncaught error in database worker, ignoring: " ++ show e
+    writerThread db chan = do
+      -- Clear the index of any files that might have been deleted since the last run
+      deleteMissingRealFiles db
+      _ <- garbageCollectTypeNames db
+      forever $ do
+        k <- atomically $ readTQueue chan
+        k db
+          `catch` \e@SQLError{} -> do
+            hPutStrLn stderr $ "SQLite error in worker, ignoring: " ++ show e
+          `catchAny` \e -> do
+            hPutStrLn stderr $ "Uncaught error in database worker, ignoring: " ++ show e
 
 
 getHieDbLoc :: FilePath -> IO FilePath
