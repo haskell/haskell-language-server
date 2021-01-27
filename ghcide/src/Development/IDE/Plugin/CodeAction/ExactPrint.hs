@@ -38,10 +38,7 @@ import Language.Haskell.LSP.Types
 import OccName
 import Outputable (ppr, showSDocUnsafe)
 import Retrie.GHC (rdrNameOcc, unpackFS)
-import HeaderInfo (mkPrelImports)
-import Retrie (mkRealSrcSpan)
-import Retrie.GHC (SourceText(NoSourceText))
-import RdrName (mkRdrUnqual)
+
 ------------------------------------------------------------------------------
 
 -- | Construct a 'Rewrite', replacing the node at the given 'SrcSpan' with the

@@ -54,13 +54,14 @@ import Ide.PluginUtils (subRange)
 import Ide.Types
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Types
+import Language.Haskell.LSP.Types.Lens (character, end, line, start)
 import Language.Haskell.LSP.VFS
+import OccName (parenSymOcc)
 import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
 import Retrie.GHC (mkVarOcc)
 import Safe (atMay)
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
-import Language.Haskell.LSP.Types.Lens (start, character, end, line)
-import OccName (parenSymOcc)
+
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
