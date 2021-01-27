@@ -1,4 +1,5 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
@@ -6,6 +7,7 @@
 module Development.IDE.Plugin.CodeAction.ExactPrint
   ( Rewrite (..),
     rewriteToEdit,
+    transferAnn,
 
     -- * Utilities
     appendConstraint,
@@ -18,24 +20,28 @@ where
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans
+import Data.Char (isAlphaNum)
 import Data.Data (Data)
 import Data.Functor
 import qualified Data.HashMap.Strict as HMap
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust, mapMaybe)
+import Data.Maybe (fromJust, isNothing, mapMaybe)
 import qualified Data.Text as T
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.GHC.ExactPrint
 import Development.IDE.Types.Location
+import FieldLabel (flLabel)
 import GhcPlugins (realSrcSpanEnd, realSrcSpanStart, sigPrec)
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
 import Language.Haskell.LSP.Types
 import OccName
 import Outputable (ppr, showSDocUnsafe)
-import Retrie.GHC (unpackFS)
-import FieldLabel (flLabel)
-
+import Retrie.GHC (rdrNameOcc, unpackFS)
+import HeaderInfo (mkPrelImports)
+import Retrie (mkRealSrcSpan)
+import Retrie.GHC (SourceText(NoSourceText))
+import RdrName (mkRdrUnqual)
 ------------------------------------------------------------------------------
 
 -- | Construct a 'Rewrite', replacing the node at the given 'SrcSpan' with the
@@ -330,13 +336,28 @@ extendHiding symbol (L l idecls) mlies df = do
     rdr <- liftParseAST df symbol
     let lie = L src $ IEName rdr
         x = L top $ IEVar noExtField lie
-    when hasSibling $
-      addTrailingCommaT (last lies)
-    addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
-    addSimpleAnnT rdr dp00 $ unqalDP $ hasParen symbol
-    unless hasSibling $ forM_ mlies $ \lies0 ->
-      transferAnn lies0 (L l' [x]) id
-    return $ L l idecls {ideclHiding = Just (True, L l' $ lies ++ [x])}
+        singleHide = L l' [x]
+    when (isNothing mlies) $ do
+        addSimpleAnnT
+            singleHide
+            dp00
+            [ (G AnnHiding, DP (0, 1))
+            , (G AnnOpenP, DP (0, 1))
+            , (G AnnCloseP, DP (0, 0))
+            ]
+    addSimpleAnnT x (DP (0, 0)) []
+    addSimpleAnnT rdr dp00 $ unqalDP $ isOperator $ unLoc rdr
+    if hasSibling
+        then when hasSibling $ do
+            addTrailingCommaT x
+            addSimpleAnnT (head lies) (DP (0, 1)) []
+            unless (null $ tail lies) $
+                addTrailingCommaT (head lies) -- Why we need this?
+        else forM_ mlies $ \lies0 -> do
+            transferAnn lies0 singleHide id
+    return $ L l idecls {ideclHiding = Just (True, L l' $ x : lies)}
+    where
+        isOperator = not . all isAlphaNum . occNameString . rdrNameOcc
 
 deleteFromImport ::
     String ->
@@ -344,7 +365,14 @@ deleteFromImport ::
     Located [LIE GhcPs] ->
     DynFlags ->
     TransformT (Either String) (LImportDecl GhcPs)
-deleteFromImport symbol (L l idecls) (L lieLoc lies) _ =
+deleteFromImport symbol (L l idecls) llies@(L lieLoc lies) _ =do
+    let edited = L lieLoc deletedLies
+    when (not (null lies) && null deletedLies) $ do
+        transferAnn llies edited id
+        addSimpleAnnT edited dp00
+            [(G AnnOpenP, DP (0, 1))
+            ,(G AnnCloseP, DP (0,0))
+            ]
     pure $ L l $ idecls
         { ideclHiding = Just (False, L lieLoc deletedLies)
         }
@@ -352,19 +380,22 @@ deleteFromImport symbol (L l idecls) (L lieLoc lies) _ =
         deletedLies =
             mapMaybe killLie lies
         killLie :: LIE GhcPs -> Maybe (LIE GhcPs)
-        killLie v@(L _ (IEVar _ (L _ (unIEWrappedName -> nam))))
+        killLie v@(L _ (IEVar _ (L _ (rawIEWrapName -> nam))))
             | nam == symbol  = Nothing
             | otherwise = Just v
-        killLie v@(L _ (IEThingAbs _ (L _ (unIEWrappedName -> nam))))
+        killLie v@(L _ (IEThingAbs _ (L _ (rawIEWrapName -> nam))))
             | nam == symbol = Nothing
             | otherwise = Just v
 
-        killLie (L lieL (IEThingWith xt ty@(L _ (unIEWrappedName -> nam)) wild cons flds))
+        killLie (L lieL (IEThingWith xt ty@(L _ (rawIEWrapName -> nam)) wild cons flds))
             | nam == symbol = Nothing
             | otherwise = Just $
                 L lieL $ IEThingWith xt ty wild
-                  (filter ((/= symbol) . unIEWrappedName . unLoc) cons)
+                  (filter ((/= symbol) . rawIEWrapName . unLoc) cons)
                   (filter ((/= symbol) . unpackFS . flLabel . unLoc) flds)
         killLie v = Just v
 
-
+rawIEWrapName :: IEWrappedName RdrName -> String
+rawIEWrapName (IEName (L _ nam)) = occNameString $ rdrNameOcc nam
+rawIEWrapName (IEPattern (L _ nam)) = occNameString $ rdrNameOcc nam
+rawIEWrapName (IEType (L _ nam)) = occNameString $ rdrNameOcc nam

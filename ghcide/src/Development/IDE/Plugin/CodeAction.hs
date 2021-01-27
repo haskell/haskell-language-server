@@ -17,17 +17,20 @@ import Bag (isEmptyBag)
 import Control.Applicative ((<|>))
 import Control.Arrow (second, (>>>))
 import Control.Concurrent.Extra (readVar)
+import Control.Lens (foldMapBy, (^.))
 import Control.Monad (guard, join)
 import Data.Char
+import Data.Coerce (coerce)
+import qualified Data.DList as DL
 import Data.Function
 import Data.Functor
 import qualified Data.HashMap.Strict as Map
 import qualified Data.HashSet as Set
+import Data.Hashable (Hashable)
 import Data.List.Extra
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty as NE
 import Data.Maybe
-import Data.Ord (Down (Down))
 import qualified Data.Rope.UTF16 as Rope
 import qualified Data.Text as T
 import Development.IDE.Core.RuleTypes
@@ -46,18 +49,18 @@ import Development.IDE.Plugin.TypeLenses (suggestSignature)
 import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
+import qualified GHC.LanguageExtensions as Lang
 import Ide.PluginUtils (subRange)
 import Ide.Types
-import Language.Haskell.GHC.ExactPrint.Transform (uniqueSrcSpanT)
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.VFS
 import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
-import Retrie (unpackFS)
-import Retrie.GHC (fsLit, mkRealSrcLoc, mkRealSrcSpan, mkVarOcc)
+import Retrie.GHC (mkVarOcc)
 import Safe (atMay)
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
-
+import Language.Haskell.LSP.Types.Lens (start, character, end, line)
+import OccName (parenSymOcc)
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
@@ -101,14 +104,45 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
           , Just ps <- [annotatedPS]
           , Just dynflags <- [df]
           , (title, grafts) <- suggestExactAction exportsMap dynflags ps x
-          , let edit = foldMap (either error id .
+          , let edit = foldMapBy unionWSEdit mempty (either error id .
                         rewriteToEdit dynflags uri (annsA ps)) grafts
+          ] ++
+          [mkCA title [x] edit
+          | x <- xs
+          , ps <- maybeToList annotatedPS
+          , dynflags <- maybeToList df
+          , (title, edRewrs) <-
+                suggestImportDisambiguation dynflags (astA ps) x
+          , let edit =
+                    foldMapBy unionWSEdit mempty
+                    (either
+                        (\te -> WorkspaceEdit
+                                { _changes = Just $ Map.singleton uri $ List [te]
+                                , _documentChanges = Nothing }
+                        )
+                        (either error id .
+                        rewriteToEdit dynflags uri (annsA ps))
+                    ) edRewrs
+
           ]
       actions'' = caRemoveRedundantImports parsedModule text diag xs uri
                <> actions
                <> actions'
                <> caRemoveInvalidExports parsedModule text diag xs uri
     pure $ Right $ List actions''
+
+-- | Semigroup instance just overrides duplicated keys in the first argument
+unionWSEdit :: WorkspaceEdit -> WorkspaceEdit -> WorkspaceEdit
+unionWSEdit (WorkspaceEdit a b) (WorkspaceEdit c d) =
+    -- FIXME: Want to use monoidal-containers, but it supports aeson <1.5 only...
+    WorkspaceEdit (runCatHashMap <$> fmap CatHashMap a <> fmap CatHashMap c)
+        (b <> d)
+
+newtype CatHashMap k v = CatHashMap { runCatHashMap :: Map.HashMap k v }
+instance (Eq k, Hashable k, Semigroup v) => Semigroup (CatHashMap k v) where
+  (<>) = coerce $ Map.unionWith @k @v (<>)
+instance (Eq k, Hashable k, Semigroup v) => Monoid (CatHashMap k v) where
+  mempty = CatHashMap mempty
 
 mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
 mkCA title diags edit =
@@ -125,7 +159,6 @@ suggestExactAction exportsMap df ps x =
     [ suggestConstraint df (astA ps) x
     , suggestImplicitParameter (astA ps) x
     , suggestExtendImport exportsMap (astA ps) x
-    , suggestImportDisambiguation (astA ps) x
     ]
 
 suggestAction
@@ -708,7 +741,13 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
                 , parent = Nothing
                 , isDatacon = False}
 
-data HidingMode = HideOthers [LImportDecl GhcPs] | ToQualified ModuleName
+data HidingMode = HideOthers [ModuleTarget]
+                | ToQualified ModuleName
+    deriving (Show)
+
+data ModuleTarget
+    = ExistingImp (NonEmpty (LImportDecl GhcPs))
+    | ImplicitPrelude [LImportDecl GhcPs]
     deriving (Show)
 
 oneAndOthers :: [a] -> [(a, [a])]
@@ -717,12 +756,16 @@ oneAndOthers = go
         go [] = []
         go (x : xs) = (x, xs) : map (second (x :)) (go xs)
 
+isPreludeImplicit :: DynFlags -> Bool
+isPreludeImplicit = xopt Lang.ImplicitPrelude
+
 -- | Suggests disambiguation for ambiguous symbols.
 suggestImportDisambiguation ::
+    DynFlags ->
     ParsedSource ->
     Diagnostic ->
-    [(T.Text, [Rewrite])]
-suggestImportDisambiguation (L _ HsModule {hsmodImports}) diag@Diagnostic {..}
+    [(T.Text, [Either TextEdit Rewrite])]
+suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
             _message
@@ -734,28 +777,38 @@ suggestImportDisambiguation (L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | otherwise = []
     where
         locDic =
-            Map.fromList $
+            fmap (NE.fromList . DL.toList) $
+            Map.fromListWith (<>) $
                 map
                     ( \i@(L _ idecl) ->
                         ( T.pack $ moduleNameString $ unLoc $ ideclName idecl
-                        , i
+                        , DL.singleton i
                         )
                     )
                     hsmodImports
+        toModuleTarget "Prelude"
+            | isPreludeImplicit df
+             = Just $ ImplicitPrelude $
+                maybe [] NE.toList (Map.lookup "Prelude" locDic)
+        toModuleTarget mName = ExistingImp <$> Map.lookup mName locDic
+
         suggestions symbol mods
-            | Just targets <- mapM (`Map.lookup` locDic) mods =
+            | Just targets <- mapM toModuleTarget mods =
+                sortOn fst
                 [ ( renderUniquify mode modNameText symbol
-                  , disambiguateSymbol diag symbol lidecl mode
+                  , disambiguateSymbol df ps diag symbol mode
                   )
-                | (lidecl@(L _ ImportDecl {..}), restImports) <- oneAndOthers targets
-                , let modName = unLoc ideclName
+                | (modTarget, restImports) <- oneAndOthers targets
+                , let modName = targetModuleName modTarget
                       modNameText = T.pack $ moduleNameString modName
                 , mode <-
+                    HideOthers restImports :
                     [ ToQualified qual
-                    | L _ qual <- maybeToList ideclAs
+                    | ExistingImp imps <- [modTarget]
+                    , L _ qual <- nubOrd $ mapMaybe (ideclAs . unLoc)
+                        $ NE.toList imps
                     ]
-                        ++ [HideOthers restImports]
-                        ++ [ToQualified modName]
+                    ++ [ToQualified modName]
                 ]
             | otherwise = []
         renderUniquify HideOthers {} modName symbol =
@@ -766,41 +819,52 @@ suggestImportDisambiguation (L _ HsModule {hsmodImports}) diag@Diagnostic {..}
                 <> "."
                 <> symbol
 
+targetModuleName :: ModuleTarget -> ModuleName
+targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
+targetModuleName (ExistingImp (L _ ImportDecl{..} :| _)) =
+    unLoc ideclName
+targetModuleName (ExistingImp _) =
+    error "Cannot happen!"
+
 disambiguateSymbol ::
+    DynFlags ->
+    ParsedSource ->
     Diagnostic ->
     T.Text ->
-    GenLocated SrcSpan (ImportDecl GhcPs) ->
     HidingMode ->
-    [Rewrite]
-disambiguateSymbol Diagnostic {..} (T.unpack -> symbol) (L loc _) h = case h of
+    [Either TextEdit Rewrite]
+disambiguateSymbol df pm Diagnostic {..} (T.unpack -> symbol) = \case
     (HideOthers hiddens0) ->
-        [ hideSymbol symbol idecl
-        | idecl <- sortOn (Down . getLoc) hiddens0
+        [ Right $ hideSymbol symbol idecl
+        | ExistingImp idecls <- hiddens0
+        , idecl <- NE.toList idecls
         ]
+            ++ mconcat
+                [ if null imps
+                    then [Left $ hidePreludeSymbol df symbol pm]
+                    else Right . hideSymbol symbol <$> imps
+                | ImplicitPrelude imps <- hiddens0
+                ]
     (ToQualified qualMod) ->
-        [ Rewrite (rangeToSrcSpan theFile _range) $ \_ -> do
-            spn <- uniqueSrcSpanT
-            pure
-                ( L spn $
-                    HsVar NoExt $
-                        L spn $
-                            Qual qualMod (mkVarOcc symbol) ::
-                    LHsExpr GhcPs
-                )
-        ]
-        where
-            theFile
-                | RealSrcSpan real <- loc = unpackFS $ srcSpanFile real
-                | otherwise = "<dummy>"
+        let occSym = mkVarOcc symbol
+            rdr = Qual qualMod occSym
+        in [Left $ TextEdit _range
+            $ T.pack $ showSDoc df
+            $ parenSymOcc occSym
+            $ ppr rdr]
 
-rangeToSrcSpan :: String -> Range -> SrcSpan
-rangeToSrcSpan file range = RealSrcSpan $ rangeToRealSrcSpan file range
-
-rangeToRealSrcSpan :: String -> Range -> RealSrcSpan
-rangeToRealSrcSpan file (Range (Position startLn startCh) (Position endLn endCh)) =
-    mkRealSrcSpan
-      (mkRealSrcLoc (fsLit file) (startLn + 1) (startCh + 1))
-      (mkRealSrcLoc (fsLit file) (endLn + 1) (endCh + 1))
+-- Couldn't make out how to add New imports by ghc-exactprint;
+-- using direct TextEdit instead.
+hidePreludeSymbol :: DynFlags -> String -> ParsedSource -> TextEdit
+hidePreludeSymbol df symbol (L _ HsModule{..}) =
+    let ran = fromJust $ srcSpanToRange $ getLoc $ last hsmodImports
+        col = ran ^. start.character
+        beg = Position (1 + (ran ^. end.line)) 0
+        symOcc = mkVarOcc symbol
+        symImp = T.pack $ showSDoc df $ parenSymOcc symOcc $ ppr symOcc
+    in TextEdit
+        (Range beg beg)
+      $ T.replicate col " " <> "import Prelude hiding (" <> symImp <> ")\n"
 
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L l _)-> srcSpanToRange l == Just range) xs
