@@ -278,7 +278,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
           modifyVar_ fileToFlags $ \var -> do
               pure $ Map.insert hieYaml (HM.fromList (concatMap toFlagsMap all_targets)) var
           modifyVar_ filesMap $ \var -> do
-              pure $ HM.union var (HM.fromList (zip (map fst $ concatMap toFlagsMap all_targets) (repeat hieYaml)))
+              evaluate $ HM.union var (HM.fromList (zip (map fst $ concatMap toFlagsMap all_targets) (repeat hieYaml)))
 
           extendKnownTargets all_targets
 
@@ -338,7 +338,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                modifyVar_ fileToFlags $ \var -> do
                  pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
                modifyVar_ filesMap $ \var -> do
-                 pure $ HM.insert ncfp hieYaml var
+                 evaluate $ HM.insert ncfp hieYaml var
                return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
