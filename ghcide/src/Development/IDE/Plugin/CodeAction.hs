@@ -97,8 +97,10 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
           , Just ps <- [annotatedPS]
           , Just dynflags <- [df]
           , (title, graft) <- suggestExactAction exportsMap dynflags ps x
-          , let edit = either error id $
-                        rewriteToEdit dynflags uri (annsA ps) graft
+          , Right edit <-
+                [ -- either (Left . traceShow) Right $
+                 rewriteToEdit dynflags uri (annsA ps) graft
+                 ]
           ]
       actions'' = caRemoveRedundantImports parsedModule text diag xs uri
                <> actions
