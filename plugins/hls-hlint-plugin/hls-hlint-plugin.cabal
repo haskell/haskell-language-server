@@ -27,7 +27,7 @@ library
   hs-source-dirs:   src
   build-depends:
     , aeson
-    , apply-refact
+    , apply-refact           >=0.9
     , base                   >=4.12 && <5
     , binary
     , bytestring
