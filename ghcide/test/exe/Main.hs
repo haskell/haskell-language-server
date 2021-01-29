@@ -1530,7 +1530,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             action <- liftIO $ pickActionWithTitle cmd actions
             executeCodeAction action
             contentAfterAction <- documentContents doc
-            liftIO $ expected @=? contentAfterAction
+            liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
     withHideFunction k = runInDir hidingDir $ do
         doc <- openDoc ("HideFunction" <.> "hs") "haskell"
         void (skipManyTill anyMessage message
