@@ -27,11 +27,20 @@ import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent, PositionRes
 import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Typeable
 import Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import Development.IDE.Spans.Common
 import Development.IDE.Test
+    ( canonicalizeUri,
+      diagnostic,
+      expectCurrentDiagnostics,
+      expectDiagnostics,
+      expectDiagnosticsWithTags,
+      expectNoMoreDiagnostics,
+      flushMessages,
+      standardizeQuotes,
+      waitForAction,
+      Cursor )
 import Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import Development.IDE.Types.Location
@@ -1465,10 +1474,21 @@ suggestImportTests = testGroup "suggest import actions"
 suggestImportDisambiguationTests :: TestTree
 suggestImportDisambiguationTests = testGroup "suggest import disambiguation actions"
   [ testGroup "Hiding strategy works"
-    [ testCase "Symbol" $ runInDir hidingDir $ do
+    [ testGroup "fromList"
+        [ testCase "AVec" $ withHideFunction $ \doc actions -> do
+            expected <- liftIO $
+                readFileUtf8 (hidingDir </> "HideFunction" <.> "hs" <.> "expected.A.fromList")
+            action <- liftIO $ pickActionWithTitle "Use AVec for fromList, hiding other imports" actions
+            executeCodeAction action
+            contentAfterAction <- documentContents doc
+            liftIO $ expected @=? contentAfterAction
+        ]
+    ]
+  ]
+  where
+    hidingDir = "test/data/hiding"
+    withHideFunction k = runInDir hidingDir $ do
         doc <- openDoc ("HideFunction" <.> "hs") "haskell"
-        expected <- liftIO $
-            T.readFile (hidingDir </> "HideFunction" <.> "hs" <.> "expected.A.fromList")
         void (skipManyTill anyMessage message
             :: Session WorkDoneProgressEndNotification)
         void waitForDiagnostics
@@ -1476,14 +1496,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         contents <- documentContents doc
         let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
         actions <- getCodeActions doc range
-        action <- liftIO $ pickActionWithTitle "Use AVec for fromList, hiding other imports" actions
-        executeCodeAction action
-        contentAfterAction <- documentContents doc
-        liftIO $ expected @=? contentAfterAction
-    ]
-  ]
-  where
-    hidingDir = "test/data/hiding"
+        k doc actions
 
 disableWarningTests :: TestTree
 disableWarningTests =
@@ -2911,7 +2924,7 @@ findDefinitionAndHoverTests = let
         Position{_line = l + 1, _character = c + 1}
     in
     case map (read . T.unpack) lineCol of
-      [l,c] -> liftIO $ (adjust $ _start expectedRange) @=? Position l c
+      [l,c] -> liftIO $ adjust (_start expectedRange) @=? Position l c
       _     -> liftIO $ assertFailure $
         "expected: " <> show ("[...]" <> sourceFileName <> ":<LINE>:<COL>**[...]", Just expectedRange) <>
         "\n but got: " <> show (msg, rangeInHover)
