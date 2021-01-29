@@ -3,6 +3,8 @@
 ## 0.9.0
 
 This release includes lot of refactorings and bug fixes over existing features, hlint and eval plugins among others.
+It contains a fix for a bug in ghcide involving stale diagnostics (#1204).
+
 The list of contributors continues to show healthy growth, many thanks to you all!
 
 And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_face:
@@ -11,6 +13,7 @@ And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_fa
 
 ### Pull requests merged for 0.9.0
 
+- Do not error out on failed rewrite
 ([#1269)](https://github.com/haskell/haskell-language-server/pull/1269) by @pepeiborra
 - Tighten dependency on apply-refact
 ([#1268)](https://github.com/haskell/haskell-language-server/pull/1268) by @hololeap
