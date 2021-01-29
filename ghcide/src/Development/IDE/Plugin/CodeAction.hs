@@ -61,6 +61,7 @@ import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
 import Retrie.GHC (mkVarOcc)
 import Safe (atMay)
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
+import Data.Either (fromRight)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
