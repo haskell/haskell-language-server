@@ -3,7 +3,7 @@
 ## 0.9.0
 
 This release includes lot of refactorings and bug fixes over existing features, hlint and eval plugins among others.
-The list of contributors keeps growing healthy, many thanks to you all!
+The list of contributors continues to show healthy growth, many thanks to you all!
 
 And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_face:
 
