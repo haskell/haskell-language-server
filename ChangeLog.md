@@ -11,6 +11,7 @@ And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_fa
 
 ### Pull requests merged for 0.9.0
 
+([#1269)](https://github.com/haskell/haskell-language-server/pull/1269) by @pepeiborra
 - Tighten dependency on apply-refact
 ([#1268)](https://github.com/haskell/haskell-language-server/pull/1268) by @hololeap
 - Add the new logos
@@ -89,6 +90,8 @@ And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_fa
 ([#1199)](https://github.com/haskell/haskell-language-server/pull/1199) by @tittoassini
 - Disable win 8.6.4 job
 ([#1198)](https://github.com/haskell/haskell-language-server/pull/1198) by @jneira
+- Add custom cache layer for session loading
+([#1197)](https://github.com/haskell/haskell-language-server/pull/1197) by @fendor
 - Use completionSnippetsOn flag
 ([#1195)](https://github.com/haskell/haskell-language-server/pull/1195) by @takoeight0821
 - Remove runs dropped by #1173
