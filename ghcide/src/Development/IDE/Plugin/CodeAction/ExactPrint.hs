@@ -362,17 +362,18 @@ deleteFromImport ::
     Located [LIE GhcPs] ->
     DynFlags ->
     TransformT (Either String) (LImportDecl GhcPs)
-deleteFromImport symbol (L l idecls) llies@(L lieLoc lies) _ =do
+deleteFromImport symbol (L l idecl) llies@(L lieLoc lies) _ =do
     let edited = L lieLoc deletedLies
+        lidecl' = L l $ idecl
+            { ideclHiding = Just (False, edited)
+            }
     when (not (null lies) && null deletedLies) $ do
         transferAnn llies edited id
         addSimpleAnnT edited dp00
             [(G AnnOpenP, DP (0, 1))
             ,(G AnnCloseP, DP (0,0))
             ]
-    pure $ L l $ idecls
-        { ideclHiding = Just (False, L lieLoc deletedLies)
-        }
+    pure lidecl'
     where
         deletedLies =
             mapMaybe killLie lies
@@ -392,6 +393,7 @@ deleteFromImport symbol (L l idecls) llies@(L lieLoc lies) _ =do
                   (filter ((/= symbol) . unpackFS . flLabel . unLoc) flds)
         killLie v = Just v
 
+-- This must not belong here?
 rawIEWrapName :: IEWrappedName RdrName -> String
 rawIEWrapName (IEName (L _ nam)) = occNameString $ rdrNameOcc nam
 rawIEWrapName (IEPattern (L _ nam)) = occNameString $ rdrNameOcc nam

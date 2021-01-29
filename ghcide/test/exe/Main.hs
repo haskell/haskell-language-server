@@ -1479,6 +1479,11 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareHideFunctionTo
                 "Use AVec for fromList, hiding other imports"
                 "HideFunction.hs.expected.fromList.A"
+        , expectFailBecause "Known bug - Modifying topmost import decl adds additional newline at the top"
+        $  testCase "BVec" $
+            compareHideFunctionTo
+                "Use BVec for fromList, hiding other imports"
+                "HideFunction.hs.expected.fromList.B"
         ]
     , testGroup "(++)"
         [testCase "EVec" $
@@ -1502,6 +1507,18 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
                 [ actionTitle
                 | CACodeAction CodeAction { _title = actionTitle } <- actions
                 ]
+    , testGroup "fromList"
+        [ testCase "EVec" $
+            compareHideFunctionTo
+                "Replace with qualified: E.fromList"
+                "HideFunction.hs.expected.qualified.fromList.E"
+        ]
+    , testGroup "(++)"
+        [ testCase "Prelude" $
+            compareHideFunctionTo
+                "Replace with qualified: Prelude.++"
+                "HideFunction.hs.expected.qualified.append.Prelude"
+        ]
     ]
   ]
   where
