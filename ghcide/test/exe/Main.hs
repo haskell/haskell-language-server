@@ -1475,18 +1475,45 @@ suggestImportDisambiguationTests :: TestTree
 suggestImportDisambiguationTests = testGroup "suggest import disambiguation actions"
   [ testGroup "Hiding strategy works"
     [ testGroup "fromList"
-        [ testCase "AVec" $ withHideFunction $ \doc actions -> do
-            expected <- liftIO $
-                readFileUtf8 (hidingDir </> "HideFunction" <.> "hs" <.> "expected.A.fromList")
-            action <- liftIO $ pickActionWithTitle "Use AVec for fromList, hiding other imports" actions
-            executeCodeAction action
-            contentAfterAction <- documentContents doc
-            liftIO $ expected @=? contentAfterAction
+        [ testCase "AVec" $
+            compareHideFunctionTo
+                "Use AVec for fromList, hiding other imports"
+                "HideFunction.hs.expected.fromList.A"
         ]
+    , testGroup "(++)"
+        [testCase "EVec" $
+            compareHideFunctionTo
+                "Use EVec for ++, hiding other imports"
+                "HideFunction.hs.expected.append.E"
+        ]
+    ]
+  , testGroup "Qualify strategy"
+    [ testCase "won't suggest full name for qualified module" $
+      withHideFunction $ \_ actions -> do
+        liftIO $
+            assertBool "EVec.fromList must not be suggested" $
+                "Replace with qualified: EVec.fromList" `notElem`
+                [ actionTitle
+                | CACodeAction CodeAction { _title = actionTitle } <- actions
+                ]
+        liftIO $
+            assertBool "EVec.++ must not be suggested" $
+                "Replace with qualified: EVec.++" `notElem`
+                [ actionTitle
+                | CACodeAction CodeAction { _title = actionTitle } <- actions
+                ]
     ]
   ]
   where
     hidingDir = "test/data/hiding"
+    compareHideFunctionTo cmd expected =
+        withHideFunction $ \doc actions -> do
+            expected <- liftIO $
+                readFileUtf8 (hidingDir </> expected)
+            action <- liftIO $ pickActionWithTitle cmd actions
+            executeCodeAction action
+            contentAfterAction <- documentContents doc
+            liftIO $ expected @=? contentAfterAction
     withHideFunction k = runInDir hidingDir $ do
         doc <- openDoc ("HideFunction" <.> "hs") "haskell"
         void (skipManyTill anyMessage message
