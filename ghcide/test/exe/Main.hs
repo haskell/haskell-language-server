@@ -27,6 +27,7 @@ import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent, PositionRes
 import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Typeable
 import Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import Development.IDE.Spans.Common
@@ -678,6 +679,7 @@ codeActionTests = testGroup "code actions"
   , removeImportTests
   , extendImportTests
   , suggestImportTests
+  , suggestImportDisambiguationTests
   , disableWarningTests
   , fixConstructorImportTests
   , importRenameActionTests
@@ -1459,6 +1461,29 @@ suggestImportTests = testGroup "suggest import actions"
              liftIO $ after @=? contentAfterAction
           else
               liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
+
+suggestImportDisambiguationTests :: TestTree
+suggestImportDisambiguationTests = testGroup "suggest import disambiguation actions"
+  [ testGroup "Hiding strategy works"
+    [ testCase "Symbol" $ runInDir hidingDir $ do
+        doc <- openDoc ("HideFunction" <.> "hs") "haskell"
+        expected <- liftIO $
+            T.readFile (hidingDir </> "HideFunction" <.> "hs" <.> "expected.A.fromList")
+        void (skipManyTill anyMessage message
+            :: Session WorkDoneProgressEndNotification)
+        void waitForDiagnostics
+        liftIO $ sleep 0.5
+        contents <- documentContents doc
+        let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
+        actions <- getCodeActions doc range
+        action <- liftIO $ pickActionWithTitle "Use AVec for fromList, hiding other imports" actions
+        executeCodeAction action
+        contentAfterAction <- documentContents doc
+        liftIO $ expected @=? contentAfterAction
+    ]
+  ]
+  where
+    hidingDir = "test/data/hiding"
 
 disableWarningTests :: TestTree
 disableWarningTests =
