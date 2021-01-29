@@ -122,7 +122,7 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
                                 , _documentChanges = Nothing }
                         )
                         (-- either (Left . traceShow) Right $
-                            either (const mempty) id .
+                            fromRight mempty.
                         rewriteToEdit dynflags uri (annsA ps))
                     ) edRewrs
 
