@@ -7,6 +7,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
   ( Rewrite (..),
     rewriteToEdit,
     transferAnn,
+    rawIEWrapName,
 
     -- * Utilities
     appendConstraint,

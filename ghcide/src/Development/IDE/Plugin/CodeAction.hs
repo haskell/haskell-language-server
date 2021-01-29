@@ -62,6 +62,8 @@ import Retrie.GHC (mkVarOcc)
 import Safe (atMay)
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
 import Data.Either (fromRight)
+import Retrie (unpackFS)
+import FieldLabel (flLabel)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -753,6 +755,10 @@ data ModuleTarget
     | ImplicitPrelude [LImportDecl GhcPs]
     deriving (Show)
 
+targetImports :: ModuleTarget -> [LImportDecl GhcPs]
+targetImports (ExistingImp ne) = NE.toList ne
+targetImports (ImplicitPrelude xs) = xs
+
 oneAndOthers :: [a] -> [(a, [a])]
 oneAndOthers = go
     where
@@ -811,16 +817,48 @@ suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic 
                     , L _ qual <- nubOrd $ mapMaybe (ideclAs . unLoc)
                         $ NE.toList imps
                     ]
-                    ++ [ToQualified modName]
+                    ++ [ToQualified modName
+                        | any (occursUnqualified symbol . unLoc)
+                            (targetImports modTarget)
+                        || case modTarget of
+                            ImplicitPrelude{} -> True
+                            _ -> False
+                        ]
                 ]
             | otherwise = []
         renderUniquify HideOthers {} modName symbol =
-            "Use the import from " <> modName <> " for " <> symbol <> ", hiding other imports"
+            "Use " <> modName <> " for " <> symbol <> ", hiding other imports"
         renderUniquify (ToQualified qual) _ symbol =
             "Replace with qualified: "
                 <> T.pack (moduleNameString qual)
                 <> "."
                 <> symbol
+
+occursUnqualified :: T.Text -> ImportDecl GhcPs -> Bool
+occursUnqualified symbol ImportDecl{..}
+    | isNothing ideclAs = Just False /=
+            -- I don't find this particularly comprehensible,
+            -- but HLint suggested me to do so...
+        (ideclHiding <&> \(isHiding, L _ ents) ->
+            let occurs = any ((symbol `symbolOccursIn`) . unLoc) ents
+            in isHiding && not occurs || not isHiding && occurs
+        )
+occursUnqualified _ _ = False
+
+symbolOccursIn :: T.Text -> IE GhcPs -> Bool
+symbolOccursIn symb = \case
+   IEVar _ (L _ n) -> rawIEWrapName n == T.unpack symb
+   IEThingAbs _ (L _ n) -> rawIEWrapName n == T.unpack symb
+   IEThingAll _ (L _ n) -> rawIEWrapName n == T.unpack symb
+   IEThingWith _ (L _ n) _ ents flds ->
+    rawIEWrapName n == T.unpack symb
+    || any ((== T.unpack symb) . rawIEWrapName . unLoc) ents
+    || any ((== T.unpack symb) . unpackFS . flLabel . unLoc) flds
+   IEModuleContents{} -> False
+   IEGroup{} -> False
+   IEDoc{} -> False
+   IEDocNamed{} -> False
+   XIE{} -> False
 
 targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
