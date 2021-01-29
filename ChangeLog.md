@@ -2,6 +2,13 @@
 
 ## 0.9.0
 
+This release includes lot of refactorings and bug fixes over existing features, hlint and eval plugins among others.
+The list of contributors keeps growing healthy, many thanks to you all!
+
+And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_face:
+
+![haskell-language-server](https://github.com/haskell/haskell-language-server/raw/master/docs/logos/logo-256.png)
+
 ### Pull requests merged for 0.9.0
 
 - Tighten dependency on apply-refact
