@@ -121,7 +121,8 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
                                 { _changes = Just $ Map.singleton uri $ List [te]
                                 , _documentChanges = Nothing }
                         )
-                        (either error id .
+                        (-- either (Left . traceShow) Right $
+                            either (const mempty) id .
                         rewriteToEdit dynflags uri (annsA ps))
                     ) edRewrs
 
