@@ -136,10 +136,11 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
 -- | Semigroup instance just overrides duplicated keys in the first argument
 unionWSEdit :: WorkspaceEdit -> WorkspaceEdit -> WorkspaceEdit
 unionWSEdit (WorkspaceEdit a b) (WorkspaceEdit c d) =
-    -- FIXME: Want to use monoidal-containers, but it supports aeson <1.5 only...
     WorkspaceEdit (runCatHashMap <$> fmap CatHashMap a <> fmap CatHashMap c)
         (b <> d)
 
+-- | A monoidal hashmap
+     -- FIXME: Want to use monoidal-containers, but it supports aeson <1.5 only...
 newtype CatHashMap k v = CatHashMap { runCatHashMap :: Map.HashMap k v }
 instance (Eq k, Hashable k, Semigroup v) => Semigroup (CatHashMap k v) where
   (<>) = coerce $ Map.unionWith @k @v (<>)
