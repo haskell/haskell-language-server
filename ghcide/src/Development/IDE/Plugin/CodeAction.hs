@@ -107,7 +107,7 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
           , dynflags <- maybeToList df
           , nfp <- maybeToList mbFile
           , (title, grafts) <- suggestExactAction exportsMap nfp dynflags ps x
-          , let edit = foldMapBy unionWSEdit mempty (either error id .
+          , let edit = foldMapBy unionWSEdit mempty (either mempty id .
                         rewriteToEdit dynflags uri (annsA ps)) grafts
           ]
       actions'' = caRemoveRedundantImports parsedModule text diag xs uri
