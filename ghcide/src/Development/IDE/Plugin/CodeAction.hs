@@ -13,34 +13,14 @@ module Development.IDE.Plugin.CodeAction
     , matchRegExMultipleImports
     ) where
 
-import Bag (isEmptyBag)
-import Control.Applicative ((<|>))
-import Control.Arrow (second, (>>>))
-import Control.Concurrent.Extra (readVar)
-import Control.Lens (foldMapBy, (^.))
-import Control.Monad (guard, join)
-import Data.Char
-import Data.Coerce (coerce)
-import qualified Data.DList as DL
-import Data.Function
-import Data.Functor
-import qualified Data.HashMap.Strict as Map
-import qualified Data.HashSet as Set
-import Data.Hashable (Hashable)
-import Data.List.Extra
-import Data.List.NonEmpty (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty as NE
-import Data.Maybe
-import qualified Data.Rope.UTF16 as Rope
-import qualified Data.Text as T
-import Development.IDE.Core.RuleTypes
+import Control.Monad (join, guard)
+import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
+import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Error
 import Development.IDE.GHC.ExactPrint
-import Development.IDE.GHC.Util (printRdrName)
 import Development.IDE.Plugin.CodeAction.ExactPrint
 import Development.IDE.Plugin.CodeAction.PositionIndexed
 import Development.IDE.Plugin.CodeAction.RuleTypes
@@ -49,21 +29,38 @@ import Development.IDE.Plugin.TypeLenses (suggestSignature)
 import Development.IDE.Types.Exports
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
-import qualified GHC.LanguageExtensions as Lang
+import qualified Data.HashMap.Strict as Map
+import qualified Language.Haskell.LSP.Core as LSP
+import Language.Haskell.LSP.VFS
+import Language.Haskell.LSP.Types
+import qualified Data.Rope.UTF16 as Rope
+import Data.Char
+import Data.Maybe
+import Data.List.Extra
+import Data.List.NonEmpty (NonEmpty((:|)))
+import qualified Data.List.NonEmpty as NE
+import qualified Data.Text as T
+import Text.Regex.TDFA (mrAfter, (=~), (=~~))
+import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
+import Data.Function
+import Data.Functor
+import Control.Applicative ((<|>))
+import Safe (atMay)
+import Bag (isEmptyBag)
+import qualified Data.HashSet as Set
+import Control.Concurrent.Extra (readVar)
+import Development.IDE.GHC.Util (printRdrName)
 import Ide.PluginUtils (subRange)
 import Ide.Types
-import qualified Language.Haskell.LSP.Core as LSP
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Lens (character, end, line, start)
-import Language.Haskell.LSP.VFS
-import OccName (parenSymOcc)
-import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
-import Retrie.GHC (mkVarOcc)
-import Safe (atMay)
-import Text.Regex.TDFA (mrAfter, (=~), (=~~))
+import Data.Hashable (Hashable)
+import qualified Data.DList as DL
+import Development.IDE.Spans.Common
+import OccName
+import Data.Coerce
 import Data.Either (fromRight)
-import Retrie (unpackFS)
-import FieldLabel (flLabel)
+import Control.Arrow
+import qualified GHC.LanguageExtensions as Lang
+import Control.Lens (foldMapBy)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -852,8 +849,8 @@ symbolOccursIn symb = \case
    IEThingAll _ (L _ n) -> rawIEWrapName n == T.unpack symb
    IEThingWith _ (L _ n) _ ents flds ->
     rawIEWrapName n == T.unpack symb
-    || any ((== T.unpack symb) . rawIEWrapName . unLoc) ents
-    || any ((== T.unpack symb) . unpackFS . flLabel . unLoc) flds
+    || any ((== symb) . showNameWithoutUniques . unLoc) ents
+    || any ((== symb) . showNameWithoutUniques . unLoc) flds
    IEModuleContents{} -> False
    IEGroup{} -> False
    IEDoc{} -> False
@@ -899,8 +896,8 @@ disambiguateSymbol df pm Diagnostic {..} (T.unpack -> symbol) = \case
 hidePreludeSymbol :: DynFlags -> String -> ParsedSource -> TextEdit
 hidePreludeSymbol df symbol (L _ HsModule{..}) =
     let ran = fromJust $ srcSpanToRange $ getLoc $ last hsmodImports
-        col = ran ^. start.character
-        beg = Position (1 + (ran ^. end.line)) 0
+        col = _character $ _start ran
+        beg = Position (1 + _line (_end ran)) 0
         symOcc = mkVarOcc symbol
         symImp = T.pack $ showSDoc df $ parenSymOcc symOcc $ ppr symOcc
     in TextEdit
