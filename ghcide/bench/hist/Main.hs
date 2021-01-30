@@ -81,6 +81,7 @@ main = shakeArgsWith shakeOptions{shakeChange = ChangeModtimeAndDigestInput, sha
       csvRules build
       svgRules build
       heapProfileRules build
+      phonyRules build (examples configStatic)
       case wants of
           [] -> action $ allTargets build
           _ -> want wants

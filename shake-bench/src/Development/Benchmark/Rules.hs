@@ -51,7 +51,9 @@ module Development.Benchmark.Rules
       csvRules,
       svgRules,
       heapProfileRules,
+      phonyRules,
       allTargets,
+      allTargetsForExample,
       GetExample(..), GetExamples(..),
       IsExample(..), RuleResultForExample,
       GetExperiments(..),
@@ -123,26 +125,33 @@ class (Binary e, Eq e, Hashable e, NFData e, Show e, Typeable e) => IsExample e 
 
 allTargets :: RuleResultForExample e => FilePath -> Action ()
 allTargets buildFolder = do
-    experiments <- askOracle $ GetExperiments ()
     examples    <- askOracle $ GetExamples ()
+    paths <- mapM (allTargetsForExample buildFolder) examples
+    need $ concat paths
+
+allTargetsForExample :: IsExample e => FilePath -> e -> Action [FilePath]
+allTargetsForExample buildFolder ex = do
+    experiments <- askOracle $ GetExperiments ()
     versions    <- askOracle $ GetVersions ()
-    need $
-      [buildFolder </> getExampleName e </> "results.csv" | e <- examples ] ++
-      [buildFolder </> "results.csv"]
+    return $
+        [buildFolder </> getExampleName ex </> "results.csv"]
+            ++ [buildFolder </> "results.csv"]
         ++ [ buildFolder </> getExampleName ex </> escaped (escapeExperiment e) <.> "svg"
              | e <- experiments
-             , ex <- examples
            ]
         ++ [ buildFolder </>
              getExampleName ex </>
              T.unpack (humanName ver) </>
              escaped (escapeExperiment e) <.> mode
              | e <- experiments,
-               ex <- examples,
                ver <- versions,
                mode <- ["svg", "diff.svg","heap.svg"]
            ]
 
+phonyRules :: (Foldable t, IsExample e) => FilePath -> t e -> Rules ()
+phonyRules buildFolder examples = do
+    forM_ examples $ \ex ->
+        phony (getExampleName ex) $ need =<< allTargetsForExample buildFolder ex
 --------------------------------------------------------------------------------
 type OutputFolder = FilePath
 
