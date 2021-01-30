@@ -88,6 +88,7 @@
     - Development.IDE.Spans.Calculate
     - Development.IDE.Spans.Documentation
     - Development.IDE.Spans.Common
+    - Development.IDE.Spans.AtPoint
     - Development.IDE.Plugin.CodeAction
     - Development.IDE.Plugin.Completions
     - Development.IDE.Plugin.Completions.Logic

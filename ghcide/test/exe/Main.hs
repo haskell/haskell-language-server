@@ -15,7 +15,8 @@ import Control.Exception (bracket_, catch)
 import qualified Control.Lens as Lens
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Aeson (FromJSON, Value, toJSON)
+import Data.Aeson (FromJSON, Value, toJSON,fromJSON)
+import qualified Data.Aeson as A
 import qualified Data.Binary as Binary
 import Data.Default
 import Data.Foldable
@@ -23,6 +24,7 @@ import Data.List.Extra
 import Data.Maybe
 import Data.Rope.UTF16 (Rope)
 import qualified Data.Rope.UTF16 as Rope
+import qualified Data.Set as Set
 import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent, PositionResult(..), positionResultToMaybe)
 import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
@@ -77,6 +79,7 @@ import qualified Language.Haskell.LSP.Types.Lens as L
 import Control.Lens ((^.))
 import Data.Functor
 import Numeric.Natural (Natural)
+import Data.Tuple.Extra
 
 main :: IO ()
 main = do
@@ -116,6 +119,7 @@ main = do
     , asyncTests
     , clientSettingsTest
     , codeActionHelperFunctionTests
+    , referenceTests
     ]
 
 initializeResponseTests :: TestTree
@@ -138,10 +142,10 @@ initializeResponseTests = withResource acquire release tests where
     -- BUG in lsp-test, this test fails, just change the accepted response
     -- for now
     , chk "NO goto implementation"  _implementationProvider (Just $ GotoOptionsStatic True)
-    , chk "NO find references"          _referencesProvider  Nothing
+    , chk "   find references"          _referencesProvider  (Just True)
     , chk "   doc highlight"     _documentHighlightProvider  (Just True)
     , chk "   doc symbol"           _documentSymbolProvider  (Just True)
-    , chk "NO workspace symbol"    _workspaceSymbolProvider  Nothing
+    , chk "   workspace symbol"    _workspaceSymbolProvider  (Just True)
     , chk "   code action"             _codeActionProvider $ Just $ CodeActionOptionsStatic True
     , chk "   code lens"                 _codeLensProvider $ Just $ CodeLensOptions Nothing
     , chk "NO doc formatting"   _documentFormattingProvider  Nothing
@@ -3020,7 +3024,7 @@ findDefinitionAndHoverTests = let
     , testGroup "type-definition" typeDefinitionTests ]
 
   typeDefinitionTests = [ tst (getTypeDefinitions, checkDefs) aaaL14 (pure tcData) "Saturated data con"
-                        , tst (getTypeDefinitions, checkDefs) opL16 (pure [ExpectNoDefinitions]) "Polymorphic variable"]
+                        , tst (getTypeDefinitions, checkDefs) aL20 (pure [ExpectNoDefinitions]) "Polymorphic variable"]
 
   test runDef runHover look expect = testM runDef runHover look (return expect)
 
@@ -3034,6 +3038,7 @@ findDefinitionAndHoverTests = let
   fffL4  = _start fffR     ;  fffR = mkRange 8  4    8  7 ; fff  = [ExpectRange fffR]
   fffL8  = Position 12  4  ;
   fffL14 = Position 18  7  ;
+  aL20   = Position 19 15
   aaaL14 = Position 18 20  ;  aaa    = [mkR  11  0   11  3]
   dcL7   = Position 11 11  ;  tcDC   = [mkR   7 23    9 16]
   dcL12  = Position 16 11  ;
@@ -4445,6 +4450,178 @@ clientSettingsTest = testGroup "client settings handling"
         isMessagePresent expectedMsg actualMsgs = liftIO $
             assertBool ("\"" ++ expectedMsg ++ "\" is not present in: " ++ show actualMsgs)
                        (any ((expectedMsg `isSubsequenceOf`) . show) actualMsgs)
+
+referenceTests :: TestTree
+referenceTests = testGroup "references"
+    [ testGroup "can get references to FOIs"
+          [ referenceTest "can get references to symbols"
+                          ("References.hs", 4, 7)
+                          YesIncludeDeclaration
+                          [ ("References.hs", 4, 6)
+                          , ("References.hs", 6, 0)
+                          , ("References.hs", 6, 14)
+                          , ("References.hs", 9, 7)
+                          , ("References.hs", 10, 11)
+                          ]
+
+          , referenceTest "can get references to data constructor"
+                          ("References.hs", 13, 2)
+                          YesIncludeDeclaration
+                          [ ("References.hs", 13, 2)
+                          , ("References.hs", 16, 14)
+                          , ("References.hs", 19, 21)
+                          ]
+
+          , referenceTest "getting references works in the other module"
+                          ("OtherModule.hs", 6, 0)
+                          YesIncludeDeclaration
+                          [ ("OtherModule.hs", 6, 0)
+                          , ("OtherModule.hs", 8, 16)
+                          ]
+
+          , referenceTest "getting references works in the Main module"
+                          ("Main.hs", 9, 0)
+                          YesIncludeDeclaration
+                          [ ("Main.hs", 9, 0)
+                          , ("Main.hs", 10, 4)
+                          ]
+
+          , referenceTest "getting references to main works"
+                          ("Main.hs", 5, 0)
+                          YesIncludeDeclaration
+                          [ ("Main.hs", 4, 0)
+                          , ("Main.hs", 5, 0)
+                          ]
+
+          , referenceTest "can get type references"
+                          ("Main.hs", 9, 9)
+                          YesIncludeDeclaration
+                          [ ("Main.hs", 9, 0)
+                          , ("Main.hs", 9, 9)
+                          , ("Main.hs", 10, 0)
+                          ]
+
+          , expectFailBecause "references provider does not respect includeDeclaration parameter" $
+ referenceTest "works when we ask to exclude declarations"
+                          ("References.hs", 4, 7)
+                          NoExcludeDeclaration
+                          [ ("References.hs", 6, 0)
+                          , ("References.hs", 6, 14)
+                          , ("References.hs", 9, 7)
+                          , ("References.hs", 10, 11)
+                          ]
+
+          , referenceTest "INCORRECTLY returns declarations when we ask to exclude them"
+                          ("References.hs", 4, 7)
+                          NoExcludeDeclaration
+                          [ ("References.hs", 4, 6)
+                          , ("References.hs", 6, 0)
+                          , ("References.hs", 6, 14)
+                          , ("References.hs", 9, 7)
+                          , ("References.hs", 10, 11)
+                          ]
+          ]
+
+    , testGroup "can get references to non FOIs"
+          [ referenceTest "can get references to symbol defined in a module we import"
+                          ("References.hs", 22, 4)
+                          YesIncludeDeclaration
+                          [ ("References.hs", 22, 4)
+                          , ("OtherModule.hs", 0, 20)
+                          , ("OtherModule.hs", 4, 0)
+                          ]
+
+          , referenceTest "can get references in modules that import us to symbols we define"
+                          ("OtherModule.hs", 4, 0)
+                          YesIncludeDeclaration
+                          [ ("References.hs", 22, 4)
+                          , ("OtherModule.hs", 0, 20)
+                          , ("OtherModule.hs", 4, 0)
+                          ]
+
+          , referenceTest "can get references to symbol defined in a module we import transitively"
+                          ("References.hs", 24, 4)
+                          YesIncludeDeclaration
+                          [ ("References.hs", 24, 4)
+                          , ("OtherModule.hs", 0, 48)
+                          , ("OtherOtherModule.hs", 2, 0)
+                          ]
+
+          , referenceTest "can get references in modules that import us transitively to symbols we define"
+                          ("OtherOtherModule.hs", 2, 0)
+                          YesIncludeDeclaration
+                          [ ("References.hs", 24, 4)
+                          , ("OtherModule.hs", 0, 48)
+                          , ("OtherOtherModule.hs", 2, 0)
+                          ]
+
+          , referenceTest "can get type references to other modules"
+                          ("Main.hs", 12, 10)
+                          YesIncludeDeclaration
+                          [ ("Main.hs", 12, 7)
+                          , ("Main.hs", 13, 0)
+                          , ("References.hs", 12, 5)
+                          , ("References.hs", 16, 0)
+                          ]
+          ]
+    ]
+
+-- | When we ask for all references to symbol "foo", should the declaration "foo
+-- = 2" be among the references returned?
+data IncludeDeclaration =
+    YesIncludeDeclaration
+    | NoExcludeDeclaration
+
+getReferences' :: SymbolLocation -> IncludeDeclaration -> Session [Location]
+getReferences' (file, l, c) includeDeclaration = do
+    doc <- openDoc file "haskell"
+    getReferences doc (Position l c) $ toBool includeDeclaration
+    where toBool YesIncludeDeclaration = True
+          toBool NoExcludeDeclaration = False
+
+referenceTestSession :: String -> FilePath -> [FilePath] -> (FilePath -> Session ()) -> TestTree
+referenceTestSession name thisDoc docs' f = testSessionWithExtraFiles "references" name $ \dir -> do
+  let docs = map (dir </>) $ delete thisDoc $ nubOrd docs'
+  -- Initial Index
+  docid <- openDoc thisDoc "haskell"
+  let
+    loop [] = pure ()
+    loop docs = do
+      doc <- skipManyTill anyMessage $ satisfyMaybe $ \case
+          NotCustomServer (NotificationMessage _ (CustomServerMethod "ghcide/reference/ready") fp) -> do
+            A.Success fp' <- pure $ fromJSON fp
+            find (fp' ==) docs
+          _ -> Nothing
+      loop (delete doc docs)
+  loop docs
+  f dir
+  closeDoc docid
+
+-- | Given a location, lookup the symbol and all references to it. Make sure
+-- they are the ones we expect.
+referenceTest :: String -> SymbolLocation -> IncludeDeclaration -> [SymbolLocation] -> TestTree
+referenceTest name loc includeDeclaration expected =
+    referenceTestSession name (fst3 loc) docs $ \dir -> do
+        actual <- getReferences' loc includeDeclaration
+        liftIO $ actual `expectSameLocations` map (first3 (dir </>)) expected
+  where
+    docs = map fst3 expected
+
+type SymbolLocation = (FilePath, Int, Int)
+
+expectSameLocations :: [Location] -> [SymbolLocation] -> Assertion
+expectSameLocations actual expected = do
+    let actual' =
+            Set.map (\location -> (location ^. L.uri
+                                   , location ^. L.range . L.start . L.line
+                                   , location ^. L.range . L.start . L.character))
+            $ Set.fromList actual
+    expected' <- Set.fromList <$>
+        (forM expected $ \(file, l, c) -> do
+                              fp <- canonicalizePath file
+                              return (filePathToUri fp, l, c))
+    actual' @?= expected'
+
 ----------------------------------------------------------------------
 -- Utils
 ----------------------------------------------------------------------

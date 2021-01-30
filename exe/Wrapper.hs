@@ -43,12 +43,13 @@ main = do
       VersionMode PrintNumericVersion ->
           putStrLn haskellLanguageServerNumericVersion
 
-      LspMode lspArgs ->
-          launchHaskellLanguageServer lspArgs
+      _ -> launchHaskellLanguageServer args
 
-launchHaskellLanguageServer :: LspArguments -> IO ()
-launchHaskellLanguageServer LspArguments{..} = do
-  whenJust argsCwd setCurrentDirectory
+launchHaskellLanguageServer :: Arguments -> IO ()
+launchHaskellLanguageServer parsedArgs = do
+  case parsedArgs of
+    LspMode LspArguments{..} -> whenJust argsCwd setCurrentDirectory
+    _ -> pure ()
 
   d <- getCurrentDirectory
 
@@ -56,7 +57,10 @@ launchHaskellLanguageServer LspArguments{..} = do
   cradle <- findLocalCradle (d </> "a")
   setCurrentDirectory $ cradleRootDir cradle
 
-  when argsProjectGhcVersion $ getRuntimeGhcVersion' cradle >>= putStrLn >> exitSuccess
+  case parsedArgs of
+    LspMode LspArguments{..} ->
+      when argsProjectGhcVersion $ getRuntimeGhcVersion' cradle >>= putStrLn >> exitSuccess
+    _ -> pure ()
 
   progName <- getProgName
   hPutStrLn stderr $ "Run entered for haskell-language-server-wrapper(" ++ progName ++ ") "

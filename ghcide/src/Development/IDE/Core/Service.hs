@@ -20,7 +20,7 @@ module Development.IDE.Core.Service(
 
 import Development.IDE.Types.Options (IdeOptions(..))
 import Development.IDE.Core.Debouncer
-import           Development.IDE.Core.FileStore  (VFSHandle, fileStoreRules)
+import           Development.IDE.Core.FileStore  (fileStoreRules)
 import           Development.IDE.Core.FileExists (fileExistsRules)
 import           Development.IDE.Core.OfInterest
 import Development.IDE.Types.Logger as Logger
@@ -31,7 +31,6 @@ import qualified Language.Haskell.LSP.Types.Capabilities as LSP
 
 import           Development.IDE.Core.Shake
 import Control.Monad
-
 
 
 ------------------------------------------------------------
@@ -48,8 +47,10 @@ initialise :: LSP.ClientCapabilities
            -> Debouncer LSP.NormalizedUri
            -> IdeOptions
            -> VFSHandle
+           -> HieDb
+           -> IndexQueue
            -> IO IdeState
-initialise caps mainRule getLspId toDiags wProg wIndefProg logger debouncer options vfs =
+initialise caps mainRule getLspId toDiags wProg wIndefProg logger debouncer options vfs hiedb hiedbChan =
     shakeOpen
         getLspId
         toDiags
@@ -61,6 +62,9 @@ initialise caps mainRule getLspId toDiags wProg wIndefProg logger debouncer opti
         (optShakeProfiling options)
         (optReportProgress options)
         (optTesting options)
+        hiedb
+        hiedbChan
+        vfs
         (optShakeOptions options)
           $ do
             addIdeGlobal $ GlobalIdeOptions options
