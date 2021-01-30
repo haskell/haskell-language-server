@@ -93,7 +93,7 @@ expectProgressReports = expectProgressReports' []
                 CreateM msg ->
                     expectProgressReports' (token msg : tokens) expectedTitles
                 BeginM msg -> do
-                    liftIO $ title msg `expectElem` expectedTitles
+                    liftIO $ title msg `expectElem` ("Indexing references from:":expectedTitles)
                     liftIO $ token msg `expectElem` tokens
                     expectProgressReports' tokens (delete (title msg) expectedTitles)
                 ProgressM msg -> do

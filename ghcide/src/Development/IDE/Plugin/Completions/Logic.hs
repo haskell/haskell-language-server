@@ -188,7 +188,7 @@ mkNameCompItem origName origMod thingType isInfix docs !imp = CI{..}
     compKind = occNameToComKind typeText $ occName origName
     importedFrom = Right $ showModName origMod
     isTypeCompl = isTcOcc $ occName origName
-    label = T.pack $ showGhc origName
+    label = showGhc origName
     insertText = case isInfix of
             Nothing -> case getArgText <$> thingType of
                             Nothing -> label
@@ -197,7 +197,7 @@ mkNameCompItem origName origMod thingType isInfix docs !imp = CI{..}
 
             Just Surrounded -> label
     typeText
-          | Just t <- thingType = Just . stripForall $ T.pack (showGhc t)
+          | Just t <- thingType = Just . stripForall $ showGhc t
           | otherwise = Nothing
     additionalTextEdits = imp >>= extendImportList (showGhc origName)
 
@@ -215,7 +215,7 @@ mkNameCompItem origName origMod thingType isInfix docs !imp = CI{..}
         argText :: T.Text
         argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
         snippet :: Int -> Type -> T.Text
-        snippet i t = T.pack $ "${" <> show i <> ":" <> showGhc t <> "}"
+        snippet i t = "${" <> T.pack (show i) <> ":" <> showGhc t <> "}"
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []
@@ -261,21 +261,21 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-extendImportList :: String -> LImportDecl GhcPs -> Maybe [TextEdit]
+extendImportList :: T.Text -> LImportDecl GhcPs -> Maybe [TextEdit]
 extendImportList name lDecl = let
     f (Just range) ImportDecl {ideclHiding} = case ideclHiding of
         Just (False, x)
-          | Set.notMember name (Set.fromList [show y| y <- unLoc x])
+          | Set.notMember name (Set.fromList [T.pack (show y) | y <- unLoc x])
           -> let
             start_pos = _end range
             new_start_pos = start_pos {_character = _character start_pos - 1}
             -- use to same start_pos to handle situation where we do not have latest edits due to caching of Rules
             new_range = Range new_start_pos new_start_pos
             -- we cannot wrap mapM_ inside (mapM_) but we need to wrap (<$)
-            alpha = all isAlphaNum $ filter (/= '_') name
-            result = if alpha then name ++ ", "
-                else "(" ++ name ++ "), "
-            in Just [TextEdit new_range (T.pack result)]
+            alpha = T.all isAlphaNum $ T.filter (\c -> c /= '_') name
+            result = if alpha then name <> ", "
+                else "(" <> name <> "), "
+            in Just [TextEdit new_range result]
           | otherwise -> Nothing
         _ -> Nothing  -- hiding import list and no list
     f _ _ = Nothing
@@ -417,11 +417,11 @@ localCompletionsForParsedModule pm@ParsedModule{pm_parsed_source = L _ HsModule{
 findRecordCompl :: ParsedModule -> T.Text -> TyClDecl GhcPs -> [CompItem]
 findRecordCompl pmod mn DataDecl {tcdLName, tcdDataDefn} = result
     where
-        result = [mkRecordSnippetCompItem (T.pack . showGhc . unLoc $ con_name) field_labels mn doc Nothing
+        result = [mkRecordSnippetCompItem (showGhc . unLoc $ con_name) field_labels mn doc Nothing
                  | ConDeclH98{..} <- unLoc <$> dd_cons tcdDataDefn
                  , Just  con_details <- [getFlds con_args]
                  , let field_names = mapMaybe extract con_details
-                 , let field_labels = T.pack . showGhc . unLoc <$> field_names
+                 , let field_labels = showGhc . unLoc <$> field_names
                  , (not . List.null) field_labels
                  ]
         doc = SpanDocText (getDocumentation [pmod] tcdLName) (SpanDocUris Nothing Nothing)
@@ -698,7 +698,7 @@ prefixes =
 safeTyThingForRecord :: TyThing -> Maybe (T.Text, [T.Text])
 safeTyThingForRecord (AnId _) = Nothing
 safeTyThingForRecord (AConLike dc) =
-    let ctxStr =   T.pack . showGhc . occName . conLikeName $ dc
+    let ctxStr =   showGhc . occName . conLikeName $ dc
         field_names = T.pack . unpackFS . flLabel <$> conLikeFieldLabels dc
     in
         Just (ctxStr, field_names)
@@ -716,7 +716,7 @@ mkRecordSnippetCompItem ctxStr compl mn docs imp = r
           , isInfix = Nothing
           , docs = docs
           , isTypeCompl = False
-          , additionalTextEdits = imp >>= extendImportList (T.unpack ctxStr)
+          , additionalTextEdits = imp >>= extendImportList ctxStr
           }
 
       placeholder_pairs = zip compl ([1..]::[Int])

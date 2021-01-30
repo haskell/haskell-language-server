@@ -6,6 +6,7 @@ module Development.IDE.Core.FileExists
   , modifyFileExists
   , getFileExists
   , watchedGlobs
+  , GetFileExists(..)
   )
 where
 

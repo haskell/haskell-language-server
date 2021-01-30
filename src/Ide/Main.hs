@@ -8,11 +8,13 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Ide.Main(defaultMain, runLspMode) where
 
 import Control.Concurrent.Extra
 import Control.Monad.Extra
+import Control.Exception.Safe
 import Data.Default
 import Data.List.Extra
 import qualified Data.Map.Strict as Map
@@ -31,7 +33,7 @@ import Development.IDE.LSP.LanguageServer
 import Development.IDE.LSP.Protocol
 import Development.IDE.Plugin
 import Development.IDE.Plugin.HLS
-import Development.IDE.Session (loadSession, findCradle, defaultLoadingOptions)
+import Development.IDE.Session (loadSession, findCradle, defaultLoadingOptions, setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger as G
@@ -52,6 +54,7 @@ import System.IO
 import qualified System.Log.Logger as L
 import System.Time.Extra
 import Development.Shake (ShakeOptions (shakeThreads), action)
+import HieDb.Run
 
 ghcIdePlugins :: T.Text -> IdePlugins IdeState -> (Plugin Config, [T.Text])
 ghcIdePlugins pid ps = (asGhcIdePlugin ps, allLspCmdIds' pid ps)
@@ -75,6 +78,16 @@ defaultMain args idePlugins = do
         VersionMode PrintNumericVersion ->
             putStrLn haskellLanguageServerNumericVersion
 
+        DbCmd opts cmd -> do
+          dir <- IO.getCurrentDirectory
+          dbLoc <- getHieDbLoc dir
+          hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
+          mlibdir <- setInitialDynFlags
+          case mlibdir of
+            Nothing -> exitWith $ ExitFailure 1
+            Just libdir ->
+              runCommand libdir opts{database = dbLoc} cmd
+
         LspMode lspArgs -> do
             {- see WARNING above -}
             hPutStrLn stderr hlsVer
@@ -94,7 +107,14 @@ hlsLogger = G.Logger $ \pri txt ->
 -- ---------------------------------------------------------------------
 
 runLspMode :: LspArguments -> IdePlugins IdeState -> IO ()
-runLspMode lspArgs@LspArguments{..} idePlugins = do
+runLspMode lspArgs@LspArguments{argsCwd} idePlugins = do
+    whenJust argsCwd IO.setCurrentDirectory
+    dir <- IO.getCurrentDirectory
+    dbLoc <- getHieDbLoc dir
+    runWithDb dbLoc $ runLspMode' lspArgs idePlugins
+
+runLspMode' :: LspArguments -> IdePlugins IdeState -> HieDb -> IndexQueue -> IO ()
+runLspMode' lspArgs@LspArguments{..} idePlugins hiedb hiechan = do
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 
@@ -102,8 +122,6 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
     lock <- newLock
     let logger p = Logger $ \pri msg -> when (pri >= p) $ withLock lock $
             T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
-
-    whenJust argsCwd IO.setCurrentDirectory
 
     dir <- IO.getCurrentDirectory
 
@@ -125,6 +143,9 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg _getConfig _rootPath -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
+
+            _libdir <- setInitialDynFlags
+                          `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
             sessionLoader <- loadSession dir
             -- config <- fromMaybe defaultLspConfig <$> getConfig
             let options = defOptions
@@ -137,6 +158,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
             debouncer <- newAsyncDebouncer
             initialise caps (mainRule >> pluginRules plugins >> action kick)
                 getLspId event wProg wIndefProg hlsLogger debouncer options vfs
+                hiedb hiechan
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
         hSetEncoding stdout utf8
@@ -165,7 +187,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         debouncer <- newAsyncDebouncer
         let dummyWithProg _ _ f = f (const (pure ()))
         sessionLoader <- loadSession dir
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions sessionLoader) vfs
+        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions sessionLoader) vfs hiedb hiechan
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashMap.fromList $ map ((, OnDisk) . toNormalizedFilePath') files

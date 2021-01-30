@@ -42,6 +42,7 @@ module Development.IDE.GHC.Compat(
     disableWarningsAsErrors,
     AvailInfo,
     tcg_exports,
+    pattern FunTy,
 
 #if MIN_GHC_API_VERSION(8,10,0)
     module GHC.Hs.Extension,
@@ -89,6 +90,7 @@ import HsExtension
 #endif
 
 import qualified GHC
+import qualified TyCoRep
 import GHC hiding (
       ModLocation,
       HasSrcSpan,
@@ -151,7 +153,7 @@ upNameCache = updNameCache
 #endif
 
 
-type RefMap = Map Identifier [(Span, IdentifierDetails Type)]
+type RefMap a = Map Identifier [(Span, IdentifierDetails a)]
 
 mkHieFile' :: ModSummary
            -> [AvailInfo]
@@ -292,3 +294,9 @@ dropForAll = snd . GHC.splitLHsForAllTyInvis
 dropForAll = snd . GHC.splitLHsForAllTy
 #endif
 
+pattern FunTy :: Type -> Type -> Type
+#if MIN_GHC_API_VERSION(8, 10, 0)
+pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
+#else
+pattern FunTy arg res <- TyCoRep.FunTy arg res
+#endif
