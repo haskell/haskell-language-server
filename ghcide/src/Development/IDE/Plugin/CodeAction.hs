@@ -88,59 +88,48 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text x
+        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
-      actions' =
-          [mkCA title [x] edit
-          | x <- xs
-          , Just ps <- [annotatedPS]
-          , Just dynflags <- [df]
-          , (title, graft) <- suggestExactAction exportsMap dynflags ps x
-          , Right edit <-
-                [ -- either (Left . traceShow) Right $
-                 rewriteToEdit dynflags uri (annsA ps) graft
-                 ]
-          ]
-      actions'' = caRemoveRedundantImports parsedModule text diag xs uri
+      actions' = caRemoveRedundantImports parsedModule text diag xs uri
                <> actions
-               <> actions'
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right $ List actions''
+    pure $ Right $ List actions'
 
 mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
 mkCA title diags edit =
   CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) (Just edit) Nothing
 
-suggestExactAction ::
-  ExportsMap ->
-  DynFlags ->
-  Annotated ParsedSource ->
-  Diagnostic ->
-  [(T.Text, Rewrite)]
-suggestExactAction exportsMap df ps x =
-  concat
-    [ suggestConstraint df (astA ps) x
-    , suggestImplicitParameter (astA ps) x
-    , suggestExtendImport exportsMap (astA ps) x
-    ]
+rewrite ::
+    Maybe DynFlags ->
+    Maybe (Annotated ParsedSource) ->
+    (DynFlags -> ParsedSource -> [(T.Text, Rewrite)]) ->
+    [(T.Text, [TextEdit])]
+rewrite (Just df) (Just ps) f
+    | Right edit <- (traverse . traverse) (rewriteToEdit df (annsA ps)) (f df $ astA ps) = edit
+rewrite _ _ _ = []
 
 suggestAction
   :: ExportsMap
   -> IdeOptions
   -> Maybe ParsedModule
   -> Maybe T.Text
+  -> Maybe DynFlags
+  -> Maybe (Annotated ParsedSource)
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
-suggestAction packageExports ideOptions parsedModule text diag = concat
+suggestAction packageExports ideOptions parsedModule text df annSource diag = concat
    -- Order these suggestions by priority
     [ suggestSignature True diag
+    , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
     , suggestReplaceIdentifier text diag
     , removeRedundantConstraints text diag
     , suggestAddTypeAnnotationToSatisfyContraints text diag
+    , rewrite df annSource $ \df ps -> suggestConstraint df ps diag
+    , rewrite df annSource $ \_ ps -> suggestImplicitParameter ps diag
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestNewImport packageExports pm diag
