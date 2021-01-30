@@ -78,7 +78,6 @@ import Control.Monad.Extra (whenJust)
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Control.Lens ((^.))
 import Data.Functor
-import Numeric.Natural (Natural)
 import Data.Tuple.Extra
 
 main :: IO ()
@@ -1481,36 +1480,36 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
   [ testGroup "Hiding strategy works"
     [ testGroup "fromList"
         [ testCase "AVec" $
-            compareHideFunctionTo
+            compareHideFunctionTo [(8,9),(10,8)]
                 "Use AVec for fromList, hiding other imports"
                 "HideFunction.hs.expected.fromList.A"
         , testCase "BVec" $
-            compareHideFunctionTo
+            compareHideFunctionTo [(8,9),(10,8)]
                 "Use BVec for fromList, hiding other imports"
                 "HideFunction.hs.expected.fromList.B"
         ]
     , testGroup "(++)"
         [testCase "EVec" $
-            compareHideFunctionTo
+            compareHideFunctionTo [(8,9),(10,8)]
                 "Use EVec for ++, hiding other imports"
                 "HideFunction.hs.expected.append.E"
         ]
     , testGroup "Vec (type)"
         [ testCase "AVec" $
             compareTwo
-                "HideType.hs"
+                "HideType.hs" [(8,15)]
                 "Use AVec for Vec, hiding other imports"
                 "HideType.hs.expected.A"
         , testCase "EVec" $
             compareTwo
-                "HideType.hs"
+                "HideType.hs" [(8,15)]
                 "Use EVec for Vec, hiding other imports"
                 "HideType.hs.expected.E"
         ]
     ]
   , testGroup "Qualify strategy"
     [ testCase "won't suggest full name for qualified module" $
-      withHideFunction $ \_ actions -> do
+      withHideFunction [(8,9),(10,8)] $ \_ actions -> do
         liftIO $
             assertBool "EVec.fromList must not be suggested" $
                 "Replace with qualified: EVec.fromList" `notElem`
@@ -1525,13 +1524,13 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
                 ]
     , testGroup "fromList"
         [ testCase "EVec" $
-            compareHideFunctionTo
+            compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: E.fromList"
                 "HideFunction.hs.expected.qualified.fromList.E"
         ]
     , testGroup "(++)"
         [ testCase "Prelude" $
-            compareHideFunctionTo
+            compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: Prelude.++"
                 "HideFunction.hs.expected.qualified.append.Prelude"
         ]
@@ -1539,8 +1538,8 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
   ]
   where
     hidingDir = "test/data/hiding"
-    compareTwo original cmd expected =
-        withTarget original $ \doc actions -> do
+    compareTwo original locs cmd expected =
+        withTarget original locs $ \doc actions -> do
             expected <- liftIO $
                 readFileUtf8 (hidingDir </> expected)
             action <- liftIO $ pickActionWithTitle cmd actions
@@ -1548,33 +1547,19 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             contentAfterAction <- documentContents doc
             liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
     compareHideFunctionTo = compareTwo "HideFunction.hs"
-    withTarget file k = runInDir hidingDir $ do
+    auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs"]
+    withTarget file locs k = withTempDir $ \dir -> runInDir dir $ do
+        liftIO $ mapM_ (\fp -> copyFile (hidingDir </> fp) $ dir </> fp)
+            $ file : auxFiles
         doc <- openDoc file "haskell"
         void (skipManyTill anyMessage message
             :: Session WorkDoneProgressEndNotification)
-        void waitForDiagnostics
+        void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
         contents <- documentContents doc
         let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
-        actions <- waitForAtLeatOneAction 0.5 4 doc range
+        actions <- getCodeActions doc range
         k doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")
-
-waitForAtLeatOneAction ::
-    -- | Waiting interval
-    Double ->
-    -- | Maximum # of retry (0 for no retry at ll)
-    Natural ->
-    TextDocumentIdentifier ->
-    Range ->
-    Session [CAResult]
-waitForAtLeatOneAction wait count doc range = go count []
-    where
-        go !remain !acc = do
-            liftIO $ sleep wait
-            actions <- getCodeActions doc range
-            if not (null actions) || remain <= 0
-                then pure $ acc ++ actions
-                else go (remain - 1) (acc ++ actions)
 
 disableWarningTests :: TestTree
 disableWarningTests =
