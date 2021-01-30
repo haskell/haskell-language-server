@@ -76,6 +76,7 @@ import Control.Monad.Extra (whenJust)
 import qualified Language.Haskell.LSP.Types.Lens as L
 import Control.Lens ((^.))
 import Data.Functor
+import Numeric.Natural (Natural)
 
 main :: IO ()
 main = do
@@ -1548,12 +1549,28 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         void (skipManyTill anyMessage message
             :: Session WorkDoneProgressEndNotification)
         void waitForDiagnostics
-        liftIO $ sleep 1.5
         contents <- documentContents doc
         let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
-        actions <- getCodeActions doc range
+        actions <- waitForAtLeatOneAction 0.5 4 doc range
         k doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")
+
+waitForAtLeatOneAction ::
+    -- | Waiting interval
+    Double ->
+    -- | Maximum # of retry (0 for no retry at ll)
+    Natural ->
+    TextDocumentIdentifier ->
+    Range ->
+    Session [CAResult]
+waitForAtLeatOneAction wait count doc range = go count []
+    where
+        go !remain !acc = do
+            liftIO $ sleep wait
+            actions <- getCodeActions doc range
+            if not (null actions) || remain <= 0
+                then pure $ acc ++ actions
+                else go (remain - 1) (acc ++ actions)
 
 disableWarningTests :: TestTree
 disableWarningTests =
