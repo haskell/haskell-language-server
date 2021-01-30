@@ -1535,7 +1535,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         void (skipManyTill anyMessage message
             :: Session WorkDoneProgressEndNotification)
         void waitForDiagnostics
-        liftIO $ sleep 0.5
+        liftIO $ sleep 1.0
         contents <- documentContents doc
         let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
         actions <- getCodeActions doc range
