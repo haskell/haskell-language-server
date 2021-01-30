@@ -45,7 +45,7 @@ import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
 import Data.Function
 import Control.Arrow ((>>>), second)
 import Data.Functor
-import Control.Applicative ((<|>))
+import Control.Applicative ((<|>), Applicative (liftA2))
 import Safe (atMay)
 import Bag (isEmptyBag)
 import qualified Data.HashSet as Set
@@ -62,6 +62,7 @@ import qualified GHC.LanguageExtensions as Lang
 import Control.Lens (foldMapBy)
 import FieldLabel (flLabel)
 import FastString (unpackFS)
+import Data.Monoid (Ap(Ap, getAp))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -107,8 +108,9 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
           , dynflags <- maybeToList df
           , nfp <- maybeToList mbFile
           , (title, grafts) <- suggestExactAction exportsMap nfp dynflags ps x
-          , let edit = foldMapBy unionWSEdit mempty (either mempty id .
-                        rewriteToEdit dynflags uri (annsA ps)) grafts
+          , Right edit
+              <- [getAp $ foldMapBy (liftA2 unionWSEdit) mempty
+                      (Ap . rewriteToEdit dynflags uri (annsA ps)) grafts]
           ]
       actions'' = caRemoveRedundantImports parsedModule text diag xs uri
                <> actions
