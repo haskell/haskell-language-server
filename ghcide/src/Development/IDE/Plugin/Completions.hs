@@ -185,7 +185,8 @@ extendImportHandler' ideState ExtendImport {..}
     mzero
 
 isWantedModule :: ModuleName -> GenLocated l (ImportDecl pass) -> Bool
-isWantedModule wantedModule (L _ ImportDecl{ideclName, ideclHiding = Just (False, _), ideclQualified = NotQualified}) = unLoc ideclName == wantedModule
+isWantedModule wantedModule (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
+    not (isQualifiedImport it) && unLoc ideclName == wantedModule
 isWantedModule _ _ = False
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a

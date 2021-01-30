@@ -248,15 +248,6 @@ runIde state = runAction "importLens" state
 
 --------------------------------------------------------------------------------
 
-isQualifiedImport :: ImportDecl a -> Bool
-#if MIN_GHC_API_VERSION(8,10,0)
-isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
-isQualifiedImport ImportDecl{} = True
-#else
-isQualifiedImport ImportDecl{ideclQualified} = ideclQualified
-#endif
-isQualifiedImport _ = False
-
 within :: Range -> SrcSpan -> Bool
 within (Range start end) span =
   isInsideSrcSpan start span || isInsideSrcSpan end span

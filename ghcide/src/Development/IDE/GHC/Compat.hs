@@ -60,7 +60,7 @@ module Development.IDE.GHC.Compat(
     module Compat.HieTypes,
     module Compat.HieUtils,
     dropForAll
-    ) where
+    ,isQualifiedImport) where
 
 #if MIN_GHC_API_VERSION(8,10,0)
 import LinkerTypes
@@ -300,3 +300,12 @@ pattern FunTy arg res <- TyCoRep.FunTy {ft_arg = arg, ft_res = res}
 #else
 pattern FunTy arg res <- TyCoRep.FunTy arg res
 #endif
+
+isQualifiedImport :: ImportDecl a -> Bool
+#if MIN_GHC_API_VERSION(8,10,0)
+isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
+isQualifiedImport ImportDecl{} = True
+#else
+isQualifiedImport ImportDecl{ideclQualified} = ideclQualified
+#endif
+isQualifiedImport _ = False
