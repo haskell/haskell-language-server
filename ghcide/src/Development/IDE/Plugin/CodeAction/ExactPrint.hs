@@ -7,7 +7,6 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
   ( Rewrite (..),
     rewriteToEdit,
     transferAnn,
-    rawIEWrapName,
 
     -- * Utilities
     appendConstraint,
@@ -39,6 +38,7 @@ import Language.Haskell.LSP.Types
 import OccName
 import Outputable (ppr, showSDocUnsafe)
 import Retrie.GHC (rdrNameOcc, unpackFS)
+import Development.IDE.Spans.Common
 
 ------------------------------------------------------------------------------
 
@@ -367,7 +367,7 @@ deleteFromImport ::
     Located [LIE GhcPs] ->
     DynFlags ->
     TransformT (Either String) (LImportDecl GhcPs)
-deleteFromImport symbol (L l idecl) llies@(L lieLoc lies) _ =do
+deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
     let edited = L lieLoc deletedLies
         lidecl' = L l $ idecl
             { ideclHiding = Just (False, edited)
@@ -383,23 +383,17 @@ deleteFromImport symbol (L l idecl) llies@(L lieLoc lies) _ =do
         deletedLies =
             mapMaybe killLie lies
         killLie :: LIE GhcPs -> Maybe (LIE GhcPs)
-        killLie v@(L _ (IEVar _ (L _ (rawIEWrapName -> nam))))
+        killLie v@(L _ (IEVar _ (L _ (unqualIEWrapName -> nam))))
             | nam == symbol  = Nothing
             | otherwise = Just v
-        killLie v@(L _ (IEThingAbs _ (L _ (rawIEWrapName -> nam))))
+        killLie v@(L _ (IEThingAbs _ (L _ (unqualIEWrapName -> nam))))
             | nam == symbol = Nothing
             | otherwise = Just v
 
-        killLie (L lieL (IEThingWith xt ty@(L _ (rawIEWrapName -> nam)) wild cons flds))
+        killLie (L lieL (IEThingWith xt ty@(L _ (unqualIEWrapName -> nam)) wild cons flds))
             | nam == symbol = Nothing
             | otherwise = Just $
                 L lieL $ IEThingWith xt ty wild
-                  (filter ((/= symbol) . rawIEWrapName . unLoc) cons)
-                  (filter ((/= symbol) . unpackFS . flLabel . unLoc) flds)
+                  (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
+                  (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
         killLie v = Just v
-
--- This must not belong here?
-rawIEWrapName :: IEWrappedName RdrName -> String
-rawIEWrapName (IEName (L _ nam)) = occNameString $ rdrNameOcc nam
-rawIEWrapName (IEPattern (L _ nam)) = occNameString $ rdrNameOcc nam
-rawIEWrapName (IEType (L _ nam)) = occNameString $ rdrNameOcc nam

@@ -61,6 +61,8 @@ import Data.Coerce
 import Data.Either (fromRight)
 import qualified GHC.LanguageExtensions as Lang
 import Control.Lens (foldMapBy)
+import FieldLabel (flLabel)
+import FastString (unpackFS)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -845,13 +847,13 @@ occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
 symbolOccursIn symb = \case
-   IEVar _ (L _ n) -> rawIEWrapName n == T.unpack symb
-   IEThingAbs _ (L _ n) -> rawIEWrapName n == T.unpack symb
-   IEThingAll _ (L _ n) -> rawIEWrapName n == T.unpack symb
+   IEVar _ (L _ n) -> unqualIEWrapName n == symb
+   IEThingAbs _ (L _ n) -> unqualIEWrapName n == symb
+   IEThingAll _ (L _ n) -> unqualIEWrapName n == symb
    IEThingWith _ (L _ n) _ ents flds ->
-    rawIEWrapName n == T.unpack symb
-    || any ((== symb) . showNameWithoutUniques . unLoc) ents
-    || any ((== symb) . showNameWithoutUniques . unLoc) flds
+    unqualIEWrapName n == symb
+    || any ((== symb) . unqualIEWrapName . unLoc) ents
+    || any ((== symb) . T.pack . unpackFS . flLabel . unLoc) flds
    IEModuleContents{} -> False
    IEGroup{} -> False
    IEDoc{} -> False
