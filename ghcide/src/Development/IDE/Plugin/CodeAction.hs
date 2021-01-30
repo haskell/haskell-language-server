@@ -889,10 +889,10 @@ disambiguateSymbol df pm Diagnostic {..} (T.unpack -> symbol) = \case
     (ToQualified qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-        in [Left $ TextEdit _range
-            $ T.pack $ showSDoc df
-            $ parenSymOcc occSym
-            $ ppr rdr]
+        in [Right $ Rewrite (rangeToSrcSpan nfp _range) $ \df -> do
+            liftParseAST @(HsExpr GhcPs) df $ prettyPrint $ HsVar @GhcPs noExtField
+                $ L (UnhelpfulSpan "") rdr
+            ]
 
 -- Couldn't make out how to add New imports by ghc-exactprint;
 -- using direct TextEdit instead.
