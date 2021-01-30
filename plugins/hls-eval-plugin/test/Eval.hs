@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -37,7 +36,7 @@ import System.FilePath (
     (<.>),
     (</>),
  )
-import Test.Hls.Util (hlsCommand)
+import Test.Hls.Util (hlsCommand, GhcVersion (GHC84, GHC86), knownBrokenForGhcVersions, knownBrokenOnWindows)
 import Test.Tasty (
     TestTree,
     testGroup,
@@ -163,15 +162,14 @@ tests =
                     -- Write the test file, to make sure that it has no final line return
                     writeFile (evalPath </> mdl) "module TLastLine where\n\n-- >>> take 3 [1..]"
                     goldenTest mdl
-#if __GLASGOW_HASKELL__ >= 808
-            ,
-#if mingw32_HOST_OS
-            expectFailBecause "CPP eval on Windows fails for some reasons" $
-#endif
+            , knownBrokenForGhcVersions [GHC84, GHC86]
+                "Preprocessor known to fail on GHC <= 8.6"
+            $ testGroup "with preprocessors"
+            [ knownBrokenOnWindows "CPP eval on Windows fails for some reasons" $
               testCase "CPP support" $ goldenTest "TCPP.hs"
             , testCase "Literate Haskell Bird Style" $ goldenTest "TLHS.lhs"
-#endif
             -- , testCase "Literate Haskell LaTeX Style" $ goldenTest "TLHSLateX.lhs"
+            ]
         ]
 
 goldenTest :: FilePath -> IO ()

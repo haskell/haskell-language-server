@@ -20,6 +20,7 @@ module Test.Hls.Util
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
+    , knownBrokenOnWindows
     , knownBrokenForGhcVersions
     , logFilePath
     , setupBuildToolFiles
@@ -61,6 +62,7 @@ import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecaus
 import           Test.Tasty.HUnit (Assertion, assertFailure, (@?=))
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal hiding (null)
+import System.Info.Extra (isWindows)
 
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
@@ -115,6 +117,11 @@ ghcVersion = GHC86
 #elif (defined(MIN_VERSION_GLASGOW_HASKELL) && (MIN_VERSION_GLASGOW_HASKELL(8,4,0,0)))
 ghcVersion = GHC84
 #endif
+
+knownBrokenOnWindows :: String -> TestTree -> TestTree
+knownBrokenOnWindows reason
+    | isWindows = expectFailBecause reason
+    | otherwise = id
 
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 knownBrokenForGhcVersions vers reason
