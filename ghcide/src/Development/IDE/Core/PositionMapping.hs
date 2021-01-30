@@ -10,11 +10,13 @@ module Development.IDE.Core.PositionMapping
   , toCurrentPosition
   , PositionDelta(..)
   , addDelta
+  , idDelta
   , mkDelta
   , toCurrentRange
   , fromCurrentRange
   , applyChange
   , zeroMapping
+  , deltaFromDiff
   -- toCurrent and fromCurrent are mainly exposed for testing
   , toCurrent
   , fromCurrent
@@ -24,6 +26,10 @@ import Control.Monad
 import qualified Data.Text as T
 import Language.Haskell.LSP.Types
 import Data.List
+import Data.Algorithm.Diff
+import Data.Bifunctor
+import Control.DeepSeq
+import qualified Data.Vector.Unboxed as V
 
 -- | Either an exact position, or the range of text that was substituted
 data PositionResult a
@@ -63,6 +69,12 @@ data PositionDelta = PositionDelta
   { toDelta :: !(Position -> PositionResult Position)
   , fromDelta :: !(Position -> PositionResult Position)
   }
+
+instance Show PositionDelta where
+  show PositionDelta{} = "PositionDelta{..}"
+
+instance NFData PositionDelta where
+  rnf (PositionDelta a b) = a `seq` b `seq` ()
 
 fromCurrentPosition :: PositionMapping -> Position -> Maybe Position
 fromCurrentPosition (PositionMapping pm) = positionResultToMaybe . fromDelta pm
@@ -158,3 +170,44 @@ fromCurrent (Range start@(Position startLine startColumn) end@(Position endLine 
           | line == newEndLine = column - (newEndColumn - endColumn)
           | otherwise = column
         newLine = line - lineDiff
+
+deltaFromDiff :: T.Text -> T.Text -> PositionDelta
+deltaFromDiff (T.lines -> old) (T.lines -> new) =
+    PositionDelta (lookupPos lnew o2nPrevs o2nNexts old2new) (lookupPos lold n2oPrevs n2oNexts new2old)
+  where
+    !lnew = length new
+    !lold = length old
+
+    diff = getDiff old new
+
+    (V.fromList -> !old2new, V.fromList -> !new2old) = go diff 0 0
+
+    -- Compute previous and next lines that mapped successfully
+    !o2nPrevs = V.prescanl' f        (-1) old2new
+    !o2nNexts = V.prescanr' (flip f) lnew old2new
+
+    !n2oPrevs = V.prescanl' f        (-1) new2old
+    !n2oNexts = V.prescanr' (flip f) lold new2old
+
+    f :: Int -> Int -> Int
+    f !a !b = if b == -1 then a else b
+
+    lookupPos :: Int -> V.Vector Int -> V.Vector Int -> V.Vector Int -> Position -> PositionResult Position
+    lookupPos end prevs nexts xs (Position line col)
+      | line < 0            = PositionRange (Position 0   0) (Position 0   0)
+      | line >= V.length xs = PositionRange (Position end 0) (Position end 0)
+      | otherwise           = case V.unsafeIndex xs line of
+          -1 ->
+            -- look for the previous and next lines that mapped successfully
+            let !prev = 1 + V.unsafeIndex prevs line
+                !next = V.unsafeIndex nexts line
+              in PositionRange (Position prev 0) (Position next 0)
+          line' -> PositionExact (Position line' col)
+
+    -- Construct a mapping between lines in the diff
+    -- -1 for unsucessful mapping
+    go :: [Diff T.Text] -> Int -> Int -> ([Int], [Int])
+    go [] _ _ = ([],[])
+    go (Both _ _ : xs) !lold !lnew = bimap  (lnew :) (lold :) $ go xs (lold+1) (lnew+1)
+    go (First _  : xs) !lold !lnew = first  (-1   :)          $ go xs (lold+1) lnew
+    go (Second _ : xs) !lold !lnew = second          (-1   :) $ go xs lold     (lnew+1)

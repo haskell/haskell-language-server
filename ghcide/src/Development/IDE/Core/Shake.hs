@@ -36,6 +36,7 @@ module Development.IDE.Core.Shake(
     use_, useNoFile_, uses_,
     useWithStale, usesWithStale,
     useWithStale_, usesWithStale_,
+    BadDependency(..),
     define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks,
     getDiagnostics,
     getHiddenDiagnostics,
@@ -62,6 +63,11 @@ module Development.IDE.Core.Shake(
     mkUpdater,
     -- Exposed for testing.
     Q(..),
+    IndexQueue,
+    HieDb,
+    HieDbWriter(..),
+    VFSHandle(..),
+    addPersistentRule
     ) where
 
 import           Development.Shake hiding (ShakeValue, doesFileExist, Info)
@@ -99,7 +105,7 @@ import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
-import           Control.Concurrent.STM (readTVar, writeTVar, newTVarIO, atomically)
+import           Control.Concurrent.STM
 import           Control.DeepSeq
 import           Control.Exception.Extra
 import           System.Time.Extra
@@ -121,6 +127,7 @@ import Control.Monad.Trans.Maybe
 import Data.Traversable
 import Data.Hashable
 import Development.IDE.Core.Tracing
+import Language.Haskell.LSP.VFS
 
 import Data.IORef
 import NameCache
@@ -128,6 +135,24 @@ import UniqSupply
 import PrelInfo
 import Language.Haskell.LSP.Types.Capabilities
 import OpenTelemetry.Eventlog
+import GHC.Fingerprint
+
+import HieDb.Types
+
+-- | We need to serialize writes to the database, so we send any function that
+-- needs to write to the database over the channel, where it will be picked up by
+-- a worker thread.
+data HieDbWriter
+  = HieDbWriter
+  { indexQueue :: IndexQueue
+  , indexPending :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexCompleted :: TVar Int -- ^ to report progress
+  , indexProgressToken :: Var (Maybe LSP.ProgressToken)
+  -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
+  }
+
+-- | Actions to queue up on the index worker thread
+type IndexQueue = TQueue (HieDb -> IO ())
 
 -- information we stash inside the shakeExtra field
 data ShakeExtras = ShakeExtras
@@ -167,6 +192,13 @@ data ShakeExtras = ShakeExtras
     -- | A work queue for actions added via 'runInShakeSession'
     ,actionQueue :: ActionQueue
     ,clientCapabilities :: ClientCapabilities
+    , hiedb :: HieDb -- ^ Use only to read.
+    , hiedbWriter :: HieDbWriter -- ^ use to write
+    , persistentKeys :: Var (HMap.HashMap Key GetStalePersistent)
+      -- ^ Registery for functions that compute/get "stale" results for the rule
+      -- (possibly from disk)
+    , getLspId :: IO LspId
+    , vfs :: VFSHandle
     }
 
 type WithProgressFunc = forall a.
@@ -178,6 +210,8 @@ data ProgressEvent
     = KickStarted
     | KickCompleted
 
+type GetStalePersistent = NormalizedFilePath -> IdeAction (Maybe (Dynamic,PositionDelta,TextDocumentVersion))
+
 getShakeExtras :: Action ShakeExtras
 getShakeExtras = do
     Just x <- getShakeExtra @ShakeExtras
@@ -188,7 +222,31 @@ getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
 
+-- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
+-- This is called when we don't already have a result, or computing the rule failed.
+-- The result of this function will always be marked as 'stale', and a 'proper' rebuild of the rule will
+-- be queued if the rule hasn't run before.
+addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,TextDocumentVersion))) -> Rules ()
+addPersistentRule k getVal = do
+  ShakeExtras{persistentKeys} <- getShakeExtrasRules
+  liftIO $ modifyVar_ persistentKeys $ \hm -> do
+    pure $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal) hm
+  return ()
+
 class Typeable a => IsIdeGlobal a where
+
+
+-- | haskell-lsp manages the VFS internally and automatically so we cannot use
+-- the builtin VFS without spawning up an LSP server. To be able to test things
+-- like `setBufferModified` we abstract over the VFS implementation.
+data VFSHandle = VFSHandle
+    { getVirtualFile :: NormalizedUri -> IO (Maybe VirtualFile)
+        -- ^ get the contents of a virtual file
+    , setVirtualFileContents :: Maybe (NormalizedUri -> Maybe T.Text -> IO ())
+        -- ^ set a specific file to a value. If Nothing then we are ignoring these
+        --   signals anyway so can just say something was modified
+    }
+instance IsIdeGlobal VFSHandle
 
 addIdeGlobal :: IsIdeGlobal a => a -> Rules ()
 addIdeGlobal x = do
@@ -234,26 +292,54 @@ getIdeOptionsIO ide = do
 
 -- | Return the most recent, potentially stale, value and a PositionMapping
 -- for the version of that value.
-lastValueIO :: ShakeExtras -> NormalizedFilePath -> Value v -> IO (Maybe (v, PositionMapping))
-lastValueIO ShakeExtras{positionMapping} file v = do
-    allMappings <- liftIO $ readVar positionMapping
-    pure $ case v of
-        Succeeded ver v -> Just (v, mappingForVersion allMappings file ver)
-        Stale ver v -> Just (v, mappingForVersion allMappings file ver)
-        Failed -> Nothing
+lastValueIO :: IdeRule k v => ShakeExtras -> k -> NormalizedFilePath -> IO (Maybe (v, PositionMapping))
+lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
+    hm <- readVar state
+    allMappings <- readVar positionMapping
+
+    let readPersistent
+          | IdeTesting testing <- ideTesting s -- Don't read stale persistent values in tests
+          , testing = pure Nothing
+          | otherwise = do
+          pmap <- readVar persistentKeys
+          mv <- runMaybeT $ do
+            liftIO $ Logger.logDebug (logger s) $ T.pack $ "LOOKUP UP PERSISTENT FOR: " ++ show k
+            f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
+            (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
+            MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
+          modifyVar state $ \hm -> pure $ case mv of
+            Nothing -> (HMap.alter (alterValue $ Failed True) (file,Key k) hm,Nothing)
+            Just (v,del,ver) -> (HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (file,Key k) hm
+                                ,Just (v,addDelta del $ mappingForVersion allMappings file ver))
+
+        -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
+        alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
+        alterValue new (Just old@(ValueWithDiagnostics val diags)) = Just $ case val of
+          -- Old failed, we can update it preserving diagnostics
+          Failed{} -> ValueWithDiagnostics new diags
+          -- Something already succeeded before, leave it alone
+          _ -> old
+
+    case HMap.lookup (file,Key k) hm of
+      Nothing -> readPersistent
+      Just (ValueWithDiagnostics v _) -> case v of
+        Succeeded ver (fromDynamic -> Just v) -> pure (Just (v, mappingForVersion allMappings file ver))
+        Stale del ver (fromDynamic -> Just v) -> pure (Just (v, maybe id addDelta del $ mappingForVersion allMappings file ver))
+        Failed p | not p -> readPersistent
+        _ -> pure Nothing
 
 -- | Return the most recent, potentially stale, value and a PositionMapping
 -- for the version of that value.
-lastValue :: NormalizedFilePath -> Value v -> Action (Maybe (v, PositionMapping))
-lastValue file v = do
+lastValue :: IdeRule k v => k -> NormalizedFilePath -> Action (Maybe (v, PositionMapping))
+lastValue key file = do
     s <- getShakeExtras
-    liftIO $ lastValueIO s file v
+    liftIO $ lastValueIO s key file
 
 valueVersion :: Value v -> Maybe TextDocumentVersion
 valueVersion = \case
     Succeeded ver _ -> Just ver
-    Stale ver _ -> Just ver
-    Failed -> Nothing
+    Stale _ ver _ -> Just ver
+    Failed _ -> Nothing
 
 mappingForVersion
     :: HMap.HashMap NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
@@ -362,8 +448,8 @@ knownTargets = do
 seqValue :: Value v -> b -> b
 seqValue v b = case v of
     Succeeded ver v -> rnf ver `seq` v `seq` b
-    Stale ver v -> rnf ver `seq` v `seq` b
-    Failed -> b
+    Stale d ver v -> rnf d `seq` rnf ver `seq` v `seq` b
+    Failed _ -> b
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: IO LSP.LspId
@@ -376,12 +462,14 @@ shakeOpen :: IO LSP.LspId
           -> Maybe FilePath
           -> IdeReportProgress
           -> IdeTesting
+          -> HieDb
+          -> IndexQueue
+          -> VFSHandle
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
 shakeOpen getLspId eventer withProgress withIndefiniteProgress clientCapabilities logger debouncer
-  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) opts rules = mdo
-
+  shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
     inProgress <- newVar HMap.empty
     us <- mkSplitUniqSupply 'r'
     ideNc <- newIORef (initNameCache us knownKeyNames)
@@ -396,7 +484,12 @@ shakeOpen getLspId eventer withProgress withIndefiniteProgress clientCapabilitie
         let restartShakeSession = shakeRestart ideState
         let session = shakeSession
         mostRecentProgressEvent <- newTVarIO KickCompleted
+        persistentKeys <- newVar HMap.empty
         let progressUpdate = atomically . writeTVar mostRecentProgressEvent
+        indexPending <- newTVarIO HMap.empty
+        indexCompleted <- newTVarIO 0
+        indexProgressToken <- newVar Nothing
+        let hiedbWriter = HieDbWriter{..}
         progressAsync <- async $
             when reportProgress $
                 progressThread mostRecentProgressEvent inProgress
@@ -718,10 +811,8 @@ runIdeAction _herald s i = runReaderT (runIdeActionT i) s
 askShake :: IdeAction ShakeExtras
 askShake = ask
 
-mkUpdater :: MaybeT IdeAction NameCacheUpdater
-mkUpdater = do
-  ref <- lift $ ideNc <$> askShake
-  pure $ NCU (upNameCache ref)
+mkUpdater :: IORef NameCache -> NameCacheUpdater
+mkUpdater ref = NCU (upNameCache ref)
 
 -- | A (maybe) stale result now, and an up to date one later
 data FastResult a = FastResult { stale :: Maybe (a,PositionMapping), uptoDate :: IO (Maybe a)  }
@@ -748,16 +839,16 @@ useWithStaleFast' key file = do
   liftIO $ case r of
     -- block for the result if we haven't computed before
     Nothing -> do
-      a <- wait
-      r <- getValues state key file
-      case r of
-        Nothing -> return $ FastResult Nothing (pure a)
-        Just (v, _) -> do
-          res <- lastValueIO s file v
-          pure $ FastResult res (pure a)
+      -- Check if we can get a stale value from disk
+      res <- lastValueIO s key file
+      case res of
+        Nothing -> do
+          a <- wait
+          pure $ FastResult ((,zeroMapping) <$> a) (pure a)
+        Just _ -> pure $ FastResult res wait
     -- Otherwise, use the computed value even if it's out of date.
-    Just (v, _) -> do
-      res <- lastValueIO s file v
+    Just _ -> do
+      res <- lastValueIO s key file
       pure $ FastResult res wait
 
 useNoFile :: IdeRule k v => k -> Action (Maybe v)
@@ -785,8 +876,11 @@ uses key files = map (\(A value) -> currentValue value) <$> apply (map (Q . (key
 usesWithStale :: IdeRule k v
     => k -> [NormalizedFilePath] -> Action [Maybe (v, PositionMapping)]
 usesWithStale key files = do
-    values <- map (\(A value) -> value) <$> apply (map (Q . (key,)) files)
-    zipWithM lastValue files values
+    _ <- apply (map (Q . (key,)) files)
+    -- We don't look at the result of the 'apply' since 'lastValue' will
+    -- return the most recent successfully computed value regardless of
+    -- whether the rule succeeded or not.
+    mapM (lastValue key) files
 
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
@@ -819,14 +913,14 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                     Nothing -> do
                         staleV <- liftIO $ getValues state key file
                         pure $ case staleV of
-                            Nothing -> (toShakeValue ShakeResult bs, Failed)
+                            Nothing -> (toShakeValue ShakeResult bs, Failed False)
                             Just v -> case v of
                                 (Succeeded ver v, _) ->
-                                    (toShakeValue ShakeStale bs, Stale ver v)
-                                (Stale ver v, _) ->
-                                    (toShakeValue ShakeStale bs, Stale ver v)
-                                (Failed, _) ->
-                                    (toShakeValue ShakeResult bs, Failed)
+                                    (toShakeValue ShakeStale bs, Stale Nothing ver v)
+                                (Stale d ver v, _) ->
+                                    (toShakeValue ShakeStale bs, Stale d ver v)
+                                (Failed b, _) ->
+                                    (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
                 liftIO $ setValues state key file res (Vector.fromList diags)
                 updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
@@ -849,7 +943,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
         where f shift = modifyVar_ var $ \x -> evaluate $ HMap.insertWith (\_ x -> shift x) file (shift 0) x
 
 isSuccess :: RunResult (A v) -> Bool
-isSuccess (RunResult _ _ (A Failed)) = False
+isSuccess (RunResult _ _ (A Failed{})) = False
 isSuccess _ = True
 
 -- | Rule type, input file

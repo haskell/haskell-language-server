@@ -44,7 +44,7 @@ import HscTypes (HscEnv(hsc_dflags))
 mkDocMap
   :: HscEnv
   -> [ParsedModule]
-  -> RefMap
+  -> RefMap a
   -> TcGblEnv
   -> IO DocAndKindMap
 mkDocMap env sources rm this_mod =
@@ -99,8 +99,8 @@ getDocumentationsTryGhc env mod sources names = do
             src <- toFileUriText $ lookupSrcHtmlForModule df mod
             return (doc, src)
           Nothing -> pure (Nothing, Nothing)
-      let docUri = (<> "#" <> selector <> showName name) <$> docFu
-          srcUri = (<> "#" <> showName name) <$> srcFu
+      let docUri = (<> "#" <> selector <> showNameWithoutUniques name) <$> docFu
+          srcUri = (<> "#" <> showNameWithoutUniques name) <$> srcFu
           selector
             | isValName name = "v:"
             | otherwise = "t:"

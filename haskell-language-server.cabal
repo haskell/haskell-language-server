@@ -57,18 +57,26 @@ library
   autogen-modules:  Paths_haskell_language_server
   hs-source-dirs:   src
   build-depends:
+    , async
+    , base16-bytestring
+    , bytestring
     , containers
+    , cryptohash-sha1
     , data-default
     , ghc
     , ghcide                >=0.7
     , gitrev
     , haskell-lsp           ^>=0.23
     , hls-plugin-api        >=0.6
+    , hie-bios
+    , hiedb
     , hslogger
     , optparse-applicative
     , optparse-simple
     , process
     , shake
+    , safe-exceptions
+    , sqlite-simple
     , unordered-containers
 
   ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
@@ -303,9 +311,12 @@ executable haskell-language-server
 
   build-depends:
     , aeson
+    , async
+    , base16-bytestring
     , binary
     , bytestring
     , containers
+    , cryptohash-sha1
     , deepseq
     , ghc
     , ghc-boot-th
@@ -313,6 +324,8 @@ executable haskell-language-server
     , hashable
     , haskell-language-server
     , haskell-lsp              ^>=0.23
+    , hie-bios
+    , hiedb
     , lens
     , regex-tdfa
     , hslogger
@@ -323,6 +336,7 @@ executable haskell-language-server
     , regex-tdfa
     , safe-exceptions
     , shake                    >=0.17.5
+    , sqlite-simple
     , temporary
     , transformers
     , unordered-containers
@@ -379,7 +393,7 @@ common hls-test-utils
     , hspec
     , hspec-core
     , lens
-    , lsp-test              >=0.11.0.6
+    , lsp-test              >=0.12.0.0
     , stm
     , tasty-expected-failure
     , tasty-hunit
