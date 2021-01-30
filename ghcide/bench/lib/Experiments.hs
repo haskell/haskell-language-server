@@ -20,7 +20,7 @@ module Experiments
 , exampleToOptions
 ) where
 import Control.Applicative.Combinators (skipManyTill)
-import Control.Exception.Safe
+import Control.Exception.Safe (IOException, handleAny, try)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Data.Aeson (Value(Null))
@@ -498,22 +498,21 @@ setupDocumentContents config =
 
         -- Find an identifier defined in another file in this project
         symbols <- getDocumentSymbols doc
-        case symbols of
-            Left [DocumentSymbol{_children = Just (List symbols)}] -> do
-                let endOfImports = case symbols of
-                        DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
-                            Position (succ $ _line $ _end _range) 4
-                        DocumentSymbol{_range} : _ -> _start _range
-                        [] -> error "Module has no symbols"
-                contents <- documentContents doc
+        let endOfImports = case symbols of
+                Left symbols | Just x <- findEndOfImports symbols -> x
+                _ -> error $ "symbols: " <> show symbols
+        contents <- documentContents doc
+        identifierP <- searchSymbol doc contents endOfImports
+        return $ DocumentPositions{..}
 
-                identifierP <- searchSymbol doc contents endOfImports
-
-                return $ DocumentPositions{..}
-            other ->
-                error $ "symbols: " <> show other
-
-
+findEndOfImports :: [DocumentSymbol] -> Maybe Position
+findEndOfImports (DocumentSymbol{_kind = SkModule, _name = "imports", _range} : _) =
+    Just $ Position (succ $ _line $ _end _range) 4
+findEndOfImports [DocumentSymbol{_kind = SkFile, _children = Just (List cc)}] =
+    findEndOfImports cc
+findEndOfImports (DocumentSymbol{_range} : _) =
+    Just $ _start _range
+findEndOfImports _ = Nothing
 
 --------------------------------------------------------------------------------------------
 
