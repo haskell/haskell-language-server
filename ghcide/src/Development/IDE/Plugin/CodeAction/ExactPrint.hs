@@ -203,8 +203,8 @@ extendImportTopLevel df idnetifier (L l it@ImportDecl {..})
     rdr <- liftParseAST df idnetifier
 
     let alreadyImported =
-            showNameWithoutUniques rdr `elem`
-            map (showNameWithoutUniques @RdrName) (listify (const True) lies)
+            showNameWithoutUniques (occName (unLoc rdr)) `elem`
+            map (showNameWithoutUniques @OccName) (listify (const True) lies)
     when alreadyImported $
         lift (Left $ idnetifier <> " already imported")
 
@@ -255,8 +255,8 @@ extendImportViaParent df parent child (L l it@ImportDecl {..})
           childRdr <- liftParseAST df child
 
           let alreadyImported =
-                showNameWithoutUniques childRdr `elem`
-                map (showNameWithoutUniques @RdrName) (listify (const True) lies')
+                showNameWithoutUniques(occName (unLoc childRdr)) `elem`
+                map (showNameWithoutUniques @OccName) (listify (const True) lies')
           when alreadyImported $
             lift (Left $ child <> " already included in " <> parent <> " imports")
 
