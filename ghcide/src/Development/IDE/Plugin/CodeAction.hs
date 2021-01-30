@@ -58,7 +58,6 @@ import qualified Data.DList as DL
 import Development.IDE.Spans.Common
 import OccName
 import Data.Coerce
-import Data.Either (fromRight)
 import qualified GHC.LanguageExtensions as Lang
 import Control.Lens (foldMapBy)
 import FieldLabel (flLabel)
@@ -104,31 +103,12 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
       actions' =
           [mkCA title [x] edit
           | x <- xs
-          , Just ps <- [annotatedPS]
-          , Just dynflags <- [df]
-          , (title, grafts) <- suggestExactAction exportsMap dynflags ps x
-          , let edit = foldMapBy unionWSEdit mempty (either error id .
-                        rewriteToEdit dynflags uri (annsA ps)) grafts
-          ] ++
-          [mkCA title [x] edit
-          | x <- xs
           , ps <- maybeToList annotatedPS
           , dynflags <- maybeToList df
           , nfp <- maybeToList mbFile
-          , (title, edRewrs) <-
-                suggestImportDisambiguation nfp dynflags (astA ps) x
-          , let edit =
-                    foldMapBy unionWSEdit mempty
-                    (either
-                        (\te -> WorkspaceEdit
-                                { _changes = Just $ Map.singleton uri $ List [te]
-                                , _documentChanges = Nothing }
-                        )
-                        (-- either (Left . traceShow) Right $
-                            fromRight mempty.
-                        rewriteToEdit dynflags uri (annsA ps))
-                    ) edRewrs
-
+          , (title, grafts) <- suggestExactAction exportsMap nfp dynflags ps x
+          , let edit = foldMapBy unionWSEdit mempty (either error id .
+                        rewriteToEdit dynflags uri (annsA ps)) grafts
           ]
       actions'' = caRemoveRedundantImports parsedModule text diag xs uri
                <> actions
@@ -156,15 +136,17 @@ mkCA title diags edit =
 
 suggestExactAction ::
   ExportsMap ->
+  NormalizedFilePath ->
   DynFlags ->
   Annotated ParsedSource ->
   Diagnostic ->
   [(T.Text, [Rewrite])]
-suggestExactAction exportsMap df ps x =
+suggestExactAction exportsMap nfp df ps x =
   concat
     [ suggestConstraint df (astA ps) x
     , suggestImplicitParameter (astA ps) x
     , suggestExtendImport exportsMap (astA ps) x
+    , suggestImportDisambiguation nfp df (astA ps) x
     ]
 
 suggestAction
@@ -775,7 +757,7 @@ suggestImportDisambiguation ::
     DynFlags ->
     ParsedSource ->
     Diagnostic ->
-    [(T.Text, [Either TextEdit Rewrite])]
+    [(T.Text, [Rewrite])]
 suggestImportDisambiguation nfp df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
@@ -875,23 +857,23 @@ disambiguateSymbol ::
     Diagnostic ->
     T.Text ->
     HidingMode ->
-    [Either TextEdit Rewrite]
+    [Rewrite]
 disambiguateSymbol nfp pm Diagnostic {..} (T.unpack -> symbol) = \case
     (HideOthers hiddens0) ->
-        [ Right $ hideSymbol symbol idecl
+        [ hideSymbol symbol idecl
         | ExistingImp idecls <- hiddens0
         , idecl <- NE.toList idecls
         ]
             ++ mconcat
                 [ if null imps
-                    then [Right $ hideImplicitPreludeSymbol symbol pm]
-                    else Right . hideSymbol symbol <$> imps
+                    then [hideImplicitPreludeSymbol symbol pm]
+                    else hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
     (ToQualified qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-        in [Right $ Rewrite (rangeToSrcSpan nfp _range) $ \df -> do
+        in [Rewrite (rangeToSrcSpan nfp _range) $ \df -> do
             liftParseAST @(HsExpr GhcPs) df $ prettyPrint $ HsVar @GhcPs noExtField
                 $ L (UnhelpfulSpan "") rdr
             ]
