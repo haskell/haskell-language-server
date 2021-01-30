@@ -29,6 +29,7 @@ import Data.Maybe (fromJust, isNothing, mapMaybe)
 import qualified Data.Text as T
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.GHC.ExactPrint
+    ( Annotate, ASTElement(parseAST) )
 import Development.IDE.Types.Location
 import FieldLabel (flLabel)
 import GhcPlugins (realSrcSpanEnd, realSrcSpanStart, sigPrec)
@@ -68,11 +69,15 @@ rewriteToEdit dflags uri anns (Rewrite dst f) = do
           [ ( uri,
               List
                 [ TextEdit (fromJust $ srcSpanToRange dst) $
-                    T.pack $ tail $ exactPrint ast anns
+                    stripPrecedingNewline $ T.pack $ tail $ exactPrint ast anns
                 ]
             )
           ]
   pure $ WorkspaceEdit (Just editMap) Nothing
+
+stripPrecedingNewline
+    :: T.Text -> T.Text
+stripPrecedingNewline = T.dropWhile (`elem` ("\r\n" :: [Char]))
 
 srcSpanToRange :: SrcSpan -> Maybe Range
 srcSpanToRange (UnhelpfulSpan _) = Nothing

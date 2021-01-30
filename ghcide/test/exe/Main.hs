@@ -1479,8 +1479,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareHideFunctionTo
                 "Use AVec for fromList, hiding other imports"
                 "HideFunction.hs.expected.fromList.A"
-        , expectFailBecause "Known bug - Modifying topmost import decl adds additional newline at the top"
-        $  testCase "BVec" $
+        , testCase "BVec" $
             compareHideFunctionTo
                 "Use BVec for fromList, hiding other imports"
                 "HideFunction.hs.expected.fromList.B"
