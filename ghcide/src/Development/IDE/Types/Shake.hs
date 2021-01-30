@@ -29,11 +29,12 @@ import Development.Shake (RuleResult, ShakeException (shakeExceptionInner))
 import Development.Shake.Classes
 import GHC.Generics
 import Language.Haskell.LSP.Types
+import Development.IDE.Core.PositionMapping
 
 data Value v
     = Succeeded TextDocumentVersion v
-    | Stale TextDocumentVersion v
-    | Failed
+    | Stale (Maybe PositionDelta) TextDocumentVersion v
+    | Failed Bool -- True if we already tried the persistent rule
     deriving (Functor, Generic, Show)
 
 instance NFData v => NFData (Value v)
@@ -42,8 +43,8 @@ instance NFData v => NFData (Value v)
 -- up2date results not for stale values.
 currentValue :: Value v -> Maybe v
 currentValue (Succeeded _ v) = Just v
-currentValue (Stale _ _) = Nothing
-currentValue Failed = Nothing
+currentValue (Stale _ _ _) = Nothing
+currentValue Failed{} = Nothing
 
 data ValueWithDiagnostics
   = ValueWithDiagnostics !(Value Dynamic) !(Vector FileDiagnostic)

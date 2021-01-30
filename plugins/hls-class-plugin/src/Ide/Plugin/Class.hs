@@ -166,13 +166,15 @@ codeAction _ state plId docId _ context = fmap (fromMaybe errorResult) . runMayb
           . Just
 
     findClassIdentifier docPath range = do
-      (hieAst -> hf, pmap) <- MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath
-      pure
-        $ head . head
-        $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
-          ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
-            <=< nodeChildren
-          )
+      (hieAstResult, pmap) <- MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath
+      case hieAstResult of
+        HAR {hieAst = hf} ->
+          pure
+            $ head . head
+            $ pointCommand hf (fromJust (fromCurrentRange pmap range) ^. J.start & J.character -~ 1)
+              ( (Map.keys . Map.filter isClassNodeIdentifier . nodeIdentifiers . nodeInfo)
+                <=< nodeChildren
+              )
 
     findClassFromIdentifier docPath (Right name) = do
       (hscEnv -> hscenv, _) <- MaybeT . runAction "classplugin" state $ useWithStale GhcSessionDeps docPath

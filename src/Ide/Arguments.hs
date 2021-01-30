@@ -21,14 +21,15 @@ import Development.GitRev
 import Options.Applicative
 import Paths_haskell_language_server
 import System.Environment
+import HieDb.Run
 
 -- ---------------------------------------------------------------------
 
 data Arguments
   = VersionMode PrintVersion
   | ProbeToolsMode
+  | DbCmd Options Command
   | LspMode LspArguments
-  deriving Show
 
 data LspArguments = LspArguments
     {argLSP :: Bool
@@ -53,9 +54,11 @@ data PrintVersion
 getArguments :: String -> IO Arguments
 getArguments exeName = execParser opts
   where
+    hieInfo = fullDesc <> progDesc "Query .hie files"
     opts = info ((
       VersionMode <$> printVersionParser exeName
       <|> probeToolsParser exeName
+      <|> hsubparser (command "hiedb" (info (DbCmd <$> optParser "" True <*> cmdParser <**> helper) hieInfo))
       <|> LspMode <$> arguments)
       <**> helper)
       ( fullDesc

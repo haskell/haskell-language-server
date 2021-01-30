@@ -6,6 +6,7 @@
 
 module Development.IDE.Import.FindImports
   ( locateModule
+  , locateModuleFile
   , Import(..)
   , ArtifactsLocation(..)
   , modSummaryToArtifactsLocation

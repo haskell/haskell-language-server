@@ -5,7 +5,6 @@
 
 module Development.IDE.Spans.Common (
   showGhc
-, showName
 , showNameWithoutUniques
 , safeTyThingId
 , safeTyThingType
@@ -30,23 +29,21 @@ import ConLike
 import DataCon
 import Var
 import NameEnv
+import DynFlags
 
 import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types as H
-import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Orphans ()
+import Development.IDE.GHC.Util
 
 type DocMap = NameEnv SpanDoc
 type KindMap = NameEnv TyThing
 
-showGhc :: Outputable a => a -> String
-showGhc = showPpr unsafeGlobalDynFlags
+showGhc :: Outputable a => a -> T.Text
+showGhc = showSD . ppr
 
-showName :: Outputable a => a -> T.Text
-showName = T.pack . prettyprint
-  where
-    prettyprint x = renderWithStyle unsafeGlobalDynFlags (ppr x) style
-    style = mkUserStyle unsafeGlobalDynFlags neverQualify AllTheWay
+showSD :: SDoc -> T.Text
+showSD = T.pack . unsafePrintSDoc
 
 showNameWithoutUniques :: Outputable a => a -> T.Text
 showNameWithoutUniques = T.pack . prettyprint
