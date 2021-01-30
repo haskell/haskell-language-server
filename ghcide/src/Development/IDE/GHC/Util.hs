@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
@@ -13,6 +14,7 @@ module Development.IDE.GHC.Util(
     deps,
     -- * GHC wrappers
     prettyPrint,
+    unsafePrintSDoc,
     printRdrName,
     printName,
     ParseResult(..), runParser,
@@ -41,6 +43,7 @@ import Data.Typeable
 import qualified Data.ByteString.Internal as BS
 import Fingerprint
 import GhcMonad
+import DynFlags
 import Control.Exception
 import Data.IORef
 import FileCleanup
@@ -64,7 +67,7 @@ import StringBuffer
 import System.FilePath
 import HscTypes (cg_binds, md_types, cg_module, ModDetails, CgGuts, ic_dflags, hsc_IC, HscEnv(hsc_dflags))
 import PackageConfig (PackageConfig)
-import Outputable (showSDocUnsafe, ppr, showSDoc, Outputable)
+import Outputable (SDoc, showSDocUnsafe, ppr, Outputable, mkUserStyle, renderWithStyle, neverQualify, Depth(..))
 import Packages (getPackageConfigMap, lookupPackage')
 import SrcLoc (mkRealSrcLoc)
 import FastString (mkFastString)
@@ -122,7 +125,12 @@ bytestringToStringBuffer (PS buf cur len) = StringBuffer{..}
 
 -- | Pretty print a GHC value using 'unsafeGlobalDynFlags '.
 prettyPrint :: Outputable a => a -> String
-prettyPrint = showSDoc unsafeGlobalDynFlags . ppr
+prettyPrint = unsafePrintSDoc . ppr
+
+unsafePrintSDoc :: SDoc -> String
+unsafePrintSDoc sdoc = renderWithStyle dflags sdoc (mkUserStyle dflags neverQualify AllTheWay)
+  where
+    dflags = unsafeGlobalDynFlags
 
 -- | Pretty print a 'RdrName' wrapping operators in parens
 printRdrName :: RdrName -> String

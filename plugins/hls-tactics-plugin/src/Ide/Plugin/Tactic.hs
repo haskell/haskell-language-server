@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE NumDecimals         #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -248,36 +249,41 @@ judgementForHole state nfp range = do
   ((modsum,_), _) <- MaybeT $ runIde state $ useWithStale GetModSummaryWithoutTimestamps nfp
   let dflags = ms_hspp_opts modsum
 
-  (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts $ hieAst asts) $ \fs ast ->
-      case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
-        Nothing -> Nothing
-        Just ast' -> do
-          let info = nodeInfo ast'
-          ty <- listToMaybe $ nodeType info
-          guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
-          pure (nodeSpan ast', ty)
+  case asts of
+    (HAR _ hf _ _ kind) -> do
+      (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+          case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
+            Nothing -> Nothing
+            Just ast' -> do
+              let info = nodeInfo ast'
+              ty <- listToMaybe $ nodeType info
+              guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
+              pure (nodeSpan ast', ty)
 
-  resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-  (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
-  let tcg  = tmrTypechecked tcmod
-      tcs = tcg_binds tcg
-      ctx = mkContext
-              (mapMaybe (sequenceA . (occName *** coerce))
-                $ getDefiningBindings binds rss)
-              tcg
-      top_provs = getRhsPosVals rss tcs
-      local_hy = spliceProvenance top_provs
-               $ hypothesisFromBindings rss binds
-      cls_hy = contextMethodHypothesis ctx
-  pure ( resulting_range
-       , mkFirstJudgement
-           (local_hy <> cls_hy)
-           (isRhsHole rss tcs)
-           goal
-       , ctx
-       , dflags
-       )
-
+      resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
+      (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+      let tcg  = tmrTypechecked tcmod
+          tcs = tcg_binds tcg
+          ctx = mkContext
+                  (mapMaybe (sequenceA . (occName *** coerce))
+                    $ getDefiningBindings binds rss)
+                  tcg
+          top_provs = getRhsPosVals rss tcs
+          local_hy = spliceProvenance top_provs
+                   $ hypothesisFromBindings rss binds
+          cls_hy = contextMethodHypothesis ctx
+      case kind of
+        HieFromDisk hf' ->
+          fail "Need a fresh hie file"
+        HieFresh ->
+          pure ( resulting_range
+               , mkFirstJudgement
+                   (local_hy <> cls_hy)
+                   (isRhsHole rss tcs)
+                   goal
+               , ctx
+               , dflags
+               )
 
 spliceProvenance
     :: Map OccName Provenance

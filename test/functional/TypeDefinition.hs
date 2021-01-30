@@ -1,11 +1,9 @@
 module TypeDefinition (tests) where
 
-import Control.Lens ((^.))
 import Control.Monad.IO.Class
+import Data.Tuple.Extra (first3)
 import Language.Haskell.LSP.Test
 import Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types.Lens as L
-import System.Directory
 import System.FilePath ((</>))
 import Test.Hls.Util
 import Test.Tasty
@@ -14,42 +12,36 @@ import Test.Tasty.HUnit
 tests :: TestTree
 tests = testGroup "type definitions" [
     testCase "finds local definition of record variable"
-        $ getTypeDefinitionTest' (11, 23) 8
+        $ getTypeDefinitionTest' 10 23 7 0
     , testCase "finds local definition of newtype variable"
-        $ getTypeDefinitionTest' (16, 21) 13
+        $ getTypeDefinitionTest' 15 21 12 0
     , testCase "finds local definition of sum type variable"
-        $ getTypeDefinitionTest' (21, 13) 18
+        $ getTypeDefinitionTest' 20 13 17 0
     , knownBrokenForGhcVersions [GHC88] "Definition of sum type not found from data constructor in GHC 8.8.x" $
       testCase "finds local definition of sum type constructor"
-        $ getTypeDefinitionTest' (24, 7) 18
+        $ getTypeDefinitionTest' 23 7 17 0
     , testCase "finds non-local definition of type def"
-        $ getTypeDefinitionTest' (30, 17) 27
+        $ getTypeDefinitionTest' 29 19 26 0
     , testCase "find local definition of type def"
-        $ getTypeDefinitionTest' (35, 16) 32
+        $ getTypeDefinitionTest' 34 16 31 0
     , testCase "find type-definition of type def in component"
-        $ getTypeDefinitionTest "src/Lib2.hs" (13, 20) "src/Lib.hs" 8
+        $ getTypeDefinitionTest ("src/Lib2.hs", 12, 20) [("src/Lib.hs", 7, 0)]
     , testCase "find definition of parameterized data type"
-        $ getTypeDefinitionTest' (40, 19) 37
+        $ getTypeDefinitionTest ("src/Lib.hs", 39, 19) [ ("src/Lib.hs", 36, 0)
+                                                       , ("src/Lib.hs", 38, 0)]
     ]
 
-getTypeDefinitionTest :: String -> (Int, Int) -> String -> Int -> Assertion
-getTypeDefinitionTest symbolFile symbolPosition definitionFile definitionLine =
-    failIfSessionTimeout . runSession hlsCommand fullCaps "test/testdata/gototest" $ do
+definitionsPath :: FilePath
+definitionsPath = "test/testdata/gototest"
+
+getTypeDefinitionTest :: SymbolLocation -> [SymbolLocation] -> Assertion
+getTypeDefinitionTest (symbolFile, symbolLine, symbolCol) definitionLocations =
+    failIfSessionTimeout . runSession (hlsCommand ++ " --test") fullCaps definitionsPath $ do
         doc  <- openDoc symbolFile "haskell"
-        _  <- openDoc definitionFile "haskell"
-        defs <- getTypeDefinitions doc $ toPos symbolPosition
-        fp <- liftIO $ canonicalizePath $ "test/testdata/gototest" </> definitionFile
-        liftIO $ do
-            length defs == 1 @? "Expecting a list containing one location, but got: " ++ show defs
-            let [def] = defs
-            def ^. L.uri @?= filePathToUri fp
-            def ^. L.range . L.start . L.line @?= definitionLine - 1
-            def ^. L.range . L.end . L.line @?= definitionLine - 1
+        defs <- getTypeDefinitions doc $ Position symbolLine symbolCol
+        liftIO $ defs `expectSameLocations` map (first3 (definitionsPath </>)) definitionLocations
 
-getTypeDefinitionTest' :: (Int, Int) -> Int -> Assertion
-getTypeDefinitionTest' symbolPosition definitionLine =
-    getTypeDefinitionTest "src/Lib.hs" symbolPosition "src/Lib.hs" definitionLine
-
---NOTE: copied from Haskell.Ide.Engine.ArtifactMap
-toPos :: (Int,Int) -> Position
-toPos (l,c) = Position (l-1) (c-1)
+getTypeDefinitionTest' :: Int -> Int -> Int -> Int -> Assertion
+getTypeDefinitionTest' symbolLine symbolCol definitionLine definitionCol =
+    getTypeDefinitionTest ("src/Lib.hs", symbolLine, symbolCol)
+                          [("src/Lib.hs", definitionLine, definitionCol)]

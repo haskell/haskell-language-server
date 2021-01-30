@@ -10,7 +10,7 @@ module Development.IDE.Import.DependencyInformation
   , TransitiveDependencies(..)
   , FilePathId(..)
   , NamedModuleDep(..)
-
+  , ShowableModuleName(..)
   , PathIdMap
   , emptyPathIdMap
   , getPathId

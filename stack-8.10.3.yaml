@@ -31,7 +31,7 @@ extra-deps:
   - heapsize-0.3.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
-  - lsp-test-0.11.0.6
+  - lsp-test-0.12.0.0
   - monad-dijkstra-0.1.1.2
   - refinery-0.3.0.0
   - retrie-0.1.1.1
@@ -40,6 +40,8 @@ extra-deps:
   - temporary-1.2.1.1
   - haskell-lsp-0.23.0.0
   - haskell-lsp-types-0.23.0.0
+  - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
+  - hiedb-0.3.0.1
 
 configure-options:
   ghcide:

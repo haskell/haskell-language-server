@@ -6,6 +6,7 @@ module Test.Hls.Util
     , expectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
+    , expectSameLocations
     , failIfSessionTimeout
     , flushStackEnvironment
     , fromAction
@@ -22,6 +23,7 @@ module Test.Hls.Util
     , knownBrokenForGhcVersions
     , logFilePath
     , setupBuildToolFiles
+    , SymbolLocation
     , waitForDiagnosticsFrom
     , waitForDiagnosticsFromSource
     , waitForDiagnosticsFromSourceWithTimeout
@@ -38,6 +40,7 @@ import           Data.Default
 import           Data.List (intercalate)
 import           Data.List.Extra (find)
 import           Data.Maybe
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import           Language.Haskell.LSP.Core
 import           Language.Haskell.LSP.Messages (FromServerMessage(NotLogMessage))
@@ -55,7 +58,7 @@ import           Test.Hspec.Runner
 import           Test.Hspec.Core.Formatters hiding (Seconds)
 import           Test.Tasty (TestTree)
 import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
-import           Test.Tasty.HUnit (assertFailure)
+import           Test.Tasty.HUnit (Assertion, assertFailure, (@?=))
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal hiding (null)
 
@@ -397,3 +400,20 @@ failIfSessionTimeout action = action `catch` errorHandler
     where errorHandler :: Test.SessionException -> IO a
           errorHandler e@(Test.Timeout _) = assertFailure $ show e
           errorHandler e = throwIO e
+
+-- | To locate a symbol, we provide a path to the file from the HLS root
+-- directory, the line number, and the column number. (0 indexed.)
+type SymbolLocation = (FilePath, Int, Int)
+
+expectSameLocations :: [Location] -> [SymbolLocation] -> Assertion
+actual `expectSameLocations` expected = do
+    let actual' =
+            Set.map (\location -> (location ^. L.uri
+                                   , location ^. L.range . L.start . L.line
+                                   , location ^. L.range . L.start . L.character))
+            $ Set.fromList actual
+    expected' <- Set.fromList <$>
+        (forM expected $ \(file, l, c) -> do
+                              fp <- canonicalizePath file
+                              return (filePathToUri fp, l, c))
+    actual' @?= expected'
