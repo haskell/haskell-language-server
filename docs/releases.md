@@ -8,6 +8,15 @@ extension](https://github.com/alanz/vscode-hie-server) to provide automatic
 installation for users on VS Code, but they can also be installed manually
 when added to the path.
 
+## Minimal checklist
+
+* [ ] generate the list of pull requests finished since the last release using the [haskell script](https://github.com/haskell/haskell-language-server/blob/master/GenChangelogs.hs) in the project root.
+* [ ] add that list to the actual [Changelog](https://github.com/haskell/haskell-language-server/blob/master/ChangeLog.md) with a description of the release.
+* [ ] bump up versions of changed packages. All are optional but [haskell-language-server itself](https://github.com/haskell/haskell-language-server/blob/master/haskell-language-server.cabal).
+* [ ] create the tag and make an initial prerelease to trigger the ci workflow (see details below)
+* [ ] check uploaded binaries (see windows note below) and the release description (usually the changelog entry) and uncheck the prerelease box
+* [ ] make public the release in the usual social channels: irc, twitter, reddit, discord, discourse, mailing lists, etc (not required but useful to spread the word :slightly_smiling_face:)
+
 ## Making a new release of haskell-language-server
 
 Go to the [GitHub releases
@@ -70,6 +79,13 @@ One caveat is that we need to rename the binaries from
 haskell-language-server/haskell-language-server-wrapper to hls/hls-wrapper due to
 path length limitations on windows. But whenever we upload them to the release,
 we make sure to upload them as their full name variant.
+
+### Failing workflow
+
+If the workflow fail and all of some binaries has not been uploaded,
+the prerelease and the tag itself has to be recreated to start it again.
+If only some of the artefacts are missinf an alternative could be make
+the release in a fork and upload manually them.
 
 ### ghcup
 Ghcup can install hls binaries, provided that there is a tarfile
