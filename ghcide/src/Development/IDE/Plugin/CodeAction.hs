@@ -50,7 +50,7 @@ import Safe (atMay)
 import Bag (isEmptyBag)
 import qualified Data.HashSet as Set
 import Control.Concurrent.Extra (readVar)
-import Development.IDE.GHC.Util (printRdrName)
+import Development.IDE.GHC.Util (printRdrName, prettyPrint)
 import Ide.PluginUtils (subRange)
 import Ide.Types
 import Data.Hashable (Hashable)
@@ -114,8 +114,9 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
           | x <- xs
           , ps <- maybeToList annotatedPS
           , dynflags <- maybeToList df
+          , nfp <- maybeToList mbFile
           , (title, edRewrs) <-
-                suggestImportDisambiguation dynflags (astA ps) x
+                suggestImportDisambiguation nfp dynflags (astA ps) x
           , let edit =
                     foldMapBy unionWSEdit mempty
                     (either
@@ -770,11 +771,12 @@ isPreludeImplicit = xopt Lang.ImplicitPrelude
 
 -- | Suggests disambiguation for ambiguous symbols.
 suggestImportDisambiguation ::
+    NormalizedFilePath ->
     DynFlags ->
     ParsedSource ->
     Diagnostic ->
     [(T.Text, [Either TextEdit Rewrite])]
-suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
+suggestImportDisambiguation nfp df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
             _message
@@ -805,7 +807,7 @@ suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic 
             | Just targets <- mapM toModuleTarget mods =
                 sortOn fst
                 [ ( renderUniquify mode modNameText symbol
-                  , disambiguateSymbol df ps diag symbol mode
+                  , disambiguateSymbol nfp ps diag symbol mode
                   )
                 | (modTarget, restImports) <- oneAndOthers targets
                 , let modName = targetModuleName modTarget
@@ -868,13 +870,13 @@ targetModuleName (ExistingImp _) =
     error "Cannot happen!"
 
 disambiguateSymbol ::
-    DynFlags ->
+    NormalizedFilePath  ->
     ParsedSource ->
     Diagnostic ->
     T.Text ->
     HidingMode ->
     [Either TextEdit Rewrite]
-disambiguateSymbol df pm Diagnostic {..} (T.unpack -> symbol) = \case
+disambiguateSymbol nfp pm Diagnostic {..} (T.unpack -> symbol) = \case
     (HideOthers hiddens0) ->
         [ Right $ hideSymbol symbol idecl
         | ExistingImp idecls <- hiddens0
@@ -882,7 +884,7 @@ disambiguateSymbol df pm Diagnostic {..} (T.unpack -> symbol) = \case
         ]
             ++ mconcat
                 [ if null imps
-                    then [Left $ hidePreludeSymbol df symbol pm]
+                    then [Right $ hideImplicitPreludeSymbol symbol pm]
                     else Right . hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
@@ -893,19 +895,6 @@ disambiguateSymbol df pm Diagnostic {..} (T.unpack -> symbol) = \case
             liftParseAST @(HsExpr GhcPs) df $ prettyPrint $ HsVar @GhcPs noExtField
                 $ L (UnhelpfulSpan "") rdr
             ]
-
--- Couldn't make out how to add New imports by ghc-exactprint;
--- using direct TextEdit instead.
-hidePreludeSymbol :: DynFlags -> String -> ParsedSource -> TextEdit
-hidePreludeSymbol df symbol (L _ HsModule{..}) =
-    let ran = fromJust $ srcSpanToRange $ getLoc $ last hsmodImports
-        col = _character $ _start ran
-        beg = Position (1 + _line (_end ran)) 0
-        symOcc = mkVarOcc symbol
-        symImp = T.pack $ showSDoc df $ parenSymOcc symOcc $ ppr symOcc
-    in TextEdit
-        (Range beg beg)
-      $ T.replicate col " " <> "import Prelude hiding (" <> symImp <> ")\n"
 
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L l _)-> srcSpanToRange l == Just range) xs

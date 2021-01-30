@@ -1497,6 +1497,11 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use Prelude for ++, hiding other imports"
                 "HideFunction.hs.expected.append.Prelude"
+        , testCase "AVec, indented" $
+            compareTwo "HidePreludeIndented.hs" [(3,8)]
+            "Use AVec for ++, hiding other imports"
+            "HidePreludeIndented.hs.expected"
+
         ]
     , testGroup "Vec (type)"
         [ testCase "AVec" $

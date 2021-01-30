@@ -11,6 +11,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
     -- * Utilities
     appendConstraint,
     extendImport,
+    hideImplicitPreludeSymbol,
     hideSymbol,
     liftParseAST,
   )
@@ -31,14 +32,15 @@ import Development.IDE.GHC.ExactPrint
     ( Annotate, ASTElement(parseAST) )
 import Development.IDE.Types.Location
 import FieldLabel (flLabel)
-import GhcPlugins (realSrcSpanEnd, realSrcSpanStart, sigPrec)
+import GhcPlugins (sigPrec)
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
 import Language.Haskell.LSP.Types
 import OccName
-import Outputable (ppr, showSDocUnsafe)
-import Retrie.GHC (rdrNameOcc, unpackFS)
+import Outputable (ppr, showSDocUnsafe, showSDoc)
+import Retrie.GHC (rdrNameOcc, unpackFS, mkRealSrcSpan, realSrcSpanEnd)
 import Development.IDE.Spans.Common
+import Development.IDE.GHC.Error
 
 ------------------------------------------------------------------------------
 
@@ -63,35 +65,19 @@ rewriteToEdit ::
   Rewrite ->
   Either String WorkspaceEdit
 rewriteToEdit dflags uri anns (Rewrite dst f) = do
-  (ast, (anns, _), _) <- runTransformT anns $ f dflags
+  (ast, (anns, _), _) <- runTransformT anns $ do
+      ast <- f dflags
+      ast <$ setEntryDPT ast (DP (0,0))
   let editMap =
         HMap.fromList
           [ ( uri,
               List
                 [ TextEdit (fromJust $ srcSpanToRange dst) $
-                    stripPrecedingNewline $ T.pack $ tail $ exactPrint ast anns
+                    T.pack $ exactPrint ast anns
                 ]
             )
           ]
   pure $ WorkspaceEdit (Just editMap) Nothing
-
-stripPrecedingNewline
-    :: T.Text -> T.Text
-stripPrecedingNewline = T.dropWhile (`elem` ("\r\n" :: [Char]))
-
-srcSpanToRange :: SrcSpan -> Maybe Range
-srcSpanToRange (UnhelpfulSpan _) = Nothing
-srcSpanToRange (RealSrcSpan real) = Just $ realSrcSpanToRange real
-
-realSrcSpanToRange :: RealSrcSpan -> Range
-realSrcSpanToRange real =
-  Range
-    (realSrcLocToPosition $ realSrcSpanStart real)
-    (realSrcLocToPosition $ realSrcSpanEnd real)
-
-realSrcLocToPosition :: RealSrcLoc -> Position
-realSrcLocToPosition real =
-  Position (srcLocLine real - 1) (srcLocCol real - 1)
 
 ------------------------------------------------------------------------------
 
@@ -397,3 +383,25 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
                   (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
                   (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
         killLie v = Just v
+
+hideImplicitPreludeSymbol
+    :: String -> ParsedSource -> Rewrite
+hideImplicitPreludeSymbol symbol (L _ HsModule{..}) =
+    let -- We assume there is at least one import, to collide with Prelude;
+        -- otherwise (custom) Prelude must be buggy, (or preprocessor adds some collision?)
+        existingImp = last hsmodImports
+        exisImpSpan = fromJust $ realSpan $ getLoc existingImp
+        indentation = srcSpanStartCol exisImpSpan
+        beg = realSrcSpanEnd exisImpSpan
+        ran = RealSrcSpan $ mkRealSrcSpan beg beg
+    in Rewrite ran $ \df -> do
+        -- Re-labeling is needed to reflect annotations correctly
+        let symOcc = mkVarOcc symbol
+            symImp = T.pack $ showSDoc df $ parenSymOcc symOcc $ ppr symOcc
+            impStmt = "import Prelude hiding (" <> symImp <> ")"
+
+        L _ idecl0 <- liftParseAST @(ImportDecl GhcPs) df $ T.unpack impStmt
+        let idecl = L ran idecl0
+        addSimpleAnnT idecl (DP (1,indentation - 1))
+            [(G AnnImport, DP (1, indentation - 1))]
+        pure idecl
