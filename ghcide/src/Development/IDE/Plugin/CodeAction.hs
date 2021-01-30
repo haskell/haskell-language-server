@@ -43,6 +43,7 @@ import qualified Data.Text as T
 import Text.Regex.TDFA (mrAfter, (=~), (=~~))
 import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
 import Data.Function
+import Control.Arrow ((>>>), second)
 import Data.Functor
 import Control.Applicative ((<|>))
 import Safe (atMay)
@@ -58,7 +59,6 @@ import Development.IDE.Spans.Common
 import OccName
 import Data.Coerce
 import Data.Either (fromRight)
-import Control.Arrow
 import qualified GHC.LanguageExtensions as Lang
 import Control.Lens (foldMapBy)
 
