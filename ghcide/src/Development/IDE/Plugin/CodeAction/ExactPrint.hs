@@ -395,11 +395,11 @@ hideImplicitPreludeSymbol symbol (L _ HsModule{..}) =
         beg = realSrcSpanEnd exisImpSpan
         ran = RealSrcSpan $ mkRealSrcSpan beg beg
     in Rewrite ran $ \df -> do
-        -- Re-labeling is needed to reflect annotations correctly
         let symOcc = mkVarOcc symbol
             symImp = T.pack $ showSDoc df $ parenSymOcc symOcc $ ppr symOcc
             impStmt = "import Prelude hiding (" <> symImp <> ")"
 
+        -- Re-labeling is needed to reflect annotations correctly
         L _ idecl0 <- liftParseAST @(ImportDecl GhcPs) df $ T.unpack impStmt
         let idecl = L ran idecl0
         addSimpleAnnT idecl (DP (1,indentation - 1))
