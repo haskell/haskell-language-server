@@ -248,6 +248,7 @@ benchmark benchHist
         shake-bench == 0.1.*,
         directory,
         filepath,
+        optparse-applicative,
         shake,
         text,
         yaml

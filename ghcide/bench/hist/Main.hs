@@ -52,10 +52,15 @@ import qualified Experiments.Types as E
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Development.Shake.Classes
+import System.Console.GetOpt
+import Data.Maybe
 
 
-config :: FilePath
-config = "bench/config.yaml"
+configPath :: FilePath
+configPath = "bench/config.yaml"
+
+configOpt :: OptDescr (Either String FilePath)
+configOpt = Option [] ["config"] (ReqArg Right configPath) "config file"
 
 -- | Read the config without dependency
 readConfigIO :: FilePath -> IO (Config BuildSystem)
@@ -66,8 +71,9 @@ type instance RuleResult GetExample = Maybe Example
 type instance RuleResult GetExamples = [Example]
 
 main :: IO ()
-main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigestInput, shakeThreads = 0} $ do
-  createBuildSystem $ \resource -> do
+main = shakeArgsWith shakeOptions{shakeChange = ChangeModtimeAndDigestInput, shakeThreads = 0} [configOpt] $ \configs wants -> pure $ Just $ do
+  let config = fromMaybe configPath $ listToMaybe configs
+  createBuildSystem config $ \resource -> do
       configStatic <- liftIO $ readConfigIO config
       let build = outputFolder configStatic
       buildRules build ghcideBuildRules
@@ -75,7 +81,9 @@ main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigestInput, shakeT
       csvRules build
       svgRules build
       heapProfileRules build
-      action $ allTargets build
+      case wants of
+          [] -> action $ allTargets build
+          _ -> want wants
 
 ghcideBuildRules :: MkBuildRules BuildSystem
 ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" buildGhcide
@@ -94,8 +102,8 @@ data Config buildSystem = Config
   deriving (Generic, Show)
   deriving anyclass (FromJSON)
 
-createBuildSystem :: (Resource -> Rules a) -> Rules a
-createBuildSystem userRules = do
+createBuildSystem :: FilePath -> (Resource -> Rules a) -> Rules a
+createBuildSystem config userRules = do
   readConfig <- newCache $ \fp -> need [fp] >> liftIO (readConfigIO fp)
 
   _ <- addOracle $ \GetExperiments {} -> experiments <$> readConfig config
