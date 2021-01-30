@@ -681,7 +681,7 @@ it to look for the right executable.
 
 :heart: The Haskell tooling dream is near, we need your help! :heart:
 
-- Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-ide-engine) at `#haskell-ide-engine` on `freenode`.
+- Join [our IRC channel](https://webchat.freenode.net/?channels=haskell-language-server) at `#haskell-language-server` on `freenode`.
 - Fork this repo and [ghcide](https://github.com/haskell/ghcide) and hack as much as you can.
 
 ### Style guidelines
