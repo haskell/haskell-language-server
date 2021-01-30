@@ -1,4 +1,5 @@
-module AVec (Vec, (++), cons, fromList, snoc) where
+{-# LANGUAGE TypeOperators #-}
+module AVec (Vec, type (@@@), (++), cons, fromList, snoc) where
 
 import Prelude hiding ((++))
 
@@ -6,6 +7,8 @@ data Vec a
 
 (++) :: Vec a -> Vec a -> Vec a
 (++) = undefined
+
+data (@@@) a b
 
 fromList :: [a] -> Vec a
 fromList = undefined

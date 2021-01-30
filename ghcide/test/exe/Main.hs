@@ -1490,6 +1490,18 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
                 "Use EVec for ++, hiding other imports"
                 "HideFunction.hs.expected.append.E"
         ]
+    , testGroup "Vec (type)"
+        [ testCase "AVec" $
+            compareTwo
+                "HideType.hs"
+                "Use AVec for Vec, hiding other imports"
+                "HideType.hs.expected.A"
+        , testCase "EVec" $
+            compareTwo
+                "HideType.hs"
+                "Use EVec for Vec, hiding other imports"
+                "HideType.hs.expected.E"
+        ]
     ]
   , testGroup "Qualify strategy"
     [ testCase "won't suggest full name for qualified module" $
@@ -1522,16 +1534,17 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
   ]
   where
     hidingDir = "test/data/hiding"
-    compareHideFunctionTo cmd expected =
-        withHideFunction $ \doc actions -> do
+    compareTwo original cmd expected =
+        withTarget original $ \doc actions -> do
             expected <- liftIO $
                 readFileUtf8 (hidingDir </> expected)
             action <- liftIO $ pickActionWithTitle cmd actions
             executeCodeAction action
             contentAfterAction <- documentContents doc
             liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
-    withHideFunction k = runInDir hidingDir $ do
-        doc <- openDoc ("HideFunction" <.> "hs") "haskell"
+    compareHideFunctionTo = compareTwo "HideFunction.hs"
+    withTarget file k = runInDir hidingDir $ do
+        doc <- openDoc file "haskell"
         void (skipManyTill anyMessage message
             :: Session WorkDoneProgressEndNotification)
         void waitForDiagnostics
@@ -1540,6 +1553,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
         actions <- getCodeActions doc range
         k doc actions
+    withHideFunction = withTarget ("HideFunction" <.> "hs")
 
 disableWarningTests :: TestTree
 disableWarningTests =
