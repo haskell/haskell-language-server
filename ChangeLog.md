@@ -1,5 +1,177 @@
 # Changelog for haskell-language-server
 
+## 0.9.0
+
+This release includes lot of refactorings and bug fixes over existing features, hlint and eval plugins among others.
+It contains a fix for a bug in ghcide involving stale diagnostics (#1204).
+
+The list of contributors continues to show healthy growth, many thanks to you all!
+
+And remember, we have a new brand logo, courtesy of @Ailrun :slightly_smiling_face:
+
+![haskell-language-server](https://github.com/haskell/haskell-language-server/raw/master/docs/logos/logo-256.png)
+
+### Pull requests merged for 0.9.0
+
+- Do not error out on failed rewrite
+([#1269)](https://github.com/haskell/haskell-language-server/pull/1269) by @pepeiborra
+- Tighten dependency on apply-refact
+([#1268)](https://github.com/haskell/haskell-language-server/pull/1268) by @hololeap
+- Add the new logos
+([#1267)](https://github.com/haskell/haskell-language-server/pull/1267) by @Ailrun
+- Fix a bug in completions
+([#1265)](https://github.com/haskell/haskell-language-server/pull/1265) by @pepeiborra
+- Produce heap profiles the old fashioned way, from .hp files
+([#1261)](https://github.com/haskell/haskell-language-server/pull/1261) by @pepeiborra
+- Break down ghcide functionality in HLS plugins
+([#1257)](https://github.com/haskell/haskell-language-server/pull/1257) by @pepeiborra
+- Enforce max completions over all plugins
+([#1256)](https://github.com/haskell/haskell-language-server/pull/1256) by @pepeiborra
+- Reorder code actions to put remove redundant imports first
+([#1255)](https://github.com/haskell/haskell-language-server/pull/1255) by @pepeiborra
+- Update bench.yml to include all the relevant artifacts
+([#1254)](https://github.com/haskell/haskell-language-server/pull/1254) by @pepeiborra
+- Benchmarks: generate heap profiles
+([#1253)](https://github.com/haskell/haskell-language-server/pull/1253) by @pepeiborra
+- Add gh workflows badges
+([#1251)](https://github.com/haskell/haskell-language-server/pull/1251) by @jneira
+- Add dynamic linking common issue
+([#1249)](https://github.com/haskell/haskell-language-server/pull/1249) by @jneira
+- Add license for hls-tactics-plugin
+([#1248)](https://github.com/haskell/haskell-language-server/pull/1248) by @isovector
+- Use exact print to extend import lists
+([#1246)](https://github.com/haskell/haskell-language-server/pull/1246) by @berberman
+- Test apply-refact with TypeApplications
+([#1244)](https://github.com/haskell/haskell-language-server/pull/1244) by @jneira
+- Add non reversable pragma completion
+([#1243)](https://github.com/haskell/haskell-language-server/pull/1243) by @Ailrun
+- Delete redundant "category: Development".
+([#1241)](https://github.com/haskell/haskell-language-server/pull/1241) by @peterwicksstringfield
+- Complete the No- variants of language extensions and Strict extension
+([#1238)](https://github.com/haskell/haskell-language-server/pull/1238) by @mrBliss
+- Add code actions for disabling a warning in the current file
+([#1235)](https://github.com/haskell/haskell-language-server/pull/1235) by @georgefst
+- Change packages metadata and rename tactics subfolder
+([#1234)](https://github.com/haskell/haskell-language-server/pull/1234) by @jneira
+- Fix the bug that generating comments would duplicate existing comments
+([#1233)](https://github.com/haskell/haskell-language-server/pull/1233) by @berberman
+- Delete global hie.yaml config
+([#1230)](https://github.com/haskell/haskell-language-server/pull/1230) by @jneira
+- Easy hlint fixes
+([#1226)](https://github.com/haskell/haskell-language-server/pull/1226) by @peterwicksstringfield
+- Use the runtime ghc libdir for ghc-exactprint
+([#1225)](https://github.com/haskell/haskell-language-server/pull/1225) by @jneira
+- Add note in README/Tutorial regarding CPP support
+([#1224)](https://github.com/haskell/haskell-language-server/pull/1224) by @tittoassini
+- Test and fix for issue 1213
+([#1223)](https://github.com/haskell/haskell-language-server/pull/1223) by @tittoassini
+- Add traces for HLS providers
+([#1222)](https://github.com/haskell/haskell-language-server/pull/1222) by @pepeiborra
+- Use exact print for suggest missing constraint code actions
+([#1221)](https://github.com/haskell/haskell-language-server/pull/1221) by @pepeiborra
+- Fix changelog dates
+([#1220)](https://github.com/haskell/haskell-language-server/pull/1220) by @pepeiborra
+- Ignore .shake folder
+([#1219)](https://github.com/haskell/haskell-language-server/pull/1219) by @pepeiborra
+- Limit completions to top 40
+([#1218)](https://github.com/haskell/haskell-language-server/pull/1218) by @pepeiborra
+- Parenthesise type operators when extending import lists
+([#1212)](https://github.com/haskell/haskell-language-server/pull/1212) by @mrBliss
+- Expose shake options used
+([#1209)](https://github.com/haskell/haskell-language-server/pull/1209) by @pepeiborra
+- Prepare ghcide release v0.7.1
+([#1207)](https://github.com/haskell/haskell-language-server/pull/1207) by @pepeiborra
+- Documentation for the Eval Plugin
+([#1206)](https://github.com/haskell/haskell-language-server/pull/1206) by @tittoassini
+- Stale diagnostics fix
+([#1204)](https://github.com/haskell/haskell-language-server/pull/1204) by @pepeiborra
+- Extract Development.IDE.GHC.ExactPrint
+([#1203)](https://github.com/haskell/haskell-language-server/pull/1203) by @pepeiborra
+- Fix bug in Retrie "fold/unfold in local file" commands
+([#1202)](https://github.com/haskell/haskell-language-server/pull/1202) by @pepeiborra
+- Minor eval plugin fixes
+([#1199)](https://github.com/haskell/haskell-language-server/pull/1199) by @tittoassini
+- Disable win 8.6.4 job
+([#1198)](https://github.com/haskell/haskell-language-server/pull/1198) by @jneira
+- Add custom cache layer for session loading
+([#1197)](https://github.com/haskell/haskell-language-server/pull/1197) by @fendor
+- Use completionSnippetsOn flag
+([#1195)](https://github.com/haskell/haskell-language-server/pull/1195) by @takoeight0821
+- Remove runs dropped by #1173
+([#1194)](https://github.com/haskell/haskell-language-server/pull/1194) by @jneira
+- Remove undefined exports suggestions
+([#1193)](https://github.com/haskell/haskell-language-server/pull/1193) by @kderme
+- Update nixpkgs to ghc 8.10.3
+([#1191)](https://github.com/haskell/haskell-language-server/pull/1191) by @pepeiborra
+- Do not disable parallel GC
+([#1190)](https://github.com/haskell/haskell-language-server/pull/1190) by @pepeiborra
+- Switch module outline to useWtihStale
+([#1189)](https://github.com/haskell/haskell-language-server/pull/1189) by @pepeiborra
+- Fix sticky diagnostics
+([#1188)](https://github.com/haskell/haskell-language-server/pull/1188) by @pepeiborra
+- Fix class plugin cabal
+([#1186)](https://github.com/haskell/haskell-language-server/pull/1186) by @Ailrun
+- Update package description of haddock comments plugin
+([#1185)](https://github.com/haskell/haskell-language-server/pull/1185) by @berberman
+- Installation from Hackage - add README section
+([#1183)](https://github.com/haskell/haskell-language-server/pull/1183) by @pepeiborra
+- Preparation for Uploading Splice Plugin to Hackage
+([#1182)](https://github.com/haskell/haskell-language-server/pull/1182) by @konn
+- Preparation for uploading `hls-exactprint-utils`
+([#1181)](https://github.com/haskell/haskell-language-server/pull/1181) by @konn
+- Complete hls-hlint-plugin package metadata
+([#1180)](https://github.com/haskell/haskell-language-server/pull/1180) by @jneira
+- Benchmark improvements
+([#1178)](https://github.com/haskell/haskell-language-server/pull/1178) by @pepeiborra
+- Make adding missing constraint work in presence of 'forall' (fixes #1164)
+([#1177)](https://github.com/haskell/haskell-language-server/pull/1177) by @jhrcek
+- Prepare for Hackage
+([#1176)](https://github.com/haskell/haskell-language-server/pull/1176) by @pepeiborra
+- Test only last ghc minor version and fix windows cache
+([#1173)](https://github.com/haskell/haskell-language-server/pull/1173) by @jneira
+- Fix toMethodName bug of the Class plugin
+([#1170)](https://github.com/haskell/haskell-language-server/pull/1170) by @Ailrun
+- Quick fix for #1158
+([#1166)](https://github.com/haskell/haskell-language-server/pull/1166) by @Ailrun
+- Suggest adding pragmas for parse errors too
+([#1165)](https://github.com/haskell/haskell-language-server/pull/1165) by @mrBliss
+- Fix wrong component name of splice plugin in hie.yaml
+([#1162)](https://github.com/haskell/haskell-language-server/pull/1162) by @berberman
+- Revert "Auto cancel redundant workflows (attempt #2)"
+([#1156)](https://github.com/haskell/haskell-language-server/pull/1156) by @pepeiborra
+- Auto cancel redundant workflows (attempt #2)
+([#1154)](https://github.com/haskell/haskell-language-server/pull/1154) by @pepeiborra
+- Prepare 0.8.0 (versions)
+([#1153)](https://github.com/haskell/haskell-language-server/pull/1153) by @jneira
+- Streamline CircleCI jobs
+([#1152)](https://github.com/haskell/haskell-language-server/pull/1152) by @pepeiborra
+- Mergify: create configuration
+([#1151)](https://github.com/haskell/haskell-language-server/pull/1151) by @jneira
+- Bump haskell-lsp to 0.23
+([#1146)](https://github.com/haskell/haskell-language-server/pull/1146) by @berberman
+- Remove no longer needed git submodule update
+([#1145)](https://github.com/haskell/haskell-language-server/pull/1145) by @jhrcek
+- Enable more tests
+([#1143)](https://github.com/haskell/haskell-language-server/pull/1143) by @peterwicksstringfield
+- Update links to issues/PRs in ghcide tests.
+([#1142)](https://github.com/haskell/haskell-language-server/pull/1142) by @peterwicksstringfield
+- Fix #723 (Instance declarations in hs-boot files result in GHC errors)
+([#781)](https://github.com/haskell/haskell-language-server/pull/781) by @nitros12
+- Also suggest importing methods without parent class
+([#766)](https://github.com/haskell/haskell-language-server/pull/766) by @mrBliss
+- Delete unused utilities for controlling logging.
+([#764)](https://github.com/haskell/haskell-language-server/pull/764) by @peterwicksstringfield
+- Delete unused testdata
+([#763)](https://github.com/haskell/haskell-language-server/pull/763) by @peterwicksstringfield
+- Fix suggestAddTypeAnnotation regex
+([#760)](https://github.com/haskell/haskell-language-server/pull/760) by @kderme
+- Splice Plugin: expands TH splices and QuasiQuotes
+([#759)](https://github.com/haskell/haskell-language-server/pull/759) by @konn
+- Haddock comments plugin
+([#673)](https://github.com/haskell/haskell-language-server/pull/673) by @berberman
+- Leverage last apply-refact improvements in hlint plugin (include getParsedModuleWithComments in ghcide)
+([#635)](https://github.com/haskell/haskell-language-server/pull/635) by @jneira
+
 ## 0.8.0
 
 - This version adds support for ghc-8.10.3
