@@ -1,8 +1,8 @@
 {- |
 Tests in plain comments in both single line or multi line format, both forward and backward.
 Tests are ignored if:
-    * do not start on the first column
-    * are in multi line comments that open and close on the same line
+    * do not start on the first column (in Ordinary Haskell)
+    * do not start on the first or second column (in Literate Haskell)
 -}
 module THaddock () where
 

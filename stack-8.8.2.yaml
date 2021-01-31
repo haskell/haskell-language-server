@@ -52,6 +52,7 @@ extra-deps:
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
   - lsp-test-0.12.0.0
+  - megaparsec-9.0.1
   - monad-dijkstra-0.1.1.2
   - opentelemetry-0.6.1
   - opentelemetry-extra-0.6.1
