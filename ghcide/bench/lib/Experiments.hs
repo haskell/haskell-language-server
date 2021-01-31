@@ -62,44 +62,44 @@ allWithIdentifierPos f docs = allM f (filter (isJust . identifierP) docs)
 experiments :: [Bench]
 experiments =
     [ ---------------------------------------------------------------------------------------
-      bench "hover" 10 $ allWithIdentifierPos $ \DocumentPositions{..} ->
+      bench "hover" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "edit" 10 $ \docs -> do
+      bench "edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
         waitForProgressDone -- TODO check that this waits for all of them
         return True,
       ---------------------------------------------------------------------------------------
-      bench "hover after edit" 10 $ \docs -> do
+      bench "hover after edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "getDefinition" 10 $ allWithIdentifierPos $ \DocumentPositions{..} ->
+      bench "getDefinition" $ allWithIdentifierPos $ \DocumentPositions{..} ->
         not . null <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "getDefinition after edit" 10 $ \docs -> do
+      bench "getDefinition after edit" $ \docs -> do
           forM_ docs $ \DocumentPositions{..} ->
             changeDoc doc [charEdit stringLiteralP]
           flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
             not . null <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "documentSymbols" 100 $ allM $ \DocumentPositions{..} -> do
+      bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
       ---------------------------------------------------------------------------------------
-      bench "documentSymbols after edit" 100 $ \docs -> do
+      bench "documentSymbols after edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
         flip allM docs $ \DocumentPositions{..} ->
           either (not . null) (not . null) <$> getDocumentSymbols doc,
       ---------------------------------------------------------------------------------------
-      bench "completions" 10 $ \docs -> do
+      bench "completions" $ \docs -> do
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
           not . null <$> getCompletions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
-      bench "completions after edit" 10 $ \docs -> do
+      bench "completions after edit" $ \docs -> do
         forM_ docs $ \DocumentPositions{..} ->
           changeDoc doc [charEdit stringLiteralP]
         flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
@@ -107,7 +107,6 @@ experiments =
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions"
-        10
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
@@ -122,7 +121,6 @@ experiments =
       ---------------------------------------------------------------------------------------
       benchWithSetup
         "code actions after edit"
-        10
         ( \docs -> do
             unless (any (isJust . identifierP) docs) $
                 error "None of the example modules is suitable for this experiment"
@@ -208,21 +206,20 @@ select Bench {name, enabled} =
 
 benchWithSetup ::
   String ->
-  Natural ->
   ([DocumentPositions] -> Session ()) ->
   Experiment ->
   Bench
-benchWithSetup name samples benchSetup experiment = Bench {..}
+benchWithSetup name benchSetup experiment = Bench {..}
   where
     enabled = True
+    samples = 100
 
-bench :: String -> Natural -> Experiment -> Bench
-bench name defSamples =
-  benchWithSetup name defSamples (const $ pure ())
+bench :: String -> Experiment -> Bench
+bench name = benchWithSetup name (const $ pure ())
 
 runBenchmarksFun :: HasConfig => FilePath -> [Bench] -> IO ()
 runBenchmarksFun dir allBenchmarks = do
-  let benchmarks = [ b{samples = fromMaybe (samples b) (repetitions ?config) }
+  let benchmarks = [ b{samples = fromMaybe 100 (repetitions ?config) }
                    | b <- allBenchmarks
                    , select b ]
 
