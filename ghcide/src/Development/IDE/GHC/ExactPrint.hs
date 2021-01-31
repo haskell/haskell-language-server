@@ -54,8 +54,8 @@ import Generics.SYB
 import Ide.PluginUtils
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
+import Language.LSP.Types
+import Language.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable (Outputable, ppr, showSDoc)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
 import Parser (parseIdentifier)

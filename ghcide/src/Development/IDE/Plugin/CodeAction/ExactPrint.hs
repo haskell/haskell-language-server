@@ -34,7 +34,7 @@ import FieldLabel (flLabel)
 import GhcPlugins (sigPrec)
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
 import OccName
 import Outputable (ppr, showSDocUnsafe, showSDoc)
 import Retrie.GHC (rdrNameOcc, unpackFS, mkRealSrcSpan, realSrcSpanEnd)

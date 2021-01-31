@@ -1,4 +1,7 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 #include "ghc-api-version.h"
 
@@ -9,9 +12,9 @@ module Development.IDE.LSP.Outline
   )
 where
 
-import qualified Language.Haskell.LSP.Core     as LSP
-import           Language.Haskell.LSP.Messages
-import           Language.Haskell.LSP.Types
+import qualified Language.LSP.Server as LSP
+import           Language.LSP.Types
+import           Control.Monad.IO.Class
 import           Data.Functor
 import           Data.Generics
 import           Data.Maybe
@@ -21,28 +24,26 @@ import           Data.Text                      ( Text
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
+import           Development.IDE.LSP.Server
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      ( realSrcSpanToRange )
-import           Development.IDE.LSP.Server
 import           Development.IDE.Types.Location
 import           Outputable                     ( Outputable
                                                 , ppr
                                                 , showSDocUnsafe
                                                 )
 
-setHandlersOutline :: PartialHandlers c
-setHandlersOutline = PartialHandlers $ \WithMessage {..} x -> return x
-  { LSP.documentSymbolHandler = withResponse RspDocumentSymbols moduleOutline
-  }
+setHandlersOutline :: LSP.Handlers (ServerM c)
+setHandlersOutline = requestHandler STextDocumentDocumentSymbol moduleOutline
 
 moduleOutline
-  :: LSP.LspFuncs c -> IdeState -> DocumentSymbolParams -> IO (Either ResponseError DSResult)
-moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentIdentifier uri }
-  = case uriToFilePath uri of
+  :: IdeState -> DocumentSymbolParams -> LSP.LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))
+moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
+  = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do
       mb_decls <- fmap fst <$> runAction "Outline" ideState (useWithStale GetParsedModule fp)
       pure $ Right $ case mb_decls of
-        Nothing -> DSDocumentSymbols (List [])
+        Nothing -> InL (List [])
         Just ParsedModule { pm_parsed_source = L _ltop HsModule { hsmodName, hsmodDecls, hsmodImports } }
           -> let
                declSymbols  = mapMaybe documentSymbolForDecl hsmodDecls
@@ -64,10 +65,10 @@ moduleOutline _lsp ideState DocumentSymbolParams { _textDocument = TextDocumentI
                        }
                    ]
              in
-               DSDocumentSymbols (List allSymbols)
+               InL (List allSymbols)
 
 
-    Nothing -> pure $ Right $ DSDocumentSymbols (List [])
+    Nothing -> pure $ Right $ InL (List [])
 
 documentSymbolForDecl :: Located (HsDecl GhcPs) -> Maybe DocumentSymbol
 documentSymbolForDecl (L (RealSrcSpan l) (TyClD _ FamDecl { tcdFam = FamilyDecl { fdLName = L _ n, fdInfo, fdTyVars } }))

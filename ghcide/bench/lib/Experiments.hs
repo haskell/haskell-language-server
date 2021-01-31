@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ImpredicativeTypes #-}
@@ -23,16 +24,16 @@ import Control.Applicative.Combinators (skipManyTill)
 import Control.Exception.Safe (IOException, handleAny, try)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
-import Data.Aeson (Value(Null))
+import Data.Aeson (Value(Null), toJSON)
 import Data.List
 import Data.Maybe
 import qualified Data.Text as T
 import Data.Version
 import Development.IDE.Plugin.Test
 import Experiments.Types
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Capabilities
+import Language.LSP.Test
+import Language.LSP.Types
+import Language.LSP.Types.Capabilities
 import Numeric.Natural
 import Options.Applicative
 import System.Directory
@@ -79,7 +80,7 @@ experiments =
           isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition" $ allWithIdentifierPos $ \DocumentPositions{..} ->
-        not . null <$> getDefinitions doc (fromJust identifierP),
+        either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition after edit" $ \docs -> do
           forM_ docs $ \DocumentPositions{..} ->
@@ -359,7 +360,9 @@ waitForProgressDone :: Session ()
 waitForProgressDone = loop
   where
     loop = do
-      void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+      void $ skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
 
@@ -393,8 +396,9 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
             else do
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
-                waitId <- sendRequest (CustomClientMethod "test") WaitForShakeQueue
-                (td, resp) <- duration $ skipManyTill anyMessage $ responseForId waitId
+                let m = SCustomMethod "ghcide/blocking/queue"
+                waitId <- sendRequest m (toJSON WaitForShakeQueue)
+                (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
                 case resp of
                     ResponseMessage{_result=Right Null} -> do
                       loop (userWaits+t) (delayedWork+td) (n -1)

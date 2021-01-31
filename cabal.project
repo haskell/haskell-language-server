@@ -12,6 +12,9 @@ packages:
          ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
+         /home/zubin/hie-lsp/haskell-lsp/
+         /home/zubin/hie-lsp/haskell-lsp/lsp-types
+         /home/zubin/hie-lsp/haskell-lsp/lsp-test
 
 tests: true
 

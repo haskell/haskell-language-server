@@ -5,10 +5,9 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
 module Ide.Plugin.Config
-    (
-      getInitialConfig
-    , getConfigFromNotification
+    ( getConfigFromNotification
     , Config(..)
     , PluginConfig(..)
     , CheckParents(..)
@@ -19,7 +18,7 @@ import qualified Data.Aeson                    as A
 import           Data.Aeson              hiding ( Error )
 import           Data.Default
 import qualified Data.Text                     as T
-import           Language.Haskell.LSP.Types
+import           Language.LSP.Types
 import qualified Data.Map as Map
 import GHC.Generics (Generic)
 
@@ -27,18 +26,9 @@ import GHC.Generics (Generic)
 
 -- | Given a DidChangeConfigurationNotification message, this function returns the parsed
 -- Config object if possible.
-getConfigFromNotification :: DidChangeConfigurationNotification -> Either T.Text Config
+getConfigFromNotification :: NotificationMessage WorkspaceDidChangeConfiguration -> Either T.Text Config
 getConfigFromNotification (NotificationMessage _ _ (DidChangeConfigurationParams p)) =
   case fromJSON p of
-    A.Success c -> Right c
-    A.Error err -> Left $ T.pack err
-
--- | Given an InitializeRequest message, this function returns the parsed
--- Config object if possible. Otherwise, it returns the default configuration
-getInitialConfig :: InitializeRequest -> Either T.Text Config
-getInitialConfig (RequestMessage _ _ _ InitializeParams{_initializationOptions = Nothing }) = Right def
-getInitialConfig (RequestMessage _ _ _ InitializeParams{_initializationOptions = Just opts}) =
-  case fromJSON opts of
     A.Success c -> Right c
     A.Error err -> Left $ T.pack err
 
@@ -52,7 +42,6 @@ data CheckParents
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
-
 
 -- | We (initially anyway) mirror the hie configuration, so that existing
 -- clients can simply switch executable and not have any nasty surprises.  There
