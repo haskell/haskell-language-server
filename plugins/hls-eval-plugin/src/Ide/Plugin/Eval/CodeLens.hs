@@ -309,8 +309,6 @@ evalCommand :: PluginCommand IdeState
 evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 
 -- | Specify the test section to execute
---
--- >>> 12
 data EvalParams = EvalParams
     { sections :: [Section]
     , module_ :: !TextDocumentIdentifier
@@ -423,26 +421,6 @@ runEvalCmd lsp st EvalParams{..} =
             withIndefiniteProgress lsp "Evaluating" Cancellable $
                 response' cmd
 
-{-
->>> import Language.Haskell.LSP.Types(applyTextEdit)
->>> aTest = Located 1 (Example (pure " 2 + 2") [])
->>> ending = Position 1 10
->>> mdl = "module Test where\n-- >>> 2+2"
-
-To avoid https://github.com/haskell/haskell-language-server/issues/1213, `addFinalReturn` adds, if necessary, a final empty line to the document before inserting the tests' results.
-
->>> let [e1,e2] = addFinalReturn mdl [asEdit aTest Line () ["4"]] in applyTextEdit e2 (applyTextEdit e1 mdl)
-"module Test where\n-- >>> 2+2\n4\n"
-
->>> applyTextEdit (head $ addFinalReturn mdl [asEdit aTest ["4"]]) mdl
-"module Test where\n-- >>> 2+2\n"
-
->>> addFinalReturn mdl [asEdit aTest ["4"]]
-[TextEdit {_range = Range {_start = Position {_line = 1, _character = 10}, _end = Position {_line = 1, _character = 10}}, _newText = "\n"},TextEdit {_range = Range {_start = Position {_line = 2, _character = 0}, _end = Position {_line = 2, _character = 0}}, _newText = "4\n"}]
-
->>> asEdit aTest ["4"]
-TextEdit {_range = Range {_start = Position {_line = 2, _character = 0}, _end = Position {_line = 2, _character = 0}}, _newText = "4\n"}
--}
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
 addFinalReturn mdlText edits
     | not (null edits) && not (T.null mdlText) && T.last mdlText /= '\n' =
