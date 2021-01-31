@@ -286,8 +286,8 @@ snippetTests = testGroup "snippets" [
         liftIO $ do
             item ^. label @?= "filter"
             item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "filter ${1:a -> Bool} ${2:[a]}"
+            item ^. insertTextFormat @?= Just PlainText
+            item ^. insertText @?= Nothing
 
     , testCase "work for infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
@@ -300,8 +300,8 @@ snippetTests = testGroup "snippets" [
         liftIO $ do
             item ^. label @?= "filter"
             item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "filter ${1:a -> Bool} ${2:[a]}"
+            item ^. insertTextFormat @?= Just PlainText
+            item ^. insertText @?= Nothing
 
     , testCase "work for qualified infix functions" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
@@ -314,8 +314,8 @@ snippetTests = testGroup "snippets" [
         liftIO $ do
             item ^. label @?= "intersperse"
             item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "intersperse ${1:a} ${2:[a]}"
+            item ^. insertTextFormat @?= Just PlainText
+            item ^. insertText @?= Nothing
 
     , testCase "work for qualified infix functions in backticks" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
@@ -328,8 +328,8 @@ snippetTests = testGroup "snippets" [
         liftIO $ do
             item ^. label @?= "intersperse"
             item ^. kind @?= Just CiFunction
-            item ^. insertTextFormat @?= Just Snippet
-            item ^. insertText @?= Just "intersperse ${1:a} ${2:[a]}"
+            item ^. insertTextFormat @?= Just PlainText
+            item ^. insertText @?= Nothing
 
     , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"

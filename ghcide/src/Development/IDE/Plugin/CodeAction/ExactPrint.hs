@@ -6,6 +6,7 @@
 module Development.IDE.Plugin.CodeAction.ExactPrint
   ( Rewrite (..),
     rewriteToEdit,
+    rewriteToWEdit,
     transferAnn,
 
     -- * Utilities
@@ -40,6 +41,8 @@ import Retrie.GHC (rdrNameOcc, unpackFS, mkRealSrcSpan, realSrcSpanEnd)
 import Development.IDE.Spans.Common
 import Development.IDE.GHC.Error
 import Safe (lastMay)
+import Data.Generics (listify)
+import GHC.Exts (IsList (fromList))
 
 ------------------------------------------------------------------------------
 
@@ -56,7 +59,7 @@ data Rewrite where
 
 ------------------------------------------------------------------------------
 
--- | Convert a 'Rewrite' into a 'WorkspaceEdit'.
+-- | Convert a 'Rewrite' into a list of '[TextEdit]'.
 rewriteToEdit ::
   DynFlags ->
   Anns ->
@@ -70,6 +73,16 @@ rewriteToEdit dflags anns (Rewrite dst f) = do
                     T.pack $ exactPrint ast anns
                 ]
   pure editMap
+
+-- | Convert a 'Rewrite' into a 'WorkspaceEdit'
+rewriteToWEdit :: DynFlags -> Uri -> Anns -> Rewrite -> Either String WorkspaceEdit
+rewriteToWEdit dflags uri anns r = do
+    edits <- rewriteToEdit dflags anns r
+    return $
+        WorkspaceEdit
+            { _changes = Just (fromList [(uri, List edits)])
+            , _documentChanges = Nothing
+            }
 
 ------------------------------------------------------------------------------
 
@@ -200,17 +213,25 @@ extendImportTopLevel df idnetifier (L l it@ImportDecl {..})
     src <- uniqueSrcSpanT
     top <- uniqueSrcSpanT
     rdr <- liftParseAST df idnetifier
+
+    let alreadyImported =
+            showNameWithoutUniques (occName (unLoc rdr)) `elem`
+            map (showNameWithoutUniques @OccName) (listify (const True) lies)
+    when alreadyImported $
+        lift (Left $ idnetifier <> " already imported")
+
     let lie = L src $ IEName rdr
         x = L top $ IEVar noExtField lie
-    when hasSibling $
-      addTrailingCommaT (last lies)
-    addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
-    addSimpleAnnT rdr dp00 $ unqalDP $ hasParen idnetifier
-    -- Parens are attachted to `lies`, so if `lies` was empty previously,
-    -- we need change the ann key from `[]` to `:` to keep parens and other anns.
-    unless hasSibling $
-      transferAnn (L l' lies) (L l' [x]) id
-    return $ L l it {ideclHiding = Just (hide, L l' $ lies ++ [x])}
+    if x `elem` lies then lift (Left $ idnetifier <> " already imported") else do
+        when hasSibling $
+            addTrailingCommaT (last lies)
+        addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
+        addSimpleAnnT rdr dp00 $ unqalDP $ hasParen idnetifier
+        -- Parens are attachted to `lies`, so if `lies` was empty previously,
+        -- we need change the ann key from `[]` to `:` to keep parens and other anns.
+        unless hasSibling $
+            transferAnn (L l' lies) (L l' [x]) id
+        return $ L l it {ideclHiding = Just (hide, L l' $ lies ++ [x])}
 extendImportTopLevel _ _ _ = lift $ Left "Unable to extend the import list"
 
 -- | Add an identifier with its parent to import list
@@ -244,6 +265,13 @@ extendImportViaParent df parent child (L l it@ImportDecl {..})
         do
           srcChild <- uniqueSrcSpanT
           childRdr <- liftParseAST df child
+
+          let alreadyImported =
+                showNameWithoutUniques(occName (unLoc childRdr)) `elem`
+                map (showNameWithoutUniques @OccName) (listify (const True) lies')
+          when alreadyImported $
+            lift (Left $ child <> " already included in " <> parent <> " imports")
+
           when hasSibling $
             addTrailingCommaT (last lies')
           let childLIE = L srcChild $ IEName childRdr

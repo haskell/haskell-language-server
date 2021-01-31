@@ -4,7 +4,6 @@
 
 module Development.IDE.Plugin.Completions
     ( descriptor
-    , ProduceCompletions(..)
     , LocalCompletions(..)
     , NonLocalCompletions(..)
     ) where
@@ -12,6 +11,12 @@ import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Core as LSP
 import qualified Language.Haskell.LSP.VFS as VFS
 
+import Control.Monad
+import Control.Monad.Trans.Maybe
+import Data.Aeson
+import Data.List (find)
+import Data.Maybe
+import qualified Data.Text as T
 import Development.Shake.Classes
 import Development.Shake
 import GHC.Generics
@@ -22,36 +27,33 @@ import Development.IDE.Types.Location
 import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat
-
+import Development.IDE.GHC.ExactPrint (Annotated (annsA), GetAnnotatedParsedSource (GetAnnotatedParsedSource))
 import Development.IDE.GHC.Util
-import TcRnDriver (tcRnImportDecls)
-import Data.Maybe
+import Development.IDE.Plugin.CodeAction.ExactPrint
+import Development.IDE.Plugin.Completions.Types
 import Ide.Plugin.Config (Config (completionSnippetsOn))
 import Ide.PluginUtils (getClientConfig)
 import Ide.Types
-
+import TcRnDriver (tcRnImportDecls)
 #if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
 #endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginRules = produceCompletions
-  , pluginCompletionProvider = Just getCompletionsLSP
-  }
+    { pluginRules = produceCompletions,
+      pluginCompletionProvider = Just (getCompletionsLSP plId),
+      pluginCommands = [extendImportCommand]
+    }
 
 produceCompletions :: Rules ()
 produceCompletions = do
-    define $ \ProduceCompletions file -> do
-        local <- useWithStale LocalCompletions file
-        nonLocal <- useWithStale NonLocalCompletions file
-        let extract = fmap fst
-        return ([], extract local <> extract nonLocal)
     define $ \LocalCompletions file -> do
+        let uri = fromNormalizedUri $ normalizedFilePathToUri file
         pm <- useWithStale GetParsedModule file
         case pm of
             Just (pm, _) -> do
-                let cdata = localCompletionsForParsedModule pm
+                let cdata = localCompletionsForParsedModule uri pm
                 return ([], Just cdata)
             _ -> return ([], Nothing)
     define $ \NonLocalCompletions file -> do
@@ -77,7 +79,8 @@ produceCompletions = do
               res <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> imps)
               case res of
                   (_, Just rdrEnv) -> do
-                      cdata <- liftIO $ cacheDataProducer env (ms_mod ms) rdrEnv imps parsedDeps
+                      let uri = fromNormalizedUri $ normalizedFilePathToUri file
+                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) rdrEnv imps parsedDeps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
@@ -94,15 +97,8 @@ dropListFromImportDecl iDecl = let
     in f <$> iDecl
 
 -- | Produce completions info for a file
-type instance RuleResult ProduceCompletions = CachedCompletions
 type instance RuleResult LocalCompletions = CachedCompletions
 type instance RuleResult NonLocalCompletions = CachedCompletions
-
-data ProduceCompletions = ProduceCompletions
-    deriving (Eq, Show, Typeable, Generic)
-instance Hashable ProduceCompletions
-instance NFData   ProduceCompletions
-instance Binary   ProduceCompletions
 
 data LocalCompletions = LocalCompletions
     deriving (Eq, Show, Typeable, Generic)
@@ -115,13 +111,15 @@ data NonLocalCompletions = NonLocalCompletions
 instance Hashable NonLocalCompletions
 instance NFData   NonLocalCompletions
 instance Binary   NonLocalCompletions
+
 -- | Generate code actions.
 getCompletionsLSP
-    :: LSP.LspFuncs Config
+    :: PluginId
+    -> LSP.LspFuncs Config
     -> IdeState
     -> CompletionParams
     -> IO (Either ResponseError CompletionResponseResult)
-getCompletionsLSP lsp ide
+getCompletionsLSP plId lsp ide
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
                   ,_context=completionContext} = do
@@ -131,12 +129,13 @@ getCompletionsLSP lsp ide
         let npath = toNormalizedFilePath' path
         (ideOpts, compls) <- runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
-            compls <- useWithStaleFast ProduceCompletions npath
+            localCompls <- useWithStaleFast LocalCompletions npath
+            nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
             pm <- useWithStaleFast GetParsedModule npath
             binds <- fromMaybe (mempty, zeroMapping) <$> useWithStaleFast GetBindings npath
-            pure (opts, fmap (,pm,binds) compls )
+            pure (opts, fmap (,pm,binds) ((fst <$> localCompls) <> (fst <$> nonLocalCompls)))
         case compls of
-          Just ((cci', _), parsedMod, bindMap) -> do
+          Just (cci', parsedMod, bindMap) -> do
             pfix <- VFS.getCompletionPrefix position cnts
             case (pfix, completionContext) of
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
@@ -145,8 +144,57 @@ getCompletionsLSP lsp ide
                 let clientCaps = clientCapabilities $ shakeExtras ide
                 config <- getClientConfig lsp
                 let snippets = WithSnippets . completionSnippetsOn $ config
-                allCompletions <- getCompletions ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
+                allCompletions <- getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
                 pure $ Completions (List allCompletions)
               _ -> return (Completions $ List [])
           _ -> return (Completions $ List [])
       _ -> return (Completions $ List [])
+
+----------------------------------------------------------------------------------------------------
+
+extendImportCommand :: PluginCommand IdeState
+extendImportCommand =
+  PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
+
+extendImportHandler :: CommandFunction IdeState ExtendImport
+extendImportHandler _lsp ideState edit = do
+  res <- runMaybeT $ extendImportHandler' ideState edit
+  return (Right Null, res)
+
+extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (ServerMethod, ApplyWorkspaceEditParams)
+extendImportHandler' ideState ExtendImport {..}
+  | Just fp <- uriToFilePath doc,
+    nfp <- toNormalizedFilePath' fp =
+    do
+      (ms, ps, imps) <- MaybeT $
+        runAction "extend import" ideState $
+          runMaybeT $ do
+            -- We want accurate edits, so do not use stale data here
+            (ms, imps) <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+            ps <- MaybeT $ use GetAnnotatedParsedSource nfp
+            return (ms, ps, imps)
+      let df = ms_hspp_opts ms
+          wantedModule = mkModuleName (T.unpack importName)
+          wantedQual = mkModuleName . T.unpack <$> importQual
+      imp <- liftMaybe $ find (isWantedModule wantedModule wantedQual) imps
+      wedit <-
+        liftEither $
+          rewriteToWEdit df doc (annsA ps) $
+            extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
+      return (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit)
+  | otherwise =
+    mzero
+
+isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl pass) -> Bool
+isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
+    not (isQualifiedImport it) && unLoc ideclName == wantedModule
+isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
+    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc <$> ideclAs) == Just qual)
+isWantedModule _ _ _ = False
+
+liftMaybe :: Monad m => Maybe a -> MaybeT m a
+liftMaybe a = MaybeT $ pure a
+
+liftEither :: Monad m => Either e a -> MaybeT m a
+liftEither (Left _) = mzero
+liftEither (Right x) = return x
