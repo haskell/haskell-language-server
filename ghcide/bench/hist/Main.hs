@@ -16,7 +16,7 @@
     ├─ <example>
     │   ├── results.csv                           - aggregated results for all the versions
     │   └── <git-reference>
-    │       ├── <experiment>.benchmark-gcStats    - RTS -s output
+    │       ├── <experiment>.gcStats.log          - RTS -s output
     │       ├── <experiment>.csv                  - stats for the experiment
     │       ├── <experiment>.svg                  - Graph of bytes over elapsed time
     │       ├── <experiment>.diff.svg             - idem, including the previous version
