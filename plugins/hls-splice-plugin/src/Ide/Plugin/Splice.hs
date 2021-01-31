@@ -47,12 +47,11 @@ import Ide.Plugin.Splice.Types
 import Ide.PluginUtils (mkLspCommand, responseError)
 import Development.IDE.GHC.ExactPrint
 import Ide.Types
-import Language.Haskell.GHC.ExactPrint (TransformT, setPrecedingLines, uniqueSrcSpanT)
+import Language.Haskell.GHC.ExactPrint (setPrecedingLines, uniqueSrcSpanT)
 import Language.Haskell.LSP.Core
 import Language.Haskell.LSP.Messages
 import Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types.Lens as J
-import Retrie.ExactPrint (Annotated)
 import RnSplice
 import TcRnMonad
 import Data.Foldable (Foldable(foldl'))
@@ -392,10 +391,7 @@ codeAction _ state plId docId ran _ =
             ParsedModule {..} <-
                 MaybeT . runAction "splice.codeAction.GitHieAst" state $
                     use GetParsedModule fp
-            let spn =
-                    rangeToRealSrcSpan ran $
-                        fromString $
-                            fromNormalizedFilePath fp
+            let spn = rangeToRealSrcSpan fp ran
                 mouterSplice = something' (detectSplice spn) pm_parsed_source
             mcmds <- forM mouterSplice $
                 \(spliceSpan, spliceContext) ->
@@ -459,15 +455,3 @@ something' f =  go
             case f x of
               Stop -> Nothing
               resl -> foldl' (flip (<|>)) (fromSearchResult resl) (gmapQ go x)
-
-posToRealSrcLoc :: Position -> FastString -> RealSrcLoc
-posToRealSrcLoc pos fs = mkRealSrcLoc fs (line + 1) (col + 1)
-    where
-        line = _line pos
-        col = _character pos
-
-rangeToRealSrcSpan :: Range -> FastString -> RealSrcSpan
-rangeToRealSrcSpan ran fs =
-    mkRealSrcSpan
-        (posToRealSrcLoc (_start ran) fs)
-        (posToRealSrcLoc (_end ran) fs)
