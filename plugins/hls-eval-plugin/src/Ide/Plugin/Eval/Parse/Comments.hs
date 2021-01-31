@@ -50,7 +50,7 @@ import Text.Megaparsec.Char
 import Data.Functor ((<&>))
 import qualified Data.Text as T
 
-{- |
+{-
 We build parsers combining the following three kinds of them:
 
     *   Line parser - paring a single line into an input,
@@ -65,13 +65,12 @@ We build parsers combining the following three kinds of them:
     *   Block comment parser: Parsing entire block comment into sections.
         Input must be surrounded by @{\-@ and @-\}@.
 -}
-type Parser inputs = Parsec Void inputs
 
 -- | Line parser
 type LineParser a = forall m. Monad m => ParsecT Void String m a
 
 -- | Line comment group parser
-type LineGroupParser = Parser [(Range, RawLineComment)]
+type LineGroupParser = Parsec Void [(Range, RawLineComment)]
 
 data BlockEnv = BlockEnv
     { isLhs :: Bool
@@ -457,7 +456,7 @@ Nothing
 parseLine ::
     (Ord (f RawLineComment), Traversable f) =>
     LineParser a ->
-    Parser [f RawLineComment] (f a)
+    Parsec Void [f RawLineComment] (f a)
 parseLine p =
     P.token
         (mapM $ parseMaybe (lineCommentHeadP *> p) . getRawLineComment)
