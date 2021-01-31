@@ -832,19 +832,7 @@ occursUnqualified symbol ImportDecl{..}
 occursUnqualified _ _ = False
 
 symbolOccursIn :: T.Text -> IE GhcPs -> Bool
-symbolOccursIn symb = \case
-   IEVar _ (L _ n) -> unqualIEWrapName n == symb
-   IEThingAbs _ (L _ n) -> unqualIEWrapName n == symb
-   IEThingAll _ (L _ n) -> unqualIEWrapName n == symb
-   IEThingWith _ (L _ n) _ ents flds ->
-    unqualIEWrapName n == symb
-    || any ((== symb) . unqualIEWrapName . unLoc) ents
-    || any ((== symb) . T.pack . unpackFS . flLabel . unLoc) flds
-   IEModuleContents{} -> False
-   IEGroup{} -> False
-   IEDoc{} -> False
-   IEDocNamed{} -> False
-   XIE{} -> False
+symbolOccursIn symb = any ((== symb). showNameWithoutUniques) . ieNames
 
 targetModuleName :: ModuleTarget -> ModuleName
 targetModuleName ImplicitPrelude{} = mkModuleName "Prelude"
