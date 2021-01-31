@@ -134,6 +134,16 @@ experiments =
             not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
               forM identifierP $ \p ->
                 getCodeActions doc (Range p p))
+        ),
+      ---------------------------------------------------------------------------------------
+      bench
+        "hover after cradle edit"
+        (\docs -> do
+            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
+            liftIO $ appendFile hieYaml "##\n"
+            sendNotification WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
+            flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         )
     ]
 

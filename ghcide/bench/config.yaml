@@ -35,6 +35,7 @@ experiments:
     - "code actions"
     - "code actions after edit"
     - "documentSymbols after edit"
+    - "hover after cradle edit"
 
 # An ordered list of versions to analyze
 versions:
