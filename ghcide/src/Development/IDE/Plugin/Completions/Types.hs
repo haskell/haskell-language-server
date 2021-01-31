@@ -25,7 +25,8 @@ data ExtendImport = ExtendImport
   { doc :: !Uri,
     newThing :: !T.Text,
     thingParent :: !(Maybe T.Text),
-    importName :: !T.Text
+    importName :: !T.Text,
+    importQual :: !(Maybe T.Text)
   }
   deriving (Eq, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)

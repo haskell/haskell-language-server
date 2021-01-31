@@ -229,6 +229,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
           { doc,
             thingParent,
             importName = showModName $ unLoc $ ideclName $ unLoc x,
+            importQual = getImportQual x,
             newThing = showNameWithoutUniques origName
           }
 
@@ -742,6 +743,7 @@ mkRecordSnippetCompItem uri parent ctxStr compl mn docs imp = r
                 { doc = uri,
                   thingParent = parent,
                   importName = showModName $ unLoc $ ideclName $ unLoc x,
+                  importQual = getImportQual x,
                   newThing = ctxStr
                 }
           }
@@ -751,3 +753,8 @@ mkRecordSnippetCompItem uri parent ctxStr compl mn docs imp = r
       snippet = T.intercalate (T.pack ", ") snippet_parts
       buildSnippet = ctxStr <> " {" <> snippet <> "}"
       importedFrom = Right mn
+
+getImportQual :: LImportDecl GhcPs -> Maybe T.Text
+getImportQual (L _ imp)
+    | isQualifiedImport imp = Just $ T.pack $ moduleNameString $ maybe (unLoc $ ideclName imp) unLoc (ideclAs imp)
+    | otherwise = Nothing

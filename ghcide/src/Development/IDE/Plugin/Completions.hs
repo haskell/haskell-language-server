@@ -175,7 +175,8 @@ extendImportHandler' ideState ExtendImport {..}
             return (ms, ps, imps)
       let df = ms_hspp_opts ms
           wantedModule = mkModuleName (T.unpack importName)
-      imp <- liftMaybe $ find (isWantedModule wantedModule) imps
+          wantedQual = mkModuleName . T.unpack <$> importQual
+      imp <- liftMaybe $ find (isWantedModule wantedModule wantedQual) imps
       wedit <-
         liftEither $
           rewriteToWEdit df doc (annsA ps) $
@@ -184,10 +185,12 @@ extendImportHandler' ideState ExtendImport {..}
   | otherwise =
     mzero
 
-isWantedModule :: ModuleName -> GenLocated l (ImportDecl pass) -> Bool
-isWantedModule wantedModule (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
+isWantedModule :: ModuleName -> Maybe ModuleName -> GenLocated l (ImportDecl pass) -> Bool
+isWantedModule wantedModule Nothing (L _ it@ImportDecl{ideclName, ideclHiding = Just (False, _)}) =
     not (isQualifiedImport it) && unLoc ideclName == wantedModule
-isWantedModule _ _ = False
+isWantedModule wantedModule (Just qual) (L _ ImportDecl{ideclAs, ideclName, ideclHiding = Just (False, _)}) =
+    unLoc ideclName == wantedModule && (wantedModule == qual || (unLoc <$> ideclAs) == Just qual)
+isWantedModule _ _ _ = False
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a

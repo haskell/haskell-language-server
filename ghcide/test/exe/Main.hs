@@ -3607,19 +3607,45 @@ nonLocalCompletionTests =
       , completionCommandTest
         "show imports not in list - names with _"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import qualified Control.Monad as M (msum)", "f = M.mapM_"]
+        "module A where", "import Control.Monad as M (msum)", "f = M.mapM_"]
         (Position 3 11)
         "mapM_"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import qualified Control.Monad as M (msum, mapM_)", "f = M.mapM_"]
+        "module A where", "import Control.Monad as M (msum, mapM_)", "f = M.mapM_"]
       , completionCommandTest
         "show imports not in list - initial empty list"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import qualified Control.Monad as M ()", "f = M.joi"]
+        "module A where", "import Control.Monad as M ()", "f = M.joi"]
         (Position 3 10)
         "join"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import qualified Control.Monad as M (join)", "f = M.joi"]
+        "module A where", "import Control.Monad as M (join)", "f = M.joi"]
+      , testGroup "qualified imports"
+        [ completionCommandTest
+            "single"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad ()", "f = Control.Monad.joi"]
+            (Position 3 22)
+            "join"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad (join)", "f = Control.Monad.joi"]
+        , completionCommandTest
+            "as"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M ()", "f = M.joi"]
+            (Position 3 10)
+            "join"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M (join)", "f = M.joi"]
+        , completionCommandTest
+            "multiple"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M ()", "import Control.Monad as N ()", "f = N.joi"]
+            (Position 4 10)
+            "join"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M ()", "import Control.Monad as N (join)", "f = N.joi"]
+        ]
       , testGroup "Data constructor"
         [ completionCommandTest
             "not imported"
