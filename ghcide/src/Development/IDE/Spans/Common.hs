@@ -56,9 +56,7 @@ showNameWithoutUniques = T.pack . prettyprint
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 unqualIEWrapName :: IEWrappedName RdrName -> T.Text
-unqualIEWrapName (IEName (L _ nam)) = showNameWithoutUniques $ rdrNameOcc nam
-unqualIEWrapName (IEPattern (L _ nam)) = showNameWithoutUniques $ rdrNameOcc nam
-unqualIEWrapName (IEType (L _ nam)) = showNameWithoutUniques $ rdrNameOcc nam
+unqualIEWrapName = showNameWithoutUniques . rdrNameOcc . ieWrappedName
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
 safeTyThingType :: TyThing -> Maybe Type
