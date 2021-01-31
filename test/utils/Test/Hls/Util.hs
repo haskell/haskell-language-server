@@ -13,14 +13,19 @@ module Test.Hls.Util
     , fromCommand
     , getHspecFormattedConfig
     , ghcVersion, GhcVersion(..)
+    , hostOS, OS(..)
+    , matchesCurrentEnv, EnvSpec(..)
     , hlsCommand
     , hlsCommandExamplePlugin
     , hlsCommandVomit
     , ignoreForGhcVersions
+    , ignoreInEnv
     , inspectCodeAction
     , inspectCommand
     , inspectDiagnostic
+    , knownBrokenOnWindows
     , knownBrokenForGhcVersions
+    , knownBrokenInEnv
     , logFilePath
     , setupBuildToolFiles
     , SymbolLocation
@@ -61,6 +66,7 @@ import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecaus
 import           Test.Tasty.HUnit (Assertion, assertFailure, (@?=))
 import           Text.Blaze.Renderer.String (renderMarkup)
 import           Text.Blaze.Internal hiding (null)
+import System.Info.Extra (isWindows, isMac)
 
 codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
@@ -116,9 +122,42 @@ ghcVersion = GHC86
 ghcVersion = GHC84
 #endif
 
+data EnvSpec = HostOS OS | GhcVer GhcVersion
+    deriving (Show, Eq)
+
+matchesCurrentEnv :: EnvSpec -> Bool
+matchesCurrentEnv (HostOS os) = hostOS == os
+matchesCurrentEnv (GhcVer ver) = ghcVersion == ver
+
+data OS = Windows | MacOS | Linux
+    deriving (Show, Eq)
+
+hostOS :: OS
+hostOS
+    | isWindows = Windows
+    | isMac = MacOS
+    | otherwise = Linux
+
+-- | Mark as broken if /any/ of environmental spec mathces the current environment.
+knownBrokenInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
+knownBrokenInEnv envSpecs reason
+    | any matchesCurrentEnv envSpecs = expectFailBecause reason
+    | otherwise = id
+
+knownBrokenOnWindows :: String -> TestTree -> TestTree
+knownBrokenOnWindows reason
+    | isWindows = expectFailBecause reason
+    | otherwise = id
+
 knownBrokenForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 knownBrokenForGhcVersions vers reason
     | ghcVersion `elem` vers =  expectFailBecause reason
+    | otherwise = id
+
+-- | IgnroeTest if /any/ of environmental spec mathces the current environment.
+ignoreInEnv :: [EnvSpec] -> String -> TestTree -> TestTree
+ignoreInEnv envSpecs reason
+    | any matchesCurrentEnv envSpecs = ignoreTestBecause reason
     | otherwise = id
 
 ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree

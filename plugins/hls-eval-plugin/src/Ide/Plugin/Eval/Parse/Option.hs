@@ -6,13 +6,10 @@ module Ide.Plugin.Eval.Parse.Option (
 ) where
 
 import Control.Monad.Combinators (many)
-import Ide.Plugin.Eval.Parse.Parser (
-    Parser,
-    letterChar,
-    runParser,
-    space,
-    string,
- )
+import Text.Megaparsec.Char
+import Text.Megaparsec
+import Data.Void (Void)
+import Control.Arrow (left)
 
 {- |
 >>> langOptions ":set   -XBinaryLiterals  -XOverloadedStrings "
@@ -24,10 +21,13 @@ Right []
 >>> langOptions ""
 Left "No match"
 -}
-langOptions :: [Char] -> Either String [[Char]]
-langOptions = runParser (many space *> languageOpts <* many space)
+langOptions :: String -> Either String [String]
+langOptions =
+  left errorBundlePretty
+  . parse (space *> languageOpts <* eof) ""
 
--- >>> runParser languageOpts ":set -XBinaryLiterals -XOverloadedStrings"
--- Right ["BinaryLiterals","OverloadedStrings"]
-languageOpts :: Parser Char [[Char]]
-languageOpts = string ":set" *> many (many space *> string "-X" *> many letterChar)
+-- >>> parseMaybe languageOpts ":set -XBinaryLiterals -XOverloadedStrings"
+-- Just ["BinaryLiterals","OverloadedStrings"]
+languageOpts :: Parsec Void String [String]
+languageOpts = string ":set" *> space1
+  *> many (string "-X" *> many letterChar <* space)

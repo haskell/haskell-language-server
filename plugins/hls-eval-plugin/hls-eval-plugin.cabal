@@ -31,9 +31,7 @@ library
     Ide.Plugin.Eval.CodeLens
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Option
-    Ide.Plugin.Eval.Parse.Parser
-    Ide.Plugin.Eval.Parse.Section
-    Ide.Plugin.Eval.Parse.Token
+    Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Types
     Ide.Plugin.Eval.Util
 
@@ -44,6 +42,7 @@ library
     , deepseq
     , Diff
     , directory
+    , dlist
     , extra
     , filepath
     , ghc
@@ -54,6 +53,8 @@ library
     , haskell-lsp
     , haskell-lsp-types
     , hls-plugin-api
+    , lens
+    , megaparsec >= 0.9
     , parser-combinators
     , pretty-simple
     , QuickCheck
@@ -63,6 +64,7 @@ library
     , text
     , time
     , transformers
+    , mtl
     , unordered-containers
 
   ghc-options: -Wall -Wno-name-shadowing

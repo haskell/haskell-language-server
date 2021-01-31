@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DuplicateRecordFields #-}
@@ -25,258 +26,255 @@ module Ide.Plugin.Eval.CodeLens (
 import Control.Applicative (Alternative ((<|>)))
 import Control.Arrow (second)
 import qualified Control.Exception as E
-import Control.Monad (
-    void,
-    when,
- )
+import Control.Monad
+    ( void,
+      when,
+    )
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Trans.Except (
-    ExceptT (..),
-    runExceptT,
- )
-import Data.Aeson (
-    FromJSON,
-    ToJSON,
-    toJSON,
- )
+import Control.Monad.Trans.Except
+    ( ExceptT (..),
+    )
+import Data.Aeson
+    ( FromJSON,
+      ToJSON,
+      toJSON,
+    )
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import qualified Data.HashMap.Strict as Map
-import Data.List (
-    dropWhileEnd,
-    find,
- )
-import Data.Maybe (
-    catMaybes,
-    fromMaybe,
- )
+import qualified Data.HashMap.Strict as HashMap
+import Data.List
+    (dropWhileEnd,
+      find
+    )
+import qualified Data.Map.Strict as Map
+import Data.Maybe
+    ( catMaybes,
+      fromMaybe,
+    )
 import Data.String (IsString)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8)
 import Data.Time (getCurrentTime)
 import Data.Typeable (Typeable)
-import Development.IDE (
-    GetModSummary (..),
-    GhcSession (..),
-    HscEnvEq (envImportPaths, hscEnv),
-    IdeState,
-    List (List),
-    NormalizedFilePath,
-    Range (Range),
-    Uri,
-    evalGhcEnv,
-    hscEnvWithImportPaths,
-    runAction,
-    stringBufferToByteString,
-    textToStringBuffer,
-    toNormalizedFilePath',
-    toNormalizedUri,
-    uriToFilePath',
-    use_,
- )
-import Development.IDE.Core.Preprocessor (
-    preprocessor,
- )
-import Development.IDE.GHC.Compat (HscEnv)
+import Development.IDE
+    (realSrcSpanToRange,  GetModSummary (..),
+      GetParsedModuleWithComments (..),
+      GhcSession (..),
+      HscEnvEq (envImportPaths),
+      IdeState,
+      List (List),
+      NormalizedFilePath,
+      Range (Range),
+      Uri,
+      evalGhcEnv,
+      fromNormalizedFilePath,
+      hscEnvWithImportPaths,
+      runAction,
+      textToStringBuffer,
+      toNormalizedFilePath',
+      toNormalizedUri,
+      uriToFilePath',
+      useWithStale_,
+      use_,
+    )
+import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
 import DynamicLoading (initializePlugins)
-import GHC (
-    ExecOptions (
-        execLineNumber,
-        execSourceFile
-    ),
-    ExecResult (..),
-    GeneralFlag (..),
-    Ghc,
-    GhcLink (LinkInMemory),
-    GhcMode (CompManager),
-    GhcMonad (getSession),
-    HscTarget (HscInterpreted),
-    LoadHowMuch (LoadAllTargets),
-    ModSummary (ms_hspp_opts),
-    Module (moduleName),
-    SuccessFlag (Failed, Succeeded),
-    TcRnExprMode (..),
-    execOptions,
-    execStmt,
-    exprType,
-    getInteractiveDynFlags,
-    getSessionDynFlags,
-    isImport,
-    isStmt,
-    load,
-    runDecls,
-    setContext,
-    setInteractiveDynFlags,
-    setLogAction,
-    setSessionDynFlags,
-    setTargets,
-    typeKind,
- )
+import FastString (unpackFS)
+import GHC
+    (ExecOptions
+        ( execLineNumber,
+          execSourceFile
+        ),
+      ExecResult (..),
+      GeneralFlag (..),
+      Ghc,
+      GhcLink (LinkInMemory),
+      GhcMode (CompManager),
+      GhcMonad (getSession),
+      HscTarget (HscInterpreted),
+      LoadHowMuch (LoadAllTargets),
+      ModSummary (ms_hspp_opts),
+      Module (moduleName),
+      SuccessFlag (Failed, Succeeded),
+      TcRnExprMode (..),
+      execOptions,
+      execStmt,
+      exprType,
+      getInteractiveDynFlags,
+      getSessionDynFlags,
+      isImport,
+      isStmt,
+      load,
+      runDecls,
+      setContext,
+      setInteractiveDynFlags,
+      setLogAction,
+      setSessionDynFlags,
+      setTargets,
+      typeKind,
+    )
 import GHC.Generics (Generic)
 import qualified GHC.LanguageExtensions.Type as LangExt
-import GhcPlugins (
-    DynFlags (..),
-    defaultLogActionHPutStrDoc,
-    gopt_set,
-    gopt_unset,
-    interpWays,
-    targetPlatform,
-    updateWays,
-    wayGeneralFlags,
-    wayUnsetGeneralFlags,
-    xopt_set,
- )
-import HscTypes (
-    InteractiveImport (IIModule),
-    ModSummary (ms_mod),
-    Target (Target),
-    TargetId (TargetFile),
- )
-import Ide.Plugin.Eval.Code (
-    Statement,
-    asStatements,
-    evalExpr,
-    evalExtensions,
-    evalSetup,
-    propSetup,
-    resultRange,
-    testCheck,
-    testRanges,
- )
-import Ide.Plugin.Eval.GHC (
-    addExtension,
-    addImport,
-    addPackages,
-    hasPackage,
-    isExpr,
-    showDynFlags,
- )
+import GhcPlugins
+    ( DynFlags (..),
+      defaultLogActionHPutStrDoc,
+      gopt_set,
+      gopt_unset,
+      interpWays,
+      targetPlatform,
+      updateWays,
+      wayGeneralFlags,
+      wayUnsetGeneralFlags,
+      xopt_set,
+    )
+import HscTypes
+    ( InteractiveImport (IIModule),
+      ModSummary (ms_mod),
+      Target (Target),
+      TargetId (TargetFile),
+    )
+import Ide.Plugin.Eval.Code
+    ( Statement,
+      asStatements,
+      evalExpr,
+      evalExtensions,
+      evalSetup,
+      propSetup,
+      resultRange,
+      testCheck,
+      testRanges,
+    )
+import Ide.Plugin.Eval.GHC
+    ( addExtension,
+      addImport,
+      addPackages,
+      hasPackage,
+      isExpr,
+      showDynFlags,
+    )
+import Ide.Plugin.Eval.Parse.Comments (commentsToSections)
 import Ide.Plugin.Eval.Parse.Option (langOptions)
-import Ide.Plugin.Eval.Parse.Section (
-    Section (
-        sectionFormat,
-        sectionTests
-    ),
-    allSections,
- )
-import Ide.Plugin.Eval.Parse.Token (tokensFrom)
-import Ide.Plugin.Eval.Types (
-    Format (SingleLine),
-    Loc,
-    Located (Located),
-    Test,
-    hasTests,
-    isProperty,
-    splitSections,
-    unLoc,
- )
-import Ide.Plugin.Eval.Util (
-    asS,
-    gStrictTry,
-    handleMaybe,
-    handleMaybeM,
-    isLiterate,
-    logWith,
-    response,
-    response',
-    timed,
- )
+import Ide.Plugin.Eval.Types
+import Ide.Plugin.Eval.Util
+    ( asS,
+      gStrictTry,
+      handleMaybe,
+      handleMaybeM,
+      isLiterate,
+      logWith,
+      response,
+      response',
+      timed,
+    )
 import Ide.PluginUtils (mkLspCommand)
-import Ide.Types (
-    CodeLensProvider,
-    CommandFunction,
-    CommandId,
-    PluginCommand (PluginCommand),
- )
-import Language.Haskell.LSP.Core (
-    LspFuncs (
-        getVirtualFileFunc,
-        withIndefiniteProgress
-    ),
-    ProgressCancellable (
-        Cancellable
-    ),
- )
-import Language.Haskell.LSP.Types (
-    ApplyWorkspaceEditParams (
-        ApplyWorkspaceEditParams
-    ),
-    CodeLens (CodeLens),
-    CodeLensParams (
-        CodeLensParams,
-        _textDocument
-    ),
-    Command (_arguments, _title),
-    Position (..),
-    ServerMethod (
-        WorkspaceApplyEdit
-    ),
-    TextDocumentIdentifier (..),
-    TextEdit (TextEdit),
-    WorkspaceEdit (WorkspaceEdit),
- )
+import Ide.Types
+    ( CodeLensProvider,
+      CommandFunction,
+      CommandId,
+      PluginCommand (PluginCommand),
+    )
+import Language.Haskell.LSP.Core
+    ( LspFuncs
+        ( getVirtualFileFunc,
+          withIndefiniteProgress
+        ),
+      ProgressCancellable
+        ( Cancellable
+        ),
+    )
+import Language.Haskell.LSP.Types
+    ( ApplyWorkspaceEditParams
+        ( ApplyWorkspaceEditParams
+        ),
+      CodeLens (CodeLens),
+      CodeLensParams
+        ( CodeLensParams,
+          _textDocument
+        ),
+      Command (_arguments, _title),
+      Position (..),
+      ServerMethod
+        ( WorkspaceApplyEdit
+        ),
+      TextDocumentIdentifier (..),
+      TextEdit (TextEdit),
+      WorkspaceEdit (WorkspaceEdit),
+    )
 import Language.Haskell.LSP.VFS (virtualFileText)
-import Outputable (
-    nest,
-    ppr,
-    showSDoc,
-    text,
-    ($$),
-    (<+>),
- )
+import Outputable
+    ( nest,
+      ppr,
+      showSDoc,
+      text,
+      ($$),
+      (<+>),
+    )
 import System.FilePath (takeFileName)
 import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
 import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
+import Development.IDE.Core.PositionMapping (toCurrentRange)
+import qualified Data.DList as DL
+import Control.Lens ((^.))
+import Language.Haskell.LSP.Types.Lens (line, end)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
 codeLens :: CodeLensProvider IdeState
-codeLens lsp st plId CodeLensParams{_textDocument} =
+codeLens _lsp st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
             response $ do
                 let TextDocumentIdentifier uri = _textDocument
                 fp <- handleMaybe "uri" $ uriToFilePath' uri
+                let nfp = toNormalizedFilePath' fp
+                    isLHS = isLiterate fp
                 dbg "fp" fp
-                mdlText <- moduleText lsp uri
+                (ParsedModule{..}, posMap) <- liftIO $
+                    runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
+                let comments = foldMap
+                        ( foldMap $ \case
+                            L (RealSrcSpan real) bdy
+                                | unpackFS (srcSpanFile real) ==
+                                    fromNormalizedFilePath nfp
+                                , let ran0 = realSrcSpanToRange real
+                                , Just curRan <- toCurrentRange posMap ran0
+                                ->
 
-                {- Normalise CPP/LHS files/custom preprocessed files.
-                   Used to extract tests correctly from CPP and LHS (Bird-style).
-                -}
-                session :: HscEnvEq <-
-                    runGetSession st $ toNormalizedFilePath' fp
-
-                Right (ppContent, _dflags) <-
-                    perf "preprocessor" $
-                        liftIO $
-                            runExceptT $
-                                preprocessor (hscEnv session) fp (Just $ textToStringBuffer mdlText)
-                let text =
-                        cleanSource (isLiterate fp) . decodeUtf8 $
-                            stringBufferToByteString
-                                ppContent
-                -- dbg "PREPROCESSED CONTENT" text
+                                    -- since Haddock parsing is unset explicitly in 'getParsedModuleWithComments',
+                                    -- we can concentrate on these two
+                                    case bdy of
+                                        AnnLineComment cmt ->
+                                            mempty { lineComments = Map.singleton curRan (RawLineComment cmt) }
+                                        AnnBlockComment cmt ->
+                                            mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
+                                        _ -> mempty
+                            _ -> mempty
+                        )
+                        $ snd pm_annotations
+                dbg "excluded comments" $ show $  DL.toList $
+                    foldMap
+                    (foldMap $ \(L a b) ->
+                        case b of
+                            AnnLineComment{} -> mempty
+                            AnnBlockComment{} -> mempty
+                            _ -> DL.singleton (a, b)
+                    )
+                    $ snd pm_annotations
+                dbg "comments" $ show comments
 
                 -- Extract tests from source code
-                let Right (setups, nonSetups) =
-                        (splitSections . filter hasTests <$>)
-                            . allSections
-                            . tokensFrom
-                            . T.unpack
-                            $ text
-                let tests = testsBySection nonSetups
-
+                let Sections{..} = commentsToSections isLHS comments
+                    tests = testsBySection nonSetupSections
                 cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
                         [ CodeLens testRange (Just cmd') Nothing
                         | (section, test) <- tests
                         , let (testRange, resultRange) = testRanges test
-                              args = EvalParams (setups ++ [section]) _textDocument
+                              args = EvalParams (setupSections ++ [section]) _textDocument
                               cmd' =
                                 (cmd :: Command)
                                     { _arguments = Just (List [toJSON args])
@@ -292,9 +290,9 @@ codeLens lsp st plId CodeLensParams{_textDocument} =
                         unwords
                             [ show (length tests)
                             , "tests in"
-                            , show (length nonSetups)
+                            , show (length nonSetupSections)
                             , "sections"
-                            , show (length setups)
+                            , show (length setupSections)
                             , "setups"
                             , show (length lenses)
                             , "lenses."
@@ -310,7 +308,7 @@ evalCommandName = "evalCommand"
 evalCommand :: PluginCommand IdeState
 evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 
--- |Specify the test section to execute
+-- | Specify the test section to execute
 data EvalParams = EvalParams
     { sections :: [Section]
     , module_ :: !TextDocumentIdentifier
@@ -415,7 +413,7 @@ runEvalCmd lsp st EvalParams{..} =
                                 (st, fp)
                                 tests
 
-            let workspaceEditsMap = Map.fromList [(_uri, List $ addFinalReturn mdlText edits)]
+            let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
 
             return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
@@ -423,25 +421,6 @@ runEvalCmd lsp st EvalParams{..} =
             withIndefiniteProgress lsp "Evaluating" Cancellable $
                 response' cmd
 
-{-
->>> import Language.Haskell.LSP.Types(applyTextEdit)
->>> aTest s = let Right [sec] = allSections (tokensFrom s) in head. sectionTests $ sec
->>> mdl = "module Test where\n-- >>> 2+2"
-
-To avoid https://github.com/haskell/haskell-language-server/issues/1213, `addFinalReturn` adds, if necessary, a final empty line to the document before inserting the tests' results.
-
->>> let [e1,e2] = addFinalReturn mdl [asEdit (aTest mdl) ["4"]] in applyTextEdit e2 (applyTextEdit e1 mdl)
-"module Test where\n-- >>> 2+2\n4\n"
-
->>> applyTextEdit (head $ addFinalReturn mdl [asEdit (aTest mdl) ["4"]]) mdl
-"module Test where\n-- >>> 2+2\n"
-
->>> addFinalReturn mdl [asEdit (aTest mdl) ["4"]]
-[TextEdit {_range = Range {_start = Position {_line = 1, _character = 10}, _end = Position {_line = 1, _character = 10}}, _newText = "\n"},TextEdit {_range = Range {_start = Position {_line = 2, _character = 0}, _end = Position {_line = 2, _character = 0}}, _newText = "4\n"}]
-
->>> asEdit (aTest mdl) ["4"]
-TextEdit {_range = Range {_start = Position {_line = 2, _character = 0}, _end = Position {_line = 2, _character = 0}}, _newText = "4\n"}
--}
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
 addFinalReturn mdlText edits
     | not (null edits) && not (T.null mdlText) && T.last mdlText /= '\n' =
@@ -465,13 +444,13 @@ moduleText lsp uri =
                     lsp
                     (toNormalizedUri uri)
 
-testsBySection :: [Section] -> [(Section, Loc Test)]
+testsBySection :: [Section] -> [(Section, Test)]
 testsBySection sections =
     [(section, test) | section <- sections, test <- sectionTests section]
 
 type TEnv = (IdeState, String)
 
-runTests :: TEnv -> [(Section, Loc Test)] -> Ghc [TextEdit]
+runTests :: TEnv -> [(Section, Test)] -> Ghc [TextEdit]
 runTests e@(_st, _) tests = do
     df <- getInteractiveDynFlags
     evalSetup
@@ -479,7 +458,7 @@ runTests e@(_st, _) tests = do
 
     mapM (processTest e df) tests
   where
-    processTest :: TEnv -> DynFlags -> (Section, Loc Test) -> Ghc TextEdit
+    processTest :: TEnv -> DynFlags -> (Section, Test) -> Ghc TextEdit
     processTest e@(st, fp) df (section, test) = do
         let dbg = logWith st
         let pad = pad_ $ (if isLiterate fp then ("> " `T.append`) else id) $ padPrefix (sectionFormat section)
@@ -487,22 +466,33 @@ runTests e@(_st, _) tests = do
         rs <- runTest e df test
         dbg "TEST RESULTS" rs
 
-        let checkedResult = testCheck (section, unLoc test) rs
+        let checkedResult = testCheck (section, test) rs
 
-        let edit = asEdit test (map pad checkedResult)
+        let edit = asEdit (sectionFormat section) test (map pad checkedResult)
         dbg "TEST EDIT" edit
         return edit
 
     -- runTest :: String -> DynFlags -> Loc Test -> Ghc [Text]
     runTest _ df test
-        | not (hasQuickCheck df) && (isProperty . unLoc $ test) =
+        | not (hasQuickCheck df) && isProperty test =
             return $
                 singleLine
                     "Add QuickCheck to your cabal dependencies to run this test."
     runTest e df test = evals e df (asStatements test)
 
-asEdit :: Loc Test -> [Text] -> TextEdit
-asEdit test resultLines = TextEdit (resultRange test) (T.unlines resultLines)
+asEdit :: Format -> Test -> [Text] -> TextEdit
+asEdit (MultiLine commRange) test resultLines
+    -- A test in a block comment, ending with @-\}@ without newline in-between.
+    | testRange test ^. end.line == commRange ^. end . line
+    =
+    TextEdit
+        (Range
+            (testRange test ^. end)
+            (resultRange test ^. end)
+        )
+        ("\n" <> T.unlines (resultLines <> ["-}"]))
+asEdit _ test resultLines =
+    TextEdit (resultRange test) (T.unlines resultLines)
 
 {-
 The result of evaluating a test line can be:
@@ -542,7 +532,7 @@ A, possibly multi line, error is returned for a wrong declaration, directive or 
 Unknown extension: "NonExistent"
 
 >>> cls C
-Variable not in scope: cls :: t0 -> f0
+Variable not in scope: cls :: t0 -> ()
 Data constructor not in scope: C
 
 >>> "A
@@ -635,8 +625,8 @@ runGetSession st nfp =
                 -- GhcSessionDeps
                 nfp
 
-needsQuickCheck :: [(Section, Loc Test)] -> Bool
-needsQuickCheck = any (isProperty . unLoc . snd)
+needsQuickCheck :: [(Section, Test)] -> Bool
+needsQuickCheck = any (isProperty . snd)
 
 hasQuickCheck :: DynFlags -> Bool
 hasQuickCheck df = hasPackage df "QuickCheck"
@@ -688,27 +678,6 @@ convertBlank x
 padPrefix :: IsString p => Format -> p
 padPrefix SingleLine = "-- "
 padPrefix _ = ""
-
-{-
-Normalise preprocessed source code (from a CPP/LHS or other processed file) so that tests are on the same lines as in the original source.
-
->>> cleanSource True $ T.pack "#line 1 \nA comment\n> module X where"
-"comment\nmodule X where\n"
-
->>> cleanSource False $ T.pack "#1  \nmodule X where"
-"module X where\n"
--}
-cleanSource :: Bool -> Text -> Text
-cleanSource isLit =
-    T.unlines
-        . reverse
-        . (if isLit then map cleanBirdCode else id)
-        . takeWhile (\t -> T.null t || (T.head t /= '#'))
-        . reverse
-        . T.lines
-
-cleanBirdCode :: Text -> Text
-cleanBirdCode = T.drop 2
 
 {- | Resulting @Text@ MUST NOT prefix each line with @--@
    Such comment-related post-process will be taken place

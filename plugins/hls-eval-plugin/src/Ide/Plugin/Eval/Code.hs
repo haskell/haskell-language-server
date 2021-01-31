@@ -15,20 +15,21 @@ import GhcMonad (Ghc, GhcMonad, liftIO)
 import Ide.Plugin.Eval.Types (
     Language (Plain),
     Loc,
-    Located (Located),
     Section (sectionLanguage),
-    Test (Example, Property, testOutput),
+    Test (..),
     Txt,
     locate,
-    locate0,
+    locate0, Located(..)
  )
 import InteractiveEval (runDecls)
 import Unsafe.Coerce (unsafeCoerce)
+import Control.Lens ((^.))
+import Language.Haskell.LSP.Types.Lens (start, line)
 
 -- | Return the ranges of the expression and result parts of the given test
-testRanges :: Loc Test -> (Range, Range)
-testRanges (Located line tst) =
-    let startLine = line
+testRanges :: Test -> (Range, Range)
+testRanges tst =
+    let startLine = testRange tst ^. start.line
         (exprLines, resultLines) = testLenghts tst
         resLine = startLine + exprLines
      in ( Range
@@ -44,7 +45,7 @@ testRanges (Located line tst) =
 -}
 
 -- |The document range where the result of the test is defined
-resultRange :: Loc Test -> Range
+resultRange :: Test -> Range
 resultRange = snd . testRanges
 
 -- TODO: handle BLANKLINE
@@ -66,18 +67,18 @@ testCheck (section, test) out
     | otherwise = showDiffs $ getDiff (map T.pack $ testOutput test) out
 
 testLenghts :: Test -> (Int, Int)
-testLenghts (Example e r) = (NE.length e, length r)
-testLenghts (Property _ r) = (1, length r)
+testLenghts (Example e r _) = (NE.length e, length r)
+testLenghts (Property _ r _) = (1, length r)
 
 -- |A one-line Haskell statement
 type Statement = Loc String
 
-asStatements :: Loc Test -> [Statement]
-asStatements lt = locate (asStmts <$> lt)
+asStatements :: Test -> [Statement]
+asStatements lt = locate $ Located (testRange lt ^. start.line) (asStmts lt)
 
 asStmts :: Test -> [Txt]
-asStmts (Example e _) = NE.toList e
-asStmts (Property t _) =
+asStmts (Example e _ _) = NE.toList e
+asStmts (Property t _ _) =
     ["prop11 = " ++ t, "(propEvaluation prop11 :: IO String)"]
 
 -- |Evaluate an expression (either a pure expression or an IO a)

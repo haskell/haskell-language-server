@@ -38,6 +38,8 @@ library
       T24
       T25
       T26
+      T27
+      TEndingMulti
       TMulti
       TPlainComment
       THaddock
@@ -50,7 +52,9 @@ library
       TPrelude
       TCPP
       TLHS
+      TSetup
       Util
+      TNested
 
   build-depends:       base >= 4.7 && < 5, QuickCheck
   default-language:    Haskell2010
