@@ -236,7 +236,7 @@ benchRules build benchResource MkBenchRules{..} = do
         setupRes    <- setupProject
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
         let exePath    = build </> "binaries" </> ver </> executableName
-            exeExtraArgs = ["+RTS", "-h", "-qg", "-S" <> outGc, "-RTS"]
+            exeExtraArgs = ["+RTS", "-h", "-i1", "-qg", "-S" <> outGc, "-RTS"]
             ghcPath    = build </> "binaries" </> ver </> "ghc.path"
             experiment = Escaped $ dropExtension exp
         need [exePath, ghcPath]
