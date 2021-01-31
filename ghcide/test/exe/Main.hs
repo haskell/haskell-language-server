@@ -43,7 +43,7 @@ import Development.IDE.Test
       flushMessages,
       standardizeQuotes,
       waitForAction,
-      Cursor )
+      Cursor, expectMessages )
 import Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import Development.IDE.Types.Location
