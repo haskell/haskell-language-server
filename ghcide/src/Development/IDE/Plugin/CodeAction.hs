@@ -45,7 +45,7 @@ import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
 import Data.Function
 import Control.Arrow ((>>>), second)
 import Data.Functor
-import Control.Applicative ((<|>), Applicative (liftA2))
+import Control.Applicative ((<|>))
 import Safe (atMay)
 import Bag (isEmptyBag)
 import qualified Data.HashSet as Set
@@ -53,16 +53,12 @@ import Control.Concurrent.Extra (readVar)
 import Development.IDE.GHC.Util (printRdrName, prettyPrint)
 import Ide.PluginUtils (subRange)
 import Ide.Types
-import Data.Hashable (Hashable)
 import qualified Data.DList as DL
 import Development.IDE.Spans.Common
 import OccName
-import Data.Coerce
 import qualified GHC.LanguageExtensions as Lang
-import Control.Lens (foldMapBy)
-import FieldLabel (flLabel)
-import FastString (unpackFS)
-import Data.Monoid (Ap(Ap, getAp))
+import Control.Lens (alaf)
+import Data.Monoid (Ap(..))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -98,75 +94,59 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text x
+        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions mbFile parsedModule text df annotatedPS x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
-      actions' =
-          [mkCA title [x] edit
-          | x <- xs
-          , ps <- maybeToList annotatedPS
-          , dynflags <- maybeToList df
-          , nfp <- maybeToList mbFile
-          , (title, grafts) <- suggestExactAction exportsMap nfp dynflags ps x
-          , Right edit
-              <- [getAp $ foldMapBy (liftA2 unionWSEdit) mempty
-                      (Ap . rewriteToEdit dynflags uri (annsA ps)) grafts]
-          ]
-      actions'' = caRemoveRedundantImports parsedModule text diag xs uri
+      actions' = caRemoveRedundantImports parsedModule text diag xs uri
                <> actions
-               <> actions'
                <> caRemoveInvalidExports parsedModule text diag xs uri
-    pure $ Right $ List actions''
-
--- | Semigroup instance just overrides duplicated keys in the first argument
-unionWSEdit :: WorkspaceEdit -> WorkspaceEdit -> WorkspaceEdit
-unionWSEdit (WorkspaceEdit a b) (WorkspaceEdit c d) =
-    WorkspaceEdit (runCatHashMap <$> fmap CatHashMap a <> fmap CatHashMap c)
-        (b <> d)
-
--- | A monoidal hashmap
-     -- FIXME: Want to use monoidal-containers, but it supports aeson <1.5 only...
-newtype CatHashMap k v = CatHashMap { runCatHashMap :: Map.HashMap k v }
-instance (Eq k, Hashable k, Semigroup v) => Semigroup (CatHashMap k v) where
-  (<>) = coerce $ Map.unionWith @k @v (<>)
-instance (Eq k, Hashable k, Semigroup v) => Monoid (CatHashMap k v) where
-  mempty = CatHashMap mempty
+    pure $ Right $ List actions'
 
 mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
 mkCA title diags edit =
   CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) (Just edit) Nothing
 
-suggestExactAction ::
-  ExportsMap ->
-  NormalizedFilePath ->
-  DynFlags ->
-  Annotated ParsedSource ->
-  Diagnostic ->
-  [(T.Text, [Rewrite])]
-suggestExactAction exportsMap nfp df ps x =
-  concat
-    [ suggestConstraint df (astA ps) x
-    , suggestImplicitParameter (astA ps) x
-    , suggestExtendImport exportsMap (astA ps) x
-    , suggestImportDisambiguation nfp df (astA ps) x
-    ]
+rewrite ::
+    Maybe DynFlags ->
+    Maybe (Annotated ParsedSource) ->
+    (DynFlags -> ParsedSource -> [(T.Text, [Rewrite])]) ->
+    [(T.Text, [TextEdit])]
+rewrite (Just df) (Just ps) f
+    | Right edit <- (traverse . traverse)
+        (alaf Ap foldMap (rewriteToEdit df (annsA ps)))
+        (f df $ astA ps) = edit
+rewrite _ _ _ = []
 
 suggestAction
   :: ExportsMap
   -> IdeOptions
+  -> Maybe NormalizedFilePath
   -> Maybe ParsedModule
   -> Maybe T.Text
+  -> Maybe DynFlags
+  -> Maybe (Annotated ParsedSource)
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
-suggestAction packageExports ideOptions parsedModule text diag = concat
+suggestAction packageExports ideOptions mbFile parsedModule text df annSource diag =
+    concat
    -- Order these suggestions by priority
     [ suggestSignature True diag
-    , suggestFillTypeWildcard diag
+    , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
+    ]
+    ++ concat
+    [ rewrite df annSource $ \df ps ->
+        suggestImportDisambiguation nfp df ps diag
+    | nfp <- maybeToList mbFile
+    ] ++
+    concat [
+    suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
     , suggestReplaceIdentifier text diag
     , removeRedundantConstraints text diag
     , suggestAddTypeAnnotationToSatisfyContraints text diag
+    , rewrite df annSource $ \df ps -> suggestConstraint df ps diag
+    , rewrite df annSource $ \_ ps -> suggestImplicitParameter ps diag
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestNewImport packageExports pm diag
@@ -891,7 +871,7 @@ suggestConstraint df parsedModule diag@Diagnostic {..}
   = let codeAction = if _message =~ ("the type signature for:" :: String)
                         then suggestFunctionConstraint df parsedModule
                         else suggestInstanceConstraint df parsedModule
-     in map (second pure) $ codeAction diag missingConstraint
+     in map (second (:[])) $ codeAction diag missingConstraint
   | otherwise = []
     where
       findMissingConstraint :: T.Text -> Maybe T.Text

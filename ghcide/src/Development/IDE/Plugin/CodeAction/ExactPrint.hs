@@ -23,14 +23,12 @@ import Control.Monad.Trans
 import Data.Char (isAlphaNum)
 import Data.Data (Data)
 import Data.Functor
-import qualified Data.HashMap.Strict as HMap
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromJust, isNothing, mapMaybe)
 import qualified Data.Text as T
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.GHC.ExactPrint
     ( Annotate, ASTElement(parseAST) )
-import Development.IDE.Types.Location
 import FieldLabel (flLabel)
 import GhcPlugins (sigPrec)
 import Language.Haskell.GHC.ExactPrint
@@ -60,24 +58,17 @@ data Rewrite where
 -- | Convert a 'Rewrite' into a 'WorkspaceEdit'.
 rewriteToEdit ::
   DynFlags ->
-  Uri ->
   Anns ->
   Rewrite ->
-  Either String WorkspaceEdit
-rewriteToEdit dflags uri anns (Rewrite dst f) = do
+  Either String [TextEdit]
+rewriteToEdit dflags anns (Rewrite dst f) = do
   (ast, (anns, _), _) <- runTransformT anns $ do
       ast <- f dflags
       ast <$ setEntryDPT ast (DP (0,0))
-  let editMap =
-        HMap.fromList
-          [ ( uri,
-              List
-                [ TextEdit (fromJust $ srcSpanToRange dst) $
+  let editMap = [ TextEdit (fromJust $ srcSpanToRange dst) $
                     T.pack $ exactPrint ast anns
                 ]
-            )
-          ]
-  pure $ WorkspaceEdit (Just editMap) Nothing
+  pure editMap
 
 ------------------------------------------------------------------------------
 
