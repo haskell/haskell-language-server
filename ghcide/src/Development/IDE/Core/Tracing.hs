@@ -32,7 +32,7 @@ import           Development.Shake              (Action, actionBracket, liftIO)
 import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
-import           Language.Haskell.LSP.Types     (NormalizedFilePath,
+import           Language.LSP.Types             (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
 import           OpenTelemetry.Eventlog         (SpanInFlight, Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,

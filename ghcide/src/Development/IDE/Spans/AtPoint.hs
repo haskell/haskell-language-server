@@ -22,7 +22,7 @@ module Development.IDE.Spans.AtPoint (
 import Development.IDE.GHC.Error
 import Development.IDE.GHC.Orphans()
 import Development.IDE.Types.Location
-import Language.Haskell.LSP.Types
+import           Language.LSP.Types
 
 -- compiler and infrastructure
 import Development.IDE.GHC.Compat

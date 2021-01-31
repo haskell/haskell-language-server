@@ -46,6 +46,8 @@ library
         data-default,
         deepseq,
         directory,
+        dependent-map,
+        dependent-sum,
         dlist,
         extra >= 1.7.4,
         fuzzy,
@@ -55,12 +57,12 @@ library
         Glob,
         haddock-library >= 1.8,
         hashable,
-        haskell-lsp-types == 0.23.*,
-        haskell-lsp == 0.23.*,
         hie-compat,
         hls-plugin-api >= 0.7,
         lens,
         hiedb == 0.3.0.1,
+        lsp-types == 1.0.*,
+        lsp == 1.0.*,
         mtl,
         network-uri,
         parallel,
@@ -88,7 +90,8 @@ library
         vector,
         bytestring-encoding,
         opentelemetry >=0.6.1,
-        heapsize ==0.3.*
+        heapsize ==0.3.*,
+        unliftio
     if flag(ghc-lib)
       build-depends:
         ghc-lib >= 8.8,
@@ -204,7 +207,6 @@ library
         Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.Completions.Logic
-        Development.IDE.Plugin.HLS.Formatter
         Development.IDE.Types.Action
     ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns
 
@@ -283,8 +285,8 @@ executable ghcide
         safe-exceptions,
         ghc,
         hashable,
-        haskell-lsp,
-        haskell-lsp-types,
+        lsp,
+        lsp-types,
         heapsize,
         hie-bios,
         hls-plugin-api,
@@ -343,12 +345,12 @@ test-suite ghcide-tests
         ghcide,
         ghc-typelits-knownnat,
         haddock-library,
-        haskell-lsp,
-        haskell-lsp-types,
+        lsp,
+        lsp-types,
         hls-plugin-api,
         network-uri,
         lens,
-        lsp-test >= 0.12.0.0 && < 0.13,
+        lsp-test >= 0.11.0.6 && < 0.13,
         optparse-applicative,
         process,
         QuickCheck,
@@ -405,7 +407,7 @@ executable ghcide-bench
         extra,
         filepath,
         ghcide,
-        lsp-test >= 0.12.0.0 && < 0.13,
+        lsp-test >= 0.11.0.6 && < 0.13,
         optparse-applicative,
         process,
         safe-exceptions,

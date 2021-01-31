@@ -5,55 +5,53 @@
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE RankNTypes #-}
-module Development.IDE.LSP.Server
-  ( WithMessage(..)
-  , PartialHandlers(..)
-  , HasTracing(..)
-  ,setUriAnd) where
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+module Development.IDE.LSP.Server where
 
-
+import Language.LSP.Types
+import Language.LSP.Types.Lens
 import Control.Lens ((^.))
-import Data.Default
-
-import           Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.Messages as LSP
-import Language.Haskell.LSP.Types.Lens (HasTextDocument (textDocument), HasUri (uri))
+import qualified Language.LSP.Server as LSP
+import           Language.LSP.Server (Handlers, LspM, Handler)
+import Development.IDE.Core.Shake
+import UnliftIO.Chan
+import Control.Monad.Reader
 import Development.IDE.Core.Service
 import Data.Aeson (Value)
 import Development.IDE.Core.Tracing (otSetUri)
 import OpenTelemetry.Eventlog (SpanInFlight, setTag)
 import Data.Text.Encoding (encodeUtf8)
+import qualified Data.Text as T
 
-data WithMessage c = WithMessage
-    {withResponse :: forall m req resp . (Show m, Show req, HasTracing req) =>
-        (ResponseMessage resp -> LSP.FromServerMessage) -> -- how to wrap a response
-        (LSP.LspFuncs c -> IdeState -> req -> IO (Either ResponseError resp)) -> -- actual work
-        Maybe (LSP.Handler (RequestMessage m req resp))
-    ,withNotification :: forall m req . (Show m, Show req, HasTracing req) =>
-        Maybe (LSP.Handler (NotificationMessage m req)) -> -- old notification handler
-        (LSP.LspFuncs c -> IdeState -> req -> IO ()) -> -- actual work
-        Maybe (LSP.Handler (NotificationMessage m req))
-    ,withResponseAndRequest :: forall m rm req resp newReqParams newReqBody .
-        (Show m, Show rm, Show req, Show newReqParams, Show newReqBody, HasTracing req) =>
-        (ResponseMessage resp -> LSP.FromServerMessage) -> -- how to wrap a response
-        (RequestMessage rm newReqParams newReqBody -> LSP.FromServerMessage) -> -- how to wrap the additional req
-        (LSP.LspFuncs c -> IdeState -> req -> IO (Either ResponseError resp, Maybe (rm, newReqParams))) -> -- actual work
-        Maybe (LSP.Handler (RequestMessage m req resp))
-    , withInitialize :: (LSP.LspFuncs c -> IdeState -> InitializeParams -> IO ())
-                     -> Maybe (LSP.Handler InitializeRequest)
-    }
+data ReactorMessage
+  = ReactorNotification (IO ())
+  | ReactorRequest SomeLspId (IO ()) (ResponseError -> IO ())
 
-newtype PartialHandlers c = PartialHandlers (WithMessage c -> LSP.Handlers -> IO LSP.Handlers)
+type ReactorChan = Chan ReactorMessage
+type ServerM c = ReaderT (ReactorChan, IdeState) (LspM c)
 
-instance Default (PartialHandlers c) where
-    def = PartialHandlers $ \_ x -> pure x
+requestHandler
+  :: forall (m :: Method FromClient Request) c.
+     SMethod m
+  -> (IdeState -> MessageParams m -> LspM c (Either ResponseError (ResponseResult m)))
+  -> Handlers (ServerM c)
+requestHandler m k = LSP.requestHandler m $ \RequestMessage{_id,_params} resp -> do
+  st@(chan,ide) <- ask
+  env <- LSP.getLspEnv
+  let resp' = flip runReaderT st . resp
+  writeChan chan $ ReactorRequest (SomeLspId _id) (LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
 
-instance Semigroup (PartialHandlers c) where
-    PartialHandlers a <> PartialHandlers b = PartialHandlers $ \w x -> a w x >>= b w
-
-instance Monoid (PartialHandlers c) where
-    mempty = def
+notificationHandler
+  :: forall (m :: Method FromClient Notification) c.
+     SMethod m
+  -> (IdeState -> MessageParams m -> LspM c ())
+  -> Handlers (ServerM c)
+notificationHandler m k = LSP.notificationHandler m $ \NotificationMessage{_params}-> do
+  (chan,ide) <- ask
+  env <- LSP.getLspEnv
+  writeChan chan $ ReactorNotification (LSP.runLspT env $ k ide _params)
 
 class HasTracing a where
   traceWithSpan :: SpanInFlight -> a -> IO ()
@@ -70,7 +68,7 @@ instance HasTracing DidChangeConfigurationParams
 instance HasTracing InitializeParams
 instance HasTracing (Maybe InitializedParams)
 instance HasTracing WorkspaceSymbolParams where
-  traceWithSpan sp (WorkspaceSymbolParams query _) = setTag sp "query" (encodeUtf8 query)
+  traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 $ T.pack query)
 
 setUriAnd ::
   (HasTextDocument params a, HasUri a Uri) =>

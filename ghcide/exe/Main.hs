@@ -32,10 +32,9 @@ import Development.IDE.Plugin
 import Development.IDE.Plugin.Test as Test
 import Development.IDE.Session (loadSession, setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.Shake (ShakeOptions (shakeThreads))
-import qualified Language.Haskell.LSP.Core as LSP
-import Language.Haskell.LSP.Messages
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Lens (params, initializationOptions)
+import qualified Language.LSP.Server as LSP
+import Language.LSP.Types
+import Language.LSP.Types.Lens (params, initializationOptions)
 import Development.IDE.LSP.LanguageServer
 import qualified System.Directory.Extra as IO
 import System.Environment
@@ -117,22 +116,19 @@ runIde Arguments{..} hiedb hiechan = do
 
     let plugins = hlsPlugin
             <> if argsTesting then Test.plugin else mempty
-        onInitialConfiguration :: InitializeRequest -> Either T.Text Config
-        onInitialConfiguration x = case x ^. params . initializationOptions of
-          Nothing -> Right def
-          Just v -> case J.fromJSON v of
-            J.Error err -> Left $ T.pack err
-            J.Success a -> Right a
-        onConfigurationChange = const $ Left "Updating Not supported"
         options = def { LSP.executeCommandCommands = Just hlsCommands
                       , LSP.completionTriggerCharacters = Just "."
                       }
+        onConfigurationChange _ide v = pure $ case J.fromJSON v of
+          J.Error err -> Left $ T.pack err
+          J.Success a -> Right a
+
     case argFilesOrCmd of
       Nothing -> do
         t <- offsetTime
         hPutStrLn stderr "Starting LSP server..."
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps wProg wIndefProg getConfig rootPath -> do
+        runLanguageServer options onConfigurationChange (pluginHandlers plugins) $ \env vfs rootPath -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
@@ -144,15 +140,16 @@ runIde Arguments{..} hiedb hiechan = do
                           `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
             sessionLoader <- loadSession $ fromMaybe dir rootPath
-            config <- fromMaybe def <$> getConfig
+            let config = maybe def id <$> (LSP.runLspT env LSP.getConfig)
+            caps <- LSP.runLspT env LSP.getClientCapabilities
             let options = defOptions
                     { optReportProgress    = clientSupportsProgress caps
                     , optShakeProfiling    = argsShakeProfiling
                     , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                     , optTesting           = IdeTesting argsTesting
                     , optShakeOptions      = (optShakeOptions defOptions){shakeThreads = argsThreads}
-                    , optCheckParents      = checkParents config
-                    , optCheckProject      = checkProject config
+                    , optCheckParents      = checkParents <$> config
+                    , optCheckProject      = checkProject <$> config
                     }
                 defOptions = defaultIdeOptions sessionLoader
                 logLevel = if argsVerbose then minBound else Info
@@ -165,8 +162,7 @@ runIde Arguments{..} hiedb hiechan = do
                   -- Shake database restart, i.e. on every user edit.
                   unless argsDisableKick $
                     action kick
-            initialise caps rules
-                getLspId event wProg wIndefProg (logger logLevel) debouncer options vfs hiedb hiechan
+            initialise rules (Just env) (logger logLevel) debouncer options vfs hiedb hiechan
       Just argFiles -> do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
         hSetEncoding stdout utf8
@@ -197,12 +193,12 @@ runIde Arguments{..} hiedb hiechan = do
                     -- , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                     , optTesting           = IdeTesting argsTesting
                     , optShakeOptions      = (optShakeOptions defOptions){shakeThreads = argsThreads}
-                    , optCheckParents      = NeverCheck
-                    , optCheckProject      = False
+                    , optCheckParents      = pure NeverCheck
+                    , optCheckProject      = pure False
                     }
             defOptions = defaultIdeOptions sessionLoader
             logLevel = if argsVerbose then minBound else Info
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger logLevel) debouncer options vfs hiedb hiechan
+        ide <- initialise mainRule Nothing (logger logLevel) debouncer (defaultIdeOptions sessionLoader) vfs hiedb hiechan
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashMap.fromList $ map ((, OnDisk) . toNormalizedFilePath') files

@@ -104,7 +104,8 @@ kick = do
 
     -- Update the exports map for non FOIs
     -- We can skip this if checkProject is True, assuming they never change under our feet.
-    IdeOptions{ optCheckProject = checkProject } <- getIdeOptions
+    IdeOptions{ optCheckProject = doCheckProject } <- getIdeOptions
+    checkProject <- liftIO $ doCheckProject
     ifaces <- if checkProject then return Nothing else runMaybeT $ do
         deps <- MaybeT $ sequence <$> uses GetDependencies files
         hiResults <- lift $ uses GetModIface (nubOrd $ foldMap transitiveModuleDeps deps)

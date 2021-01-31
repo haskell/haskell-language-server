@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE ExplicitNamespaces #-}
 
 module Development.IDE.GHC.Warnings(withWarnings) where
 
@@ -12,7 +13,7 @@ import qualified           Data.Text as T
 
 import           Development.IDE.Types.Diagnostics
 import           Development.IDE.GHC.Error
-import           Language.Haskell.LSP.Types (NumberOrString (StringValue))
+import           Language.LSP.Types (type (|?)(..))
 
 
 -- | Take a GHC monadic action (e.g. @typecheckModule pm@ for some
@@ -36,7 +37,7 @@ withWarnings diagSource action = do
   return (reverse $ concat warns, res)
 
 attachReason :: WarnReason -> Diagnostic -> Diagnostic
-attachReason wr d = d{_code = StringValue <$> showReason wr}
+attachReason wr d = d{_code = InR . T.unpack <$> showReason wr}
  where
   showReason = \case
     NoReason -> Nothing
