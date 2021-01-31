@@ -36,7 +36,7 @@ import System.FilePath (
     (<.>),
     (</>),
  )
-import Test.Hls.Util (hlsCommand, GhcVersion (GHC84, GHC86), knownBrokenForGhcVersions, knownBrokenOnWindows)
+import Test.Hls.Util (hlsCommand, GhcVersion (GHC84, GHC86), knownBrokenForGhcVersions, knownBrokenInEnv, EnvSpec (HostOS, GhcVer), OS (Windows))
 import Test.Tasty (
     TestTree,
     testGroup,
@@ -162,12 +162,13 @@ tests =
                     -- Write the test file, to make sure that it has no final line return
                     writeFile (evalPath </> mdl) "module TLastLine where\n\n-- >>> take 3 [1..]"
                     goldenTest mdl
+            , testGroup "with preprocessors"
+            [ knownBrokenInEnv [HostOS Windows, GhcVer GHC84, GhcVer GHC86]
+                "CPP eval on Windows and/or GHC <= 8.6 fails for some reasons" $
+              testCase "CPP support" $ goldenTest "TCPP.hs"
             , knownBrokenForGhcVersions [GHC84, GHC86]
                 "Preprocessor known to fail on GHC <= 8.6"
-            $ testGroup "with preprocessors"
-            [ knownBrokenOnWindows "CPP eval on Windows fails for some reasons" $
-              testCase "CPP support" $ goldenTest "TCPP.hs"
-            , testCase "Literate Haskell Bird Style" $ goldenTest "TLHS.lhs"
+                $ testCase "Literate Haskell Bird Style" $ goldenTest "TLHS.lhs"
             -- , testCase "Literate Haskell LaTeX Style" $ goldenTest "TLHSLateX.lhs"
             ]
         ]
