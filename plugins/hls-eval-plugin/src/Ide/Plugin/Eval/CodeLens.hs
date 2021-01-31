@@ -236,13 +236,14 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 (ParsedModule{..}, posMap) <- liftIO $
                     runAction "parsed" st $ useWithStale_ GetParsedModuleWithComments nfp
                 let comments = foldMap
-                        ( foldMap (\case
+                        ( foldMap $ \case
                             L (RealSrcSpan real) bdy
                                 | unpackFS (srcSpanFile real) ==
-                                    fromNormalizedFilePath nfp ->
-                                    let ran0 = realSrcSpanToRange real
-                                        curRan = fromMaybe ran0 $ toCurrentRange posMap ran0
-                                    in
+                                    fromNormalizedFilePath nfp
+                                , let ran0 = realSrcSpanToRange real
+                                , Just curRan <- toCurrentRange posMap ran0
+                                ->
+
                                     -- since Haddock parsing is unset explicitly in 'getParsedModuleWithComments',
                                     -- we can concentrate on these two
                                     case bdy of
@@ -252,7 +253,6 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                                             mempty { blockComments = Map.singleton curRan $ RawBlockComment cmt }
                                         _ -> mempty
                             _ -> mempty
-                            )
                         )
                         $ snd pm_annotations
                 dbg "excluded comments" $ show $  DL.toList $
