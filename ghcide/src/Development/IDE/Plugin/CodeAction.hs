@@ -94,7 +94,7 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions mbFile parsedModule text df annotatedPS x
+        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
       actions' = caRemoveRedundantImports parsedModule text diag xs uri
@@ -120,26 +120,20 @@ rewrite _ _ _ = []
 suggestAction
   :: ExportsMap
   -> IdeOptions
-  -> Maybe NormalizedFilePath
   -> Maybe ParsedModule
   -> Maybe T.Text
   -> Maybe DynFlags
   -> Maybe (Annotated ParsedSource)
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
-suggestAction packageExports ideOptions mbFile parsedModule text df annSource diag =
+suggestAction packageExports ideOptions parsedModule text df annSource diag =
     concat
    -- Order these suggestions by priority
     [ suggestSignature True diag
     , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
-    ]
-    ++ concat
-    [ rewrite df annSource $ \df ps ->
-        suggestImportDisambiguation nfp df ps diag
-    | nfp <- maybeToList mbFile
-    ] ++
-    concat [
-    suggestFillTypeWildcard diag
+    , rewrite df annSource $ \df ps ->
+        suggestImportDisambiguation df ps diag
+    , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
     , suggestReplaceIdentifier text diag
@@ -735,12 +729,11 @@ isPreludeImplicit = xopt Lang.ImplicitPrelude
 
 -- | Suggests disambiguation for ambiguous symbols.
 suggestImportDisambiguation ::
-    NormalizedFilePath ->
     DynFlags ->
     ParsedSource ->
     Diagnostic ->
     [(T.Text, [Rewrite])]
-suggestImportDisambiguation nfp df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
+suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
             _message
@@ -771,7 +764,7 @@ suggestImportDisambiguation nfp df ps@(L _ HsModule {hsmodImports}) diag@Diagnos
             | Just targets <- mapM toModuleTarget mods =
                 sortOn fst
                 [ ( renderUniquify mode modNameText symbol
-                  , disambiguateSymbol nfp ps diag symbol mode
+                  , disambiguateSymbol ps diag symbol mode
                   )
                 | (modTarget, restImports) <- oneAndOthers targets
                 , let modName = targetModuleName modTarget
@@ -822,13 +815,12 @@ targetModuleName (ExistingImp _) =
     error "Cannot happen!"
 
 disambiguateSymbol ::
-    NormalizedFilePath  ->
     ParsedSource ->
     Diagnostic ->
     T.Text ->
     HidingMode ->
     [Rewrite]
-disambiguateSymbol nfp pm Diagnostic {..} (T.unpack -> symbol) = \case
+disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
     (HideOthers hiddens0) ->
         [ hideSymbol symbol idecl
         | ExistingImp idecls <- hiddens0
@@ -843,7 +835,7 @@ disambiguateSymbol nfp pm Diagnostic {..} (T.unpack -> symbol) = \case
     (ToQualified qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-        in [Rewrite (rangeToSrcSpan nfp _range) $ \df -> do
+        in [Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df -> do
             liftParseAST @(HsExpr GhcPs) df $ prettyPrint $ HsVar @GhcPs noExtField
                 $ L (UnhelpfulSpan "") rdr
             ]
