@@ -26,7 +26,8 @@ import           Ide.Plugin.Eval                   as Eval
 #endif
 
 #if importLens
-import           Ide.Plugin.ExplicitImports        as ExplicitImports
+-- import           Ide.Plugin.ExplicitImports        as ExplicitImports
+import           Ide.Plugin.RefineImports as RefineImports
 #endif
 
 #if retrie
@@ -123,7 +124,8 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       Eval.descriptor "eval" :
 #endif
 #if importLens
-      ExplicitImports.descriptor "importLens" :
+      -- , ExplicitImports.descriptor "importLens"
+      , RefineImports.descriptor "refineImports"
 #endif
 #if moduleName
       ModuleName.descriptor "moduleName" :

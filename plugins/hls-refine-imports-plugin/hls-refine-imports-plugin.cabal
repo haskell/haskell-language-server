@@ -1,0 +1,27 @@
+cabal-version: 2.2
+name:          hls-refine-imports-plugin
+version:       0.1.0.0
+synopsis:      Refine imports plugin for Haskell Language Server
+license:       Apache-2.0
+license-file:  LICENSE
+author:        rayshih
+maintainer:    mnf.shih@gmail.com
+category:      Development
+build-type:    Simple
+
+library
+  exposed-modules:  Ide.Plugin.RefineImports
+  hs-source-dirs:   src
+  build-depends:    aeson
+               ,    base        >=4.12 && <5
+               ,    containers
+               ,    deepseq
+               ,    haskell-lsp-types
+               ,    hls-plugin-api
+               ,    ghc
+               ,    ghcide
+               ,    shake
+               ,    text
+               ,    unordered-containers
+
+  default-language: Haskell2010
