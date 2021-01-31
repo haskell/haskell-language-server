@@ -54,6 +54,7 @@ import Numeric.Natural (Natural)
 import Development.Shake.Classes
 import System.Console.GetOpt
 import Data.Maybe
+import Control.Monad.Extra
 
 
 configPath :: FilePath
@@ -70,21 +71,17 @@ instance IsExample Example where getExampleName = E.getExampleName
 type instance RuleResult GetExample = Maybe Example
 type instance RuleResult GetExamples = [Example]
 
+shakeOpts :: ShakeOptions
+shakeOpts =
+    shakeOptions{shakeChange = ChangeModtimeAndDigestInput, shakeThreads = 0}
+
 main :: IO ()
-main = shakeArgsWith shakeOptions{shakeChange = ChangeModtimeAndDigestInput, shakeThreads = 0} [configOpt] $ \configs wants -> pure $ Just $ do
+main = shakeArgsWith shakeOpts [configOpt] $ \configs wants -> pure $ Just $ do
   let config = fromMaybe configPath $ listToMaybe configs
-  createBuildSystem config $ \resource -> do
-      configStatic <- liftIO $ readConfigIO config
-      let build = outputFolder configStatic
-      buildRules build ghcideBuildRules
-      benchRules build resource (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
-      csvRules build
-      svgRules build
-      heapProfileRules build
-      phonyRules build (examples configStatic)
-      case wants of
-          [] -> action $ allTargets build
-          _ -> want wants
+  _configStatic <- createBuildSystem config
+  case wants of
+      [] -> want ["all"]
+      _ -> want wants
 
 ghcideBuildRules :: MkBuildRules BuildSystem
 ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" buildGhcide
@@ -98,13 +95,14 @@ data Config buildSystem = Config
     versions :: [GitCommit],
     -- | Output folder ('foo' works, 'foo/bar' does not)
     outputFolder :: String,
-    buildTool :: buildSystem
+    buildTool :: buildSystem,
+    profileInterval :: Maybe Double
   }
   deriving (Generic, Show)
   deriving anyclass (FromJSON)
 
-createBuildSystem :: FilePath -> (Resource -> Rules a) -> Rules a
-createBuildSystem config userRules = do
+createBuildSystem :: FilePath -> Rules (Config BuildSystem )
+createBuildSystem config = do
   readConfig <- newCache $ \fp -> need [fp] >> liftIO (readConfigIO fp)
 
   _ <- addOracle $ \GetExperiments {} -> experiments <$> readConfig config
@@ -114,9 +112,20 @@ createBuildSystem config userRules = do
   _ <- addOracle $ \GetBuildSystem {} -> buildTool <$> readConfig config
   _ <- addOracle $ \GetSamples{} -> samples <$> readConfig config
 
-  benchResource <- newResource "ghcide-bench" 1
+  configStatic <- liftIO $ readConfigIO config
+  let build = outputFolder configStatic
 
-  userRules benchResource
+  buildRules build ghcideBuildRules
+  benchRules build (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
+  csvRules build
+  svgRules build
+  heapProfileRules build
+  phonyRules "" NoProfiling build (examples configStatic)
+
+  whenJust (profileInterval configStatic) $ \i -> do
+    phonyRules "profiled-" (CheapHeapProfiling i) build (examples configStatic)
+
+  return configStatic
 
 newtype GetSamples = GetSamples () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 type instance RuleResult GetSamples = Natural
