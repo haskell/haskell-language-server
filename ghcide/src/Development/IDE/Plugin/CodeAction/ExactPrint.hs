@@ -39,6 +39,7 @@ import Outputable (ppr, showSDocUnsafe, showSDoc)
 import Retrie.GHC (rdrNameOcc, unpackFS, mkRealSrcSpan, realSrcSpanEnd)
 import Development.IDE.Spans.Common
 import Development.IDE.GHC.Error
+import Safe (lastMay)
 
 ------------------------------------------------------------------------------
 
@@ -376,16 +377,14 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
         killLie v = Just v
 
 hideImplicitPreludeSymbol
-    :: String -> ParsedSource -> Rewrite
-hideImplicitPreludeSymbol symbol (L _ HsModule{..}) =
-    let -- We assume there is at least one import, to collide with Prelude;
-        -- otherwise (custom) Prelude must be buggy, (or preprocessor adds some collision?)
-        existingImp = last hsmodImports
-        exisImpSpan = fromJust $ realSpan $ getLoc existingImp
-        indentation = srcSpanStartCol exisImpSpan
+    :: String -> ParsedSource -> Maybe Rewrite
+hideImplicitPreludeSymbol symbol (L _ HsModule{..}) = do
+    existingImp <- lastMay hsmodImports
+    exisImpSpan <- realSpan $ getLoc existingImp
+    let indentation = srcSpanStartCol exisImpSpan
         beg = realSrcSpanEnd exisImpSpan
         ran = RealSrcSpan $ mkRealSrcSpan beg beg
-    in Rewrite ran $ \df -> do
+    pure $ Rewrite ran $ \df -> do
         let symOcc = mkVarOcc symbol
             symImp = T.pack $ showSDoc df $ parenSymOcc symOcc $ ppr symOcc
             impStmt = "import Prelude hiding (" <> symImp <> ")"

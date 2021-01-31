@@ -828,16 +828,18 @@ disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
         ]
             ++ mconcat
                 [ if null imps
-                    then [hideImplicitPreludeSymbol symbol pm]
+                    then maybeToList $ hideImplicitPreludeSymbol symbol pm
                     else hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
     (ToQualified qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-        in [Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df -> do
-            liftParseAST @(HsExpr GhcPs) df $ prettyPrint $ HsVar @GhcPs noExtField
-                $ L (UnhelpfulSpan "") rdr
+         in [ Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df -> do
+                liftParseAST @(HsExpr GhcPs) df $
+                    prettyPrint $
+                        HsVar @GhcPs noExtField $
+                            L (UnhelpfulSpan "") rdr
             ]
 
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
