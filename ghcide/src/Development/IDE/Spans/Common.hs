@@ -6,6 +6,7 @@
 module Development.IDE.Spans.Common (
   showGhc
 , showNameWithoutUniques
+, unqualIEWrapName
 , safeTyThingId
 , safeTyThingType
 , SpanDoc(..)
@@ -35,6 +36,7 @@ import qualified Documentation.Haddock.Parser as H
 import qualified Documentation.Haddock.Types as H
 import Development.IDE.GHC.Orphans ()
 import Development.IDE.GHC.Util
+import RdrName (rdrNameOcc)
 
 type DocMap = NameEnv SpanDoc
 type KindMap = NameEnv TyThing
@@ -51,6 +53,10 @@ showNameWithoutUniques = T.pack . prettyprint
     dyn = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
     prettyprint x = renderWithStyle dyn (ppr x) style
     style = mkUserStyle dyn neverQualify AllTheWay
+
+-- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
+unqualIEWrapName :: IEWrappedName RdrName -> T.Text
+unqualIEWrapName = showNameWithoutUniques . rdrNameOcc . ieWrappedName
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/Support/HieExtras.hs
 safeTyThingType :: TyThing -> Maybe Type

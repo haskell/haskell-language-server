@@ -33,6 +33,16 @@ import Data.Typeable
 import Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import Development.IDE.Spans.Common
 import Development.IDE.Test
+    ( canonicalizeUri,
+      diagnostic,
+      expectCurrentDiagnostics,
+      expectDiagnostics,
+      expectDiagnosticsWithTags,
+      expectNoMoreDiagnostics,
+      flushMessages,
+      standardizeQuotes,
+      waitForAction,
+      Cursor )
 import Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import Development.IDE.Types.Location
@@ -682,6 +692,7 @@ codeActionTests = testGroup "code actions"
   , removeImportTests
   , extendImportTests
   , suggestImportTests
+  , suggestImportDisambiguationTests
   , disableWarningTests
   , fixConstructorImportTests
   , importRenameActionTests
@@ -1463,6 +1474,101 @@ suggestImportTests = testGroup "suggest import actions"
              liftIO $ after @=? contentAfterAction
           else
               liftIO $ [_title | CACodeAction CodeAction{_title} <- actions, _title == newImp ] @?= []
+
+suggestImportDisambiguationTests :: TestTree
+suggestImportDisambiguationTests = testGroup "suggest import disambiguation actions"
+  [ testGroup "Hiding strategy works"
+    [ testGroup "fromList"
+        [ testCase "AVec" $
+            compareHideFunctionTo [(8,9),(10,8)]
+                "Use AVec for fromList, hiding other imports"
+                "HideFunction.hs.expected.fromList.A"
+        , testCase "BVec" $
+            compareHideFunctionTo [(8,9),(10,8)]
+                "Use BVec for fromList, hiding other imports"
+                "HideFunction.hs.expected.fromList.B"
+        ]
+    , testGroup "(++)"
+        [ testCase "EVec" $
+            compareHideFunctionTo [(8,9),(10,8)]
+                "Use EVec for ++, hiding other imports"
+                "HideFunction.hs.expected.append.E"
+        , testCase "Prelude" $
+            compareHideFunctionTo [(8,9),(10,8)]
+                "Use Prelude for ++, hiding other imports"
+                "HideFunction.hs.expected.append.Prelude"
+        , testCase "AVec, indented" $
+            compareTwo "HidePreludeIndented.hs" [(3,8)]
+            "Use AVec for ++, hiding other imports"
+            "HidePreludeIndented.hs.expected"
+
+        ]
+    , testGroup "Vec (type)"
+        [ testCase "AVec" $
+            compareTwo
+                "HideType.hs" [(8,15)]
+                "Use AVec for Vec, hiding other imports"
+                "HideType.hs.expected.A"
+        , testCase "EVec" $
+            compareTwo
+                "HideType.hs" [(8,15)]
+                "Use EVec for Vec, hiding other imports"
+                "HideType.hs.expected.E"
+        ]
+    ]
+  , testGroup "Qualify strategy"
+    [ testCase "won't suggest full name for qualified module" $
+      withHideFunction [(8,9),(10,8)] $ \_ actions -> do
+        liftIO $
+            assertBool "EVec.fromList must not be suggested" $
+                "Replace with qualified: EVec.fromList" `notElem`
+                [ actionTitle
+                | CACodeAction CodeAction { _title = actionTitle } <- actions
+                ]
+        liftIO $
+            assertBool "EVec.++ must not be suggested" $
+                "Replace with qualified: EVec.++" `notElem`
+                [ actionTitle
+                | CACodeAction CodeAction { _title = actionTitle } <- actions
+                ]
+    , testGroup "fromList"
+        [ testCase "EVec" $
+            compareHideFunctionTo [(8,9),(10,8)]
+                "Replace with qualified: E.fromList"
+                "HideFunction.hs.expected.qualified.fromList.E"
+        ]
+    , testGroup "(++)"
+        [ testCase "Prelude" $
+            compareHideFunctionTo [(8,9),(10,8)]
+                "Replace with qualified: Prelude.++"
+                "HideFunction.hs.expected.qualified.append.Prelude"
+        ]
+    ]
+  ]
+  where
+    hidingDir = "test/data/hiding"
+    compareTwo original locs cmd expected =
+        withTarget original locs $ \doc actions -> do
+            expected <- liftIO $
+                readFileUtf8 (hidingDir </> expected)
+            action <- liftIO $ pickActionWithTitle cmd actions
+            executeCodeAction action
+            contentAfterAction <- documentContents doc
+            liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
+    compareHideFunctionTo = compareTwo "HideFunction.hs"
+    auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs"]
+    withTarget file locs k = withTempDir $ \dir -> runInDir dir $ do
+        liftIO $ mapM_ (\fp -> copyFile (hidingDir </> fp) $ dir </> fp)
+            $ file : auxFiles
+        doc <- openDoc file "haskell"
+        void (skipManyTill anyMessage message
+            :: Session WorkDoneProgressEndNotification)
+        void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
+        contents <- documentContents doc
+        let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
+        actions <- getCodeActions doc range
+        k doc actions
+    withHideFunction = withTarget ("HideFunction" <.> "hs")
 
 disableWarningTests :: TestTree
 disableWarningTests =
@@ -2890,7 +2996,7 @@ findDefinitionAndHoverTests = let
         Position{_line = l + 1, _character = c + 1}
     in
     case map (read . T.unpack) lineCol of
-      [l,c] -> liftIO $ (adjust $ _start expectedRange) @=? Position l c
+      [l,c] -> liftIO $ adjust (_start expectedRange) @=? Position l c
       _     -> liftIO $ assertFailure $
         "expected: " <> show ("[...]" <> sourceFileName <> ":<LINE>:<COL>**[...]", Just expectedRange) <>
         "\n but got: " <> show (msg, rangeInHover)

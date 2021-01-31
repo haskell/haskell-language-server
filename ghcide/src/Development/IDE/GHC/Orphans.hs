@@ -22,7 +22,6 @@ import qualified StringBuffer               as SB
 import Data.Text (Text)
 import Data.String (IsString(fromString))
 import Retrie.ExactPrint (Annotated)
-import Data.List (foldl')
 
 
 -- Orphan instances for types from the GHC API.
