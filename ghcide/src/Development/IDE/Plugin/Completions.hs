@@ -178,7 +178,7 @@ extendImportHandler' ideState ExtendImport {..}
       imp <- liftMaybe $ find (isWantedModule wantedModule) imps
       wedit <-
         liftEither $
-          rewriteToEdit df doc (annsA ps) $
+          rewriteToWEdit df doc (annsA ps) $
             extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
       return (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit)
   | otherwise =

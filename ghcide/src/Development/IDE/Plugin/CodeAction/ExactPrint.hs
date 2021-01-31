@@ -6,6 +6,7 @@
 module Development.IDE.Plugin.CodeAction.ExactPrint
   ( Rewrite (..),
     rewriteToEdit,
+    rewriteToWEdit,
     transferAnn,
 
     -- * Utilities
@@ -41,6 +42,7 @@ import Development.IDE.Spans.Common
 import Development.IDE.GHC.Error
 import Safe (lastMay)
 import Data.Generics (listify)
+import GHC.Exts (IsList (fromList))
 
 ------------------------------------------------------------------------------
 
@@ -57,7 +59,7 @@ data Rewrite where
 
 ------------------------------------------------------------------------------
 
--- | Convert a 'Rewrite' into a 'WorkspaceEdit'.
+-- | Convert a 'Rewrite' into a list of '[TextEdit]'.
 rewriteToEdit ::
   DynFlags ->
   Anns ->
@@ -71,6 +73,16 @@ rewriteToEdit dflags anns (Rewrite dst f) = do
                     T.pack $ exactPrint ast anns
                 ]
   pure editMap
+
+-- | Convert a 'Rewrite' into a 'WorkspaceEdit'
+rewriteToWEdit :: DynFlags -> Uri -> Anns -> Rewrite -> Either String WorkspaceEdit
+rewriteToWEdit dflags uri anns r = do
+    edits <- rewriteToEdit dflags anns r
+    return $
+        WorkspaceEdit
+            { _changes = Just (fromList [(uri, List edits)])
+            , _documentChanges = Nothing
+            }
 
 ------------------------------------------------------------------------------
 
