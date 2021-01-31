@@ -32,6 +32,7 @@ experiments:
     # - "hover after cradle edit"
     - "getDefinition"
     - "getDefinition after edit"
+    - "completions"
     - "completions after edit"
     - "code actions"
     - "code actions after edit"
