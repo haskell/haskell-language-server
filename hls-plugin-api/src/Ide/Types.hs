@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
@@ -10,15 +11,18 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Ide.Types
     where
 
 import           Data.Aeson                    hiding (defaultOptions)
+import           GHC.Generics
 import qualified Data.Map  as Map
 import           Data.String
 import qualified Data.Text                     as T
-import           Development.Shake
+import           Development.Shake hiding (command)
 import           Ide.Plugin.Config
 import           Language.LSP.Types
 import           Language.LSP.VFS
@@ -29,6 +33,7 @@ import           Text.Regex.TDFA.Text()
 import           Data.Dependent.Map (DMap)
 import qualified Data.Dependent.Map as DMap
 import Data.List.NonEmpty (NonEmpty(..), toList)
+import qualified Data.List.NonEmpty as NE
 import Data.GADT.Compare
 import Data.Maybe
 import Data.Semigroup
@@ -69,20 +74,49 @@ class PluginMethod m where
   pluginEnabled :: SMethod m -> PluginId -> Config -> Bool
 
   -- | How to combine responses from different plugins
-  combineResponses :: SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
+  combineResponses
+    :: SMethod m
+    -> T.Text -- ^ the process id, to make commands
+    -> Config -- ^ IDE Configuration
+    -> ClientCapabilities
+    -> MessageParams m
+    -> NonEmpty (ResponseResult m) -> ResponseResult m
 
-  default combineResponses :: Semigroup (ResponseResult m) => SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
-  combineResponses _method _config _caps _params = sconcat
+  default combineResponses :: Semigroup (ResponseResult m)
+    => SMethod m -> T.Text -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
+  combineResponses _method _pid _config _caps _params = sconcat
 
 instance PluginMethod TextDocumentCodeAction where
   pluginEnabled _ = pluginEnabledConfig plcCodeActionsOn
+  combineResponses _method pid _config (ClientCapabilities _ textDocCaps _ _) (CodeActionParams _ _ docId range context) resps =
+      fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
+    where
+
+      compat :: (Command |? CodeAction) -> (Command |? CodeAction)
+      compat x@(InL _) = x
+      compat x@(InR action)
+        | Just _ <- textDocCaps >>= _codeAction >>= _codeActionLiteralSupport
+        = x
+        | otherwise = InL cmd
+        where
+          cmd = mkLspCommand' pid "hls" "fallbackCodeAction" (action ^. title) (Just cmdParams)
+          cmdParams = [toJSON (FallbackCodeActionParams (action ^. edit) (action ^. command))]
+
+      wasRequested :: (Command |? CodeAction) -> Bool
+      wasRequested (InL _) = True
+      wasRequested (InR ca)
+        | Nothing <- _only context = True
+        | Just (List allowed) <- _only context
+        , Just caKind <- ca ^. kind = caKind `elem` allowed
+        | otherwise = False
+
 instance PluginMethod TextDocumentCodeLens where
   pluginEnabled _ = pluginEnabledConfig plcCodeLensOn
 instance PluginMethod TextDocumentRename where
   pluginEnabled _ = pluginEnabledConfig plcRenameOn
 instance PluginMethod TextDocumentHover where
   pluginEnabled _ = pluginEnabledConfig plcHoverOn
-  combineResponses _ _ _ _ (catMaybes . toList -> hs) = h
+  combineResponses _ _ _ _ _ (catMaybes . toList -> hs) = h
     where
       r = listToMaybe $ mapMaybe (^. range) hs
       h = case foldMap (^. contents) hs of
@@ -91,7 +125,7 @@ instance PluginMethod TextDocumentHover where
 
 instance PluginMethod TextDocumentDocumentSymbol where
   pluginEnabled _ = pluginEnabledConfig plcSymbolsOn
-  combineResponses _ _ (ClientCapabilities _ tdc _ _) params xs = res
+  combineResponses _ _ _ (ClientCapabilities _ tdc _ _) params xs = res
     where
       uri' = params ^. textDocument . uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
@@ -113,7 +147,7 @@ instance PluginMethod TextDocumentDocumentSymbol where
 
 instance PluginMethod TextDocumentCompletion where
   pluginEnabled _ = pluginEnabledConfig plcCompletionOn
-  combineResponses _ conf _ _ (toList -> xs) = consumeCompletionResponse limit $ combine xs
+  combineResponses _ _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
         combine :: [List CompletionItem |? CompletionList] -> ((List CompletionItem) |? CompletionList)
@@ -126,12 +160,19 @@ instance PluginMethod TextDocumentCompletion where
         go comp acc (InR (CompletionList comp' (List ls)) : rest) =
           go (comp && comp') (acc <> DList.fromList ls) rest
 
+        -- boolean disambiguators
+        isCompleteResponse, isIncompleteResponse :: Bool
+        isIncompleteResponse = True
+        isCompleteResponse = False
+
         consumeCompletionResponse limit it@(InR (CompletionList _ (List xx))) =
           case splitAt limit xx of
-            (_, []) -> it
-            (xx', _) -> InR (CompletionList False (List xx'))
+            -- consumed all the items, return the result as is
+            (_, []) -> (limit - length xx, it)
+            -- need to crop the response, set the 'isIncomplete' flag
+            (xx', _) -> (0, InR (CompletionList isIncompleteResponse (List xx')))
         consumeCompletionResponse n (InL (List xx)) =
-          consumeCompletionResponse n (InR (CompletionList False (List xx)))
+          consumeCompletionResponse n (InR (CompletionList isCompleteResponse (List xx)))
 
 instance PluginMethod TextDocumentFormatting where
   type ExtraParams TextDocumentFormatting = (FormattingType, T.Text)
@@ -142,7 +183,7 @@ instance PluginMethod TextDocumentFormatting where
       Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
-  combineResponses _ _ _ _ (x :| _) = x
+  combineResponses _ _ _ _ _ (x :| _) = x
 
 instance PluginMethod TextDocumentRangeFormatting where
   type ExtraParams TextDocumentRangeFormatting = (FormattingType, T.Text)
@@ -153,7 +194,7 @@ instance PluginMethod TextDocumentRangeFormatting where
       Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
 
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
-  combineResponses _ _ _ _ (x :| _) = x
+  combineResponses _ _ _ _ _ (x :| _) = x
 
 -- | Methods which have a PluginMethod instance
 data IdeMethod (m :: Method FromClient Request) = PluginMethod m => IdeMethod (SMethod m)
@@ -253,5 +294,26 @@ data FormattingType = FormatText
 
 responseError :: T.Text -> ResponseError
 responseError txt = ResponseError InvalidParams txt Nothing
+
+-- ---------------------------------------------------------------------
+
+data FallbackCodeActionParams =
+  FallbackCodeActionParams
+    { fallbackWorkspaceEdit :: Maybe WorkspaceEdit
+    , fallbackCommand       :: Maybe Command
+    }
+  deriving (Generic, ToJSON, FromJSON)
+
+-- ---------------------------------------------------------------------
+
+mkLspCommand' :: T.Text -> PluginId -> CommandId -> T.Text -> Maybe [Value] -> Command
+mkLspCommand' pid plid cn title args' = Command title cmdId args
+  where
+    cmdId = mkLspCmdId pid plid cn
+    args = List <$> args'
+
+mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
+mkLspCmdId pid (PluginId plid) (CommandId cid)
+  = pid <> ":" <> plid <> ":" <> cid
 
 

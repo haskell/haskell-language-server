@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE DataKinds #-}
@@ -12,6 +11,7 @@ module Development.IDE.Plugin.HLS
 import           Control.Exception(SomeException)
 import           Control.Lens ((^.))
 import           Control.Monad
+import           Control.Monad.IO.Class
 import qualified Data.Aeson as J
 import qualified Data.DList as DList
 import           Data.Either
@@ -22,8 +22,8 @@ import qualified Data.Text                     as T
 import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
-import           GHC.Generics
 import           Ide.Plugin.Config
+import           Ide.PluginUtils
 import           Ide.Types as HLS
 import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as J
@@ -47,23 +47,18 @@ import UnliftIO (MonadUnliftIO)
 -- ---------------------------------------------------------------------
 --
 
--- | Map a set of plugins to the underlying ghcide engine.  Main point is
--- IdePlugins are arranged by kind of operation, 'Plugin' is arranged by message
--- category ('Notifaction', 'Request' etc).
+-- | Map a set of plugins to the underlying ghcide engine.
 asGhcIdePlugin :: IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin mp =
-    mkPlugin rulesPlugins (Just . HLS.pluginRules) <>
-    -- mkPlugin executeCommandPlugins (Just . pluginCommands) <>
-    mkPlugin extensiblePlugins     (Just . HLS.pluginHandlers)
+    mkPlugin rulesPlugins          HLS.pluginRules <>
+    mkPlugin executeCommandPlugins HLS.pluginCommands <>
+    mkPlugin extensiblePlugins     HLS.pluginHandlers
     where
-        justs (p, Just x)  = [(p, x)]
-        justs (_, Nothing) = []
-
         ls = Map.toList (ipMap mp)
 
-        mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> Maybe b) -> Plugin Config
+        mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> b) -> Plugin Config
         mkPlugin maker selector =
-          case concatMap (\(pid, p) -> justs (pid, selector p)) ls of
+          case map (\(pid, p) -> (pid, selector p)) ls of
             -- If there are no plugins that provide a descriptor, use mempty to
             -- create the plugin – otherwise we we end up declaring handlers for
             -- capabilities that there are no plugins for
@@ -77,6 +72,70 @@ rulesPlugins rs = Plugin rules mempty
     where
         rules = foldMap snd rs
 
+-- ---------------------------------------------------------------------
+
+executeCommandPlugins :: [(PluginId, [PluginCommand IdeState])] -> Plugin Config
+executeCommandPlugins ecs = Plugin mempty (executeCommandHandlers ecs)
+
+executeCommandHandlers :: [(PluginId, [PluginCommand IdeState])] -> LSP.Handlers (ServerM Config)
+executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
+  where
+    pluginMap = Map.fromList ecs
+
+    parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
+    parseCmdId x = case T.splitOn ":" x of
+      [plugin, command] -> Just (PluginId plugin, CommandId command)
+      [_, plugin, command] -> Just (PluginId plugin, CommandId command)
+      _ -> Nothing
+
+    -- The parameters to the HLS command are always the first element
+
+    execCmd ide (ExecuteCommandParams _ cmdId args) = do
+      let cmdParams :: J.Value
+          cmdParams = case args of
+            Just (J.List (x:_)) -> x
+            _ -> J.Null
+      case parseCmdId cmdId of
+        -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
+        Just ("hls", "fallbackCodeAction") ->
+          case J.fromJSON cmdParams of
+            J.Success (FallbackCodeActionParams mEdit mCmd) -> do
+
+              -- Send off the workspace request if it has one
+              forM_ mEdit $ \edit ->
+                LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+
+              case mCmd of
+                -- If we have a command, continue to execute it
+                Just (J.Command _ innerCmdId innerArgs)
+                    -> execCmd ide (ExecuteCommandParams Nothing innerCmdId innerArgs)
+                Nothing -> return $ Right J.Null
+
+            J.Error _str -> return $ Right J.Null
+
+        -- Just an ordinary HIE command
+        Just (plugin, cmd) -> runPluginCommand ide plugin cmd cmdParams
+
+        -- Couldn't parse the command identifier
+        _ -> return $ Left $ ResponseError InvalidParams "Invalid command identifier" Nothing
+
+    runPluginCommand ide p@(PluginId p') com@(CommandId com') arg =
+      case Map.lookup p pluginMap  of
+        Nothing -> return
+          (Left $ ResponseError InvalidRequest ("Plugin " <> p' <> " doesn't exist") Nothing)
+        Just xs -> case List.find ((com ==) . commandId) xs of
+          Nothing -> return $ Left $
+            ResponseError InvalidRequest ("Command " <> com' <> " isn't defined for plugin " <> p'
+                                          <> ". Legal commands are: " <> T.pack(show $ map commandId xs)) Nothing
+          Just (PluginCommand _ _ f) -> case J.fromJSON arg of
+            J.Error err -> return $ Left $
+              ResponseError InvalidParams ("error while parsing args for " <> com' <> " in plugin " <> p'
+                                           <> ": " <> T.pack err
+                                           <> "\narg = " <> T.pack (show arg)) Nothing
+            J.Success a -> f ide a
+
+-- ---------------------------------------------------------------------
+
 extensiblePlugins :: [(PluginId, PluginHandlers IdeState)] -> Plugin Config
 extensiblePlugins xs = Plugin mempty handlers
   where
@@ -88,6 +147,7 @@ extensiblePlugins xs = Plugin mempty handlers
     handlers = mconcat $ do
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params -> do
+        pid <- liftIO getPid
         config <- getClientConfig
         let fs = filter (\(pid,_) -> pluginEnabled m pid config) fs'
         case nonEmpty fs of
@@ -106,7 +166,7 @@ extensiblePlugins xs = Plugin mempty handlers
                   Nothing -> pure $ Left $ combineErrors errs
                   Just xs -> do
                     caps <- LSP.getClientCapabilities
-                    pure $ Right $ combineResponses m config caps params xs
+                    pure $ Right $ combineResponses m pid config caps params xs
 
 runConcurrently
   :: MonadUnliftIO m
