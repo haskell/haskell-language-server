@@ -1,7 +1,7 @@
 -- Support for language options
 
 {-# LANGUAGE ScopedTypeVariables #-}
-module TLanguageOptions where
+module TFlags where
 
 -- Language options set in the module source (ScopedTypeVariables)
 -- also apply to tests so this works fine
@@ -18,8 +18,6 @@ module TLanguageOptions where
 Options apply only in the section where they are defined (unless they are in the setup section), so this will fail:
 
 >>> class L a b c
-Too many parameters for class ‘L’
-(Enable MultiParamTypeClasses to allow multi-parameter classes)
 -}
 
 
@@ -29,12 +27,6 @@ Options apply to all tests in the same section after their declaration.
 Not set yet:
 
 >>> class D
-No parameters for class ‘D’
-(Enable MultiParamTypeClasses to allow no-parameter classes)
-No parameters for class ‘D’
-(Enable MultiParamTypeClasses to allow no-parameter classes)
-No parameters for class ‘D’
-(Enable MultiParamTypeClasses to allow no-parameter classes)
 
 Now it works:
 
@@ -46,7 +38,32 @@ It still works
 >>> class F
 -}
 
-{- Wrong option names are reported.
->>> :set -XWrong
-Unknown extension: "Wrong"
+{- Now -package flag is handled correctly:
+
+>>> :set -package ghc-prim
+>>> import GHC.Prim
+
+-}
+
+{- -fprint-* families
+
+>>> import Data.Proxy
+>>> :set -XPolyKinds
+>>> :t Proxy
+
+>>> :set -fprint-explicit-foralls -fprint-explicit-kinds
+>>> :t Proxy
+-}
+
+{- Invalid option/flags are reported, but valid ones will be reflected
+
+>>> f = const 42 :: (forall x. x) -> Int
+>>> f undefined
+
+>>> :set -XRank2Types -XAbsent -XDatatypeContexts -XWrong -fprint-nothing-at-all
+
+Still, Rank2Types is enabled, as in GHCi:
+
+>>> f = const 42 :: (forall x. x) -> Int
+>>> f undefined
 -}

@@ -1,3 +1,5 @@
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -26,7 +28,7 @@ import Language.Haskell.LSP.Test (
 import Language.Haskell.LSP.Types (
     ApplyWorkspaceEditRequest,
     CodeLens (CodeLens, _command, _range),
-    Command (Command, _title),
+    Command (Command, _title, _arguments),
     Position (..),
     Range (..),
     TextDocumentIdentifier,
@@ -43,12 +45,16 @@ import Test.Tasty (
  )
 import Test.Tasty.ExpectedFailure (
     expectFailBecause,
-    ignoreTestBecause,
  )
 import Test.Tasty.HUnit (
     testCase,
     (@?=),
  )
+import Data.List.Extra (nubOrdOn)
+import Development.IDE (List(List))
+import Ide.Plugin.Eval.Types (EvalParams(..))
+import Data.Aeson (fromJSON)
+import Data.Aeson.Types (Result(Success))
 
 tests :: TestTree
 tests =
@@ -140,9 +146,11 @@ tests =
         , testCase "Local Modules imports are accessible in a test" $
             goldenTest "TLocalImport.hs"
         , -- , testCase "Local Modules can be imported in a test" $ goldenTest "TLocalImportInTest.hs"
-          ignoreTestBecause "Unexplained but minor issue" $
+          expectFailBecause "Unexplained but minor issue" $
             testCase "Setting language option TupleSections" $
                 goldenTest "TLanguageOptionsTupleSections.hs"
+        , testCase ":set accepts ghci flags" $
+            goldenTest "TFlags.hs"
         , testCase "IO expressions are supported, stdout/stderr output is ignored" $
             goldenTest "TIO.hs"
         , testCase "Property checking" $ goldenTest "TProperty.hs"
@@ -187,10 +195,11 @@ goldenTestBy fltr input = runSession hlsCommand fullCaps evalPath $ do
     codeLenses <- reverse <$> getCodeLensesBy fltr doc
     -- liftIO $ print codeLenses
 
-    -- Execute sequentially, waiting for a moment to
-    -- avoid mis-insertion due to staled location info.
+    -- Execute sequentially, nubbing elements to avoid
+    -- evaluating the same section with multiple tests
+    -- more than twice
     mapM_ executeCmd
-        [c | CodeLens{_command = Just c} <- codeLenses]
+        $ nubOrdOn actSectionId [c | CodeLens{_command = Just c} <- codeLenses]
 
     edited <- replaceUnicodeQuotes <$> documentContents doc
     -- liftIO $ T.putStrLn edited
@@ -203,6 +212,10 @@ goldenTestBy fltr input = runSession hlsCommand fullCaps evalPath $ do
         when missingExpected $ T.writeFile expectedFile edited
         expected <- T.readFile expectedFile
         edited @?= expected
+
+actSectionId :: Command -> Int
+actSectionId Command{_arguments = Just (List [fromJSON -> Success EvalParams{..}])} = evalId
+actSectionId _ = error "Invalid CodeLens"
 
 getEvalCodeLenses :: TextDocumentIdentifier -> Session [CodeLens]
 getEvalCodeLenses = getCodeLensesBy isEvalTest
