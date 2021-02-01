@@ -19,6 +19,7 @@ module Ide.PluginUtils
     fullRange,
     mkLspCommand,
     mkLspCmdId,
+    getPid,
   allLspCmdIds,allLspCmdIds',installSigUsr1Handler, subRange)
 where
 
@@ -227,15 +228,9 @@ allLspCmdIds pid commands = concat $ map go commands
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
 mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [J.Value] -> IO Command
-mkLspCommand plid cn title args' = do
+mkLspCommand plid cn title args = do
   pid <- getPid
-  let cmdId = mkLspCmdId pid plid cn
-  let args = List <$> args'
-  return $ Command title cmdId args
-
-mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
-mkLspCmdId pid (PluginId plid) (CommandId cid)
-  = pid <> ":" <> plid <> ":" <> cid
+  pure $ mkLspCommand' pid plid cn title args
 
 -- | Get the operating system process id for the running server
 -- instance. This should be the same for the lifetime of the instance,
