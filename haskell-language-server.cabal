@@ -67,7 +67,7 @@ library
     , ghcide                >=0.7
     , gitrev
     , haskell-lsp           ^>=0.23
-    , hls-plugin-api        >=0.6
+    , hls-plugin-api        >=0.7
     , hie-bios
     , hiedb
     , hslogger
