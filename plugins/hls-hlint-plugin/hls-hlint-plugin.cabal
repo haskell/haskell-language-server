@@ -38,7 +38,7 @@ library
     , directory
     , extra
     , filepath
-    , ghc-exactprint
+    , ghc-exactprint           >=0.6.3.4
     , ghcide                   >=0.7.2.0
     , hashable
     , haskell-lsp
