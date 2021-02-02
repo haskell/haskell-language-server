@@ -30,6 +30,7 @@ import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
 import Data.Typeable
+import Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import Development.IDE.Spans.Common
 import Development.IDE.Test
@@ -42,7 +43,7 @@ import Development.IDE.Test
       flushMessages,
       standardizeQuotes,
       waitForAction,
-      Cursor )
+      Cursor, expectMessages )
 import Development.IDE.Test.Runfiles
 import qualified Development.IDE.Types.Diagnostics as Diagnostics
 import Development.IDE.Types.Location
@@ -156,7 +157,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider  Nothing
     , chk "NO color"                         _colorProvider (Just $ ColorOptionsStatic False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ FoldingRangeOptionsStatic False)
-    , che "   execute command"      _executeCommandProvider [blockCommandId, typeLensCommandId]
+    , che "   execute command"      _executeCommandProvider [blockCommandId, extendImportCommandId, typeLensCommandId]
     , chk "   workspace"                         _workspace (Just $ WorkspaceOptions (Just WorkspaceFolderOptions{_supported = Just True, _changeNotifications = Just ( WorkspaceFolderChangeNotificationsBool True )}))
     , chk "NO experimental"                   _experimental  Nothing
     ] where
@@ -3409,6 +3410,35 @@ completionTest name src pos expected = testSessionWait name $ do
             when expectedDocs $
                 assertBool ("Missing docs: " <> T.unpack _label) (isJust _documentation)
 
+completionCommandTest ::
+  String ->
+  [T.Text] ->
+  Position ->
+  T.Text ->
+  [T.Text] ->
+  TestTree
+completionCommandTest name src pos wanted expected = testSession name $ do
+  docId <- createDoc "A.hs" "haskell" (T.unlines src)
+  _ <- waitForDiagnostics
+  compls <- getCompletions docId pos
+  let wantedC = find ( \case
+            CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
+            _ -> False
+            ) compls
+  case wantedC of
+    Nothing ->
+      liftIO $ assertFailure $ "Cannot find expected completion in: " <> show [_label | CompletionItem {_label} <- compls]
+    Just CompletionItem {..} -> do
+      c <- assertJust "Expected a command" _command
+      executeCommand c
+      if src /= expected
+          then do
+            modifiedCode <- getDocumentEdit docId
+            liftIO $ modifiedCode @?= T.unlines expected
+          else do
+            expectMessages @ApplyWorkspaceEditRequest 1 $ \edit ->
+              liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
+
 topLevelCompletionTests :: [TestTree]
 topLevelCompletionTests = [
     completionTest
@@ -3557,46 +3587,104 @@ nonLocalCompletionTests =
        ]
        (Position 3 6)
        [],
-    expectFailBecause "Auto import completion snippets were disabled in v0.6.0.2" $
-      testGroup "auto import snippets"
-      [ completionTest
+    testGroup "auto import snippets"
+      [ completionCommandTest
         "show imports not in list - simple"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
         "module A where", "import Control.Monad (msum)", "f = joi"]
         (Position 3 6)
-        [("join", CiFunction, "join ${1:m (m a)}", False, False,
-            Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 26}, _end = Position {_line = 2, _character = 26}}, _newText = "join, "}]))]
-      , completionTest
+        "join"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import Control.Monad (msum, join)", "f = joi"]
+      , completionCommandTest
         "show imports not in list - multi-line"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
         "module A where", "import Control.Monad (\n    msum)", "f = joi"]
         (Position 4 6)
-        [("join", CiFunction, "join ${1:m (m a)}", False, False,
-            Just (List [TextEdit {_range = Range {_start = Position {_line = 3, _character = 8}, _end = Position {_line = 3, _character = 8}}, _newText = "join, "}]))]
-      , completionTest
+        "join"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import Control.Monad (\n    msum, join)", "f = joi"]
+      , completionCommandTest
         "show imports not in list - names with _"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import qualified Control.Monad as M (msum)", "f = M.mapM_"]
+        "module A where", "import Control.Monad as M (msum)", "f = M.mapM_"]
         (Position 3 11)
-        [("mapM_", CiFunction, "mapM_ ${1:a -> m b} ${2:t a}", False, False,
-            Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 41}, _end = Position {_line = 2, _character = 41}}, _newText = "mapM_, "}]))]
-      , completionTest
+        "mapM_"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import Control.Monad as M (msum, mapM_)", "f = M.mapM_"]
+      , completionCommandTest
         "show imports not in list - initial empty list"
         ["{-# LANGUAGE NoImplicitPrelude #-}",
-        "module A where", "import qualified Control.Monad as M ()", "f = M.joi"]
+        "module A where", "import Control.Monad as M ()", "f = M.joi"]
         (Position 3 10)
-        [("join", CiFunction, "join ${1:m (m a)}", False, False,
-            Just (List [TextEdit {_range = Range {_start = Position {_line = 2, _character = 37}, _end = Position {_line = 2, _character = 37}}, _newText = "join, "}]))]
-      , completionTest
-        "record snippet on import"
-        ["module A where", "import Text.Printf (FormatParse(FormatParse))", "FormatParse"]
-        (Position 2 10)
-        [("FormatParse", CiStruct, "FormatParse ", False, False,
-        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}])),
-        ("FormatParse", CiConstructor, "FormatParse ${1:String} ${2:Char} ${3:String}", False, False,
-        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}])),
-        ("FormatParse", CiSnippet, "FormatParse {fpModifiers=${1:_fpModifiers}, fpChar=${2:_fpChar}, fpRest=${3:_fpRest}}", False, False,
-        Just (List [TextEdit {_range = Range {_start = Position {_line = 1, _character = 44}, _end = Position {_line = 1, _character = 44}}, _newText = "FormatParse, "}]))
+        "join"
+        ["{-# LANGUAGE NoImplicitPrelude #-}",
+        "module A where", "import Control.Monad as M (join)", "f = M.joi"]
+      , testGroup "qualified imports"
+        [ completionCommandTest
+            "single"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad ()", "f = Control.Monad.joi"]
+            (Position 3 22)
+            "join"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad (join)", "f = Control.Monad.joi"]
+        , completionCommandTest
+            "as"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M ()", "f = M.joi"]
+            (Position 3 10)
+            "join"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M (join)", "f = M.joi"]
+        , completionCommandTest
+            "multiple"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M ()", "import Control.Monad as N ()", "f = N.joi"]
+            (Position 4 10)
+            "join"
+            ["{-# LANGUAGE NoImplicitPrelude #-}",
+            "module A where", "import Control.Monad as M ()", "import Control.Monad as N (join)", "f = N.joi"]
+        ]
+      , testGroup "Data constructor"
+        [ completionCommandTest
+            "not imported"
+            ["module A where", "import Text.Printf ()", "ZeroPad"]
+            (Position 2 4)
+            "ZeroPad"
+            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+        , completionCommandTest
+            "parent imported"
+            ["module A where", "import Text.Printf (FormatAdjustment)", "ZeroPad"]
+            (Position 2 4)
+            "ZeroPad"
+            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+        , completionCommandTest
+            "already imported"
+            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+            (Position 2 4)
+            "ZeroPad"
+            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+        ]
+      , testGroup "Record completion"
+        [ completionCommandTest
+            "not imported"
+            ["module A where", "import Text.Printf ()", "FormatParse"]
+            (Position 2 10)
+            "FormatParse {"
+            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
+        , completionCommandTest
+            "parent imported"
+            ["module A where", "import Text.Printf (FormatParse)", "FormatParse"]
+            (Position 2 10)
+            "FormatParse {"
+            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
+        , completionCommandTest
+            "already imported"
+            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
+            (Position 2 10)
+            "FormatParse {"
+            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
         ]
       ],
       -- we need this test to make sure the ghcide completions module does not return completions for language pragmas. this functionality is turned on in hls
