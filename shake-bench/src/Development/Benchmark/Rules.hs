@@ -177,6 +177,8 @@ data MkBuildRules buildSystem = MkBuildRules
     findGhc            :: buildSystem -> FilePath -> IO FilePath
     -- | Name of the binary produced by 'buildProject'
   , executableName     :: String
+    -- | An action that captures the source dependencies, used for the HEAD build
+  , projectDepends     :: Action ()
     -- | Build the project found in the cwd and save the build artifacts in the output folder
   , buildProject       :: buildSystem
                        -> [CmdOption]
@@ -204,9 +206,8 @@ buildRules build MkBuildRules{..} = do
                 , build -/- "binaries/HEAD/ghc.path"
                 ]
     &%> \[out, ghcpath] -> do
+      projectDepends
       liftIO $ createDirectoryIfMissing True $ dropFileName out
-      -- TOOD more precise dependency tracking
-      need =<< getDirectoryFiles "." ["//*.hs", "*.cabal"]
       buildSystem <- askOracle $ GetBuildSystem ()
       buildProject buildSystem [Cwd "."] (takeDirectory out)
       ghcLoc <- liftIO $ findGhc buildSystem "."

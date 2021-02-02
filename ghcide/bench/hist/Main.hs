@@ -55,6 +55,7 @@ import Development.Shake.Classes
 import System.Console.GetOpt
 import Data.Maybe
 import Control.Monad.Extra
+import System.FilePath
 
 
 configPath :: FilePath
@@ -84,7 +85,12 @@ main = shakeArgsWith shakeOpts [configOpt] $ \configs wants -> pure $ Just $ do
       _ -> want wants
 
 ghcideBuildRules :: MkBuildRules BuildSystem
-ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" buildGhcide
+ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" projectDepends buildGhcide
+  where
+      projectDepends = do
+        need . map ("src" </>) =<< getDirectoryFiles "src" ["//*.hs"]
+        need . map ("session-loader" </>) =<< getDirectoryFiles "session-loader" ["//*.hs"]
+        need =<< getDirectoryFiles "." ["*.cabal"]
 
 --------------------------------------------------------------------------------
 
