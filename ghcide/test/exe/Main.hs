@@ -1539,10 +1539,25 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
                 "HideFunction.hs.expected.qualified.fromList.E"
         ]
     , testGroup "(++)"
-        [ testCase "Prelude" $
+        [ testCase "Prelude, parensed" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: Prelude.++"
                 "HideFunction.hs.expected.qualified.append.Prelude"
+        , testCase "Prelude, infix" $
+            compareTwo
+                "HideQualifyInfix.hs" [(4,19)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifyInfix.hs.expected"
+        , testCase "Prelude, left section" $
+            compareTwo
+                "HideQualifySectionLeft.hs" [(4,15)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifySectionLeft.hs.expected"
+        , testCase "Prelude, right section" $
+            compareTwo
+                "HideQualifySectionRight.hs" [(4,18)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifySectionRight.hs.expected"
         ]
     ]
   ]
