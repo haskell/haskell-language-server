@@ -20,9 +20,9 @@ import           GHC.LanguageExtensions.Type
 import           GhcPlugins                        (HscEnv (hsc_dflags))
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.LSP.Core         (LspFuncs (withIndefiniteProgress),
+import           Language.LSP.Server         (LspFuncs (withIndefiniteProgress),
                                                     ProgressCancellable (Cancellable))
-import           Language.Haskell.LSP.Types
+import           Language.LSP.Types
 import "ormolu"  Ormolu
 import           System.FilePath                   (takeFileName)
 import           Text.Regex.TDFA.Text              ()

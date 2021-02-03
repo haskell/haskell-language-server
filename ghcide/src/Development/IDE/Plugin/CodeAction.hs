@@ -174,7 +174,7 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
 
 suggestDisableWarning :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestDisableWarning pm contents Diagnostic{..}
-    | Just (InR (T.stripPrefix "-W" . T.pack -> Just w)) <- _code =
+    | Just (InR (T.stripPrefix "-W" -> Just w)) <- _code =
         pure
             ( "Disable \"" <> w <> "\" warnings"
             , [TextEdit (endOfModuleHeader pm contents) $ "{-# OPTIONS_GHC -Wno-" <> w <> " #-}\n"]

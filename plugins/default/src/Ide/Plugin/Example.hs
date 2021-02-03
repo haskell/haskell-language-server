@@ -29,7 +29,7 @@ import Development.IDE.Core.Shake (getDiagnostics, getHiddenDiagnostics)
 import GHC.Generics
 import Ide.PluginUtils
 import Ide.Types
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
 import Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------

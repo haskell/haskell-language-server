@@ -15,6 +15,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
 
 module Ide.Plugin.Splice
     ( descriptor,
@@ -48,19 +49,20 @@ import Ide.PluginUtils (mkLspCommand, responseError)
 import Development.IDE.GHC.ExactPrint
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint (setPrecedingLines, uniqueSrcSpanT)
-import Language.Haskell.LSP.Core
-import Language.Haskell.LSP.Messages
-import Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types.Lens as J
+import Language.LSP.Server
+import Language.LSP.Types
+import Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens as J
 import RnSplice
 import TcRnMonad
 import Data.Foldable (Foldable(foldl'))
+import Control.Monad.IO.Unlift
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
         { pluginCommands = commands
-        , pluginCodeActionProvider = Just codeAction
+        , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
         }
 
 commands :: [PluginCommand IdeState]
@@ -81,34 +83,11 @@ expandTHSplice ::
     -- | Inplace?
     ExpandStyle ->
     CommandFunction IdeState ExpandSpliceParams
-expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
-    fmap (fromMaybe defaultResult) $
-        runMaybeT $ do
-
-            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
-            eedits <-
-                ( lift . runExceptT . withTypeChecked fp
-                        =<< MaybeT
-                            (runAction "expandTHSplice.TypeCheck" ideState $ use TypeCheck fp)
-                    )
-                    <|> lift (runExceptT $ expandManually fp)
-
-            case eedits of
-                Left err -> do
-                    reportEditor
-                        lsp
-                        MtError
-                        ["Error during expanding splice: " <> T.pack err]
-                    pure (Left $ responseError $ T.pack err, Nothing)
-                Right edits ->
-                    pure
-                        ( Right Null
-                        , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
-                        )
-    where
-        range = realSrcSpanToRange spliceSpan
-        srcSpan = RealSrcSpan spliceSpan
-        defaultResult = (Right Null, Nothing)
+expandTHSplice _eStyle ideState params@ExpandSpliceParams {..} = do
+    clientCapabilities <- getClientCapabilities
+    rio <- askRunInIO
+    let reportEditor :: ReportEditor
+        reportEditor msgTy msgs = liftIO $ rio $ sendNotification SWindowShowMessage (ShowMessageParams msgTy (T.unlines msgs))
         expandManually fp = do
             mresl <-
                 liftIO $ runAction "expandTHSplice.fallback.TypeCheck (stale)" ideState $ useWithStale TypeCheck fp
@@ -118,7 +97,6 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                 )
                 pure mresl
             reportEditor
-                lsp
                 MtWarning
                 [ "Expansion in type-chcking phase failed;"
                 , "trying to expand manually, but note taht it is less rigorous."
@@ -130,7 +108,8 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
             (ps, hscEnv, _dflags) <- setupHscEnv ideState fp pm
 
             manualCalcEdit
-                lsp
+                clientCapabilities
+                reportEditor
                 range
                 ps
                 hscEnv
@@ -138,6 +117,7 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                 spliceSpan
                 _eStyle
                 params
+
         withTypeChecked fp TcModuleResult {..} = do
             (ps, _hscEnv, dflags) <- setupHscEnv ideState fp tmrParsed
             let Splices {..} = tmrTopLevelSplices
@@ -162,7 +142,7 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                     expandeds <&> \(_, expanded) ->
                         transform
                             dflags
-                            (clientCapabilities lsp)
+                            clientCapabilities
                             uri
                             (graft (RealSrcSpan spliceSpan) expanded)
                             ps
@@ -178,13 +158,43 @@ expandTHSplice _eStyle lsp ideState params@ExpandSpliceParams {..} =
                         declSuperSpans <&> \(_, expanded) ->
                             transform
                                 dflags
-                                (clientCapabilities lsp)
+                                clientCapabilities
                                 uri
                                 (graftDecls (RealSrcSpan spliceSpan) expanded)
                                 ps
                                 <&>
                                 -- FIXME: Why ghc-exactprint sweeps preceeding comments?
                                 adjustToRange uri range
+
+    res <- liftIO $ runMaybeT $ do
+
+            fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri uri
+            eedits <-
+                ( lift . runExceptT . withTypeChecked fp
+                        =<< MaybeT
+                            (runAction "expandTHSplice.TypeCheck" ideState $ use TypeCheck fp)
+                    )
+                    <|> lift (runExceptT $ expandManually fp)
+
+            case eedits of
+                Left err -> do
+                    reportEditor
+                        MtError
+                        ["Error during expanding splice: " <> T.pack err]
+                    pure (Left $ responseError $ T.pack err)
+                Right edits ->
+                    pure (Right edits)
+    case res of
+      Nothing -> pure $ Right Null
+      Just (Left err) -> pure $ Left err
+      Just (Right edit) -> do
+        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+        pure $ Right Null
+
+    where
+        range = realSrcSpanToRange spliceSpan
+        srcSpan = RealSrcSpan spliceSpan
+
 
 setupHscEnv
     :: IdeState
@@ -239,10 +249,12 @@ adjustToRange uri ran (WorkspaceEdit mhult mlt) =
                         eds
              in adjustLine minStart <$> eds
         adjustWS = ix uri %~ adjustTextEdits
-        adjustDoc es
+        adjustDoc :: DocumentChange -> DocumentChange
+        adjustDoc (InR es) = InR es
+        adjustDoc (InL es)
             | es ^. J.textDocument . J.uri == uri =
-                es & J.edits %~ adjustTextEdits
-            | otherwise = es
+                InL $ es & J.edits %~ adjustTextEdits
+            | otherwise = InL es
 
         adjustLine :: Range -> TextEdit -> TextEdit
         adjustLine bad =
@@ -291,17 +303,11 @@ classifyAST = \case
     Pat -> OneToOneAST @Pat proxy#
     HsType -> OneToOneAST @HsType proxy#
 
-reportEditor :: MonadIO m => LspFuncs a -> MessageType -> [T.Text] -> m ()
-reportEditor lsp msgTy msgs =
-    liftIO $
-        sendFunc lsp $
-            NotShowMessage $
-                NotificationMessage "2.0" WindowShowMessage $
-                    ShowMessageParams msgTy $
-                        T.unlines msgs
+type ReportEditor = forall m. MonadIO m => MessageType -> [T.Text] -> m ()
 
 manualCalcEdit ::
-    LspFuncs a ->
+    ClientCapabilities ->
+    ReportEditor ->
     Range ->
     Annotated ParsedSource ->
     HscEnv ->
@@ -310,14 +316,14 @@ manualCalcEdit ::
     ExpandStyle ->
     ExpandSpliceParams ->
     ExceptT String IO WorkspaceEdit
-manualCalcEdit lsp ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..} = do
+manualCalcEdit clientCapabilities reportEditor ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..} = do
     (warns, resl) <-
         ExceptT $ do
             ((warns, errs), eresl) <-
                 initTcWithGbl hscEnv typechkd srcSpan $
                     case classifyAST spliceContext of
                         IsHsDecl -> fmap (fmap $ adjustToRange uri ran) $
-                            flip (transformM dflags (clientCapabilities lsp) uri) ps $
+                            flip (transformM dflags clientCapabilities uri) ps $
                                 graftDeclsWithM (RealSrcSpan srcSpan) $ \case
                                     (L _spn (SpliceD _ (SpliceDecl _ (L _ spl) _))) -> do
                                         eExpr <-
@@ -330,7 +336,7 @@ manualCalcEdit lsp ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..
                                         pure $ Just eExpr
                                     _ -> pure Nothing
                         OneToOneAST astP ->
-                            flip (transformM dflags (clientCapabilities lsp) uri) ps $
+                            flip (transformM dflags clientCapabilities uri) ps $
                                 graftWithM (RealSrcSpan srcSpan) $ \case
                                     (L _spn (matchSplice astP -> Just spl)) -> do
                                         eExpr <-
@@ -347,7 +353,6 @@ manualCalcEdit lsp ran ps hscEnv typechkd srcSpan _eStyle ExpandSpliceParams {..
     unless
         (null warns)
         $ reportEditor
-            lsp
             MtWarning
             [ "Warning during expanding: "
             , ""
@@ -383,8 +388,8 @@ fromSearchResult _ = Nothing
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
-codeAction :: CodeActionProvider IdeState
-codeAction _ state plId docId ran _ =
+codeAction :: SimpleHandler IdeState TextDocumentCodeAction
+codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
     fmap (maybe (Right $ List []) Right) $
         runMaybeT $ do
             fp <- MaybeT $ pure $ uriToNormalizedFilePath $ toNormalizedUri theUri
@@ -399,8 +404,8 @@ codeAction _ state plId docId ran _ =
                         let params = ExpandSpliceParams {uri = theUri, ..}
                         act <- liftIO $ mkLspCommand plId cmdId title (Just [toJSON params])
                         pure $
-                            CACodeAction $
-                                CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing (Just act)
+                            InR $
+                                CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing Nothing Nothing (Just act)
 
             pure $ maybe mempty List mcmds
     where

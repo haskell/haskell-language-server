@@ -8,6 +8,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
 
 #include "ghc-api-version.h"
 
@@ -29,7 +30,8 @@ import Development.Shake.Classes
 import GHC.Generics (Generic)
 import Ide.PluginUtils ( mkLspCommand )
 import Ide.Types
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
+import Language.LSP.Server
 import PrelNames (pRELUDE)
 import RnNames
   ( findImportUsage,
@@ -45,14 +47,17 @@ importCommandId = "ImportLensCommand"
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { -- This plugin provides code lenses
-      pluginCodeLensProvider = Just lensProvider,
+    { 
       -- This plugin provides a command handler
       pluginCommands = [importLensCommand],
-      -- This plugin provides code actions
-      pluginCodeActionProvider = Just codeActionProvider,
       -- This plugin defines a new rule
-      pluginRules = minimalImportsRule
+      pluginRules = minimalImportsRule,
+      pluginHandlers = mconcat
+        [ -- This plugin provides code lenses
+          mkPluginHandler STextDocumentCodeLens lensProvider
+          -- This plugin provides code actions
+        , mkPluginHandler STextDocumentCodeAction codeActionProvider
+        ]
     }
 
 -- | The command descriptor
@@ -67,9 +72,10 @@ data ImportCommandParams = ImportCommandParams WorkspaceEdit
 
 -- | The actual command handler
 runImportCommand :: CommandFunction IdeState ImportCommandParams
-runImportCommand _lspFuncs _state (ImportCommandParams edit) = do
+runImportCommand _state (ImportCommandParams edit) = do
   -- This command simply triggers a workspace edit!
-  return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams edit))
+  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+  return (Right Null)
 
 -- | For every implicit import statement, return a code lens of the corresponding explicit import
 -- Example - for the module below:
@@ -81,15 +87,14 @@ runImportCommand _lspFuncs _state (ImportCommandParams edit) = do
 -- the provider should produce one code lens associated to the import statement:
 --
 -- > import Data.List (intercalate, sortBy)
-lensProvider :: CodeLensProvider IdeState
+lensProvider :: SimpleHandler IdeState TextDocumentCodeLens
 lensProvider
-  _lspFuncs -- LSP functions, not used
   state -- ghcide state, used to retrieve typechecking artifacts
   pId -- plugin Id
   CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
     -- VSCode uses URIs instead of file paths
     -- haskell-lsp provides conversion functions
-    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri =
+    | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
       do
         mbMinImports <- runAction "" state $ useWithStale MinimalImports nfp
         case mbMinImports of
@@ -110,10 +115,10 @@ lensProvider
 
 -- | If there are any implicit imports, provide one code action to turn them all
 --   into explicit imports.
-codeActionProvider :: CodeActionProvider IdeState
-codeActionProvider _lspFuncs ideState _pId docId range _context
+codeActionProvider :: SimpleHandler IdeState TextDocumentCodeAction
+codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
-    Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri =
+    Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
     do
       pm <- runIde ideState $ use GetParsedModule nfp
       let insideImport = case pm of
@@ -132,7 +137,7 @@ codeActionProvider _lspFuncs ideState _pId docId range _context
                       maybe [] getMinimalImportsResult minImports,
                     Just e <- [mkExplicitEdit zeroMapping imp explicit]
                 ]
-              caExplicitImports = CACodeAction CodeAction {..}
+              caExplicitImports = InR CodeAction {..}
               _title = "Make all imports explicit"
               _kind = Just CodeActionQuickFix
               _command = Nothing
@@ -140,6 +145,8 @@ codeActionProvider _lspFuncs ideState _pId docId range _context
               _changes = Just $ HashMap.singleton _uri $ List edits
               _documentChanges = Nothing
               _diagnostics = Nothing
+              _isPreferred = Nothing
+              _disabled = Nothing
           return $ Right $ List [caExplicitImports | not (null edits)]
   | otherwise =
     return $ Right $ List []

@@ -22,12 +22,11 @@ import GHC (DynFlags, moduleNameString)
 import GHC.LanguageExtensions.Type (Extension (Cpp))
 import GhcPlugins (HscEnv (hsc_dflags))
 import Ide.PluginUtils (responseError, makeDiffTextEdit)
-import Language.Haskell.LSP.Messages (FromServerMessage (ReqShowMessage))
 
 import Ide.Types
-import Language.Haskell.LSP.Core
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Lens
+import Language.LSP.Server
+import Language.LSP.Types
+import Language.LSP.Types.Lens
 import "fourmolu" Ormolu
 
 -- ---------------------------------------------------------------------

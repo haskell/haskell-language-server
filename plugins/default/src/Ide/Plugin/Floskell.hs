@@ -15,7 +15,7 @@ import           Development.IDE as D
 import           Floskell
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.LSP.Types
+import           Language.LSP.Types
 import           Text.Regex.TDFA.Text()
 
 -- ---------------------------------------------------------------------

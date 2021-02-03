@@ -41,7 +41,7 @@ library
     , ghc-exactprint           >=0.6.3.4
     , ghcide                   >=0.7.2.0
     , hashable
-    , haskell-lsp
+    , lsp
     , hlint                    >=3.2
     , hls-plugin-api           >=0.7.0.0
     , hslogger

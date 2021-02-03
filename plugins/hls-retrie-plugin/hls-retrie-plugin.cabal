@@ -21,8 +21,8 @@ library
                ,    deepseq
                ,    directory
                ,    extra
-               ,    haskell-lsp
-               ,    haskell-lsp-types
+               ,    lsp
+               ,    lsp-types
                ,    hls-plugin-api
                ,    ghc
                ,    ghcide

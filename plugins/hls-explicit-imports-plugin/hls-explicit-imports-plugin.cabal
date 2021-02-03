@@ -19,7 +19,8 @@ library
                ,    base        >=4.12 && <5
                ,    containers
                ,    deepseq
-               ,    haskell-lsp-types
+               ,    lsp-types
+               ,    lsp
                ,    hls-plugin-api
                ,    ghc
                ,    ghcide     >= 0.7.4

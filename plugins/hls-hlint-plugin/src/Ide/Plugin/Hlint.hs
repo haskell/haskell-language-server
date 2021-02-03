@@ -8,6 +8,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports    #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DataKinds         #-}
 
 module Ide.Plugin.Hlint
   (
@@ -59,12 +60,13 @@ import Ide.Types
 import Ide.Plugin.Config
 import Ide.PluginUtils
 import Language.Haskell.HLint as Hlint
-import Language.Haskell.LSP.Core
-    ( LspFuncs(withIndefiniteProgress),
+import Language.LSP.Server
+    ( withIndefiniteProgress,
+      sendRequest,
       ProgressCancellable(Cancellable) )
-import Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types      as LSP
-import qualified Language.Haskell.LSP.Types.Lens as LSP
+import Language.LSP.Types
+import qualified Language.LSP.Types      as LSP
+import qualified Language.LSP.Types.Lens as LSP
 
 import Text.Regex.TDFA.Text()
 import GHC.Generics (Generic)
@@ -78,7 +80,7 @@ descriptor plId = (defaultPluginDescriptor plId)
       [ PluginCommand "applyOne" "Apply a single hint" applyOneCmd
       , PluginCommand "applyAll" "Apply all hints to the file" applyAllCmd
       ]
-    , pluginCodeActionProvider = Just codeActionProvider
+    , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
   }
 
 -- This rule only exists for generating file diagnostics
@@ -104,7 +106,7 @@ rules plugin = do
   define $ \GetHlintDiagnostics file -> do
     config <- getClientConfigAction
     let pluginConfig = configForPlugin config plugin
-    let hlintOn' = hlintOn config && pluginEnabled pluginConfig plcDiagnosticsOn
+    let hlintOn' = hlintOn config && plcGlobalOn pluginConfig && plcDiagnosticsOn pluginConfig
     ideas <- if hlintOn' then getIdeas file else return (Right [])
     return (diagnostics file ideas, Just ())
 
@@ -128,7 +130,7 @@ rules plugin = do
             _range    = srcSpanToRange $ ideaSpan idea
           , _severity = Just LSP.DsInfo
           -- we are encoding the fact that idea has refactorings in diagnostic code
-          , _code     = Just (LSP.StringValue $ T.pack $ codePre ++ ideaHint idea)
+          , _code     = Just (InR $ T.pack $ codePre ++ ideaHint idea)
           , _source   = Just "hlint"
           , _message  = idea2Message idea
           , _relatedInformation = Nothing
@@ -151,7 +153,7 @@ rules plugin = do
         LSP.Diagnostic {
             _range    = srcSpanToRange l
           , _severity = Just LSP.DsInfo
-          , _code     = Just (LSP.StringValue "parser")
+          , _code     = Just (InR "parser")
           , _source   = Just "hlint"
           , _message  = T.unlines [T.pack msg,T.pack contents]
           , _relatedInformation = Nothing
@@ -250,8 +252,8 @@ getHlintSettingsRule usage =
 
 -- ---------------------------------------------------------------------
 
-codeActionProvider :: CodeActionProvider IdeState
-codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CACodeAction <$> getCodeActions
+codeActionProvider :: SimpleHandler IdeState TextDocumentCodeAction
+codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right . LSP.List . map InR <$> liftIO getCodeActions
   where
 
     getCodeActions = do
@@ -274,13 +276,13 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
     applyAllAction = do
       let args = Just [toJSON (docId ^. LSP.uri)]
       cmd <- mkLspCommand plId "applyAll" "Apply all hints" args
-      pure $ LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing (Just cmd)
+      pure $ LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd)
 
     applyOneActions :: IO [LSP.CodeAction]
     applyOneActions = catMaybes <$> mapM mkHlintAction (filter validCommand diags)
 
     -- |Some hints do not have an associated refactoring
-    validCommand (LSP.Diagnostic _ _ (Just (LSP.StringValue code)) (Just "hlint") _ _ _) =
+    validCommand (LSP.Diagnostic _ _ (Just (InR code)) (Just "hlint") _ _ _) =
         "refact:" `T.isPrefixOf` code
     validCommand _ =
         False
@@ -288,10 +290,10 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
     LSP.List diags = context ^. LSP.diagnostics
 
     mkHlintAction :: LSP.Diagnostic -> IO (Maybe LSP.CodeAction)
-    mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (LSP.StringValue code)) (Just "hlint") _ _ _) =
+    mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (InR code)) (Just "hlint") _ _ _) =
       Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
      where
-       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing (Just cmd)
+       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd)
        -- we have to recover the original ideaHint removing the prefix
        ideaHint = T.replace "refact:" "" code
        title = "Apply hint: " <> ideaHint
@@ -302,18 +304,19 @@ codeActionProvider _lf ideState plId docId _ context = Right . LSP.List . map CA
 -- ---------------------------------------------------------------------
 
 applyAllCmd :: CommandFunction IdeState Uri
-applyAllCmd lf ide uri = do
+applyAllCmd ide uri = do
   let file = maybe (error $ show uri ++ " is not a file.")
                     toNormalizedFilePath'
                    (uriToFilePath' uri)
-  withIndefiniteProgress lf "Applying all hints" Cancellable $ do
+  withIndefiniteProgress "Applying all hints" Cancellable $ do
     logm $ "hlint:applyAllCmd:file=" ++ show file
-    res <- applyHint ide file Nothing
+    res <- liftIO $ applyHint ide file Nothing
     logm $ "hlint:applyAllCmd:res=" ++ show res
-    return $
-      case res of
-        Left err -> (Left (responseError (T.pack $ "hlint:applyAll: " ++ show err)), Nothing)
-        Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+    case res of
+      Left err -> pure $ Left (responseError (T.pack $ "hlint:applyAll: " ++ show err))
+      Right fs -> do
+        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
+        pure $ Right Null
 
 -- ---------------------------------------------------------------------
 
@@ -332,19 +335,20 @@ data OneHint = OneHint
   } deriving (Eq, Show)
 
 applyOneCmd :: CommandFunction IdeState ApplyOneParams
-applyOneCmd lf ide (AOP uri pos title) = do
+applyOneCmd ide (AOP uri pos title) = do
   let oneHint = OneHint pos title
   let file = maybe (error $ show uri ++ " is not a file.") toNormalizedFilePath'
                    (uriToFilePath' uri)
   let progTitle = "Applying hint: " <> title
-  withIndefiniteProgress lf progTitle Cancellable $ do
+  withIndefiniteProgress progTitle Cancellable $ do
     logm $ "hlint:applyOneCmd:file=" ++ show file
-    res <- applyHint ide file (Just oneHint)
+    res <- liftIO $ applyHint ide file (Just oneHint)
     logm $ "hlint:applyOneCmd:res=" ++ show res
-    return $
-      case res of
-        Left err -> (Left (responseError (T.pack $ "hlint:applyOne: " ++ show err)), Nothing)
-        Right fs -> (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams fs))
+    case res of
+      Left err -> pure $ Left (responseError (T.pack $ "hlint:applyOne: " ++ show err))
+      Right fs -> do
+        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing fs) (\_ -> pure ())
+        pure $ Right Null
 
 applyHint :: IdeState -> NormalizedFilePath -> Maybe OneHint -> IO (Either String WorkspaceEdit)
 applyHint ide nfp mhint =

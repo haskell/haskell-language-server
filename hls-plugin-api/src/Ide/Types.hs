@@ -218,11 +218,13 @@ instance Semigroup (PluginHandlers a) where
 instance Monoid (PluginHandlers a) where
   mempty = PluginHandlers mempty
 
+type SimpleHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m))
+
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
   :: PluginMethod m
   => SClientMethod m
-  -> (ideState -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m)))
+  -> SimpleHandler ideState m
   -> PluginHandlers ideState
 mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandler f')
   where

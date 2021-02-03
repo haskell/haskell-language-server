@@ -37,7 +37,7 @@ withWarnings diagSource action = do
   return (reverse $ concat warns, res)
 
 attachReason :: WarnReason -> Diagnostic -> Diagnostic
-attachReason wr d = d{_code = InR . T.unpack <$> showReason wr}
+attachReason wr d = d{_code = InR <$> showReason wr}
  where
   showReason = \case
     NoReason -> Nothing

@@ -7,6 +7,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE TypeOperators #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic
@@ -56,8 +58,8 @@ import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.LSP.Core (clientCapabilities)
-import           Language.Haskell.LSP.Types
+import           Language.LSP.Server
+import           Language.LSP.Types
 import           OccName
 import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
@@ -74,7 +76,7 @@ descriptor plId = (defaultPluginDescriptor plId)
               (tacticDesc $ tcCommandName tc)
               (tacticCmd $ commandTactic tc))
               [minBound .. maxBound]
-    , pluginCodeActionProvider = Just codeActionProvider
+    , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
     }
 
 tacticDesc :: T.Text -> T.Text
@@ -83,7 +85,7 @@ tacticDesc name = "fill the hole using the " <> name <> " tactic"
 ------------------------------------------------------------------------------
 -- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
 -- UI.
-type TacticProvider = DynFlags -> PluginId -> Uri -> Range -> Judgement -> IO [CAResult]
+type TacticProvider = DynFlags -> PluginId -> Uri -> Range -> Judgement -> IO [Command |? CodeAction]
 
 
 ------------------------------------------------------------------------------
@@ -164,10 +166,10 @@ runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
 
 
-codeActionProvider :: CodeActionProvider IdeState
-codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
+codeActionProvider :: SimpleHandler IdeState TextDocumentCodeAction
+codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
-      fromMaybeT (Right $ List []) $ do
+      liftIO $ fromMaybeT (Right $ List []) $ do
         (_, jdg, _, dflags) <- judgementForHole state nfp range
         actions <- lift $
           -- This foldMap is over the function monoid.
@@ -178,11 +180,11 @@ codeActionProvider _conf state plId (TextDocumentIdentifier uri) range _ctx
             range
             jdg
         pure $ Right $ List actions
-codeActionProvider _ _ _ _ _ _ = pure $ Right $ codeActions []
+codeActionProvider _ _ _ = pure $ Right $ codeActions []
 
 
-codeActions :: [CodeAction] -> List CAResult
-codeActions = List . fmap CACodeAction
+codeActions :: [CodeAction] -> List (Command |? CodeAction)
+codeActions = List . fmap InR
 
 
 ------------------------------------------------------------------------------
@@ -195,8 +197,8 @@ provide tc name _ plId uri range _ = do
   cmd <- mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
   pure
     $ pure
-    $ CACodeAction
-    $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing
+    $ InR
+    $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing Nothing Nothing
     $ Just cmd
 
 
@@ -310,9 +312,10 @@ spliceProvenance provs x =
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
-tacticCmd tac lf state (TacticParams uri range var_name)
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
-      fromMaybeT (Right Null, Nothing) $ do
+tacticCmd tac state (TacticParams uri range var_name)
+  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      clientCapabilities <- getClientCapabilities
+      res <- liftIO $ fromMaybeT (Right Nothing) $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
@@ -322,25 +325,27 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                 $ mkVarOcc
                 $ T.unpack var_name of
             Left err ->
-              pure $ (, Nothing)
-                $ Left
-                $ ResponseError InvalidRequest (T.pack $ show err) Nothing
+              pure $ Left
+                   $ ResponseError InvalidRequest (T.pack $ show err) Nothing
             Right rtr -> do
               traceMX "solns" $ rtr_other_solns rtr
               let g = graft (RealSrcSpan span) $ rtr_extract rtr
-                  response = transform dflags (clientCapabilities lf) uri g pm
+                  response = transform dflags clientCapabilities uri g pm
               pure $ case response of
-                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
-                Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+                Right res -> Right $ Just res
+                Left err -> Left $ ResponseError InternalError (T.pack err) Nothing
         pure $ case x of
           Just y -> y
-          Nothing -> (, Nothing)
-                   $ Left
+          Nothing -> Left
                    $ ResponseError InvalidRequest "timed out" Nothing
-tacticCmd _ _ _ _ =
-  pure ( Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
-       , Nothing
-       )
+      case res of
+        Left err -> pure $ Left err
+        Right medit -> do
+          forM_ medit $ \edit ->
+            sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+          pure $ Right Null
+tacticCmd _ _ _ =
+  pure $ Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a

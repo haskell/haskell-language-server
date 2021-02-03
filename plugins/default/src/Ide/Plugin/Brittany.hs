@@ -12,8 +12,8 @@ import qualified Data.Text                             as T
 import           Development.IDE
 import           Development.IDE.GHC.Compat (topDir, ModSummary(ms_hspp_opts))
 import           Language.Haskell.Brittany
-import           Language.Haskell.LSP.Types            as J
-import qualified Language.Haskell.LSP.Types.Lens       as J
+import           Language.LSP.Types            as J
+import qualified Language.LSP.Types.Lens       as J
 import           Ide.PluginUtils
 import           Ide.Types
 
