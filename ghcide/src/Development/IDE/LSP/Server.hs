@@ -23,7 +23,6 @@ import Data.Aeson (Value)
 import Development.IDE.Core.Tracing (otSetUri)
 import OpenTelemetry.Eventlog (SpanInFlight, setTag)
 import Data.Text.Encoding (encodeUtf8)
-import qualified Data.Text as T
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -68,7 +67,7 @@ instance HasTracing DidChangeConfigurationParams
 instance HasTracing InitializeParams
 instance HasTracing (Maybe InitializedParams)
 instance HasTracing WorkspaceSymbolParams where
-  traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 $ T.pack query)
+  traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
 
 setUriAnd ::
   (HasTextDocument params a, HasUri a Uri) =>

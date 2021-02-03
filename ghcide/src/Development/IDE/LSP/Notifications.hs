@@ -137,7 +137,7 @@ setHandlersNotifications = mconcat
           watcher glob = FileSystemWatcher { _globPattern = glob, _kind = Just watchKind }
           -- We use multiple watchers instead of one using '{}' because lsp-test doesn't
           -- support that: https://github.com/bubba/lsp-test/issues/77
-          watchers = [ watcher glob | glob <- watchedGlobs opts ]
+          watchers = [ watcher (Text.pack glob) | glob <- watchedGlobs opts ]
 
         void $ LSP.sendRequest SClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
       else liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
