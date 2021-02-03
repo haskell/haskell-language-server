@@ -842,8 +842,7 @@ disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
     (ToQualified parensed qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-            asExpr = parensed && isSymOcc occSym
-         in [ if asExpr
+         in [ if parensed
                 then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @(HsExpr GhcPs) df $
                     prettyPrint $
