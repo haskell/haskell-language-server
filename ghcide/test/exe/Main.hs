@@ -1483,25 +1483,25 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         [ testCase "AVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use AVec for fromList, hiding other imports"
-                "HideFunction.hs.expected.fromList.A"
+                "HideFunction.expected.fromList.A.hs"
         , testCase "BVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use BVec for fromList, hiding other imports"
-                "HideFunction.hs.expected.fromList.B"
+                "HideFunction.expected.fromList.B.hs"
         ]
     , testGroup "(++)"
         [ testCase "EVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use EVec for ++, hiding other imports"
-                "HideFunction.hs.expected.append.E"
+                "HideFunction.expected.append.E.hs"
         , testCase "Prelude" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use Prelude for ++, hiding other imports"
-                "HideFunction.hs.expected.append.Prelude"
+                "HideFunction.expected.append.Prelude.hs"
         , testCase "AVec, indented" $
             compareTwo "HidePreludeIndented.hs" [(3,8)]
             "Use AVec for ++, hiding other imports"
-            "HidePreludeIndented.hs.expected"
+            "HidePreludeIndented.expected.hs"
 
         ]
     , testGroup "Vec (type)"
@@ -1509,12 +1509,12 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareTwo
                 "HideType.hs" [(8,15)]
                 "Use AVec for Vec, hiding other imports"
-                "HideType.hs.expected.A"
+                "HideType.expected.A.hs"
         , testCase "EVec" $
             compareTwo
                 "HideType.hs" [(8,15)]
                 "Use EVec for Vec, hiding other imports"
-                "HideType.hs.expected.E"
+                "HideType.expected.E.hs"
         ]
     ]
   , testGroup "Qualify strategy"
@@ -1536,13 +1536,28 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         [ testCase "EVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: E.fromList"
-                "HideFunction.hs.expected.qualified.fromList.E"
+                "HideFunction.expected.qualified.fromList.E.hs"
         ]
     , testGroup "(++)"
-        [ testCase "Prelude" $
+        [ testCase "Prelude, parensed" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: Prelude.++"
-                "HideFunction.hs.expected.qualified.append.Prelude"
+                "HideFunction.expected.qualified.append.Prelude.hs"
+        , testCase "Prelude, infix" $
+            compareTwo
+                "HideQualifyInfix.hs" [(4,19)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifyInfix.expected.hs"
+        , testCase "Prelude, left section" $
+            compareTwo
+                "HideQualifySectionLeft.hs" [(4,15)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifySectionLeft.expected.hs"
+        , testCase "Prelude, right section" $
+            compareTwo
+                "HideQualifySectionRight.hs" [(4,18)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifySectionRight.expected.hs"
         ]
     ]
   ]
