@@ -10,6 +10,7 @@
 {-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE DataKinds           #-}
 
 {-# OPTIONS -Wno-orphans #-}
 #include "ghc-api-version.h"
@@ -38,7 +39,7 @@ import           Data.String                    (IsString (fromString))
 import qualified Data.Text                      as T
 import qualified Data.Text.IO                   as T
 import           Data.Typeable                  (Typeable)
-import           Development.IDE
+import           Development.IDE                hiding (pluginHandlers)
 import           Development.IDE.Core.Shake     (toKnownFiles, ShakeExtras(knownTargetsVar))
 import           Development.IDE.GHC.Compat     (GenLocated (L), GhcRn,
                                                  HsBindLR (FunBind),
@@ -65,9 +66,8 @@ import           GhcPlugins                     (Outputable,
                                                  rdrNameOcc, unpackFS)
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.LSP.Core      (LspFuncs (..), ProgressCancellable (Cancellable))
-import           Language.Haskell.LSP.Messages  (FromServerMessage (NotShowMessage))
-import           Language.Haskell.LSP.Types     as J
+import           Language.LSP.Server      (ProgressCancellable (Cancellable), withIndefiniteProgress, LspM, sendRequest, sendNotification)
+import           Language.LSP.Types     as J
 import           Retrie.CPP                     (CPP (NoCPP), parseCPP)
 import           Retrie.ExactPrint              (fix, relativiseApiAnns,
                                                  transformA, unsafeMkA)
@@ -90,7 +90,7 @@ import qualified Data.Aeson as Aeson
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginCodeActionProvider = Just provider,
+    { pluginHandlers = mkPluginHandler STextDocumentCodeAction provider,
       pluginCommands = [retrieCommand]
     }
 
@@ -110,21 +110,20 @@ data RunRetrieParams = RunRetrieParams
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 runRetrieCmd ::
-  LspFuncs a ->
   IdeState ->
   RunRetrieParams ->
-  IO (Either ResponseError Value, Maybe (ServerMethod, ApplyWorkspaceEditParams))
-runRetrieCmd lsp state RunRetrieParams{originatingFile = uri, ..} =
-  withIndefiniteProgress lsp description Cancellable $ do
-    res <- runMaybeT $ do
+  LspM c (Either ResponseError Value)
+runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
+  withIndefiniteProgress description Cancellable $ do
+    runMaybeT $ do
         nfp <- MaybeT $ return $ uriToNormalizedFilePath $ toNormalizedUri uri
-        (session, _) <- MaybeT $
+        (session, _) <- MaybeT $ liftIO $
             runAction "Retrie.GhcSessionDeps" state $
                 useWithStale GhcSessionDeps
                 nfp
-        (ms, binds, _, _, _) <- MaybeT $ runAction "Retrie.getBinds" state $ getBinds nfp
+        (ms, binds, _, _, _) <- MaybeT $ liftIO $ runAction "Retrie.getBinds" state $ getBinds nfp
         let importRewrites = concatMap (extractImports ms binds) rewrites
-        (errors, edits) <- lift $
+        (errors, edits) <- liftIO $
             callRetrie
                 state
                 (hscEnv session)
@@ -132,16 +131,14 @@ runRetrieCmd lsp state RunRetrieParams{originatingFile = uri, ..} =
                 nfp
                 restrictToOriginatingFile
         unless (null errors) $
-            lift $ sendFunc lsp $
-                NotShowMessage $
-                NotificationMessage "2.0" WindowShowMessage $
+            lift $ sendNotification SWindowShowMessage $
                     ShowMessageParams MtWarning $
                     T.unlines $
                         "## Found errors during rewrite:" :
                         ["-" <> T.pack (show e) | e <- errors]
-        return (WorkspaceApplyEdit, ApplyWorkspaceEditParams edits)
-    return
-      (Right Null, res)
+        lift $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edits) (\_ -> pure ())
+        return ()
+    return $ Right Null
 
 extractImports :: ModSummary -> [HsBindLR GhcRn GhcRn] -> RewriteSpec -> [ImportSpec]
 extractImports ModSummary{ms_mod} topLevelBinds (Unfold thing)
@@ -166,14 +163,14 @@ extractImports _ _ _ = []
 
 -------------------------------------------------------------------------------
 
-provider :: CodeActionProvider IdeState
-provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
+provider :: SimpleHandler IdeState TextDocumentCodeAction
+provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = response $ do
   let (J.CodeActionContext _diags _monly) = ca
       nuri = toNormalizedUri uri
   nfp <- handleMaybe "uri" $ uriToNormalizedFilePath nuri
 
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
-    <- handleMaybeM "typecheck" $ runAction "retrie" state $ getBinds nfp
+    <- handleMaybeM "typecheck" $ liftIO $ runAction "retrie" state $ getBinds nfp
 
   pos <- handleMaybe "pos" $ _start <$> fromCurrentRange posMapping range
   let rewrites =
@@ -188,11 +185,11 @@ provider _a state plId (TextDocumentIdentifier uri) range ca = response $ do
              ]
 
   commands <- lift $
-    forM rewrites $ \(title, kind, params) -> do
+    forM rewrites $ \(title, kind, params) -> liftIO $ do
       c <- mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
-      return $ CodeAction title (Just kind) Nothing Nothing (Just c)
+      return $ CodeAction title (Just kind) Nothing Nothing Nothing Nothing (Just c)
 
-  return $ J.List [CACodeAction c | c <- commands]
+  return $ J.List [InR c | c <- commands]
 
 getBinds :: NormalizedFilePath -> Action (Maybe (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn]))
 getBinds nfp = runMaybeT $ do
@@ -491,7 +488,7 @@ handleMaybe msg = maybe (throwE msg) return
 handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
 handleMaybeM msg act = maybe (throwE msg) return =<< lift act
 
-response :: ExceptT String IO a -> IO (Either ResponseError a)
+response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
 response =
   fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
     . runExceptT

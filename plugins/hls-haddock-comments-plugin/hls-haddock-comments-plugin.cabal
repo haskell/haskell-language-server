@@ -24,7 +24,7 @@ library
     , ghc
     , ghc-exactprint
     , ghcide
-    , haskell-lsp-types
+    , lsp-types
     , hls-plugin-api
     , text
     , unordered-containers

@@ -26,8 +26,8 @@ import GHC.Generics (Generic)
 
 -- | Given a DidChangeConfigurationNotification message, this function returns the parsed
 -- Config object if possible.
-getConfigFromNotification :: NotificationMessage WorkspaceDidChangeConfiguration -> Either T.Text Config
-getConfigFromNotification (NotificationMessage _ _ (DidChangeConfigurationParams p)) =
+getConfigFromNotification :: Applicative m => a -> A.Value -> m (Either T.Text Config)
+getConfigFromNotification _ p = pure $
   case fromJSON p of
     A.Success c -> Right c
     A.Error err -> Left $ T.pack err

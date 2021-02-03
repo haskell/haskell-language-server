@@ -38,15 +38,14 @@ import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger as G
 import Development.IDE.Types.Options
-import qualified Language.Haskell.LSP.Core as LSP
+import qualified Language.LSP.Server as LSP
 import Ide.Arguments
 import Ide.Logger
 import Ide.Version
 import Ide.Plugin.Config
 import Ide.PluginUtils
 import Ide.Types (IdePlugins, ipMap)
-import Language.Haskell.LSP.Messages
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
 import qualified System.Directory.Extra as IO
 import System.Exit
 import System.FilePath
@@ -140,13 +139,14 @@ runLspMode' lspArgs@LspArguments{..} idePlugins hiedb hiechan = do
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
-        runLanguageServer options (pluginHandler plugins) getInitialConfig getConfigFromNotification $ \getLspId event vfs caps wProg wIndefProg _getConfig _rootPath -> do
+        runLanguageServer options getConfigFromNotification (pluginHandlers plugins) $ \env vfs _rootPath -> do
             t <- t
             hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
             _libdir <- setInitialDynFlags
                           `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
             sessionLoader <- loadSession dir
+            caps <- LSP.runLspT env LSP.getClientCapabilities
             -- config <- fromMaybe defaultLspConfig <$> getConfig
             let options = defOptions
                     { optReportProgress = clientSupportsProgress caps
@@ -156,8 +156,8 @@ runLspMode' lspArgs@LspArguments{..} idePlugins hiedb hiechan = do
                     }
                 defOptions = defaultIdeOptions sessionLoader
             debouncer <- newAsyncDebouncer
-            initialise caps (mainRule >> pluginRules plugins >> action kick)
-                getLspId event wProg wIndefProg hlsLogger debouncer options vfs
+            initialise (mainRule >> pluginRules plugins >> action kick)
+                (Just env) hlsLogger debouncer options vfs
                 hiedb hiechan
     else do
         -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
@@ -187,7 +187,7 @@ runLspMode' lspArgs@LspArguments{..} idePlugins hiedb hiechan = do
         debouncer <- newAsyncDebouncer
         let dummyWithProg _ _ f = f (const (pure ()))
         sessionLoader <- loadSession dir
-        ide <- initialise def mainRule (pure $ IdInt 0) (showEvent lock) dummyWithProg (const (const id)) (logger Info)     debouncer (defaultIdeOptions sessionLoader) vfs hiedb hiechan
+        ide <- initialise mainRule Nothing (logger Info) debouncer (defaultIdeOptions sessionLoader) vfs hiedb hiechan
 
         putStrLn "\nStep 4/4: Type checking the files"
         setFilesOfInterest ide $ HashMap.fromList $ map ((, OnDisk) . toNormalizedFilePath') files

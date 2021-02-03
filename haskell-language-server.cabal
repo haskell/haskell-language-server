@@ -66,7 +66,7 @@ library
     , ghc
     , ghcide                >=0.7
     , gitrev
-    , haskell-lsp           ^>=0.23
+    , lsp
     , hls-plugin-api        >=0.7
     , hie-bios
     , hiedb
@@ -323,7 +323,7 @@ executable haskell-language-server
     , ghcide
     , hashable
     , haskell-language-server
-    , haskell-lsp              ^>=0.23
+    , lsp
     , hie-bios
     , hiedb
     , lens
@@ -386,7 +386,7 @@ common hls-test-utils
     , blaze-markup
     , containers
     , data-default
-    , haskell-lsp
+    , lsp
     , hie-bios
     , hls-plugin-api        >=0.6
     , hslogger

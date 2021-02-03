@@ -64,11 +64,11 @@ import Ide.Types (
     PluginId (..),
     defaultPluginDescriptor,
  )
-import Language.Haskell.LSP.Core (
+import Language.LSP.Server (
     LspFuncs,
     getVirtualFileFunc,
  )
-import Language.Haskell.LSP.Types (
+import Language.LSP.Types (
     ApplyWorkspaceEditParams (..),
     CodeLens (CodeLens),
     CodeLensParams (CodeLensParams),
@@ -82,7 +82,7 @@ import Language.Haskell.LSP.Types (
     WorkspaceEdit (..),
     uriToNormalizedFilePath,
  )
-import Language.Haskell.LSP.VFS (virtualFileText)
+import Language.LSP.VFS (virtualFileText)
 import System.Directory (canonicalizePath)
 import System.FilePath (
     dropExtension,
