@@ -1,3 +1,13 @@
+### 0.7.3 (2021-02-..)
+* Add custom cache layer for session loading (#1197) - (fendor)
+* Remove invalid exports (#1193) - (Kostas Dermentzis)
+* Use exact print to suggestExtendImport - (Potato Hatsue)
+* Add code actions for disabling a warning in the current file (#1235) - (George Thomas)
+* Limit completions to top 40 (#1218) - (Pepe Iborra)
+* Add traces for HLS providers (#1222) - (Pepe Iborra)
+* Use exact print for suggest missing constraint code actions (#1221) - (Pepe Iborra)
+* Parenthesise type operators when extending import lists (#1212) - (Thomas Winant)
+
 ### 0.7.2 (2021-01-14)
 * Expose shakeOptions used - (Pepe Iborra)
 
