@@ -48,7 +48,7 @@ references ide (ReferenceParams (TextDocumentIdentifier uri) pos _ _ _) = liftIO
     Nothing -> pure $ Left $ ResponseError InvalidParams ("Invalid URI " <> T.pack (show uri)) Nothing
 
 wsSymbols :: IdeState -> WorkspaceSymbolParams -> LSP.LspM c (Either ResponseError (List SymbolInformation))
-wsSymbols ide (WorkspaceSymbolParams _ _ (T.pack -> query)) = liftIO $ do
+wsSymbols ide (WorkspaceSymbolParams _ _ query) = liftIO $ do
   logDebug (ideLogger ide) $ "Workspace symbols request: " <> query
   runIdeAction "WorkspaceSymbols" (shakeExtras ide) $ Right . maybe (List []) List <$> workspaceSymbols query
 

@@ -140,7 +140,7 @@ extensiblePlugins :: [(PluginId, PluginHandlers IdeState)] -> Plugin Config
 extensiblePlugins xs = Plugin mempty handlers
   where
     IdeHandlers handlers' = foldMap bakePluginId xs
-    bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers IdeState
+    bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers
     bakePluginId (pid,PluginHandlers hs) = IdeHandlers $ DMap.map
       (\(PluginHandler f) -> IdeHandler [(pid,f pid)])
       hs
@@ -185,15 +185,15 @@ combineErrors [x] = x
 combineErrors xs = ResponseError InternalError (T.pack (show xs)) Nothing
 
 -- | Combine the 'PluginHandler' for all plugins
-newtype IdeHandler a (m :: J.Method FromClient Request)
-  = IdeHandler [(PluginId,(a -> ExtraParams m -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m)))))]
+newtype IdeHandler (m :: J.Method FromClient Request)
+  = IdeHandler [(PluginId,(IdeState -> ExtraParams m -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m)))))]
 
 -- | Combine the 'PluginHandlers' for all plugins
-newtype IdeHandlers a = IdeHandlers (DMap IdeMethod (IdeHandler a))
+newtype IdeHandlers = IdeHandlers (DMap IdeMethod IdeHandler)
 
-instance Semigroup (IdeHandlers a) where
+instance Semigroup IdeHandlers where
   (IdeHandlers a) <> (IdeHandlers b) = IdeHandlers $ DMap.unionWithKey go a b
     where
       go _ (IdeHandler a) (IdeHandler b) = IdeHandler (a ++ b)
-instance Monoid (IdeHandlers a) where
+instance Monoid IdeHandlers where
   mempty = IdeHandlers mempty
