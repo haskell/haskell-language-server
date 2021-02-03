@@ -2,6 +2,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE PolyKinds #-}
 
 module Development.IDE.Test
   ( Cursor
@@ -36,7 +38,7 @@ import System.Time.Extra
 import Test.Tasty.HUnit
 import System.Directory (canonicalizePath)
 import Data.Maybe (fromJust)
-import Development.IDE.Plugin.Test (WaitForIdeRuleResult, TestRequest(WaitForIdeRule))
+import Development.IDE.Plugin.Test (WaitForIdeRuleResult, TestRequest(..))
 import Data.Aeson (FromJSON)
 import Data.Typeable (Typeable)
 
@@ -71,7 +73,7 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag) 
 -- if any diagnostic messages arrive in that period
 expectNoMoreDiagnostics :: Seconds -> Session ()
 expectNoMoreDiagnostics timeout =
-  expectMessages @PublishDiagnosticsNotification timeout $ \diagsNot -> do
+  expectMessages STextDocumentPublishDiagnostics timeout $ \diagsNot -> do
     let fileUri = diagsNot ^. params . uri
         actual = diagsNot ^. params . diagnostics
     liftIO $
@@ -80,30 +82,27 @@ expectNoMoreDiagnostics timeout =
           <> " got "
           <> show actual
 
-expectMessages :: (FromJSON msg, Typeable msg) => Seconds -> (msg -> Session ()) -> Session ()
-expectMessages timeout handle = do
+expectMessages :: SMethod m -> Seconds -> (ServerMessage m -> Session ()) -> Session ()
+expectMessages m timeout handle = do
     -- Give any further diagnostic messages time to arrive.
     liftIO $ sleep timeout
     -- Send a dummy message to provoke a response from the server.
     -- This guarantees that we have at least one message to
     -- process, so message won't block or timeout.
-    let m = SCustomMethod "ghcide/queue/count"
-    i <- sendRequest m $ A.toJSON GetShakeSessionQueueCount
-    handleMessages m i
+    let cm = SCustomMethod "ghcide/queue/count"
+    i <- sendRequest cm $ A.toJSON GetShakeSessionQueueCount
+    go cm i
   where
-    handleMessages = (LspTest.message >>= handle) <|> handleCustomMethodResponse <|> ignoreOthers
-    ignoreOthers = void anyMessage >> handleMessages
-
-handleCustomMethodResponse :: Session ()
-handleCustomMethodResponse =
-    -- the CustomClientMethod triggers a RspCustomServer
-    -- handle that and then exit
-    void (LspTest.message :: Session CustomResponse)
+    go cm i = handleMessages
+      where
+        handleMessages = (LspTest.message m >>= handle) <|> (void $ responseForId cm i) <|> ignoreOthers
+        ignoreOthers = void anyMessage >> handleMessages
 
 flushMessages :: Session ()
 flushMessages = do
-    void $ sendRequest (CustomClientMethod "non-existent-method") ()
-    handleCustomMethodResponse <|> ignoreOthers
+    let cm = SCustomMethod "non-existent-method"
+    i <- sendRequest cm A.Null
+    (void $ responseForId cm i) <|> ignoreOthers
     where
         ignoreOthers = void anyMessage >> flushMessages
 
@@ -117,7 +116,7 @@ expectDiagnostics
   = expectDiagnosticsWithTags
   . map (second (map (\(ds, c, t) -> (ds, c, t, Nothing))))
 
-unwrapDiagnostic :: PublishDiagnosticsNotification -> (Uri, List Diagnostic)
+unwrapDiagnostic :: NotificationMessage TextDocumentPublishDiagnostics  -> (Uri, List Diagnostic)
 unwrapDiagnostic diagsNot = (diagsNot^.params.uri, diagsNot^.params.diagnostics)
 
 expectDiagnosticsWithTags :: [(String, [(DiagnosticSeverity, Cursor, T.Text, Maybe DiagnosticTag)])] -> Session ()
@@ -182,7 +181,7 @@ checkDiagnosticsForDoc TextDocumentIdentifier {_uri} expected obtained = do
 canonicalizeUri :: Uri -> IO Uri
 canonicalizeUri uri = filePathToUri <$> canonicalizePath (fromJust (uriToFilePath uri))
 
-diagnostic :: Session PublishDiagnosticsNotification
+diagnostic :: Session (NotificationMessage TextDocumentPublishDiagnostics)
 diagnostic = LspTest.message STextDocumentPublishDiagnostics
 
 standardizeQuotes :: T.Text -> T.Text
@@ -195,6 +194,11 @@ standardizeQuotes msg = let
 
 waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
 waitForAction key TextDocumentIdentifier{_uri} = do
-    waitId <- sendRequest (CustomClientMethod "test") (WaitForIdeRule key _uri)
-    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId waitId
-    return _result
+    let cm = SCustomMethod "test"
+    waitId <- sendRequest cm (A.toJSON $ WaitForIdeRule key _uri)
+    ResponseMessage{_result} <- skipManyTill anyMessage $ responseForId cm waitId
+    return $ do
+      e <- _result
+      case A.fromJSON e of
+        A.Error e -> Left $ ResponseError InternalError (T.pack e) Nothing
+        A.Success a -> pure a
