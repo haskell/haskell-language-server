@@ -86,7 +86,7 @@ experiments =
           forM_ docs $ \DocumentPositions{..} ->
             changeDoc doc [charEdit stringLiteralP]
           flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-            not . null <$> getDefinitions doc (fromJust identifierP),
+            either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
@@ -360,7 +360,7 @@ waitForProgressDone :: Session ()
 waitForProgressDone = loop
   where
     loop = do
-      void $ skipManyTill anyMessage $ satisfyMaybe $ \case
+      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
         FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
         _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
@@ -566,7 +566,7 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
       checkDefinitions pos = do
         defs <- getDefinitions doc pos
         case defs of
-            [Location uri _] -> return $ uri /= _uri
+            (InL [Location uri _]) -> return $ uri /= _uri
             _ -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos
