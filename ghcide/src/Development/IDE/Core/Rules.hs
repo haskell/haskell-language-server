@@ -112,6 +112,7 @@ import qualified Development.IDE.Spans.AtPoint as AtPoint
 import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
+import Development.IDE.Types.HscEnvEq
 import Development.Shake.Classes hiding (get, put)
 import Control.Monad.Trans.Except (runExceptT,ExceptT,except)
 import Control.Concurrent.Async (concurrently)

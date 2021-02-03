@@ -16,7 +16,7 @@ import Data.CaseInsensitive (CI, original)
 import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat
-import Development.IDE.GHC.Util (HscEnvEq(hscEnv))
+import Development.IDE.Types.HscEnvEq (HscEnvEq(hscEnv))
 import Development.IDE.LSP.Server
 import Development.IDE.Plugin
 import Development.IDE.Types.Action

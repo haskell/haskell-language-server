@@ -7,7 +7,7 @@ module Development.IDE.Plugin.CodeAction.RuleTypes
 import Data.Hashable (Hashable)
 import Control.DeepSeq (NFData)
 import Data.Binary (Binary)
-import Development.IDE.GHC.Util
+import Development.IDE.Types.HscEnvEq (HscEnvEq)
 import Development.IDE.Types.Exports
 import Development.Shake (RuleResult)
 import Data.Typeable (Typeable)

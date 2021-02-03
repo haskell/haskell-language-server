@@ -10,7 +10,7 @@ module Development.IDE.Types.Exports
 ) where
 
 import Avail (AvailInfo(..))
-import Control.DeepSeq (NFData)
+import Control.DeepSeq (NFData(..))
 import Data.Text (pack, Text)
 import Development.IDE.GHC.Compat
 import Development.IDE.GHC.Util
@@ -27,41 +27,50 @@ import Data.Hashable (Hashable)
 import TcRnTypes(TcGblEnv(..))
 
 newtype ExportsMap = ExportsMap
-    {getExportsMap :: HashMap IdentifierText (HashSet (IdentInfo,ModuleNameText))}
+    {getExportsMap :: HashMap IdentifierText (HashSet IdentInfo)}
     deriving newtype (Monoid, NFData, Show)
 
 instance Semigroup ExportsMap where
     ExportsMap a <> ExportsMap b = ExportsMap $ Map.unionWith (<>) a b
 
 type IdentifierText = Text
-type ModuleNameText = Text
 
 data IdentInfo = IdentInfo
     { name :: !Text
     , rendered :: Text
     , parent :: !(Maybe Text)
     , isDatacon :: !Bool
+    , moduleNameText :: !Text
     }
-    deriving (Eq, Generic, Show)
+    deriving (Generic, Show)
     deriving anyclass Hashable
 
-instance NFData IdentInfo
+instance Eq IdentInfo where
+    a == b = name a == name b
+          && parent a == parent b
+          && isDatacon a == isDatacon b
+          && moduleNameText a == moduleNameText b
 
-mkIdentInfos :: AvailInfo -> [IdentInfo]
-mkIdentInfos (Avail n) =
-    [IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n)]
-mkIdentInfos (AvailTC parent (n:nn) flds)
+instance NFData IdentInfo where
+    rnf IdentInfo{..} =
+        -- deliberately skip the rendered field
+        rnf name `seq` rnf parent `seq` rnf isDatacon `seq` rnf moduleNameText
+
+mkIdentInfos :: Text -> AvailInfo -> [IdentInfo]
+mkIdentInfos mod (Avail n) =
+    [IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n) mod]
+mkIdentInfos mod (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent
-    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) (Just $! parentP) (isDataConName n)
+    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) (Just $! parentP) (isDataConName n) mod
         | n <- nn ++ map flSelector flds
       ] ++
-      [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n)]
+      [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n) mod]
     where
         parentP = pack $ printName parent
 
-mkIdentInfos (AvailTC _ nn flds)
-    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n)
+mkIdentInfos mod (AvailTC _ nn flds)
+    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n) mod
         | n <- nn ++ map flSelector flds
       ]
 
@@ -86,7 +95,7 @@ createExportsMapTc = ExportsMap . Map.fromListWith (<>) . concatMap doOne
       where
         mn = moduleName $ tcg_mod mi
 
-unpackAvail :: ModuleName -> IfaceExport -> [(Text, [(IdentInfo, Text)])]
-unpackAvail mod =
-  map (\id@IdentInfo {..} -> (name, [(id, pack $ moduleNameString mod)]))
-    . mkIdentInfos
+unpackAvail :: ModuleName -> IfaceExport -> [(Text, [IdentInfo])]
+unpackAvail !(pack . moduleNameString -> mod) = map f . mkIdentInfos mod
+  where
+    f id@IdentInfo {..} = (name, [id])

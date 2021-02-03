@@ -23,10 +23,9 @@ import Development.IDE.GHC.Error
 import Development.IDE.GHC.ExactPrint
 import Development.IDE.Plugin.CodeAction.ExactPrint
 import Development.IDE.Plugin.CodeAction.PositionIndexed
-import Development.IDE.Plugin.CodeAction.RuleTypes
-import Development.IDE.Plugin.CodeAction.Rules
 import Development.IDE.Plugin.TypeLenses (suggestSignature)
 import Development.IDE.Types.Exports
+import Development.IDE.Types.HscEnvEq
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import qualified Data.HashMap.Strict as Map
@@ -63,7 +62,7 @@ import Data.Monoid (Ap(..))
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginRules = rulePackageExports,
+    { pluginRules = mempty,
       pluginCodeActionProvider = Just codeAction
     }
 
@@ -87,7 +86,7 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
             <*> use GhcSession `traverse` mbFile
             <*> use GetAnnotatedParsedSource `traverse` mbFile
     -- This is quite expensive 0.6-0.7s on GHC
-    pkgExports <- runAction "CodeAction:PackageExports" state $ (useNoFile_ . PackageExports) `traverse` env
+    let pkgExports = envPackageExports <$> env
     localExports <- readVar (exportsMap $ shakeExtras state)
     let
       exportsMap = localExports <> fromMaybe mempty pkgExports
@@ -694,7 +693,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           | otherwise = []
         lookupExportMap binding mod
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
-          , [(ident, _)] <- filter (\(_,m) -> mod == m) (Set.toList match)
+          , [ident] <- filter (\ident -> moduleNameText ident == mod) (Set.toList match)
            = Just ident
 
             -- fallback to using GHC suggestion even though it is not always correct
@@ -703,7 +702,8 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
                 { name = binding
                 , rendered = binding
                 , parent = Nothing
-                , isDatacon = False}
+                , isDatacon = False
+                , moduleNameText = mod}
 
 data HidingMode
     = HideOthers [ModuleTarget]
@@ -1090,10 +1090,10 @@ constructNewImportSuggestions
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrd
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
-  , (identInfo, m) <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
+  , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
   , canUseIdent thingMissing identInfo
-  , m `notElem` fromMaybe [] notTheseModules
-  , suggestion <- renderNewImport identInfo m
+  , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules
+  , suggestion <- renderNewImport identInfo (moduleNameText identInfo)
   ]
  where
   renderNewImport :: IdentInfo -> T.Text -> [T.Text]

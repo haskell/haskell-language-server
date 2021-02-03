@@ -166,6 +166,7 @@ library
         Development.IDE.Spans.LocalBindings
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Exports
+        Development.IDE.Types.HscEnvEq
         Development.IDE.Types.KnownTargets
         Development.IDE.Types.Location
         Development.IDE.Types.Logger
@@ -202,8 +203,6 @@ library
         Development.IDE.Import.FindImports
         Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
-        Development.IDE.Plugin.CodeAction.Rules
-        Development.IDE.Plugin.CodeAction.RuleTypes
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Plugin.HLS.Formatter
         Development.IDE.Types.Action
