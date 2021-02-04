@@ -29,9 +29,7 @@ extra-deps:
   - extra-1.7.3
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  # - ghc-exactprint-0.6.3.3
-  - git: https://github.com/alanz/ghc-exactprint.git
-    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
+  - ghc-exactprint-0.6.3.4
   - ghc-lib-8.10.3.20201220
   - ghc-lib-parser-8.10.3.20201220
   - ghc-trace-events-0.1.2.1
