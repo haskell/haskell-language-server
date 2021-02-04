@@ -3669,11 +3669,17 @@ nonLocalCompletionTests =
             "ZeroPad"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
         , completionCommandTest
-            "parent imported"
+            "parent imported abs"
             ["module A where", "import Text.Printf (FormatAdjustment)", "ZeroPad"]
             (Position 2 4)
             "ZeroPad"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+        , completionCommandTest
+            "parent imported all"
+            ["module A where", "import Text.Printf (FormatAdjustment (..))", "ZeroPad"]
+            (Position 2 4)
+            "ZeroPad"
+            ["module A where", "import Text.Printf (FormatAdjustment (..))", "ZeroPad"]
         , completionCommandTest
             "already imported"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
