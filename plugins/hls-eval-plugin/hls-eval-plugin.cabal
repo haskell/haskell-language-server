@@ -1,14 +1,15 @@
 cabal-version:      2.2
 name:               hls-eval-plugin
-version:            0.1.0.1
+version:            0.2.0.0
 synopsis:           Eval plugin for Haskell Language Server
-description:     Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
-category: Development
-bug-reports:   https://github.com/haskell/haskell-language-server/issues
+description:        Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+category:           Development
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
 license:            Apache-2.0
 license-file:       LICENSE
-author: https://github.com/haskell/haskell-language-server/contributors
-maintainer: https://github.com/haskell/haskell-language-server/contributors
+author:             https://github.com/haskell/haskell-language-server/contributors
+maintainer:         https://github.com/haskell/haskell-language-server/contributors
+
 build-type:         Simple
 extra-source-files:
   LICENSE
@@ -30,14 +31,14 @@ library
     Ide.Plugin.Eval.Code
     Ide.Plugin.Eval.CodeLens
     Ide.Plugin.Eval.GHC
-    Ide.Plugin.Eval.Parse.Option
     Ide.Plugin.Eval.Parse.Comments
+    Ide.Plugin.Eval.Parse.Option
     Ide.Plugin.Eval.Types
     Ide.Plugin.Eval.Util
 
   build-depends:
     , aeson
-    , base       >=4.12 && <5
+    , base                  >=4.12    && <5
     , containers
     , deepseq
     , Diff
@@ -48,13 +49,14 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide
+    , ghcide                >=0.7.3.0
     , hashable
     , haskell-lsp
     , haskell-lsp-types
-    , hls-plugin-api
+    , hls-plugin-api        >=0.7
     , lens
-    , megaparsec >= 0.9
+    , megaparsec            >=0.9
+    , mtl
     , parser-combinators
     , pretty-simple
     , QuickCheck
@@ -64,10 +66,9 @@ library
     , text
     , time
     , transformers
-    , mtl
     , unordered-containers
 
-  ghc-options: -Wall -Wno-name-shadowing
+  ghc-options:      -Wall -Wno-name-shadowing
 
   if flag(pedantic)
     ghc-options: -Werror
