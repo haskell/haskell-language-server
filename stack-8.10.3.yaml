@@ -26,8 +26,7 @@ extra-deps:
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - git: https://github.com/alanz/ghc-exactprint.git
-    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
+  - ghc-exactprint-0.6.3.4
   - heapsize-0.3.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5

@@ -13,11 +13,6 @@ packages:
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
 
-source-repository-package
-  type: git
-  location: https://github.com/alanz/ghc-exactprint.git
-  tag: 6748e24da18a6cea985d20cc3e1e7920cb743795
-
 tests: true
 
 package *
@@ -30,7 +25,7 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2021-01-28T17:47:48Z
+index-state: 2021-02-03T00:50:21Z
 
 allow-newer:
 	active:base,
