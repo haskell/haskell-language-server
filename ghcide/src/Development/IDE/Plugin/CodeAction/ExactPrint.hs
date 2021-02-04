@@ -239,6 +239,8 @@ extendImportTopLevel _ _ _ = lift $ Left "Unable to extend the import list"
 -- extendImportViaParent "Bar" "Cons" AST:
 --
 -- import A --> Error
+-- import A (Bar(..)) --> Error
+-- import A (Bar(Cons)) --> Error
 -- import A () --> import A (Bar(Cons))
 -- import A (Foo, Bar) --> import A (Foo, Bar(Cons))
 -- import A (Foo, Bar()) --> import A (Foo, Bar(Cons))
@@ -247,6 +249,8 @@ extendImportViaParent df parent child (L l it@ImportDecl {..})
   | Just (hide, L l' lies) <- ideclHiding = go hide l' [] lies
   where
     go :: Bool -> SrcSpan -> [LIE GhcPs] -> [LIE GhcPs] -> TransformT (Either String) (LImportDecl GhcPs)
+    go _hide _l' _pre ((L _ll' (IEThingAll _ (L _ ie))) : _xs)
+      | parent == unIEWrappedName ie = lift . Left $ child <> " already included in " <> parent <> " imports"
     go hide l' pre (lAbs@(L ll' (IEThingAbs _ absIE@(L _ ie))) : xs)
       -- ThingAbs ie => ThingWith ie child
       | parent == unIEWrappedName ie = do
