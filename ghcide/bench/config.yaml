@@ -34,6 +34,7 @@ experiments:
     - "completions after edit"
     - "code actions"
     - "code actions after edit"
+    - "code actions after cradle edit"
     - "documentSymbols after edit"
     - "hover after cradle edit"
 

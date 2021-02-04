@@ -136,6 +136,27 @@ experiments =
                 getCodeActions doc (Range p p))
         ),
       ---------------------------------------------------------------------------------------
+      benchWithSetup
+        "code actions after cradle edit"
+        ( \docs -> do
+            unless (any (isJust . identifierP) docs) $
+                error "None of the example modules is suitable for this experiment"
+            forM_ docs $ \DocumentPositions{..} ->
+                forM_ identifierP $ \p -> changeDoc doc [charEdit p]
+        )
+        ( \docs -> do
+            Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
+            liftIO $ appendFile hieYaml "##\n"
+            sendNotification WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+                List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
+            forM_ docs $ \DocumentPositions{..} ->
+              changeDoc doc [charEdit stringLiteralP]
+            waitForProgressDone
+            not . null . catMaybes <$> forM docs (\DocumentPositions{..} -> do
+              forM identifierP $ \p ->
+                getCodeActions doc (Range p p))
+        ),
+      ---------------------------------------------------------------------------------------
       bench
         "hover after cradle edit"
         (\docs -> do
