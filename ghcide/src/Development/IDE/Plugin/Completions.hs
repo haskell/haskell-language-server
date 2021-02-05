@@ -35,8 +35,8 @@ import Ide.Plugin.Config (Config (completionSnippetsOn))
 import Ide.PluginUtils (getClientConfig)
 import Ide.Types
 import TcRnDriver (tcRnImportDecls)
-import RdrName (globalRdrEnvElts)
-import Data.Algorithm.Diff (getDiff, PolyDiff (..))
+import RdrName (globalRdrEnvElts, GlobalRdrElt (..))
+import Data.Algorithm.Diff (PolyDiff (..), getDiffBy)
 #if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
 #endif
@@ -85,12 +85,11 @@ produceCompletions = do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
                           globalElts = globalRdrEnvElts globalEnv
                           inScopeElts = globalRdrEnvElts inScopeEnv
-                          diff = getDiff globalElts inScopeElts
-                          go (First x : xs) ys = go xs $ (x, False) : ys
-                          go (Second x : xs) ys = go xs $ (x, True) : ys
-                          go (Both x _ : xs) ys = go xs $ (x, True) : ys
-                          go [] ys = ys
-                          rdrElts = go diff []
+                          diff = getDiffBy (\GRE {gre_name = nameA} GRE {gre_name = nameB} -> nameA == nameB) globalElts inScopeElts
+                          rdrElts = flip map diff $ \case
+                            First x -> (x, False)
+                            Second x -> (x, True)
+                            Both x _ -> (x, True)
                       cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) rdrElts imps parsedDeps
                       return ([], Just cdata)
                   (_diag, _) ->

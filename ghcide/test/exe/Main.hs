@@ -3591,15 +3591,15 @@ nonLocalCompletionTests =
       "constructor"
       ["module A where", "f = Tru"]
       (Position 1 7)
-      [ ("truncate", CiFunction, "truncate ${1:a}", True, True, Nothing),
-        ("True", CiConstructor, "True ", True, True, Nothing)
+      [ ("True", CiConstructor, "True ", True, True, Nothing),
+        ("truncate", CiFunction, "truncate ${1:a}", True, True, Nothing)
       ],
     completionTest
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
       (Position 2 7)
-      [ ("Bool", CiStruct, "Bool ", True, True, Nothing),
-        ("Bounded", CiClass, "Bounded ${1:*}", True, True, Nothing)
+      [ ("Bounded", CiClass, "Bounded ${1:*}", True, True, Nothing),
+        ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
       "qualified"
