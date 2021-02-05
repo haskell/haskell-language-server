@@ -77,10 +77,11 @@ produceCompletions = do
               let env = hscEnv sess
               -- We do this to be able to provide completions of items that are not restricted to the explicit list
               res <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> imps)
-              case res of
-                  (_, Just rdrEnv) -> do
+              inScope <- liftIO $ tcRnImportDecls env imps
+              case (res, inScope) of
+                  ((_, Just rdrEnv), (_, Just inScopeEnv)) -> do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) rdrEnv imps parsedDeps
+                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) rdrEnv inScopeEnv imps parsedDeps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
