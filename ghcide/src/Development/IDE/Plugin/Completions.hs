@@ -35,6 +35,8 @@ import Ide.Plugin.Config (Config (completionSnippetsOn))
 import Ide.PluginUtils (getClientConfig)
 import Ide.Types
 import TcRnDriver (tcRnImportDecls)
+import RdrName (globalRdrEnvElts)
+import Data.Algorithm.Diff (getDiff, PolyDiff (..))
 #if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
 #endif
@@ -79,9 +81,17 @@ produceCompletions = do
               res <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> imps)
               inScope <- liftIO $ tcRnImportDecls env imps
               case (res, inScope) of
-                  ((_, Just rdrEnv), (_, Just inScopeEnv)) -> do
+                  ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) rdrEnv inScopeEnv imps parsedDeps
+                          globalElts = globalRdrEnvElts globalEnv
+                          inScopeElts = globalRdrEnvElts inScopeEnv
+                          diff = getDiff globalElts inScopeElts
+                          go (First x : xs) ys = go xs $ (x, False) : ys
+                          go (Second x : xs) ys = go xs $ (x, True) : ys
+                          go (Both x _ : xs) ys = go xs $ (x, True) : ys
+                          go [] ys = ys
+                          rdrElts = go diff []
+                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) rdrElts imps parsedDeps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)

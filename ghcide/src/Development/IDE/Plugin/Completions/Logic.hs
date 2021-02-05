@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs#-}
 
-#include "ghc-api-version.h"
+
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -28,11 +28,11 @@ import Name
 import RdrName
 import Type
 import Packages
-#if MIN_GHC_API_VERSION(8,10,0)
+
 import Predicate (isDictTy)
 import Pair
 import Coercion
-#endif
+
 
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
@@ -259,12 +259,12 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
                   then getArgs ret
                   else Prelude.filter (not . isDictTy) args
           | isPiTy t = getArgs $ snd (splitPiTys t)
-#if MIN_GHC_API_VERSION(8,10,0)
+
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
           = getArgs t
-#else
-          | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
-#endif
+
+
+
           | otherwise = []
 
 mkModCompl :: T.Text -> CompletionItem
@@ -293,8 +293,11 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-cacheDataProducer :: Uri -> HscEnv -> Module -> GlobalRdrEnv -> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
-cacheDataProducer uri packageState curMod rdrEnv inScopeEnv limports deps = do
+-- | 'Bool' means whether this element is in scope
+type GlobalRdrElt' = (GlobalRdrElt, Bool)
+
+cacheDataProducer :: Uri -> HscEnv -> Module -> [GlobalRdrElt']-> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer uri packageState curMod rdrElts limports deps = do
   let dflags = hsc_dflags packageState
       curModName = moduleName curMod
 
@@ -314,22 +317,20 @@ cacheDataProducer uri packageState curMod rdrEnv inScopeEnv limports deps = do
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
 
-      rdrElts = globalRdrEnvElts rdrEnv
-
       foldMapM :: (Foldable f, Monad m, Monoid b) => (a -> m b) -> f a -> m b
       foldMapM f xs = foldr step return xs mempty where
         step x r z = f x >>= \y -> r $! z `mappend` y
 
-      getCompls :: [GlobalRdrElt] -> IO ([CompItem],QualCompls)
+      getCompls :: [GlobalRdrElt'] -> IO ([CompItem],QualCompls)
       getCompls = foldMapM getComplsForOne
 
-      getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
-      getComplsForOne (GRE n par True _) =
+      getComplsForOne :: GlobalRdrElt' -> IO ([CompItem],QualCompls)
+      getComplsForOne (GRE n par True _, _) =
           (, mempty) <$> toCompItem par curMod curModName n Nothing
-      getComplsForOne (GRE n par False prov) =
+      getComplsForOne (GRE n par False prov, inScope) =
         flip foldMapM (map is_decl prov) $ \spec -> do
           -- we don't want to extend import if it's already in scope
-          let originalImportDecl = if null $ lookupGRE_Name inScopeEnv n then Map.lookup (is_dloc spec) importMap else Nothing
+          let originalImportDecl = if inScope then Nothing else Map.lookup (is_dloc spec) importMap
           compItem <- toCompItem par curMod (is_mod spec) n originalImportDecl
           let unqual
                 | is_qual spec = []
