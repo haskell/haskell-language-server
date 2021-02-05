@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs#-}
 
-
+#include "ghc-api-version.h"
 
 -- Mostly taken from "haskell-ide-engine"
 module Development.IDE.Plugin.Completions.Logic (
@@ -28,11 +28,11 @@ import Name
 import RdrName
 import Type
 import Packages
-
+#if MIN_GHC_API_VERSION(8,10,0)
 import Predicate (isDictTy)
 import Pair
 import Coercion
-
+#endif
 
 import Language.Haskell.LSP.Types
 import Language.Haskell.LSP.Types.Capabilities
@@ -259,12 +259,12 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
                   then getArgs ret
                   else Prelude.filter (not . isDictTy) args
           | isPiTy t = getArgs $ snd (splitPiTys t)
-
+#if MIN_GHC_API_VERSION(8,10,0)
           | Just (Pair _ t) <- coercionKind <$> isCoercionTy_maybe t
           = getArgs t
-
-
-
+#else
+          | isCoercionTy t = maybe [] (getArgs . snd) (splitCoercionType_maybe t)
+#endif
           | otherwise = []
 
 mkModCompl :: T.Text -> CompletionItem
@@ -372,7 +372,6 @@ cacheDataProducer uri packageState curMod rdrElts limports deps = do
     , qualCompls = quals
     , importableModules = moduleNames
     }
-
 
 -- | Produces completions from the top level declarations of a module.
 localCompletionsForParsedModule :: Uri -> ParsedModule -> CachedCompletions
