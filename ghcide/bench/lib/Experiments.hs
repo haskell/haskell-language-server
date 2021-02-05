@@ -41,6 +41,7 @@ import System.FilePath ((</>), (<.>))
 import System.Process
 import System.Time.Extra
 import Text.ParserCombinators.ReadP (readP_to_S)
+import Development.Shake (cmd_, CmdOption (Cwd, FileStdout))
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
@@ -423,19 +424,24 @@ setup :: HasConfig => IO SetupResult
 setup = do
 --   when alreadyExists $ removeDirectoryRecursive examplesPath
   benchDir <- case example ?config of
-      UsePackage{..} -> return examplePath
+      UsePackage{..} -> do
+          let hieYamlPath = examplePath </> "hie.yaml"
+          alreadyExists <- doesFileExist hieYamlPath
+          unless alreadyExists $
+                cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
+          return examplePath
       GetPackage{..} -> do
         let path = examplesPath </> package
             package = exampleName <> "-" <> showVersion exampleVersion
+            hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
         unless alreadySetup $
           case buildTool ?config of
             Cabal -> do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
                 callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
-                writeFile
-                    (path </> "hie.yaml")
-                    ("cradle: {cabal: {component: " <> exampleName <> "}}")
+                let hieYamlPath = path </> "hie.yaml"
+                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String)
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
                     (path </> "cabal.project")
@@ -464,9 +470,7 @@ setup = do
                             ]
                         )
 
-                writeFile
-                    (path </> "hie.yaml")
-                    ("cradle: {stack: {component: " <> show (exampleName <> ":lib") <> "}}")
+                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String) ["--stack"::String]
         return path
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
