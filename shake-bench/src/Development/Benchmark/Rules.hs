@@ -259,7 +259,7 @@ benchRules build benchResource MkBenchRules{..} = do
             results = tail csvContents
             header' = header <> ", maxResidency, allocatedBytes"
         results' <- forM results $ \row -> do
-            (maxResidency, allocations) <- liftIO $
+            (maxResidency, allocations) <- liftIO
                     (parseMaxResidencyAndAllocations <$> readFile outGc)
             return $ printf "%s, %s, %s" row (showMB maxResidency) (showMB allocations)
         let csvContents' = header' : results'
