@@ -29,6 +29,7 @@ experiments:
     - "edit"
     - "hover"
     - "hover after edit"
+    # - "hover after cradle edit"
     - "getDefinition"
     - "getDefinition after edit"
     - "completions after edit"
@@ -36,7 +37,6 @@ experiments:
     - "code actions after edit"
     - "code actions after cradle edit"
     - "documentSymbols after edit"
-    - "hover after cradle edit"
 
 # An ordered list of versions to analyze
 versions:
