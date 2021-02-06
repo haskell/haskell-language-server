@@ -1093,11 +1093,11 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
   , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
   , canUseIdent thingMissing identInfo
   , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules
-  , suggestion <- renderNewImport identInfo (moduleNameText identInfo)
+  , suggestion <- renderNewImport identInfo
   ]
  where
-  renderNewImport :: IdentInfo -> T.Text -> [T.Text]
-  renderNewImport identInfo m
+  renderNewImport :: IdentInfo -> [T.Text]
+  renderNewImport identInfo
     | Just q <- qual
     , asQ <- if q == m then "" else " as " <> q
     = ["import qualified " <> m <> asQ]
@@ -1105,6 +1105,8 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
     = ["import " <> m <> " (" <> renderImportStyle importStyle <> ")"
       | importStyle <- NE.toList $ importStyles identInfo] ++
       ["import " <> m ]
+    where
+        m = moduleNameText identInfo
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
 canUseIdent NotInScopeDataConstructor{} = isDatacon
