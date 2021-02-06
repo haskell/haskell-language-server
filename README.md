@@ -257,6 +257,8 @@ Direct installation from Hackage, while possible via `cabal install haskell-lang
 Said command builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder,
 but the binary will only work with projects that use the same GHC version that built it.
 
+The package can be found here on Hackage: https://hackage.haskell.org/package/haskell-language-server
+
 ## Configuring `haskell-language-server`
 
 Language servers like `haskell-language-server` expose most of their configuration via the client (i.e. the editor).
