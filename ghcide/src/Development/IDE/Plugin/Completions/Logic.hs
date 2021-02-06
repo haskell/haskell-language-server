@@ -293,8 +293,9 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
-cacheDataProducer :: Uri -> HscEnv -> Module -> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
-cacheDataProducer uri packageState curMod rdrEnv limports deps = do
+
+cacheDataProducer :: Uri -> HscEnv -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = do
   let dflags = hsc_dflags packageState
       curModName = moduleName curMod
 
@@ -314,7 +315,7 @@ cacheDataProducer uri packageState curMod rdrEnv limports deps = do
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
 
-      rdrElts = globalRdrEnvElts rdrEnv
+      rdrElts = globalRdrEnvElts globalEnv
 
       foldMapM :: (Foldable f, Monad m, Monoid b) => (a -> m b) -> f a -> m b
       foldMapM f xs = foldr step return xs mempty where
@@ -328,7 +329,8 @@ cacheDataProducer uri packageState curMod rdrEnv limports deps = do
           (, mempty) <$> toCompItem par curMod curModName n Nothing
       getComplsForOne (GRE n par False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
-          let originalImportDecl = Map.lookup (is_dloc spec) importMap
+          -- we don't want to extend import if it's already in scope
+          let originalImportDecl = if null $ lookupGRE_Name inScopeEnv n then Map.lookup (is_dloc spec) importMap else Nothing
           compItem <- toCompItem par curMod (is_mod spec) n originalImportDecl
           let unqual
                 | is_qual spec = []
@@ -370,7 +372,6 @@ cacheDataProducer uri packageState curMod rdrEnv limports deps = do
     , qualCompls = quals
     , importableModules = moduleNames
     }
-
 
 -- | Produces completions from the top level declarations of a module.
 localCompletionsForParsedModule :: Uri -> ParsedModule -> CachedCompletions

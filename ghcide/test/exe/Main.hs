@@ -3454,6 +3454,26 @@ completionCommandTest name src pos wanted expected = testSession name $ do
             expectMessages @ApplyWorkspaceEditRequest 1 $ \edit ->
               liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
 
+completionNoCommandTest ::
+  String ->
+  [T.Text] ->
+  Position ->
+  T.Text ->
+  TestTree
+completionNoCommandTest name src pos wanted = testSession name $ do
+  docId <- createDoc "A.hs" "haskell" (T.unlines src)
+  _ <- waitForDiagnostics
+  compls <- getCompletions docId pos
+  let wantedC = find ( \case
+            CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
+            _ -> False
+            ) compls
+  case wantedC of
+    Nothing ->
+      liftIO $ assertFailure $ "Cannot find expected completion in: " <> show [_label | CompletionItem {_label} <- compls]
+    Just CompletionItem{..} -> liftIO . assertBool ("Expected no command but got: " <> show _command) $ null _command
+    
+
 topLevelCompletionTests :: [TestTree]
 topLevelCompletionTests = [
     completionTest
@@ -3674,18 +3694,21 @@ nonLocalCompletionTests =
             (Position 2 4)
             "ZeroPad"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
-        , completionCommandTest
+        , completionNoCommandTest
             "parent imported all"
             ["module A where", "import Text.Printf (FormatAdjustment (..))", "ZeroPad"]
             (Position 2 4)
             "ZeroPad"
-            ["module A where", "import Text.Printf (FormatAdjustment (..))", "ZeroPad"]
-        , completionCommandTest
+        , completionNoCommandTest
             "already imported"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
             (Position 2 4)
-            "ZeroPad"
-            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+            "ZeroPad"        
+        , completionNoCommandTest
+            "function from Prelude"
+            ["module A where", "import Data.Maybe ()", "Nothing"]
+            (Position 2 4)
+            "Nothing"
         ]
       , testGroup "Record completion"
         [ completionCommandTest
@@ -3700,12 +3723,11 @@ nonLocalCompletionTests =
             (Position 2 10)
             "FormatParse {"
             ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
-        , completionCommandTest
+        , completionNoCommandTest
             "already imported"
             ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
             (Position 2 10)
             "FormatParse {"
-            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
         ]
       ],
       -- we need this test to make sure the ghcide completions module does not return completions for language pragmas. this functionality is turned on in hls
