@@ -11,18 +11,19 @@ where
 import qualified Data.ByteString.Lazy           as BS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding             as T
-import           Development.IDE as D
+import           Development.IDE as D           hiding (pluginHandlers)
 import           Floskell
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
 import           Text.Regex.TDFA.Text()
+import Control.Monad.IO.Class
 
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginFormattingProvider = Just provider
+  { pluginHandlers = mkFormattingHandlers provider
   }
 
 -- ---------------------------------------------------------------------
@@ -30,8 +31,8 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- | Format provider of Floskell.
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
-provider :: FormattingProvider IdeState IO
-provider _lf _ideState typ contents fp _ = do
+provider :: FormattingHandler IdeState
+provider _ideState typ contents fp _ = liftIO $ do
     let file = fromNormalizedFilePath fp
     config <- findConfigOrDefault file
     let (range, selectedContents) = case typ of

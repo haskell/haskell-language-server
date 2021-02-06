@@ -19,14 +19,14 @@ import           System.FilePath
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginFormattingProvider = Just provider
+  { pluginHandlers = mkFormattingHandlers provider
   }
 
 -- | Formatter provider of stylish-haskell.
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
-provider :: FormattingProvider IdeState IO
-provider _lf _ideState typ contents fp _opts = do
+provider :: FormattingHandler IdeState
+provider _ideState typ contents fp _opts = do
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file
   let (range, selectedContents) = case typ of
