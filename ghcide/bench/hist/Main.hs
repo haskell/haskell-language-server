@@ -120,10 +120,10 @@ createBuildSystem config = do
   csvRules build
   svgRules build
   heapProfileRules build
-  phonyRules "" NoProfiling build (examples configStatic)
+  phonyRules "" "ghcide" NoProfiling build (examples configStatic)
 
   whenJust (profileInterval configStatic) $ \i -> do
-    phonyRules "profiled-" (CheapHeapProfiling i) build (examples configStatic)
+    phonyRules "profiled-" "ghcide" (CheapHeapProfiling i) build (examples configStatic)
 
   return configStatic
 

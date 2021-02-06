@@ -141,16 +141,25 @@ allTargetsForExample prof baseFolder ex = do
                mode <- ["svg", "diff.svg"] ++ ["heap.svg" | prof /= NoProfiling]
            ]
 
+allBinaries :: FilePath -> String -> Action [FilePath]
+allBinaries buildFolder executableName = do
+    versions <- askOracle $ GetVersions ()
+    return $
+        [ buildFolder </> "binaries" </> T.unpack (humanName ver) </> executableName
+        | ver <- versions]
+
 -- | Generate a set of phony rules:
 --     * <prefix>all
 --     * <prefix><example>  for each example
 phonyRules
     :: (Traversable t, IsExample e)
-    => String         -- prefix
+    => String         -- ^ prefix
+    -> String         -- ^ Executable name
     -> ProfilingMode
     -> FilePath
-    -> t e -> Rules ()
-phonyRules prefix prof buildFolder examples = do
+    -> t e
+    -> Rules ()
+phonyRules prefix executableName prof buildFolder examples = do
     forM_ examples $ \ex ->
         phony (prefix <> getExampleName ex) $ need =<<
             allTargetsForExample prof buildFolder ex
@@ -159,6 +168,7 @@ phonyRules prefix prof buildFolder examples = do
             allTargetsForExample prof buildFolder ex
         need $ [ buildFolder </> profilingPath prof </> "results.csv" ]
              ++ concat exampleTargets
+    phony (prefix <> "all-binaries") $ need =<< allBinaries buildFolder executableName
 --------------------------------------------------------------------------------
 type OutputFolder = FilePath
 
