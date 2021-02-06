@@ -293,11 +293,9 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
     Nothing Nothing Nothing Nothing Nothing
 
--- | 'Bool' means whether this element is in scope
-type GlobalRdrElt' = (GlobalRdrElt, Bool)
 
-cacheDataProducer :: Uri -> HscEnv -> Module -> [GlobalRdrElt']-> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
-cacheDataProducer uri packageState curMod rdrElts limports deps = do
+cacheDataProducer :: Uri -> HscEnv -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = do
   let dflags = hsc_dflags packageState
       curModName = moduleName curMod
 
@@ -317,20 +315,22 @@ cacheDataProducer uri packageState curMod rdrElts limports deps = do
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
 
+      rdrElts = globalRdrEnvElts globalEnv
+
       foldMapM :: (Foldable f, Monad m, Monoid b) => (a -> m b) -> f a -> m b
       foldMapM f xs = foldr step return xs mempty where
         step x r z = f x >>= \y -> r $! z `mappend` y
 
-      getCompls :: [GlobalRdrElt'] -> IO ([CompItem],QualCompls)
+      getCompls :: [GlobalRdrElt] -> IO ([CompItem],QualCompls)
       getCompls = foldMapM getComplsForOne
 
-      getComplsForOne :: GlobalRdrElt' -> IO ([CompItem],QualCompls)
-      getComplsForOne (GRE n par True _, _) =
+      getComplsForOne :: GlobalRdrElt -> IO ([CompItem],QualCompls)
+      getComplsForOne (GRE n par True _) =
           (, mempty) <$> toCompItem par curMod curModName n Nothing
-      getComplsForOne (GRE n par False prov, inScope) =
+      getComplsForOne (GRE n par False prov) =
         flip foldMapM (map is_decl prov) $ \spec -> do
           -- we don't want to extend import if it's already in scope
-          let originalImportDecl = if inScope then Nothing else Map.lookup (is_dloc spec) importMap
+          let originalImportDecl = if null $ lookupGRE_Name inScopeEnv n then Map.lookup (is_dloc spec) importMap else Nothing
           compItem <- toCompItem par curMod (is_mod spec) n originalImportDecl
           let unqual
                 | is_qual spec = []

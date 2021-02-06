@@ -35,8 +35,7 @@ import Ide.Plugin.Config (Config (completionSnippetsOn))
 import Ide.PluginUtils (getClientConfig)
 import Ide.Types
 import TcRnDriver (tcRnImportDecls)
-import RdrName (globalRdrEnvElts, GlobalRdrElt (..))
-import Data.Algorithm.Diff (PolyDiff (..), getDiffBy)
+import Control.Concurrent.Async (concurrently)
 #if defined(GHC_LIB)
 import Development.IDE.Import.DependencyInformation
 #endif
@@ -78,19 +77,11 @@ produceCompletions = do
             (Just (ms,imps), Just sess) -> do
               let env = hscEnv sess
               -- We do this to be able to provide completions of items that are not restricted to the explicit list
-              res <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> imps)
-              inScope <- liftIO $ tcRnImportDecls env imps
-              case (res, inScope) of
+              (global, inScope) <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> imps) `concurrently` tcRnImportDecls env imps
+              case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                          globalElts = globalRdrEnvElts globalEnv
-                          inScopeElts = globalRdrEnvElts inScopeEnv
-                          diff = getDiffBy (\GRE {gre_name = nameA} GRE {gre_name = nameB} -> nameA == nameB) globalElts inScopeElts
-                          rdrElts = flip map diff $ \case
-                            First x -> (x, False)
-                            Second x -> (x, True)
-                            Both x _ -> (x, True)
-                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) rdrElts imps parsedDeps
+                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) globalEnv inScopeEnv imps parsedDeps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
