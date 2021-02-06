@@ -29,7 +29,7 @@ descriptor plId =
     { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
     }
 
-codeActionProvider :: SimpleHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState _pId (CodeActionParams _ _ (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags}) =
   do
     let noErr = and $ (/= Just DsError) . _severity <$> diags

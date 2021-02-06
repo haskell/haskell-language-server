@@ -130,7 +130,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
 -- |
 -- This implementation is ad-hoc in a sense that the diagnostic detection mechanism is
 -- sensitive to the format of diagnostic messages from GHC.
-codeAction :: SimpleHandler IdeState TextDocumentCodeAction
+codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fromMaybe errorResult) . runMaybeT $ do
   docPath <- MaybeT . pure . uriToNormalizedFilePath $ toNormalizedUri uri
   actions <- join <$> mapM (mkActions docPath) methodDiags

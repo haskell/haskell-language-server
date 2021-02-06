@@ -163,7 +163,7 @@ extractImports _ _ _ = []
 
 -------------------------------------------------------------------------------
 
-provider :: SimpleHandler IdeState TextDocumentCodeAction
+provider :: PluginMethodHandler IdeState TextDocumentCodeAction
 provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca) = response $ do
   let (J.CodeActionContext _diags _monly) = ca
       nuri = toNormalizedUri uri

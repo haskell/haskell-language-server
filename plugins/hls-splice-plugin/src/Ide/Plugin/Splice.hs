@@ -388,7 +388,7 @@ fromSearchResult _ = Nothing
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
-codeAction :: SimpleHandler IdeState TextDocumentCodeAction
+codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
     fmap (maybe (Right $ List []) Right) $
         runMaybeT $ do

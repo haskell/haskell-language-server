@@ -87,7 +87,7 @@ runImportCommand _state (ImportCommandParams edit) = do
 -- the provider should produce one code lens associated to the import statement:
 --
 -- > import Data.List (intercalate, sortBy)
-lensProvider :: SimpleHandler IdeState TextDocumentCodeLens
+lensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
 lensProvider
   state -- ghcide state, used to retrieve typechecking artifacts
   pId -- plugin Id
@@ -115,7 +115,7 @@ lensProvider
 
 -- | If there are any implicit imports, provide one code action to turn them all
 --   into explicit imports.
-codeActionProvider :: SimpleHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
   | TextDocumentIdentifier {_uri} <- docId,
     Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $

@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Ide.Types
     where
@@ -26,7 +27,7 @@ import           Development.Shake hiding (command)
 import           Ide.Plugin.Config
 import           Language.LSP.Types
 import           Language.LSP.VFS
-import           Language.LSP.Types.Lens hiding (id)
+import           Language.LSP.Types.Lens as J hiding (id)
 import           Language.LSP.Types.Capabilities
 import           Language.LSP.Server (LspM, getVirtualFile)
 import           Text.Regex.TDFA.Text()
@@ -60,16 +61,6 @@ data PluginDescriptor ideState =
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
 class PluginMethod m where
 
-  -- | Extra data associated with requests of this type, to be passed to the handler
-  type ExtraParams m :: *
-  type ExtraParams m = () -- no extra data by default
-
-  -- | How to generate the extra data
-  getExtraParams :: SMethod m -> MessageParams m -> LspM Config (Either ResponseError (ExtraParams m))
-
-  default getExtraParams :: (ExtraParams m ~ ()) => SMethod m -> MessageParams m -> LspM Config (Either ResponseError (ExtraParams m))
-  getExtraParams _ _ = pure $ Right ()
-
   -- | Parse the configuration to check if this plugin is enabled
   pluginEnabled :: SMethod m -> PluginId -> Config -> Bool
 
@@ -88,7 +79,7 @@ class PluginMethod m where
 
 instance PluginMethod TextDocumentCodeAction where
   pluginEnabled _ = pluginEnabledConfig plcCodeActionsOn
-  combineResponses _method pid _config (ClientCapabilities _ textDocCaps _ _) (CodeActionParams _ _ docId range context) resps =
+  combineResponses _method pid _config (ClientCapabilities _ textDocCaps _ _) (CodeActionParams _ _ _ _ context) resps =
       fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
     where
 
@@ -175,24 +166,10 @@ instance PluginMethod TextDocumentCompletion where
           consumeCompletionResponse n (InR (CompletionList isCompleteResponse (List xx)))
 
 instance PluginMethod TextDocumentFormatting where
-  type ExtraParams TextDocumentFormatting = (FormattingType, T.Text)
-  getExtraParams _ (DocumentFormattingParams _ (TextDocumentIdentifier uri) params) = do
-    mf <- getVirtualFile $ toNormalizedUri uri
-    case mf of
-      Just vf -> pure $ Right (FormatText, virtualFileText vf)
-      Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
-
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
   combineResponses _ _ _ _ _ (x :| _) = x
 
 instance PluginMethod TextDocumentRangeFormatting where
-  type ExtraParams TextDocumentRangeFormatting = (FormattingType, T.Text)
-  getExtraParams _ (DocumentRangeFormattingParams _ (TextDocumentIdentifier uri) range params) = do
-    mf <- getVirtualFile $ toNormalizedUri uri
-    case mf of
-      Just vf -> pure $ Right (FormatRange range, virtualFileText vf)
-      Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
-
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
   combineResponses _ _ _ _ _ (x :| _) = x
 
@@ -205,39 +182,30 @@ instance GCompare IdeMethod where
 
 -- | Combine handlers for the
 newtype PluginHandler a (m :: Method FromClient Request)
-  = PluginHandler (PluginId -> a -> ExtraParams m -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))
+  = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))
 
 newtype PluginHandlers a = PluginHandlers (DMap IdeMethod (PluginHandler a))
 
 instance Semigroup (PluginHandlers a) where
   (PluginHandlers a) <> (PluginHandlers b) = PluginHandlers $ DMap.unionWithKey go a b
     where
-      go _ (PluginHandler f) (PluginHandler g) = PluginHandler $ \pid ide extra params ->
-        (<>) <$> f pid ide extra params <*> g pid ide extra params
+      go _ (PluginHandler f) (PluginHandler g) = PluginHandler $ \pid ide params ->
+        (<>) <$> f pid ide params <*> g pid ide params
 
 instance Monoid (PluginHandlers a) where
   mempty = PluginHandlers mempty
 
-type SimpleHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m))
+type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m))
 
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
   :: PluginMethod m
   => SClientMethod m
-  -> SimpleHandler ideState m
+  -> PluginMethodHandler ideState m
   -> PluginHandlers ideState
 mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandler f')
   where
-    f' pid ide _ params = pure <$> f ide pid params
-
-mkPluginHandlerExtra
-  :: PluginMethod m
-  => SClientMethod m
-  -> (ideState -> PluginId -> ExtraParams m -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m)))
-  -> PluginHandlers ideState
-mkPluginHandlerExtra m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandler f')
-  where
-    f' pid ide extra params = pure <$> f ide pid extra params
+    f' pid ide params = pure <$> f ide pid params
 
 defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
@@ -293,6 +261,45 @@ pluginEnabledConfig f pid config = plcGlobalOn pluginConfig && f pluginConfig
 -- as the FormattingType.
 data FormattingType = FormatText
                     | FormatRange Range
+
+
+type FormattingMethod m =
+  ( J.HasOptions (MessageParams m) FormattingOptions
+  , J.HasTextDocument (MessageParams m) TextDocumentIdentifier
+  , ResponseResult m ~ List TextEdit
+  )
+
+type FormattingHandler a
+  =  a
+  -> FormattingType
+  -> T.Text
+  -> NormalizedFilePath
+  -> FormattingOptions
+  -> LspM Config (Either ResponseError (List TextEdit))
+
+mkFormattingHandlers :: forall a. FormattingHandler a -> PluginHandlers a
+mkFormattingHandlers f = mkPluginHandler STextDocumentFormatting (provider STextDocumentFormatting)
+                      <> mkPluginHandler STextDocumentRangeFormatting (provider STextDocumentRangeFormatting)
+  where
+    provider :: forall m. FormattingMethod m => SMethod m -> PluginMethodHandler a m
+    provider m ide _pid params
+      | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+        mf <- getVirtualFile $ toNormalizedUri uri
+        case mf of
+          Just vf -> do
+            let typ = case m of
+                  STextDocumentFormatting -> FormatText
+                  STextDocumentRangeFormatting -> FormatRange (params ^. J.range)
+                  _ -> error "mkFormattingHandlers: impossible"
+            f ide typ (virtualFileText vf) nfp opts
+          Nothing -> pure $ Left $ responseError $ T.pack $ "Formatter plugin: could not get file contents for " ++ show uri
+
+      | otherwise = pure $ Left $ responseError $ T.pack $ "Formatter plugin: uriToFilePath failed for: " ++ show uri
+      where
+        uri = params ^. J.textDocument . J.uri
+        opts = params ^. J.options
+
+-- ---------------------------------------------------------------------
 
 responseError :: T.Text -> ResponseError
 responseError txt = ResponseError InvalidParams txt Nothing
