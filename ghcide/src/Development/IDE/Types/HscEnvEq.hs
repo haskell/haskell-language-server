@@ -107,7 +107,9 @@ instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b c d e) = rnf (hashUnique a) `seq` b `seq` c `seq` rnf d `seq` rnf e
+  rnf (HscEnvEq a b c d _) =
+      -- deliberately skip the package exports map
+      rnf (hashUnique a) `seq` b `seq` c `seq` rnf d
 
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique
