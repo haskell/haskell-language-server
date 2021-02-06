@@ -155,29 +155,24 @@ extensiblePlugins xs = Plugin mempty handlers
             ("No plugin enabled for " <> T.pack (show m) <> ", available: " <> T.pack (show $ map fst fs))
             Nothing
           Just fs -> do
-            ex <- getExtraParams m params
-            case ex of
-              Left err -> pure $ Left err
-              Right ex -> do
-                let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
-                es <- runConcurrently msg fs ide ex params
-                let (errs,succs) = partitionEithers $ toList es
-                case nonEmpty succs of
-                  Nothing -> pure $ Left $ combineErrors errs
-                  Just xs -> do
-                    caps <- LSP.getClientCapabilities
-                    pure $ Right $ combineResponses m pid config caps params xs
+            let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
+            es <- runConcurrently msg fs ide params
+            let (errs,succs) = partitionEithers $ toList es
+            case nonEmpty succs of
+              Nothing -> pure $ Left $ combineErrors errs
+              Just xs -> do
+                caps <- LSP.getClientCapabilities
+                pure $ Right $ combineResponses m pid config caps params xs
 
 runConcurrently
   :: MonadUnliftIO m
   => (SomeException -> PluginId -> T.Text)
-  -> NonEmpty (PluginId, a -> b -> c -> m (NonEmpty (Either ResponseError d)))
+  -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
   -> a
   -> b
-  -> c
   -> m (NonEmpty (Either ResponseError d))
-runConcurrently msg fs a b c = fmap join $ forConcurrently fs $ \(pid,f) ->
-  f a b c
+runConcurrently msg fs a b = fmap join $ forConcurrently fs $ \(pid,f) ->
+  f a b
     `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing)
 
 combineErrors :: [ResponseError] -> ResponseError
@@ -186,7 +181,7 @@ combineErrors xs = ResponseError InternalError (T.pack (show xs)) Nothing
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeHandler (m :: J.Method FromClient Request)
-  = IdeHandler [(PluginId,(IdeState -> ExtraParams m -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m)))))]
+  = IdeHandler [(PluginId,(IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m)))))]
 
 -- | Combine the 'PluginHandlers' for all plugins
 newtype IdeHandlers = IdeHandlers (DMap IdeMethod IdeHandler)

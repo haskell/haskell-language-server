@@ -194,7 +194,7 @@ import Language.LSP.Types.Lens (line, end)
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
-codeLens :: SimpleHandler IdeState TextDocumentCodeLens
+codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
 codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg

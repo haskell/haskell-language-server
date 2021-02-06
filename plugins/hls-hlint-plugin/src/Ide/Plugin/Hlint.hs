@@ -252,7 +252,7 @@ getHlintSettingsRule usage =
 
 -- ---------------------------------------------------------------------
 
-codeActionProvider :: SimpleHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right . LSP.List . map InR <$> liftIO getCodeActions
   where
 

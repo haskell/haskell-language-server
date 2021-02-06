@@ -152,7 +152,7 @@ runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
 
 
-codeActionProvider :: SimpleHandler IdeState TextDocumentCodeAction
+codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
       liftIO $ fromMaybeT (Right $ List []) $ do
