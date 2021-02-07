@@ -14,5 +14,5 @@ bench-temp/
 ghcide
 ghcide-bench
 ghcide-preprocessor
-*.benchmark-gcStats
+*.gcStats.log
 tags

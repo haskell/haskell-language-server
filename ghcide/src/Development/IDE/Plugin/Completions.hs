@@ -28,7 +28,7 @@ import Development.IDE.Core.RuleTypes
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat
 import Development.IDE.GHC.ExactPrint (Annotated (annsA), GetAnnotatedParsedSource (GetAnnotatedParsedSource))
-import Development.IDE.GHC.Util
+import Development.IDE.Types.HscEnvEq (hscEnv)
 import Development.IDE.Plugin.CodeAction.ExactPrint
 import Development.IDE.Plugin.Completions.Types
 import Ide.Plugin.Config (Config (completionSnippetsOn))

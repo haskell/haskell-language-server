@@ -1,6 +1,6 @@
 # The number of samples to run per experiment.
 # At least 100 is recommended in order to observe space leaks
-samples: 100
+samples: 50
 
 buildTool: cabal
 
@@ -29,11 +29,14 @@ experiments:
     - "edit"
     - "hover"
     - "hover after edit"
+    # - "hover after cradle edit"
     - "getDefinition"
     - "getDefinition after edit"
+    - "completions"
     - "completions after edit"
     - "code actions"
     - "code actions after edit"
+    - "code actions after cradle edit"
     - "documentSymbols after edit"
 
 # An ordered list of versions to analyze
