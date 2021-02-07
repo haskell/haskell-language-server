@@ -31,10 +31,11 @@
     ├─ <example>
     │   ├── results.csv                           - aggregated results for all the versions
     │   └── <git-reference>
-    │       ├── <experiment>.benchmark-gcStats    - RTS -s output
+    │       ├── <experiment>.gcStats.log          - RTS -s output
     │       ├── <experiment>.csv                  - stats for the experiment
     │       ├── <experiment>.svg                  - Graph of bytes over elapsed time
     │       ├── <experiment>.diff.svg             - idem, including the previous version
+    │       ├── <experiment>.heap.svg             - Heap profile
     │       ├── <experiment>.log                  - bench stdout
     │       └── results.csv                       - results of all the experiments for the example
     ├── results.csv        - aggregated results of all the experiments and versions
@@ -224,9 +225,9 @@ benchRules build benchResource MkBenchRules{..} = do
   -- run an experiment
   priority 0 $
     [ build -/- "*/*/*.csv",
-      build -/- "*/*/*.benchmark-gcStats",
+      build -/- "*/*/*.gcStats.log",
       build -/- "*/*/*.hp",
-      build -/- "*/*/*.log"
+      build -/- "*/*/*.output.log"
     ]
       &%> \[outcsv, outGc, outHp, outLog] -> do
         let [_, exampleName, ver, exp] = splitDirectories outcsv
@@ -236,7 +237,7 @@ benchRules build benchResource MkBenchRules{..} = do
         setupRes    <- setupProject
         liftIO $ createDirectoryIfMissing True $ dropFileName outcsv
         let exePath    = build </> "binaries" </> ver </> executableName
-            exeExtraArgs = ["+RTS", "-h", "-S" <> outGc, "-RTS"]
+            exeExtraArgs = ["+RTS", "-h", "-i1", "-qg", "-S" <> outGc, "-RTS"]
             ghcPath    = build </> "binaries" </> ver </> "ghc.path"
             experiment = Escaped $ dropExtension exp
         need [exePath, ghcPath]
@@ -250,7 +251,7 @@ benchRules build benchResource MkBenchRules{..} = do
                 AddPath [takeDirectory ghcPath, "."] []
               ]
               BenchProject {..}
-          liftIO $ renameFile "ghcide.hp" $ dropFileName outcsv </> dropExtension exp <.> "hp"
+          liftIO $ renameFile "ghcide.hp" outHp
 
         -- extend csv output with allocation data
         csvContents <- liftIO $ lines <$> readFile outcsv
@@ -258,14 +259,8 @@ benchRules build benchResource MkBenchRules{..} = do
             results = tail csvContents
             header' = header <> ", maxResidency, allocatedBytes"
         results' <- forM results $ \row -> do
-            -- assume that the gcStats file can be guessed from the row id
-            -- assume that the row id is the first column
-            let id = takeWhile (/= ',') row
-            let gcStatsPath = dropFileName outcsv </> escapeSpaces id <.> "benchmark-gcStats"
-            (maxResidency, allocations) <- liftIO $
-                ifM (IO.doesFileExist gcStatsPath)
-                    (parseMaxResidencyAndAllocations <$> readFile gcStatsPath)
-                    (pure (0,0))
+            (maxResidency, allocations) <- liftIO
+                    (parseMaxResidencyAndAllocations <$> readFile outGc)
             return $ printf "%s, %s, %s" row (showMB maxResidency) (showMB allocations)
         let csvContents' = header' : results'
         writeFileLines outcsv csvContents'
@@ -495,8 +490,8 @@ data RunLog = RunLog
 
 loadRunLog :: HasCallStack => FilePath -> String -> Escaped FilePath -> FilePath -> Action RunLog
 loadRunLog buildF example exp ver = do
-  let log_fp = buildF </> example </> ver </> escaped exp <.> "benchmark-gcStats"
-      csv_fp = replaceExtension log_fp "csv"
+  let csv_fp = buildF </> example </> ver </> escaped exp <.> "csv"
+      log_fp = replaceExtension csv_fp "gcStats.log"
   log <- readFileLines log_fp
   csv <- readFileLines csv_fp
   let frames =
