@@ -66,7 +66,7 @@ type instance RuleResult GetExample = Maybe Example
 type instance RuleResult GetExamples = [Example]
 
 main :: IO ()
-main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigest, shakeThreads = 0} $ do
+main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigestInput, shakeThreads = 0} $ do
   createBuildSystem $ \resource -> do
       configStatic <- liftIO $ readConfigIO config
       let build = outputFolder configStatic
