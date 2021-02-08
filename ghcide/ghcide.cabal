@@ -246,7 +246,9 @@ benchmark benchHist
         base == 4.*,
         shake-bench == 0.1.*,
         directory,
+        extra,
         filepath,
+        optparse-applicative,
         shake,
         text,
         yaml

@@ -67,3 +67,7 @@ versions:
 # - ghcide-v0.7.3
 - upstream: origin/master
 - HEAD
+
+# Heap profile interval in seconds (+RTS -i)
+# Comment out to disable heap profiling
+profileInterval: 1

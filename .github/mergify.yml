@@ -5,7 +5,8 @@ pull_request_rules:
       method: squash
   name: Automatically merge pull requests
   conditions:
-  - status-success=bench (8.10.3, ubuntu-latest)
+  - status-success=bench-example (8.10.3, ubuntu-latest, Cabal-3.0.0.0)
+  - status-success=bench-example (8.10.3, ubuntu-latest, lsp-types-1.0.0.1)
 
   - status-success=nix (default, ubuntu-latest)
   - status-success=nix (default, macOS-latest)
