@@ -3148,7 +3148,6 @@ checkFileCompiles fp diag =
 
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
-  ignoreTest8101 "GHC #18070" $
   ignoreInWindowsForGHC88And810 $
   testSessionWithExtraFiles "plugin" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
@@ -3163,7 +3162,6 @@ pluginSimpleTests =
 
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
-  ignoreTest8101 "GHC #18070" $
   ignoreInWindowsForGHC88And810 $
   testSessionWithExtraFiles "plugin" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
@@ -4025,11 +4023,6 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
-
-ignoreTest8101 :: String -> TestTree -> TestTree
-ignoreTest8101
-  | GHC_API_VERSION == ("8.10.1" :: String) = ignoreTestBecause
-  | otherwise = const id
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
