@@ -58,6 +58,12 @@ import OccName
 import qualified GHC.LanguageExtensions as Lang
 import Control.Lens (alaf)
 import Data.Monoid (Ap(..))
+import TcRnTypes (TcGblEnv(..), ImportAvails(..))
+import HscTypes (ImportedModsVal(..), importedByUser)
+import RdrName (GlobalRdrElt(..), lookupGlobalRdrEnv)
+import SrcLoc (realSrcSpanStart)
+import Module (moduleEnvElts)
+import qualified Data.Map as M
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -80,11 +86,13 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     diag <- fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
-    (ideOptions, join -> parsedModule, join -> env, join -> annotatedPS) <- runAction "CodeAction" state $
-      (,,,) <$> getIdeOptions
+    (ideOptions, join -> parsedModule, join -> env, join -> annotatedPS, join -> tcM, join -> har) <- runAction "CodeAction" state $
+      (,,,,,) <$> getIdeOptions
             <*> getParsedModule `traverse` mbFile
             <*> use GhcSession `traverse` mbFile
             <*> use GetAnnotatedParsedSource `traverse` mbFile
+            <*> use TypeCheck `traverse` mbFile
+            <*> use GetHieAst `traverse` mbFile
     -- This is quite expensive 0.6-0.7s on GHC
     let pkgExports = envPackageExports <$> env
     localExports <- readVar (exportsMap $ shakeExtras state)
@@ -93,7 +101,7 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS x
+        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS tcM har x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
       actions' = caRemoveRedundantImports parsedModule text diag xs uri
@@ -123,9 +131,11 @@ suggestAction
   -> Maybe T.Text
   -> Maybe DynFlags
   -> Maybe (Annotated ParsedSource)
+  -> Maybe TcModuleResult
+  -> Maybe HieAstResult
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
-suggestAction packageExports ideOptions parsedModule text df annSource diag =
+suggestAction packageExports ideOptions parsedModule text df annSource tcM har diag =
     concat
    -- Order these suggestions by priority
     [ suggestSignature True diag
@@ -140,6 +150,7 @@ suggestAction packageExports ideOptions parsedModule text df annSource diag =
     , suggestAddTypeAnnotationToSatisfyContraints text diag
     , rewrite df annSource $ \df ps -> suggestConstraint df ps diag
     , rewrite df annSource $ \_ ps -> suggestImplicitParameter ps diag
+    , rewrite df annSource $ \_ ps -> suggestHideShadow ps tcM har diag
     ] ++ concat
     [  suggestNewDefinition ideOptions pm text diag
     ++ suggestNewImport packageExports pm diag
@@ -168,6 +179,75 @@ findInstanceHead df instanceHead decls =
 
 findDeclContainingLoc :: Position -> [Located a] -> Maybe (Located a)
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
+
+-- This binding for ‘mod’ shadows the existing binding
+--   imported from ‘Prelude’ at haskell-language-server/ghcide/src/Development/IDE/Plugin/CodeAction.hs:10:8-40
+--   (and originally defined in ‘GHC.Real’)typecheck(-Wname-shadowing)
+suggestHideShadow :: ParsedSource -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Rewrite])]
+suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_message, _range}
+  | Just tcM <- mTcM,
+    Just har <- mHar,
+    Just [identifier, modName, s] <-
+      matchRegexUnifySpaces
+        _message
+        "This binding for ‘([^`]+)’ shadows the existing binding imported from ‘([^`]+)’ at ([^ ]*)",
+    [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
+    isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s'),
+    title <- "Hide " <> identifier <> " from " <> modName,
+    implicitPrelude <- null $ findImportDeclByModuleName hsmodImports "Prelude" =
+    if modName == "Prelude" && implicitPrelude
+      then [(title, maybeToList $ hideImplicitPreludeSymbol (T.unpack identifier) pm)]
+      else [(title, hideOrRemoveId hsmodImports (T.unpack identifier) (T.unpack modName))]
+  | otherwise = []
+
+hideOrRemoveId :: [LImportDecl GhcPs] -> String -> String -> [Rewrite]
+hideOrRemoveId lImportDecls identifier modName
+  | Just decl <- findImportDeclByModuleName lImportDecls modName =
+    [hideSymbol identifier decl]
+  | otherwise =
+    []
+
+findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
+findImportDeclByModuleName decls modName = flip find decls $ \case
+  (L _ ImportDecl {..}) -> modName == moduleNameString (unLoc ideclName)
+  _ -> error "impossible"
+
+isTheSameLine :: SrcSpan -> SrcSpan -> Bool
+isTheSameLine s1 s2
+  | Just sl1 <- getStartLine s1,
+    Just sl2 <- getStartLine s2 =
+    sl1 == sl2
+  | otherwise = False
+
+getStartLine :: SrcSpan -> Maybe Int
+getStartLine s
+  | RealSrcSpan s' <- s,
+    startLoc <- realSrcSpanStart s',
+    startLine <- srcLocLine startLoc =
+    Just startLine
+  | otherwise = Nothing
+
+isUnusedImportedId :: TcModuleResult -> HieAstResult -> String -> String -> SrcSpan -> Bool
+isUnusedImportedId
+  TcModuleResult {tmrTypechecked = TcGblEnv {tcg_imports = ImportAvails {imp_mods}}}
+  HAR {refMap = rf}
+  identifier
+  modName
+  importSpan
+    | occ <- mkVarOcc identifier,
+      impModsVals <- importedByUser . concat $ moduleEnvElts imp_mods,
+      Just rdrEnv <-
+        listToMaybe
+          [ imv_all_exports
+            | ImportedModsVal {..} <- impModsVals,
+              imv_name == mkModuleName modName,
+              isTheSameLine imv_span importSpan
+          ],
+      [GRE {..}] <- lookupGlobalRdrEnv rdrEnv occ,
+      importedIdentifier <- Right gre_name,
+      refs <- M.lookup importedIdentifier rf =
+      maybe True null refs
+    | otherwise = False
 
 suggestDisableWarning :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestDisableWarning pm contents Diagnostic{..}
