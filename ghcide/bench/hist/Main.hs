@@ -116,7 +116,7 @@ createBuildSystem config = do
   let build = outputFolder configStatic
 
   buildRules build ghcideBuildRules
-  benchRules build (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
+  benchRules build (MkBenchRules (askOracle $ GetSamples ()) benchGhcide warmupGhcide "ghcide")
   csvRules build
   svgRules build
   heapProfileRules build
@@ -172,3 +172,15 @@ benchGhcide samples buildSystem args BenchProject{..} = do
     [ "--stack" | Stack == buildSystem
     ]
 
+warmupGhcide :: BuildSystem -> FilePath -> [CmdOption] -> Example -> Action ()
+warmupGhcide buildSystem exePath args example = do
+  command args "ghcide-bench" $
+    [ "--no-clean",
+      "-v",
+      "--samples=1",
+      "--ghcide=" <> exePath,
+      "--select=hover"
+    ] ++
+    exampleToOptions example ++
+    [ "--stack" | Stack == buildSystem
+    ]
