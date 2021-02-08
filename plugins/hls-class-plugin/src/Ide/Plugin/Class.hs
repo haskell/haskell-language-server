@@ -18,13 +18,12 @@ import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Char
-import qualified Data.HashMap.Strict as H
 import           Data.List
 import qualified Data.Map.Strict as Map
 import           Data.Maybe
 import qualified Data.Text as T
 import           Development.IDE
-import           Development.IDE.Core.PositionMapping (fromCurrentRange, toCurrentRange)
+import           Development.IDE.Core.PositionMapping (fromCurrentRange)
 import           Development.IDE.GHC.Compat hiding (getLoc)
 import           Development.IDE.Spans.AtPoint
 import qualified GHC.Generics as Generics

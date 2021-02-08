@@ -4,14 +4,8 @@
 
 -- | General utility functions, mostly focused around GHC operations.
 module Development.IDE.GHC.Util(
-    -- * HcsEnv and environment
-    HscEnvEq,
-    hscEnv, newHscEnvEq,
-    hscEnvWithImportPaths,
-    envImportPaths,
     modifyDynFlags,
     evalGhcEnv,
-    deps,
     -- * GHC wrappers
     prettyPrint,
     unsafePrintSDoc,
@@ -32,8 +26,7 @@ module Development.IDE.GHC.Util(
     setHieDir,
     dontWriteHieFiles,
     disableWarningsAsErrors,
-    newHscEnvEqPreserveImportPaths,
-    newHscEnvEqWithImportPaths) where
+    ) where
 
 import Control.Concurrent
 import Data.List.Extra
@@ -56,8 +49,6 @@ import GHC.IO.Encoding
 import GHC.IO.Exception
 import GHC.IO.Handle.Types
 import GHC.IO.Handle.Internals
-import Data.Unique
-import Development.Shake.Classes
 import qualified Data.Text                as T
 import qualified Data.Text.Encoding       as T
 import qualified Data.Text.Encoding.Error as T
@@ -71,13 +62,12 @@ import Outputable (SDoc, showSDocUnsafe, ppr, Outputable, mkUserStyle, renderWit
 import Packages (getPackageConfigMap, lookupPackage')
 import SrcLoc (mkRealSrcLoc)
 import FastString (mkFastString)
-import Module (moduleNameSlashes, InstalledUnitId)
+import Module (moduleNameSlashes)
 import OccName (parenSymOcc)
 import RdrName (nameRdrName, rdrNameOcc)
 
 import Development.IDE.GHC.Compat as GHC
 import Development.IDE.Types.Location
-import System.Directory (canonicalizePath)
 
 
 ----------------------------------------------------------------------
@@ -177,77 +167,6 @@ moduleImportPath (takeDirectory . fromNormalizedFilePath -> pathDir) mn
         takeDirectory $
         fromNormalizedFilePath $ toNormalizedFilePath' $
         moduleNameSlashes mn
-
--- | An 'HscEnv' with equality. Two values are considered equal
---   if they are created with the same call to 'newHscEnvEq'.
-data HscEnvEq = HscEnvEq
-    { envUnique :: !Unique
-    , hscEnv :: !HscEnv
-    , deps   :: [(InstalledUnitId, DynFlags)]
-               -- ^ In memory components for this HscEnv
-               -- This is only used at the moment for the import dirs in
-               -- the DynFlags
-    , envImportPaths :: Maybe [String]
-        -- ^ If Just, import dirs originally configured in this env
-        --   If Nothing, the env import dirs are unaltered
-    }
-
--- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEq :: FilePath -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEq cradlePath hscEnv0 deps = do
-    envUnique <- newUnique
-    let relativeToCradle = (takeDirectory cradlePath </>)
-        hscEnv = removeImportPaths hscEnv0
-
-    -- Canonicalize import paths since we also canonicalize targets
-    importPathsCanon <-
-      mapM canonicalizePath $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
-    let envImportPaths = Just importPathsCanon
-
-    return HscEnvEq{..}
-
-newHscEnvEqWithImportPaths :: Maybe [String] -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
-    envUnique <- newUnique
-    return HscEnvEq{..}
-
--- | Wrap an 'HscEnv' into an 'HscEnvEq'.
-newHscEnvEqPreserveImportPaths
-    :: HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
-newHscEnvEqPreserveImportPaths hscEnv deps = do
-    let envImportPaths = Nothing
-    envUnique <- newUnique
-    return HscEnvEq{..}
-
--- | Unwrap the 'HscEnv' with the original import paths.
---   Used only for locating imports
-hscEnvWithImportPaths :: HscEnvEq -> HscEnv
-hscEnvWithImportPaths HscEnvEq{..}
-    | Just imps <- envImportPaths
-    = hscEnv{hsc_dflags = (hsc_dflags hscEnv){importPaths = imps}}
-    | otherwise
-    = hscEnv
-
-removeImportPaths :: HscEnv -> HscEnv
-removeImportPaths hsc = hsc{hsc_dflags = (hsc_dflags hsc){importPaths = []}}
-
-instance Show HscEnvEq where
-  show HscEnvEq{envUnique} = "HscEnvEq " ++ show (hashUnique envUnique)
-
-instance Eq HscEnvEq where
-  a == b = envUnique a == envUnique b
-
-instance NFData HscEnvEq where
-  rnf (HscEnvEq a b c d) = rnf (hashUnique a) `seq` b `seq` c `seq` rnf d
-
-instance Hashable HscEnvEq where
-  hashWithSalt s = hashWithSalt s . envUnique
-
--- Fake instance needed to persuade Shake to accept this type as a key.
--- No harm done as ghcide never persists these keys currently
-instance Binary HscEnvEq where
-  put _ = error "not really"
-  get = error "not really"
 
 -- | Read a UTF8 file, with lenient decoding, so it will never raise a decoding error.
 readFileUtf8 :: FilePath -> IO T.Text

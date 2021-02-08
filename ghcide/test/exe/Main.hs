@@ -3418,7 +3418,8 @@ completionTest name src pos expected = testSessionWait name $ do
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
     liftIO $ do
         let emptyToMaybe x = if T.null x then Nothing else Just x
-        compls' @?= [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
+        sortOn (Lens.view Lens._1) compls' @?=
+            sortOn (Lens.view Lens._1) [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
         forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,_,expectedSig, expectedDocs, _)) -> do
             when expectedSig $
                 assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
@@ -3472,7 +3473,7 @@ completionNoCommandTest name src pos wanted = testSession name $ do
     Nothing ->
       liftIO $ assertFailure $ "Cannot find expected completion in: " <> show [_label | CompletionItem {_label} <- compls]
     Just CompletionItem{..} -> liftIO . assertBool ("Expected no command but got: " <> show _command) $ null _command
-    
+
 
 topLevelCompletionTests :: [TestTree]
 topLevelCompletionTests = [
@@ -3703,7 +3704,7 @@ nonLocalCompletionTests =
             "already imported"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
             (Position 2 4)
-            "ZeroPad"        
+            "ZeroPad"
         , completionNoCommandTest
             "function from Prelude"
             ["module A where", "import Data.Maybe ()", "Nothing"]

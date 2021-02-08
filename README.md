@@ -2,6 +2,7 @@
 
 ![haskell-language-server][logo]
 
+[![Hackage][badge-hackage]][hackage]
 [![License Apache 2.0][badge-license]][license]
 [![CircleCI][badge-circleci]][circleci]
 ![Github Testing Workflow](https://github.com/haskell/haskell-language-server/workflows/Testing/badge.svg)
@@ -12,6 +13,8 @@
 [license]: https://github.com/haskell/haskell-language-server/blob/master/LICENSE
 [badge-circleci]: https://img.shields.io/circleci/project/github/haskell/haskell-language-server/master.svg
 [circleci]: https://circleci.com/gh/haskell/haskell-language-server/
+[badge-hackage]: https://img.shields.io/hackage/v/haskell-language-server.svg?logo=haskell
+[hackage]: https://hackage.haskell.org/package/haskell-language-server
 
 Integration point for [ghcide](https://github.com/haskell/ghcide) and [haskell-ide-engine](https://github.com/haskell/haskell-ide-engine). One IDE to rule
 them all. Read the [project's
@@ -256,6 +259,8 @@ If your desired ghc has been found, you use it to install haskell-language-serve
 Direct installation from Hackage, while possible via `cabal install haskell-language-server`, is not recommended for most people.
 Said command builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder,
 but the binary will only work with projects that use the same GHC version that built it.
+
+The package can be found here on Hackage: https://hackage.haskell.org/package/haskell-language-server
 
 ## Configuring `haskell-language-server`
 

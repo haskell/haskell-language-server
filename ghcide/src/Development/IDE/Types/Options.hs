@@ -19,7 +19,7 @@ module Development.IDE.Types.Options
 
 import Data.Default
 import Development.Shake
-import Development.IDE.GHC.Util
+import Development.IDE.Types.HscEnvEq (HscEnvEq)
 import           GHC hiding (parseModule, typecheckModule)
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
 import qualified Language.Haskell.LSP.Types.Capabilities as LSP

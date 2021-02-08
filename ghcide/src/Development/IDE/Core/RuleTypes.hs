@@ -22,6 +22,7 @@ import Data.Binary
 import           Development.IDE.Import.DependencyInformation
 import Development.IDE.GHC.Compat hiding (HieFileResult)
 import Development.IDE.GHC.Util
+import Development.IDE.Types.HscEnvEq (HscEnvEq)
 import Development.IDE.Types.KnownTargets
 import           Data.Hashable
 import           Data.Typeable
@@ -191,10 +192,10 @@ data HieKind a where
 instance NFData (HieKind a) where
     rnf (HieFromDisk hf) = rnf hf
     rnf HieFresh = ()
- 
+
 instance NFData HieAstResult where
     rnf (HAR m hf _rm _tr kind) = rnf m `seq` rwhnf hf `seq` rnf kind
- 
+
 instance Show HieAstResult where
     show = show . hieModule
 

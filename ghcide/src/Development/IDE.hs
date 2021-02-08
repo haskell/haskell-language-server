@@ -40,6 +40,7 @@ import Development.IDE.GHC.Error as X
 import Development.IDE.GHC.Util as X
 import Development.IDE.Plugin as X
 import Development.IDE.Types.Diagnostics as X
+import Development.IDE.Types.HscEnvEq as X (HscEnvEq(..), hscEnv, hscEnvWithImportPaths)
 import Development.IDE.Types.Location as X
 import Development.IDE.Types.Logger as X
 import Development.Shake as X (Action, action, Rules, RuleResult)
