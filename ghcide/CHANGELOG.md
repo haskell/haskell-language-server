@@ -1,4 +1,14 @@
-### 0.7.3 (2021-02-..)
+### 0.7.4 (2021-02-08)
+* Support for references via hiedb (#704) - wz1000
+* Fix space leak on cradle reloads (#1316) - Pepe Iborra
+* Trigger extending import only when the item is not in scope (#1309) - Potato Hatsue
+* Don't extend the import list with child if the parent has already been imported as (..) (#1302) - Potato Hatsue
+* FindImports typo (minor) (#1291) - Andy
+* Reenable auto extend imports and drop snippets for infix completions (#1266) - Pepe Iborra
+* ghcide: Implements a CodeAction to disambiguate ambiguous symbols (#1264) - Hiromi Ishii
+* Restore code actions order (#1273) - Pepe Iborra
+
+### 0.7.3 (2021-02-04)
 * Add custom cache layer for session loading (#1197) - (fendor)
 * Remove invalid exports (#1193) - (Kostas Dermentzis)
 * Use exact print to suggestExtendImport - (Potato Hatsue)
