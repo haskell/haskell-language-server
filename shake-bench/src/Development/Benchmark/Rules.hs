@@ -233,6 +233,8 @@ data MkBenchRules buildSystem example =  forall setup. MkBenchRules
     setupProject :: Action setup
   -- | An action that invokes the executable to run the benchmark
   , benchProject :: setup -> buildSystem -> [CmdOption] -> BenchProject example -> Action ()
+  -- | An action that performs any necessary warmup. Will only be invoked once
+  , warmupProject :: buildSystem -> FilePath -> [CmdOption] -> example -> Action ()
   -- | Name of the executable to benchmark. Should match the one used to 'MkBuildRules'
   , executableName :: String
   }
@@ -262,6 +264,26 @@ benchRules :: RuleResultForExample example => FilePattern -> MkBenchRules BuildS
 benchRules build MkBenchRules{..} = do
 
   benchResource <- newResource "ghcide-bench" 1
+  -- warmup an example
+  build -/- "binaries/*/*.warmup" %> \out -> do
+        let [_, _, ver, exampleName] = splitDirectories (dropExtension out)
+        let exePath = build </> "binaries" </> ver </> executableName
+            ghcPath = build </> "binaries" </> ver </> "ghc.path"
+        need [exePath, ghcPath]
+        buildSystem <- askOracle  $ GetBuildSystem ()
+        example <- fromMaybe (error $ "Unknown example " <> exampleName)
+                    <$> askOracle (GetExample exampleName)
+        let exeExtraArgs = []
+            outcsv = ""
+            experiment = Escaped "hover"
+        withResource benchResource 1 $ warmupProject buildSystem exePath
+              [ EchoStdout False,
+                FileStdout out,
+                RemEnv "NIX_GHC_LIBDIR",
+                RemEnv "GHC_PACKAGE_PATH",
+                AddPath [takeDirectory ghcPath, "."] []
+              ]
+              example
   -- run an experiment
   priority 0 $
     [ build -/- "*/*/*/*.csv",
@@ -287,8 +309,9 @@ benchRules build MkBenchRules{..} = do
                  | CheapHeapProfiling i <- [prof]]
              ++ ["-RTS"]
             ghcPath    = build </> "binaries" </> ver </> "ghc.path"
+            warmupPath = build </> "binaries" </> ver </> exampleName <.> "warmup"
             experiment = Escaped $ dropExtension exp
-        need [exePath, ghcPath]
+        need [exePath, ghcPath, warmupPath]
         ghcPath <- readFile' ghcPath
         withResource benchResource 1 $ do
           benchProject setupRes buildSystem
