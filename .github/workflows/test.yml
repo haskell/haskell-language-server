@@ -33,6 +33,8 @@ jobs:
           # only build rest of supported ghc versions for windows
           - os: windows-latest
             ghc: '8.10.2.2'
+          - os: windows-latest
+            ghc: '8.10.3'
           # This build get stuck frequently
           # - os: windows-latest
           #   ghc: '8.6.4'
