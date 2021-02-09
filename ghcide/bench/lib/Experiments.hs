@@ -148,7 +148,7 @@ experiments =
         ( \docs -> do
             Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
             liftIO $ appendFile hieYaml "##\n"
-            sendNotification WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
             forM_ docs $ \DocumentPositions{..} ->
               changeDoc doc [charEdit stringLiteralP]
@@ -163,7 +163,7 @@ experiments =
         (\docs -> do
             Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
             liftIO $ appendFile hieYaml "##\n"
-            sendNotification WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         )
