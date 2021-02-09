@@ -88,7 +88,6 @@ import System.IO (hPutStrLn, hSetEncoding, stderr, stdout, utf8)
 import System.Time.Extra (offsetTime, showDuration)
 import Text.Printf (printf)
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
-import Ide.Version (findProgramVersions, showProgramVersionOfInterest)
 
 data Arguments = Arguments
     { argsOTMemoryProfiling :: Bool
@@ -141,6 +140,8 @@ defaultMain Arguments{..} = do
     case argFiles of
         Nothing -> do
             t <- offsetTime
+            hPutStrLn stderr "Starting LSP server..."
+            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
             runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps wProg wIndefProg getConfig rootPath -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
@@ -180,12 +181,8 @@ defaultMain Arguments{..} = do
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
 
-            putStrLn $ "HLS setup tester in " ++ dir ++ "."
+            putStrLn $ "ghcide setup tester in " ++ dir ++ "."
             putStrLn "Report bugs at https://github.com/haskell/haskell-language-server/issues"
-            programsOfInterest <- findProgramVersions
-            putStrLn ""
-            putStrLn "Tool versions found on the $PATH"
-            putStrLn $ showProgramVersionOfInterest programsOfInterest
 
             putStrLn $ "\nStep 1/4: Finding files to test in " ++ dir
             files <- expandFiles (argFiles ++ ["." | null argFiles])
