@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DataKinds #-}
 
 module Tactic
   ( tests
@@ -19,9 +22,9 @@ import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Ide.Plugin.Tactic.TestTypes
-import           Language.Haskell.LSP.Test
-import           Language.Haskell.LSP.Types (ExecuteCommandParams(ExecuteCommandParams), ClientMethod (..), Command, ExecuteCommandResponse, ResponseMessage (..), ApplyWorkspaceEditRequest, Position(..) , Range(..) , CAResult(..) , CodeAction(..))
-import           Language.Haskell.LSP.Types.Lens hiding (id, capabilities, message, executeCommand, applyEdit, rename)
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Language.LSP.Types.Lens hiding (id, capabilities, message, executeCommand, applyEdit, rename)
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hls.Util
@@ -44,9 +47,9 @@ pointRange
 
 ------------------------------------------------------------------------------
 -- | Get the title of a code action.
-codeActionTitle :: CAResult -> Maybe Text
-codeActionTitle CACommand{} = Nothing
-codeActionTitle (CACodeAction(CodeAction title _ _ _ _)) = Just title
+codeActionTitle :: (Command |? CodeAction) -> Maybe Text
+codeActionTitle InL{} = Nothing
+codeActionTitle (InR(CodeAction title _ _ _ _ _ _)) = Just title
 
 
 tests :: TestTree
@@ -153,10 +156,10 @@ goldenTest input line col tc occ =
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
-      Just (CACodeAction CodeAction {_command = Just c})
+      Just (InR CodeAction {_command = Just c})
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       executeCommand c
-      _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+      _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
       edited <- documentContents doc
       let expected_name = tacticPath </> input <.> "expected"
       -- Write golden tests if they don't already exist
@@ -173,7 +176,7 @@ expectFail input line col tc occ =
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
-      Just (CACodeAction CodeAction {_command = Just c})
+      Just (InR CodeAction {_command = Just c})
         <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
       resp <- executeCommandWithResp c
       liftIO $ unless (isLeft $ _result resp) $
@@ -184,8 +187,8 @@ tacticPath :: FilePath
 tacticPath = "test/testdata/tactic"
 
 
-executeCommandWithResp :: Command -> Session ExecuteCommandResponse
+executeCommandWithResp :: Command -> Session (ResponseMessage WorkspaceExecuteCommand)
 executeCommandWithResp cmd = do
   let args = decode $ encode $ fromJust $ cmd ^. arguments
-      execParams = ExecuteCommandParams (cmd ^. command) args Nothing
-  request WorkspaceExecuteCommand execParams
+      execParams = ExecuteCommandParams Nothing (cmd ^. command) args
+  request SWorkspaceExecuteCommand execParams

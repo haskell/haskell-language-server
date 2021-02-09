@@ -1,6 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE GADTs #-}
 
 module Progress (tests) where
 
@@ -13,10 +17,10 @@ import Data.List (delete)
 import Data.Maybe (fromJust)
 import Data.Text (Text, pack)
 import Ide.Plugin.Config
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Capabilities
-import qualified Language.Haskell.LSP.Types.Lens as L
+import Language.LSP.Test
+import Language.LSP.Types
+import Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens as L
 import System.FilePath ((</>))
 import Test.Hls.Util
 import Test.Tasty
@@ -38,29 +42,29 @@ tests =
                 expectProgressReports ["Setting up testdata (for T1.hs)", "Processing"]
                 [evalLens] <- getCodeLenses doc
                 let cmd = evalLens ^?! L.command . _Just
-                _ <- sendRequest WorkspaceExecuteCommand $ ExecuteCommandParams (cmd ^. L.command) (decode $ encode $ fromJust $ cmd ^. L.arguments) Nothing
+                _ <- sendRequest SWorkspaceExecuteCommand $ ExecuteCommandParams Nothing (cmd ^. L.command) (decode $ encode $ fromJust $ cmd ^. L.arguments)
                 expectProgressReports ["Evaluating"]
         , testCase "ormolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
-                sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+                sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
                 doc <- openDoc "Format.hs" "haskell"
                 expectProgressReports ["Setting up testdata (for Format.hs)", "Processing"]
-                _ <- sendRequest TextDocumentFormatting $ DocumentFormattingParams doc (FormattingOptions 2 True) Nothing
+                _ <- sendRequest STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressReports ["Formatting Format.hs"]
         , testCase "fourmolu plugin sends progress notifications" $ do
             runSession hlsCommand progressCaps "test/testdata/format" $ do
-                sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
+                sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
                 doc <- openDoc "Format.hs" "haskell"
                 expectProgressReports ["Setting up testdata (for Format.hs)", "Processing"]
-                _ <- sendRequest TextDocumentFormatting $ DocumentFormattingParams doc (FormattingOptions 2 True) Nothing
+                _ <- sendRequest STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
                 expectProgressReports ["Formatting Format.hs"]
         , ignoreTestBecause "no liquid Haskell support" $
             testCase "liquid haskell plugin sends progress notifications" $ do
                 runSession hlsCommand progressCaps "test/testdata" $ do
                     doc <- openDoc "liquid/Evens.hs" "haskell"
                     let config = def{liquidOn = True, hlintOn = False}
-                    sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
-                    sendNotification TextDocumentDidSave (DidSaveTextDocumentParams doc)
+                    sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+                    sendNotification STextDocumentDidSave (DidSaveTextDocumentParams doc Nothing)
                     expectProgressReports ["Running Liquid Haskell on Evens.hs"]
         ]
 
@@ -71,10 +75,10 @@ progressCaps :: ClientCapabilities
 progressCaps = fullCaps{_window = Just (WindowClientCapabilities (Just True))}
 
 data CollectedProgressNotification
-    = CreateM WorkDoneProgressCreateRequest
-    | BeginM WorkDoneProgressBeginNotification
-    | ProgressM WorkDoneProgressReportNotification
-    | EndM WorkDoneProgressEndNotification
+    = CreateM WorkDoneProgressCreateParams
+    | BeginM (ProgressParams WorkDoneProgressBeginParams)
+    | ProgressM (ProgressParams WorkDoneProgressReportParams)
+    | EndM (ProgressParams WorkDoneProgressEndParams)
 
 {- | Test that the server is correctly producing a sequence of progress related
  messages. Each create must be pair with a corresponding begin and end,
@@ -102,10 +106,16 @@ expectProgressReports = expectProgressReports' []
                 EndM msg -> do
                     liftIO $ token msg `expectElem` tokens
                     expectProgressReports' (delete (token msg) tokens) expectedTitles
-    title msg = msg ^. L.params ^. L.value ^. L.title
-    token msg = msg ^. L.params ^. L.token
-    create = CreateM <$> message
-    begin = BeginM <$> message
-    progress = ProgressM <$> message
-    end = EndM <$> message
+    title msg = msg ^. L.value ^. L.title
+    token msg = msg ^. L.token
+    create = CreateM . view L.params <$> (message SWindowWorkDoneProgressCreate)
+    begin = BeginM <$> satisfyMaybe (\case
+      FromServerMess SProgress (NotificationMessage _ _ (ProgressParams t (Begin x))) -> Just (ProgressParams t x)
+      _ -> Nothing)
+    progress = ProgressM <$> satisfyMaybe (\case
+      FromServerMess SProgress (NotificationMessage _ _ (ProgressParams t (Report x))) -> Just (ProgressParams t x)
+      _ -> Nothing)
+    end = EndM <$> satisfyMaybe (\case
+      FromServerMess SProgress (NotificationMessage _ _ (ProgressParams t (End x))) -> Just (ProgressParams t x)
+      _ -> Nothing)
     expectElem a as = a `elem` as @? "Unexpected " ++ show a

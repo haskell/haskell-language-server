@@ -2,8 +2,8 @@ module TypeDefinition (tests) where
 
 import Control.Monad.IO.Class
 import Data.Tuple.Extra (first3)
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
+import Language.LSP.Test
+import Language.LSP.Types
 import System.FilePath ((</>))
 import Test.Hls.Util
 import Test.Tasty
@@ -38,7 +38,7 @@ getTypeDefinitionTest :: SymbolLocation -> [SymbolLocation] -> Assertion
 getTypeDefinitionTest (symbolFile, symbolLine, symbolCol) definitionLocations =
     failIfSessionTimeout . runSession (hlsCommand ++ " --test") fullCaps definitionsPath $ do
         doc  <- openDoc symbolFile "haskell"
-        defs <- getTypeDefinitions doc $ Position symbolLine symbolCol
+        InL defs <- getTypeDefinitions doc $ Position symbolLine symbolCol
         liftIO $ defs `expectSameLocations` map (first3 (definitionsPath </>)) definitionLocations
 
 getTypeDefinitionTest' :: Int -> Int -> Int -> Int -> Assertion
