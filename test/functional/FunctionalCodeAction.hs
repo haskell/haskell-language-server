@@ -523,7 +523,10 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             doc <- openDoc "NamedFieldPuns.hs" "haskell"
 
             _ <- waitForDiagnosticsFrom doc
-            [ca] <- map fromAction <$> getAllCodeActions doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ length cas == 1 @? "Expected one code action, but got: " <> show cas
+            let ca = head cas
 
             liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
 
