@@ -69,7 +69,7 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.Process.Extra (readCreateProcessWithExitCode, CreateProcess(cwd), proc)
 import System.Info.Extra (isWindows)
 import Test.QuickCheck
-import Test.QuickCheck.Instances ()
+-- import Test.QuickCheck.Instances ()
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
 import Test.Tasty.Ingredients.Rerun
@@ -85,17 +85,17 @@ import Data.Functor
 import Data.Tuple.Extra
 
 waitForProgressBegin :: Session ()
-waitForProgressBegin = void $ skipManyTill anyMessage $ satisfyMaybe $ \case
+waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Begin _))) -> Just ()
   _ -> Nothing
 
 waitForProgressReport :: Session ()
-waitForProgressReport = void $ skipManyTill anyMessage $ satisfyMaybe $ \case
+waitForProgressReport = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Report _))) -> Just ()
   _ -> Nothing
 
 waitForProgressDone :: Session ()
-waitForProgressDone = void $ skipManyTill anyMessage $ satisfyMaybe $ \case
+waitForProgressDone = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
   _ -> Nothing
 
@@ -159,7 +159,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "   goto type definition" _typeDefinitionProvider (Just $ InL True)
     -- BUG in lsp-test, this test fails, just change the accepted response
     -- for now
-    , chk "NO goto implementation"  _implementationProvider (Just $ InL True)
+    , chk "NO goto implementation"  _implementationProvider (Just $ InL False)
     , chk "   find references"          _referencesProvider (Just $ InL True)
     , chk "   doc highlight"     _documentHighlightProvider (Just $ InL True)
     , chk "   doc symbol"           _documentSymbolProvider (Just $ InL True)
