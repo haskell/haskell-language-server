@@ -138,6 +138,7 @@ library
         include
     exposed-modules:
         Development.IDE
+        Development.IDE.Main
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
         Development.IDE.Core.IdeConfiguration
