@@ -290,8 +290,9 @@ benchRules build MkBenchRules{..} = do
     [ build -/- "*/*/*/*.csv",
       build -/- "*/*/*/*.gcStats.log",
       build -/- "*/*/*/*.output.log",
+      build -/- "*/*/*/*.eventlog",
       build -/- "*/*/*/*.hp"
-    ] &%> \[outcsv, outGc, outLog, outHp] -> do
+    ] &%> \[outcsv, outGc, outLog, outEventlog, outHp] -> do
         let [_, flavour, exampleName, ver, exp] = splitDirectories outcsv
             prof = fromMaybe (error $ "Not a valid profiling mode: " <> flavour) $ profilingP flavour
         example <- fromMaybe (error $ "Unknown example " <> exampleName)
@@ -302,6 +303,7 @@ benchRules build MkBenchRules{..} = do
         let exePath    = build </> "binaries" </> ver </> executableName
             exeExtraArgs =
                 [ "+RTS"
+                , "-l-au"
                 , "-S" <> outGc]
              ++ concat
                 [[ "-h"
@@ -323,6 +325,7 @@ benchRules build MkBenchRules{..} = do
                 AddPath [takeDirectory ghcPath, "."] []
               ]
               BenchProject {..}
+        liftIO $ renameFile "ghcide.eventlog" outEventlog
         liftIO $ case prof of
             CheapHeapProfiling{} -> renameFile "ghcide.hp" outHp
             NoProfiling -> writeFile outHp dummyHp
