@@ -11,9 +11,9 @@ import           Data.Default
 import qualified Data.Map as Map
 import qualified Data.Text as T
 import           Ide.Plugin.Config
-import           Language.Haskell.LSP.Test as Test
-import           Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types.Lens as L
+import           Language.LSP.Test as Test
+import           Language.LSP.Types
+import qualified Language.LSP.Types.Lens as L
 import           System.FilePath ((</>))
 import           Test.Hls.Util
 import           Test.Tasty
@@ -34,13 +34,13 @@ hlintTests = testGroup "hlint plugin enables" [
 
       testCase "changing hlintOn configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
         let config = def { hlintOn = True }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
         let config' = def { hlintOn = False }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
         diags' <- waitForDiagnosticsFrom doc
 
@@ -48,13 +48,13 @@ hlintTests = testGroup "hlint plugin enables" [
 
     , testCase "changing hlint plugin configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
         let config = def { hlintOn = True }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
         let config' = pluginGlobalOn config "hlint" False
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
         diags' <- waitForDiagnosticsFrom doc
 
@@ -78,12 +78,12 @@ configTests :: TestTree
 configTests = testGroup "config parsing" [
       testCase "empty object as user configuration should not send error logMessage" $ runConfigSession "" $ do
         let config = object []
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         -- Send custom request so server returns a response to prevent blocking
-        void $ Test.sendRequest (CustomClientMethod "non-existent-method") ()
+        void $ Test.sendRequest (SCustomMethod "non-existent-method") Null
 
-        logNot <- skipManyTill Test.anyMessage Test.message :: Session LogMessageNotification
+        logNot <- skipManyTill Test.anyMessage (message SWindowLogMessage)
 
         liftIO $ (logNot ^. L.params . L.xtype) > MtError
                  || "non-existent-method" `T.isInfixOf` (logNot ^. L.params . L.message)

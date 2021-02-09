@@ -8,9 +8,9 @@ import           Control.Monad.IO.Class
 import           Data.Aeson (toJSON)
 import qualified Data.Default
 import           Ide.Plugin.Config
-import           Language.Haskell.LSP.Test hiding (message)
-import           Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types.Lens as LSP
+import           Language.LSP.Test hiding (message)
+import           Language.LSP.Types
+import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
@@ -64,7 +64,7 @@ saveTests = testGroup  "only diagnostics on save" [
     ignoreTestBecause "diagnosticsOnChange parameter is not supported right now" $ testCase "Respects diagnosticsOnChange setting" $
         runSession hlsCommandExamplePlugin codeActionSupportCaps "test/testdata" $ do
             let config = Data.Default.def { diagnosticsOnChange = False } :: Config
-            sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+            sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
             doc <- openDoc "Hover.hs" "haskell"
             diags <- waitForDiagnosticsFrom doc
 
@@ -75,7 +75,7 @@ saveTests = testGroup  "only diagnostics on save" [
             _ <- applyEdit doc te
             skipManyTill loggingNotification noDiagnostics
 
-            sendNotification TextDocumentDidSave (DidSaveTextDocumentParams doc)
+            sendNotification STextDocumentDidSave (DidSaveTextDocumentParams doc Nothing)
             diags2 <- waitForDiagnosticsFrom doc
             liftIO $
                 length diags2 @?= 1

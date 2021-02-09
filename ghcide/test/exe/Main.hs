@@ -87,17 +87,17 @@ import Data.Tuple.Extra
 waitForProgressBegin :: Session ()
 waitForProgressBegin = void $ skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Begin _))) -> Just ()
-  _ -> pure ()
+  _ -> Nothing
 
 waitForProgressReport :: Session ()
 waitForProgressReport = void $ skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Report _))) -> Just ()
-  _ -> pure ()
+  _ -> Nothing
 
 waitForProgressDone :: Session ()
 waitForProgressDone = void $ skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
-  _ -> pure ()
+  _ -> Nothing
 
 main :: IO ()
 main = do

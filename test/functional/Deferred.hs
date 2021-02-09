@@ -8,10 +8,10 @@ import Control.Monad.IO.Class
 import Control.Lens hiding (List)
 -- import Control.Monad
 -- import Data.Maybe
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Lens hiding (id, message)
--- import qualified Language.Haskell.LSP.Types.Lens as LSP
+import Language.LSP.Test
+import Language.LSP.Types
+import Language.LSP.Types.Lens hiding (id, message)
+-- import qualified Language.LSP.Types.Lens as LSP
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
@@ -94,7 +94,7 @@ tests = testGroup "deferred responses" [
      testCase "instantly respond to failed modules with no cache" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "FuncTestFail.hs" "haskell"
         defs <- getDefinitions doc (Position 1 11)
-        liftIO $ defs @?= []
+        liftIO $ defs @?= InL []
 
     -- TODO: the benefits of caching parsed modules is doubted.
     -- TODO: add issue link
@@ -160,16 +160,16 @@ multiMainTests = testGroup "multiple main modules" [
     testCase "Can load one file at a time, when more than one Main module exists"
         $ runSession hlsCommand fullCaps "test/testdata" $ do
             _doc <- openDoc "ApplyRefact2.hs" "haskell"
-            _diagsRspHlint <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
-            diagsRspGhc    <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
+            _diagsRspHlint <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
+            diagsRspGhc    <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
             let (List diags) = diagsRspGhc ^. params . diagnostics
 
             liftIO $ length diags @?= 2
 
             _doc2 <- openDoc "HaReRename.hs" "haskell"
-            _diagsRspHlint2 <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
+            _diagsRspHlint2 <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
             -- errMsg <- skipManyTill anyNotification notification :: Session ShowMessageNotification
-            diagsRsp2 <- skipManyTill anyNotification message :: Session PublishDiagnosticsNotification
+            diagsRsp2 <- skipManyTill anyNotification (message STextDocumentPublishDiagnostics)
             let (List diags2) = diagsRsp2 ^. params . diagnostics
 
             liftIO $ show diags2 @?= "[]"

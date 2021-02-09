@@ -4,10 +4,10 @@ module Symbol (tests) where
 import Control.Lens (to, ix, (^?), _Just)
 import Control.Monad.IO.Class
 import Data.List
-import Language.Haskell.LSP.Test as Test
-import Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types.Lens as L
-import Language.Haskell.LSP.Types.Capabilities
+import Language.LSP.Test as Test
+import Language.LSP.Types
+import qualified Language.LSP.Types.Lens as L
+import Language.LSP.Types.Capabilities
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)

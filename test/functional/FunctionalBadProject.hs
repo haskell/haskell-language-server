@@ -5,9 +5,9 @@ module FunctionalBadProject (tests) where
 -- import           Control.Lens hiding (List)
 -- import           Control.Monad.IO.Class
 -- import qualified Data.Text as T
--- import           Language.Haskell.LSP.Test hiding (message)
--- import           Language.Haskell.LSP.Types as LSP
--- import           Language.Haskell.LSP.Types.Lens as LSP hiding (contents, error )
+-- import           Language.LSP.Test hiding (message)
+-- import           Language.LSP.Types as LSP
+-- import           Language.LSP.Types.Lens as LSP hiding (contents, error )
 -- import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit

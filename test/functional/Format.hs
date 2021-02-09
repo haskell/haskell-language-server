@@ -5,8 +5,8 @@ import Control.Monad.IO.Class
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text.Encoding as T
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
+import Language.LSP.Test
+import Language.LSP.Types
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.Golden
@@ -20,11 +20,11 @@ tests :: TestTree
 tests = testGroup "format document" [
     goldenVsStringDiff "works" goldenGitDiff "test/testdata/format/Format.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatDoc doc (FormattingOptions 2 True)
+        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     , goldenVsStringDiff "works with custom tab size" goldenGitDiff "test/testdata/format/Format.formatted_document_with_tabsize.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatDoc doc (FormattingOptions 5 True)
+        formatDoc doc (FormattingOptions 5 True Nothing Nothing Nothing)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     , rangeTests
     , providerTests
@@ -40,11 +40,11 @@ rangeTests :: TestTree
 rangeTests = testGroup "format range" [
     goldenVsStringDiff "works" goldenGitDiff "test/testdata/format/Format.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 2 True) (Range (Position 5 0) (Position 7 10))
+        formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 5 0) (Position 7 10))
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     , goldenVsStringDiff "works with custom tab size" goldenGitDiff "test/testdata/format/Format.formatted_range_with_tabsize.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
-        formatRange doc (FormattingOptions 5 True) (Range (Position 8 0) (Position 11 19))
+        formatRange doc (FormattingOptions 5 True Nothing Nothing Nothing) (Range (Position 8 0) (Position 11 19))
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     ]
 
@@ -54,10 +54,10 @@ providerTests = testGroup "formatting provider" [
         doc <- openDoc "Format.hs" "haskell"
         orig <- documentContents doc
 
-        formatDoc doc (FormattingOptions 2 True)
+        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= orig)
 
-        formatRange doc (FormattingOptions 2 True) (Range (Position 1 0) (Position 3 10))
+        formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 1 0) (Position 3 10))
         documentContents doc >>= liftIO . (@?= orig)
 
 #if AGPL
@@ -68,16 +68,16 @@ providerTests = testGroup "formatting provider" [
 
         doc <- openDoc "Format.hs" "haskell"
 
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
-        formatDoc doc (FormattingOptions 2 True)
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedBrittany)
 
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "floskell"))
-        formatDoc doc (FormattingOptions 2 True)
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "floskell"))
+        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedFloskell)
 
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
-        formatDoc doc (FormattingOptions 2 True)
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedBrittanyPostFloskell)
     , testCase "supports both new and old configuration sections" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
        formattedBrittany <- liftIO $ T.readFile "test/testdata/format/Format.brittany.formatted.hs"
@@ -85,12 +85,12 @@ providerTests = testGroup "formatting provider" [
 
        doc <- openDoc "Format.hs" "haskell"
 
-       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "brittany"))
-       formatDoc doc (FormattingOptions 2 True)
+       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "brittany"))
+       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedBrittany)
 
-       sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "floskell"))
-       formatDoc doc (FormattingOptions 2 True)
+       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "floskell"))
+       formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedFloskell)
 #endif
     ]
@@ -98,14 +98,14 @@ providerTests = testGroup "formatting provider" [
 stylishHaskellTests :: TestTree
 stylishHaskellTests = testGroup "stylish-haskell" [
   goldenVsStringDiff "formats a document" goldenGitDiff "test/testdata/format/StylishHaskell.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
+      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
       doc <- openDoc "StylishHaskell.hs" "haskell"
-      formatDoc doc (FormattingOptions 2 True)
+      formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   , goldenVsStringDiff "formats a range" goldenGitDiff "test/testdata/format/StylishHaskell.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
+      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
       doc <- openDoc "StylishHaskell.hs" "haskell"
-      formatRange doc (FormattingOptions 2 True) (Range (Position 0 0) (Position 2 21))
+      formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 0 0) (Position 2 21))
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
@@ -113,29 +113,29 @@ stylishHaskellTests = testGroup "stylish-haskell" [
 brittanyTests :: TestTree
 brittanyTests = testGroup "brittany" [
     goldenVsStringDiff "formats a document with LF endings" goldenGitDiff "test/testdata/format/BrittanyLF.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyLF.hs" "haskell"
-        formatDoc doc (FormattingOptions 4 True)
+        formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
 
     , goldenVsStringDiff "formats a document with CRLF endings" goldenGitDiff "test/testdata/format/BrittanyCRLF.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyCRLF.hs" "haskell"
-        formatDoc doc (FormattingOptions 4 True)
+        formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
 
     , goldenVsStringDiff "formats a range with LF endings" goldenGitDiff "test/testdata/format/BrittanyLF.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyLF.hs" "haskell"
         let range = Range (Position 1 0) (Position 2 22)
-        formatRange doc (FormattingOptions 4 True) range
+        formatRange doc (FormattingOptions 4 True Nothing Nothing Nothing) range
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
 
     , goldenVsStringDiff "formats a range with CRLF endings" goldenGitDiff "test/testdata/format/BrittanyCRLF.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
         doc <- openDoc "BrittanyCRLF.hs" "haskell"
         let range = Range (Position 1 0) (Position 2 22)
-        formatRange doc (FormattingOptions 4 True) range
+        formatRange doc (FormattingOptions 4 True Nothing Nothing Nothing) range
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     ]
 #endif
@@ -143,28 +143,28 @@ brittanyTests = testGroup "brittany" [
 ormoluTests :: TestTree
 ormoluTests = testGroup "ormolu"
   [ goldenVsStringDiff "formats correctly" goldenGitDiff "test/testdata/format/Format.ormolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
       doc <- openDoc "Format.hs" "haskell"
-      formatDoc doc (FormattingOptions 2 True)
+      formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   , goldenVsStringDiff "formats imports correctly" goldenGitDiff "test/testdata/format/Format2.ormolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
+      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
       doc <- openDoc "Format2.hs" "haskell"
-      formatDoc doc (FormattingOptions 2 True)
+      formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 
 fourmoluTests :: TestTree
 fourmoluTests = testGroup "fourmolu"
   [ goldenVsStringDiff "formats correctly" goldenGitDiff "test/testdata/format/Format.fourmolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
+      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
       doc <- openDoc "Format.hs" "haskell"
-      formatDoc doc (FormattingOptions 4 True)
+      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   , goldenVsStringDiff "formats imports correctly" goldenGitDiff "test/testdata/format/Format2.fourmolu.formatted.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
+      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "fourmolu"))
       doc <- openDoc "Format2.hs" "haskell"
-      formatDoc doc (FormattingOptions 4 True)
+      formatDoc doc (FormattingOptions 4 True Nothing Nothing Nothing)
       BS.fromStrict . T.encodeUtf8 <$> documentContents doc
   ]
 

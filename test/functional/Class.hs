@@ -2,6 +2,7 @@
 -- {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 module Class
   ( tests
   )
@@ -11,9 +12,9 @@ import           Control.Lens                    hiding ((<.>))
 import           Control.Monad.IO.Class          (MonadIO(liftIO))
 import qualified Data.ByteString.Lazy            as BS
 import qualified Data.Text.Encoding              as T
-import           Language.Haskell.LSP.Test
-import           Language.Haskell.LSP.Types      hiding (_title, _command)
-import qualified Language.Haskell.LSP.Types.Lens as J
+import           Language.LSP.Test
+import           Language.LSP.Types      hiding (_title, _command)
+import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
@@ -54,10 +55,10 @@ tests = testGroup
       executeCodeAction _fAction
   ]
 
-_CACodeAction :: Prism' CAResult CodeAction
-_CACodeAction = prism' CACodeAction $ \case
-  CACodeAction action -> Just action
-  _                   -> Nothing
+_CACodeAction :: Prism' (Command |? CodeAction) CodeAction
+_CACodeAction = prism' InR $ \case
+  InR action -> Just action
+  _          -> Nothing
 
 classPath :: FilePath
 classPath = "test" </> "testdata" </> "class"
