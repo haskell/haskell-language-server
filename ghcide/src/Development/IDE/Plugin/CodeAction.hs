@@ -64,6 +64,7 @@ import RdrName (GlobalRdrElt(..), lookupGlobalRdrEnv)
 import SrcLoc (realSrcSpanStart)
 import Module (moduleEnvElts)
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -180,25 +181,44 @@ findInstanceHead df instanceHead decls =
 findDeclContainingLoc :: Position -> [Located a] -> Maybe (Located a)
 findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
 
+-- Single:
 -- This binding for ‘mod’ shadows the existing binding
 --   imported from ‘Prelude’ at haskell-language-server/ghcide/src/Development/IDE/Plugin/CodeAction.hs:10:8-40
 --   (and originally defined in ‘GHC.Real’)typecheck(-Wname-shadowing)
+-- Multi:
+--This binding for ‘pack’ shadows the existing bindings
+--  imported from ‘Data.ByteString’ at B.hs:6:1-22
+--  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
+--  imported from ‘Data.Text’ at B.hs:7:1-16
+
 suggestHideShadow :: ParsedSource -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Rewrite])]
 suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_message, _range}
-  | Just tcM <- mTcM,
-    Just har <- mHar,
-    Just [identifier, modName, s] <-
+  | Just [identifier, modName, s] <-
       matchRegexUnifySpaces
         _message
-        "This binding for ‘([^`]+)’ shadows the existing binding imported from ‘([^`]+)’ at ([^ ]*)",
-    [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
-    isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s'),
-    title <- "Hide " <> identifier <> " from " <> modName,
-    implicitPrelude <- null $ findImportDeclByModuleName hsmodImports "Prelude" =
-    if modName == "Prelude" && implicitPrelude
-      then [(title, maybeToList $ hideImplicitPreludeSymbol (T.unpack identifier) pm)]
-      else [(title, hideOrRemoveId hsmodImports (T.unpack identifier) (T.unpack modName))]
+        "This binding for ‘([^`]+)’ shadows the existing binding imported from ‘([^`]+)’ at ([^ ]*)"
+    = suggests identifier modName s
+  | Just [identifier] <-
+      matchRegexUnifySpaces
+        _message
+        "This binding for ‘([^`]+)’ shadows the existing bindings",
+    Just matched <- allMatchRegexUnifySpaces _message "imported from ‘([^’]+)’ at ([^ ]*)",
+    mods <- [(modName, s) | [_, modName, s] <- matched],
+    result <- nubOrdBy (compare `on` fst) $ mods >>= uncurry (suggests identifier),
+    hideAll <- ("Hide " <> identifier <> " from all occurence imports", concat $ snd <$> result)
+    = result <> [hideAll]
   | otherwise = []
+    where
+      suggests identifier modName s
+        | Just tcM <- mTcM,
+          Just har <- mHar,
+          [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
+          isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s'),
+          title <- "Hide " <> identifier <> " from " <> modName
+         = if modName == "Prelude" && (null $ findImportDeclByModuleName hsmodImports "Prelude")
+              then [(title, maybeToList $ hideImplicitPreludeSymbol (T.unpack identifier) pm)]
+              else [(title, hideOrRemoveId hsmodImports (T.unpack identifier) (T.unpack modName))]
+        | otherwise = []
 
 hideOrRemoveId :: [LImportDecl GhcPs] -> String -> String -> [Rewrite]
 hideOrRemoveId lImportDecls identifier modName
@@ -220,12 +240,7 @@ isTheSameLine s1 s2
   | otherwise = False
 
 getStartLine :: SrcSpan -> Maybe Int
-getStartLine s
-  | RealSrcSpan s' <- s,
-    startLoc <- realSrcSpanStart s',
-    startLine <- srcLocLine startLoc =
-    Just startLine
-  | otherwise = Nothing
+getStartLine x = srcLocLine . realSrcSpanStart <$> realSpan x
 
 isUnusedImportedId :: TcModuleResult -> HieAstResult -> String -> String -> SrcSpan -> Bool
 isUnusedImportedId
@@ -246,7 +261,7 @@ isUnusedImportedId
       [GRE {..}] <- lookupGlobalRdrEnv rdrEnv occ,
       importedIdentifier <- Right gre_name,
       refs <- M.lookup importedIdentifier rf =
-      maybe True null refs
+      maybe True (null . filter (\(_, IdentifierDetails{..}) -> identInfo == S.singleton Use)) refs
     | otherwise = False
 
 suggestDisableWarning :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
