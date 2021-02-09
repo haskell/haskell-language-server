@@ -20,6 +20,7 @@ import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
+import Control.Applicative.Combinators
 
 tests :: TestTree
 tests = testGroup
@@ -72,7 +73,7 @@ glodenTest name fp deco execute
       _ <- waitForDiagnosticsFromSource doc "typecheck"
       actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
       execute actions
-      BS.fromStrict . T.encodeUtf8 <$> getDocumentEdit doc
+      BS.fromStrict . T.encodeUtf8 <$> (skipManyTill anyMessage $ getDocumentEdit doc)
   where
     fpWithDeco
       | deco == "" = fp

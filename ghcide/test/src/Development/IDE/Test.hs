@@ -89,7 +89,7 @@ expectMessages m timeout handle = do
     -- Send a dummy message to provoke a response from the server.
     -- This guarantees that we have at least one message to
     -- process, so message won't block or timeout.
-    let cm = SCustomMethod "ghcide/queue/count"
+    let cm = SCustomMethod "test"
     i <- sendRequest cm $ A.toJSON GetShakeSessionQueueCount
     go cm i
   where
