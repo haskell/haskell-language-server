@@ -140,7 +140,7 @@ runIde Arguments{..} hiedb hiechan = do
                           `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
             sessionLoader <- loadSession $ fromMaybe dir rootPath
-            let config = maybe def id <$> (LSP.runLspT env LSP.getConfig)
+            let config = fromMaybe def <$> (LSP.runLspT env LSP.getConfig)
             caps <- LSP.runLspT env LSP.getClientCapabilities
             let options = defOptions
                     { optReportProgress    = clientSupportsProgress caps
