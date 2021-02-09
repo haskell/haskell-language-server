@@ -11,11 +11,9 @@ module Ide.Plugin.Pragmas
   ) where
 
 import           Control.Lens                    hiding (List)
-import           Data.Aeson
 import qualified Data.HashMap.Strict             as H
 import qualified Data.Text                       as T
 import           Development.IDE                 as D
-import qualified GHC.Generics                    as Generics
 import           Ide.Types
 import           Language.Haskell.LSP.Types
 import qualified Language.Haskell.LSP.Types      as J
@@ -26,6 +24,7 @@ import           Development.IDE.GHC.Compat
 import qualified Language.Haskell.LSP.Core       as LSP
 import qualified Language.Haskell.LSP.VFS as VFS
 import qualified Text.Fuzzy as Fuzzy
+import Data.List.Extra (nubOrd)
 
 -- ---------------------------------------------------------------------
 
@@ -36,13 +35,6 @@ descriptor plId = (defaultPluginDescriptor plId)
   }
 
 -- ---------------------------------------------------------------------
-
--- | Parameters for the addPragma PluginCommand.
-data AddPragmaParams = AddPragmaParams
-  { file   :: J.Uri  -- ^ Uri of the file to add the pragma to
-  , pragma :: T.Text -- ^ Name of the Pragma to add
-  }
-  deriving (Show, Eq, Generics.Generic, ToJSON, FromJSON)
 
 -- | Add a Pragma to the given URI at the top of the file.
 -- Pragma is added to the first line of the Uri.
@@ -68,7 +60,7 @@ codeActionProvider _ state _plId docId _ (J.CodeActionContext (J.List diags) _mo
     pm <- fmap join $ runAction "addPragma" state $ getParsedModule `traverse` mFile
     let dflags = ms_hspp_opts . pm_mod_summary <$> pm
         -- Get all potential Pragmas for all diagnostics.
-        pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) diags
+        pragmas = nubOrd $ concatMap (\d -> genPragma dflags (d ^. J.message)) diags
     cmds <- mapM mkCodeAction pragmas
     return $ Right $ List cmds
       where
