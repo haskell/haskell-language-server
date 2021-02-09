@@ -531,12 +531,12 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
 
     -- Get a progress token to report progress and update it for the current file
     pre = do
-      tok <- modifyVar indexProgressToken $ \case
-        x@(Just _) -> pure (x, x)
+      tok <- modifyVar indexProgressToken $ fmap dupe . \case
+        x@(Just _) -> pure x
         -- Create a token if we don't already have one
         Nothing -> do
           case lspEnv se of
-            Nothing -> pure (Nothing, Nothing)
+            Nothing -> pure Nothing
             Just env -> LSP.runLspT env $ do
               u <- LSP.ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
               b <- liftIO newBarrier
@@ -545,7 +545,7 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
               resp <- liftIO $ waitBarrier b
               case resp of
                 -- We didn't get a token from the server
-                Left _err -> pure (Nothing,Nothing)
+                Left _err -> pure Nothing
                 Right _ -> do
                   LSP.sendNotification LSP.SProgress $ LSP.ProgressParams u $
                     LSP.Begin $ LSP.WorkDoneProgressBeginParams
@@ -554,7 +554,7 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
                       , _message = Nothing
                       , _percentage = Nothing
                       }
-                  pure (Just u, Just u)
+                  pure (Just u)
 
       (!done, !remaining) <- atomically $ do
         done <- readTVar indexCompleted
