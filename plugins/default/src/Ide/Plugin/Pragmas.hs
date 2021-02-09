@@ -69,15 +69,14 @@ codeActionProvider _ state _plId docId _ (J.CodeActionContext (J.List diags) _mo
     let dflags = ms_hspp_opts . pm_mod_summary <$> pm
         -- Get all potential Pragmas for all diagnostics.
         pragmas = concatMap (\d -> genPragma dflags (d ^. J.message)) diags
-    cmds <- mapM mkCodeAction pragmas
-    return $ Right $ List cmds
+        cmds = map (J.CACodeAction . snd) . H.toList . H.fromList . map mkTitleCodeActionTuple
+    return . Right . List $ cmds pragmas
       where
-        mkCodeAction pragmaName = do
+        mkTitleCodeActionTuple pragmaName = do
           let
-            codeAction = J.CACodeAction $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) (Just edit) Nothing
             title = "Add \"" <> pragmaName <> "\""
             edit = mkPragmaEdit (docId ^. J.uri) pragmaName
-          return codeAction
+          (title, J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) (Just edit) Nothing)
 
         genPragma mDynflags target =
             [ r | r <- findPragma target, r `notElem` disabled]
