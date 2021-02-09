@@ -518,6 +518,33 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                     ]
 
             liftIO $ T.lines contents @?= expected
+    , testCase "No duplication" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "NamedFieldPuns.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            [ca] <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ (ca ^. L.title == "Add \"NamedFieldPuns\"") @? "NamedFieldPuns code action"
+
+            executeCodeAction ca
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "{-# LANGUAGE NamedFieldPuns #-}"
+                    , "module NamedFieldPuns where"
+                    , ""
+                    , "data Record = Record"
+                    , "  { a :: Int,"
+                    , "    b :: Double,"
+                    , "    c :: String"
+                    , "  }"
+                    , ""
+                    , "f Record{a, b} = a"
+                    ]
+
+            liftIO $ T.lines contents @?= expected
     ]
 
 unusedTermTests :: TestTree
