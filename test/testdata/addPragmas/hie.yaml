@@ -3,3 +3,4 @@ cradle:
     arguments:
       - "NeedsPragmas"
       - "TypeApplications"
+      - "NamedFieldPuns"
