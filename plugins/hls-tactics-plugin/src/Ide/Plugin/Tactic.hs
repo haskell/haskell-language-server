@@ -216,10 +216,11 @@ filterBindingType
 filterBindingType p tp dflags plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
-   in fmap join $ for (M.toList $ hyByName hy) $ \(occ, hi_type -> CType ty) ->
-        case p (unCType g) ty of
-          True  -> tp occ ty dflags plId uri range jdg
-          False -> pure []
+   in fmap join $ for (unHypothesis hy) $ \hi ->
+        let ty = unCType $ hi_type hi
+         in case p (unCType g) ty of
+              True  -> tp (hi_name hi) ty dflags plId uri range jdg
+              False -> pure []
 
 
 data TacticParams = TacticParams

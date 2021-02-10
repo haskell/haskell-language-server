@@ -107,7 +107,7 @@ destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
       in case isPatternMatch $ hi_provenance hi of
             True ->
               pruning subtactic $ \jdgs ->
-                let getHyTypes = S.fromList . fmap hi_type . M.elems . hyByName . jHypothesis
+                let getHyTypes = S.fromList . fmap hi_type . unHypothesis . jHypothesis
                     new_hy = foldMap getHyTypes jdgs
                     old_hy = getHyTypes jdg
                 in case S.null $ new_hy S.\\ old_hy of
@@ -271,12 +271,17 @@ auto' n = do
 
 overFunctions :: (OccName -> TacticsM ()) -> TacticsM ()
 overFunctions =
-  attemptOn $ M.keys . M.filter (isFunction . unCType . hi_type) . hyByName . jHypothesis
+  attemptOn $ fmap hi_name
+           . filter (isFunction . unCType . hi_type)
+           . unHypothesis
+           . jHypothesis
 
 overAlgebraicTerms :: (OccName -> TacticsM ()) -> TacticsM ()
 overAlgebraicTerms =
-  attemptOn $
-    M.keys . M.filter (isJust . algebraicTyCon . unCType . hi_type) . hyByName . jHypothesis
+  attemptOn $ fmap hi_name
+            . filter (isJust . algebraicTyCon . unCType . hi_type)
+            . unHypothesis
+            . jHypothesis
 
 
 allNames :: Judgement -> Set OccName

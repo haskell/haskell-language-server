@@ -313,8 +313,17 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 hyNamesInScope :: Hypothesis a -> Set OccName
 hyNamesInScope = M.keysSet . hyByName
 
+
+------------------------------------------------------------------------------
+-- | Fold a hypothesis into a single mapping from name to info. This
+-- unavoidably will cause duplicate names (things like methods) to shadow one
+-- another.
 hyByName :: Hypothesis a -> Map OccName (HyInfo a)
-hyByName = M.fromList . fmap (hi_name &&& id) . unHypothesis
+hyByName
+  = M.fromList
+  . fmap (hi_name &&& id)
+  -- . filter (not . isDisallowed . hi_provenance)
+  . unHypothesis
 
 
 ------------------------------------------------------------------------------
