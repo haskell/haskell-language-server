@@ -539,22 +539,16 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
             Nothing -> pure Nothing
             Just env -> LSP.runLspT env $ do
               u <- LSP.ProgressTextToken . T.pack . show . hashUnique <$> liftIO newUnique
-              b <- liftIO newBarrier
-              _ <- LSP.sendRequest LSP.SWindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (liftIO . signalBarrier b)
-              -- Wait for the progress create response to use the token
-              resp <- liftIO $ waitBarrier b
-              case resp of
-                -- We didn't get a token from the server
-                Left _err -> pure Nothing
-                Right _ -> do
-                  LSP.sendNotification LSP.SProgress $ LSP.ProgressParams u $
-                    LSP.Begin $ LSP.WorkDoneProgressBeginParams
-                      { _title = "Indexing references from:"
-                      , _cancellable = Nothing
-                      , _message = Nothing
-                      , _percentage = Nothing
-                      }
-                  pure (Just u)
+              -- TODO: Wait for the progress create response to use the token
+              _ <- LSP.sendRequest LSP.SWindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
+              LSP.sendNotification LSP.SProgress $ LSP.ProgressParams u $
+                LSP.Begin $ LSP.WorkDoneProgressBeginParams
+                  { _title = "Indexing references from:"
+                  , _cancellable = Nothing
+                  , _message = Nothing
+                  , _percentage = Nothing
+                  }
+              pure (Just u)
 
       (!done, !remaining) <- atomically $ do
         done <- readTVar indexCompleted
