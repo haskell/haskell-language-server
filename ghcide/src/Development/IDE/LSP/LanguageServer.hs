@@ -32,6 +32,7 @@ import UnliftIO.Async
 import UnliftIO.Concurrent
 import Control.Monad.IO.Class
 import Control.Monad.Reader
+import Ide.Types (traceWithSpan)
 
 import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Shake
@@ -132,7 +133,8 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
         handleInit
           :: IO () -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
           -> LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-        handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ _ params) = do
+        handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+            liftIO $ traceWithSpan sp params
             let root = LSP.resRootPath env
             ide <- liftIO $ getIdeState env (makeLSPVFSHandle env) root
 

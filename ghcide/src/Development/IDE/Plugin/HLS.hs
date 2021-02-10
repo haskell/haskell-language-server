@@ -10,7 +10,6 @@ module Development.IDE.Plugin.HLS
 
 import           Control.Exception(SomeException)
 import           Control.Monad
-import           Control.Monad.IO.Class
 import qualified Data.Aeson as J
 import           Data.Either
 import qualified Data.List                     as List
@@ -20,14 +19,13 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
 import           Ide.Plugin.Config
-import           Ide.PluginUtils
 import           Ide.Types as HLS
 import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as J
 import Language.LSP.Types
 import           Text.Regex.TDFA.Text()
 import Development.Shake (Rules)
-import Ide.PluginUtils (getClientConfig, pluginEnabled, getPluginConfig, responseError, getProcessID)
+import Ide.PluginUtils (getClientConfig)
 import Development.IDE.Core.Tracing
 import UnliftIO.Async (forConcurrently)
 import UnliftIO.Exception (catchAny)
@@ -36,6 +34,7 @@ import qualified Data.Dependent.Map as DMap
 import           Data.Dependent.Sum
 import Data.List.NonEmpty (nonEmpty,NonEmpty,toList)
 import UnliftIO (MonadUnliftIO)
+import Data.String
 
 -- ---------------------------------------------------------------------
 --
@@ -148,7 +147,7 @@ extensiblePlugins xs = Plugin mempty handlers
             Nothing
           Just fs -> do
             let msg e pid = "Exception in plugin " <> T.pack (show pid) <> "while processing " <> T.pack (show m) <> ": " <> T.pack (show e)
-            es <- runConcurrently msg fs ide params
+            es <- runConcurrently msg (show m) fs ide params
             let (errs,succs) = partitionEithers $ toList es
             case nonEmpty succs of
               Nothing -> pure $ Left $ combineErrors errs
@@ -159,11 +158,12 @@ extensiblePlugins xs = Plugin mempty handlers
 runConcurrently
   :: MonadUnliftIO m
   => (SomeException -> PluginId -> T.Text)
+  -> String -- ^ label
   -> NonEmpty (PluginId, a -> b -> m (NonEmpty (Either ResponseError d)))
   -> a
   -> b
   -> m (NonEmpty (Either ResponseError d))
-runConcurrently msg fs a b = fmap join $ forConcurrently fs $ \(pid,f) ->
+runConcurrently msg method fs a b = fmap join $ forConcurrently fs $ \(pid,f) -> otTracedProvider pid (fromString method) $ do
   f a b
     `catchAny` (\e -> pure $ pure $ Left $ ResponseError InternalError (msg e pid) Nothing)
 

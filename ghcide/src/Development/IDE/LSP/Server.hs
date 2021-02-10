@@ -10,18 +10,14 @@
 {-# LANGUAGE GADTs #-}
 module Development.IDE.LSP.Server where
 
-import Language.LSP.Server (LspM, Handler, Handlers)
+import Language.LSP.Server (LspM, Handlers)
 import Language.LSP.Types
-import Language.LSP.Types.Lens
-import Control.Lens ((^.))
 import qualified Language.LSP.Server as LSP
 import Development.IDE.Core.Shake
 import UnliftIO.Chan
 import Control.Monad.Reader
-import Data.Aeson (Value)
-import Development.IDE.Core.Tracing (otSetUri)
-import OpenTelemetry.Eventlog (SpanInFlight, setTag)
-import Data.Text.Encoding (encodeUtf8)
+import Ide.Types (HasTracing, traceWithSpan)
+import Development.IDE.Core.Tracing
 
 data ReactorMessage
   = ReactorNotification (IO ())
@@ -31,51 +27,30 @@ type ReactorChan = Chan ReactorMessage
 type ServerM c = ReaderT (ReactorChan, IdeState) (LspM c)
 
 requestHandler
-  :: forall (m :: Method FromClient Request) c.
+  :: forall (m :: Method FromClient Request) c. (HasTracing (MessageParams m)) =>
      SMethod m
   -> (IdeState -> MessageParams m -> LspM c (Either ResponseError (ResponseResult m)))
   -> Handlers (ServerM c)
-requestHandler m k = LSP.requestHandler m $ \RequestMessage{_id,_params} resp -> do
+requestHandler m k = LSP.requestHandler m $ \RequestMessage{_method,_id,_params} resp -> do
   st@(chan,ide) <- ask
   env <- LSP.getLspEnv
   let resp' = flip runReaderT st . resp
-  writeChan chan $ ReactorRequest (SomeLspId _id) (LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
+      trace x = otTracedHandler "Request" (show _method) $ \sp -> do
+        traceWithSpan sp _params
+        x
+  writeChan chan $ ReactorRequest (SomeLspId _id) (trace $ LSP.runLspT env $ resp' =<< k ide _params) (LSP.runLspT env . resp' . Left)
 
 notificationHandler
-  :: forall (m :: Method FromClient Notification) c.
+  :: forall (m :: Method FromClient Notification) c. (HasTracing (MessageParams m)) =>
      SMethod m
   -> (IdeState -> MessageParams m -> LspM c ())
   -> Handlers (ServerM c)
-notificationHandler m k = LSP.notificationHandler m $ \NotificationMessage{_params}-> do
+notificationHandler m k = LSP.notificationHandler m $ \NotificationMessage{_params,_method}-> do
   (chan,ide) <- ask
   env <- LSP.getLspEnv
-  writeChan chan $ ReactorNotification (LSP.runLspT env $ k ide _params)
+  let trace x = otTracedHandler "Notification" (show _method) $ \sp -> do
+        traceWithSpan sp _params
+        x
+  writeChan chan $ ReactorNotification (trace $ LSP.runLspT env $ k ide _params)
 
-class HasTracing a where
-  traceWithSpan :: SpanInFlight -> a -> IO ()
-  traceWithSpan _ _ = pure ()
 
-instance {-# OVERLAPPABLE #-} (HasTextDocument a doc, HasUri doc Uri) => HasTracing a where
-  traceWithSpan sp a = otSetUri sp (a ^. textDocument . uri)
-
-instance HasTracing Value
-instance HasTracing ExecuteCommandParams
-instance HasTracing DidChangeWatchedFilesParams
-instance HasTracing DidChangeWorkspaceFoldersParams
-instance HasTracing DidChangeConfigurationParams
-instance HasTracing InitializeParams
-instance HasTracing (Maybe InitializedParams)
-instance HasTracing WorkspaceSymbolParams where
-  traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
-
-setUriAnd ::
-  (HasTextDocument params a, HasUri a Uri) =>
-  (lspFuncs -> ide -> params -> IO res) ->
-  lspFuncs ->
-  SpanInFlight ->
-  ide ->
-  params ->
-  IO res
-setUriAnd k lf sp ide params = do
-  otSetUri sp (params ^. textDocument . uri)
-  k lf ide params

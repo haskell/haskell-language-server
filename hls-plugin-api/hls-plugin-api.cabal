@@ -49,6 +49,7 @@ library
     , dependent-map
     , dependent-sum
     , dlist
+    , opentelemetry
 
   if os(windows)
       build-depends:

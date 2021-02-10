@@ -91,7 +91,8 @@ library
         bytestring-encoding,
         opentelemetry >=0.6.1,
         heapsize ==0.3.*,
-        unliftio
+        unliftio,
+        unliftio-core
     if flag(ghc-lib)
       build-depends:
         ghc-lib >= 8.8,

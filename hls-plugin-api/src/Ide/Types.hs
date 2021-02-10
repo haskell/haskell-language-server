@@ -12,6 +12,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Ide.Types
     where
@@ -46,6 +48,8 @@ import qualified Data.DList as DList
 import qualified Data.Default
 import System.IO.Unsafe
 import Control.Monad
+import OpenTelemetry.Eventlog
+import Data.Text.Encoding (encodeUtf8)
 
 -- ---------------------------------------------------------------------
 
@@ -64,7 +68,7 @@ data PluginDescriptor ideState =
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
 -- Only methods for which we know how to combine responses can be instances of 'PluginMethod'
-class PluginMethod m where
+class HasTracing (MessageParams m) => PluginMethod m where
 
   -- | Parse the configuration to check if this plugin is enabled
   pluginEnabled :: SMethod m -> PluginId -> Config -> Bool
@@ -316,6 +320,28 @@ data FallbackCodeActionParams =
     , fallbackCommand       :: Maybe Command
     }
   deriving (Generic, ToJSON, FromJSON)
+
+-- ---------------------------------------------------------------------
+
+otSetUri :: SpanInFlight -> Uri -> IO ()
+otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
+
+class HasTracing a where
+  traceWithSpan :: SpanInFlight -> a -> IO ()
+  traceWithSpan _ _ = pure ()
+
+instance {-# OVERLAPPABLE #-} (HasTextDocument a doc, HasUri doc Uri) => HasTracing a where
+  traceWithSpan sp a = otSetUri sp (a ^. J.textDocument . J.uri)
+
+instance HasTracing Value
+instance HasTracing ExecuteCommandParams
+instance HasTracing DidChangeWatchedFilesParams
+instance HasTracing DidChangeWorkspaceFoldersParams
+instance HasTracing DidChangeConfigurationParams
+instance HasTracing InitializeParams
+instance HasTracing (Maybe InitializedParams)
+instance HasTracing WorkspaceSymbolParams where
+  traceWithSpan sp (WorkspaceSymbolParams _ _ query) = setTag sp "query" (encodeUtf8 query)
 
 -- ---------------------------------------------------------------------
 
