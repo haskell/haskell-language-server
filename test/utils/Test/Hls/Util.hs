@@ -391,7 +391,7 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
         -- Send a dummy message to provoke a response from the server.
         -- This guarantees that we have at least one message to
         -- process, so message won't block or timeout.
-        void $ Test.sendRequest (SCustomMethod "non-existent-method") A.Null
+        void $ Test.sendNotification (SCustomMethod "non-existent-method") A.Null
     handleMessages
   where
     matches :: Diagnostic -> Bool

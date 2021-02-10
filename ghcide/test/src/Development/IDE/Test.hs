@@ -102,9 +102,9 @@ flushMessages :: Session ()
 flushMessages = do
     let cm = SCustomMethod "non-existent-method"
     i <- sendRequest cm A.Null
-    (void $ responseForId cm i) <|> ignoreOthers
+    void (responseForId cm i) <|> ignoreOthers cm i
     where
-        ignoreOthers = void anyMessage >> flushMessages
+        ignoreOthers cm i = skipManyTill anyMessage (responseForId cm i) >> flushMessages
 
 -- | It is not possible to use 'expectDiagnostics []' to assert the absence of diagnostics,
 --   only that existing diagnostics have been cleared.

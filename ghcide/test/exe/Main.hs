@@ -505,7 +505,6 @@ diagnosticTests = testGroup "diagnostics"
           let itemA = TextDocumentItem uriA "haskell" 0 aContent
           let a = TextDocumentIdentifier uriA
           sendNotification STextDocumentDidOpen (DidOpenTextDocumentParams itemA)
-          diagsNot <- skipManyTill anyMessage diagnostic
           NotificationMessage{_params = PublishDiagnosticsParams fileUri _ diags} <- skipManyTill anyMessage diagnostic
           -- Check that if we put a lower-case drive in for A.A
           -- the diagnostics for A.B will also be lower-case.
@@ -2932,7 +2931,7 @@ addSigLensesTests = let
     doc <- createDoc "Sigs.hs" "haskell" originalCode
     [CodeLens {_command = Just c}] <- getCodeLenses doc
     executeCommand c
-    modifiedCode <- getDocumentEdit doc
+    modifiedCode <- skipManyTill anyMessage (getDocumentEdit doc)
     liftIO $ expectedCode @=? modifiedCode
   in
   testGroup "add signature"
@@ -3452,7 +3451,7 @@ completionCommandTest ::
 completionCommandTest name src pos wanted expected = testSession name $ do
   docId <- createDoc "A.hs" "haskell" (T.unlines src)
   _ <- waitForDiagnostics
-  compls <- getCompletions docId pos
+  compls <- skipManyTill anyMessage (getCompletions docId pos)
   let wantedC = find ( \case
             CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
             _ -> False
@@ -3465,7 +3464,7 @@ completionCommandTest name src pos wanted expected = testSession name $ do
       executeCommand c
       if src /= expected
           then do
-            modifiedCode <- getDocumentEdit docId
+            modifiedCode <- skipManyTill anyMessage (getDocumentEdit docId)
             liftIO $ modifiedCode @?= T.unlines expected
           else do
             expectMessages SWorkspaceApplyEdit 1 $ \edit ->
@@ -4370,7 +4369,7 @@ ifaceErrorTest = testCase "iface-error-test-1" $ runWithExtraFiles "recomp" $ \d
 
 
     -- Check that we wrote the interfaces for B when we saved
-    let m = SCustomMethod "hidir"
+    let m = SCustomMethod "test"
     lid <- sendRequest m $ toJSON $ GetInterfaceFilesDir bPath
     res <- skipManyTill anyMessage $ responseForId m lid
     liftIO $ case res of
@@ -4570,12 +4569,7 @@ asyncTests = testGroup "async"
 
 clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
-    [
-        testSession "ghcide does not support update config" $ do
-            sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
-            logNot <- skipManyTill anyMessage loggingNotification
-            isMessagePresent "Updating Not supported" [getLogMessage logNot]
-    ,   testSession "ghcide restarts shake session on config changes" $ do
+    [ testSession "ghcide restarts shake session on config changes" $ do
             void $ skipManyTill anyMessage $ message SClientRegisterCapability
             sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
             nots <- skipManyTill anyMessage $ count 3 loggingNotification
