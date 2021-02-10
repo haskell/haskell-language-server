@@ -37,7 +37,6 @@ import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Shake
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Notifications
-import Development.IDE.LSP.Outline
 import Development.IDE.Types.Logger
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.Tracing

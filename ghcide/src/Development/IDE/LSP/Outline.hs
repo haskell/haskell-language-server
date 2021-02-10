@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
@@ -10,8 +11,8 @@ module Development.IDE.LSP.Outline
   )
 where
 
-import qualified Language.LSP.Server as LSP
 import           Language.LSP.Types
+import           Language.LSP.Server (LspM)
 import           Control.Monad.IO.Class
 import           Data.Functor
 import           Data.Generics
@@ -22,7 +23,6 @@ import           Data.Text                      ( Text
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
-import           Development.IDE.LSP.Server
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error      ( realSrcSpanToRange )
 import           Development.IDE.Types.Location
@@ -32,7 +32,7 @@ import           Outputable                     ( Outputable
                                                 )
 
 moduleOutline
-  :: IdeState -> DocumentSymbolParams -> LSP.LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))
+  :: IdeState -> DocumentSymbolParams -> LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))
 moduleOutline ideState DocumentSymbolParams{ _textDocument = TextDocumentIdentifier uri }
   = liftIO $ case uriToFilePath uri of
     Just (toNormalizedFilePath' -> fp) -> do

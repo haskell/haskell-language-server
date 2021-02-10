@@ -194,7 +194,7 @@ provide :: TacticCommand -> T.Text -> TacticProvider
 provide tc name _ plId uri range _ = do
   let title = tacticTitle tc name
       params = TacticParams { file = uri , range = range , var_name = name }
-  cmd <- mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
+      cmd = mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
   pure
     $ pure
     $ InR

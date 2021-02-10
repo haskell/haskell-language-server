@@ -77,7 +77,7 @@ codeLensProvider ideState pId CodeLensParams {_textDocument = TextDocumentIdenti
 
 generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> IO CodeLens
 generateLens pId _range title edit = do
-  cId <- mkLspCommand pId (CommandId typeLensCommandId) title (Just [toJSON edit])
+  let cId = mkLspCommand pId (CommandId typeLensCommandId) title (Just [toJSON edit])
   return $ CodeLens _range (Just cId) Nothing
 
 commandHandler :: CommandFunction IdeState WorkspaceEdit

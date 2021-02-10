@@ -7,8 +7,6 @@ module Development.IDE.Plugin where
 import Data.Default
 import Development.Shake
 
-import           Language.LSP.Types
-import Development.IDE.Core.Rules
 import Development.IDE.LSP.Server
 import qualified Language.LSP.Server as LSP
 

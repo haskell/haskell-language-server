@@ -134,6 +134,9 @@ library
         TupleSections
         TypeApplications
         ViewPatterns
+        DataKinds
+        TypeOperators
+        KindSignatures
 
     hs-source-dirs:
         src
@@ -209,7 +212,7 @@ library
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Types.Action
-    ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns
+    ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns -Wno-unticked-promoted-constructors
 
 executable ghcide-test-preprocessor
     default-language: Haskell2010

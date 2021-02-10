@@ -186,7 +186,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
 
   commands <- lift $
     forM rewrites $ \(title, kind, params) -> liftIO $ do
-      c <- mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
+      let c = mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
       return $ CodeAction title (Just kind) Nothing Nothing Nothing Nothing (Just c)
 
   return $ J.List [InR c | c <- commands]

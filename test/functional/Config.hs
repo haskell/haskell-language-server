@@ -81,7 +81,7 @@ configTests = testGroup "config parsing" [
         sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         -- Send custom request so server returns a response to prevent blocking
-        void $ Test.sendRequest (SCustomMethod "non-existent-method") Null
+        void $ sendNotification (SCustomMethod "non-existent-method") Null
 
         logNot <- skipManyTill Test.anyMessage (message SWindowLogMessage)
 

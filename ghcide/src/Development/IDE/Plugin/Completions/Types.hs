@@ -13,7 +13,7 @@ import Development.IDE.Spans.Common
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Language.LSP.Types (CompletionItemKind, TextEdit, Uri)
+import Language.LSP.Types (CompletionItemKind, Uri)
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
 

@@ -257,7 +257,6 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
   where
 
     getCodeActions = do
-        applyOne <- applyOneActions
         diags <- getDiagnostics ideState
         let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
             numHintsInDoc = length
@@ -268,18 +267,17 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
         -- We only want to show the applyAll code action if there is more than 1
         -- hint in the current document
         if numHintsInDoc > 1 then do
-          applyAll <- applyAllAction
-          pure $ applyAll:applyOne
+          pure $ applyAllAction:applyOneActions
         else
-          pure applyOne
+          pure applyOneActions
 
-    applyAllAction = do
+    applyAllAction =
       let args = Just [toJSON (docId ^. LSP.uri)]
-      cmd <- mkLspCommand plId "applyAll" "Apply all hints" args
-      pure $ LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd)
+          cmd = mkLspCommand plId "applyAll" "Apply all hints" args
+        in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd)
 
-    applyOneActions :: IO [LSP.CodeAction]
-    applyOneActions = catMaybes <$> mapM mkHlintAction (filter validCommand diags)
+    applyOneActions :: [LSP.CodeAction]
+    applyOneActions = catMaybes $ map mkHlintAction (filter validCommand diags)
 
     -- |Some hints do not have an associated refactoring
     validCommand (LSP.Diagnostic _ _ (Just (InR code)) (Just "hlint") _ _ _) =
@@ -289,9 +287,9 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
 
     LSP.List diags = context ^. LSP.diagnostics
 
-    mkHlintAction :: LSP.Diagnostic -> IO (Maybe LSP.CodeAction)
+    mkHlintAction :: LSP.Diagnostic -> Maybe LSP.CodeAction
     mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (InR code)) (Just "hlint") _ _ _) =
-      Just . codeAction <$> mkLspCommand plId "applyOne" title (Just args)
+      Just . codeAction $ mkLspCommand plId "applyOne" title (Just args)
      where
        codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd)
        -- we have to recover the original ideaHint removing the prefix
@@ -299,7 +297,7 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
        title = "Apply hint: " <> ideaHint
        -- need 'file', 'start_pos' and hint title (to distinguish between alternative suggestions at the same location)
        args = [toJSON (AOP (docId ^. LSP.uri) start ideaHint)]
-    mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = return Nothing
+    mkHlintAction (LSP.Diagnostic _r _s _c _source _m _ _) = Nothing
 
 -- ---------------------------------------------------------------------
 
