@@ -231,7 +231,7 @@ methodHypothesis ty = do
   pure $ mappend sc_methods $ methods <&> \method ->
     let (_, _, ty) = tcSplitSigmaTy $ idType method
     in ( occName method
-       , HyInfo (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
+       , HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
        )
 
 

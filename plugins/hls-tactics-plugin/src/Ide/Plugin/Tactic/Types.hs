@@ -218,7 +218,8 @@ instance Uniquable a => Ord (Uniquely a) where
 ------------------------------------------------------------------------------
 -- | The provenance and type of a hypothesis term.
 data HyInfo a = HyInfo
-  { hi_provenance :: Provenance
+  { hi_name       :: OccName
+  , hi_provenance :: Provenance
   , hi_type       :: a
   }
   deriving stock (Functor, Eq, Show, Generic, Ord)
@@ -227,7 +228,7 @@ data HyInfo a = HyInfo
 ------------------------------------------------------------------------------
 -- | Map a function over the provenance.
 overProvenance :: (Provenance -> Provenance) -> HyInfo a -> HyInfo a
-overProvenance f (HyInfo prv ty) = HyInfo (f prv) ty
+overProvenance f (HyInfo name prv ty) = HyInfo name (f prv) ty
 
 
 ------------------------------------------------------------------------------

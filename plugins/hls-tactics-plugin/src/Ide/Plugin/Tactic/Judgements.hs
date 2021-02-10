@@ -61,7 +61,7 @@ buildHypothesis
   where
     go (occName -> occ, t)
       | Just ty <- t
-      , isAlpha . head . occNameString $ occ = Just (occ, HyInfo UserPrv $ CType ty)
+      , isAlpha . head . occNameString $ occ = Just (occ, HyInfo occ UserPrv $ CType ty)
       | otherwise = Nothing
 
 
@@ -97,7 +97,7 @@ introducing
     -> Judgement' a
 introducing f ns =
   field @"_jHypothesis" <>~ M.fromList (zip [0..] ns <&>
-    \(pos, (name, ty)) -> (name, HyInfo (f pos) ty))
+    \(pos, (name, ty)) -> (name, HyInfo name (f pos) ty))
 
 
 ------------------------------------------------------------------------------
