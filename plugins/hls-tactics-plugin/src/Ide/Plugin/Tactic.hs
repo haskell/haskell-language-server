@@ -216,7 +216,7 @@ filterBindingType
 filterBindingType p tp dflags plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
-   in fmap join $ for (M.toList hy) $ \(occ, hi_type -> CType ty) ->
+   in fmap join $ for (M.toList $ hyByName hy) $ \(occ, hi_type -> CType ty) ->
         case p (unCType g) ty of
           True  -> tp occ ty dflags plId uri range jdg
           False -> pure []
@@ -278,7 +278,7 @@ judgementForHole state nfp range = do
         HieFresh ->
           pure ( resulting_range
                , mkFirstJudgement
-                   (local_hy <> cls_hy)
+                   (local_hy <> Hypothesis cls_hy)
                    (isRhsHole rss tcs)
                    goal
                , ctx
@@ -287,10 +287,10 @@ judgementForHole state nfp range = do
 
 spliceProvenance
     :: Map OccName Provenance
-    -> Map OccName (HyInfo a)
-    -> Map OccName (HyInfo a)
-spliceProvenance provs =
-  M.mapWithKey $ \name hi ->
+    -> Hypothesis a
+    -> Hypothesis a
+spliceProvenance provs x =
+  Hypothesis $ flip M.mapWithKey (hyByName x) $ \name hi ->
     overProvenance (maybe id const $ M.lookup name provs) hi
 
 

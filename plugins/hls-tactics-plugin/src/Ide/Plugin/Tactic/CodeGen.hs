@@ -35,7 +35,7 @@ import           Type hiding (Var)
 useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
 useOccName jdg name =
   -- Only score points if this is in the local hypothesis
-  case M.lookup name $ jLocalHypothesis jdg of
+  case M.lookup name $ hyByName $ jLocalHypothesis jdg of
     Just{}  -> modify
              $ (withUsedVals $ S.insert name)
              . (field @"ts_unused_top_vals" %~ S.delete name)
@@ -75,7 +75,7 @@ destructMatches f scrut t jdg = do
         [] -> throwError $ GoalMismatch "destruct" g
         _ -> fmap unzipTrace $ for dcs $ \dc -> do
           let args = dataConInstOrigArgTys' dc apps
-          names <- mkManyGoodNames hy args
+          names <- mkManyGoodNames (hyNamesInScope hy) args
           let hy' = zip names $ coerce args
               j = introducingPat scrut dc hy'
                 $ withNewGoal g jdg
@@ -154,7 +154,7 @@ destruct' :: (DataCon -> Judgement -> Rule) -> OccName -> Judgement -> Rule
 destruct' f term jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let hy = jHypothesis jdg
-  case M.lookup term hy of
+  case M.lookup term (hyByName hy) of
     Nothing -> throwError $ UndefinedHypothesis term
     Just (hi_type -> t) -> do
       useOccName jdg term

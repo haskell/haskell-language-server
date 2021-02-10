@@ -74,9 +74,11 @@ runTactic ctx jdg t =
                 $ (:) (jGoal jdg)
                 $ fmap hi_type
                 $ toList
+                $ hyByName
                 $ jHypothesis jdg
         unused_topvals = M.keysSet
                        $ M.filter (isTopLevel . hi_provenance)
+                       $ hyByName
                        $ jHypothesis jdg
         tacticState =
           defaultTacticState

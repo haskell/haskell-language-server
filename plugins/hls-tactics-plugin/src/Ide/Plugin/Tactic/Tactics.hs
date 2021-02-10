@@ -51,7 +51,7 @@ assumption = attemptOn allNames assume
 assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
   let g  = jGoal jdg
-  case M.lookup name $ jHypothesis jdg of
+  case M.lookup name $ hyByName $ jHypothesis jdg of
     Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
       for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
@@ -80,7 +80,7 @@ intros = rule $ \jdg -> do
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
-      vs <- mkManyGoodNames (jEntireHypothesis jdg) as
+      vs <- mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
       let top_hole = isTopHole ctx jdg
           jdg' = introducingLambda top_hole (zip vs $ coerce as)
                $ withNewGoal (CType b) jdg
@@ -99,14 +99,14 @@ intros = rule $ \jdg -> do
 destructAuto :: OccName -> TacticsM ()
 destructAuto name = requireConcreteHole $ tracing "destruct(auto)" $ do
   jdg <- goal
-  case M.lookup name $ jHypothesis jdg of
+  case M.lookup name $ hyByName $ jHypothesis jdg of
     Nothing -> throwError $ NotInScope name
     Just hi ->
       let subtactic = rule $ destruct' (const subgoal) name
       in case isPatternMatch $ hi_provenance hi of
             True ->
               pruning subtactic $ \jdgs ->
-                let getHyTypes = S.fromList . fmap hi_type . M.elems . jHypothesis
+                let getHyTypes = S.fromList . fmap hi_type . M.elems . hyByName . jHypothesis
                     new_hy = foldMap getHyTypes jdgs
                     old_hy = getHyTypes jdg
                 in case S.null $ new_hy S.\\ old_hy of
@@ -153,7 +153,7 @@ apply func = requireConcreteHole $ tracing ("apply' " <> show func) $ do
   jdg <- goal
   let hy = jHypothesis jdg
       g  = jGoal jdg
-  case M.lookup func hy of
+  case M.lookup func $ hyByName hy of
     Just (hi_type -> CType ty) -> do
       ty' <- freshTyvars ty
       let (_, _, args, ret) = tacticsSplitFunTy ty'
@@ -270,13 +270,14 @@ auto' n = do
 
 overFunctions :: (OccName -> TacticsM ()) -> TacticsM ()
 overFunctions =
-  attemptOn $ M.keys . M.filter (isFunction . unCType . hi_type) . jHypothesis
+  attemptOn $ M.keys . M.filter (isFunction . unCType . hi_type) . hyByName . jHypothesis
 
 overAlgebraicTerms :: (OccName -> TacticsM ()) -> TacticsM ()
 overAlgebraicTerms =
   attemptOn $
-    M.keys . M.filter (isJust . algebraicTyCon . unCType . hi_type) . jHypothesis
+    M.keys . M.filter (isJust . algebraicTyCon . unCType . hi_type) . hyByName . jHypothesis
 
 
 allNames :: Judgement -> [OccName]
-allNames = M.keys . jHypothesis
+allNames = hyNamesInScope . jHypothesis
+
