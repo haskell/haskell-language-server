@@ -382,6 +382,8 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
         lidecl' = L l $ idecl
             { ideclHiding = Just (False, edited)
             }
+    -- avoid import A (foo,)
+    maybe (pure ()) removeTrailingCommaT $ lastMaybe deletedLies
     when (not (null lies) && null deletedLies) $ do
         transferAnn llies edited id
         addSimpleAnnT edited dp00
@@ -417,6 +419,7 @@ hideImplicitPreludeSymbol symbol (L _ HsModule{..}) = do
         existingDeclSpan = (fmap (predLine, ) . realSpan . getLoc) =<< headMaybe hsmodDecls
     (f, s) <- existingImpSpan <|> existingDeclSpan
     let beg = f $ realSrcSpanEnd s
+        indentation = srcSpanStartCol s
         ran = RealSrcSpan $ mkRealSrcSpan beg beg
     pure $ Rewrite ran $ \df -> do
         let symOcc = mkVarOcc symbol
@@ -426,6 +429,6 @@ hideImplicitPreludeSymbol symbol (L _ HsModule{..}) = do
         -- Re-labeling is needed to reflect annotations correctly
         L _ idecl0 <- liftParseAST @(ImportDecl GhcPs) df $ T.unpack impStmt
         let idecl = L ran idecl0
-        addSimpleAnnT idecl (DP (1, 0))
-            [(G AnnImport, DP (1, 0))]
+        addSimpleAnnT idecl (DP (1, indentation - 1))
+            [(G AnnImport, DP (1, indentation - 1))]
         pure idecl
