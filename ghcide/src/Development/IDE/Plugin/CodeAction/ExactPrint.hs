@@ -42,6 +42,7 @@ import Development.IDE.Spans.Common
 import Development.IDE.GHC.Error
 import Data.Generics (listify)
 import GHC.Exts (IsList (fromList))
+import Control.Monad.Extra (whenJust)
 
 ------------------------------------------------------------------------------
 
@@ -383,7 +384,7 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
             { ideclHiding = Just (False, edited)
             }
     -- avoid import A (foo,)
-    maybe (pure ()) removeTrailingCommaT $ lastMaybe deletedLies
+    whenJust (lastMaybe deletedLies) removeTrailingCommaT
     when (not (null lies) && null deletedLies) $ do
         transferAnn llies edited id
         addSimpleAnnT edited dp00

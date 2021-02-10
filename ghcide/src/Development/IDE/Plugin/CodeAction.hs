@@ -3,7 +3,7 @@
 
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE CPP                   #-}
-#include "ghc-api-version.h"
+
 
 -- | Go to the definition of a variable.
 module Development.IDE.Plugin.CodeAction
@@ -215,7 +215,7 @@ suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_messag
           [s'] <- [x | (x, "") <- readSrcSpan $ T.unpack s],
           isUnusedImportedId tcM har (T.unpack identifier) (T.unpack modName) (RealSrcSpan s'),
           title <- "Hide " <> identifier <> " from " <> modName
-         = if modName == "Prelude" && (null $ findImportDeclByModuleName hsmodImports "Prelude")
+         = if modName == "Prelude" && null (findImportDeclByModuleName hsmodImports "Prelude")
               then [(title, maybeToList $ hideImplicitPreludeSymbol (T.unpack identifier) pm)]
               else [(title, hideOrRemoveId hsmodImports (T.unpack identifier) (T.unpack modName))]
         | otherwise = []
@@ -261,7 +261,7 @@ isUnusedImportedId
       [GRE {..}] <- lookupGlobalRdrEnv rdrEnv occ,
       importedIdentifier <- Right gre_name,
       refs <- M.lookup importedIdentifier rf =
-      maybe True (null . filter (\(_, IdentifierDetails{..}) -> identInfo == S.singleton Use)) refs
+      maybe True (not . any (\(_, IdentifierDetails{..}) -> identInfo == S.singleton Use)) refs
     | otherwise = False
 
 suggestDisableWarning :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
