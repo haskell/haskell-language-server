@@ -52,10 +52,17 @@ import qualified Experiments.Types as E
 import GHC.Generics (Generic)
 import Numeric.Natural (Natural)
 import Development.Shake.Classes
+import System.Console.GetOpt
+import Data.Maybe
+import Control.Monad.Extra
+import System.FilePath
 
 
-config :: FilePath
-config = "bench/config.yaml"
+configPath :: FilePath
+configPath = "bench/config.yaml"
+
+configOpt :: OptDescr (Either String FilePath)
+configOpt = Option [] ["config"] (ReqArg Right configPath) "config file"
 
 -- | Read the config without dependency
 readConfigIO :: FilePath -> IO (Config BuildSystem)
@@ -65,20 +72,25 @@ instance IsExample Example where getExampleName = E.getExampleName
 type instance RuleResult GetExample = Maybe Example
 type instance RuleResult GetExamples = [Example]
 
+shakeOpts :: ShakeOptions
+shakeOpts =
+    shakeOptions{shakeChange = ChangeModtimeAndDigestInput, shakeThreads = 0}
+
 main :: IO ()
-main = shakeArgs shakeOptions {shakeChange = ChangeModtimeAndDigestInput, shakeThreads = 0} $ do
-  createBuildSystem $ \resource -> do
-      configStatic <- liftIO $ readConfigIO config
-      let build = outputFolder configStatic
-      buildRules build ghcideBuildRules
-      benchRules build resource (MkBenchRules (askOracle $ GetSamples ()) benchGhcide "ghcide")
-      csvRules build
-      svgRules build
-      heapProfileRules build
-      action $ allTargets build
+main = shakeArgsWith shakeOpts [configOpt] $ \configs wants -> pure $ Just $ do
+  let config = fromMaybe configPath $ listToMaybe configs
+  _configStatic <- createBuildSystem config
+  case wants of
+      [] -> want ["all"]
+      _ -> want wants
 
 ghcideBuildRules :: MkBuildRules BuildSystem
-ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" buildGhcide
+ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" projectDepends buildGhcide
+  where
+      projectDepends = do
+        need . map ("src" </>) =<< getDirectoryFiles "src" ["//*.hs"]
+        need . map ("session-loader" </>) =<< getDirectoryFiles "session-loader" ["//*.hs"]
+        need =<< getDirectoryFiles "." ["*.cabal"]
 
 --------------------------------------------------------------------------------
 
@@ -89,13 +101,14 @@ data Config buildSystem = Config
     versions :: [GitCommit],
     -- | Output folder ('foo' works, 'foo/bar' does not)
     outputFolder :: String,
-    buildTool :: buildSystem
+    buildTool :: buildSystem,
+    profileInterval :: Maybe Double
   }
   deriving (Generic, Show)
   deriving anyclass (FromJSON)
 
-createBuildSystem :: (Resource -> Rules a) -> Rules a
-createBuildSystem userRules = do
+createBuildSystem :: FilePath -> Rules (Config BuildSystem )
+createBuildSystem config = do
   readConfig <- newCache $ \fp -> need [fp] >> liftIO (readConfigIO fp)
 
   _ <- addOracle $ \GetExperiments {} -> experiments <$> readConfig config
@@ -105,9 +118,20 @@ createBuildSystem userRules = do
   _ <- addOracle $ \GetBuildSystem {} -> buildTool <$> readConfig config
   _ <- addOracle $ \GetSamples{} -> samples <$> readConfig config
 
-  benchResource <- newResource "ghcide-bench" 1
+  configStatic <- liftIO $ readConfigIO config
+  let build = outputFolder configStatic
 
-  userRules benchResource
+  buildRules build ghcideBuildRules
+  benchRules build (MkBenchRules (askOracle $ GetSamples ()) benchGhcide warmupGhcide "ghcide")
+  csvRules build
+  svgRules build
+  heapProfileRules build
+  phonyRules "" "ghcide" NoProfiling build (examples configStatic)
+
+  whenJust (profileInterval configStatic) $ \i -> do
+    phonyRules "profiled-" "ghcide" (CheapHeapProfiling i) build (examples configStatic)
+
+  return configStatic
 
 newtype GetSamples = GetSamples () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 type instance RuleResult GetSamples = Natural
@@ -123,6 +147,7 @@ buildGhcide Cabal args out = do
         ,"--install-method=copy"
         ,"--overwrite-policy=always"
         ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=-eventlog"
         ]
 
 buildGhcide Stack args out =
@@ -132,6 +157,7 @@ buildGhcide Stack args out =
         ,"ghcide:ghcide"
         ,"--copy-bins"
         ,"--ghc-options=-rtsopts"
+        ,"--ghc-options=-eventlog"
         ]
 
 benchGhcide
@@ -152,3 +178,15 @@ benchGhcide samples buildSystem args BenchProject{..} = do
     [ "--stack" | Stack == buildSystem
     ]
 
+warmupGhcide :: BuildSystem -> FilePath -> [CmdOption] -> Example -> Action ()
+warmupGhcide buildSystem exePath args example = do
+  command args "ghcide-bench" $
+    [ "--no-clean",
+      "-v",
+      "--samples=1",
+      "--ghcide=" <> exePath,
+      "--select=hover"
+    ] ++
+    exampleToOptions example ++
+    [ "--stack" | Stack == buildSystem
+    ]
