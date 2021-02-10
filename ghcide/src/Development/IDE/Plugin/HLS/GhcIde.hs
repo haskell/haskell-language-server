@@ -10,7 +10,6 @@ module Development.IDE.Plugin.HLS.GhcIde
 import Development.IDE
 import Development.IDE.LSP.HoverDefinition
 import Development.IDE.LSP.Outline
-import Ide.PluginUtils
 import Ide.Types
 import Language.LSP.Types
 import Language.LSP.Server (LspM)

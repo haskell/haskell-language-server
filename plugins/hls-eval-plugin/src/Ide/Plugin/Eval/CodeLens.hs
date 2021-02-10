@@ -241,7 +241,7 @@ codeLens st plId CodeLensParams{_textDocument} =
                 -- Extract tests from source code
                 let Sections{..} = commentsToSections isLHS comments
                     tests = testsBySection nonSetupSections
-                cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
+                    cmd = mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
                         [ CodeLens testRange (Just cmd') Nothing
                         | (section, test) <- tests

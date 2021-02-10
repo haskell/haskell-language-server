@@ -12,6 +12,7 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
+import Debug.Trace
 
 tests :: TestTree
 tests = testGroup "document symbols" [
@@ -98,7 +99,7 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
 
         liftIO $ testPattern `elem` symbs @? "Contains symbols"
 
-    , testCase "provides imports" $ runSession hlsCommand oldCaps "test/testdata" $ do
+    , testCase "provides imports" $ runSession hlsCommand (traceShowId oldCaps) "test/testdata" $ do
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 

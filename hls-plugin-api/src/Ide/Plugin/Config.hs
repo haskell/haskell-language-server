@@ -18,7 +18,6 @@ import qualified Data.Aeson                    as A
 import           Data.Aeson              hiding ( Error )
 import           Data.Default
 import qualified Data.Text                     as T
-import           Language.LSP.Types
 import qualified Data.Map as Map
 import GHC.Generics (Generic)
 
@@ -27,8 +26,7 @@ import GHC.Generics (Generic)
 -- | Given a DidChangeConfigurationNotification message, this function returns the parsed
 -- Config object if possible.
 getConfigFromNotification :: Applicative m => a -> A.Value -> m (Either T.Text Config)
-getConfigFromNotification _ p = pure $
-  case fromJSON p of
+getConfigFromNotification _ p = pure $ case fromJSON p of
     A.Success c -> Right c
     A.Error err -> Left $ T.pack err
 

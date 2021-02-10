@@ -9,15 +9,12 @@ module Development.IDE.Plugin.HLS
     ) where
 
 import           Control.Exception(SomeException)
-import           Control.Lens ((^.))
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Data.Aeson as J
-import qualified Data.DList as DList
 import           Data.Either
 import qualified Data.List                     as List
 import qualified Data.Map  as Map
-import           Data.Maybe
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server
@@ -27,15 +24,11 @@ import           Ide.PluginUtils
 import           Ide.Types as HLS
 import qualified Language.LSP.Server             as LSP
 import qualified Language.LSP.Types              as J
-import qualified Language.LSP.Types.Capabilities as C
 import Language.LSP.Types
-import           Language.LSP.Types.Lens as L hiding (formatting, rangeFormatting)
-import qualified Language.LSP.VFS                as VFS
 import           Text.Regex.TDFA.Text()
 import Development.Shake (Rules)
 import Ide.PluginUtils (getClientConfig, pluginEnabled, getPluginConfig, responseError, getProcessID)
 import Development.IDE.Core.Tracing
-import Development.IDE.Types.Logger (logDebug)
 import UnliftIO.Async (forConcurrently)
 import UnliftIO.Exception (catchAny)
 import           Data.Dependent.Map (DMap)
@@ -147,7 +140,6 @@ extensiblePlugins xs = Plugin mempty handlers
     handlers = mconcat $ do
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params -> do
-        pid <- liftIO getPid
         config <- getClientConfig
         let fs = filter (\(pid,_) -> pluginEnabled m pid config) fs'
         case nonEmpty fs of
@@ -162,7 +154,7 @@ extensiblePlugins xs = Plugin mempty handlers
               Nothing -> pure $ Left $ combineErrors errs
               Just xs -> do
                 caps <- LSP.getClientCapabilities
-                pure $ Right $ combineResponses m pid config caps params xs
+                pure $ Right $ combineResponses m config caps params xs
 
 runConcurrently
   :: MonadUnliftIO m

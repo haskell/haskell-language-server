@@ -203,7 +203,7 @@ mkCompl
                         T.intercalate sectionSeparator docs'
 
 mkAdditionalEditsCommand :: PluginId -> ExtendImport -> IO Command
-mkAdditionalEditsCommand pId edits =
+mkAdditionalEditsCommand pId edits = pure $
   mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
 
 mkNameCompItem :: Uri -> Maybe T.Text -> Name -> ModuleName -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem

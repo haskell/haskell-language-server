@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Ide.PluginUtils
@@ -34,18 +33,10 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
 
-#ifdef mingw32_HOST_OS
-import qualified System.Win32.Process                    as P (getCurrentProcessId)
-#else
-import           System.Posix.Signals
-import qualified System.Posix.Process                    as P (getProcessID)
-#endif
-import qualified Data.Aeson                              as J
 import qualified Data.Default
 import qualified Data.Map.Strict                         as Map
 import           Ide.Plugin.Config
 import Language.LSP.Server
-import Control.Monad (void)
 
 -- ---------------------------------------------------------------------
 
@@ -227,26 +218,3 @@ allLspCmdIds pid commands = concat $ map go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
-mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [J.Value] -> IO Command
-mkLspCommand plid cn title args = do
-  pid <- getPid
-  pure $ mkLspCommand' pid plid cn title args
-
--- | Get the operating system process id for the running server
--- instance. This should be the same for the lifetime of the instance,
--- and different from that of any other currently running instance.
-getPid :: IO T.Text
-getPid = T.pack . show <$> getProcessID
-
-getProcessID :: IO Int
-installSigUsr1Handler :: IO () -> IO ()
-
-#ifdef mingw32_HOST_OS
-getProcessID = fromIntegral <$> P.getCurrentProcessId
-installSigUsr1Handler _ = return ()
-
-#else
-getProcessID = fromIntegral <$> P.getProcessID
-
-installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
-#endif

@@ -10,15 +10,14 @@
 {-# LANGUAGE GADTs #-}
 module Development.IDE.LSP.Server where
 
+import Language.LSP.Server (LspM, Handler, Handlers)
 import Language.LSP.Types
 import Language.LSP.Types.Lens
 import Control.Lens ((^.))
 import qualified Language.LSP.Server as LSP
-import           Language.LSP.Server (Handlers, LspM, Handler)
 import Development.IDE.Core.Shake
 import UnliftIO.Chan
 import Control.Monad.Reader
-import Development.IDE.Core.Service
 import Data.Aeson (Value)
 import Development.IDE.Core.Tracing (otSetUri)
 import OpenTelemetry.Eventlog (SpanInFlight, setTag)

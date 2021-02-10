@@ -34,7 +34,6 @@ import Development.IDE.GHC.ExactPrint (Annotated (annsA), GetAnnotatedParsedSour
 import Development.IDE.Types.HscEnvEq (hscEnv)
 import Development.IDE.Plugin.CodeAction.ExactPrint
 import Development.IDE.Plugin.Completions.Types
-import Data.Maybe
 import Ide.Plugin.Config (Config (completionSnippetsOn))
 import Ide.PluginUtils (getClientConfig)
 import Ide.Types

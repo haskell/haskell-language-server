@@ -402,7 +402,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                 \(spliceSpan, spliceContext) ->
                     forM expandStyles $ \(_, (title, cmdId)) -> do
                         let params = ExpandSpliceParams {uri = theUri, ..}
-                        act <- liftIO $ mkLspCommand plId cmdId title (Just [toJSON params])
+                            act = mkLspCommand plId cmdId title (Just [toJSON params])
                         pure $
                             InR $
                                 CodeAction title (Just CodeActionRefactorRewrite) Nothing Nothing Nothing Nothing (Just act)

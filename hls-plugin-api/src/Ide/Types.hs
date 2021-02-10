@@ -1,23 +1,27 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP #-}
 
 module Ide.Types
     where
 
+#ifdef mingw32_HOST_OS
+import qualified System.Win32.Process                    as P (getCurrentProcessId)
+#else
+import           System.Posix.Signals
+import qualified System.Posix.Process                    as P (getProcessID)
+#endif
 import           Data.Aeson                    hiding (defaultOptions)
 import           GHC.Generics
 import qualified Data.Map  as Map
@@ -34,13 +38,14 @@ import           Text.Regex.TDFA.Text()
 import           Data.Dependent.Map (DMap)
 import qualified Data.Dependent.Map as DMap
 import Data.List.NonEmpty (NonEmpty(..), toList)
-import qualified Data.List.NonEmpty as NE
 import Data.GADT.Compare
 import Data.Maybe
 import Data.Semigroup
 import Control.Lens ((^.))
 import qualified Data.DList as DList
 import qualified Data.Default
+import System.IO.Unsafe
+import Control.Monad
 
 -- ---------------------------------------------------------------------
 
@@ -67,19 +72,18 @@ class PluginMethod m where
   -- | How to combine responses from different plugins
   combineResponses
     :: SMethod m
-    -> T.Text -- ^ the process id, to make commands
     -> Config -- ^ IDE Configuration
     -> ClientCapabilities
     -> MessageParams m
     -> NonEmpty (ResponseResult m) -> ResponseResult m
 
   default combineResponses :: Semigroup (ResponseResult m)
-    => SMethod m -> T.Text -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
-  combineResponses _method _pid _config _caps _params = sconcat
+    => SMethod m -> Config -> ClientCapabilities -> MessageParams m -> NonEmpty (ResponseResult m) -> ResponseResult m
+  combineResponses _method _config _caps _params = sconcat
 
 instance PluginMethod TextDocumentCodeAction where
   pluginEnabled _ = pluginEnabledConfig plcCodeActionsOn
-  combineResponses _method pid _config (ClientCapabilities _ textDocCaps _ _) (CodeActionParams _ _ _ _ context) resps =
+  combineResponses _method _config (ClientCapabilities _ textDocCaps _ _) (CodeActionParams _ _ _ _ context) resps =
       fmap compat $ List $ filter wasRequested $ (\(List x) -> x) $ sconcat resps
     where
 
@@ -90,7 +94,7 @@ instance PluginMethod TextDocumentCodeAction where
         = x
         | otherwise = InL cmd
         where
-          cmd = mkLspCommand' pid "hls" "fallbackCodeAction" (action ^. title) (Just cmdParams)
+          cmd = mkLspCommand "hls" "fallbackCodeAction" (action ^. title) (Just cmdParams)
           cmdParams = [toJSON (FallbackCodeActionParams (action ^. edit) (action ^. command))]
 
       wasRequested :: (Command |? CodeAction) -> Bool
@@ -107,7 +111,7 @@ instance PluginMethod TextDocumentRename where
   pluginEnabled _ = pluginEnabledConfig plcRenameOn
 instance PluginMethod TextDocumentHover where
   pluginEnabled _ = pluginEnabledConfig plcHoverOn
-  combineResponses _ _ _ _ _ (catMaybes . toList -> hs) = h
+  combineResponses _ _ _ _ (catMaybes . toList -> hs) = h
     where
       r = listToMaybe $ mapMaybe (^. range) hs
       h = case foldMap (^. contents) hs of
@@ -116,7 +120,7 @@ instance PluginMethod TextDocumentHover where
 
 instance PluginMethod TextDocumentDocumentSymbol where
   pluginEnabled _ = pluginEnabledConfig plcSymbolsOn
-  combineResponses _ _ _ (ClientCapabilities _ tdc _ _) params xs = res
+  combineResponses _ _ (ClientCapabilities _ tdc _ _) params xs = res
     where
       uri' = params ^. textDocument . uri
       supportsHierarchy = Just True == (tdc >>= _documentSymbol >>= _hierarchicalDocumentSymbolSupport)
@@ -124,7 +128,7 @@ instance PluginMethod TextDocumentDocumentSymbol where
       res
         | supportsHierarchy = InL $ sconcat $ fmap (either id (fmap siToDs)) dsOrSi
         | otherwise = InR $ sconcat $ fmap (either (List . concatMap dsToSi) id) dsOrSi
-      siToDs (SymbolInformation name kind dep (Location uri range) cont)
+      siToDs (SymbolInformation name kind dep (Location _uri range) cont)
         = DocumentSymbol name cont kind dep range range Nothing
       dsToSi = go Nothing
       go :: Maybe T.Text -> DocumentSymbol -> [SymbolInformation]
@@ -138,7 +142,7 @@ instance PluginMethod TextDocumentDocumentSymbol where
 
 instance PluginMethod TextDocumentCompletion where
   pluginEnabled _ = pluginEnabledConfig plcCompletionOn
-  combineResponses _ _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
+  combineResponses _ conf _ _ (toList -> xs) = snd $ consumeCompletionResponse limit $ combine xs
       where
         limit = maxCompletions conf
         combine :: [List CompletionItem |? CompletionList] -> ((List CompletionItem) |? CompletionList)
@@ -167,11 +171,11 @@ instance PluginMethod TextDocumentCompletion where
 
 instance PluginMethod TextDocumentFormatting where
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
-  combineResponses _ _ _ _ _ (x :| _) = x
+  combineResponses _ _ _ _ (x :| _) = x
 
 instance PluginMethod TextDocumentRangeFormatting where
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
-  combineResponses _ _ _ _ _ (x :| _) = x
+  combineResponses _ _ _ _ (x :| _) = x
 
 -- | Methods which have a PluginMethod instance
 data IdeMethod (m :: Method FromClient Request) = PluginMethod m => IdeMethod (SMethod m)
@@ -315,14 +319,35 @@ data FallbackCodeActionParams =
 
 -- ---------------------------------------------------------------------
 
-mkLspCommand' :: T.Text -> PluginId -> CommandId -> T.Text -> Maybe [Value] -> Command
-mkLspCommand' pid plid cn title args' = Command title cmdId args
+{-# NOINLINE pROCESS_ID #-}
+pROCESS_ID :: T.Text
+pROCESS_ID = unsafePerformIO getPid
+
+mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [Value] -> Command
+mkLspCommand plid cn title args' = Command title cmdId args
   where
-    cmdId = mkLspCmdId pid plid cn
+    cmdId = mkLspCmdId pROCESS_ID plid cn
     args = List <$> args'
 
 mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
 mkLspCmdId pid (PluginId plid) (CommandId cid)
   = pid <> ":" <> plid <> ":" <> cid
 
+-- | Get the operating system process id for the running server
+-- instance. This should be the same for the lifetime of the instance,
+-- and different from that of any other currently running instance.
+getPid :: IO T.Text
+getPid = T.pack . show <$> getProcessID
 
+getProcessID :: IO Int
+installSigUsr1Handler :: IO () -> IO ()
+
+#ifdef mingw32_HOST_OS
+getProcessID = fromIntegral <$> P.getCurrentProcessId
+installSigUsr1Handler _ = return ()
+
+#else
+getProcessID = fromIntegral <$> P.getProcessID
+
+installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
+#endif

@@ -151,8 +151,7 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
         range = diag ^. J.range
 
         mkAction methodGroup
-          = mkCodeAction title
-            <$> mkLspCommand plId "addMinimalMethodPlaceholders" title (Just cmdParams)
+          = pure $ mkCodeAction title $ mkLspCommand plId "addMinimalMethodPlaceholders" title (Just cmdParams)
           where
             title = mkTitle methodGroup
             cmdParams = mkCmdParams methodGroup

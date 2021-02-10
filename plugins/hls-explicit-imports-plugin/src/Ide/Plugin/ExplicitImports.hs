@@ -245,7 +245,7 @@ generateLens pId uri importEdit@TextEdit {_range} = do
       -- the command argument is simply the edit
       _arguments = Just [toJSON $ ImportCommandParams edit]
   -- create the command
-  _command <- Just <$> mkLspCommand pId importCommandId title _arguments
+      _command = Just $ mkLspCommand pId importCommandId title _arguments
   -- create and return the code lens
   return $ Just CodeLens {..}
 
