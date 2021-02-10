@@ -282,7 +282,11 @@ disallowing reason (S.fromList -> ns) =
 -- | The hypothesis, consisting of local terms and the ambient environment
 -- (impors and class methods.) Hides disallowed values.
 jHypothesis :: Judgement' a -> Hypothesis a
-jHypothesis = Hypothesis . filter (not . isDisallowed . hi_provenance) . unHypothesis . jEntireHypothesis
+jHypothesis
+  = Hypothesis
+  . filter (not . isDisallowed . hi_provenance)
+  . unHypothesis
+  . jEntireHypothesis
 
 
 ------------------------------------------------------------------------------
@@ -294,7 +298,11 @@ jEntireHypothesis = _jHypothesis
 ------------------------------------------------------------------------------
 -- | Just the local hypothesis.
 jLocalHypothesis :: Judgement' a -> Hypothesis a
-jLocalHypothesis = Hypothesis . filter (isLocalHypothesis . hi_provenance) . unHypothesis . jHypothesis
+jLocalHypothesis
+  = Hypothesis
+  . filter (isLocalHypothesis . hi_provenance)
+  . unHypothesis
+  . jHypothesis
 
 
 ------------------------------------------------------------------------------
@@ -322,14 +330,16 @@ hyByName :: Hypothesis a -> Map OccName (HyInfo a)
 hyByName
   = M.fromList
   . fmap (hi_name &&& id)
-  -- . filter (not . isDisallowed . hi_provenance)
   . unHypothesis
 
 
 ------------------------------------------------------------------------------
 -- | Only the hypothesis members which are pattern vals
 jPatHypothesis :: Judgement' a -> Map OccName PatVal
-jPatHypothesis = M.mapMaybe (getPatVal . hi_provenance) . hyByName . jHypothesis
+jPatHypothesis
+  = M.mapMaybe (getPatVal . hi_provenance)
+  . hyByName
+  . jHypothesis
 
 
 getPatVal :: Provenance-> Maybe PatVal

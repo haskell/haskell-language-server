@@ -61,6 +61,8 @@ import           OccName
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
+import Refinery.Tactic (goal)
+import Control.Monad.Error (MonadError(throwError))
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -124,10 +126,19 @@ commandProvider HomomorphismLambdaCase =
 commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto         = const auto
 commandTactic Intros       = const intros
-commandTactic Destruct     = destruct
-commandTactic Homomorphism = homo
+commandTactic Destruct     = useNameFromHypothesis destruct
+commandTactic Homomorphism = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
+
+
+useNameFromHypothesis :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
+useNameFromHypothesis f name = do
+  hy <- jHypothesis <$> goal
+  case M.lookup name $ hyByName hy of
+    Just hi -> f hi
+    Nothing -> throwError $ NotInScope name
+
 
 
 ------------------------------------------------------------------------------
