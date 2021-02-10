@@ -28,7 +28,7 @@ import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionIO (GhcSessionIO))
 import           Development.IDE.Types.Logger   (logInfo, Logger, logDebug)
 import           Development.IDE.Types.Shake    (ValueWithDiagnostics(..), Key (..), Value, Values)
-import           Development.Shake              (Action, actionBracket, liftIO)
+import           Development.Shake              (Action, actionBracket)
 import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
@@ -42,20 +42,24 @@ import Data.ByteString (ByteString)
 import Data.Text.Encoding (encodeUtf8)
 import Ide.Types (PluginId (..))
 import Development.IDE.Types.Location (Uri (..))
+import Control.Monad.IO.Unlift
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
-    :: String -- ^ Message type
+    :: MonadUnliftIO m
+    => String -- ^ Message type
     -> String -- ^ Message label
-    -> (SpanInFlight -> IO a)
-    -> IO a
+    -> (SpanInFlight -> m a)
+    -> m a
 otTracedHandler requestType label act =
   let !name =
         if null label
           then requestType
           else requestType <> ":" <> show label
    -- Add an event so all requests can be quickly seen in the viewer without searching
-   in withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> act sp)
+   in do
+     runInIO <- askRunInIO
+     liftIO $ withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> runInIO (act sp))
 
 otSetUri :: SpanInFlight -> Uri -> IO ()
 otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
@@ -81,14 +85,15 @@ otTracedAction key file success act = actionBracket
         return res)
 
 #if MIN_GHC_API_VERSION(8,8,0)
-otTracedProvider :: PluginId -> ByteString -> IO a -> IO a
+otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 #else
-otTracedProvider :: PluginId -> String -> IO a -> IO a
+otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
 #endif
-otTracedProvider (PluginId pluginName) provider act =
-  withSpan (provider <> " provider") $ \sp -> do
+otTracedProvider (PluginId pluginName) provider act = do
+  runInIO <- askRunInIO
+  liftIO $ withSpan (provider <> " provider") $ \sp -> do
     setTag sp "plugin" (encodeUtf8 pluginName)
-    act
+    runInIO act
 
 startTelemetry :: Bool -> Logger -> Var Values -> IO ()
 startTelemetry allTheTime logger stateRef = do
