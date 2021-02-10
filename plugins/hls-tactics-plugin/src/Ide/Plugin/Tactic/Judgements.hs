@@ -309,8 +309,8 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 
 ------------------------------------------------------------------------------
 -- | What names are currently in scope in the hypothesis?
-hyNamesInScope :: Hypothesis a -> [OccName]
-hyNamesInScope = M.keys . hyByName
+hyNamesInScope :: Hypothesis a -> Set OccName
+hyNamesInScope = M.keysSet . hyByName
 
 
 ------------------------------------------------------------------------------

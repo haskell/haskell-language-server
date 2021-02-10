@@ -20,6 +20,7 @@ import           Data.Foldable
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
+import           Data.Set (Set)
 import qualified Data.Set as S
 import           DataCon
 import           Development.IDE.GHC.Compat
@@ -43,7 +44,7 @@ import           Type hiding (Var)
 ------------------------------------------------------------------------------
 -- | Use something in the hypothesis to fill the hole.
 assumption :: TacticsM ()
-assumption = attemptOn allNames assume
+assumption = attemptOn (S.toList . allNames) assume
 
 
 ------------------------------------------------------------------------------
@@ -278,6 +279,6 @@ overAlgebraicTerms =
     M.keys . M.filter (isJust . algebraicTyCon . unCType . hi_type) . hyByName . jHypothesis
 
 
-allNames :: Judgement -> [OccName]
+allNames :: Judgement -> Set OccName
 allNames = hyNamesInScope . jHypothesis
 

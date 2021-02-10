@@ -2,6 +2,8 @@
 
 module Ide.Plugin.Tactic.Naming where
 
+import qualified Data.Set as S
+import Data.Set (Set)
 import           Control.Monad.State.Strict
 import           Data.Bool (bool)
 import           Data.Char
@@ -61,12 +63,12 @@ filterReplace f r = fmap (\a -> bool a r $ f a)
 ------------------------------------------------------------------------------
 -- | Produce a unique, good name for a type.
 mkGoodName
-    :: [OccName]  -- ^ Bindings in scope; used to ensure we don't shadow anything
+    :: Set OccName  -- ^ Bindings in scope; used to ensure we don't shadow anything
     -> Type       -- ^ The type to produce a name for
     -> OccName
 mkGoodName in_scope t =
   let tn = mkTyName t
-   in mkVarOcc $ case elem (mkVarOcc tn) in_scope of
+   in mkVarOcc $ case S.member (mkVarOcc tn) in_scope of
         True -> tn ++ show (length in_scope)
         False -> tn
 
@@ -75,14 +77,14 @@ mkGoodName in_scope t =
 -- | Like 'mkGoodName' but creates several apart names.
 mkManyGoodNames
   :: (Traversable t, Monad m)
-  => [OccName]
+  => Set OccName
   -> t Type
   -> m (t OccName)
 mkManyGoodNames in_scope args =
   flip evalStateT in_scope $ for args $ \at -> do
     in_scope <- get
     let n = mkGoodName in_scope at
-    modify (n :)
+    modify $ S.insert n
     pure n
 
 
