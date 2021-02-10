@@ -1,4 +1,4 @@
-resolver: nightly-2021-01-17
+resolver: nightly-2021-02-06
 
 packages:
   - .
@@ -19,15 +19,12 @@ ghc-options:
   "$everything": -haddock
 
 extra-deps:
-  - apply-refact-0.9.0.0
   - brittany-0.13.1.0
   - Cabal-3.0.2.0
   - clock-0.7.2
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  - git: https://github.com/alanz/ghc-exactprint.git
-    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
   - heapsize-0.3.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5

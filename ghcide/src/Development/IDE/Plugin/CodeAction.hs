@@ -23,10 +23,9 @@ import Development.IDE.GHC.Error
 import Development.IDE.GHC.ExactPrint
 import Development.IDE.Plugin.CodeAction.ExactPrint
 import Development.IDE.Plugin.CodeAction.PositionIndexed
-import Development.IDE.Plugin.CodeAction.RuleTypes
-import Development.IDE.Plugin.CodeAction.Rules
 import Development.IDE.Plugin.TypeLenses (suggestSignature)
 import Development.IDE.Types.Exports
+import Development.IDE.Types.HscEnvEq
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import qualified Data.HashMap.Strict as Map
@@ -63,7 +62,7 @@ import Data.Monoid (Ap(..))
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginRules = rulePackageExports,
+    { pluginRules = mempty,
       pluginCodeActionProvider = Just codeAction
     }
 
@@ -87,7 +86,7 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
             <*> use GhcSession `traverse` mbFile
             <*> use GetAnnotatedParsedSource `traverse` mbFile
     -- This is quite expensive 0.6-0.7s on GHC
-    pkgExports <- runAction "CodeAction:PackageExports" state $ (useNoFile_ . PackageExports) `traverse` env
+    let pkgExports = envPackageExports <$> env
     localExports <- readVar (exportsMap $ shakeExtras state)
     let
       exportsMap = localExports <> fromMaybe mempty pkgExports
@@ -132,7 +131,7 @@ suggestAction packageExports ideOptions parsedModule text df annSource diag =
     [ suggestSignature True diag
     , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
     , rewrite df annSource $ \df ps ->
-        suggestImportDisambiguation df ps diag
+        suggestImportDisambiguation df text ps diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
@@ -694,7 +693,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
           | otherwise = []
         lookupExportMap binding mod
           | Just match <- Map.lookup binding (getExportsMap exportsMap)
-          , [(ident, _)] <- filter (\(_,m) -> mod == m) (Set.toList match)
+          , [ident] <- filter (\ident -> moduleNameText ident == mod) (Set.toList match)
            = Just ident
 
             -- fallback to using GHC suggestion even though it is not always correct
@@ -703,10 +702,15 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
                 { name = binding
                 , rendered = binding
                 , parent = Nothing
-                , isDatacon = False}
+                , isDatacon = False
+                , moduleNameText = mod}
 
-data HidingMode = HideOthers [ModuleTarget]
-                | ToQualified ModuleName
+data HidingMode
+    = HideOthers [ModuleTarget]
+    | ToQualified
+        Bool
+        -- ^ Parenthesised?
+        ModuleName
     deriving (Show)
 
 data ModuleTarget
@@ -730,10 +734,11 @@ isPreludeImplicit = xopt Lang.ImplicitPrelude
 -- | Suggests disambiguation for ambiguous symbols.
 suggestImportDisambiguation ::
     DynFlags ->
+    Maybe T.Text ->
     ParsedSource ->
     Diagnostic ->
     [(T.Text, [Rewrite])]
-suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
+suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
             _message
@@ -759,7 +764,8 @@ suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic 
              = Just $ ImplicitPrelude $
                 maybe [] NE.toList (Map.lookup "Prelude" locDic)
         toModuleTarget mName = ExistingImp <$> Map.lookup mName locDic
-
+        parensed =
+            "(" `T.isPrefixOf` T.strip (textInRange _range txt)
         suggestions symbol mods
             | Just targets <- mapM toModuleTarget mods =
                 sortOn fst
@@ -771,12 +777,12 @@ suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic 
                       modNameText = T.pack $ moduleNameString modName
                 , mode <-
                     HideOthers restImports :
-                    [ ToQualified qual
+                    [ ToQualified parensed qual
                     | ExistingImp imps <- [modTarget]
                     , L _ qual <- nubOrd $ mapMaybe (ideclAs . unLoc)
                         $ NE.toList imps
                     ]
-                    ++ [ToQualified modName
+                    ++ [ToQualified parensed modName
                         | any (occursUnqualified symbol . unLoc)
                             (targetImports modTarget)
                         || case modTarget of
@@ -787,11 +793,12 @@ suggestImportDisambiguation df ps@(L _ HsModule {hsmodImports}) diag@Diagnostic 
             | otherwise = []
         renderUniquify HideOthers {} modName symbol =
             "Use " <> modName <> " for " <> symbol <> ", hiding other imports"
-        renderUniquify (ToQualified qual) _ symbol =
+        renderUniquify (ToQualified _ qual) _ symbol =
             "Replace with qualified: "
                 <> T.pack (moduleNameString qual)
                 <> "."
                 <> symbol
+suggestImportDisambiguation _ _ _ _ = []
 
 occursUnqualified :: T.Text -> ImportDecl GhcPs -> Bool
 occursUnqualified symbol ImportDecl{..}
@@ -832,14 +839,18 @@ disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
                     else hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
-    (ToQualified qualMod) ->
+    (ToQualified parensed qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-         in [ Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df -> do
-                liftParseAST @(HsExpr GhcPs) df $
+         in [ if parensed
+                then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
+                    liftParseAST @(HsExpr GhcPs) df $
                     prettyPrint $
                         HsVar @GhcPs noExtField $
                             L (UnhelpfulSpan "") rdr
+                else Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
+                    liftParseAST @RdrName df $
+                    prettyPrint $ L (UnhelpfulSpan "") rdr
             ]
 
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
@@ -1079,14 +1090,14 @@ constructNewImportSuggestions
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrd
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
-  , (identInfo, m) <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
+  , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
   , canUseIdent thingMissing identInfo
-  , m `notElem` fromMaybe [] notTheseModules
-  , suggestion <- renderNewImport identInfo m
+  , moduleNameText identInfo `notElem` fromMaybe [] notTheseModules
+  , suggestion <- renderNewImport identInfo
   ]
  where
-  renderNewImport :: IdentInfo -> T.Text -> [T.Text]
-  renderNewImport identInfo m
+  renderNewImport :: IdentInfo -> [T.Text]
+  renderNewImport identInfo
     | Just q <- qual
     , asQ <- if q == m then "" else " as " <> q
     = ["import qualified " <> m <> asQ]
@@ -1094,6 +1105,8 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
     = ["import " <> m <> " (" <> renderImportStyle importStyle <> ")"
       | importStyle <- NE.toList $ importStyles identInfo] ++
       ["import " <> m ]
+    where
+        m = moduleNameText identInfo
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
 canUseIdent NotInScopeDataConstructor{} = isDatacon

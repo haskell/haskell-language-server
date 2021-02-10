@@ -35,9 +35,9 @@ let
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)
-                ghc8101 = extended (pkgs.haskell.packages.ghc8101.override sharedOverrides);
                 ghc8102 = extended (pkgs.haskell.packages.ghc8102.override sharedOverrides);
                 ghc8103 = extended (pkgs.haskell.packages.ghc8103.override sharedOverrides);
+                ghc8104 = extended (pkgs.haskell.packages.ghc8104.override sharedOverrides);
             };
         };
         };

@@ -14,7 +14,7 @@ copyright:          The Haskell IDE Team
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
-tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.1 || == 8.10.2 || == 8.10.3
+tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
 extra-source-files:
   README.md
   ChangeLog.md
@@ -67,7 +67,7 @@ library
     , ghcide                >=0.7
     , gitrev
     , haskell-lsp           ^>=0.23
-    , hls-plugin-api        >=0.6
+    , hls-plugin-api        >=0.7
     , hie-bios
     , hiedb
     , hslogger

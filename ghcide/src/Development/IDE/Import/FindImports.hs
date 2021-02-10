@@ -99,7 +99,7 @@ locateModule
     -> [(M.InstalledUnitId, DynFlags)] -- ^ Import directories
     -> [String]                        -- ^ File extensions
     -> (ModuleName -> NormalizedFilePath -> m Bool)  -- ^ does file exist predicate
-    -> Located ModuleName              -- ^ Moudle name
+    -> Located ModuleName              -- ^ Module name
     -> Maybe FastString                -- ^ Package name
     -> Bool                            -- ^ Is boot module
     -> m (Either [FileDiagnostic] Import)

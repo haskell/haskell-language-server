@@ -1,6 +1,6 @@
 # The number of samples to run per experiment.
 # At least 100 is recommended in order to observe space leaks
-samples: 100
+samples: 50
 
 buildTool: cabal
 
@@ -29,11 +29,14 @@ experiments:
     - "edit"
     - "hover"
     - "hover after edit"
+    # - "hover after cradle edit"
     - "getDefinition"
     - "getDefinition after edit"
+    - "completions"
     - "completions after edit"
     - "code actions"
     - "code actions after edit"
+    - "code actions after cradle edit"
     - "documentSymbols after edit"
 
 # An ordered list of versions to analyze
@@ -50,15 +53,22 @@ versions:
 #    parent: <tag/branch/commithash> # version to compare with in .diff graphs
 
 
-# - v0.0.5
-# - v0.0.6
-# - v0.1.0
-# - v0.2.0
-# - v0.3.0
-# - v0.4.0
-# - v0.5.0
-# - v0.6.0
-# - v0.7.0
-# - v0.7.1
+# - ghcide-v0.0.5
+# - ghcide-v0.0.6
+# - ghcide-v0.1.0
+# - ghcide-v0.2.0
+# - ghcide-v0.3.0
+# - ghcide-v0.4.0
+# - ghcide-v0.5.0
+# - ghcide-v0.6.0
+# - ghcide-v0.7.0
+# - ghcide-v0.7.1
+# - ghcide-v0.7.2
+# - ghcide-v0.7.3
+# - ghcide-v0.7.4
 - upstream: origin/master
 - HEAD
+
+# Heap profile interval in seconds (+RTS -i)
+# Comment out to disable heap profiling
+profileInterval: 1

@@ -7,6 +7,7 @@ The logic for setting up a ghcide session by tapping into hie-bios.
 -}
 module Development.IDE.Session
   (SessionLoadingOptions(..)
+  ,CacheDirs(..)
   ,defaultLoadingOptions
   ,loadSession
   ,loadSessionWithOptions
@@ -49,6 +50,7 @@ import Development.IDE.GHC.Util
 import Development.IDE.Session.VersionCheck
 import Development.IDE.Types.Diagnostics
 import Development.IDE.Types.Exports
+import Development.IDE.Types.HscEnvEq (HscEnvEq, newHscEnvEqPreserveImportPaths, newHscEnvEq)
 import Development.IDE.Types.Location
 import Development.IDE.Types.Logger
 import Development.IDE.Types.Options

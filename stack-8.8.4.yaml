@@ -1,4 +1,4 @@
-resolver: lts-16.25
+resolver: lts-16.31 # last 8.8.4 lts
 
 packages:
   - .
@@ -28,11 +28,7 @@ extra-deps:
   - constrained-dynamic-0.1.0.0
   - floskell-0.10.4
   - fourmolu-0.3.0.0
-  # - ghc-exactprint-0.6.3.3
-  - git: https://github.com/alanz/ghc-exactprint.git
-    commit: 6748e24da18a6cea985d20cc3e1e7920cb743795
-  - ghc-lib-8.10.3.20201220
-  - ghc-lib-parser-8.10.3.20201220
+  - ghc-exactprint-0.6.3.4
   - ghc-trace-events-0.1.2.1
   - haskell-lsp-0.23.0.0
   - haskell-lsp-types-0.23.0.0
@@ -56,7 +52,6 @@ extra-deps:
   - semigroups-0.18.5
   - stylish-haskell-0.12.2.0
   - temporary-1.2.1.1
-  - uniplate-1.6.13
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
   - hiedb-0.3.0.1
   - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002

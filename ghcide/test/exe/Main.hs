@@ -1483,25 +1483,25 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         [ testCase "AVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use AVec for fromList, hiding other imports"
-                "HideFunction.hs.expected.fromList.A"
+                "HideFunction.expected.fromList.A.hs"
         , testCase "BVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use BVec for fromList, hiding other imports"
-                "HideFunction.hs.expected.fromList.B"
+                "HideFunction.expected.fromList.B.hs"
         ]
     , testGroup "(++)"
         [ testCase "EVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use EVec for ++, hiding other imports"
-                "HideFunction.hs.expected.append.E"
+                "HideFunction.expected.append.E.hs"
         , testCase "Prelude" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Use Prelude for ++, hiding other imports"
-                "HideFunction.hs.expected.append.Prelude"
+                "HideFunction.expected.append.Prelude.hs"
         , testCase "AVec, indented" $
             compareTwo "HidePreludeIndented.hs" [(3,8)]
             "Use AVec for ++, hiding other imports"
-            "HidePreludeIndented.hs.expected"
+            "HidePreludeIndented.expected.hs"
 
         ]
     , testGroup "Vec (type)"
@@ -1509,12 +1509,12 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareTwo
                 "HideType.hs" [(8,15)]
                 "Use AVec for Vec, hiding other imports"
-                "HideType.hs.expected.A"
+                "HideType.expected.A.hs"
         , testCase "EVec" $
             compareTwo
                 "HideType.hs" [(8,15)]
                 "Use EVec for Vec, hiding other imports"
-                "HideType.hs.expected.E"
+                "HideType.expected.E.hs"
         ]
     ]
   , testGroup "Qualify strategy"
@@ -1536,13 +1536,28 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         [ testCase "EVec" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: E.fromList"
-                "HideFunction.hs.expected.qualified.fromList.E"
+                "HideFunction.expected.qualified.fromList.E.hs"
         ]
     , testGroup "(++)"
-        [ testCase "Prelude" $
+        [ testCase "Prelude, parensed" $
             compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: Prelude.++"
-                "HideFunction.hs.expected.qualified.append.Prelude"
+                "HideFunction.expected.qualified.append.Prelude.hs"
+        , testCase "Prelude, infix" $
+            compareTwo
+                "HideQualifyInfix.hs" [(4,19)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifyInfix.expected.hs"
+        , testCase "Prelude, left section" $
+            compareTwo
+                "HideQualifySectionLeft.hs" [(4,15)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifySectionLeft.expected.hs"
+        , testCase "Prelude, right section" $
+            compareTwo
+                "HideQualifySectionRight.hs" [(4,18)]
+                "Replace with qualified: Prelude.++"
+                "HideQualifySectionRight.expected.hs"
         ]
     ]
   ]
@@ -3133,7 +3148,6 @@ checkFileCompiles fp diag =
 
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
-  ignoreTest8101 "GHC #18070" $
   ignoreInWindowsForGHC88And810 $
   testSessionWithExtraFiles "plugin" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
@@ -3148,7 +3162,6 @@ pluginSimpleTests =
 
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
-  ignoreTest8101 "GHC #18070" $
   ignoreInWindowsForGHC88And810 $
   testSessionWithExtraFiles "plugin" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
@@ -3403,7 +3416,8 @@ completionTest name src pos expected = testSessionWait name $ do
     let compls' = [ (_label, _kind, _insertText, _additionalTextEdits) | CompletionItem{..} <- compls]
     liftIO $ do
         let emptyToMaybe x = if T.null x then Nothing else Just x
-        compls' @?= [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
+        sortOn (Lens.view Lens._1) compls' @?=
+            sortOn (Lens.view Lens._1) [ (l, Just k, emptyToMaybe t, at) | (l,k,t,_,_,at) <- expected]
         forM_ (zip compls expected) $ \(CompletionItem{..}, (_,_,_,expectedSig, expectedDocs, _)) -> do
             when expectedSig $
                 assertBool ("Missing type signature: " <> T.unpack _label) (isJust _detail)
@@ -3438,6 +3452,26 @@ completionCommandTest name src pos wanted expected = testSession name $ do
           else do
             expectMessages @ApplyWorkspaceEditRequest 1 $ \edit ->
               liftIO $ assertFailure $ "Expected no edit but got: " <> show edit
+
+completionNoCommandTest ::
+  String ->
+  [T.Text] ->
+  Position ->
+  T.Text ->
+  TestTree
+completionNoCommandTest name src pos wanted = testSession name $ do
+  docId <- createDoc "A.hs" "haskell" (T.unlines src)
+  _ <- waitForDiagnostics
+  compls <- getCompletions docId pos
+  let wantedC = find ( \case
+            CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
+            _ -> False
+            ) compls
+  case wantedC of
+    Nothing ->
+      liftIO $ assertFailure $ "Cannot find expected completion in: " <> show [_label | CompletionItem {_label} <- compls]
+    Just CompletionItem{..} -> liftIO . assertBool ("Expected no command but got: " <> show _command) $ null _command
+
 
 topLevelCompletionTests :: [TestTree]
 topLevelCompletionTests = [
@@ -3654,17 +3688,26 @@ nonLocalCompletionTests =
             "ZeroPad"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
         , completionCommandTest
-            "parent imported"
+            "parent imported abs"
             ["module A where", "import Text.Printf (FormatAdjustment)", "ZeroPad"]
             (Position 2 4)
             "ZeroPad"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
-        , completionCommandTest
+        , completionNoCommandTest
+            "parent imported all"
+            ["module A where", "import Text.Printf (FormatAdjustment (..))", "ZeroPad"]
+            (Position 2 4)
+            "ZeroPad"
+        , completionNoCommandTest
             "already imported"
             ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
             (Position 2 4)
             "ZeroPad"
-            ["module A where", "import Text.Printf (FormatAdjustment (ZeroPad))", "ZeroPad"]
+        , completionNoCommandTest
+            "function from Prelude"
+            ["module A where", "import Data.Maybe ()", "Nothing"]
+            (Position 2 4)
+            "Nothing"
         ]
       , testGroup "Record completion"
         [ completionCommandTest
@@ -3679,12 +3722,11 @@ nonLocalCompletionTests =
             (Position 2 10)
             "FormatParse {"
             ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
-        , completionCommandTest
+        , completionNoCommandTest
             "already imported"
             ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
             (Position 2 10)
             "FormatParse {"
-            ["module A where", "import Text.Printf (FormatParse (FormatParse))", "FormatParse"]
         ]
       ],
       -- we need this test to make sure the ghcide completions module does not return completions for language pragmas. this functionality is turned on in hls
@@ -3981,11 +4023,6 @@ pattern R x y x' y' = Range (Position x y) (Position x' y')
 
 xfail :: TestTree -> String -> TestTree
 xfail = flip expectFailBecause
-
-ignoreTest8101 :: String -> TestTree -> TestTree
-ignoreTest8101
-  | GHC_API_VERSION == ("8.10.1" :: String) = ignoreTestBecause
-  | otherwise = const id
 
 ignoreInWindowsBecause :: String -> TestTree -> TestTree
 ignoreInWindowsBecause = if isWindows then ignoreTestBecause else (\_ x -> x)
