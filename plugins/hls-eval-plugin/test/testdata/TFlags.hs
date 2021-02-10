@@ -50,9 +50,11 @@ It still works
 >>> import Data.Proxy
 >>> :set -XPolyKinds
 >>> :t Proxy
+Proxy :: forall k (t :: k). Proxy t
 
->>> :set -fprint-explicit-foralls -fprint-explicit-kinds
+>>> :set -fprint-explicit-foralls
 >>> :t Proxy
+Proxy :: forall {k} {t :: k}. Proxy t
 -}
 
 {- Invalid option/flags are reported, but valid ones will be reflected
