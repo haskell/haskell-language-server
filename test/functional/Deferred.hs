@@ -94,7 +94,7 @@ tests = testGroup "deferred responses" [
      testCase "instantly respond to failed modules with no cache" $ runSession hlsCommand fullCaps "test/testdata" $ do
         doc <- openDoc "FuncTestFail.hs" "haskell"
         defs <- getDefinitions doc (Position 1 11)
-        liftIO $ defs @?= InL []
+        liftIO $ defs @?= InR []
 
     -- TODO: the benefits of caching parsed modules is doubted.
     -- TODO: add issue link

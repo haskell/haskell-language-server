@@ -87,7 +87,7 @@ data CollectedProgressNotification
  the titles we see are those we expect.
 -}
 expectProgressReports :: [Text] -> Session ()
-expectProgressReports = expectProgressReports' []
+expectProgressReports xs = expectProgressReports' [] xs
   where
     expectProgressReports' [] [] = return ()
     expectProgressReports' tokens expectedTitles =
@@ -97,7 +97,7 @@ expectProgressReports = expectProgressReports' []
                 CreateM msg ->
                     expectProgressReports' (token msg : tokens) expectedTitles
                 BeginM msg -> do
-                    liftIO $ title msg `expectElem` ("Indexing references from:":expectedTitles)
+                    liftIO $ title msg `expectElem` ("Indexing references from:":xs)
                     liftIO $ token msg `expectElem` tokens
                     expectProgressReports' tokens (delete (title msg) expectedTitles)
                 ProgressM msg -> do

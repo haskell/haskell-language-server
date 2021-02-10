@@ -6,9 +6,7 @@
 #include "ghc-api-version.h"
 
 module Development.IDE.LSP.Outline
-  ( setHandlersOutline
-    -- * For haskell-language-server
-  , moduleOutline
+  ( moduleOutline
   )
 where
 
@@ -32,9 +30,6 @@ import           Outputable                     ( Outputable
                                                 , ppr
                                                 , showSDocUnsafe
                                                 )
-
-setHandlersOutline :: LSP.Handlers (ServerM c)
-setHandlersOutline = requestHandler STextDocumentDocumentSymbol moduleOutline
 
 moduleOutline
   :: IdeState -> DocumentSymbolParams -> LSP.LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))

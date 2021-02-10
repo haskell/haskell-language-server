@@ -7,10 +7,12 @@ import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text.Encoding as T
 import Language.LSP.Test
 import Language.LSP.Types
+import qualified Language.LSP.Types.Lens as LSP
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
+import Control.Lens ((^.))
 
 #if AGPL
 import qualified Data.Text.IO as T
@@ -52,13 +54,8 @@ providerTests :: TestTree
 providerTests = testGroup "formatting provider" [
     testCase "respects none" $ runSessionWithConfig (formatConfig "none") hlsCommand fullCaps "test/testdata/format" $ do
         doc <- openDoc "Format.hs" "haskell"
-        orig <- documentContents doc
-
-        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-        documentContents doc >>= liftIO . (@?= orig)
-
-        formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 1 0) (Position 3 10))
-        documentContents doc >>= liftIO . (@?= orig)
+        resp <- request STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        liftIO $ resp ^. LSP.result @?= (Left $ ResponseError InvalidRequest "No plugin enabled for STextDocumentFormatting, available: []" Nothing)
 
 #if AGPL
     , testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do

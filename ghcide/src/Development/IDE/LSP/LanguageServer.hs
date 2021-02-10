@@ -94,7 +94,6 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
 
     let ideHandlers = mconcat
           [ setIdeHandlers
-          , setHandlersOutline
           , userHandlers
           , setHandlersNotifications -- absolutely critical, join them with user notifications
           ]

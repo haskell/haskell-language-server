@@ -189,7 +189,7 @@ hlintTests = testGroup "hlint suggestions" [
 
             executeCodeAction (fromJust ca)
 
-            contents <- getDocumentEdit doc
+            contents <- skipManyTill anyMessage $ getDocumentEdit doc
             liftIO $ contents @?= T.unlines expected
 
         expectedLambdaCase = [ "module ApplyRefact1 where", ""
@@ -224,6 +224,7 @@ renameTests = testGroup "rename suggestions" [
         cars <- getAllCodeActions doc
         replaceButStrLn <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
         executeCommand replaceButStrLn
+        _ <- anyRequest
 
         x:_ <- T.lines <$> documentContents doc
         liftIO $ x @?= "main = putStrLn \"hello\""
@@ -243,6 +244,7 @@ renameTests = testGroup "rename suggestions" [
                 not ("documentChanges" `HM.member` editParams) @? "Doesn't contain documentChanges"
 
             executeCommand cmd
+            _ <- anyRequest
 
             x1:x2:_ <- T.lines <$> documentContents doc
             liftIO $
@@ -376,6 +378,7 @@ redundantImportTests = testGroup "redundant import code actions" [
         _   <- waitForDiagnosticsFromSource doc "typecheck"
         _ : InL cmd : _ <- getAllCodeActions doc
         executeCommand cmd
+        _ <- anyRequest
         contents <- documentContents doc
         liftIO $ T.lines contents @?=
                 [ "{-# OPTIONS_GHC -Wunused-imports #-}"
