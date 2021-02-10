@@ -1676,51 +1676,51 @@ suggestHideShadowTests =
             , "import C hiding ((++))"
             , "f (++) = (++)"
             ]
-        ]
-    , testOneCodeAction
-        "hide from Prelude"
-        "Hide ++ from Prelude"
-        (2, 2)
-        (2, 6)
-        [ "import B"
-        , "import C"
-        , "f (++) = (++)"
-        ]
-        [ "import B"
-        , "import C"
-        , "import Prelude hiding ((++))"
-        , "f (++) = (++)"
-        ]
-    , testMultiCodeActions
-        "manual hide all"
-        [ "Hide ++ from Prelude"
-        , "Hide ++ from C"
-        , "Hide ++ from B"
-        ]
-        (2, 2)
-        (2, 6)
-        [ "import B"
-        , "import C"
-        , "f (++) = (++)"
-        ]
-        [ "import B hiding ((++))"
-        , "import C hiding ((++))"
-        , "import Prelude hiding ((++))"
-        , "f (++) = (++)"
-        ]
-    , testOneCodeAction
-        "auto hide all"
-        ""
-        (2, 2)
-        (2, 6)
-        [ "import B"
-        , "import C"
-        , "f (++) = (++)"
-        ]
-        [ "import B hiding ((++))"
-        , "import C ((++))"
-        , "import Prelude hiding ((++))"
-        , "f (++) = (++)"
+        , testOneCodeAction
+            "hide from Prelude"
+            "Hide ++ from Prelude"
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B"
+            , "import C"
+            , "import Prelude hiding ((++))"
+            , "f (++) = (++)"
+            ]
+        , testMultiCodeActions
+            "manual hide all"
+            [ "Hide ++ from Prelude"
+            , "Hide ++ from C"
+            , "Hide ++ from B"
+            ]
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B hiding ((++))"
+            , "import C hiding ((++))"
+            , "import Prelude hiding ((++))"
+            , "f (++) = (++)"
+            ]
+        , testOneCodeAction
+            "auto hide all"
+            "Hide ++ from all occurence imports"
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B hiding ((++))"
+            , "import C ((++))"
+            , "import Prelude hiding ((++))"
+            , "f (++) = (++)"
+            ]
         ]
     ]
  where
