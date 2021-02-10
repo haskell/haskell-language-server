@@ -216,10 +216,10 @@ instance Uniquable a => Ord (Uniquely a) where
 
 
 newtype Hypothesis a = Hypothesis
-  { hyByName :: Map OccName (HyInfo a)
+  { unHypothesis :: [HyInfo a]
   }
   deriving stock (Functor, Eq, Show, Generic, Ord)
-  deriving (Semigroup, Monoid) via Map OccName (HyInfo a)
+  deriving newtype (Semigroup, Monoid)
 
 
 ------------------------------------------------------------------------------

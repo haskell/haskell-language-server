@@ -27,8 +27,10 @@ module Ide.Plugin.Tactic.Judgements
   , hypothesisFromBindings
   , isTopLevel
   , hyNamesInScope
+  , hyByName
   ) where
 
+import Control.Arrow
 import           Control.Lens hiding (Context)
 import           Data.Bool
 import           Data.Char
@@ -58,12 +60,11 @@ hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
 buildHypothesis :: [(Name, Maybe Type)] -> Hypothesis CType
 buildHypothesis
   = Hypothesis
-  . M.fromList
   . mapMaybe go
   where
     go (occName -> occ, t)
       | Just ty <- t
-      , isAlpha . head . occNameString $ occ = Just (occ, HyInfo occ UserPrv $ CType ty)
+      , isAlpha . head . occNameString $ occ = Just $ HyInfo occ UserPrv $ CType ty
       | otherwise = Nothing
 
 
@@ -98,8 +99,8 @@ introducing
     -> Judgement' a
     -> Judgement' a
 introducing f ns =
-  field @"_jHypothesis" <>~ Hypothesis (M.fromList (zip [0..] ns <&>
-    \(pos, (name, ty)) -> (name, HyInfo name (f pos) ty)))
+  field @"_jHypothesis" <>~ (Hypothesis $ zip [0..] ns <&>
+    \(pos, (name, ty)) -> HyInfo name (f pos) ty)
 
 
 ------------------------------------------------------------------------------
@@ -270,8 +271,8 @@ introducingPat scrutinee dc ns jdg
 -- them from 'jHypothesis', but not from 'jEntireHypothesis'.
 disallowing :: DisallowReason -> [OccName] -> Judgement' a -> Judgement' a
 disallowing reason (S.fromList -> ns) =
-  field @"_jHypothesis" %~ (\z -> Hypothesis . flip M.mapWithKey (hyByName z) $ \name hi ->
-    case S.member name ns of
+  field @"_jHypothesis" %~ (\z -> Hypothesis . flip fmap (unHypothesis z) $ \hi ->
+    case S.member (hi_name hi) ns of
       True -> overProvenance (DisallowedPrv reason) hi
       False -> hi
                            )
@@ -281,7 +282,7 @@ disallowing reason (S.fromList -> ns) =
 -- | The hypothesis, consisting of local terms and the ambient environment
 -- (impors and class methods.) Hides disallowed values.
 jHypothesis :: Judgement' a -> Hypothesis a
-jHypothesis = Hypothesis . M.filter (not . isDisallowed . hi_provenance) . hyByName . jEntireHypothesis
+jHypothesis = Hypothesis . filter (not . isDisallowed . hi_provenance) . unHypothesis . jEntireHypothesis
 
 
 ------------------------------------------------------------------------------
@@ -293,7 +294,7 @@ jEntireHypothesis = _jHypothesis
 ------------------------------------------------------------------------------
 -- | Just the local hypothesis.
 jLocalHypothesis :: Judgement' a -> Hypothesis a
-jLocalHypothesis = Hypothesis . M.filter (isLocalHypothesis . hi_provenance) . hyByName . jHypothesis
+jLocalHypothesis = Hypothesis . filter (isLocalHypothesis . hi_provenance) . unHypothesis . jHypothesis
 
 
 ------------------------------------------------------------------------------
@@ -311,6 +312,9 @@ unsetIsTopHole = field @"_jIsTopHole" .~ False
 -- | What names are currently in scope in the hypothesis?
 hyNamesInScope :: Hypothesis a -> Set OccName
 hyNamesInScope = M.keysSet . hyByName
+
+hyByName :: Hypothesis a -> Map OccName (HyInfo a)
+hyByName = M.fromList . fmap (hi_name &&& id) . unHypothesis
 
 
 ------------------------------------------------------------------------------

@@ -278,7 +278,7 @@ judgementForHole state nfp range = do
         HieFresh ->
           pure ( resulting_range
                , mkFirstJudgement
-                   (local_hy <> Hypothesis cls_hy)
+                   (local_hy <> cls_hy)
                    (isRhsHole rss tcs)
                    goal
                , ctx
@@ -290,8 +290,8 @@ spliceProvenance
     -> Hypothesis a
     -> Hypothesis a
 spliceProvenance provs x =
-  Hypothesis $ flip M.mapWithKey (hyByName x) $ \name hi ->
-    overProvenance (maybe id const $ M.lookup name provs) hi
+  Hypothesis $ flip fmap (unHypothesis x) $ \hi ->
+    overProvenance (maybe id const $ M.lookup (hi_name hi) provs) hi
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
