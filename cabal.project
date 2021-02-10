@@ -12,10 +12,6 @@ packages:
          ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
-         /home/zubin/hie-lsp/haskell-lsp/
-         /home/zubin/hie-lsp/haskell-lsp/lsp-types
-         /home/zubin/hie-lsp/haskell-lsp/lsp-test
-
 tests: true
 
 package *
@@ -25,6 +21,22 @@ package haskell-language-server
   test-show-details: direct
 package ghcide
   test-show-details: direct
+
+source-repository-package
+    type: git
+    location: https://github.com/alanz/lsp.git
+    tag: a720ad10577e0c9151da40ff2ff43b18241814ae
+    subdir: lsp-types
+
+source-repository-package
+    type: git
+    location: https://github.com/alanz/lsp.git
+    tag: a720ad10577e0c9151da40ff2ff43b18241814ae
+
+source-repository-package
+    type: git
+    location: https://github.com/wz1000/lsp-test.git
+    tag: 7cef3a40e4774016c464d43b2a79c2bd6ef084d3
 
 write-ghc-environment-files: never
 
