@@ -29,6 +29,9 @@ mkTyName (tcSplitFunTys -> (_:_, b))
 -- eg. mkTyName (Either A B) = "eab"
 mkTyName (splitTyConApp_maybe -> Just (c, args))
   = mkTyConName c ++ foldMap mkTyName args
+-- eg. mkTyName (f a) = "fa"
+mkTyName (tcSplitAppTys -> (t, args@(_:_)))
+  = mkTyName t ++ foldMap mkTyName args
 -- eg. mkTyName a = "a"
 mkTyName (getTyVar_maybe -> Just tv)
   = occNameString $ occName tv
