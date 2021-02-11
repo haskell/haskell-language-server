@@ -1,6 +1,5 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeOperators #-}
 
 -- | Exposes the ghcide features as an HLS plugin
 module Development.IDE.Plugin.HLS.GhcIde

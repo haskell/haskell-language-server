@@ -2,8 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE DataKinds #-}
-{-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults -fno-warn-unused-binds -fno-warn-unused-imports #-}
+{-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults -fno-warn-unused-binds -fno-warn-unused-imports -Wno-unticked-promoted-constructors #-}
 
 {- | Keep the module name in sync with its file path.
 

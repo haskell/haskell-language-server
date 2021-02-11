@@ -32,3 +32,5 @@ library
                   , unordered-containers
 
   default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators
+  ghc-options: -Wno-unticked-promoted-constructors

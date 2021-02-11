@@ -8,7 +8,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PackageImports    #-}
 {-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE DataKinds         #-}
+{-# OPTIONS_GHC -Wno-orphans   #-}
 
 module Ide.Plugin.Hlint
   (

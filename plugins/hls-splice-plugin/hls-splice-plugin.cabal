@@ -12,7 +12,7 @@ build-type:         Simple
 
 library
   exposed-modules:  Ide.Plugin.Splice
-  ghc-options:      -Wall
+  ghc-options:      -Wall -Wno-unticked-promoted-constructors
   other-modules:    Ide.Plugin.Splice.Types
   hs-source-dirs:   src
   build-depends:    aeson
@@ -35,3 +35,4 @@ library
                   , unliftio-core
 
   default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators

@@ -21,7 +21,7 @@ import qualified EnumSet as S
 import GHC (DynFlags, moduleNameString)
 import GHC.LanguageExtensions.Type (Extension (Cpp))
 import GhcPlugins (HscEnv (hsc_dflags))
-import Ide.PluginUtils (responseError, makeDiffTextEdit)
+import Ide.PluginUtils (makeDiffTextEdit)
 
 import Ide.Types
 import Language.LSP.Server

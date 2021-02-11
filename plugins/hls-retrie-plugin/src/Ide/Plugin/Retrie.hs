@@ -10,7 +10,6 @@
 {-# LANGUAGE StandaloneDeriving  #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE DataKinds           #-}
 
 {-# OPTIONS -Wno-orphans #-}
 #include "ghc-api-version.h"

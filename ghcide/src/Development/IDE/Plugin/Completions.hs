@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP          #-}
-{-# LANGUAGE DataKinds    #-}
 {-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
 #include "ghc-api-version.h"

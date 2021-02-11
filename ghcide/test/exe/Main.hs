@@ -4724,7 +4724,7 @@ referenceTestSession name thisDoc docs' f = testSessionWithExtraFiles "reference
     loop [] = pure ()
     loop docs = do
       doc <- skipManyTill anyMessage $ satisfyMaybe $ \case
-          FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess (NotificationMessage{_params = fp})) -> do
+          FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
             A.Success fp' <- pure $ fromJSON fp
             find (fp' ==) docs
           _ -> Nothing

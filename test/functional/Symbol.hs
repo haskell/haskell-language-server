@@ -12,7 +12,6 @@ import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
-import Debug.Trace
 
 tests :: TestTree
 tests = testGroup "document symbols" [

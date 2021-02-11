@@ -6,9 +6,14 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
-module Development.IDE.LSP.Server where
+module Development.IDE.LSP.Server
+  ( ReactorMessage(..)
+  , ReactorChan
+  , ServerM
+  , requestHandler
+  , notificationHandler
+  ) where
 
 import Language.LSP.Server (LspM, Handlers)
 import Language.LSP.Types

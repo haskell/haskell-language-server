@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DataKinds #-}
 #include "ghc-api-version.h"
 module Development.IDE.Core.Tracing
     ( otTracedHandler

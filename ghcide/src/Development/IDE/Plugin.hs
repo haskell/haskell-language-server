@@ -1,8 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE GADTs      #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-module Development.IDE.Plugin where
+module Development.IDE.Plugin ( Plugin(..) ) where
 
 import Data.Default
 import Development.Shake

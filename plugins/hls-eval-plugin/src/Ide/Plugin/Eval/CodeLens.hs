@@ -12,7 +12,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
@@ -61,17 +60,11 @@ import Development.IDE
       GetParsedModuleWithComments (..),
       HscEnvEq,
       IdeState,
-      List (List),
-      NormalizedFilePath,
-      Range (Range),
-      Uri,
       evalGhcEnv,
-      fromNormalizedFilePath,
       hscEnvWithImportPaths,
       runAction,
       textToStringBuffer,
       toNormalizedFilePath',
-      toNormalizedUri,
       uriToFilePath',
       useWithStale_,
       prettyPrint,
@@ -168,7 +161,6 @@ import Ide.Plugin.Eval.Util
       response',
       timed,
     )
-import Ide.PluginUtils (mkLspCommand)
 import Ide.Types
 import Language.LSP.Server
 import Language.LSP.Types

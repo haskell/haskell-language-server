@@ -4,9 +4,7 @@
 {-# LANGUAGE ExistentialQuantification  #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
@@ -142,7 +140,7 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
             liftIO $ logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
             liftIO $ registerIdeConfiguration (shakeExtras ide) initConfig
 
-            _ <- flip forkFinally (const $ exitClientMsg) $ forever $ do
+            _ <- flip forkFinally (const exitClientMsg) $ forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled

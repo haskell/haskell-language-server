@@ -64,9 +64,10 @@ library
 
     cpp-options:   -DHLINT_ON_GHC_LIB
 
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
+  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror
 
   default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators

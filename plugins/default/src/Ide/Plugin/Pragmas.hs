@@ -3,7 +3,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE DataKinds             #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
 module Ide.Plugin.Pragmas

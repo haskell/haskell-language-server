@@ -39,7 +39,7 @@ library
     Ide.Plugin.Tactic.TestTypes
 
   ghc-options:
-    -Wno-name-shadowing -Wredundant-constraints
+    -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -70,6 +70,7 @@ library
     , deepseq
 
   default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators
 
 test-suite tests
   type: exitcode-stdio-1.0

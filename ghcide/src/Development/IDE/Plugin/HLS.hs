@@ -1,6 +1,4 @@
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
 module Development.IDE.Plugin.HLS
@@ -35,6 +33,7 @@ import           Data.Dependent.Sum
 import Data.List.NonEmpty (nonEmpty,NonEmpty,toList)
 import UnliftIO (MonadUnliftIO)
 import Data.String
+import Data.Bifunctor
 
 -- ---------------------------------------------------------------------
 --
@@ -50,7 +49,7 @@ asGhcIdePlugin mp =
 
         mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> b) -> Plugin Config
         mkPlugin maker selector =
-          case map (\(pid, p) -> (pid, selector p)) ls of
+          case map (second selector) ls of
             -- If there are no plugins that provide a descriptor, use mempty to
             -- create the plugin – otherwise we we end up declaring handlers for
             -- capabilities that there are no plugins for
@@ -173,7 +172,7 @@ combineErrors xs = ResponseError InternalError (T.pack (show xs)) Nothing
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeHandler (m :: J.Method FromClient Request)
-  = IdeHandler [(PluginId,(IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m)))))]
+  = IdeHandler [(PluginId,IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))]
 
 -- | Combine the 'PluginHandlers' for all plugins
 newtype IdeHandlers = IdeHandlers (DMap IdeMethod IdeHandler)

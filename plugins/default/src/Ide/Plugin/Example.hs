@@ -7,7 +7,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Ide.Plugin.Example

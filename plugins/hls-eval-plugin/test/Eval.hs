@@ -11,7 +11,6 @@ module Eval (
 import Control.Applicative.Combinators (
     skipManyTill
  )
-import Data.Function
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Data.Text as T

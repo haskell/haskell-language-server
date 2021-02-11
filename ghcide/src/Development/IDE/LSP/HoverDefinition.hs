@@ -2,10 +2,6 @@
 -- SPDX-License-Identifier: Apache-2.0
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs      #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ViewPatterns #-}
 
 -- | Display information on hover.
 module Development.IDE.LSP.HoverDefinition

@@ -7,8 +7,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE ViewPatterns        #-}
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE TypeOperators #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic

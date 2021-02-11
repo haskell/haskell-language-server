@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP #-}
 
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DuplicateRecordFields #-}

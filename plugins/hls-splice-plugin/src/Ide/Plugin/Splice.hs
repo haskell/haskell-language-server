@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -15,7 +14,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE DataKinds #-}
 
 module Ide.Plugin.Splice
     ( descriptor,
@@ -45,7 +43,6 @@ import GHC.Exts
 import GhcMonad
 import GhcPlugins hiding (Var, getLoc, (<>))
 import Ide.Plugin.Splice.Types
-import Ide.PluginUtils (mkLspCommand, responseError)
 import Development.IDE.GHC.ExactPrint
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint (setPrecedingLines, uniqueSrcSpanT)

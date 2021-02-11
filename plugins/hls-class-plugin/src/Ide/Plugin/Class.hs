@@ -4,7 +4,6 @@
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE ViewPatterns      #-}
-{-# LANGUAGE DataKinds         #-}
 module Ide.Plugin.Class
   ( descriptor
   ) where
