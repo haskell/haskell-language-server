@@ -215,10 +215,18 @@ instance Uniquable a => Ord (Uniquely a) where
   compare = nonDetCmpUnique `on` getUnique . getViaUnique
 
 
+newtype Hypothesis a = Hypothesis
+  { unHypothesis :: [HyInfo a]
+  }
+  deriving stock (Functor, Eq, Show, Generic, Ord)
+  deriving newtype (Semigroup, Monoid)
+
+
 ------------------------------------------------------------------------------
 -- | The provenance and type of a hypothesis term.
 data HyInfo a = HyInfo
-  { hi_provenance :: Provenance
+  { hi_name       :: OccName
+  , hi_provenance :: Provenance
   , hi_type       :: a
   }
   deriving stock (Functor, Eq, Show, Generic, Ord)
@@ -227,13 +235,13 @@ data HyInfo a = HyInfo
 ------------------------------------------------------------------------------
 -- | Map a function over the provenance.
 overProvenance :: (Provenance -> Provenance) -> HyInfo a -> HyInfo a
-overProvenance f (HyInfo prv ty) = HyInfo (f prv) ty
+overProvenance f (HyInfo name prv ty) = HyInfo name (f prv) ty
 
 
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis :: !(Map OccName (HyInfo a))
+  { _jHypothesis :: !(Hypothesis a)
   , _jBlacklistDestruct :: !Bool
   , _jWhitelistSplit :: !Bool
   , _jIsTopHole    :: !Bool
