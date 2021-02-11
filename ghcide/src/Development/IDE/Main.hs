@@ -68,15 +68,13 @@ import Development.IDE.Types.Options (
 import Development.IDE.Types.Shake (Key (Key))
 import Development.Shake (action)
 import HIE.Bios.Cradle (findCradle)
-import Ide.Plugin.Config (
-    CheckParents (NeverCheck),
-    Config (checkParents, checkProject),
- )
+import Ide.Plugin.Config (CheckParents (NeverCheck), Config)
 import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 import Ide.Types (IdePlugins)
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages (FromServerMessage)
 import Language.Haskell.LSP.Types (
+    DidChangeConfigurationNotification,
     InitializeRequest,
     LspId (IdInt),
  )
@@ -99,8 +97,10 @@ data Arguments = Arguments
     , argsHlsPlugins :: IdePlugins IdeState
     , argsGhcidePlugin :: Plugin Config  -- ^ Deprecated
     , argsSessionLoadingOptions :: SessionLoadingOptions
-    , argsIdeOptions :: Action IdeGhcSession -> IdeOptions
+    , argsIdeOptions :: Maybe Config -> Action IdeGhcSession -> IdeOptions
     , argsLspOptions :: LSP.Options
+    , argsGetInitialConfig :: InitializeRequest -> Either T.Text Config
+    , argsOnConfigChange :: DidChangeConfigurationNotification -> Either T.Text Config
     }
 
 defArguments :: HieDb -> IndexQueue -> Arguments
@@ -115,8 +115,14 @@ defArguments hiedb hiechan =
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
         , argsSessionLoadingOptions = defaultLoadingOptions
-        , argsIdeOptions = defaultIdeOptions
+        , argsIdeOptions = const defaultIdeOptions
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
+        , argsOnConfigChange = const $ Left "Updating Not supported"
+        , argsGetInitialConfig = \x -> case x ^. params . initializationOptions of
+            Nothing -> Right def
+            Just v -> case J.fromJSON v of
+                J.Error err -> Left $ T.pack err
+                J.Success a -> Right a
         }
 
 defaultMain :: Arguments -> IO ()
@@ -127,22 +133,14 @@ defaultMain Arguments{..} = do
     let hlsPlugin = asGhcIdePlugin argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
-        onInitialConfiguration :: InitializeRequest -> Either T.Text Config
-        onInitialConfiguration x = case x ^. params . initializationOptions of
-            Nothing -> Right def
-            Just v -> case J.fromJSON v of
-                J.Error err -> Left $ T.pack err
-                J.Success a -> Right a
-        onConfigurationChange = const $ Left "Updating Not supported"
-        options = argsLspOptions
-                { LSP.executeCommandCommands = Just hlsCommands
-                }
+        options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
+
     case argFiles of
         Nothing -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-            runLanguageServer options (pluginHandler plugins) onInitialConfiguration onConfigurationChange $ \getLspId event vfs caps wProg wIndefProg getConfig rootPath -> do
+            runLanguageServer options (pluginHandler plugins) argsGetInitialConfig argsOnConfigChange $ \getLspId event vfs caps wProg wIndefProg getConfig rootPath -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
@@ -155,11 +153,9 @@ defaultMain Arguments{..} = do
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
-                config <- fromMaybe def <$> getConfig
-                let options = (argsIdeOptions sessionLoader)
+                config <- getConfig
+                let options = (argsIdeOptions config sessionLoader)
                             { optReportProgress = clientSupportsProgress caps
-                            , optCheckParents = checkParents config
-                            , optCheckProject = checkProject config
                             }
                     rules = argsRules >> pluginRules plugins
                 debouncer <- newAsyncDebouncer
@@ -201,7 +197,7 @@ defaultMain Arguments{..} = do
             debouncer <- newAsyncDebouncer
             let dummyWithProg _ _ f = f (const (pure ()))
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
-            let options = (argsIdeOptions sessionLoader)
+            let options = (argsIdeOptions Nothing sessionLoader)
                         { optCheckParents = NeverCheck
                         , optCheckProject = False
                         }

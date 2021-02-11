@@ -8,7 +8,9 @@ module Main(main) where
 import Arguments ( Arguments'(..), IdeCmd(..), getArguments )
 import Control.Concurrent.Extra ( newLock, withLock )
 import Control.Monad.Extra ( unless, when, whenJust )
+import Data.Default ( Default(def) )
 import Data.List.Extra ( upper )
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Version ( showVersion )
@@ -22,6 +24,7 @@ import Development.IDE.Session (setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.IDE.Types.Options
 import qualified Development.IDE.Main as Main
 import Development.Shake (ShakeOptions(shakeThreads))
+import Ide.Plugin.Config (Config(checkParents, checkProject))
 import Ide.PluginUtils (pluginDescToIdePlugins)
 import HieDb.Run (Options(..), runCommand)
 import Paths_ghcide ( version )
@@ -102,13 +105,15 @@ main = do
                     then Test.plugin
                     else mempty
 
-                ,Main.argsIdeOptions = \sessionLoader ->
+                ,Main.argsIdeOptions = \(fromMaybe def -> config) sessionLoader ->
                     let defOptions = defaultIdeOptions sessionLoader
                     in defOptions
                       { optShakeProfiling = argsShakeProfiling
                       , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                       , optTesting = IdeTesting argsTesting
                       , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
+                      , optCheckParents = checkParents config
+                      , optCheckProject = checkProject config
                       }
                 }
 

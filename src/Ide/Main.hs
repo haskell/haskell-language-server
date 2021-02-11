@@ -31,6 +31,7 @@ import HieDb.Run
 import qualified Development.IDE.Main as Main
 import qualified Development.IDE.Types.Options as Ghcide
 import Development.Shake (ShakeOptions(shakeThreads))
+import Ide.Plugin.Config (getInitialConfig, getConfigFromNotification)
 
 defaultMain :: Arguments -> IdePlugins IdeState -> IO ()
 defaultMain args idePlugins = do
@@ -99,7 +100,9 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
           { Main.argFiles = if argLSP then Nothing else Just []
           , Main.argsHlsPlugins = idePlugins
           , Main.argsLogger = hlsLogger
-          , Main.argsIdeOptions = \sessionLoader ->
+          , Main.argsGetInitialConfig = getInitialConfig
+          , Main.argsOnConfigChange = getConfigFromNotification
+          , Main.argsIdeOptions = \_config sessionLoader ->
             let defOptions = Ghcide.defaultIdeOptions sessionLoader
             in defOptions
                 { Ghcide.optShakeProfiling = argsShakeProfiling
