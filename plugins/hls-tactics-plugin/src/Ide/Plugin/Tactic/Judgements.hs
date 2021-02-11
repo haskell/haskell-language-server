@@ -30,7 +30,7 @@ module Ide.Plugin.Tactic.Judgements
   , hyByName
   ) where
 
-import Control.Arrow
+import           Control.Arrow
 import           Control.Lens hiding (Context)
 import           Data.Bool
 import           Data.Char
