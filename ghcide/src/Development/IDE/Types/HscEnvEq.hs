@@ -24,7 +24,7 @@ import TcRnMonad (initIfaceLoad, WhereFrom (ImportByUser))
 import LoadIface (loadInterface)
 import qualified Maybes
 import OpenTelemetry.Eventlog (withSpan)
-import Control.Monad.Extra (mapMaybeM, join)
+import Control.Monad.Extra (mapMaybeM, join, eitherM)
 import Control.Concurrent.Extra (newVar, modifyVar)
 import Control.Concurrent.Async (Async, async, waitCatch)
 import Control.Exception (throwIO, mask)
@@ -127,7 +127,7 @@ instance Binary HscEnvEq where
 onceAsync :: IO a -> IO (IO a)
 onceAsync act = do
     var <- newVar OncePending
-    let run as = either throwIO pure =<< waitCatch as
+    let run as = eitherM throwIO pure (waitCatch as)
     pure $ mask $ \unmask -> join $ modifyVar var $ \v -> case v of
         OnceRunning x -> pure (v, unmask $ run x)
         OncePending -> do
