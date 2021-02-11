@@ -426,9 +426,11 @@ test-suite func-test
     , tasty-ant-xml           >=1.1.6
     , tasty-golden
     , tasty-rerun
+    , megaparsec
+    , deepseq
     , ghcide
 
-  hs-source-dirs:     test/functional plugins/hls-tactics-plugin/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src
+  hs-source-dirs:     test/functional plugins/hls-tactics-plugin/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src plugins/hls-eval-plugin/src
 
   main-is:            Main.hs
   other-modules:
@@ -457,6 +459,7 @@ test-suite func-test
     HaddockComments
     Ide.Plugin.Splice.Types
     Ide.Plugin.Tactic.TestTypes
+    Ide.Plugin.Eval.Types
 
   ghc-options:
     -Wall -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N

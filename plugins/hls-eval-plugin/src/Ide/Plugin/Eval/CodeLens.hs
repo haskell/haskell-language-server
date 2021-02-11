@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -24,11 +26,11 @@ module Ide.Plugin.Eval.CodeLens (
 ) where
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Arrow (second)
+import Control.Arrow (second, (>>>))
 import qualified Control.Exception as E
 import Control.Monad
     ( void,
-      when,
+      when, guard
     )
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Except
@@ -44,7 +46,7 @@ import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
     (dropWhileEnd,
-      find
+      find, intercalate
     )
 import qualified Data.Map.Strict as Map
 import Data.Maybe
@@ -75,9 +77,9 @@ import Development.IDE
       toNormalizedUri,
       uriToFilePath',
       useWithStale_,
-      use_,
+      use_, prettyPrint
     )
-import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
+import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan, UnhelpfulSpan), srcSpanFile, GhcException, setInteractiveDynFlags)
 import DynamicLoading (initializePlugins)
 import FastString (unpackFS)
 import GHC
@@ -125,7 +127,7 @@ import GhcPlugins
       updateWays,
       wayGeneralFlags,
       wayUnsetGeneralFlags,
-      xopt_set,
+      xopt_set, parseDynamicFlagsCmdLine
     )
 import HscTypes
     ( InteractiveImport (IIModule),
@@ -153,7 +155,7 @@ import Ide.Plugin.Eval.GHC
       showDynFlags,
     )
 import Ide.Plugin.Eval.Parse.Comments (commentsToSections)
-import Ide.Plugin.Eval.Parse.Option (langOptions)
+import Ide.Plugin.Eval.Parse.Option (langOptions, parseSetFlags)
 import Ide.Plugin.Eval.Types
 import Ide.Plugin.Eval.Util
     ( asS,
@@ -216,8 +218,11 @@ import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
-import Control.Lens ((^.))
+import Control.Lens ((^.), _1, (%~), (<&>), _3)
 import Language.Haskell.LSP.Types.Lens (line, end)
+import Control.Exception (try)
+import CmdLineParser
+import qualified Development.IDE.GHC.Compat as SrcLoc
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -272,9 +277,9 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
                         [ CodeLens testRange (Just cmd') Nothing
-                        | (section, test) <- tests
+                        | (section, ident, test) <- tests
                         , let (testRange, resultRange) = testRanges test
-                              args = EvalParams (setupSections ++ [section]) _textDocument
+                              args = EvalParams (setupSections ++ [section]) _textDocument ident
                               cmd' =
                                 (cmd :: Command)
                                     { _arguments = Just (List [toJSON args])
@@ -308,19 +313,14 @@ evalCommandName = "evalCommand"
 evalCommand :: PluginCommand IdeState
 evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 
--- | Specify the test section to execute
-data EvalParams = EvalParams
-    { sections :: [Section]
-    , module_ :: !TextDocumentIdentifier
-    }
-    deriving (Eq, Show, Generic, FromJSON, ToJSON)
+type EvalId = Int
 
 runEvalCmd :: CommandFunction IdeState EvalParams
 runEvalCmd lsp st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
         cmd = do
-            let tests = testsBySection sections
+            let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- handleMaybe "uri" $ uriToFilePath' _uri
@@ -444,9 +444,12 @@ moduleText lsp uri =
                     lsp
                     (toNormalizedUri uri)
 
-testsBySection :: [Section] -> [(Section, Test)]
+testsBySection :: [Section] -> [(Section, EvalId, Test)]
 testsBySection sections =
-    [(section, test) | section <- sections, test <- sectionTests section]
+    [(section, ident, test)
+    | (ident, section) <- zip [0..] sections
+    , test <- sectionTests section
+    ]
 
 type TEnv = (IdeState, String)
 
@@ -560,20 +563,36 @@ evals (st, fp) df stmts = do
     dbg = logWith st
     eval :: Statement -> Ghc (Maybe [Text])
     eval (Located l stmt)
-        | -- A :set -XLanguageOption directive
-          isRight (langOptions stmt) =
-            either
-                (return . Just . errorLines)
-                ( \es -> do
-                    dbg "{:SET" es
-                    ndf <- getInteractiveDynFlags
-                    dbg "pre set" $ showDynFlags ndf
-                    mapM_ addExtension es
-                    ndf <- getInteractiveDynFlags
-                    dbg "post set" $ showDynFlags ndf
-                    return Nothing
-                )
-                $ ghcOptions stmt
+        | -- GHCi flags
+          Just (words -> flags) <- parseSetFlags stmt = do
+            dbg "{:SET" flags
+            ndf <- getInteractiveDynFlags
+            dbg "pre set" $ showDynFlags ndf
+            eans <-
+                liftIO $ try @GhcException $
+                parseDynamicFlagsCmdLine ndf
+                (map (L $ UnhelpfulSpan "<interactive>") flags)
+            dbg "parsed flags" $ eans
+              <&> (_1 %~ showDynFlags >>> _3 %~ map warnMsg)
+            case eans of
+                Left err -> pure $ Just $ errorLines $ show err
+                Right (df', ignoreds, warns) -> do
+                    let warnings = do
+                            guard $ not $ null warns
+                            pure $ errorLines $
+                                unlines $
+                                map prettyWarn warns
+                        igns = do
+                            guard $ not $ null ignoreds
+                            pure
+                                ["Some flags have not been recognized: "
+                                <> T.pack (intercalate ", " $ map SrcLoc.unLoc ignoreds)
+                                ]
+                    dbg "post set" $ showDynFlags df'
+                    _ <- setSessionDynFlags df'
+                    sessDyns <- getSessionDynFlags
+                    setInteractiveDynFlags sessDyns
+                    pure $ warnings <> igns
         | -- A type/kind command
           Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt =
             evalGhciLikeCmd cmd arg
@@ -615,6 +634,11 @@ evals (st, fp) df stmts = do
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in execStmt stmt opts
+
+prettyWarn :: Warn -> String
+prettyWarn Warn{..} =
+    prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
+    <> "    " <> SrcLoc.unLoc warnMsg
 
 runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnvEq
 runGetSession st nfp =

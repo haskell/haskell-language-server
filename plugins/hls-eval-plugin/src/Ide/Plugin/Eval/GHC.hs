@@ -20,7 +20,7 @@ import Development.IDE.GHC.Compat
 import qualified EnumSet
 import GHC.LanguageExtensions.Type (Extension (..))
 import GhcMonad (modifySession)
-import GhcPlugins (DefUnitId (..), InstalledUnitId (..), fsLit, hsc_IC)
+import GhcPlugins (DefUnitId (..), InstalledUnitId (..), fsLit, hsc_IC, pprHsString)
 import HscTypes (InteractiveContext (ic_dflags))
 import Ide.Plugin.Eval.Util (asS, gStrictTry)
 import qualified Lexer
@@ -36,6 +36,7 @@ import Outputable (
 import qualified Parser
 import SrcLoc (mkRealSrcLoc)
 import StringBuffer (stringToStringBuffer)
+import Data.String (fromString)
 
 {- $setup
 >>> import GHC
@@ -192,6 +193,7 @@ showDynFlags df =
         [ ("extensions", ppr . extensions $ df)
         , ("extensionFlags", ppr . EnumSet.toList . extensionFlags $ df)
         , ("importPaths", vList $ importPaths df)
+        , ("generalFlags", pprHsString . fromString . show . EnumSet.toList . generalFlags $ df)
         , -- , ("includePaths", text . show $ includePaths df)
           -- ("packageEnv", ppr $ packageEnv df)
           ("pkgNames", vcat . map text $ pkgNames df)
