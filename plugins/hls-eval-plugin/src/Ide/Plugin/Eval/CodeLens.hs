@@ -36,13 +36,8 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Except
     ( ExceptT (..),
     )
-import Data.Aeson
-    ( FromJSON,
-      ToJSON,
-      toJSON,
-    )
+import Data.Aeson (toJSON)
 import Data.Char (isSpace)
-import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
     (dropWhileEnd,
@@ -115,14 +110,11 @@ import GHC
       load,
       runDecls,
       setContext,
-      setInteractiveDynFlags,
       setLogAction,
       setSessionDynFlags,
       setTargets,
       typeKind,
     )
-import GHC.Generics (Generic)
-import qualified GHC.LanguageExtensions.Type as LangExt
 import GhcPlugins
     ( DynFlags (..),
       hsc_dflags,
@@ -154,15 +146,14 @@ import Ide.Plugin.Eval.Code
       testRanges,
     )
 import Ide.Plugin.Eval.GHC
-    ( addExtension,
-      addImport,
+    ( addImport,
       addPackages,
       hasPackage,
       isExpr,
       showDynFlags,
     )
 import Ide.Plugin.Eval.Parse.Comments (commentsToSections)
-import Ide.Plugin.Eval.Parse.Option (langOptions, parseSetFlags)
+import Ide.Plugin.Eval.Parse.Option (parseSetFlags)
 import Ide.Plugin.Eval.Types
 import Ide.Plugin.Eval.Util
     ( asS,
@@ -221,7 +212,6 @@ import Outputable
 import System.FilePath (takeFileName)
 import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
-import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
@@ -691,23 +681,6 @@ errorLines =
         . takeWhile (not . ("CallStack" `T.isPrefixOf`))
         . T.lines
         . T.pack
-
-{-
-Check that extensions actually exists.
-
->>> ghcOptions ":set -XLambdaCase"
-Right [LambdaCase]
->>> ghcOptions ":set -XLambdaCase -XNotRight"
-Left "Unknown extension: \"NotRight\""
--}
-ghcOptions :: [Char] -> Either String [LangExt.Extension]
-ghcOptions = either Left (mapM chk) . langOptions
-  where
-    chk o =
-        maybe
-            (Left $ unwords ["Unknown extension:", show o])
-            Right
-            (readMaybe o :: Maybe LangExt.Extension)
 
 {- |
 >>> map (pad_ (T.pack "--")) (map T.pack ["2+2",""])
