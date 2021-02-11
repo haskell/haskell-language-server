@@ -17,6 +17,7 @@ module Ide.Plugin.Tactic
 
 import           Control.Arrow
 import           Control.Monad
+import           Control.Monad.Error.Class (MonadError(throwError))
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
@@ -38,6 +39,7 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
+import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
 import           DynFlags (xopt)
@@ -53,16 +55,14 @@ import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils
-import Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
+import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
-import Refinery.Tactic (goal)
-import Control.Monad.Error (MonadError(throwError))
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
