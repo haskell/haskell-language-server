@@ -30,7 +30,7 @@ import Control.Arrow (second, (>>>))
 import qualified Control.Exception as E
 import Control.Monad
     ( void,
-      when, guard
+      when, guard,
       join
     )
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -110,6 +110,10 @@ import GHC
       setTargets,
       typeKind,
     )
+<<<<<<< HEAD
+=======
+import qualified GHC.LanguageExtensions.Type as LangExt
+>>>>>>> c608a0f5 (rebase fixes)
 import GhcPlugins
     ( DynFlags (..),
       hsc_dflags,
