@@ -59,9 +59,6 @@ Proxy :: forall {k} {t :: k}. Proxy t
 
 {- Invalid option/flags are reported, but valid ones will be reflected
 
->>> f = const 42 :: (forall x. x) -> Int
->>> f undefined
-
 >>> :set -XRank2Types -XAbsent -XDatatypeContexts -XWrong -fprint-nothing-at-all
 
 Still, Rank2Types is enabled, as in GHCi:

@@ -63,11 +63,6 @@ Proxy :: forall {k} {t :: k}. Proxy t
 
 {- Invalid option/flags are reported, but valid ones will be reflected
 
->>> f = const 42 :: (forall x. x) -> Int
->>> f undefined
-Illegal polymorphic type: forall x. x
-Perhaps you intended to use RankNTypes
-
 >>> :set -XRank2Types -XAbsent -XDatatypeContexts -XWrong -fprint-nothing-at-all
 <interactive>: warning:
     -XDatatypeContexts is deprecated: It was widely considered a misfeature, and has been removed from the Haskell language.
