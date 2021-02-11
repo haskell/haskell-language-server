@@ -1607,6 +1607,17 @@ suggestHideShadowTests =
             , "g on = on"
             ]
         , testOneCodeAction
+            "extend hiding unsued"
+            "Hide on from Data.Function"
+            (1, 2)
+            (1, 4)
+            [ "import Data.Function hiding ((&))"
+            , "f on = on"
+            ]
+            [ "import Data.Function hiding (on, (&))"
+            , "f on = on"
+            ]
+        , testOneCodeAction
             "delete unsued"
             "Hide on from Data.Function"
             (1, 2)
@@ -1717,7 +1728,7 @@ suggestHideShadowTests =
             , "f (++) = (++)"
             ]
             [ "import B hiding ((++))"
-            , "import C ((++))"
+            , "import C hiding ((++))"
             , "import Prelude hiding ((++))"
             , "f (++) = (++)"
             ]
