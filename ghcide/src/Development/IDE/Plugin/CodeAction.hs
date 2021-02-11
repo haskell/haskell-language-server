@@ -86,10 +86,10 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
             <*> use GhcSession `traverse` mbFile
             <*> use GetAnnotatedParsedSource `traverse` mbFile
     -- This is quite expensive 0.6-0.7s on GHC
-    let pkgExports = envPackageExports <$> env
+    pkgExports   <- fromMaybe mempty (envPackageExports <$> env)
     localExports <- readVar (exportsMap $ shakeExtras state)
     let
-      exportsMap = localExports <> fromMaybe mempty pkgExports
+      exportsMap = localExports <> pkgExports
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title  [x] edit

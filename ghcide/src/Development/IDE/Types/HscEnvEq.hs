@@ -24,8 +24,10 @@ import TcRnMonad (initIfaceLoad, WhereFrom (ImportByUser))
 import LoadIface (loadInterface)
 import qualified Maybes
 import OpenTelemetry.Eventlog (withSpan)
-import System.IO.Unsafe (unsafePerformIO)
-import Control.Monad.Extra (mapMaybeM)
+import Control.Monad.Extra (mapMaybeM, join)
+import Control.Concurrent.Extra (newVar, modifyVar)
+import Control.Concurrent.Async (Async, async, waitCatch)
+import Control.Exception (throwIO, mask)
 
 -- | An 'HscEnv' with equality. Two values are considered equal
 --   if they are created with the same call to 'newHscEnvEq'.
@@ -39,7 +41,7 @@ data HscEnvEq = HscEnvEq
     , envImportPaths :: Maybe [String]
         -- ^ If Just, import dirs originally configured in this env
         --   If Nothing, the env import dirs are unaltered
-    , envPackageExports :: ExportsMap
+    , envPackageExports :: IO ExportsMap
     }
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
@@ -58,9 +60,8 @@ newHscEnvEqWithImportPaths :: Maybe [String] -> HscEnv -> [(InstalledUnitId, Dyn
 newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
     envUnique <- newUnique
 
-    let
-    -- evaluate lazily, using unsafePerformIO for a pure API
-      envPackageExports = unsafePerformIO $ withSpan "Package Exports" $ \_sp -> do
+    -- it's very important to delay the package exports computation
+    envPackageExports <- onceAsync $ withSpan "Package Exports" $ \_sp -> do
         -- compute the package imports
         let pkgst   = pkgState (hsc_dflags hscEnv)
             depends = explicitPackages pkgst
@@ -119,3 +120,19 @@ instance Hashable HscEnvEq where
 instance Binary HscEnvEq where
   put _ = error "not really"
   get = error "not really"
+
+-- | Given an action, produce a wrapped action that runs at most once.
+--   The action is run in an async so it won't be killed by async exceptions
+--   If the function raises an exception, the same exception will be reraised each time.
+onceAsync :: IO a -> IO (IO a)
+onceAsync act = do
+    var <- newVar OncePending
+    let run as = either throwIO pure =<< waitCatch as
+    pure $ mask $ \unmask -> join $ modifyVar var $ \v -> case v of
+        OnceRunning x -> pure (v, unmask $ run x)
+        OncePending -> do
+            x <- async (unmask act)
+            pure (OnceRunning x, unmask $ run x)
+
+data Once a = OncePending | OnceRunning (Async a)
+
