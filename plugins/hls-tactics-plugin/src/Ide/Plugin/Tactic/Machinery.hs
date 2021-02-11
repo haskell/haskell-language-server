@@ -41,6 +41,7 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
+import Ide.Plugin.Tactic.Simplify (simplify)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -97,7 +98,7 @@ runTactic ctx jdg t =
         case sorted of
           (((tr, ext), _) : _) ->
             Right
-              . RunTacticResults tr ext
+              . RunTacticResults tr (simplify ext)
               . reverse
               . fmap fst
               $ take 5 sorted
