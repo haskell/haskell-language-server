@@ -132,6 +132,9 @@ commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
 
 
+------------------------------------------------------------------------------
+-- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
+-- look it up in the hypothesis.
 useNameFromHypothesis :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
 useNameFromHypothesis f name = do
   hy <- jHypothesis <$> goal

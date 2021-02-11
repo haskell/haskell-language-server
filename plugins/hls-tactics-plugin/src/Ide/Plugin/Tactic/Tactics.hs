@@ -99,7 +99,6 @@ intros = rule $ \jdg -> do
 -- | Case split, and leave holes in the matches.
 destructAuto :: HyInfo CType -> TacticsM ()
 destructAuto hi = requireConcreteHole $ tracing "destruct(auto)" $ do
-  let name = hi_name hi
   jdg <- goal
   let subtactic = rule $ destruct' (const subgoal) hi
   case isPatternMatch $ hi_provenance hi of
@@ -109,7 +108,7 @@ destructAuto hi = requireConcreteHole $ tracing "destruct(auto)" $ do
             new_hy = foldMap getHyTypes jdgs
             old_hy = getHyTypes jdg
         in case S.null $ new_hy S.\\ old_hy of
-              True  -> Just $ UnhelpfulDestruct name
+              True  -> Just $ UnhelpfulDestruct $ hi_name hi
               False -> Nothing
     False -> subtactic
 

@@ -2,13 +2,13 @@
 
 module Ide.Plugin.Tactic.Naming where
 
-import qualified Data.Set as S
-import Data.Set (Set)
 import           Control.Monad.State.Strict
 import           Data.Bool (bool)
 import           Data.Char
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Traversable
 import           Name
 import           TcType
