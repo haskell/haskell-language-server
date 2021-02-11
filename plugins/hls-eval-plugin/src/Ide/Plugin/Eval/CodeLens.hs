@@ -59,10 +59,10 @@ import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import Data.Typeable (Typeable)
 import Development.IDE
-    (realSrcSpanToRange,  GetModSummary (..),
+    ( Action,
+      realSrcSpanToRange,  GetModSummary (..),
       GetParsedModuleWithComments (..),
-      GhcSession (..),
-      HscEnvEq (envImportPaths),
+      HscEnvEq,
       IdeState,
       List (List),
       NormalizedFilePath,
@@ -77,9 +77,15 @@ import Development.IDE
       toNormalizedUri,
       uriToFilePath',
       useWithStale_,
-      use_, prettyPrint
+      prettyPrint,
+      use_, useNoFile_, uses_,
+      GhcSessionIO(..), GetDependencies(..), GetModIface(..),
+      HiFileResult (hirHomeMod, hirModSummary)
     )
+import Development.IDE.Core.Rules (TransitiveDependencies(transitiveModuleDeps))
+import Development.IDE.Core.Compile (setupFinderCache, loadModulesHome)
 import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan, UnhelpfulSpan), srcSpanFile, GhcException, setInteractiveDynFlags)
+import Development.IDE.Types.Options
 import DynamicLoading (initializePlugins)
 import FastString (unpackFS)
 import GHC
@@ -119,6 +125,7 @@ import GHC.Generics (Generic)
 import qualified GHC.LanguageExtensions.Type as LangExt
 import GhcPlugins
     ( DynFlags (..),
+      hsc_dflags,
       defaultLogActionHPutStrDoc,
       gopt_set,
       gopt_unset,
@@ -344,14 +351,14 @@ runEvalCmd lsp st EvalParams{..} =
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
-            hscEnv' <- withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> ExceptT . (either Left id <$>) . gStrictTry . evalGhcEnv (hscEnvWithImportPaths session) $ do
+            hscEnv' <- withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> ExceptT . (either Left id <$>) . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
 
                 -- Install the module pragmas and options
                 df <- liftIO $ setupDynFlagsForGHCiLike env $ ms_hspp_opts ms
 
-                let impPaths = fromMaybe (importPaths df) (envImportPaths session)
-                -- Restore the cradle import paths
+                -- Restore the original import paths
+                let impPaths = importPaths $ hsc_dflags env
                 df <- return df{importPaths = impPaths}
 
                 -- Set the modified flags in the session
@@ -640,14 +647,29 @@ prettyWarn Warn{..} =
     prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
-runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnvEq
-runGetSession st nfp =
-    liftIO $
-        runAction "getSession" st $
-            use_
-                GhcSession
-                -- GhcSessionDeps
-                nfp
+ghcSessionDepsDefinition :: HscEnvEq -> NormalizedFilePath -> Action HscEnv
+ghcSessionDepsDefinition env file = do
+        let hsc = hscEnvWithImportPaths env
+        deps <- use_ GetDependencies file
+        let tdeps = transitiveModuleDeps deps
+        ifaces <- uses_ GetModIface tdeps
+
+        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
+        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
+        -- Long-term we might just want to change the order returned by GetDependencies
+        let inLoadOrder = reverse (map hirHomeMod ifaces)
+
+        liftIO $ loadModulesHome inLoadOrder <$> setupFinderCache (map hirModSummary ifaces) hsc
+
+runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv
+runGetSession st nfp = liftIO $ runAction "eval" st $ do
+    -- Create a new GHC Session rather than reusing an existing one
+    -- to avoid interfering with ghcide
+    IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
+    let fp = fromNormalizedFilePath nfp
+    ((_, res),_) <- liftIO $ loadSessionFun fp
+    let hscEnv = fromMaybe (error $ "Unknown file: " <> fp) res
+    ghcSessionDepsDefinition hscEnv nfp
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
