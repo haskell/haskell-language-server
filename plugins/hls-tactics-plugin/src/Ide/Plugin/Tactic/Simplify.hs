@@ -79,6 +79,7 @@ simplifyEtaReduce = mkT $ \case
       (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (HsApp _ (L _ f) (L _ (HsVar _ (L _ a))))
       | pat == a
+        -- We can only perform this simplifiation if @pat@ is otherwise unused.
       , not (containsHsVar pat f) ->
     Lambda pats f
   x -> x
@@ -93,6 +94,7 @@ simplifyCompose = mkT $ \case
       (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (unroll -> (fs@(_:_), (HsVar _ (L _ a))))
       | pat == a
+        -- We can only perform this simplifiation if @pat@ is otherwise unused.
       , not (containsHsVar pat fs) ->
     Lambda pats (foldr1 (infixCall ".") fs)
   x -> x
