@@ -37,7 +37,7 @@ import Data.List (isSuffixOf)
 
 data Import
   = FileImport !ArtifactsLocation
-  | PackageImport !M.InstalledUnitId
+  | PackageImport
   deriving (Show)
 
 data ArtifactsLocation = ArtifactsLocation
@@ -55,7 +55,7 @@ isBootLocation = not . artifactIsSource
 
 instance NFData Import where
   rnf (FileImport x) = rnf x
-  rnf (PackageImport x) = rnf x
+  rnf PackageImport = ()
 
 modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
 modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source
@@ -137,7 +137,7 @@ locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
 
     lookupInPackageDB dfs =
       case lookupModuleWithSuggestions dfs (unLoc modName) mbPkgName of
-        LookupFound _m pkgConfig -> return $ Right $ PackageImport $ unitId pkgConfig
+        LookupFound _m _pkgConfig -> return $ Right PackageImport
         reason -> return $ Left $ notFoundErr dfs modName reason
 
 -- | Don't call this on a found module.

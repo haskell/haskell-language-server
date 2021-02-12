@@ -83,7 +83,6 @@ import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile, TargetModule, TargetFile)
 import Development.IDE.GHC.ExactPrint
 import Development.IDE.GHC.Util
-import Data.Either.Extra
 import qualified Development.IDE.Types.Logger as L
 import Data.Maybe
 import           Data.Foldable
@@ -402,17 +401,11 @@ getLocatedImportsRule =
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getTargetExists modName mbPkgName isSource
             case diagOrImp of
-                Left diags -> pure (diags, Left (modName, Nothing))
-                Right (FileImport path) -> pure ([], Left (modName, Just path))
-                Right (PackageImport pkgId) -> liftIO $ do
-                    diagsOrPkgDeps <- computePackageDeps env pkgId
-                    case diagsOrPkgDeps of
-                        Left diags -> pure (diags, Right Nothing)
-                        Right pkgIds -> pure ([], Right $ Just $ pkgId : pkgIds)
-        let (moduleImports, pkgImports) = partitionEithers imports'
-        case sequence pkgImports of
-            Nothing -> pure (concat diags, Nothing)
-            Just pkgImports -> pure (concat diags, Just (moduleImports, Set.fromList $ concat pkgImports))
+                Left diags -> pure (diags, Just (modName, Nothing))
+                Right (FileImport path) -> pure ([], Just (modName, Just path))
+                Right PackageImport -> pure ([], Nothing)
+        let moduleImports = catMaybes imports'
+        pure (concat diags, Just moduleImports)
 
 type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action a
 
@@ -454,7 +447,7 @@ rawDependencyInformation fs = do
             -- elements in the queue
               modifyRawDepInfo (insertImport fId (Left ModuleParseError))
               return fId
-            Just (modImports, pkgImports) -> do
+            Just modImports -> do
               -- Get NFPs of the imports which have corresponding files
               -- Imports either come locally from a file or from a package.
               let (no_file, with_file) = splitImports modImports
@@ -466,7 +459,7 @@ rawDependencyInformation fs = do
               let moduleImports' = map (,Nothing) no_file ++ zip mns (map Just fids)
               -- Insert into the map the information about this modules
               -- imports.
-              modifyRawDepInfo $ insertImport fId (Right $ ModuleImports moduleImports' pkgImports)
+              modifyRawDepInfo $ insertImport fId (Right $ ModuleImports moduleImports')
               return fId
 
 
@@ -612,7 +605,7 @@ getHieAstRuleDefinition f hsc tmr = do
 getImportMapRule :: Rules ()
 getImportMapRule = define $ \GetImportMap f -> do
   im <- use GetLocatedImports f
-  let mkImports (fileImports, _) = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
+  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
   pure ([], ImportMap . mkImports <$> im)
 
 -- | Ensure that go to definition doesn't block on startup
@@ -857,7 +850,7 @@ isHiFileStableRule = defineEarlyCutoff $ \IsHiFileStable f -> do
             if modificationTime x < modificationTime modVersion
                 then pure SourceModified
                 else do
-                    (fileImports, _) <- use_ GetLocatedImports f
+                    fileImports <- use_ GetLocatedImports f
                     let imports = fmap artifactFilePath . snd <$> fileImports
                     deps <- uses_ IsHiFileStable (catMaybes imports)
                     pure $ if all (== SourceUnmodifiedAndStable) deps
