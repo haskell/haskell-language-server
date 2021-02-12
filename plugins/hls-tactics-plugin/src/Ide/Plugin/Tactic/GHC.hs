@@ -112,7 +112,7 @@ lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
   = Just $ isJust $ algebraicTyCon res
 lambdaCaseable _ = Nothing
 
-fromPatCompat :: PatCompat GhcTc -> Pat GhcTc
+fromPatCompat :: PatCompat ps -> Pat ps
 #if __GLASGOW_HASKELL__ == 808
 type PatCompat pass = Pat pass
 fromPatCompat = id
