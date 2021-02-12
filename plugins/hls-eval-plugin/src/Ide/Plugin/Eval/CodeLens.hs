@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -24,27 +26,22 @@ module Ide.Plugin.Eval.CodeLens (
 ) where
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Arrow (second)
+import Control.Arrow (second, (>>>))
 import qualified Control.Exception as E
 import Control.Monad
     ( void,
-      when,
+      when, guard
     )
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Except
     ( ExceptT (..),
     )
-import Data.Aeson
-    ( FromJSON,
-      ToJSON,
-      toJSON,
-    )
+import Data.Aeson (toJSON)
 import Data.Char (isSpace)
-import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
     (dropWhileEnd,
-      find
+      find, intercalate
     )
 import qualified Data.Map.Strict as Map
 import Data.Maybe
@@ -57,10 +54,10 @@ import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import Data.Typeable (Typeable)
 import Development.IDE
-    (realSrcSpanToRange,  GetModSummary (..),
+    ( Action,
+      realSrcSpanToRange,  GetModSummary (..),
       GetParsedModuleWithComments (..),
-      GhcSession (..),
-      HscEnvEq (envImportPaths),
+      HscEnvEq,
       IdeState,
       List (List),
       NormalizedFilePath,
@@ -75,9 +72,15 @@ import Development.IDE
       toNormalizedUri,
       uriToFilePath',
       useWithStale_,
-      use_,
+      prettyPrint,
+      use_, useNoFile_, uses_,
+      GhcSessionIO(..), GetDependencies(..), GetModIface(..),
+      HiFileResult (hirHomeMod, hirModSummary)
     )
-import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan), srcSpanFile)
+import Development.IDE.Core.Rules (TransitiveDependencies(transitiveModuleDeps))
+import Development.IDE.Core.Compile (setupFinderCache, loadModulesHome)
+import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan, UnhelpfulSpan), srcSpanFile, GhcException, setInteractiveDynFlags)
+import Development.IDE.Types.Options
 import DynamicLoading (initializePlugins)
 import FastString (unpackFS)
 import GHC
@@ -107,16 +110,14 @@ import GHC
       load,
       runDecls,
       setContext,
-      setInteractiveDynFlags,
       setLogAction,
       setSessionDynFlags,
       setTargets,
       typeKind,
     )
-import GHC.Generics (Generic)
-import qualified GHC.LanguageExtensions.Type as LangExt
 import GhcPlugins
     ( DynFlags (..),
+      hsc_dflags,
       defaultLogActionHPutStrDoc,
       gopt_set,
       gopt_unset,
@@ -125,7 +126,7 @@ import GhcPlugins
       updateWays,
       wayGeneralFlags,
       wayUnsetGeneralFlags,
-      xopt_set,
+      xopt_set, parseDynamicFlagsCmdLine
     )
 import HscTypes
     ( InteractiveImport (IIModule),
@@ -145,15 +146,14 @@ import Ide.Plugin.Eval.Code
       testRanges,
     )
 import Ide.Plugin.Eval.GHC
-    ( addExtension,
-      addImport,
+    ( addImport,
       addPackages,
       hasPackage,
       isExpr,
       showDynFlags,
     )
 import Ide.Plugin.Eval.Parse.Comments (commentsToSections)
-import Ide.Plugin.Eval.Parse.Option (langOptions)
+import Ide.Plugin.Eval.Parse.Option (parseSetFlags)
 import Ide.Plugin.Eval.Types
 import Ide.Plugin.Eval.Util
     ( asS,
@@ -212,12 +212,14 @@ import Outputable
 import System.FilePath (takeFileName)
 import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
-import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
-import Control.Lens ((^.))
+import Control.Lens ((^.), _1, (%~), (<&>), _3)
 import Language.Haskell.LSP.Types.Lens (line, end)
+import Control.Exception (try)
+import CmdLineParser
+import qualified Development.IDE.GHC.Compat as SrcLoc
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -272,9 +274,9 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
                         [ CodeLens testRange (Just cmd') Nothing
-                        | (section, test) <- tests
+                        | (section, ident, test) <- tests
                         , let (testRange, resultRange) = testRanges test
-                              args = EvalParams (setupSections ++ [section]) _textDocument
+                              args = EvalParams (setupSections ++ [section]) _textDocument ident
                               cmd' =
                                 (cmd :: Command)
                                     { _arguments = Just (List [toJSON args])
@@ -308,19 +310,14 @@ evalCommandName = "evalCommand"
 evalCommand :: PluginCommand IdeState
 evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 
--- | Specify the test section to execute
-data EvalParams = EvalParams
-    { sections :: [Section]
-    , module_ :: !TextDocumentIdentifier
-    }
-    deriving (Eq, Show, Generic, FromJSON, ToJSON)
+type EvalId = Int
 
 runEvalCmd :: CommandFunction IdeState EvalParams
 runEvalCmd lsp st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
         cmd = do
-            let tests = testsBySection sections
+            let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- handleMaybe "uri" $ uriToFilePath' _uri
@@ -344,14 +341,14 @@ runEvalCmd lsp st EvalParams{..} =
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
-            hscEnv' <- withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> ExceptT . (either Left id <$>) . gStrictTry . evalGhcEnv (hscEnvWithImportPaths session) $ do
+            hscEnv' <- withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> ExceptT . (either Left id <$>) . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
 
                 -- Install the module pragmas and options
                 df <- liftIO $ setupDynFlagsForGHCiLike env $ ms_hspp_opts ms
 
-                let impPaths = fromMaybe (importPaths df) (envImportPaths session)
-                -- Restore the cradle import paths
+                -- Restore the original import paths
+                let impPaths = importPaths $ hsc_dflags env
                 df <- return df{importPaths = impPaths}
 
                 -- Set the modified flags in the session
@@ -444,9 +441,12 @@ moduleText lsp uri =
                     lsp
                     (toNormalizedUri uri)
 
-testsBySection :: [Section] -> [(Section, Test)]
+testsBySection :: [Section] -> [(Section, EvalId, Test)]
 testsBySection sections =
-    [(section, test) | section <- sections, test <- sectionTests section]
+    [(section, ident, test)
+    | (ident, section) <- zip [0..] sections
+    , test <- sectionTests section
+    ]
 
 type TEnv = (IdeState, String)
 
@@ -560,20 +560,36 @@ evals (st, fp) df stmts = do
     dbg = logWith st
     eval :: Statement -> Ghc (Maybe [Text])
     eval (Located l stmt)
-        | -- A :set -XLanguageOption directive
-          isRight (langOptions stmt) =
-            either
-                (return . Just . errorLines)
-                ( \es -> do
-                    dbg "{:SET" es
-                    ndf <- getInteractiveDynFlags
-                    dbg "pre set" $ showDynFlags ndf
-                    mapM_ addExtension es
-                    ndf <- getInteractiveDynFlags
-                    dbg "post set" $ showDynFlags ndf
-                    return Nothing
-                )
-                $ ghcOptions stmt
+        | -- GHCi flags
+          Just (words -> flags) <- parseSetFlags stmt = do
+            dbg "{:SET" flags
+            ndf <- getInteractiveDynFlags
+            dbg "pre set" $ showDynFlags ndf
+            eans <-
+                liftIO $ try @GhcException $
+                parseDynamicFlagsCmdLine ndf
+                (map (L $ UnhelpfulSpan "<interactive>") flags)
+            dbg "parsed flags" $ eans
+              <&> (_1 %~ showDynFlags >>> _3 %~ map warnMsg)
+            case eans of
+                Left err -> pure $ Just $ errorLines $ show err
+                Right (df', ignoreds, warns) -> do
+                    let warnings = do
+                            guard $ not $ null warns
+                            pure $ errorLines $
+                                unlines $
+                                map prettyWarn warns
+                        igns = do
+                            guard $ not $ null ignoreds
+                            pure
+                                ["Some flags have not been recognized: "
+                                <> T.pack (intercalate ", " $ map SrcLoc.unLoc ignoreds)
+                                ]
+                    dbg "post set" $ showDynFlags df'
+                    _ <- setSessionDynFlags df'
+                    sessDyns <- getSessionDynFlags
+                    setInteractiveDynFlags sessDyns
+                    pure $ warnings <> igns
         | -- A type/kind command
           Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt =
             evalGhciLikeCmd cmd arg
@@ -616,14 +632,34 @@ evals (st, fp) df stmts = do
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
          in execStmt stmt opts
 
-runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnvEq
-runGetSession st nfp =
-    liftIO $
-        runAction "getSession" st $
-            use_
-                GhcSession
-                -- GhcSessionDeps
-                nfp
+prettyWarn :: Warn -> String
+prettyWarn Warn{..} =
+    prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
+    <> "    " <> SrcLoc.unLoc warnMsg
+
+ghcSessionDepsDefinition :: HscEnvEq -> NormalizedFilePath -> Action HscEnv
+ghcSessionDepsDefinition env file = do
+        let hsc = hscEnvWithImportPaths env
+        deps <- use_ GetDependencies file
+        let tdeps = transitiveModuleDeps deps
+        ifaces <- uses_ GetModIface tdeps
+
+        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
+        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
+        -- Long-term we might just want to change the order returned by GetDependencies
+        let inLoadOrder = reverse (map hirHomeMod ifaces)
+
+        liftIO $ loadModulesHome inLoadOrder <$> setupFinderCache (map hirModSummary ifaces) hsc
+
+runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv
+runGetSession st nfp = liftIO $ runAction "eval" st $ do
+    -- Create a new GHC Session rather than reusing an existing one
+    -- to avoid interfering with ghcide
+    IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
+    let fp = fromNormalizedFilePath nfp
+    ((_, res),_) <- liftIO $ loadSessionFun fp
+    let hscEnv = fromMaybe (error $ "Unknown file: " <> fp) res
+    ghcSessionDepsDefinition hscEnv nfp
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
@@ -645,23 +681,6 @@ errorLines =
         . takeWhile (not . ("CallStack" `T.isPrefixOf`))
         . T.lines
         . T.pack
-
-{-
-Check that extensions actually exists.
-
->>> ghcOptions ":set -XLambdaCase"
-Right [LambdaCase]
->>> ghcOptions ":set -XLambdaCase -XNotRight"
-Left "Unknown extension: \"NotRight\""
--}
-ghcOptions :: [Char] -> Either String [LangExt.Extension]
-ghcOptions = either Left (mapM chk) . langOptions
-  where
-    chk o =
-        maybe
-            (Left $ unwords ["Unknown extension:", show o])
-            Right
-            (readMaybe o :: Maybe LangExt.Extension)
 
 {- |
 >>> map (pad_ (T.pack "--")) (map T.pack ["2+2",""])

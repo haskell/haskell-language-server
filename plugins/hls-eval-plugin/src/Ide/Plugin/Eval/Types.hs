@@ -25,6 +25,7 @@ module Ide.Plugin.Eval.Types
       RawLineComment (..),
       unLoc,
       Txt,
+      EvalParams(..),
     )
 where
 
@@ -37,6 +38,7 @@ import Data.String (IsString (..))
 import Development.IDE (Range)
 import GHC.Generics (Generic)
 import qualified Text.Megaparsec as P
+import Language.Haskell.LSP.Types (TextDocumentIdentifier)
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
@@ -148,3 +150,13 @@ data LineChunk = LineChunk String | WildCardChunk
 
 instance IsString LineChunk where
     fromString = LineChunk
+
+type EvalId = Int
+
+-- | Specify the test section to execute
+data EvalParams = EvalParams
+    { sections :: [Section]
+    , module_ :: !TextDocumentIdentifier
+    , evalId :: !EvalId -- ^ unique group id; for test uses
+    }
+    deriving (Eq, Show, Generic, FromJSON, ToJSON)

@@ -42,7 +42,7 @@ spec = describe "auto for tuple" $ do
           runTactic
             emptyContext
             (mkFirstJudgement
-              (M.singleton (mkVarOcc "x") $ HyInfo UserPrv $ CType in_type)
+              (Hypothesis $ pure $ HyInfo (mkVarOcc "x") UserPrv $ CType in_type)
               True
               out_type)
             (auto' $ n * 2) `shouldSatisfy` isRight

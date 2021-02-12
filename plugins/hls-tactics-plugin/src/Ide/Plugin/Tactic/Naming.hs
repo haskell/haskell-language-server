@@ -7,6 +7,8 @@ import           Data.Bool (bool)
 import           Data.Char
 import           Data.Map (Map)
 import qualified Data.Map as M
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Traversable
 import           Name
 import           TcType
@@ -27,6 +29,9 @@ mkTyName (tcSplitFunTys -> (_:_, b))
 -- eg. mkTyName (Either A B) = "eab"
 mkTyName (splitTyConApp_maybe -> Just (c, args))
   = mkTyConName c ++ foldMap mkTyName args
+-- eg. mkTyName (f a) = "fa"
+mkTyName (tcSplitAppTys -> (t, args@(_:_)))
+  = mkTyName t ++ foldMap mkTyName args
 -- eg. mkTyName a = "a"
 mkTyName (getTyVar_maybe -> Just tv)
   = occNameString $ occName tv
@@ -61,12 +66,12 @@ filterReplace f r = fmap (\a -> bool a r $ f a)
 ------------------------------------------------------------------------------
 -- | Produce a unique, good name for a type.
 mkGoodName
-    :: [OccName]  -- ^ Bindings in scope; used to ensure we don't shadow anything
+    :: Set OccName  -- ^ Bindings in scope; used to ensure we don't shadow anything
     -> Type       -- ^ The type to produce a name for
     -> OccName
 mkGoodName in_scope t =
   let tn = mkTyName t
-   in mkVarOcc $ case elem (mkVarOcc tn) in_scope of
+   in mkVarOcc $ case S.member (mkVarOcc tn) in_scope of
         True -> tn ++ show (length in_scope)
         False -> tn
 
@@ -75,14 +80,14 @@ mkGoodName in_scope t =
 -- | Like 'mkGoodName' but creates several apart names.
 mkManyGoodNames
   :: (Traversable t, Monad m)
-  => M.Map OccName a
+  => Set OccName
   -> t Type
   -> m (t OccName)
-mkManyGoodNames hy args =
-  flip evalStateT (getInScope hy) $ for args $ \at -> do
+mkManyGoodNames in_scope args =
+  flip evalStateT in_scope $ for args $ \at -> do
     in_scope <- get
     let n = mkGoodName in_scope at
-    modify (n :)
+    modify $ S.insert n
     pure n
 
 

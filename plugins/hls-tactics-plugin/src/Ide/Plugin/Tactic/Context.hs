@@ -35,9 +35,9 @@ mkContext locals tcg = Context
 
 ------------------------------------------------------------------------------
 -- | Find all of the class methods that exist from the givens in the context.
-contextMethodHypothesis :: Context -> Map OccName (HyInfo CType)
+contextMethodHypothesis :: Context -> Hypothesis CType
 contextMethodHypothesis ctx
-  = M.fromList
+  = Hypothesis
   . excludeForbiddenMethods
   . join
   . concatMap
@@ -54,8 +54,8 @@ contextMethodHypothesis ctx
 -- | Many operations are defined in typeclasses for performance reasons, rather
 -- than being a true part of the class. This function filters out those, in
 -- order to keep our hypothesis space small.
-excludeForbiddenMethods :: [(OccName, a)] -> [(OccName, a)]
-excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods  . fst)
+excludeForbiddenMethods :: [HyInfo a] -> [HyInfo a]
+excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name)
   where
     forbiddenMethods :: Set OccName
     forbiddenMethods = S.map mkVarOcc $ S.fromList

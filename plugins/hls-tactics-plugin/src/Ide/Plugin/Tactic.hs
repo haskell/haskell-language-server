@@ -17,6 +17,7 @@ module Ide.Plugin.Tactic
 
 import           Control.Arrow
 import           Control.Monad
+import           Control.Monad.Error.Class (MonadError(throwError))
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
@@ -38,6 +39,7 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
+import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
 import           DynFlags (xopt)
@@ -53,11 +55,11 @@ import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils
-import Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource)
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
+import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
@@ -124,10 +126,22 @@ commandProvider HomomorphismLambdaCase =
 commandTactic :: TacticCommand -> OccName -> TacticsM ()
 commandTactic Auto         = const auto
 commandTactic Intros       = const intros
-commandTactic Destruct     = destruct
-commandTactic Homomorphism = homo
+commandTactic Destruct     = useNameFromHypothesis destruct
+commandTactic Homomorphism = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
+
+
+------------------------------------------------------------------------------
+-- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
+-- look it up in the hypothesis.
+useNameFromHypothesis :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
+useNameFromHypothesis f name = do
+  hy <- jHypothesis <$> goal
+  case M.lookup name $ hyByName hy of
+    Just hi -> f hi
+    Nothing -> throwError $ NotInScope name
+
 
 
 ------------------------------------------------------------------------------
@@ -216,10 +230,11 @@ filterBindingType
 filterBindingType p tp dflags plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
-   in fmap join $ for (M.toList hy) $ \(occ, hi_type -> CType ty) ->
-        case p (unCType g) ty of
-          True  -> tp occ ty dflags plId uri range jdg
-          False -> pure []
+   in fmap join $ for (unHypothesis hy) $ \hi ->
+        let ty = unCType $ hi_type hi
+         in case p (unCType g) ty of
+              True  -> tp (hi_name hi) ty dflags plId uri range jdg
+              False -> pure []
 
 
 data TacticParams = TacticParams
@@ -287,11 +302,11 @@ judgementForHole state nfp range = do
 
 spliceProvenance
     :: Map OccName Provenance
-    -> Map OccName (HyInfo a)
-    -> Map OccName (HyInfo a)
-spliceProvenance provs =
-  M.mapWithKey $ \name hi ->
-    overProvenance (maybe id const $ M.lookup name provs) hi
+    -> Hypothesis a
+    -> Hypothesis a
+spliceProvenance provs x =
+  Hypothesis $ flip fmap (unHypothesis x) $ \hi ->
+    overProvenance (maybe id const $ M.lookup (hi_name hi) provs) hi
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
