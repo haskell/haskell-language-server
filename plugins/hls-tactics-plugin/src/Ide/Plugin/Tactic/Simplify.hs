@@ -32,7 +32,7 @@ pattern Lambda pats body <-
 
 
 simplify :: LHsExpr GhcPs -> LHsExpr GhcPs
-simplify = head . drop 3 . iterate (everywhere compose . everywhere etaReduce)
+simplify = head . drop 3 . iterate (everywhere $ compose . etaReduce)
 
 
 contains :: Data a => RdrName -> a -> Bool
