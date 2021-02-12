@@ -12,6 +12,7 @@ import Data.Data (Data)
 import Data.Generics (everywhere, somewhere, something, listify, extT, mkT, GenericT, mkQ)
 import Data.List.Extra (unsnoc)
 import Data.Maybe (isJust)
+import Data.Monoid (Endo (..))
 import Development.IDE.GHC.Compat
 import GHC.Exts (fromString)
 import GHC.SourceGen (var, op)
@@ -32,7 +33,15 @@ pattern Lambda pats body <-
 
 
 simplify :: LHsExpr GhcPs -> LHsExpr GhcPs
-simplify = head . drop 3 . iterate (everywhere $ removeParens . compose . etaReduce)
+simplify = head . drop 3 . iterate (everywhere $ foldEndo
+  [ etaReduce
+  , removeParens
+  , compose
+  ])
+
+
+foldEndo :: Foldable t => t (a -> a) -> a -> a
+foldEndo = appEndo . foldMap Endo
 
 
 contains :: Data a => RdrName -> a -> Bool
