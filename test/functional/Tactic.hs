@@ -117,6 +117,7 @@ tests = testGroup
   , expectFail "GoldenFish.hs"              5 18 Auto ""
   , goldenTest "GoldenArbitrary.hs"         25 13 Auto ""
   , goldenTest "FmapBoth.hs"                2 12 Auto ""
+  , goldenTest "RecordCon.hs"               7  8 Auto ""
   ]
 
 

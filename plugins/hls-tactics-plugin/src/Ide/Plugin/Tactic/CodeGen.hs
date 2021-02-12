@@ -18,7 +18,7 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
-import           GHC.SourceGen (RdrNameStr)
+import           GHC.SourceGen (recordCon, RdrNameStr)
 import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
@@ -187,8 +187,8 @@ buildDataCon
     -> DataCon            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Trace, LHsExpr GhcPs)
-buildDataCon jdg dc apps = do
-  let args = dataConInstOrigArgTys' dc apps
+buildDataCon jdg dc tyapps = do
+  let args = dataConInstOrigArgTys' dc tyapps
   (tr, sgs)
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
@@ -210,6 +210,10 @@ mkCon dcon (fmap unLoc -> args)
   | dataConIsInfix dcon
   , (lhs : rhs : args') <- args =
       noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
+  | Just fields <- getRecordFields dcon =
+      noLoc $ recordConE (coerceName dcon_name) $ do
+        (arg, (field, _)) <- zip args fields
+        pure (coerceName field, arg)
   | otherwise =
       noLoc $ foldl' (@@) (bvar' $ occName dcon_name) args
   where

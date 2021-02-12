@@ -9,7 +9,7 @@ import           Control.Monad.State
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
 import           Data.Traversable
-import qualified DataCon as DataCon
+import           DataCon
 import           Development.IDE.GHC.Compat
 import           Generics.SYB (mkT, everywhere)
 import           Ide.Plugin.Tactic.Types
@@ -86,6 +86,18 @@ freshTyvars t = do
           Just tv' -> tv'
           Nothing -> tv
       ) t
+
+
+------------------------------------------------------------------------------
+-- | Given a datacon, extract its record fields' names and types. Returns
+-- nothing if the datacon is not a record.
+getRecordFields :: DataCon -> Maybe [(OccName, CType)]
+getRecordFields dc =
+  case dataConFieldLabels dc of
+    [] -> Nothing
+    lbls -> for lbls $ \lbl -> do
+      (_, ty) <- dataConFieldType_maybe dc $ flLabel lbl
+      pure (mkVarOccFS $ flLabel lbl, CType ty)
 
 
 ------------------------------------------------------------------------------
