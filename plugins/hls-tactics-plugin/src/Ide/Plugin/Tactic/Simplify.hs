@@ -27,7 +27,7 @@ pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
     (MG {mg_alts = L _ [L _
-      (Match { m_pats = pats
+      (Match { m_pats = fmap fromPatCompatPs -> pats
              , m_grhss = GRHSs {grhssGRHSs = [L _ (
                  GRHS _ [] (L _ body))]}
              })]})
@@ -74,11 +74,11 @@ containsHsVar name x = not $ null $ listify (
 simplifyEtaReduce :: GenericT
 simplifyEtaReduce = mkT $ \case
   Lambda
-      [fromPatCompatPs -> VarPat _ (L _ pat)]
+      [VarPat _ (L _ pat)]
       (HsVar _ (L _ a)) | pat == a ->
     var "id"
   Lambda
-      (fmap fromPatCompatPs -> unsnoc -> Just (pats, (VarPat _ (L _ pat))))
+      (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (HsApp _ (L _ f) (L _ (HsVar _ (L _ a))))
       | pat == a
         -- We can only perform this simplifiation if @pat@ is otherwise unused.
@@ -93,7 +93,7 @@ simplifyEtaReduce = mkT $ \case
 simplifyCompose :: GenericT
 simplifyCompose = mkT $ \case
   Lambda
-      (fmap fromPatCompatPs -> unsnoc -> Just (pats, (VarPat _ (L _ pat))))
+      (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (unroll -> (fs@(_:_), (HsVar _ (L _ a))))
       | pat == a
         -- We can only perform this simplifiation if @pat@ is otherwise unused.
