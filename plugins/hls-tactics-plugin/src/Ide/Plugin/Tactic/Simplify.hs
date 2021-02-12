@@ -19,6 +19,8 @@ import GHC.SourceGen (var, op)
 import GHC.SourceGen.Expr (lambda)
 
 
+------------------------------------------------------------------------------
+-- | A pattern over the otherwise (extremely) messy AST for lambdas.
 pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
@@ -28,32 +30,47 @@ pattern Lambda pats body <-
                  GRHS _ [] (L _ body))]}
              })]})
   where
+    -- If there are no patterns to bind, just stick in the body
     Lambda [] body   = body
     Lambda pats body = lambda pats body
 
 
+------------------------------------------------------------------------------
+-- | Simlify an expression.
 simplify :: LHsExpr GhcPs -> LHsExpr GhcPs
-simplify = head . drop 3 . iterate (everywhere $ foldEndo
-  [ etaReduce
-  , removeParens
-  , compose
-  ])
+simplify
+  = head
+  . drop 3   -- Do three passes; this should be good enough for the limited
+             -- amount of gas we give to auto
+  . iterate (everywhere $ foldEndo
+    [ simplifyEtaReduce
+    , simplifyRemoveParens
+    , simplifyCompose
+    ])
 
 
+------------------------------------------------------------------------------
+-- | Like 'foldMap' but for endomorphisms.
 foldEndo :: Foldable t => t (a -> a) -> a -> a
 foldEndo = appEndo . foldMap Endo
 
 
-contains :: Data a => RdrName -> a -> Bool
-contains name x = not $ null $ listify (
+------------------------------------------------------------------------------
+-- | Does this thing contain any references to 'HsVar's with the given
+-- 'RdrName'?
+containsHsVar :: Data a => RdrName -> a -> Bool
+containsHsVar name x = not $ null $ listify (
   \case
     ((HsVar _ (L _ a)) :: HsExpr GhcPs) | a == name -> True
     _ -> False
   ) x
 
 
-etaReduce :: GenericT
-etaReduce = mkT $ \case
+------------------------------------------------------------------------------
+-- | Perform an eta reduction. For example, transforms @\x -> (f g) x@ into
+-- @f g@.
+simplifyEtaReduce :: GenericT
+simplifyEtaReduce = mkT $ \case
   Lambda
       [VarPat _ (L _ pat)]
       (HsVar _ (L _ a)) | pat == a ->
@@ -62,24 +79,29 @@ etaReduce = mkT $ \case
       (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (HsApp _ (L _ f) (L _ (HsVar _ (L _ a))))
       | pat == a
-      , not (contains pat f) ->
+      , not (containsHsVar pat f) ->
     Lambda pats f
   x -> x
 
 
-compose :: GenericT
-compose = mkT $ \case
+------------------------------------------------------------------------------
+-- | Perform an eta-reducing function composition. For example, transforms
+-- @\x -> f (g (h x))@ into @f . g . h@.
+simplifyCompose :: GenericT
+simplifyCompose = mkT $ \case
   Lambda
       (unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (unroll -> (fs@(_:_), (HsVar _ (L _ a))))
       | pat == a
-      , not (contains pat fs) ->
+      , not (containsHsVar pat fs) ->
     Lambda pats (foldr1 (infixCall ".") fs)
   x -> x
 
 
-removeParens :: GenericT
-removeParens = mkT $ \case
+------------------------------------------------------------------------------
+-- | Removes unnecessary parentheses on any token that doesn't need them.
+simplifyRemoveParens :: GenericT
+simplifyRemoveParens = mkT $ \case
   HsPar _ (L _ x) | isAtomicHsExpr x -> x
   (x :: HsExpr GhcPs) -> x
 
@@ -88,6 +110,9 @@ infixCall :: String -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
 infixCall s = flip op (fromString s)
 
 
+------------------------------------------------------------------------------
+-- | Unrolls a right-associative function application of the form
+-- @HsApp f (HsApp g (HsApp h x))@ into @([f, g, h], x)@.
 unroll :: HsExpr GhcPs -> ([HsExpr GhcPs], HsExpr GhcPs)
 unroll (HsPar _ (L _ x)) = unroll x
 unroll (HsApp _ (L _ f) (L _ a)) =
