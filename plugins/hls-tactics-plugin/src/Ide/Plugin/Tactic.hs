@@ -333,7 +333,8 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                        then graftSmallestDecls (RealSrcSpan span)
                           $ pure
                           $ splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
-                          $ iterateSplit $ AgdaMatch []
+                          $ iterateSplit
+                          $ mkFirstAgda
                           $ unLoc
                           $ rtr_extract rtr
                        else graft (RealSrcSpan span)

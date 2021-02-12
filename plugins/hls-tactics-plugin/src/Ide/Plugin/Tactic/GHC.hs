@@ -116,9 +116,14 @@ data AgdaMatch = AgdaMatch
   deriving (Show)
 
 
+mkFirstAgda :: HsExpr GhcPs -> AgdaMatch
+mkFirstAgda = go []
+  where
+    go pats (Lambda pats' body) = go (pats <> pats') body
+    go pats body = AgdaMatch pats body
+
+
 agdaSplit :: AgdaMatch -> [AgdaMatch]
-agdaSplit (AgdaMatch pats (Lambda pats' body)) =
-  agdaSplit (AgdaMatch (pats <> pats') body)
 agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
   (i, pat) <- zip [id @Int 0 ..] pats
   case pat of
