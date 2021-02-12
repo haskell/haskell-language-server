@@ -4,4 +4,4 @@ type family TyFam
 type instance TyFam = Int
 
 tyblah' :: TyFam -> Int
-tyblah' = (\ i -> i)
+tyblah' = id
