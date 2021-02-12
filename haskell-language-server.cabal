@@ -64,7 +64,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                >=0.7
+    , ghcide                >=0.7.5
     , gitrev
     , haskell-lsp           ^>=0.23
     , hls-plugin-api        >=0.7
