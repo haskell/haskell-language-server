@@ -32,7 +32,7 @@ pattern Lambda pats body <-
 
 
 simplify :: LHsExpr GhcPs -> LHsExpr GhcPs
-simplify = head . drop 3 . iterate (everywhere $ compose . etaReduce)
+simplify = head . drop 3 . iterate (everywhere $ removeParens . compose . etaReduce)
 
 
 contains :: Data a => RdrName -> a -> Bool
@@ -67,6 +67,12 @@ compose = mkT $ \case
       , not (contains pat fs) ->
     Lambda pats (foldr1 (infixCall ".") fs)
   x -> x
+
+
+removeParens :: GenericT
+removeParens = mkT $ \case
+  HsPar _ (L _ x) | isAtomicHsExpr x -> x
+  (x :: HsExpr GhcPs) -> x
 
 
 infixCall :: String -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
