@@ -12,6 +12,9 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
+    # Cancel queued workflows from earlier commits in this branch
+    - uses: fkirc/skip-duplicate-actions@master
+
     - uses: actions/checkout@v2
     - run: git fetch origin master # check the master branch for benchmarking
     - uses: haskell/actions/setup@v1
@@ -81,6 +84,9 @@ jobs:
         example: ['Cabal-3.0.0.0', 'lsp-types-1.0.0.1', 'bench_example_HLS']
 
     steps:
+    # Cancel queued workflows from earlier commits in this branch
+    - uses: fkirc/skip-duplicate-actions@master
+
     - uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}

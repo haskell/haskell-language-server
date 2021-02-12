@@ -74,9 +74,11 @@ runTactic ctx jdg t =
                 $ (:) (jGoal jdg)
                 $ fmap hi_type
                 $ toList
+                $ hyByName
                 $ jHypothesis jdg
         unused_topvals = M.keysSet
                        $ M.filter (isTopLevel . hi_provenance)
+                       $ hyByName
                        $ jHypothesis jdg
         tacticState =
           defaultTacticState
@@ -218,7 +220,7 @@ unify goal inst = do
 ------------------------------------------------------------------------------
 -- | Get the class methods of a 'PredType', correctly dealing with
 -- instantiation of quantified class types.
-methodHypothesis :: PredType -> Maybe [(OccName, HyInfo CType)]
+methodHypothesis :: PredType -> Maybe [HyInfo CType]
 methodHypothesis ty = do
   (tc, apps) <- splitTyConApp_maybe ty
   cls <- tyConClass_maybe tc
@@ -230,8 +232,7 @@ methodHypothesis ty = do
               $ classSCTheta cls
   pure $ mappend sc_methods $ methods <&> \method ->
     let (_, _, ty) = tcSplitSigmaTy $ idType method
-    in ( occName method
-       , HyInfo (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
+    in ( HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
        )
 
 

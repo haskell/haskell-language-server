@@ -3,6 +3,7 @@
 -- | GHC language options parser
 module Ide.Plugin.Eval.Parse.Option (
     langOptions,
+    parseSetFlags,
 ) where
 
 import Control.Monad.Combinators (many)
@@ -25,6 +26,13 @@ langOptions :: String -> Either String [String]
 langOptions =
   left errorBundlePretty
   . parse (space *> languageOpts <* eof) ""
+
+parseSetFlags :: String -> Maybe String
+parseSetFlags = parseMaybe
+    (hspace *> chunk ":set"
+        *> hspace1 *> takeRest
+        :: Parsec Void String String
+    )
 
 -- >>> parseMaybe languageOpts ":set -XBinaryLiterals -XOverloadedStrings"
 -- Just ["BinaryLiterals","OverloadedStrings"]
