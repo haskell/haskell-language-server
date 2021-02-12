@@ -15,6 +15,7 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
+
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Error.Class (MonadError(throwError))
@@ -54,6 +55,7 @@ import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
+import           Ide.Plugin.Tactic.CodeGen (bvar')
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
@@ -335,6 +337,11 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                           $ splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
                           $ iterateSplit
                           $ mkFirstAgda
+                              ( fmap (bvar' . hi_name)
+                              . filter (isTopLevel . hi_provenance)
+                              . unHypothesis
+                              $ jHypothesis jdg
+                              )
                           $ unLoc
                           $ rtr_extract rtr
                        else graft (RealSrcSpan span)

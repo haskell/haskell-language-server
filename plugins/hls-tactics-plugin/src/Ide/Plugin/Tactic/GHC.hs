@@ -116,11 +116,9 @@ data AgdaMatch = AgdaMatch
   deriving (Show)
 
 
-mkFirstAgda :: HsExpr GhcPs -> AgdaMatch
-mkFirstAgda = go []
-  where
-    go pats (Lambda pats' body) = go (pats <> pats') body
-    go pats body = AgdaMatch pats body
+mkFirstAgda :: [Pat GhcPs] -> HsExpr GhcPs -> AgdaMatch
+mkFirstAgda pats (Lambda pats' body) = mkFirstAgda (pats <> pats') body
+mkFirstAgda pats body = AgdaMatch pats body
 
 
 agdaSplit :: AgdaMatch -> [AgdaMatch]
