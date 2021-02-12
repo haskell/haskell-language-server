@@ -633,17 +633,7 @@ getDocMapRule =
       (hscEnv -> hsc, _)        <- useWithStale_ GhcSessionDeps file
       (HAR{refMap=rf}, _)       <- useWithStale_ GetHieAst file
 
--- When possible, rely on the haddocks embedded in our interface files
--- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
-#if !defined(GHC_LIB)
-      let parsedDeps = []
-#else
-      deps <- fromMaybe (TransitiveDependencies [] [] []) <$> use GetDependencies file
-      let tdeps = transitiveModuleDeps deps
-      parsedDeps <- uses_ GetParsedModule tdeps
-#endif
-
-      dkMap <- liftIO $ mkDocMap hsc parsedDeps rf tc
+      dkMap <- liftIO $ mkDocMap hsc rf tc
       return ([],Just dkMap)
 
 -- | Persistent rule to ensure that hover doesn't block on startup
@@ -921,7 +911,6 @@ generateCoreRule =
 
 getModIfaceRule :: Rules ()
 getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
-#if !defined(GHC_LIB)
   fileOfInterest <- use_ IsFileOfInterest f
   res@(_,(_,mhmi)) <- case fileOfInterest of
     IsFOI status -> do
@@ -948,13 +937,6 @@ getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
       compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
       liftIO $ modifyVar_ compiledLinkables $ \old -> pure $ extendModuleEnv old mod time
   pure res
-#else
-    tm <- use_ TypeCheck f
-    hsc <- hscEnv <$> use_ GhcSessionDeps f
-    (diags, !hiFile) <- liftIO $ compileToObjCodeIfNeeded hsc Nothing (error "can't compile with ghc-lib") tm
-    let fp = hiFileFingerPrint <$> hiFile
-    return (fp, (diags, hiFile))
-#endif
 
 getModIfaceWithoutLinkableRule :: Rules ()
 getModIfaceWithoutLinkableRule = defineEarlyCutoff $ \GetModIfaceWithoutLinkable f -> do

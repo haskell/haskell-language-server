@@ -27,11 +27,6 @@ source-repository head
     type:     git
     location: https://github.com/haskell/ghcide.git
 
-flag ghc-lib
-  description: build against ghc-lib instead of the ghc package
-  default: False
-  manual: True
-
 library
     default-language:   Haskell2010
     build-depends:
@@ -92,19 +87,10 @@ library
         opentelemetry >=0.6.1,
         heapsize ==0.3.*,
         unliftio,
-        unliftio-core
-    if flag(ghc-lib)
-      build-depends:
-        ghc-lib >= 8.8,
-        ghc-lib-parser >= 8.8
-      cpp-options: -DGHC_LIB
-    else
-      build-depends:
+        unliftio-core,
         ghc-boot-th,
         ghc-boot,
         ghc >= 8.6,
-        -- These dependencies are used by Development.IDE.Session and are
-        -- Haskell specific. So don't use them when building with -fghc-lib!
         ghc-check >=0.5.0.1,
         ghc-paths,
         cryptohash-sha1 >=0.11.100 && <0.12,
@@ -141,6 +127,7 @@ library
 
     hs-source-dirs:
         src
+        session-loader
     include-dirs:
         include
     exposed-modules:
@@ -169,6 +156,7 @@ library
         Development.IDE.LSP.LanguageServer
         Development.IDE.LSP.Outline
         Development.IDE.LSP.Server
+        Development.IDE.Session
         Development.IDE.Spans.Common
         Development.IDE.Spans.Documentation
         Development.IDE.Spans.AtPoint
@@ -191,19 +179,6 @@ library
         Development.IDE.Plugin.Test
         Development.IDE.Plugin.TypeLenses
 
-    -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
-    -- the real GHC library and the types are incompatible. Furthermore, when
-    -- building with ghc-lib we need to make this Haskell agnostic, so no
-    -- hie-bios!
-    -- We also put these modules into a separate hs-source-dirs so we can avoid
-    -- compiling them at all if ghc-lib is not set
-    if !flag(ghc-lib)
-      hs-source-dirs:
-        session-loader
-      exposed-modules:
-        Development.IDE.Session
-      other-modules:
-        Development.IDE.Session.VersionCheck
     other-modules:
         Development.IDE.Core.FileExists
         Development.IDE.GHC.CPP
@@ -211,6 +186,7 @@ library
         Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.Completions.Logic
+        Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
     ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns -Wno-unticked-promoted-constructors
 
@@ -261,8 +237,6 @@ benchmark benchHist
         yaml
 
 executable ghcide
-    if flag(ghc-lib)
-      buildable: False
     default-language:   Haskell2010
     include-dirs:
         include
@@ -322,8 +296,6 @@ executable ghcide
         ViewPatterns
 
 test-suite ghcide-tests
-    if flag(ghc-lib)
-      buildable: False
     type: exitcode-stdio-1.0
     default-language: Haskell2010
     build-tool-depends:
