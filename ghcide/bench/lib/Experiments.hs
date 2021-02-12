@@ -3,6 +3,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ImpredicativeTypes #-}
+{-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments
 ( Bench(..)

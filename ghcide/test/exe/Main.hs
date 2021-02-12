@@ -10,6 +10,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE CPP #-}
+{-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 #include "ghc-api-version.h"
 
 module Main (main) where
@@ -19,7 +20,7 @@ import Control.Exception (bracket_, catch)
 import qualified Control.Lens as Lens
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Aeson (FromJSON, Value, toJSON,fromJSON)
+import Data.Aeson (toJSON,fromJSON)
 import qualified Data.Aeson as A
 import qualified Data.Binary as Binary
 import Data.Default
@@ -33,7 +34,6 @@ import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent, PositionRes
 import Development.IDE.Core.Shake (Q(..))
 import Development.IDE.GHC.Util
 import qualified Data.Text as T
-import Data.Typeable
 import Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import Development.IDE.Plugin.TypeLenses (typeLensCommandId)
 import Development.IDE.Spans.Common
@@ -87,11 +87,6 @@ import Data.Tuple.Extra
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
   FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Begin _))) -> Just ()
-  _ -> Nothing
-
-waitForProgressReport :: Session ()
-waitForProgressReport = skipManyTill anyMessage $ satisfyMaybe $ \case
-  FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (Report _))) -> Just ()
   _ -> Nothing
 
 waitForProgressDone :: Session ()
@@ -201,6 +196,7 @@ initializeResponseTests = withResource acquire release tests where
 
   innerCaps :: ResponseMessage Initialize -> ServerCapabilities
   innerCaps (ResponseMessage _ _ (Right (InitializeResult c _))) = c
+  innerCaps (ResponseMessage _ _ (Left _)) = error "Initialization error"
 
   acquire :: IO (ResponseMessage Initialize)
   acquire = run initializeResponse
