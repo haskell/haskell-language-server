@@ -179,7 +179,7 @@ getFileContents f = do
       Nothing -> do
         foi <- use_ IsFileOfInterest f
         liftIO $ case foi of
-          IsFOI Modified -> getCurrentTime
+          IsFOI Modified{} -> getCurrentTime
           _ -> do
             (large,small) <- getModTime $ fromNormalizedFilePath f
             pure $ internalTimeToUTCTime large small
