@@ -1036,7 +1036,7 @@ updateFileDiagnostics :: MonadIO m
   -> ShakeExtras
   -> [(ShowDiagnostic,Diagnostic)] -- ^ current results
   -> m ()
-updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
+updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, publishedDiagnostics, state, debouncer, lspEnv} current = liftIO $ do
     modTime <- (currentValue . fst =<<) <$> getValues state GetModificationTime fp
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
@@ -1057,9 +1057,12 @@ updateFileDiagnostics fp k ShakeExtras{diagnostics, hiddenDiagnostics, published
         registerEvent debouncer delay uri $ do
              mask_ $ modifyVar_ publishedDiagnostics $ \published -> do
                  let lastPublish = HMap.lookupDefault [] uri published
-                 when (lastPublish /= newDiags) $ mRunLspT lspEnv $
-                    LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                     LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
+                 when (lastPublish /= newDiags) $ case lspEnv of
+                   Nothing -> -- Print an LSP event.
+                     logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
+                   Just env -> LSP.runLspT env $
+                     LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
+                       LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
                  pure $! HMap.insert uri newDiags published
 
 newtype Priority = Priority Double

@@ -37,7 +37,6 @@ import Test.Tasty.HUnit (
     (@?=),
  )
 import Data.List.Extra (nubOrdOn)
-import Development.IDE (List(List))
 import Ide.Plugin.Eval.Types (EvalParams(..))
 import Data.Aeson (fromJSON)
 import Data.Aeson.Types (Result(Success))

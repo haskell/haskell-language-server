@@ -167,7 +167,6 @@ library
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.LanguageServer
         Development.IDE.LSP.Outline
-        Development.IDE.LSP.Protocol
         Development.IDE.LSP.Server
         Development.IDE.Spans.Common
         Development.IDE.Spans.Documentation
