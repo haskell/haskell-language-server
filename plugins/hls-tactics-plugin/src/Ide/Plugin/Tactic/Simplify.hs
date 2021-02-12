@@ -18,7 +18,7 @@ import GHC.Exts (fromString)
 import GHC.SourceGen (var, op)
 import GHC.SourceGen.Expr (lambda)
 import Ide.Plugin.Tactic.CodeGen.Utils
-import Ide.Plugin.Tactic.GHC (fromPatCompat)
+import Ide.Plugin.Tactic.GHC (fromPatCompatPs)
 
 
 ------------------------------------------------------------------------------
@@ -74,11 +74,11 @@ containsHsVar name x = not $ null $ listify (
 simplifyEtaReduce :: GenericT
 simplifyEtaReduce = mkT $ \case
   Lambda
-      [fromPatCompat -> VarPat _ (L _ pat)]
+      [fromPatCompatPs -> VarPat _ (L _ pat)]
       (HsVar _ (L _ a)) | pat == a ->
     var "id"
   Lambda
-      (fmap fromPatCompat -> unsnoc -> Just (pats, (VarPat _ (L _ pat))))
+      (fmap fromPatCompatPs -> unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (HsApp _ (L _ f) (L _ (HsVar _ (L _ a))))
       | pat == a
         -- We can only perform this simplifiation if @pat@ is otherwise unused.
@@ -93,7 +93,7 @@ simplifyEtaReduce = mkT $ \case
 simplifyCompose :: GenericT
 simplifyCompose = mkT $ \case
   Lambda
-      (fmap fromPatCompat -> unsnoc -> Just (pats, (VarPat _ (L _ pat))))
+      (fmap fromPatCompatPs -> unsnoc -> Just (pats, (VarPat _ (L _ pat))))
       (unroll -> (fs@(_:_), (HsVar _ (L _ a))))
       | pat == a
         -- We can only perform this simplifiation if @pat@ is otherwise unused.
