@@ -1,3 +1,6 @@
+### 0.7.5 (2021-02-??)
+* Added Development.IDE.Main (#1338) - Pepe Iborra
+
 ### 0.7.4 (2021-02-08)
 * Support for references via hiedb (#704) - wz1000
 * Fix space leak on cradle reloads (#1316) - Pepe Iborra
