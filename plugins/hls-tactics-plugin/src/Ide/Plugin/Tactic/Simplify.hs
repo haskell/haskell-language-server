@@ -108,6 +108,7 @@ simplifyRemoveParens = mkT $ \case
   (x :: HsExpr GhcPs) -> x
 
 
+-- TODO(sandy): Copypasted from CodeGen. Fix before merging
 infixCall :: String -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
 infixCall s = flip op (fromString s)
 
