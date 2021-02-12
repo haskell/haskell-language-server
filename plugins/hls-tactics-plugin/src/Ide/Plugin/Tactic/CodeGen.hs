@@ -4,7 +4,10 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns     #-}
 
-module Ide.Plugin.Tactic.CodeGen where
+module Ide.Plugin.Tactic.CodeGen
+  ( module Ide.Plugin.Tactic.CodeGen
+  , module Ide.Plugin.Tactic.CodeGen.Utils
+  ) where
 
 import           Control.Lens ((+~), (%~), (<>~))
 import           Control.Monad.Except

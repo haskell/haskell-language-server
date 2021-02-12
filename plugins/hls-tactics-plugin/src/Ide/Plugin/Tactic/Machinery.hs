@@ -33,6 +33,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Simplify (simplify)
 import           Ide.Plugin.Tactic.Types
 import           OccName (HasOccName(occName))
 import           Refinery.ProofState
@@ -41,7 +42,6 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
-import Ide.Plugin.Tactic.Simplify (simplify)
 
 
 substCTy :: TCvSubst -> CType -> CType
