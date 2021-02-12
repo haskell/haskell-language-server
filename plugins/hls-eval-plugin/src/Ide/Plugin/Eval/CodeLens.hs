@@ -110,7 +110,6 @@ import GHC
       setTargets,
       typeKind,
     )
-import qualified GHC.LanguageExtensions.Type as LangExt
 import GhcPlugins
     ( DynFlags (..),
       hsc_dflags,
@@ -177,7 +176,6 @@ import Outputable
 import System.FilePath (takeFileName)
 import System.IO (hClose)
 import UnliftIO.Temporary (withSystemTempFile)
-import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
