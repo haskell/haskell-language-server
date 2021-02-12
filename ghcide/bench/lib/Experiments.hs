@@ -20,7 +20,7 @@ module Experiments
 , exampleToOptions
 ) where
 import Control.Applicative.Combinators (skipManyTill)
-import Control.Exception.Safe
+import Control.Exception.Safe (IOException, handleAny, try)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Data.Aeson (Value(Null))
@@ -41,6 +41,7 @@ import System.FilePath ((</>), (<.>))
 import System.Process
 import System.Time.Extra
 import Text.ParserCombinators.ReadP (readP_to_S)
+import Development.Shake (cmd_, CmdOption (Cwd, FileStdout))
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
@@ -423,19 +424,24 @@ setup :: HasConfig => IO SetupResult
 setup = do
 --   when alreadyExists $ removeDirectoryRecursive examplesPath
   benchDir <- case example ?config of
-      UsePackage{..} -> return examplePath
+      UsePackage{..} -> do
+          let hieYamlPath = examplePath </> "hie.yaml"
+          alreadyExists <- doesFileExist hieYamlPath
+          unless alreadyExists $
+                cmd_ (Cwd examplePath) (FileStdout hieYamlPath) ("gen-hie"::String)
+          return examplePath
       GetPackage{..} -> do
         let path = examplesPath </> package
             package = exampleName <> "-" <> showVersion exampleVersion
+            hieYamlPath = path </> "hie.yaml"
         alreadySetup <- doesDirectoryExist path
         unless alreadySetup $
           case buildTool ?config of
             Cabal -> do
                 let cabalVerbosity = "-v" ++ show (fromEnum (verbose ?config))
                 callCommandLogging $ "cabal get " <> cabalVerbosity <> " " <> package <> " -d " <> examplesPath
-                writeFile
-                    (path </> "hie.yaml")
-                    ("cradle: {cabal: {component: " <> exampleName <> "}}")
+                let hieYamlPath = path </> "hie.yaml"
+                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String)
                 -- Need this in case there is a parent cabal.project somewhere
                 writeFile
                     (path </> "cabal.project")
@@ -464,9 +470,7 @@ setup = do
                             ]
                         )
 
-                writeFile
-                    (path </> "hie.yaml")
-                    ("cradle: {stack: {component: " <> show (exampleName <> ":lib") <> "}}")
+                cmd_ (Cwd path) (FileStdout hieYamlPath) ("gen-hie"::String) ["--stack"::String]
         return path
 
   whenJust (shakeProfiling ?config) $ createDirectoryIfMissing True
@@ -498,22 +502,21 @@ setupDocumentContents config =
 
         -- Find an identifier defined in another file in this project
         symbols <- getDocumentSymbols doc
-        case symbols of
-            Left [DocumentSymbol{_children = Just (List symbols)}] -> do
-                let endOfImports = case symbols of
-                        DocumentSymbol{_kind = SkModule, _name = "imports", _range } : _ ->
-                            Position (succ $ _line $ _end _range) 4
-                        DocumentSymbol{_range} : _ -> _start _range
-                        [] -> error "Module has no symbols"
-                contents <- documentContents doc
+        let endOfImports = case symbols of
+                Left symbols | Just x <- findEndOfImports symbols -> x
+                _ -> error $ "symbols: " <> show symbols
+        contents <- documentContents doc
+        identifierP <- searchSymbol doc contents endOfImports
+        return $ DocumentPositions{..}
 
-                identifierP <- searchSymbol doc contents endOfImports
-
-                return $ DocumentPositions{..}
-            other ->
-                error $ "symbols: " <> show other
-
-
+findEndOfImports :: [DocumentSymbol] -> Maybe Position
+findEndOfImports (DocumentSymbol{_kind = SkModule, _name = "imports", _range} : _) =
+    Just $ Position (succ $ _line $ _end _range) 4
+findEndOfImports [DocumentSymbol{_kind = SkFile, _children = Just (List cc)}] =
+    findEndOfImports cc
+findEndOfImports (DocumentSymbol{_range} : _) =
+    Just $ _start _range
+findEndOfImports _ = Nothing
 
 --------------------------------------------------------------------------------------------
 
