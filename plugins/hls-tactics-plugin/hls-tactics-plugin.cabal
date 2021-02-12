@@ -25,6 +25,7 @@ library
     Ide.Plugin.Tactic
     Ide.Plugin.Tactic.Auto
     Ide.Plugin.Tactic.CodeGen
+    Ide.Plugin.Tactic.CodeGen.Utils
     Ide.Plugin.Tactic.Context
     Ide.Plugin.Tactic.Debug
     Ide.Plugin.Tactic.GHC

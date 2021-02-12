@@ -17,6 +17,7 @@ import Development.IDE.GHC.Compat
 import GHC.Exts (fromString)
 import GHC.SourceGen (var, op)
 import GHC.SourceGen.Expr (lambda)
+import Ide.Plugin.Tactic.CodeGen.Utils
 import Ide.Plugin.Tactic.GHC (fromPatCompat)
 
 
@@ -107,11 +108,6 @@ simplifyRemoveParens :: GenericT
 simplifyRemoveParens = mkT $ \case
   HsPar _ (L _ x) | isAtomicHsExpr x -> x
   (x :: HsExpr GhcPs) -> x
-
-
--- TODO(sandy): Copypasted from CodeGen. Fix before merging
-infixCall :: String -> HsExpr GhcPs -> HsExpr GhcPs -> HsExpr GhcPs
-infixCall s = flip op (fromString s)
 
 
 ------------------------------------------------------------------------------
