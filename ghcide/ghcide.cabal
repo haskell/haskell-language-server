@@ -157,6 +157,7 @@ library
         Development.IDE.GHC.Orphans
         Development.IDE.GHC.Util
         Development.IDE.Import.DependencyInformation
+        Development.IDE.Import.FindImports
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.LanguageServer
         Development.IDE.LSP.Outline
@@ -201,7 +202,6 @@ library
         Development.IDE.Core.FileExists
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Warnings
-        Development.IDE.Import.FindImports
         Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.Completions.Logic
