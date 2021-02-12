@@ -110,10 +110,7 @@ import GHC
       setTargets,
       typeKind,
     )
-<<<<<<< HEAD
-=======
 import qualified GHC.LanguageExtensions.Type as LangExt
->>>>>>> c608a0f5 (rebase fixes)
 import GhcPlugins
     ( DynFlags (..),
       hsc_dflags,
