@@ -122,7 +122,7 @@ fromPatCompatPs = id
 #else
 type PatCompat pass = LPat pass
 fromPatCompatTc = unLoc
-fromPatCompatPs = id
+fromPatCompatPs = unLoc
 #endif
 
 ------------------------------------------------------------------------------
