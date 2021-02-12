@@ -39,7 +39,7 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource)
+import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource, maybeParensAST)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
 import           DynFlags (xopt)
@@ -63,6 +63,8 @@ import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
+import Data.Bool (bool)
+import Development.IDE.GHC.ExactPrint (graftWithoutParentheses)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -327,8 +329,11 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                 $ ResponseError InvalidRequest (T.pack $ show err) Nothing
             Right rtr -> do
               traceMX "solns" $ rtr_other_solns rtr
-              traceMX "after simplification" $ rtr_extract rtr
-              let g = graft (RealSrcSpan span) $ rtr_extract rtr
+              traceMX "simplified" $ rtr_extract rtr
+              let g = graftWithoutParentheses (RealSrcSpan span)
+                      -- Parenthesize the extract iff we're not in a top level hole
+                    $ bool maybeParensAST id (_jIsTopHole jdg)
+                    $ rtr_extract rtr
                   response = transform dflags (clientCapabilities lf) uri g pm
               pure $ case response of
                 Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
