@@ -327,6 +327,7 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                 $ ResponseError InvalidRequest (T.pack $ show err) Nothing
             Right rtr -> do
               traceMX "solns" $ rtr_other_solns rtr
+              traceMX "after simplification" $ rtr_extract rtr
               let g = graft (RealSrcSpan span) $ rtr_extract rtr
                   response = transform dflags (clientCapabilities lf) uri g pm
               pure $ case response of

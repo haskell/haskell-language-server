@@ -70,6 +70,9 @@ instance Show DataCon where
 instance Show Class where
   show  = unsafeRender
 
+instance Show (HsExpr GhcPs) where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
