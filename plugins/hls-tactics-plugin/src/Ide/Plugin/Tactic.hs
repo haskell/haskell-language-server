@@ -63,6 +63,7 @@ import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
+import Development.IDE.GHC.ExactPrint (graftSmallestDecls)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -327,7 +328,16 @@ tacticCmd tac lf state (TacticParams uri range var_name)
                 $ ResponseError InvalidRequest (T.pack $ show err) Nothing
             Right rtr -> do
               traceMX "solns" $ rtr_other_solns rtr
-              let g = graft (RealSrcSpan span) $ rtr_extract rtr
+              let g =
+                    if _jIsTopHole jdg
+                       then graftSmallestDecls (RealSrcSpan span)
+                          $ pure
+                          $ splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
+                          $ iterateSplit $ AgdaMatch []
+                          $ unLoc
+                          $ rtr_extract rtr
+                       else graft (RealSrcSpan span)
+                          $ rtr_extract rtr
                   response = transform dflags (clientCapabilities lf) uri g pm
               pure $ case response of
                 Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))

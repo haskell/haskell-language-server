@@ -14,6 +14,7 @@ module Development.IDE.GHC.ExactPrint
       hoistGraft,
       graftWithM,
       graftWithSmallestM,
+      graftSmallestDecls,
       transform,
       transformM,
       useAnnotatedSource,
@@ -61,6 +62,10 @@ import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
 import Parser (parseIdentifier)
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
+import Data.List (isPrefixOf)
+import Data.Traversable (for)
+import Data.Foldable (Foldable(fold))
+import Debug.Trace (traceM)
 #endif
 
 
@@ -191,6 +196,36 @@ graft dst val = Graft $ \dflags a -> do
             )
             a
 
+
+parseDecls :: DynFlags -> FilePath -> String -> ParseResult (LHsDecl GhcPs)
+parseDecls dflags fp str = do
+  let mono_decls = fmap unlines $ groupByFirstLine $ lines str
+  decls <- for (zip [0..] mono_decls) $ \(ix, line) -> parseDecl dflags (fp <> show ix) line
+  pure $ mergeDecls decls
+
+
+mergeDecls :: [(Anns, LHsDecl GhcPs)] -> (Anns, LHsDecl GhcPs)
+mergeDecls [x] = x
+mergeDecls ((anns,  L _ (ValD ext fb@FunBind{fun_matches = mg@MG {mg_alts = L _ alts}}))
+          : (anns', L _ (ValD _ FunBind{fun_matches = MG {mg_alts = L _ [alt]}}))
+          : decls) =
+  mergeDecls $
+    ( anns <> setPrecedingLines alt 1 0 anns'
+    , noLoc $ ValD ext $ fb
+        { fun_matches = mg { mg_alts = noLoc $ alts <> [alt] }
+        }
+    ) : decls
+mergeDecls _ = error "huh"
+
+
+groupByFirstLine :: [String] -> [[String]]
+groupByFirstLine [] = []
+groupByFirstLine (str : strs) =
+  let (same, diff) = span (isPrefixOf " ") strs
+   in (str : same) : groupByFirstLine diff
+
+
+
 ------------------------------------------------------------------------------
 
 graftWithM ::
@@ -257,6 +292,23 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
     let go [] = DL.empty
         go (L src e : rest)
             | src == dst = DL.fromList decs <> DL.fromList rest
+            | otherwise = DL.singleton (L src e) <> go rest
+    modifyDeclsT (pure . DL.toList . go) a
+
+graftSmallestDecls ::
+    forall a.
+    (HasDecls a) =>
+    SrcSpan ->
+    [LHsDecl GhcPs] ->
+    Graft (Either String) a
+graftSmallestDecls dst decs0 = Graft $ \dflags a -> do
+    decs <- forM decs0 $ \decl -> do
+        (anns, decl') <- annotateDecl dflags decl
+        modifyAnnsT $ mappend anns
+        pure decl'
+    let go [] = DL.empty
+        go (L src e : rest)
+            | dst `isSubspanOf` src = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
@@ -347,7 +399,7 @@ annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (Anns, L
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-    (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
+    (anns, expr') <- lift $ mapLeft show $ parseDecls dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
     pure (anns', expr')
 ------------------------------------------------------------------------------

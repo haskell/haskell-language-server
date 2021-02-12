@@ -24,9 +24,10 @@ import           Type
 import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unique
 import           Var
-import GHC.SourceGen (int, var, bvar, match, case', lambda)
+import GHC.SourceGen (funBinds, funBind, int, var, bvar, match, case', lambda)
 import Control.Lens
 import GHC.SourceGen.Pat
+import GHC.Exts (IsString(fromString))
 
 tcTyVar_maybe :: Type -> Maybe Var
 tcTyVar_maybe ty | Just ty' <- tcView ty = tcTyVar_maybe ty'
@@ -129,6 +130,12 @@ agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
 agdaSplit x = [x]
 
 
+splitToDecl :: OccName -> [AgdaMatch] -> LHsDecl GhcPs
+splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ name) $ do
+  AgdaMatch pats body <- ams
+  pure $ match pats body
+
+
 iterateSplit :: AgdaMatch -> [AgdaMatch]
 iterateSplit am =
   let iterated =  iterate (agdaSplit =<<) $ pure am
@@ -136,6 +143,8 @@ iterateSplit am =
           . dropWhile (\(a, b) -> length a /= length b)
           . zip iterated
           $ tail iterated
+
+
 
 
 ------------------------------------------------------------------------------
