@@ -420,19 +420,23 @@ execRawDepM act =
 -- imports recursively.
 rawDependencyInformation :: [NormalizedFilePath] -> Action RawDependencyInformation
 rawDependencyInformation fs = do
-    (rdi, ss) <- execRawDepM (mapM_ go fs)
+    (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
     return (rdi { rawBootMap = bm })
   where
+    goPlural ff = do
+        mss <- lift $ (fmap.fmap) fst <$> uses GetModSummaryWithoutTimestamps ff
+        zipWithM go ff mss
+
     go :: NormalizedFilePath -- ^ Current module being processed
+       -> Maybe ModSummary   -- ^ ModSummary of the module
        -> StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action FilePathId
-    go f = do
+    go f msum = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          msum <- lift $ fmap fst <$> use GetModSummaryWithoutTimestamps f
-          let al =  modSummaryToArtifactsLocation f msum
+          let al = modSummaryToArtifactsLocation f msum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Adding an edge to the bootmap so we can make sure to
@@ -454,7 +458,7 @@ rawDependencyInformation fs = do
                   (mns, ls) = unzip with_file
               -- Recursively process all the imports we just learnt about
               -- and get back a list of their FilePathIds
-              fids <- mapM (go . artifactFilePath) ls
+              fids <- goPlural $ map artifactFilePath ls
               -- Associate together the ModuleName with the FilePathId
               let moduleImports' = map (,Nothing) no_file ++ zip mns (map Just fids)
               -- Insert into the map the information about this modules
