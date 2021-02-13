@@ -118,6 +118,9 @@ tests = testGroup
   , goldenTest "GoldenArbitrary.hs"         25 13 Auto ""
   , goldenTest "FmapBoth.hs"                2 12 Auto ""
   , goldenTest "RecordCon.hs"               7  8 Auto ""
+  , goldenTest "FmapJoin.hs"                2 14 Auto ""
+  , goldenTest "Fgmap.hs"                   2 9  Auto ""
+  , goldenTest "FmapJoinInLet.hs"           4 19 Auto ""
   ]
 
 

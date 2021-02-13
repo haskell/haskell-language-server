@@ -124,13 +124,17 @@ lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
   = Just $ isJust $ algebraicTyCon res
 lambdaCaseable _ = Nothing
 
-fromPatCompat :: PatCompat GhcTc -> Pat GhcTc
+-- It's hard to generalize over these since weird type families are involved.
+fromPatCompatTc :: PatCompat GhcTc -> Pat GhcTc
+fromPatCompatPs :: PatCompat GhcPs -> Pat GhcPs
 #if __GLASGOW_HASKELL__ == 808
 type PatCompat pass = Pat pass
-fromPatCompat = id
+fromPatCompatTc = id
+fromPatCompatPs = id
 #else
 type PatCompat pass = LPat pass
-fromPatCompat = unLoc
+fromPatCompatTc = unLoc
+fromPatCompatPs = unLoc
 #endif
 
 ------------------------------------------------------------------------------
@@ -144,7 +148,7 @@ pattern TopLevelRHS name ps body <-
       [L _ (GRHS _ [] body)] _)
 
 getPatName :: PatCompat GhcTc -> Maybe OccName
-getPatName (fromPatCompat -> p0) =
+getPatName (fromPatCompatTc -> p0) =
   case p0 of
     VarPat  _ x   -> Just $ occName $ unLoc x
     LazyPat _ p   -> getPatName p
