@@ -189,8 +189,8 @@ buildDataCon
     -> DataCon            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Trace, LHsExpr GhcPs)
-buildDataCon jdg dc apps = do
-  let args = dataConInstOrigArgTys' dc apps
+buildDataCon jdg dc tyapps = do
+  let args = dataConInstOrigArgTys' dc tyapps
   (tr, sgs)
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
