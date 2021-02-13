@@ -21,6 +21,7 @@ import           Control.Monad.Error.Class (MonadError(throwError))
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
@@ -40,6 +41,7 @@ import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource, maybeParensAST)
+import           Development.IDE.GHC.ExactPrint (graftWithoutParentheses)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
 import           DynFlags (xopt)
@@ -63,8 +65,6 @@ import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
-import Data.Bool (bool)
-import Development.IDE.GHC.ExactPrint (graftWithoutParentheses)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
