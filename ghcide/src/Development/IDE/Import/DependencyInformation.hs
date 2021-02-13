@@ -335,11 +335,6 @@ transitiveDeps DependencyInformation{..} file = do
         filter (\v -> v `IntSet.member` reachableVs) $ map (fst3 . fromVertex) vs
   let transitiveModuleDeps =
         map (idToPath depPathIdMap . FilePathId) transitiveModuleDepIds
-  let transitiveNamedModuleDeps =
-        [ NamedModuleDep (idToPath depPathIdMap (FilePathId fid)) mn artifactModLocation
-        | (fid, ShowableModuleName mn) <- IntMap.toList depModuleNames
-        , let ArtifactsLocation{artifactModLocation} = idToPathMap depPathIdMap IntMap.! fid
-        ]
   pure TransitiveDependencies {..}
   where
     (g, fromVertex, toVertex) = graphFromEdges edges
@@ -353,11 +348,8 @@ transitiveDeps DependencyInformation{..} file = do
 
     vs = topSort g
 
-data TransitiveDependencies = TransitiveDependencies
+newtype TransitiveDependencies = TransitiveDependencies
   { transitiveModuleDeps :: [NormalizedFilePath]
-  -- ^ Transitive module dependencies in topological order.
-  -- The module itself is not included.
-  , transitiveNamedModuleDeps :: [NamedModuleDep]
   -- ^ Transitive module dependencies in topological order.
   -- The module itself is not included.
   } deriving (Eq, Show, Generic)
