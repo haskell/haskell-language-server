@@ -593,7 +593,7 @@ getHieAstRuleDefinition f hsc tmr = do
 
   isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
-    IsFOI Modified -> do
+    IsFOI Modified{firstOpen = False} -> do
       when (coerce $ ideTesting se) $
         liftIO $ eventer se $ LSP.NotCustomServer $
           LSP.NotificationMessage "2.0" (LSP.CustomServerMethod "ghcide/reference/ready") (toJSON $ fromNormalizedFilePath f)

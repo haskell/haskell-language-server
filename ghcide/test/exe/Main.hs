@@ -693,6 +693,7 @@ codeActionTests = testGroup "code actions"
   , removeImportTests
   , extendImportTests
   , suggestImportTests
+  , suggestHideShadowTests
   , suggestImportDisambiguationTests
   , disableWarningTests
   , fixConstructorImportTests
@@ -1585,6 +1586,193 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         actions <- getCodeActions doc range
         k doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")
+
+suggestHideShadowTests :: TestTree
+suggestHideShadowTests =
+  testGroup
+    "suggest hide shadow"
+    [ testGroup
+        "single"
+        [ testOneCodeAction
+            "hide unsued"
+            "Hide on from Data.Function"
+            (1, 2)
+            (1, 4)
+            [ "import Data.Function"
+            , "f on = on"
+            , "g on = on"
+            ]
+            [ "import Data.Function hiding (on)"
+            , "f on = on"
+            , "g on = on"
+            ]
+        , testOneCodeAction
+            "extend hiding unsued"
+            "Hide on from Data.Function"
+            (1, 2)
+            (1, 4)
+            [ "import Data.Function hiding ((&))"
+            , "f on = on"
+            ]
+            [ "import Data.Function hiding (on, (&))"
+            , "f on = on"
+            ]
+        , testOneCodeAction
+            "delete unsued"
+            "Hide on from Data.Function"
+            (1, 2)
+            (1, 4)
+            [ "import Data.Function ((&), on)"
+            , "f on = on"
+            ]
+            [ "import Data.Function ((&))"
+            , "f on = on"
+            ]
+        , testOneCodeAction
+            "hide operator"
+            "Hide & from Data.Function"
+            (1, 2)
+            (1, 5)
+            [ "import Data.Function"
+            , "f (&) = (&)"
+            ]
+            [ "import Data.Function hiding ((&))"
+            , "f (&) = (&)"
+            ]
+        , testOneCodeAction
+            "remove operator"
+            "Hide & from Data.Function"
+            (1, 2)
+            (1, 5)
+            [ "import Data.Function ((&), on)"
+            , "f (&) = (&)"
+            ]
+            [ "import Data.Function ( on)"
+            , "f (&) = (&)"
+            ]
+        , noCodeAction
+            "don't remove already used"
+            (2, 2)
+            (2, 4)
+            [ "import Data.Function"
+            , "g = on"
+            , "f on = on"
+            ]
+        ]
+    , testGroup
+        "multi"
+        [ testOneCodeAction
+            "hide from B"
+            "Hide ++ from B"
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B hiding ((++))"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+        , testOneCodeAction
+            "hide from C"
+            "Hide ++ from C"
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B"
+            , "import C hiding ((++))"
+            , "f (++) = (++)"
+            ]
+        , testOneCodeAction
+            "hide from Prelude"
+            "Hide ++ from Prelude"
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B"
+            , "import C"
+            , "import Prelude hiding ((++))"
+            , "f (++) = (++)"
+            ]
+        , testMultiCodeActions
+            "manual hide all"
+            [ "Hide ++ from Prelude"
+            , "Hide ++ from C"
+            , "Hide ++ from B"
+            ]
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B hiding ((++))"
+            , "import C hiding ((++))"
+            , "import Prelude hiding ((++))"
+            , "f (++) = (++)"
+            ]
+        , testOneCodeAction
+            "auto hide all"
+            "Hide ++ from all occurence imports"
+            (2, 2)
+            (2, 6)
+            [ "import B"
+            , "import C"
+            , "f (++) = (++)"
+            ]
+            [ "import B hiding ((++))"
+            , "import C hiding ((++))"
+            , "import Prelude hiding ((++))"
+            , "f (++) = (++)"
+            ]
+        ]
+    ]
+ where
+  testOneCodeAction testName actionName start end origin expected =
+    helper testName start end origin expected $ \cas -> do
+      action <- liftIO $ pickActionWithTitle actionName cas
+      executeCodeAction action
+  noCodeAction testName start end origin =
+    helper testName start end origin origin $ \cas -> do
+      liftIO $ cas @?= []
+  testMultiCodeActions testName actionNames start end origin expected =
+    helper testName start end origin expected $ \cas -> do
+      let r = [ca | (CACodeAction ca) <- cas, ca ^. L.title `elem` actionNames]
+      liftIO $
+        (length r == length actionNames)
+          @? "Expected " <> show actionNames <> ", but got " <> show cas <> " which is not its superset"
+      forM_ r executeCodeAction
+  helper testName (line1, col1) (line2, col2) origin expected k = testSession testName $ do
+    void $ createDoc "B.hs" "haskell" $ T.unlines docB
+    void $ createDoc "C.hs" "haskell" $ T.unlines docC
+    doc <- createDoc "A.hs" "haskell" $ T.unlines (header <> origin)
+    void waitForDiagnostics
+    void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+    cas <- getCodeActions doc (Range (Position (line1 + length header) col1) (Position (line2 + length header) col2))
+    void $ k [x | x@(CACodeAction ca) <- cas, "Hide" `T.isPrefixOf` (ca ^. L.title)]
+    contentAfter <- documentContents doc
+    liftIO $ contentAfter @?= T.unlines (header <> expected)
+  header =
+    [ "{-# OPTIONS_GHC -Wname-shadowing #-}"
+    , "module A where"
+    , ""
+    ]
+  -- for multi group
+  docB =
+    [ "module B where"
+    , "(++) = id"
+    ]
+  docC =
+    [ "module C where"
+    , "(++) = id"
+    ]
 
 disableWarningTests :: TestTree
 disableWarningTests =
