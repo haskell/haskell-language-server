@@ -3760,6 +3760,27 @@ otherCompletionTests = [
       (Position 3 11)
       [("Integer", CiStruct, "Integer ", True, True, Nothing)],
 
+    testSession "duplicate record fields" $ do
+      void $
+        createDoc "B.hs" "haskell" $
+          T.unlines
+            [ "{-# LANGUAGE DuplicateRecordFields #-}",
+              "module B where",
+              "newtype Foo = Foo { member :: () }",
+              "newtype Bar = Bar { member :: () }"
+            ]
+      docA <-
+        createDoc "A.hs" "haskell" $
+          T.unlines
+            [ "module A where",
+              "import B",
+              "memb"
+            ]
+      _ <- waitForDiagnostics
+      compls <- getCompletions docA $ Position 2 4
+      let compls' = [txt | CompletionItem {_insertText = Just txt, ..} <- compls, _label == "member"]
+      liftIO $ compls' @?= ["member ${1:Foo}", "member ${1:Bar}"],
+
     testSessionWait "maxCompletions" $ do
         doc <- createDoc "A.hs" "haskell" $ T.unlines
             [ "{-# OPTIONS_GHC -Wunused-binds #-}",
