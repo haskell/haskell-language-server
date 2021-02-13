@@ -81,7 +81,7 @@ jobs:
       matrix:
         ghc: ['8.10.4']
         os: [ubuntu-latest]
-        example: ['Cabal-3.0.0.0', 'lsp-types-1.0.0.1']
+        example: ['Cabal-3.0.0.0', 'lsp-types-1.0.0.1', 'bench_example_HLS']
 
     steps:
     # Cancel queued workflows from earlier commits in this branch

@@ -36,13 +36,8 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Except
     ( ExceptT (..),
     )
-import Data.Aeson
-    ( FromJSON,
-      ToJSON,
-      toJSON,
-    )
+import Data.Aeson (toJSON)
 import Data.Char (isSpace)
-import Data.Either (isRight)
 import qualified Data.HashMap.Strict as HashMap
 import Data.List
     (dropWhileEnd,
@@ -59,10 +54,10 @@ import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import Data.Typeable (Typeable)
 import Development.IDE
-    (realSrcSpanToRange,  GetModSummary (..),
+    ( Action,
+      realSrcSpanToRange,  GetModSummary (..),
       GetParsedModuleWithComments (..),
-      GhcSession (..),
-      HscEnvEq (envImportPaths),
+      HscEnvEq,
       IdeState,
       List (List),
       NormalizedFilePath,
@@ -77,9 +72,15 @@ import Development.IDE
       toNormalizedUri,
       uriToFilePath',
       useWithStale_,
-      use_, prettyPrint
+      prettyPrint,
+      use_, useNoFile_, uses_,
+      GhcSessionIO(..), GetDependencies(..), GetModIface(..),
+      HiFileResult (hirHomeMod, hirModSummary)
     )
+import Development.IDE.Core.Rules (TransitiveDependencies(transitiveModuleDeps))
+import Development.IDE.Core.Compile (setupFinderCache, loadModulesHome)
 import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan, UnhelpfulSpan), srcSpanFile, GhcException, setInteractiveDynFlags)
+import Development.IDE.Types.Options
 import DynamicLoading (initializePlugins)
 import FastString (unpackFS)
 import GHC
@@ -109,16 +110,14 @@ import GHC
       load,
       runDecls,
       setContext,
-      setInteractiveDynFlags,
       setLogAction,
       setSessionDynFlags,
       setTargets,
       typeKind,
     )
-import GHC.Generics (Generic)
-import qualified GHC.LanguageExtensions.Type as LangExt
 import GhcPlugins
     ( DynFlags (..),
+      hsc_dflags,
       defaultLogActionHPutStrDoc,
       gopt_set,
       gopt_unset,
@@ -147,15 +146,14 @@ import Ide.Plugin.Eval.Code
       testRanges,
     )
 import Ide.Plugin.Eval.GHC
-    ( addExtension,
-      addImport,
+    ( addImport,
       addPackages,
       hasPackage,
       isExpr,
       showDynFlags,
     )
 import Ide.Plugin.Eval.Parse.Comments (commentsToSections)
-import Ide.Plugin.Eval.Parse.Option (langOptions, parseSetFlags)
+import Ide.Plugin.Eval.Parse.Option (parseSetFlags)
 import Ide.Plugin.Eval.Types
 import Ide.Plugin.Eval.Util
     ( asS,
@@ -214,7 +212,6 @@ import Outputable
 import System.FilePath (takeFileName)
 import System.IO (hClose)
 import System.IO.Temp (withSystemTempFile)
-import Text.Read (readMaybe)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
@@ -344,14 +341,14 @@ runEvalCmd lsp st EvalParams{..} =
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
-            hscEnv' <- withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> ExceptT . (either Left id <$>) . gStrictTry . evalGhcEnv (hscEnvWithImportPaths session) $ do
+            hscEnv' <- withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> ExceptT . (either Left id <$>) . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
 
                 -- Install the module pragmas and options
                 df <- liftIO $ setupDynFlagsForGHCiLike env $ ms_hspp_opts ms
 
-                let impPaths = fromMaybe (importPaths df) (envImportPaths session)
-                -- Restore the cradle import paths
+                -- Restore the original import paths
+                let impPaths = importPaths $ hsc_dflags env
                 df <- return df{importPaths = impPaths}
 
                 -- Set the modified flags in the session
@@ -640,14 +637,29 @@ prettyWarn Warn{..} =
     prettyPrint (SrcLoc.getLoc warnMsg) <> ": warning:\n"
     <> "    " <> SrcLoc.unLoc warnMsg
 
-runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnvEq
-runGetSession st nfp =
-    liftIO $
-        runAction "getSession" st $
-            use_
-                GhcSession
-                -- GhcSessionDeps
-                nfp
+ghcSessionDepsDefinition :: HscEnvEq -> NormalizedFilePath -> Action HscEnv
+ghcSessionDepsDefinition env file = do
+        let hsc = hscEnvWithImportPaths env
+        deps <- use_ GetDependencies file
+        let tdeps = transitiveModuleDeps deps
+        ifaces <- uses_ GetModIface tdeps
+
+        -- Currently GetDependencies returns things in topological order so A comes before B if A imports B.
+        -- We need to reverse this as GHC gets very unhappy otherwise and complains about broken interfaces.
+        -- Long-term we might just want to change the order returned by GetDependencies
+        let inLoadOrder = reverse (map hirHomeMod ifaces)
+
+        liftIO $ loadModulesHome inLoadOrder <$> setupFinderCache (map hirModSummary ifaces) hsc
+
+runGetSession :: MonadIO m => IdeState -> NormalizedFilePath -> m HscEnv
+runGetSession st nfp = liftIO $ runAction "eval" st $ do
+    -- Create a new GHC Session rather than reusing an existing one
+    -- to avoid interfering with ghcide
+    IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
+    let fp = fromNormalizedFilePath nfp
+    ((_, res),_) <- liftIO $ loadSessionFun fp
+    let hscEnv = fromMaybe (error $ "Unknown file: " <> fp) res
+    ghcSessionDepsDefinition hscEnv nfp
 
 needsQuickCheck :: [(Section, Test)] -> Bool
 needsQuickCheck = any (isProperty . snd)
@@ -669,23 +681,6 @@ errorLines =
         . takeWhile (not . ("CallStack" `T.isPrefixOf`))
         . T.lines
         . T.pack
-
-{-
-Check that extensions actually exists.
-
->>> ghcOptions ":set -XLambdaCase"
-Right [LambdaCase]
->>> ghcOptions ":set -XLambdaCase -XNotRight"
-Left "Unknown extension: \"NotRight\""
--}
-ghcOptions :: [Char] -> Either String [LangExt.Extension]
-ghcOptions = either Left (mapM chk) . langOptions
-  where
-    chk o =
-        maybe
-            (Left $ unwords ["Unknown extension:", show o])
-            Right
-            (readMaybe o :: Maybe LangExt.Extension)
 
 {- |
 >>> map (pad_ (T.pack "--")) (map T.pack ["2+2",""])
