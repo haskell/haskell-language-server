@@ -397,7 +397,7 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
             else do
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
-                let m = SCustomMethod "ghcide/blocking/queue"
+                let m = SCustomMethod "test"
                 waitId <- sendRequest m (toJSON WaitForShakeQueue)
                 (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
                 case resp of
