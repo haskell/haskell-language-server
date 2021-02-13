@@ -269,10 +269,7 @@ common stylishHaskell
 
 common brittany
   if (flag(brittany) || flag(all-formatters)) && flag(agpl)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Brittany
-    build-depends: brittany                 >= 0.13.1.0
-    cpp-options: -Dbrittany
+    build-depends: hls-brittany-plugin
 
 executable haskell-language-server
   import:             agpl
