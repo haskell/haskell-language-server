@@ -25,6 +25,7 @@ library
     Ide.Plugin.Tactic
     Ide.Plugin.Tactic.Auto
     Ide.Plugin.Tactic.CodeGen
+    Ide.Plugin.Tactic.CodeGen.Utils
     Ide.Plugin.Tactic.Context
     Ide.Plugin.Tactic.Debug
     Ide.Plugin.Tactic.GHC
@@ -34,6 +35,7 @@ library
     Ide.Plugin.Tactic.Machinery
     Ide.Plugin.Tactic.Naming
     Ide.Plugin.Tactic.Range
+    Ide.Plugin.Tactic.Simplify
     Ide.Plugin.Tactic.Tactics
     Ide.Plugin.Tactic.Types
     Ide.Plugin.Tactic.TestTypes

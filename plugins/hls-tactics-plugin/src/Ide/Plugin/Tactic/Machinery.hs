@@ -33,6 +33,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Simplify (simplify)
 import           Ide.Plugin.Tactic.Types
 import           OccName (HasOccName(occName))
 import           Refinery.ProofState
@@ -97,7 +98,7 @@ runTactic ctx jdg t =
         case sorted of
           (((tr, ext), _) : _) ->
             Right
-              . RunTacticResults tr ext
+              . RunTacticResults tr (simplify ext)
               . reverse
               . fmap fst
               $ take 5 sorted

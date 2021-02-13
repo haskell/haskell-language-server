@@ -39,9 +39,6 @@ import Test.Tasty.HUnit
 import System.Directory (canonicalizePath)
 import Data.Maybe (fromJust)
 import Development.IDE.Plugin.Test (WaitForIdeRuleResult, TestRequest(..))
-import Data.Aeson (FromJSON)
-import Data.Typeable (Typeable)
-
 
 -- | (0-based line number, 0-based column number)
 type Cursor = (Int, Int)

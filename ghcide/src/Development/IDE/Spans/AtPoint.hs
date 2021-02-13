@@ -318,7 +318,15 @@ nameToLocation hiedb lookupModule name = runMaybeT $
       mod <- MaybeT $ return $ nameModule_maybe name
       erow <- liftIO $ findDef hiedb (nameOccName name) (Just $ moduleName mod) (Just $ moduleUnitId mod)
       case erow of
-        [] -> MaybeT $ pure Nothing
+        [] -> do
+          -- If the lookup failed, try again without specifying a unit-id.
+          -- This is a hack to make find definition work better with ghcide's nascent multi-component support,
+          -- where names from a component that has been indexed in a previous session but not loaded in this
+          -- session may end up with different unit ids
+          erow <- liftIO $ findDef hiedb (nameOccName name) (Just $ moduleName mod) Nothing
+          case erow of
+            [] -> MaybeT $ pure Nothing
+            xs -> lift $ mapMaybeM (runMaybeT . defRowToLocation lookupModule) xs
         xs -> lift $ mapMaybeM (runMaybeT . defRowToLocation lookupModule) xs
 
 defRowToLocation :: Monad m => LookupModule m -> Res DefRow -> MaybeT m Location

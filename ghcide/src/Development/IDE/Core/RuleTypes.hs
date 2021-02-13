@@ -296,7 +296,10 @@ instance NFData   GetFileContents
 instance Binary   GetFileContents
 
 
-data FileOfInterestStatus = OnDisk | Modified
+data FileOfInterestStatus
+  = OnDisk
+  | Modified { firstOpen :: !Bool -- ^ was this file just opened
+             }
   deriving (Eq, Show, Typeable, Generic)
 instance Hashable FileOfInterestStatus
 instance NFData   FileOfInterestStatus

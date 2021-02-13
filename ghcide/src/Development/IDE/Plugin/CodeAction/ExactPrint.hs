@@ -31,7 +31,7 @@ import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.GHC.ExactPrint
     ( Annotate, ASTElement(parseAST) )
 import FieldLabel (flLabel)
-import GhcPlugins (sigPrec)
+import GhcPlugins (sigPrec, mkRealSrcLoc)
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
 import Language.LSP.Types
@@ -40,9 +40,9 @@ import Outputable (ppr, showSDocUnsafe, showSDoc)
 import Retrie.GHC (rdrNameOcc, unpackFS, mkRealSrcSpan, realSrcSpanEnd)
 import Development.IDE.Spans.Common
 import Development.IDE.GHC.Error
-import Safe (lastMay)
 import Data.Generics (listify)
 import GHC.Exts (IsList (fromList))
+import Control.Monad.Extra (whenJust)
 
 ------------------------------------------------------------------------------
 
@@ -205,6 +205,7 @@ extendImport mparent identifier lDecl@(L l _) =
 -- extendImportTopLevel "foo" AST:
 --
 -- import A --> Error
+-- import A (foo) --> Error
 -- import A (bar) --> import A (bar, foo)
 extendImportTopLevel :: DynFlags -> String -> LImportDecl GhcPs -> TransformT (Either String) (LImportDecl GhcPs)
 extendImportTopLevel df idnetifier (L l it@ImportDecl {..})
@@ -382,6 +383,8 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
         lidecl' = L l $ idecl
             { ideclHiding = Just (False, edited)
             }
+    -- avoid import A (foo,)
+    whenJust (lastMaybe deletedLies) removeTrailingCommaT
     when (not (null lies) && null deletedLies) $ do
         transferAnn llies edited id
         addSimpleAnnT edited dp00
@@ -408,13 +411,16 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
                   (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
         killLie v = Just v
 
+-- | Insert a import declaration hiding a symbole from Prelude
 hideImplicitPreludeSymbol
     :: String -> ParsedSource -> Maybe Rewrite
 hideImplicitPreludeSymbol symbol (L _ HsModule{..}) = do
-    existingImp <- lastMay hsmodImports
-    exisImpSpan <- realSpan $ getLoc existingImp
-    let indentation = srcSpanStartCol exisImpSpan
-        beg = realSrcSpanEnd exisImpSpan
+    let predLine old = mkRealSrcLoc (srcLocFile old) (srcLocLine old - 1) (srcLocCol old)
+        existingImpSpan =  (fmap (id,) . realSpan . getLoc) =<< lastMaybe hsmodImports
+        existingDeclSpan = (fmap (predLine, ) . realSpan . getLoc) =<< headMaybe hsmodDecls
+    (f, s) <- existingImpSpan <|> existingDeclSpan
+    let beg = f $ realSrcSpanEnd s
+        indentation = srcSpanStartCol s
         ran = RealSrcSpan $ mkRealSrcSpan beg beg
     pure $ Rewrite ran $ \df -> do
         let symOcc = mkVarOcc symbol
@@ -424,6 +430,6 @@ hideImplicitPreludeSymbol symbol (L _ HsModule{..}) = do
         -- Re-labeling is needed to reflect annotations correctly
         L _ idecl0 <- liftParseAST @(ImportDecl GhcPs) df $ T.unpack impStmt
         let idecl = L ran idecl0
-        addSimpleAnnT idecl (DP (1,indentation - 1))
+        addSimpleAnnT idecl (DP (1, indentation - 1))
             [(G AnnImport, DP (1, indentation - 1))]
         pure idecl
