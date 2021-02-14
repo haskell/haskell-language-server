@@ -12,7 +12,7 @@ where
 
 import           Control.Exception
 import qualified Data.Text                         as T
-import           Development.IDE
+import           Development.IDE hiding (pluginHandlers)
 import qualified DynFlags                          as D
 import qualified EnumSet                           as S
 import           GHC
@@ -20,24 +20,24 @@ import           GHC.LanguageExtensions.Type
 import           GhcPlugins                        (HscEnv (hsc_dflags))
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.LSP.Core         (LspFuncs (withIndefiniteProgress),
-                                                    ProgressCancellable (Cancellable))
-import           Language.Haskell.LSP.Types
+import           Language.LSP.Server
+import           Language.LSP.Types
 import "ormolu"  Ormolu
 import           System.FilePath                   (takeFileName)
 import           Text.Regex.TDFA.Text              ()
+import Control.Monad.IO.Class
 
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-  { pluginFormattingProvider = Just provider
+  { pluginHandlers = mkFormattingHandlers provider
   }
 
 -- ---------------------------------------------------------------------
 
-provider :: FormattingProvider IdeState IO
-provider lf ideState typ contents fp _ = withIndefiniteProgress lf title Cancellable $ do
+provider :: FormattingHandler IdeState
+provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $ liftIO $ do
   let
     fromDyn :: DynFlags -> IO [DynOption]
     fromDyn df =

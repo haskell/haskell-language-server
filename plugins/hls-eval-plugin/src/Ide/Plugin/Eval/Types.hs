@@ -38,7 +38,7 @@ import Data.String (IsString (..))
 import Development.IDE (Range)
 import GHC.Generics (Generic)
 import qualified Text.Megaparsec as P
-import Language.Haskell.LSP.Types (TextDocumentIdentifier)
+import Language.LSP.Types (TextDocumentIdentifier)
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}

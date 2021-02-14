@@ -2,37 +2,23 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module Eval (
     tests,
 ) where
 
 import Control.Applicative.Combinators (
-    skipManyTill,
+    skipManyTill
  )
 import Control.Monad (when)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Language.Haskell.LSP.Test (
-    Session,
-    anyMessage,
-    documentContents,
-    executeCommand,
-    fullCaps,
-    getCodeLenses,
-    message,
-    openDoc,
-    runSession,
- )
-import Language.Haskell.LSP.Types (
-    ApplyWorkspaceEditRequest,
-    CodeLens (CodeLens, _command, _range),
-    Command (Command, _title, _arguments),
-    Position (..),
-    Range (..),
-    TextDocumentIdentifier,
- )
+import Language.LSP.Test
+import Language.LSP.Types
+import Language.LSP.Types.Lens (command, title, range)
+import Control.Lens (view, _Just, preview)
 import System.Directory (doesFileExist)
 import System.FilePath (
     (<.>),
@@ -51,7 +37,6 @@ import Test.Tasty.HUnit (
     (@?=),
  )
 import Data.List.Extra (nubOrdOn)
-import Development.IDE (List(List))
 import Ide.Plugin.Eval.Types (EvalParams(..))
 import Data.Aeson (fromJSON)
 import Data.Aeson.Types (Result(Success))
@@ -64,27 +49,27 @@ tests =
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
-                liftIO $ map (fmap _title . _command) lenses @?= [Just "Evaluate..."]
+                liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Evaluate..."]
         , testCase "Produces Refresh code lenses" $
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
-                liftIO $ map (fmap _title . _command) lenses @?= [Just "Refresh..."]
+                liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Refresh..."]
         , testCase "Code lenses have ranges" $
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
-                liftIO $ map _range lenses @?= [Range (Position 4 0) (Position 5 0)]
+                liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
         , testCase "Multi-line expressions have a multi-line range" $ do
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T3.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
-                liftIO $ map _range lenses @?= [Range (Position 3 0) (Position 5 0)]
+                liftIO $ map (view range) lenses @?= [Range (Position 3 0) (Position 5 0)]
         , testCase "Executed expressions range covers only the expression" $ do
             runSession hlsCommand fullCaps evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
-                liftIO $ map _range lenses @?= [Range (Position 4 0) (Position 5 0)]
+                liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
         , testCase "Evaluation of expressions" $ goldenTest "T1.hs"
         , testCase "Reevaluation of expressions" $ goldenTest "T2.hs"
         , testCase "Evaluation of expressions w/ imports" $ goldenTest "T3.hs"
@@ -227,7 +212,7 @@ getCodeLensesBy f doc = filter f <$> getCodeLenses doc
 executeCmd :: Command -> Session ()
 executeCmd cmd = do
     executeCommand cmd
-    _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+    _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
     -- liftIO $ print _resp
     return ()
 

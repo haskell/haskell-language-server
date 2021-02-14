@@ -112,8 +112,8 @@ main = do
                       , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
                       , optTesting = IdeTesting argsTesting
                       , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
-                      , optCheckParents = checkParents config
-                      , optCheckProject = checkProject config
+                      , optCheckParents = pure $ checkParents config
+                      , optCheckProject = pure $ checkProject config
                       }
                 }
 

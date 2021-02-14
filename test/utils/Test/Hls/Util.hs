@@ -1,8 +1,8 @@
-{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns, MultiParamTypeClasses #-}
+{-# LANGUAGE CPP, OverloadedStrings, NamedFieldPuns, MultiParamTypeClasses, DuplicateRecordFields, TypeOperators, GADTs #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Test.Hls.Util
   (
       codeActionSupportCaps
-    , dummyLspFuncs
     , expectCodeAction
     , expectDiagnostic
     , expectNoMoreDiagnostics
@@ -36,6 +36,7 @@ module Test.Hls.Util
   )
 where
 
+import qualified Data.Aeson as A
 import           Control.Exception (throwIO, catch)
 import           Control.Monad
 import           Control.Monad.IO.Class
@@ -47,12 +48,10 @@ import           Data.List.Extra (find)
 import           Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import           Language.Haskell.LSP.Core
-import           Language.Haskell.LSP.Messages (FromServerMessage(NotLogMessage))
-import           Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Test as Test
-import qualified Language.Haskell.LSP.Types.Lens as L
-import qualified Language.Haskell.LSP.Types.Capabilities as C
+import           Language.LSP.Types hiding (Reason(..))
+import qualified Language.LSP.Test as Test
+import qualified Language.LSP.Types.Lens as L
+import qualified Language.LSP.Types.Capabilities as C
 import           System.Directory
 import           System.Environment
 import           System.Time.Extra (Seconds, sleep)
@@ -72,8 +71,8 @@ codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = C.CodeActionClientCapabilities (Just True) (Just literalSupport)
-    literalSupport = C.CodeActionLiteralSupport def
+    codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True)
+    literalSupport = CodeActionLiteralSupport def
 
 -- ---------------------------------------------------------------------
 
@@ -292,22 +291,6 @@ flushStackEnvironment = do
 
 -- ---------------------------------------------------------------------
 
-dummyLspFuncs :: Default a => LspFuncs a
-dummyLspFuncs = LspFuncs { clientCapabilities = def
-                         , config = return (Just def)
-                         , sendFunc = const (return ())
-                         , getVirtualFileFunc = const (return Nothing)
-                         , persistVirtualFileFunc = \uri -> return (uriToFilePath (fromNormalizedUri uri))
-                         , reverseFileMapFunc = return id
-                         , publishDiagnosticsFunc = mempty
-                         , flushDiagnosticsBySourceFunc = mempty
-                         , getNextReqId = pure (IdInt 0)
-                         , rootPath = Nothing
-                         , getWorkspaceFolders = return Nothing
-                         , withProgress = \_ _ f -> f (const (return ()))
-                         , withIndefiniteProgress = \_ _ f -> f
-                         }
-
 -- | Like 'withCurrentDirectory', but will copy the directory over to the system
 -- temporary directory first to avoid haskell-language-server's source tree from
 -- interfering with the cradle
@@ -335,12 +318,12 @@ copyDir src dst = do
         else copyFile srcFp dstFp
   where ignored = ["dist", "dist-newstyle", ".stack-work"]
 
-fromAction :: CAResult -> CodeAction
-fromAction (CACodeAction action) = action
+fromAction :: (Command |? CodeAction) -> CodeAction
+fromAction (InR action) = action
 fromAction _ = error "Not a code action"
 
-fromCommand :: CAResult -> Command
-fromCommand (CACommand command) = command
+fromCommand :: (Command |? CodeAction) -> Command
+fromCommand (InL command) = command
 fromCommand _ = error "Not a command"
 
 onMatch :: [a] -> (a -> Bool) -> String -> IO a
@@ -353,24 +336,24 @@ inspectDiagnostic diags s = onMatch diags (\ca -> all (`T.isInfixOf` (ca ^. L.me
 expectDiagnostic :: [Diagnostic] -> [T.Text] -> IO ()
 expectDiagnostic diags s = void $ inspectDiagnostic diags s
 
-inspectCodeAction :: [CAResult] -> [T.Text] -> IO CodeAction
+inspectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO CodeAction
 inspectCodeAction cars s = fromAction <$> onMatch cars predicate err
-    where predicate (CACodeAction ca) = all (`T.isInfixOf` (ca ^. L.title)) s
+    where predicate (InR ca) = all (`T.isInfixOf` (ca ^. L.title)) s
           predicate _ = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
-expectCodeAction :: [CAResult] -> [T.Text] -> IO ()
+expectCodeAction :: [Command |? CodeAction] -> [T.Text] -> IO ()
 expectCodeAction cars s = void $ inspectCodeAction cars s
 
-inspectCommand :: [CAResult] -> [T.Text] -> IO Command
+inspectCommand :: [Command |? CodeAction] -> [T.Text] -> IO Command
 inspectCommand cars s = fromCommand <$> onMatch cars predicate err
-    where predicate (CACommand command) = all  (`T.isInfixOf` (command ^. L.title)) s
+    where predicate (InL command) = all  (`T.isInfixOf` (command ^. L.title)) s
           predicate _ = False
           err = "expected code action matching '" ++ show s ++ "' but did not find one"
 
 waitForDiagnosticsFrom :: TextDocumentIdentifier -> Test.Session [Diagnostic]
 waitForDiagnosticsFrom doc = do
-    diagsNot <- skipManyTill Test.anyMessage Test.message :: Test.Session PublishDiagnosticsNotification
+    diagsNot <- skipManyTill Test.anyMessage (Test.message STextDocumentPublishDiagnostics)
     let (List diags) = diagsNot ^. L.params . L.diagnostics
     if doc ^. L.uri /= diagsNot ^. L.params . L.uri
        then waitForDiagnosticsFrom doc
@@ -378,7 +361,7 @@ waitForDiagnosticsFrom doc = do
 
 waitForDiagnosticsFromSource :: TextDocumentIdentifier -> String -> Test.Session [Diagnostic]
 waitForDiagnosticsFromSource doc src = do
-    diagsNot <- skipManyTill Test.anyMessage Test.message :: Test.Session PublishDiagnosticsNotification
+    diagsNot <- skipManyTill Test.anyMessage (Test.message STextDocumentPublishDiagnostics)
     let (List diags) = diagsNot ^. L.params . L.diagnostics
     let res = filter matches diags
     if doc ^. L.uri /= diagsNot ^. L.params . L.uri || null res
@@ -408,7 +391,7 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
         -- Send a dummy message to provoke a response from the server.
         -- This guarantees that we have at least one message to
         -- process, so message won't block or timeout.
-        void $ Test.sendRequest (CustomClientMethod "non-existent-method") ()
+        void $ Test.sendNotification (SCustomMethod "non-existent-method") A.Null
     handleMessages
   where
     matches :: Diagnostic -> Bool
@@ -416,7 +399,7 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
 
     handleMessages = handleDiagnostic <|> handleCustomMethodResponse <|> ignoreOthers
     handleDiagnostic = do
-        diagsNot <- Test.message :: Test.Session PublishDiagnosticsNotification
+        diagsNot <- Test.message STextDocumentPublishDiagnostics
         let fileUri = diagsNot ^. L.params . L.uri
             (List diags) = diagsNot ^. L.params . L.diagnostics
             res = filter matches diags
@@ -427,8 +410,9 @@ waitForDiagnosticsFromSourceWithTimeout timeout document source = do
         -- handle that and then exit
         void (Test.satisfyMaybe responseForNonExistentMethod) >> return []
 
+    responseForNonExistentMethod :: FromServerMessage -> Maybe FromServerMessage
     responseForNonExistentMethod notif
-        | NotLogMessage logMsg <- notif,
+        | FromServerMess SWindowLogMessage logMsg <- notif,
           "non-existent-method" `T.isInfixOf` (logMsg ^. L.params . L.message)  = Just notif
         | otherwise = Nothing
 

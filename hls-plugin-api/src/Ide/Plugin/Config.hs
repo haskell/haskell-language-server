@@ -6,9 +6,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 module Ide.Plugin.Config
-    (
-      getInitialConfig
-    , getConfigFromNotification
+    ( getConfigFromNotification
     , Config(..)
     , parseConfig
     , PluginConfig(..)
@@ -21,7 +19,6 @@ import qualified Data.Aeson.Types              as A
 import           Data.Aeson              hiding ( Error )
 import           Data.Default
 import qualified Data.Text                     as T
-import           Language.Haskell.LSP.Types
 import qualified Data.Map as Map
 import GHC.Generics (Generic)
 
@@ -29,18 +26,9 @@ import GHC.Generics (Generic)
 
 -- | Given a DidChangeConfigurationNotification message, this function returns the parsed
 -- Config object if possible.
-getConfigFromNotification :: Config -> DidChangeConfigurationNotification -> Either T.Text Config
-getConfigFromNotification defaultValue (NotificationMessage _ _ (DidChangeConfigurationParams p)) =
+getConfigFromNotification :: Config -> A.Value -> Either T.Text Config
+getConfigFromNotification defaultValue p =
   case A.parse (parseConfig defaultValue) p of
-    A.Success c -> Right c
-    A.Error err -> Left $ T.pack err
-
--- | Given an InitializeRequest message, this function returns the parsed
--- Config object if possible. Otherwise, it returns the default configuration
-getInitialConfig :: Config -> InitializeRequest -> Either T.Text Config
-getInitialConfig defaultValue (RequestMessage _ _ _ InitializeParams{_initializationOptions = Nothing }) = Right defaultValue
-getInitialConfig defaultValue (RequestMessage _ _ _ InitializeParams{_initializationOptions = Just opts}) =
-  case A.parse (parseConfig defaultValue) opts of
     A.Success c -> Right c
     A.Error err -> Left $ T.pack err
 
@@ -54,7 +42,6 @@ data CheckParents
     | AlwaysCheck
   deriving stock (Eq, Ord, Show, Generic)
   deriving anyclass (FromJSON, ToJSON)
-
 
 -- | We (initially anyway) mirror the hie configuration, so that existing
 -- clients can simply switch executable and not have any nasty surprises.  There
