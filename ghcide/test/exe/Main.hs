@@ -4762,12 +4762,7 @@ asyncTests = testGroup "async"
 
 clientSettingsTest :: TestTree
 clientSettingsTest = testGroup "client settings handling"
-    [
-        testSession "ghcide does not support update config" $ do
-            sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
-            logNot <- skipManyTill anyMessage loggingNotification
-            isMessagePresent "Updating Not supported" [getLogMessage logNot]
-    ,   testSession "ghcide restarts shake session on config changes" $ do
+    [ testSession "ghcide restarts shake session on config changes" $ do
             void $ skipManyTill anyMessage $ message @RegisterCapabilityRequest
             sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON ("" :: String)))
             nots <- skipManyTill anyMessage $ count 3 loggingNotification
