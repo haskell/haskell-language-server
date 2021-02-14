@@ -24,7 +24,7 @@ module Development.IDE.Core.PositionMapping
 
 import Control.Monad
 import qualified Data.Text as T
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
 import Data.List
 import Data.Algorithm.Diff
 import Data.Bifunctor

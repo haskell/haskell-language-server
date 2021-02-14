@@ -6,9 +6,9 @@ import           Control.Lens hiding (List)
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Default
-import           Language.Haskell.LSP.Test hiding (message)
-import           Language.Haskell.LSP.Types as LSP
-import           Language.Haskell.LSP.Types.Lens as LSP hiding (contents)
+import           Language.LSP.Test hiding (message)
+import           Language.LSP.Types as LSP
+import           Language.LSP.Types.Lens as LSP hiding (contents)
 import           Ide.Plugin.Config
 import           Test.Hls.Util
 import           Test.Tasty
@@ -25,7 +25,7 @@ tests = testGroup "liquid haskell diagnostics" [
             doc <- openDoc "liquid/Evens.hs" "haskell"
 
             let config = def { liquidOn  = True, hlintOn = False }
-            sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+            sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
             diags <- waitForDiagnosticsFromSource doc "liquid"
             d <- liftIO $ inspectDiagnostic diags ["Liquid Type Mismatch"]

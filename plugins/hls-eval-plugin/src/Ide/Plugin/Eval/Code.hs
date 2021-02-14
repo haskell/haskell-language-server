@@ -24,7 +24,7 @@ import Ide.Plugin.Eval.Types (
 import InteractiveEval (runDecls)
 import Unsafe.Coerce (unsafeCoerce)
 import Control.Lens ((^.))
-import Language.Haskell.LSP.Types.Lens (start, line)
+import Language.LSP.Types.Lens (start, line)
 
 -- | Return the ranges of the expression and result parts of the given test
 testRanges :: Test -> (Range, Range)

@@ -30,7 +30,8 @@ import Control.Arrow (second, (>>>))
 import qualified Control.Exception as E
 import Control.Monad
     ( void,
-      when, guard
+      when, guard,
+      join
     )
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Except
@@ -59,17 +60,11 @@ import Development.IDE
       GetParsedModuleWithComments (..),
       HscEnvEq,
       IdeState,
-      List (List),
-      NormalizedFilePath,
-      Range (Range),
-      Uri,
       evalGhcEnv,
-      fromNormalizedFilePath,
       hscEnvWithImportPaths,
       runAction,
       textToStringBuffer,
       toNormalizedFilePath',
-      toNormalizedUri,
       uriToFilePath',
       useWithStale_,
       prettyPrint,
@@ -166,41 +161,10 @@ import Ide.Plugin.Eval.Util
       response',
       timed,
     )
-import Ide.PluginUtils (mkLspCommand)
 import Ide.Types
-    ( CodeLensProvider,
-      CommandFunction,
-      CommandId,
-      PluginCommand (PluginCommand),
-    )
-import Language.Haskell.LSP.Core
-    ( LspFuncs
-        ( getVirtualFileFunc,
-          withIndefiniteProgress
-        ),
-      ProgressCancellable
-        ( Cancellable
-        ),
-    )
-import Language.Haskell.LSP.Types
-    ( ApplyWorkspaceEditParams
-        ( ApplyWorkspaceEditParams
-        ),
-      CodeLens (CodeLens),
-      CodeLensParams
-        ( CodeLensParams,
-          _textDocument
-        ),
-      Command (_arguments, _title),
-      Position (..),
-      ServerMethod
-        ( WorkspaceApplyEdit
-        ),
-      TextDocumentIdentifier (..),
-      TextEdit (TextEdit),
-      WorkspaceEdit (WorkspaceEdit),
-    )
-import Language.Haskell.LSP.VFS (virtualFileText)
+import Language.LSP.Server
+import Language.LSP.Types
+import Language.LSP.VFS (virtualFileText)
 import Outputable
     ( nest,
       ppr,
@@ -211,21 +175,21 @@ import Outputable
     )
 import System.FilePath (takeFileName)
 import System.IO (hClose)
-import System.IO.Temp (withSystemTempFile)
+import UnliftIO.Temporary (withSystemTempFile)
 import Util (OverridingBool (Never))
 import Development.IDE.Core.PositionMapping (toCurrentRange)
 import qualified Data.DList as DL
 import Control.Lens ((^.), _1, (%~), (<&>), _3)
-import Language.Haskell.LSP.Types.Lens (line, end)
-import Control.Exception (try)
+import Language.LSP.Types.Lens (line, end)
 import CmdLineParser
 import qualified Development.IDE.GHC.Compat as SrcLoc
+import Control.Exception (try)
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
 -}
-codeLens :: CodeLensProvider IdeState
-codeLens _lsp st plId CodeLensParams{_textDocument} =
+codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLens st plId CodeLensParams{_textDocument} =
     let dbg = logWith st
         perf = timed dbg
      in perf "codeLens" $
@@ -271,7 +235,7 @@ codeLens _lsp st plId CodeLensParams{_textDocument} =
                 -- Extract tests from source code
                 let Sections{..} = commentsToSections isLHS comments
                     tests = testsBySection nonSetupSections
-                cmd <- liftIO $ mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
+                    cmd = mkLspCommand plId evalCommandName "Evaluate=..." (Just [])
                 let lenses =
                         [ CodeLens testRange (Just cmd') Nothing
                         | (section, ident, test) <- tests
@@ -313,16 +277,17 @@ evalCommand = PluginCommand evalCommandName "evaluate" runEvalCmd
 type EvalId = Int
 
 runEvalCmd :: CommandFunction IdeState EvalParams
-runEvalCmd lsp st EvalParams{..} =
+runEvalCmd st EvalParams{..} =
     let dbg = logWith st
         perf = timed dbg
+        cmd :: ExceptT String (LspM c) WorkspaceEdit
         cmd = do
             let tests = map (\(a,_,b) -> (a,b)) $ testsBySection sections
 
             let TextDocumentIdentifier{_uri} = module_
             fp <- handleMaybe "uri" $ uriToFilePath' _uri
             let nfp = toNormalizedFilePath' fp
-            mdlText <- moduleText lsp _uri
+            mdlText <- moduleText _uri
 
             session <- runGetSession st nfp
 
@@ -341,7 +306,7 @@ runEvalCmd lsp st EvalParams{..} =
                         (Just (textToStringBuffer mdlText, now))
 
             -- Setup environment for evaluation
-            hscEnv' <- withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> ExceptT . (either Left id <$>) . gStrictTry . evalGhcEnv session $ do
+            hscEnv' <- ExceptT $ fmap join $ withSystemTempFile (takeFileName fp) $ \logFilename logHandle -> liftIO . gStrictTry . evalGhcEnv session $ do
                 env <- getSession
 
                 -- Install the module pragmas and options
@@ -413,9 +378,9 @@ runEvalCmd lsp st EvalParams{..} =
             let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
             let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
 
-            return (WorkspaceApplyEdit, ApplyWorkspaceEditParams workspaceEdits)
+            return workspaceEdits
      in perf "evalCmd" $
-            withIndefiniteProgress lsp "Evaluating" Cancellable $
+            withIndefiniteProgress "Evaluating" Cancellable $
                 response' cmd
 
 addFinalReturn :: Text -> [TextEdit] -> [TextEdit]
@@ -432,14 +397,12 @@ finalReturn txt =
         p = Position l c
      in TextEdit (Range p p) "\n"
 
-moduleText :: (IsString e, MonadIO m) => LspFuncs c -> Uri -> ExceptT e m Text
-moduleText lsp uri =
+moduleText :: (IsString e, MonadLsp c m) => Uri -> ExceptT e m Text
+moduleText uri =
     handleMaybeM "mdlText" $
-        liftIO $
-            (virtualFileText <$>)
-                <$> getVirtualFileFunc
-                    lsp
-                    (toNormalizedUri uri)
+      (virtualFileText <$>)
+          <$> getVirtualFile
+              (toNormalizedUri uri)
 
 testsBySection :: [Section] -> [(Section, EvalId, Test)]
 testsBySection sections =

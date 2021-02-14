@@ -17,12 +17,11 @@ module Development.IDE.Types.Options
   , OptHaddockParse(..)
   ,optShakeFiles) where
 
-import Data.Default
 import Development.Shake
 import Development.IDE.Types.HscEnvEq (HscEnvEq)
 import           GHC hiding (parseModule, typecheckModule)
 import           GhcPlugins                     as GHC hiding (fst3, (<>))
-import qualified Language.Haskell.LSP.Types.Capabilities as LSP
+import qualified Language.LSP.Types.Capabilities as LSP
 import qualified Data.Text as T
 import Development.IDE.Types.Diagnostics
 import Control.DeepSeq (NFData(..))
@@ -72,9 +71,9 @@ data IdeOptions = IdeOptions
     --   features such as diagnostics and go-to-definition, in
     --   situations in which they would become unavailable because of
     --   the presence of type errors, holes or unbound variables.
-  , optCheckProject :: !Bool
+  , optCheckProject :: IO Bool
     -- ^ Whether to typecheck the entire project on load
-  , optCheckParents :: CheckParents
+  , optCheckParents :: IO CheckParents
     -- ^ When to typecheck reverse dependencies of a file
   , optHaddockParse :: OptHaddockParse
     -- ^ Whether to return result of parsing module with Opt_Haddock.
@@ -133,8 +132,8 @@ defaultIdeOptions session = IdeOptions
     ,optKeywords = haskellKeywords
     ,optDefer = IdeDefer True
     ,optTesting = IdeTesting False
-    ,optCheckProject = checkProject def
-    ,optCheckParents = checkParents def
+    ,optCheckProject = pure True
+    ,optCheckParents = pure CheckOnSaveAndClose
     ,optHaddockParse = HaddockParse
     ,optCustomDynFlags = id
     }

@@ -6,7 +6,6 @@ module Ide.Plugin.Eval.Parse.Option (
     parseSetFlags,
 ) where
 
-import Control.Monad.Combinators (many)
 import Text.Megaparsec.Char
 import Text.Megaparsec
 import Data.Void (Void)

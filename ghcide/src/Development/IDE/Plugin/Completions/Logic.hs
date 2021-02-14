@@ -34,9 +34,9 @@ import Pair
 import Coercion
 #endif
 
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Capabilities
-import qualified Language.Haskell.LSP.VFS as VFS
+import Language.LSP.Types
+import Language.LSP.Types.Capabilities
+import qualified Language.LSP.VFS as VFS
 import Development.IDE.Core.Compile
 import Development.IDE.Core.PositionMapping
 import Development.IDE.Plugin.Completions.Types
@@ -203,7 +203,7 @@ mkCompl
                         T.intercalate sectionSeparator docs'
 
 mkAdditionalEditsCommand :: PluginId -> ExtendImport -> IO Command
-mkAdditionalEditsCommand pId edits =
+mkAdditionalEditsCommand pId edits = pure $
   mkLspCommand pId (CommandId extendImportCommandId) "extend import" (Just [toJSON edits])
 
 mkNameCompItem :: Uri -> Maybe T.Text -> OccName -> ModuleName -> Maybe Type -> Maybe Backtick -> SpanDoc -> Maybe (LImportDecl GhcPs) -> CompItem

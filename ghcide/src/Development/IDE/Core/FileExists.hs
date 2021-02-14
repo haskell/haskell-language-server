@@ -26,7 +26,9 @@ import           Development.IDE.Types.Options
 import           Development.Shake
 import           Development.Shake.Classes
 import           GHC.Generics
-import           Language.Haskell.LSP.Types.Capabilities
+import           Language.LSP.Server hiding (getVirtualFile)
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
 import qualified System.Directory as Dir
 import qualified System.FilePath.Glob as Glob
 
@@ -148,8 +150,18 @@ watchedGlobs opts = [ "**/*." ++ extIncBoot | ext <- optExtensions opts, extIncB
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
 --   Creates a global state as a side effect in that case.
-fileExistsRules :: ClientCapabilities -> VFSHandle -> Rules ()
-fileExistsRules ClientCapabilities{_workspace} vfs = do
+fileExistsRules :: Maybe (LanguageContextEnv c) -> VFSHandle -> Rules ()
+fileExistsRules lspEnv vfs = do
+  supportsWatchedFiles <- case lspEnv of
+    Just lspEnv' -> liftIO $ runLspT lspEnv' $ do
+      ClientCapabilities {_workspace} <- getClientCapabilities
+      case () of
+        _ | Just WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
+          , Just DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
+          , Just True <- _dynamicRegistration
+          -> pure True
+        _ -> pure False
+    Nothing -> pure False
   -- Create the global always, although it should only be used if we have fast rules.
   -- But there's a chance someone will send unexpected notifications anyway,
   -- e.g. https://github.com/haskell/ghcide/issues/599
@@ -159,12 +171,9 @@ fileExistsRules ClientCapabilities{_workspace} vfs = do
   opts <- liftIO $ getIdeOptionsIO extras
   let globs = watchedGlobs opts
 
-  case () of
-    _ | Just WorkspaceClientCapabilities{_didChangeWatchedFiles} <- _workspace
-      , Just DidChangeWatchedFilesClientCapabilities{_dynamicRegistration} <- _didChangeWatchedFiles
-      , Just True <- _dynamicRegistration
-        -> fileExistsRulesFast globs vfs
-      | otherwise -> fileExistsRulesSlow vfs
+  if supportsWatchedFiles
+    then fileExistsRulesFast globs vfs
+    else fileExistsRulesSlow vfs
 
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
 fileExistsRulesFast :: [String] -> VFSHandle -> Rules ()

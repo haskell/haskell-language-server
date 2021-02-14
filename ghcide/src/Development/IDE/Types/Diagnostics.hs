@@ -20,12 +20,12 @@ import Control.DeepSeq
 import Data.Maybe as Maybe
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc
-import Language.Haskell.LSP.Types as LSP (DiagnosticSource,
+import Language.LSP.Types as LSP (DiagnosticSource,
     DiagnosticSeverity(..)
   , Diagnostic(..)
   , List(..)
   )
-import Language.Haskell.LSP.Diagnostics
+import Language.LSP.Diagnostics
 import Data.Text.Prettyprint.Doc.Render.Text
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
 import Data.Text.Prettyprint.Doc.Render.Terminal (Color(..), color)

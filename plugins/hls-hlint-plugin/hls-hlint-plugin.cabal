@@ -41,9 +41,9 @@ library
     , ghc-exactprint           >=0.6.3.4
     , ghcide                   >=0.7.2.0
     , hashable
-    , haskell-lsp
+    , lsp
     , hlint                    >=3.2
-    , hls-plugin-api           >=0.7.0.0
+    , hls-plugin-api           >=0.7.1.0
     , hslogger
     , lens
     , regex-tdfa
@@ -64,9 +64,10 @@ library
 
     cpp-options:   -DHLINT_ON_GHC_LIB
 
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
+  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror
 
   default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators

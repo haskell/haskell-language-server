@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults -fno-warn-unused-binds -fno-warn-unused-imports #-}
+{-# OPTIONS_GHC -Wall -Wwarn -fno-warn-type-defaults -fno-warn-unused-binds -fno-warn-unused-imports -Wno-unticked-promoted-constructors #-}
 
 {- | Keep the module name in sync with its file path.
 
@@ -15,6 +15,7 @@ module Ide.Plugin.ModuleName (
 ) where
 
 import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad
 import Data.Aeson (
     ToJSON (toJSON),
     Value (Null),
@@ -57,32 +58,10 @@ import GHC (
     unLoc,
  )
 import Ide.PluginUtils (mkLspCmdId, getProcessID)
-import Ide.Types (
-    CommandFunction,
-    PluginCommand (..),
-    PluginDescriptor (..),
-    PluginId (..),
-    defaultPluginDescriptor,
- )
-import Language.Haskell.LSP.Core (
-    LspFuncs,
-    getVirtualFileFunc,
- )
-import Language.Haskell.LSP.Types (
-    ApplyWorkspaceEditParams (..),
-    CodeLens (CodeLens),
-    CodeLensParams (CodeLensParams),
-    Command (Command),
-    ServerMethod (..),
-    TextDocumentIdentifier (
-        TextDocumentIdentifier
-    ),
-    TextEdit (TextEdit),
-    Uri,
-    WorkspaceEdit (..),
-    uriToNormalizedFilePath,
- )
-import Language.Haskell.LSP.VFS (virtualFileText)
+import Ide.Types
+import Language.LSP.Server
+import Language.LSP.Types
+import Language.LSP.VFS (virtualFileText)
 import System.Directory (canonicalizePath)
 import System.FilePath (
     dropExtension,
@@ -94,7 +73,7 @@ import System.FilePath (
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
-        { pluginCodeLensProvider = Just codeLens
+        { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLens
         , pluginCommands = [PluginCommand editCommandName editCommandName command]
         }
 
@@ -109,25 +88,20 @@ asCodeLens cid Replace{..} =
         Nothing
 
 -- | Generate code lenses
-codeLens ::
-    LspFuncs c ->
-    IdeState ->
-    PluginId ->
-    CodeLensParams ->
-    IO (Either a2 (List CodeLens))
-codeLens lsp state pluginId (CodeLensParams (TextDocumentIdentifier uri) _) =
+codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLens state pluginId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
     do
-        pid <- pack . show <$> getProcessID
-        Right . List . maybeToList . (asCodeLens (mkLspCmdId pid pluginId editCommandName) <$>) <$> action lsp state uri
+        pid <- liftIO $ pack . show <$> getProcessID
+        Right . List . maybeToList . (asCodeLens (mkLspCmdId pid pluginId editCommandName) <$>) <$> action state uri
 
 -- | (Quasi) Idempotent command execution: recalculate action to execute on command request
 command :: CommandFunction IdeState Uri
-command lsp state uri = do
-    actMaybe <- action lsp state uri
-    return
-        ( Right Null
-        , (\act -> (WorkspaceApplyEdit, ApplyWorkspaceEditParams $ asEdit act)) <$> actMaybe
-        )
+command state uri = do
+    actMaybe <- action state uri
+    case actMaybe of
+      Nothing -> pure ()
+      Just act -> void $ sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing (asEdit act)) (\_ -> pure ())
+    return (Right Null)
 
 -- | A source code change
 data Action = Replace {aUri :: Uri, aRange :: Range, aTitle :: Text, aCode :: Text} deriving (Show)
@@ -141,17 +115,17 @@ asTextEdits :: Action -> [TextEdit]
 asTextEdits Replace{..} = [TextEdit aRange aCode]
 
 -- | Required action (that can be converted to either CodeLenses or CodeActions)
-action :: LspFuncs c -> IdeState -> Uri -> IO (Maybe Action)
-action lsp state uri =
+action :: IdeState -> Uri -> LspM c (Maybe Action)
+action state uri =
     traceAs "action" <$> do
         let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
         let Just fp = uriToFilePath' uri
 
-        contents <- liftIO $ getVirtualFileFunc lsp $ toNormalizedUri uri
+        contents <- getVirtualFile $ toNormalizedUri uri
         let emptyModule = maybe True (T.null . T.strip . virtualFileText) contents
 
-        correctNameMaybe <- traceAs "correctName" <$> pathModuleName state nfp fp
-        statedNameMaybe <- traceAs "statedName" <$> codeModuleName state nfp
+        correctNameMaybe <- liftIO $ traceAs "correctName" <$> pathModuleName state nfp fp
+        statedNameMaybe <- liftIO $ traceAs "statedName" <$> codeModuleName state nfp
 
         let act = Replace uri
         let todo = case (correctNameMaybe, statedNameMaybe) of

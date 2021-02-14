@@ -62,9 +62,8 @@ module Development.IDE.Core.Rules(
 
 import Fingerprint
 
-import Data.Aeson (fromJSON,toJSON, Result(Success), FromJSON)
+import Data.Aeson (toJSON, Result(Success))
 import Data.Binary hiding (get, put)
-import Data.Default
 import Data.Tuple.Extra
 import Control.Monad.Extra
 import Control.Monad.Trans.Class
@@ -99,10 +98,9 @@ import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Core.PositionMapping
-import           Language.Haskell.LSP.Types (DocumentHighlight (..), SymbolInformation(..))
-import Language.Haskell.LSP.VFS
-import qualified Language.Haskell.LSP.Messages as LSP
-import qualified Language.Haskell.LSP.Types as LSP
+import           Language.LSP.Types (DocumentHighlight (..), SymbolInformation(..), SMethod(SCustomMethod))
+import qualified Language.LSP.Server as LSP
+import Language.LSP.VFS
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes hiding (TargetModule, TargetFile)
@@ -136,6 +134,8 @@ import GHC.IO.Encoding
 import Data.ByteString.Encoding as T
 
 import qualified HieDb
+import Ide.Plugin.Config
+import qualified Data.Aeson.Types as A
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -594,9 +594,9 @@ getHieAstRuleDefinition f hsc tmr = do
   isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
-      when (coerce $ ideTesting se) $
-        liftIO $ eventer se $ LSP.NotCustomServer $
-          LSP.NotificationMessage "2.0" (LSP.CustomServerMethod "ghcide/reference/ready") (toJSON $ fromNormalizedFilePath f)
+      when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
+        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+          toJSON $ fromNormalizedFilePath f
       pure []
     _ | Just asts <- masts -> do
           source <- getSourceFileSource f
@@ -826,9 +826,9 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ \GetModIfaceFromDiskAndInd
       | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
       , hie_loc == HieDb.hieModuleHieFile row  -> do
       -- All good, the db has indexed the file
-      when (coerce $ ideTesting se) $
-        liftIO $ eventer se $ LSP.NotCustomServer $
-          LSP.NotificationMessage "2.0" (LSP.CustomServerMethod "ghcide/reference/ready") (toJSON $ fromNormalizedFilePath f)
+      when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
+        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+          toJSON $ fromNormalizedFilePath f
     -- Not in db, must re-index
     _ -> do
       ehf <- liftIO $ runIdeAction "GetModIfaceFromDiskAndIndex" se $ runExceptT $
@@ -1047,12 +1047,13 @@ getClientSettingsRule = defineEarlyCutOffNoFile $ \GetClientSettings -> do
 
 -- | Returns the client configurarion stored in the IdeState.
 -- You can use this function to access it from shake Rules
-getClientConfigAction :: (Default a, FromJSON a) => Action a
-getClientConfigAction = do
+getClientConfigAction :: Config -- ^ default value
+                      -> Action Config
+getClientConfigAction defValue = do
   mbVal <- unhashed <$> useNoFile_ GetClientSettings
-  case fromJSON <$> mbVal of
+  case A.parse (parseConfig defValue) <$> mbVal of
     Just (Success c) -> return c
-    _ -> return def
+    _ -> return defValue
 
 -- | For now we always use bytecode
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)

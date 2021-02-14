@@ -59,8 +59,9 @@ import qualified System.Posix.Error as Posix
 
 import qualified Development.IDE.Types.Logger as L
 
-import Language.Haskell.LSP.Core
-import Language.Haskell.LSP.VFS
+import Language.LSP.Server hiding (getVirtualFile)
+import qualified Language.LSP.Server as LSP
+import Language.LSP.VFS
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
@@ -77,9 +78,9 @@ makeVFSHandle = do
                     Just content -> Map.insert uri (VirtualFile nextVersion 0 (Rope.fromText content)) vfs
         }
 
-makeLSPVFSHandle :: LspFuncs c -> VFSHandle
-makeLSPVFSHandle lspFuncs = VFSHandle
-    { getVirtualFile = getVirtualFileFunc lspFuncs
+makeLSPVFSHandle :: LanguageContextEnv c -> VFSHandle
+makeLSPVFSHandle lspEnv = VFSHandle
+    { getVirtualFile = runLspT lspEnv . LSP.getVirtualFile
     , setVirtualFileContents = Nothing
    }
 
@@ -200,7 +201,8 @@ setFileModified :: IdeState
                 -> IO ()
 setFileModified state saved nfp = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
-    let checkParents = case optCheckParents ideOptions of
+    doCheckParents <- optCheckParents ideOptions
+    let checkParents = case doCheckParents of
           AlwaysCheck -> True
           CheckOnSaveAndClose -> saved
           _ -> False
