@@ -27,7 +27,6 @@ import HscTypes
 import Name
 import RdrName
 import Type
-import Packages
 #if MIN_GHC_API_VERSION(8,10,0)
 import Predicate (isDictTy)
 import Pair
@@ -59,9 +58,7 @@ import Data.Functor
 import Ide.PluginUtils (mkLspCommand)
 import Ide.Types (CommandId (..), PluginId, WithSnippets (..))
 import Control.Monad
-import Control.Exception (evaluate)
-import Control.DeepSeq (force)
-import Development.IDE.Types.Diagnostics (FileDiagnostic)
+import Development.IDE.Types.HscEnvEq
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -297,9 +294,10 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing
 
 
-cacheDataProducer :: Uri -> HscEnv -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO ([FileDiagnostic], CachedCompletions)
-cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = do
-  let dflags = hsc_dflags packageState
+cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer uri env curMod globalEnv inScopeEnv limports deps = do
+  let 
+      packageState = hscEnv env
       curModName = moduleName curMod
 
       importMap = Map.fromList [ (getLoc imp, imp) | imp <- limports ]
@@ -311,6 +309,9 @@ cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = d
       asNamespace imp = maybe (iDeclToModName imp) GHC.unLoc (ideclAs imp)
       -- Full canonical names of imported modules
       importDeclerations = map unLoc limports
+
+      -- The list of all importable Modules from all packages
+      moduleNames = map showModName (envVisibleModuleNames env)
 
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
@@ -364,24 +365,14 @@ cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = d
         return $ mkNameCompItem uri mbParent originName mn ty Nothing docs imp'
                : recordCompls
 
-  -- The list of all importable Modules from all packages
-  (lvmnDiags, moduleNames) <-
-    catchSrcErrors
-      dflags
-      "listVisibleModuleNames"
-      (evaluate . force $ map showModName (listVisibleModuleNames dflags))
-      <&> \case
-        Left diags -> (diags, [])
-        Right x -> ([], x)
-  
   (unquals,quals) <- getCompls rdrElts
 
-  return (lvmnDiags, CC
+  return $ CC
     { allModNamesAsNS = allModNamesAsNS
     , unqualCompls = unquals
     , qualCompls = quals
     , importableModules = moduleNames
-    })
+    }
 
 -- | Produces completions from the top level declarations of a module.
 localCompletionsForParsedModule :: Uri -> ParsedModule -> CachedCompletions

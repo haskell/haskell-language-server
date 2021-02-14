@@ -6,6 +6,7 @@ module Development.IDE.Types.HscEnvEq
     newHscEnvEqWithImportPaths,
     envImportPaths,
     envPackageExports,
+    envVisibleModuleNames,
     deps
 ) where
 
@@ -16,7 +17,7 @@ import Development.Shake.Classes
 import Module (InstalledUnitId)
 import System.Directory (canonicalizePath)
 import Development.IDE.GHC.Compat
-import GhcPlugins(HscEnv (hsc_dflags), PackageState (explicitPackages), InstalledPackageInfo (exposedModules), Module(..), packageConfigId)
+import GhcPlugins(HscEnv (hsc_dflags), PackageState (explicitPackages), InstalledPackageInfo (exposedModules), Module(..), packageConfigId, listVisibleModuleNames)
 import System.FilePath
 import Development.IDE.GHC.Util (lookupPackageConfig)
 import Control.Monad.IO.Class
@@ -27,7 +28,10 @@ import OpenTelemetry.Eventlog (withSpan)
 import Control.Monad.Extra (mapMaybeM, join, eitherM)
 import Control.Concurrent.Extra (newVar, modifyVar)
 import Control.Concurrent.Async (Async, async, waitCatch)
-import Control.Exception (throwIO, mask)
+import Control.Exception (throwIO, mask, evaluate)
+import Development.IDE.GHC.Error (catchSrcErrors)
+import Control.DeepSeq (force)
+import Data.Either (fromRight)
 
 -- | An 'HscEnv' with equality. Two values are considered equal
 --   if they are created with the same call to 'newHscEnvEq'.
@@ -42,6 +46,7 @@ data HscEnvEq = HscEnvEq
         -- ^ If Just, import dirs originally configured in this env
         --   If Nothing, the env import dirs are unaltered
     , envPackageExports :: IO ExportsMap
+    , envVisibleModuleNames :: [ModuleName]
     }
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
@@ -58,12 +63,15 @@ newHscEnvEq cradlePath hscEnv0 deps = do
 
 newHscEnvEqWithImportPaths :: Maybe [String] -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
+
+    let dflags = hsc_dflags hscEnv
+
     envUnique <- newUnique
 
     -- it's very important to delay the package exports computation
     envPackageExports <- onceAsync $ withSpan "Package Exports" $ \_sp -> do
         -- compute the package imports
-        let pkgst   = pkgState (hsc_dflags hscEnv)
+        let pkgst   = pkgState dflags
             depends = explicitPackages pkgst
             targets =
                 [ (pkg, mn)
@@ -82,6 +90,14 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
                     Maybes.Succeeded mi -> Just mi
         modIfaces <- mapMaybeM doOne targets
         return $ createExportsMap modIfaces
+
+    envVisibleModuleNames <-
+      fromRight []
+        <$> catchSrcErrors
+          dflags
+          "listVisibleModuleNames"
+          (evaluate . force $ listVisibleModuleNames dflags)
+
     return HscEnvEq{..}
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
@@ -108,9 +124,9 @@ instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b c d _) =
+  rnf (HscEnvEq a b c d _ f) =
       -- deliberately skip the package exports map
-      rnf (hashUnique a) `seq` b `seq` c `seq` rnf d
+      rnf (hashUnique a) `seq` b `seq` c `seq` d `seq` rnf f
 
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique
