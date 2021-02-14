@@ -25,6 +25,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
 import Data.Aeson.Types (ToJSON(..), FromJSON(..), Value(..))
 import Data.Binary
+import Data.Default
 import Data.Hashable
 import qualified Data.HashMap.Strict as Map
 import Data.Maybe
@@ -104,7 +105,7 @@ type instance RuleResult GetHlintDiagnostics = ()
 rules :: PluginId -> Rules ()
 rules plugin = do
   define $ \GetHlintDiagnostics file -> do
-    config <- getClientConfigAction
+    config <- getClientConfigAction def
     let pluginConfig = configForPlugin config plugin
     let hlintOn' = hlintOn config && plcGlobalOn pluginConfig && plcDiagnosticsOn pluginConfig
     ideas <- if hlintOn' then getIdeas file else return (Right [])

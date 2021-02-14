@@ -8,12 +8,14 @@
 module Ide.Plugin.Config
     ( getConfigFromNotification
     , Config(..)
+    , parseConfig
     , PluginConfig(..)
     , CheckParents(..)
     ) where
 
 import           Control.Applicative
 import qualified Data.Aeson                    as A
+import qualified Data.Aeson.Types              as A
 import           Data.Aeson              hiding ( Error )
 import           Data.Default
 import qualified Data.Text                     as T
@@ -24,8 +26,9 @@ import GHC.Generics (Generic)
 
 -- | Given a DidChangeConfigurationNotification message, this function returns the parsed
 -- Config object if possible.
-getConfigFromNotification :: Applicative m => a -> A.Value -> m (Either T.Text Config)
-getConfigFromNotification _ p = pure $ case fromJSON p of
+getConfigFromNotification :: Config -> A.Value -> Either T.Text Config
+getConfigFromNotification defaultValue p =
+  case A.parse (parseConfig defaultValue) p of
     A.Success c -> Right c
     A.Error err -> Left $ T.pack err
 
@@ -79,35 +82,26 @@ instance Default Config where
     }
 
 -- TODO: Add API for plugins to expose their own LSP config options
-instance A.FromJSON Config where
-  parseJSON = A.withObject "Config" $ \v -> do
+parseConfig :: Config -> Value -> A.Parser Config
+parseConfig defValue = A.withObject "Config" $ \v -> do
     -- Officially, we use "haskell" as the section name but for
     -- backwards compatibility we also accept "languageServerHaskell"
     c <- v .: "haskell" <|> v .:? "languageServerHaskell"
     case c of
-      Nothing -> return def
+      Nothing -> return defValue
       Just s -> flip (A.withObject "Config.settings") s $ \o -> Config
-        <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents def
-        <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject def
-        <*> o .:? "hlintOn"                                 .!= hlintOn def
-        <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange def
-        <*> o .:? "maxNumberOfProblems"                     .!= maxNumberOfProblems def
-        <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration def
-        <*> o .:? "liquidOn"                                .!= liquidOn def
-        <*> o .:? "completionSnippetsOn"                    .!= completionSnippetsOn def
-        <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn def
-        <*> o .:? "formattingProvider"                      .!= formattingProvider def
-        <*> o .:? "maxCompletions"                          .!= maxCompletions def
-        <*> o .:? "plugin"                                  .!= plugins def
-
--- 2017-10-09 23:22:00.710515298 [ThreadId 11] - ---> {"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"haskell":{"maxNumberOfProblems":100,"hlintOn":true}}}}
--- 2017-10-09 23:22:00.710667381 [ThreadId 15] - reactor:got didChangeConfiguration notification:
--- NotificationMessage
---   {_jsonrpc = "2.0"
---   , _method = WorkspaceDidChangeConfiguration
---   , _params = DidChangeConfigurationParams
---                 {_settings = Object (fromList [("haskell",Object (fromList [("hlintOn",Bool True)
---                                                                            ,("maxNumberOfProblems",Number 100.0)]))])}}
+        <$> (o .:? "checkParents" <|> v .:? "checkParents") .!= checkParents defValue
+        <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
+        <*> o .:? "hlintOn"                                 .!= hlintOn defValue
+        <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange defValue
+        <*> o .:? "maxNumberOfProblems"                     .!= maxNumberOfProblems defValue
+        <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration defValue
+        <*> o .:? "liquidOn"                                .!= liquidOn defValue
+        <*> o .:? "completionSnippetsOn"                    .!= completionSnippetsOn defValue
+        <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn defValue
+        <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
+        <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
+        <*> o .:? "plugin"                                  .!= plugins defValue
 
 instance A.ToJSON Config where
   toJSON Config{..} =

@@ -5,7 +5,6 @@ import Control.Exception.Safe (
     catchAny,
  )
 import Control.Monad.Extra (concatMapM, unless, when)
-import qualified Data.Aeson as J
 import Data.Default (Default (def))
 import qualified Data.HashMap.Strict as HashMap
 import Data.List.Extra (
@@ -62,7 +61,7 @@ import Development.IDE.Types.Options (
 import Development.IDE.Types.Shake (Key (Key))
 import Development.Shake (action)
 import HIE.Bios.Cradle (findCradle)
-import Ide.Plugin.Config (CheckParents (NeverCheck), Config)
+import Ide.Plugin.Config (CheckParents (NeverCheck), Config, getConfigFromNotification)
 import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 import Ide.Types (IdePlugins)
 import qualified Language.LSP.Server as LSP
@@ -86,7 +85,7 @@ data Arguments = Arguments
     , argsSessionLoadingOptions :: SessionLoadingOptions
     , argsIdeOptions :: Maybe Config -> Action IdeGhcSession -> IdeOptions
     , argsLspOptions :: LSP.Options
-    , argsOnConfigChange :: IdeState -> J.Value -> IO (Either T.Text Config)
+    , argsDefaultHlsConfig :: Config
     }
 
 defArguments :: HieDb -> IndexQueue -> Arguments
@@ -103,9 +102,7 @@ defArguments hiedb hiechan =
         , argsSessionLoadingOptions = defaultLoadingOptions
         , argsIdeOptions = const defaultIdeOptions
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
-        , argsOnConfigChange = \_ide v -> pure $ case J.fromJSON v of
-            J.Error err -> Left $ T.pack err
-            J.Success a -> Right a
+        , argsDefaultHlsConfig = def
         }
 
 defaultMain :: Arguments -> IO ()
@@ -117,6 +114,7 @@ defaultMain Arguments{..} = do
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
+        argsOnConfigChange _ide = pure . getConfigFromNotification argsDefaultHlsConfig
 
     case argFiles of
         Nothing -> do

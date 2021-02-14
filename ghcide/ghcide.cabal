@@ -58,7 +58,7 @@ library
         haddock-library >= 1.8,
         hashable,
         hie-compat,
-        hls-plugin-api >= 0.7,
+        hls-plugin-api >= 0.7.1,
         lens,
         hiedb == 0.3.0.1,
         lsp-types == 1.1.*,
