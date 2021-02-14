@@ -4,9 +4,7 @@ import Control.Exception.Safe (
     Exception (displayException),
     catchAny,
  )
-import Control.Lens ((^.))
 import Control.Monad.Extra (concatMapM, unless, when)
-import qualified Data.Aeson as J
 import Data.Default (Default (def))
 import qualified Data.HashMap.Strict as HashMap
 import Data.List.Extra (
@@ -68,17 +66,14 @@ import Development.IDE.Types.Options (
 import Development.IDE.Types.Shake (Key (Key))
 import Development.Shake (action)
 import HIE.Bios.Cradle (findCradle)
-import Ide.Plugin.Config (CheckParents (NeverCheck), Config)
+import Ide.Plugin.Config (CheckParents (NeverCheck), Config, getInitialConfig, getConfigFromNotification)
 import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 import Ide.Types (IdePlugins)
 import qualified Language.Haskell.LSP.Core as LSP
 import Language.Haskell.LSP.Messages (FromServerMessage)
 import Language.Haskell.LSP.Types (
-    DidChangeConfigurationNotification,
-    InitializeRequest,
     LspId (IdInt),
  )
-import Language.Haskell.LSP.Types.Lens (initializationOptions, params)
 import qualified System.Directory.Extra as IO
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.FilePath (takeExtension, takeFileName)
@@ -99,8 +94,7 @@ data Arguments = Arguments
     , argsSessionLoadingOptions :: SessionLoadingOptions
     , argsIdeOptions :: Maybe Config -> Action IdeGhcSession -> IdeOptions
     , argsLspOptions :: LSP.Options
-    , argsGetInitialConfig :: InitializeRequest -> Either T.Text Config
-    , argsOnConfigChange :: DidChangeConfigurationNotification -> Either T.Text Config
+    , argsDefaultHlsConfig :: Config
     }
 
 defArguments :: HieDb -> IndexQueue -> Arguments
@@ -117,12 +111,7 @@ defArguments hiedb hiechan =
         , argsSessionLoadingOptions = defaultLoadingOptions
         , argsIdeOptions = const defaultIdeOptions
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
-        , argsOnConfigChange = const $ Left "Updating Not supported"
-        , argsGetInitialConfig = \x -> case x ^. params . initializationOptions of
-            Nothing -> Right def
-            Just v -> case J.fromJSON v of
-                J.Error err -> Left $ T.pack err
-                J.Success a -> Right a
+        , argsDefaultHlsConfig = def
         }
 
 defaultMain :: Arguments -> IO ()
@@ -134,6 +123,8 @@ defaultMain Arguments{..} = do
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
+        argsOnConfigChange = getConfigFromNotification argsDefaultHlsConfig
+        argsGetInitialConfig = getInitialConfig argsDefaultHlsConfig
 
     case argFiles of
         Nothing -> do

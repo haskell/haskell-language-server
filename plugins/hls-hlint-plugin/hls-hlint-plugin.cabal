@@ -43,7 +43,7 @@ library
     , hashable
     , haskell-lsp
     , hlint                    >=3.2
-    , hls-plugin-api           >=0.7.0.0
+    , hls-plugin-api           >=0.7.1.0
     , hslogger
     , lens
     , regex-tdfa

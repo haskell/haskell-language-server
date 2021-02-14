@@ -58,7 +58,7 @@ library
         haskell-lsp-types == 0.23.*,
         haskell-lsp == 0.23.*,
         hie-compat,
-        hls-plugin-api >= 0.7,
+        hls-plugin-api >= 0.7.1,
         lens,
         hiedb == 0.3.0.1,
         mtl,

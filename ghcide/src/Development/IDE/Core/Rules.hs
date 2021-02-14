@@ -62,9 +62,8 @@ module Development.IDE.Core.Rules(
 
 import Fingerprint
 
-import Data.Aeson (fromJSON,toJSON, Result(Success), FromJSON)
+import Data.Aeson (toJSON, Result(Success))
 import Data.Binary hiding (get, put)
-import Data.Default
 import Data.Tuple.Extra
 import Control.Monad.Extra
 import Control.Monad.Trans.Class
@@ -135,6 +134,8 @@ import GHC.IO.Encoding
 import Data.ByteString.Encoding as T
 
 import qualified HieDb
+import Ide.Plugin.Config
+import qualified Data.Aeson.Types as A
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -1044,12 +1045,13 @@ getClientSettingsRule = defineEarlyCutOffNoFile $ \GetClientSettings -> do
 
 -- | Returns the client configurarion stored in the IdeState.
 -- You can use this function to access it from shake Rules
-getClientConfigAction :: (Default a, FromJSON a) => Action a
-getClientConfigAction = do
+getClientConfigAction :: Config -- ^ default value
+                      -> Action Config
+getClientConfigAction defValue = do
   mbVal <- unhashed <$> useNoFile_ GetClientSettings
-  case fromJSON <$> mbVal of
+  case A.parse (parseConfig defValue) <$> mbVal of
     Just (Success c) -> return c
-    _ -> return def
+    _ -> return defValue
 
 -- | For now we always use bytecode
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
