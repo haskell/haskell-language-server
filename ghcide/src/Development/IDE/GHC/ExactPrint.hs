@@ -15,6 +15,7 @@ module Development.IDE.GHC.ExactPrint
       graftWithM,
       graftWithSmallestM,
       graftSmallestDecls,
+      graftSmallestDeclsWithM,
       transform,
       transformM,
       useAnnotatedSource,
@@ -64,8 +65,6 @@ import Parser (parseIdentifier)
 import Control.Arrow
 import Data.List (isPrefixOf)
 import Data.Traversable (for)
-import Data.Foldable (Foldable(fold))
-import Debug.Trace (traceM)
 #endif
 
 
@@ -200,7 +199,7 @@ graft dst val = Graft $ \dflags a -> do
 parseDecls :: DynFlags -> FilePath -> String -> ParseResult (LHsDecl GhcPs)
 parseDecls dflags fp str = do
   let mono_decls = fmap unlines $ groupByFirstLine $ lines str
-  decls <- for (zip [0..] mono_decls) $ \(ix, line) -> parseDecl dflags (fp <> show ix) line
+  decls <- for (zip [id @Int 0..] mono_decls) $ \(ix, line) -> parseDecl dflags (fp <> show ix) line
   pure $ mergeDecls decls
 
 
@@ -311,6 +310,27 @@ graftSmallestDecls dst decs0 = Graft $ \dflags a -> do
             | dst `isSubspanOf` src = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
+
+graftSmallestDeclsWithM ::
+    forall a.
+    (HasDecls a) =>
+    SrcSpan ->
+    (LHsDecl GhcPs -> TransformT (Either String) (Maybe [LHsDecl GhcPs])) ->
+    Graft (Either String) a
+graftSmallestDeclsWithM dst toDecls = Graft $ \dflags a -> do
+    let go [] = pure DL.empty
+        go (e@(L src _) : rest)
+            | dst `isSubspanOf` src = toDecls e >>= \case
+                Just decs0 -> do
+                    decs <- forM decs0 $ \decl -> do
+                        (anns, decl') <-
+                            annotateDecl dflags decl
+                        modifyAnnsT $ mappend anns
+                        pure decl'
+                    pure $ DL.fromList decs <> DL.fromList rest
+                Nothing -> (DL.singleton e <>) <$> go rest
+            | otherwise = (DL.singleton e <>) <$> go rest
+    modifyDeclsT (fmap DL.toList . go) a
 
 graftDeclsWithM ::
     forall a m.

@@ -8,14 +8,18 @@
 
 module Ide.Plugin.Tactic.GHC where
 
-import Control.Arrow
+import           Control.Lens
 import           Control.Monad.State
+import           Data.Function (on)
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
 import           Data.Traversable
 import qualified DataCon as DataCon
 import           Development.IDE.GHC.Compat
-import           Generics.SYB (Data, mkT, everywhere)
+import           GHC.Exts (IsString(fromString))
+import           GHC.SourceGen (funBinds, var, bvar, match, case', lambda)
+import           GHC.SourceGen.Pat
+import           Generics.SYB (mkT, everywhere)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcType
@@ -24,10 +28,7 @@ import           Type
 import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unique
 import           Var
-import GHC.SourceGen (funBinds, funBind, int, var, bvar, match, case', lambda)
-import Control.Lens
-import GHC.SourceGen.Pat
-import GHC.Exts (IsString(fromString))
+
 
 tcTyVar_maybe :: Type -> Maybe Var
 tcTyVar_maybe ty | Just ty' <- tcView ty = tcTyVar_maybe ty'
@@ -125,7 +126,7 @@ agdaSplit :: AgdaMatch -> [AgdaMatch]
 agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
   (i, pat) <- zip [id @Int 0 ..] pats
   case pat of
-    VarPat _ (L _ patname) | patname == var -> do
+    VarPat _ (L _ patname) | on (==) (occNameString . occName) patname var -> do
       (case_pat, body) <- matches
       -- TODO(sandy): use an at pattern if necessar
       pure $ AgdaMatch (pats & ix i .~ case_pat) body
@@ -141,7 +142,7 @@ splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ 
 
 iterateSplit :: AgdaMatch -> [AgdaMatch]
 iterateSplit am =
-  let iterated =  iterate (agdaSplit =<<) $ pure am
+  let iterated = iterate (agdaSplit =<<) $ pure am
    in fst . head
           . dropWhile (\(a, b) -> length a /= length b)
           . zip iterated
@@ -193,25 +194,6 @@ pattern Case scrutinee matches <-
   where
     Case scrutinee matches =
       case' scrutinee $ fmap (\(pat, body) -> match [pat] body) matches
-
-test :: HsExpr GhcPs
-test =
-  Lambda [bvar "b", bvar "c"] $ Case (var "c")
-    [ (conP "True" [], var "True")
-    , (conP "False" [],
-        Case (var "b")
-          [ (int 0, var "b")
-          , (wildP, int 5)
-          ]
-      )
-    ]
-
-testAgda :: AgdaMatch
-testAgda = AgdaMatch [bvar "a"] test
-
-
-
-
 
 
 ------------------------------------------------------------------------------

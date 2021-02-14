@@ -66,6 +66,7 @@ import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
 import Development.IDE.GHC.ExactPrint (graftSmallestDecls)
+import Development.IDE.GHC.ExactPrint (graftSmallestDeclsWithM, TransformT)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -332,16 +333,12 @@ tacticCmd tac lf state (TacticParams uri range var_name)
               traceMX "solns" $ rtr_other_solns rtr
               let g =
                     if _jIsTopHole jdg
-                       then graftSmallestDecls (RealSrcSpan span)
-                          $ pure
-                          $ splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
+                       then graftSmallestDeclsWithM (RealSrcSpan span)
+                          $ stickItIn (RealSrcSpan span)
+                          $ \pats ->
+                            splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
                           $ iterateSplit
-                          $ mkFirstAgda
-                              ( fmap (bvar' . hi_name)
-                              . filter (isTopLevel . hi_provenance)
-                              . unHypothesis
-                              $ jHypothesis jdg
-                              )
+                          $ mkFirstAgda (fmap unXPat pats)
                           $ unLoc
                           $ rtr_extract rtr
                        else graft (RealSrcSpan span)
@@ -359,6 +356,32 @@ tacticCmd _ _ _ _ =
   pure ( Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
        , Nothing
        )
+
+stickItIn
+    :: SrcSpan
+    -> ([Pat GhcPs] -> LHsDecl GhcPs)
+    -> LHsDecl GhcPs
+    -> TransformT (Either String) (Maybe [LHsDecl GhcPs])
+stickItIn span
+    make_decl
+    (L src (ValD ext fb@FunBind {fun_matches = mg@MG {mg_alts = L alt_src alts}}))
+  = pure $ Just $ pure $ L src $ ValD ext $ fb
+      { fun_matches = mg
+        { mg_alts = L alt_src $ do
+            alt@(L alt_src match) <- alts
+            case span `isSubspanOf` alt_src of
+              True -> do
+                let pats = m_pats match
+                    (L _ (ValD _ (FunBind {fun_matches = MG {mg_alts = L _ to_add}}))) =
+                        make_decl pats
+                to_add
+              False -> pure alt
+        }
+      }
+
+unXPat :: Pat GhcPs -> Pat GhcPs
+unXPat (XPat (L _ pat)) = unXPat pat
+unXPat pat = pat
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
