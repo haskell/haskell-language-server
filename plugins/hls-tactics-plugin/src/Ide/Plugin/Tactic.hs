@@ -425,7 +425,7 @@ getRhsPosVals rss tcs
   ) tcs
 
 
-
 -- TODO(sandy): Make this more robust
 isHole :: OccName -> Bool
 isHole = isPrefixOf "_" . occNameString
+

@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE FlexibleContexts  #-}
@@ -8,6 +9,8 @@
 
 module Ide.Plugin.Tactic.GHC where
 
+import qualified Data.Set as S
+import Data.Set (Set)
 import           Control.Lens
 import           Control.Monad.State
 import           Data.Function (on)
@@ -17,8 +20,8 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString(fromString))
-import           GHC.SourceGen (funBinds, match, case', lambda)
-import           Generics.SYB (mkT, everywhere)
+import           GHC.SourceGen (wildP, funBinds, match, case', lambda)
+import           Generics.SYB (mkQ, everything, listify, Data, mkT, everywhere)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcType
@@ -27,6 +30,8 @@ import           Type
 import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unique
 import           Var
+import Data.Bool (bool)
+import Data.List (isPrefixOf)
 
 
 tcTyVar_maybe :: Type -> Maybe Var
@@ -137,10 +142,11 @@ agdaSplit :: AgdaMatch -> [AgdaMatch]
 agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
   (i, pat) <- zip [id @Int 0 ..] pats
   case pat of
-    VarPat _ (L _ patname) | on (==) (occNameString . occName) patname var -> do
+    VarPat _ (L _ patname) | eqRdrName patname var -> do
       (case_pat, body) <- matches
-      -- TODO(sandy): use an at pattern if necessar
-      pure $ AgdaMatch (pats & ix i .~ case_pat) body
+      let make_wild = bool id (wildify (allOccNames body)) $ not $ containsHole body
+      -- TODO(sandy): use an at pattern if necessary
+      pure $ AgdaMatch (make_wild $ pats & ix i .~ case_pat) body
     _ -> []
 agdaSplit x = [x]
 
@@ -155,6 +161,38 @@ iterateSplit :: AgdaMatch -> [AgdaMatch]
 iterateSplit am =
   let iterated = iterate (agdaSplit =<<) $ pure am
    in head . drop 5 $ iterated
+
+
+eqRdrName :: RdrName -> RdrName -> Bool
+eqRdrName = (==) `on` occNameString . occName
+
+
+------------------------------------------------------------------------------
+-- | Does this thing contain any references to 'HsVar's with the given
+-- 'RdrName'?
+containsHsVar :: Data a => RdrName -> a -> Bool
+containsHsVar name x = not $ null $ listify (
+  \case
+    ((HsVar _ (L _ a)) :: HsExpr GhcPs) | eqRdrName a name -> True
+    _ -> False
+  ) x
+
+containsHole :: Data a => a -> Bool
+containsHole x = not $ null $ listify (
+  \case
+    ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isPrefixOf "_" $ occNameString $ occName name
+    _ -> False
+  ) x
+
+
+allOccNames :: Data a => a -> Set OccName
+allOccNames = everything (<>) $ mkQ mempty $ \case
+    a -> S.singleton a
+
+wildify :: Data a => Set OccName -> a -> a
+wildify (S.map occNameString -> used) = everywhere $ mkT $ \case
+  VarPat _ (L _ var) | S.notMember (occNameString $ occName var) used -> wildP
+  (x :: Pat GhcPs) -> x
 
 
 
