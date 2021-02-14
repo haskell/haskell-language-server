@@ -8,6 +8,7 @@
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
       graft,
+      graftWithoutParentheses,
       graftDecls,
       graftDeclsWithM,
       annotate,
@@ -179,8 +180,18 @@ graft ::
     SrcSpan ->
     Located ast ->
     Graft (Either String) a
-graft dst val = Graft $ \dflags a -> do
-    (anns, val') <- annotate dflags $ maybeParensAST val
+graft dst = graftWithoutParentheses dst . maybeParensAST
+
+-- | Like 'graft', but trusts that you have correctly inserted the parentheses
+-- yourself. If you haven't, the resulting AST will not be valid!
+graftWithoutParentheses ::
+    forall ast a.
+    (Data a, ASTElement ast) =>
+    SrcSpan ->
+    Located ast ->
+    Graft (Either String) a
+graftWithoutParentheses dst val = Graft $ \dflags a -> do
+    (anns, val') <- annotate dflags val
     modifyAnnsT $ mappend anns
     pure $
         everywhere'
