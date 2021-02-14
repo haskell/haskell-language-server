@@ -46,7 +46,11 @@ data HscEnvEq = HscEnvEq
         -- ^ If Just, import dirs originally configured in this env
         --   If Nothing, the env import dirs are unaltered
     , envPackageExports :: IO ExportsMap
-    , envVisibleModuleNames :: [ModuleName]
+    , envVisibleModuleNames :: IO (Maybe [ModuleName])
+        -- ^ 'listVisibleModuleNames' is a pure function,
+        -- but it could panic due to a ghc bug: https://github.com/haskell/haskell-language-server/issues/1365
+        -- So it's wrapped in IO here for error handling
+        -- If Nothing, 'listVisibleModuleNames' panic
     }
 
 -- | Wrap an 'HscEnv' into an 'HscEnvEq'.
@@ -91,12 +95,13 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
         modIfaces <- mapMaybeM doOne targets
         return $ createExportsMap modIfaces
 
-    envVisibleModuleNames <-
-      fromRight []
+    -- similar to envPackageExports, evaluated lazily
+    envVisibleModuleNames <- onceAsync $
+      fromRight Nothing
         <$> catchSrcErrors
           dflags
           "listVisibleModuleNames"
-          (evaluate . force $ listVisibleModuleNames dflags)
+          (evaluate . force . Just $ listVisibleModuleNames dflags)
 
     return HscEnvEq{..}
 
@@ -124,9 +129,9 @@ instance Eq HscEnvEq where
   a == b = envUnique a == envUnique b
 
 instance NFData HscEnvEq where
-  rnf (HscEnvEq a b c d _ f) =
-      -- deliberately skip the package exports map
-      rnf (hashUnique a) `seq` b `seq` c `seq` d `seq` rnf f
+  rnf (HscEnvEq a b c d _ _) =
+      -- deliberately skip the package exports map and visible module names
+      rnf (hashUnique a) `seq` b `seq` c `seq` rnf d
 
 instance Hashable HscEnvEq where
   hashWithSalt s = hashWithSalt s . envUnique

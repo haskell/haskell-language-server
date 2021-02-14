@@ -310,8 +310,6 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports deps = do
       -- Full canonical names of imported modules
       importDeclerations = map unLoc limports
 
-      -- The list of all importable Modules from all packages
-      moduleNames = map showModName (envVisibleModuleNames env)
 
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
@@ -366,6 +364,9 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports deps = do
                : recordCompls
 
   (unquals,quals) <- getCompls rdrElts
+
+  -- The list of all importable Modules from all packages
+  moduleNames <- maybe [] (map showModName) <$> envVisibleModuleNames env
 
   return $ CC
     { allModNamesAsNS = allModNamesAsNS
