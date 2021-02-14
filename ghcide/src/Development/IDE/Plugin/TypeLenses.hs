@@ -6,6 +6,7 @@ module Development.IDE.Plugin.TypeLenses
   )
 where
 
+import Control.Monad.IO.Class
 import Data.Aeson.Types (Value (..), toJSON)
 import qualified Data.HashMap.Strict as Map
 import qualified Data.Text as T
@@ -24,22 +25,23 @@ import Ide.Types
   ( CommandFunction,
     CommandId (CommandId),
     PluginCommand (PluginCommand),
-    PluginDescriptor (pluginCodeLensProvider, pluginCommands),
+    PluginDescriptor(..),
     PluginId,
     defaultPluginDescriptor,
+    mkPluginHandler
   )
-import qualified Language.Haskell.LSP.Core as LSP
-import Language.Haskell.LSP.Types
+import qualified Language.LSP.Server as LSP
+import Language.LSP.Types
   ( ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
     CodeLens (CodeLens),
     CodeLensParams (CodeLensParams, _textDocument),
     Diagnostic (..),
     List (..),
     ResponseError,
-    ServerMethod (WorkspaceApplyEdit),
     TextDocumentIdentifier (TextDocumentIdentifier),
     TextEdit (TextEdit),
     WorkspaceEdit (WorkspaceEdit),
+    SMethod(..)
   )
 import Text.Regex.TDFA ((=~))
 
@@ -49,19 +51,18 @@ typeLensCommandId = "typesignature.add"
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginCodeLensProvider = Just codeLensProvider,
+    { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider,
       pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
     }
 
 codeLensProvider ::
-  LSP.LspFuncs c ->
   IdeState ->
   PluginId ->
   CodeLensParams ->
-  IO (Either ResponseError (List CodeLens))
-codeLensProvider _lsp ideState pId CodeLensParams {_textDocument = TextDocumentIdentifier uri} = do
+  LSP.LspM c (Either ResponseError (List CodeLens))
+codeLensProvider ideState pId CodeLensParams {_textDocument = TextDocumentIdentifier uri} = do
   fmap (Right . List) $ case uriToFilePath' uri of
-    Just (toNormalizedFilePath' -> filePath) -> do
+    Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       _ <- runAction "codeLens" ideState (use TypeCheck filePath)
       diag <- getDiagnostics ideState
       hDiag <- getHiddenDiagnostics ideState
@@ -76,12 +77,13 @@ codeLensProvider _lsp ideState pId CodeLensParams {_textDocument = TextDocumentI
 
 generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> IO CodeLens
 generateLens pId _range title edit = do
-  cId <- mkLspCommand pId (CommandId typeLensCommandId) title (Just [toJSON edit])
+  let cId = mkLspCommand pId (CommandId typeLensCommandId) title (Just [toJSON edit])
   return $ CodeLens _range (Just cId) Nothing
 
 commandHandler :: CommandFunction IdeState WorkspaceEdit
-commandHandler _lsp _ideState wedit =
-    return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit))
+commandHandler _ideState wedit = do
+  _ <- LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right Null
 
 suggestSignature :: Bool -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestSignature isQuickFix Diagnostic {_range = _range@Range {..}, ..}

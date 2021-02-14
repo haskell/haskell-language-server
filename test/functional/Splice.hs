@@ -2,6 +2,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Splice (tests) where
 
@@ -13,16 +16,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Ide.Plugin.Splice.Types
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
-    ( ApplyWorkspaceEditRequest,
-      CAResult (..),
-      CodeAction (..),
-      Position (..),
-      Range (..),
-      TextDocumentContentChangeEvent (..),
-      TextEdit (..),
-    )
+import Language.LSP.Test
+import Language.LSP.Types
 import System.Directory
 import System.FilePath
 import System.Time.Extra (sleep)
@@ -77,9 +72,9 @@ goldenTest input tc line col =
             _ <- waitForDiagnostics
             actions <- getCodeActions doc $ pointRange line col
             case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
-                Just (CACodeAction CodeAction {_command = Just c}) -> do
+                Just (InR CodeAction {_command = Just c}) -> do
                     executeCommand c
-                    _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+                    _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
                     edited <- documentContents doc
                     let expected_name = spliceTestPath </> input <.> "expected"
                     -- Write golden tests if they don't already exist
@@ -110,9 +105,9 @@ goldenTestWithEdit input tc line col =
             void waitForDiagnostics
             actions <- getCodeActions doc $ pointRange line col
             case find ((== Just (toExpandCmdTitle tc)) . codeActionTitle) actions of
-                Just (CACodeAction CodeAction {_command = Just c}) -> do
+                Just (InR CodeAction {_command = Just c}) -> do
                     executeCommand c
-                    _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+                    _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
                     edited <- documentContents doc
                     let expected_name = spliceTestPath </> input <.> "expected"
                     -- Write golden tests if they don't already exist
@@ -134,6 +129,6 @@ pointRange
         Range (Position line col) (Position line $ col + 1)
 
 -- | Get the title of a code action.
-codeActionTitle :: CAResult -> Maybe Text
-codeActionTitle CACommand {} = Nothing
-codeActionTitle (CACodeAction (CodeAction title _ _ _ _)) = Just title
+codeActionTitle :: (Command |? CodeAction) -> Maybe Text
+codeActionTitle InL{} = Nothing
+codeActionTitle (InR(CodeAction title _ _ _ _ _ _)) = Just title

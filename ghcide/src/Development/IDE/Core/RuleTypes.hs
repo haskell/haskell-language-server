@@ -38,7 +38,7 @@ import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Import.FindImports (ArtifactsLocation)
 import Data.ByteString (ByteString)
-import Language.Haskell.LSP.Types (NormalizedFilePath)
+import Language.LSP.Types (NormalizedFilePath)
 import TcRnMonad (TcGblEnv)
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Types.Options (IdeGhcSession)

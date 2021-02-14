@@ -1,5 +1,5 @@
-{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Ide.PluginUtils
   ( WithDeletions(..),
     getProcessID,
@@ -18,6 +18,7 @@ module Ide.PluginUtils
     fullRange,
     mkLspCommand,
     mkLspCmdId,
+    getPid,
   allLspCmdIds,allLspCmdIds',installSigUsr1Handler, subRange)
 where
 
@@ -28,22 +29,14 @@ import qualified Data.HashMap.Strict                     as H
 import           Data.Maybe
 import qualified Data.Text                               as T
 import           Ide.Types
-import           Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types              as J
-import           Language.Haskell.LSP.Types.Capabilities
+import           Language.LSP.Types
+import qualified Language.LSP.Types              as J
+import           Language.LSP.Types.Capabilities
 
-#ifdef mingw32_HOST_OS
-import qualified System.Win32.Process                    as P (getCurrentProcessId)
-#else
-import           System.Posix.Signals
-import qualified System.Posix.Process                    as P (getProcessID)
-#endif
-import qualified Data.Aeson                              as J
 import qualified Data.Default
 import qualified Data.Map.Strict                         as Map
 import           Ide.Plugin.Config
-import qualified Language.Haskell.LSP.Core               as LSP
-import Control.Monad (void)
+import Language.LSP.Server
 
 -- ---------------------------------------------------------------------
 
@@ -129,7 +122,7 @@ diffText' supports (f,fText) f2Text withDeletions  =
   where
     diff = diffTextEdit fText f2Text withDeletions
     h = H.singleton f diff
-    docChanges = J.List [docEdit]
+    docChanges = J.List [InL docEdit]
     docEdit = J.TextDocumentEdit (J.VersionedTextDocumentIdentifier f (Just 0)) diff
 
 -- ---------------------------------------------------------------------
@@ -139,7 +132,7 @@ clientSupportsDocumentChanges caps =
   let ClientCapabilities mwCaps _ _ _ = caps
       supports = do
         wCaps <- mwCaps
-        WorkspaceEditClientCapabilities mDc <- _workspaceEdit wCaps
+        WorkspaceEditClientCapabilities mDc _ _ <- _workspaceEdit wCaps
         mDc
   in
     fromMaybe False supports
@@ -151,20 +144,14 @@ pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginI
 
 
 -- ---------------------------------------------------------------------
-
-responseError :: T.Text -> ResponseError
-responseError txt = ResponseError InvalidParams txt Nothing
-
-
--- ---------------------------------------------------------------------
 -- | Returns the current client configuration. It is not wise to permanently
 -- cache the returned value of this function, as clients can at runitime change
 -- their configuration.
 --
 -- If no custom configuration has been set by the client, this function returns
 -- our own defaults.
-getClientConfig :: LSP.LspFuncs Config -> IO Config
-getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
+getClientConfig :: MonadLsp Config m => m Config
+getClientConfig = fromMaybe Data.Default.def <$> getConfig
 
 -- ---------------------------------------------------------------------
 
@@ -174,21 +161,10 @@ getClientConfig lf = fromMaybe Data.Default.def <$> LSP.config lf
 --
 -- If no custom configuration has been set by the client, this function returns
 -- our own defaults.
-getPluginConfig :: LSP.LspFuncs Config -> PluginId -> IO PluginConfig
-getPluginConfig lf plugin = do
-    config <- getClientConfig lf
+getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
+getPluginConfig plugin = do
+    config <- getClientConfig
     return $ configForPlugin config plugin
-
-configForPlugin :: Config -> PluginId -> PluginConfig
-configForPlugin config (PluginId plugin)
-    = Map.findWithDefault Data.Default.def plugin (plugins config)
-
--- ---------------------------------------------------------------------
-
--- | Checks that a given plugin is both enabled and the specific feature is
--- enabled
-pluginEnabled :: PluginConfig -> (PluginConfig -> Bool) -> Bool
-pluginEnabled pluginConfig f = plcGlobalOn pluginConfig && f pluginConfig
 
 -- ---------------------------------------------------------------------
 
@@ -242,32 +218,3 @@ allLspCmdIds pid commands = concat $ map go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 
-mkLspCommand :: PluginId -> CommandId -> T.Text -> Maybe [J.Value] -> IO Command
-mkLspCommand plid cn title args' = do
-  pid <- getPid
-  let cmdId = mkLspCmdId pid plid cn
-  let args = List <$> args'
-  return $ Command title cmdId args
-
-mkLspCmdId :: T.Text -> PluginId -> CommandId -> T.Text
-mkLspCmdId pid (PluginId plid) (CommandId cid)
-  = pid <> ":" <> plid <> ":" <> cid
-
--- | Get the operating system process id for the running server
--- instance. This should be the same for the lifetime of the instance,
--- and different from that of any other currently running instance.
-getPid :: IO T.Text
-getPid = T.pack . show <$> getProcessID
-
-getProcessID :: IO Int
-installSigUsr1Handler :: IO () -> IO ()
-
-#ifdef mingw32_HOST_OS
-getProcessID = fromIntegral <$> P.getCurrentProcessId
-installSigUsr1Handler _ = return ()
-
-#else
-getProcessID = fromIntegral <$> P.getProcessID
-
-installSigUsr1Handler h = void $ installHandler sigUSR1 (Catch h) Nothing
-#endif

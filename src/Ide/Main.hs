@@ -18,7 +18,7 @@ import qualified Data.Text as T
 import Development.IDE.Core.Rules
 import Development.IDE.Session (setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.IDE.Types.Logger as G
-import qualified Language.Haskell.LSP.Core as LSP
+import qualified Language.LSP.Server as LSP
 import Ide.Arguments
 import Ide.Logger
 import Ide.Version

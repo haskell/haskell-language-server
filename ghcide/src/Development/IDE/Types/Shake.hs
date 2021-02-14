@@ -28,7 +28,7 @@ import Development.IDE.Types.Location
 import Development.Shake (RuleResult, ShakeException (shakeExceptionInner))
 import Development.Shake.Classes
 import GHC.Generics
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
 import Development.IDE.Core.PositionMapping
 
 data Value v

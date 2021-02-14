@@ -3,13 +3,14 @@ module Reference (tests) where
 import Control.Lens
 import Control.Monad.IO.Class
 import Data.List
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Lens
+import Language.LSP.Test
+import Language.LSP.Types
+import Language.LSP.Types.Lens
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import Test.Tasty.HUnit
+import Data.Coerce
 
 tests :: TestTree
 tests = testGroup "references" [
@@ -24,7 +25,7 @@ tests = testGroup "references" [
             , mkRange 4 14 4 17
             , mkRange 4 0 4 3
             , mkRange 2 6 2 9
-            ] `isInfixOf` refs @? "Contains references"
+            ] `isInfixOf` (coerce refs) @? "Contains references"
     -- TODO: Respect withDeclaration parameter
     -- ignoreTestBecause "Broken" $ testCase "works without definitions" $ runSession hlsCommand fullCaps "test/testdata" $ do
     --   doc <- openDoc "References.hs" "haskell"

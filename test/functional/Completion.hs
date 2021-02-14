@@ -5,9 +5,9 @@ module Completion(tests) where
 import Control.Monad.IO.Class
 import Control.Lens hiding ((.=))
 import Data.Aeson (object, (.=))
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Lens hiding (applyEdit)
+import Language.LSP.Test
+import Language.LSP.Types
+import Language.LSP.Types.Lens hiding (applyEdit)
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.ExpectedFailure (ignoreTestBecause)
@@ -42,8 +42,8 @@ tests = testGroup "completions" [
 
          compls <- getCompletions doc (Position 5 9)
          let item = head $ filter ((== "putStrLn") . (^. label)) compls
-         resolvedRes <- request CompletionItemResolve item
-         let Right (resolved :: CompletionItem) = resolvedRes ^. result
+         resolvedRes <- request SCompletionItemResolve item
+         let Right resolved = resolvedRes ^. result
          liftIO $ print resolved
          liftIO $ do
              resolved ^. label @?= "putStrLn"
@@ -336,7 +336,7 @@ snippetTests = testGroup "snippets" [
 
         let config = object [ "haskell" .= object ["completionSnippetsOn" .= False]]
 
-        sendNotification WorkspaceDidChangeConfiguration
+        sendNotification SWorkspaceDidChangeConfiguration
                         (DidChangeConfigurationParams config)
 
         checkNoSnippets doc

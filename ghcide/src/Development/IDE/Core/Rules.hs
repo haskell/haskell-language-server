@@ -98,10 +98,9 @@ import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Core.PositionMapping
-import           Language.Haskell.LSP.Types (DocumentHighlight (..), SymbolInformation(..))
-import Language.Haskell.LSP.VFS
-import qualified Language.Haskell.LSP.Messages as LSP
-import qualified Language.Haskell.LSP.Types as LSP
+import           Language.LSP.Types (DocumentHighlight (..), SymbolInformation(..), SMethod(SCustomMethod))
+import qualified Language.LSP.Server as LSP
+import Language.LSP.VFS
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes hiding (TargetModule, TargetFile)
@@ -595,9 +594,9 @@ getHieAstRuleDefinition f hsc tmr = do
   isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
-      when (coerce $ ideTesting se) $
-        liftIO $ eventer se $ LSP.NotCustomServer $
-          LSP.NotificationMessage "2.0" (LSP.CustomServerMethod "ghcide/reference/ready") (toJSON $ fromNormalizedFilePath f)
+      when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
+        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+          toJSON $ fromNormalizedFilePath f
       pure []
     _ | Just asts <- masts -> do
           source <- getSourceFileSource f
@@ -827,9 +826,9 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ \GetModIfaceFromDiskAndInd
       | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
       , hie_loc == HieDb.hieModuleHieFile row  -> do
       -- All good, the db has indexed the file
-      when (coerce $ ideTesting se) $
-        liftIO $ eventer se $ LSP.NotCustomServer $
-          LSP.NotificationMessage "2.0" (LSP.CustomServerMethod "ghcide/reference/ready") (toJSON $ fromNormalizedFilePath f)
+      when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
+        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+          toJSON $ fromNormalizedFilePath f
     -- Not in db, must re-index
     _ -> do
       ehf <- liftIO $ runIdeAction "GetModIfaceFromDiskAndIndex" se $ runExceptT $
