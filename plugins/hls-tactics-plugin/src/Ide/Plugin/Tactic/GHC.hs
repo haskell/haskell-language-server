@@ -14,7 +14,7 @@ import           Data.Function (on)
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
 import           Data.Traversable
-import qualified DataCon as DataCon
+import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString(fromString))
 import           GHC.SourceGen (funBinds, match, case', lambda)
@@ -94,6 +94,18 @@ freshTyvars t = do
           Just tv' -> tv'
           Nothing -> tv
       ) t
+
+
+------------------------------------------------------------------------------
+-- | Given a datacon, extract its record fields' names and types. Returns
+-- nothing if the datacon is not a record.
+getRecordFields :: DataCon -> Maybe [(OccName, CType)]
+getRecordFields dc =
+  case dataConFieldLabels dc of
+    [] -> Nothing
+    lbls -> for lbls $ \lbl -> do
+      (_, ty) <- dataConFieldType_maybe dc $ flLabel lbl
+      pure (mkVarOccFS $ flLabel lbl, CType ty)
 
 
 ------------------------------------------------------------------------------
@@ -204,13 +216,17 @@ lambdaCaseable (splitFunTy_maybe -> Just (arg, res))
   = Just $ isJust $ algebraicTyCon res
 lambdaCaseable _ = Nothing
 
-fromPatCompat :: PatCompat GhcTc -> Pat GhcTc
+-- It's hard to generalize over these since weird type families are involved.
+fromPatCompatTc :: PatCompat GhcTc -> Pat GhcTc
+fromPatCompatPs :: PatCompat GhcPs -> Pat GhcPs
 #if __GLASGOW_HASKELL__ == 808
 type PatCompat pass = Pat pass
-fromPatCompat = id
+fromPatCompatTc = id
+fromPatCompatPs = id
 #else
 type PatCompat pass = LPat pass
-fromPatCompat = unLoc
+fromPatCompatTc = unLoc
+fromPatCompatPs = unLoc
 #endif
 
 ------------------------------------------------------------------------------
@@ -224,7 +240,7 @@ pattern TopLevelRHS name ps body <-
       [L _ (GRHS _ [] body)] _)
 
 getPatName :: PatCompat GhcTc -> Maybe OccName
-getPatName (fromPatCompat -> p0) =
+getPatName (fromPatCompatTc -> p0) =
   case p0 of
     VarPat  _ x   -> Just $ occName $ unLoc x
     LazyPat _ p   -> getPatName p
