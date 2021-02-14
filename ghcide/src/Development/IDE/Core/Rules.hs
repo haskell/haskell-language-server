@@ -57,7 +57,11 @@ module Development.IDE.Core.Rules(
     getBindingsRule,
     needsCompilationRule,
     generateCoreRule,
-    getImportMapRule
+    getImportMapRule,
+    regenerateHiFile,
+    ghcSessionDepsDefinition,
+    getParsedModuleDefinition,
+    typeCheckRuleDefinition,
     ) where
 
 import Fingerprint
