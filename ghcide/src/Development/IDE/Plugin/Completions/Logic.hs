@@ -27,7 +27,6 @@ import HscTypes
 import Name
 import RdrName
 import Type
-import Packages
 #if MIN_GHC_API_VERSION(8,10,0)
 import Predicate (isDictTy)
 import Pair
@@ -59,6 +58,7 @@ import Data.Functor
 import Ide.PluginUtils (mkLspCommand)
 import Ide.Types (CommandId (..), PluginId, WithSnippets (..))
 import Control.Monad
+import Development.IDE.Types.HscEnvEq
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -294,9 +294,10 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing
 
 
-cacheDataProducer :: Uri -> HscEnv -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
-cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = do
-  let dflags = hsc_dflags packageState
+cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
+cacheDataProducer uri env curMod globalEnv inScopeEnv limports deps = do
+  let 
+      packageState = hscEnv env
       curModName = moduleName curMod
 
       importMap = Map.fromList [ (getLoc imp, imp) | imp <- limports ]
@@ -309,8 +310,6 @@ cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = d
       -- Full canonical names of imported modules
       importDeclerations = map unLoc limports
 
-      -- The list of all importable Modules from all packages
-      moduleNames = map showModName (listVisibleModuleNames dflags)
 
       -- The given namespaces for the imported modules (ie. full name, or alias if used)
       allModNamesAsNS = map (showModName . asNamespace) importDeclerations
@@ -365,6 +364,9 @@ cacheDataProducer uri packageState curMod globalEnv inScopeEnv limports deps = d
                : recordCompls
 
   (unquals,quals) <- getCompls rdrElts
+
+  -- The list of all importable Modules from all packages
+  moduleNames <- maybe [] (map showModName) <$> envVisibleModuleNames env
 
   return $ CC
     { allModNamesAsNS = allModNamesAsNS
