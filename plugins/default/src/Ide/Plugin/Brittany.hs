@@ -111,6 +111,7 @@ showExtension :: Extension -> Maybe String
 showExtension Cpp = Just "-XCPP"
 -- Brittany chokes on parsing extensions that produce warnings
 showExtension DatatypeContexts = Nothing
+showExtension RecordPuns = Just "-XNamedFieldPuns"
 showExtension other = Just $ "-X" ++ show other
 
 getExtensions :: D.DynFlags -> [String]
