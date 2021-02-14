@@ -22,25 +22,9 @@ package haskell-language-server
 package ghcide
   test-show-details: direct
 
-source-repository-package
-    type: git
-    location: https://github.com/wz1000/haskell-lsp.git
-    tag: f42dd88fc1228ce01c0c938a2e2d9a25f425f755
-    subdir: lsp-types
-
-source-repository-package
-    type: git
-    location: https://github.com/wz1000/haskell-lsp.git
-    tag: f42dd88fc1228ce01c0c938a2e2d9a25f425f755
-
-source-repository-package
-    type: git
-    location: https://github.com/wz1000/lsp-test.git
-    tag: 7cef3a40e4774016c464d43b2a79c2bd6ef084d3
-
 write-ghc-environment-files: never
 
-index-state: 2021-02-08T19:11:03Z
+index-state: 2021-02-15T19:11:03Z
 
 allow-newer:
 	active:base,

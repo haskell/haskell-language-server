@@ -396,7 +396,7 @@ common hls-test-utils
     , hspec
     , hspec-core
     , lens
-    , lsp-test              >=0.11.0.6
+    , lsp-test              == 0.13.0.0
     , stm
     , tasty-expected-failure
     , tasty-hunit
@@ -464,6 +464,7 @@ test-suite func-test
     Ide.Plugin.Tactic.TestTypes
     Ide.Plugin.Eval.Types
 
+  default-extensions: OverloadedStrings
   ghc-options:
     -Wall -Wno-name-shadowing -threaded -rtsopts -with-rtsopts=-N -Wno-unticked-promoted-constructors
 

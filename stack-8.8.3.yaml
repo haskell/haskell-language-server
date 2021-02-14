@@ -32,8 +32,6 @@ extra-deps:
   - ghc-lib-8.10.3.20201220
   - ghc-lib-parser-8.10.3.20201220
   - ghc-trace-events-0.1.2.1
-  - haskell-lsp-0.23.0.0
-  - haskell-lsp-types-0.23.0.0
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
   - hie-bios-0.7.1
@@ -44,7 +42,6 @@ extra-deps:
   - ilist-0.3.1.0
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
-  - lsp-test-0.12.0.0
   - megaparsec-9.0.1
   - monad-dijkstra-0.1.1.2
   - opentelemetry-0.6.1
@@ -61,6 +58,9 @@ extra-deps:
   - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
   - direct-sqlite-2.3.26@sha256:04e835402f1508abca383182023e4e2b9b86297b8533afbd4e57d1a5652e0c23,3718
   - extra-1.7.9@sha256:f1dec740f0f2025790c540732bfd52c556ec55bde4f5dfd7cf18e22bd44ff3d0,2683
+  - lsp-1.1.0.0
+  - lsp-types-1.1.0.0
+  - lsp-test-0.13.0.0
 
 configure-options:
   ghcide:

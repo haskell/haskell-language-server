@@ -37,7 +37,7 @@ library
     , containers
     , data-default
     , Diff
-    , lsp           ^>=1.0.0
+    , lsp                   ^>=1.1.0
     , hashable
     , hslogger
     , lens
