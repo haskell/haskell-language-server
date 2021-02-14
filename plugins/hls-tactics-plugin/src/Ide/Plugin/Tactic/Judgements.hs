@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns     #-}
 

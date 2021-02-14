@@ -5,9 +5,9 @@ import Control.Lens hiding (List)
 import Control.Monad.IO.Class
 import qualified Data.Text as T
 import Data.Char
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types as LSP
-import Language.Haskell.LSP.Types.Lens as LSP
+import Language.LSP.Test
+import Language.LSP.Types as LSP
+import Language.LSP.Types.Lens as LSP
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -25,8 +25,8 @@ tests = testGroup "commands" [
     , testCase "get de-prefixed" $
         runSession hlsCommand fullCaps "test/testdata/" $ do
             ResponseMessage _ _ (Left err) <- request
-                WorkspaceExecuteCommand
-                (ExecuteCommandParams "34133:eval:evalCommand" (Just (List [])) Nothing) :: Session ExecuteCommandResponse
+                SWorkspaceExecuteCommand
+                (ExecuteCommandParams Nothing "34133:eval:evalCommand" (Just (List [])))
             let ResponseError _ msg _ = err
             -- We expect an error message about the dud arguments, but we can
             -- check that we found the right plugin.

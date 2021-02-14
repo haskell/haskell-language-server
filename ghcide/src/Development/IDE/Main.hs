@@ -45,18 +45,13 @@ import Development.IDE.Core.Shake (
  )
 import Development.IDE.Core.Tracing (measureMemory)
 import Development.IDE.LSP.LanguageServer (runLanguageServer)
-import Development.IDE.LSP.Protocol
 import Development.IDE.Plugin (
-    Plugin (pluginHandler, pluginRules),
+    Plugin (pluginHandlers, pluginRules),
  )
 import Development.IDE.Plugin.HLS (asGhcIdePlugin)
 import Development.IDE.Session (SessionLoadingOptions, defaultLoadingOptions, loadSessionWithOptions, setInitialDynFlags)
-import Development.IDE.Types.Diagnostics (
-    ShowDiagnostic (ShowDiag),
-    showDiagnosticsColored,
- )
 import Development.IDE.Types.Location (toNormalizedFilePath')
-import Development.IDE.Types.Logger (Logger, logInfo)
+import Development.IDE.Types.Logger (Logger)
 import Development.IDE.Types.Options (
     IdeGhcSession,
     IdeOptions (optCheckParents, optCheckProject, optReportProgress),
@@ -66,14 +61,10 @@ import Development.IDE.Types.Options (
 import Development.IDE.Types.Shake (Key (Key))
 import Development.Shake (action)
 import HIE.Bios.Cradle (findCradle)
-import Ide.Plugin.Config (CheckParents (NeverCheck), Config, getInitialConfig, getConfigFromNotification)
+import Ide.Plugin.Config (CheckParents (NeverCheck), Config, getConfigFromNotification)
 import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
 import Ide.Types (IdePlugins)
-import qualified Language.Haskell.LSP.Core as LSP
-import Language.Haskell.LSP.Messages (FromServerMessage)
-import Language.Haskell.LSP.Types (
-    LspId (IdInt),
- )
+import qualified Language.LSP.Server as LSP
 import qualified System.Directory.Extra as IO
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.FilePath (takeExtension, takeFileName)
@@ -123,15 +114,14 @@ defaultMain Arguments{..} = do
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
-        argsOnConfigChange = getConfigFromNotification argsDefaultHlsConfig
-        argsGetInitialConfig = getInitialConfig argsDefaultHlsConfig
+        argsOnConfigChange _ide = pure . getConfigFromNotification argsDefaultHlsConfig
 
     case argFiles of
         Nothing -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-            runLanguageServer options (pluginHandler plugins) argsGetInitialConfig argsOnConfigChange $ \getLspId event vfs caps wProg wIndefProg getConfig rootPath -> do
+            runLanguageServer options argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
@@ -144,19 +134,16 @@ defaultMain Arguments{..} = do
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
-                config <- getConfig
+                config <- LSP.runLspT env LSP.getConfig
                 let options = (argsIdeOptions config sessionLoader)
                             { optReportProgress = clientSupportsProgress caps
                             }
                     rules = argsRules >> pluginRules plugins
+                    caps = LSP.resClientCapabilities env
                 debouncer <- newAsyncDebouncer
                 initialise
-                    caps
                     rules
-                    getLspId
-                    event
-                    wProg
-                    wIndefProg
+                    (Just env)
                     argsLogger
                     debouncer
                     options
@@ -186,13 +173,12 @@ defaultMain Arguments{..} = do
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
             debouncer <- newAsyncDebouncer
-            let dummyWithProg _ _ f = f (const (pure ()))
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
             let options = (argsIdeOptions Nothing sessionLoader)
-                        { optCheckParents = NeverCheck
-                        , optCheckProject = False
+                        { optCheckParents = pure NeverCheck
+                        , optCheckProject = pure False
                         }
-            ide <- initialise def mainRule (pure $ IdInt 0) (showEvent argsLogger) dummyWithProg (const (const id)) argsLogger debouncer options vfs argsHiedb argsHieChan
+            ide <- initialise mainRule Nothing argsLogger debouncer options vfs argsHiedb argsHieChan
 
             putStrLn "\nStep 4/4: Type checking the files"
             setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') files
@@ -237,10 +223,3 @@ expandFiles = concatMapM $ \x -> do
             when (null files) $
                 fail $ "Couldn't find any .hs/.lhs files inside directory: " ++ x
             return files
-
--- | Print an LSP event.
-showEvent :: Logger -> FromServerMessage -> IO ()
-showEvent _ (EventFileDiagnostics _ []) = return ()
-showEvent argsLogger (EventFileDiagnostics (toNormalizedFilePath' -> file) diags) =
-    logInfo argsLogger $ showDiagnosticsColored $ map (file,ShowDiag,) diags
-showEvent argsLogger e = logInfo argsLogger $ T.pack $ show e

@@ -2,6 +2,7 @@
 -- {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 module Class
   ( tests
   )
@@ -11,14 +12,15 @@ import           Control.Lens                    hiding ((<.>))
 import           Control.Monad.IO.Class          (MonadIO(liftIO))
 import qualified Data.ByteString.Lazy            as BS
 import qualified Data.Text.Encoding              as T
-import           Language.Haskell.LSP.Test
-import           Language.Haskell.LSP.Types      hiding (_title, _command)
-import qualified Language.Haskell.LSP.Types.Lens as J
+import           Language.LSP.Test
+import           Language.LSP.Types      hiding (_title, _command)
+import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
+import Control.Applicative.Combinators
 
 tests :: TestTree
 tests = testGroup
@@ -54,10 +56,10 @@ tests = testGroup
       executeCodeAction _fAction
   ]
 
-_CACodeAction :: Prism' CAResult CodeAction
-_CACodeAction = prism' CACodeAction $ \case
-  CACodeAction action -> Just action
-  _                   -> Nothing
+_CACodeAction :: Prism' (Command |? CodeAction) CodeAction
+_CACodeAction = prism' InR $ \case
+  InR action -> Just action
+  _          -> Nothing
 
 classPath :: FilePath
 classPath = "test" </> "testdata" </> "class"
@@ -71,7 +73,7 @@ glodenTest name fp deco execute
       _ <- waitForDiagnosticsFromSource doc "typecheck"
       actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
       execute actions
-      BS.fromStrict . T.encodeUtf8 <$> getDocumentEdit doc
+      BS.fromStrict . T.encodeUtf8 <$> (skipManyTill anyMessage $ getDocumentEdit doc)
   where
     fpWithDeco
       | deco == "" = fp

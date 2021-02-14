@@ -26,12 +26,12 @@ module Development.IDE.Types.Location
     ) where
 
 import Control.Applicative
-import Language.Haskell.LSP.Types (Location(..), Range(..), Position(..))
+import Language.LSP.Types (Location(..), Range(..), Position(..))
 import Control.Monad
 import Data.Hashable (Hashable(hash))
 import Data.String
 import FastString
-import qualified Language.Haskell.LSP.Types as LSP
+import qualified Language.LSP.Types as LSP
 import SrcLoc as GHC
 import Text.ParserCombinators.ReadP as ReadP
 import Data.Maybe (fromMaybe)

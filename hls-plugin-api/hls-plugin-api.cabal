@@ -37,7 +37,7 @@ library
     , containers
     , data-default
     , Diff
-    , haskell-lsp           ^>=0.23
+    , lsp                   ^>=1.1.0
     , hashable
     , hslogger
     , lens
@@ -46,6 +46,10 @@ library
     , shake                 >=0.17.5
     , text
     , unordered-containers
+    , dependent-map
+    , dependent-sum
+    , dlist
+    , opentelemetry
 
   if os(windows)
       build-depends:
@@ -54,9 +58,10 @@ library
       build-depends:
         unix
 
-  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing
+  ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror
 
   default-language: Haskell2010
+  default-extensions: DataKinds, KindSignatures, TypeOperators

@@ -1,7 +1,9 @@
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ImpredicativeTypes #-}
+{-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments
 ( Bench(..)
@@ -23,16 +25,16 @@ import Control.Applicative.Combinators (skipManyTill)
 import Control.Exception.Safe (IOException, handleAny, try)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
-import Data.Aeson (Value(Null))
+import Data.Aeson (Value(Null), toJSON)
 import Data.List
 import Data.Maybe
 import qualified Data.Text as T
 import Data.Version
 import Development.IDE.Plugin.Test
 import Experiments.Types
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
-import Language.Haskell.LSP.Types.Capabilities
+import Language.LSP.Test
+import Language.LSP.Types
+import Language.LSP.Types.Capabilities
 import Numeric.Natural
 import Options.Applicative
 import System.Directory
@@ -79,13 +81,13 @@ experiments =
           isJust <$> getHover doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition" $ allWithIdentifierPos $ \DocumentPositions{..} ->
-        not . null <$> getDefinitions doc (fromJust identifierP),
+        either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "getDefinition after edit" $ \docs -> do
           forM_ docs $ \DocumentPositions{..} ->
             changeDoc doc [charEdit stringLiteralP]
           flip allWithIdentifierPos docs $ \DocumentPositions{..} ->
-            not . null <$> getDefinitions doc (fromJust identifierP),
+            either (not . null) (not . null) . toEither <$> getDefinitions doc (fromJust identifierP),
       ---------------------------------------------------------------------------------------
       bench "documentSymbols" $ allM $ \DocumentPositions{..} -> do
         fmap (either (not . null) (not . null)) . getDocumentSymbols $ doc,
@@ -148,7 +150,7 @@ experiments =
         ( \docs -> do
             Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
             liftIO $ appendFile hieYaml "##\n"
-            sendNotification WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
             forM_ docs $ \DocumentPositions{..} ->
               changeDoc doc [charEdit stringLiteralP]
@@ -163,7 +165,7 @@ experiments =
         (\docs -> do
             Just hieYaml <- uriToFilePath <$> getDocUri "hie.yaml"
             liftIO $ appendFile hieYaml "##\n"
-            sendNotification WorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
+            sendNotification SWorkspaceDidChangeWatchedFiles $ DidChangeWatchedFilesParams $
                 List [ FileEvent (filePathToUri "hie.yaml") FcChanged ]
             flip allWithIdentifierPos docs $ \DocumentPositions{..} -> isJust <$> getHover doc (fromJust identifierP)
         )
@@ -359,7 +361,9 @@ waitForProgressDone :: Session ()
 waitForProgressDone = loop
   where
     loop = do
-      void (skipManyTill anyMessage message :: Session WorkDoneProgressEndNotification)
+      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess SProgress (NotificationMessage _ _ (ProgressParams _ (End _))) -> Just ()
+        _ -> Nothing
       done <- null <$> getIncompleteProgressSessions
       unless done loop
 
@@ -393,8 +397,9 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
             else do
                 output (showDuration t)
                 -- Wait for the delayed actions to finish
-                waitId <- sendRequest (CustomClientMethod "test") WaitForShakeQueue
-                (td, resp) <- duration $ skipManyTill anyMessage $ responseForId waitId
+                let m = SCustomMethod "test"
+                waitId <- sendRequest m (toJSON WaitForShakeQueue)
+                (td, resp) <- duration $ skipManyTill anyMessage $ responseForId m waitId
                 case resp of
                     ResponseMessage{_result=Right Null} -> do
                       loop (userWaits+t) (delayedWork+td) (n -1)
@@ -562,7 +567,7 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
       checkDefinitions pos = do
         defs <- getDefinitions doc pos
         case defs of
-            [Location uri _] -> return $ uri /= _uri
+            (InL [Location uri _]) -> return $ uri /= _uri
             _ -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos

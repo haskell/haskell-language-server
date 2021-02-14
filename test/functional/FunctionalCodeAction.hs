@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 
 module FunctionalCodeAction (tests) where
 
@@ -14,10 +15,10 @@ import           Data.List
 import           Data.Maybe
 import qualified Data.Text as T
 import           Ide.Plugin.Config
-import           Language.Haskell.LSP.Test as Test
-import           Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Types.Lens as L
-import qualified Language.Haskell.LSP.Types.Capabilities as C
+import           Language.LSP.Test as Test
+import           Language.LSP.Types
+import qualified Language.LSP.Types.Lens as L
+import qualified Language.LSP.Types.Capabilities as C
 import           Test.Hls.Util
 import           Test.Hspec.Expectations
 
@@ -52,7 +53,7 @@ hlintTests = testGroup "hlint suggestions" [
             length diags @?= 2 -- "Eta Reduce" and "Redundant Id"
             reduceDiag ^. L.range @?= Range (Position 1 0) (Position 1 12)
             reduceDiag ^. L.severity @?= Just DsInfo
-            reduceDiag ^. L.code @?= Just (StringValue "refact:Eta reduce")
+            reduceDiag ^. L.code @?= Just (InR "refact:Eta reduce")
             reduceDiag ^. L.source @?= Just "hlint"
 
         cas <- map fromAction <$> getAllCodeActions doc
@@ -85,13 +86,13 @@ hlintTests = testGroup "hlint suggestions" [
 
     , testCase "changing configuration enables or disables hlint diagnostics" $ runHlintSession "" $ do
         let config = def { hlintOn = True }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         doc <- openDoc "ApplyRefact2.hs" "haskell"
         testHlintDiagnostics doc
 
         let config' = def { hlintOn = False }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config'))
 
         diags' <- waitForDiagnosticsFrom doc
 
@@ -188,7 +189,7 @@ hlintTests = testGroup "hlint suggestions" [
 
             executeCodeAction (fromJust ca)
 
-            contents <- getDocumentEdit doc
+            contents <- skipManyTill anyMessage $ getDocumentEdit doc
             liftIO $ contents @?= T.unlines expected
 
         expectedLambdaCase = [ "module ApplyRefact1 where", ""
@@ -223,6 +224,7 @@ renameTests = testGroup "rename suggestions" [
         cars <- getAllCodeActions doc
         replaceButStrLn <- liftIO $ inspectCommand cars ["Replace with", "putStrLn"]
         executeCommand replaceButStrLn
+        _ <- anyRequest
 
         x:_ <- T.lines <$> documentContents doc
         liftIO $ x @?= "main = putStrLn \"hello\""
@@ -242,6 +244,7 @@ renameTests = testGroup "rename suggestions" [
                 not ("documentChanges" `HM.member` editParams) @? "Doesn't contain documentChanges"
 
             executeCommand cmd
+            _ <- anyRequest
 
             x1:x2:_ <- T.lines <$> documentContents doc
             liftIO $
@@ -256,7 +259,7 @@ importTests = testGroup "import suggestions" [
         doc <- openDoc "CodeActionImport.hs" "haskell"
         -- No Formatting:
         let config = def { formattingProvider = "none" }
-        sendNotification WorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (toJSON config))
 
         (diag:_) <- waitForDiagnosticsFrom doc
         liftIO $ diag ^. L.message @?= "Variable not in scope: when :: Bool -> IO () -> IO ()"
@@ -295,7 +298,7 @@ packageTests = testGroup "add package suggestions" [
                 in liftIO $ any (`T.isPrefixOf` (diag ^. L.message)) prefixes @? "Contains prefix"
 
             acts <- getAllCodeActions doc
-            let (CACodeAction action:_) = acts
+            let (InR action:_) = acts
 
             liftIO $ do
                 action ^. L.title @?= "Add text as a dependency"
@@ -373,8 +376,9 @@ redundantImportTests = testGroup "redundant import code actions" [
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
         _   <- waitForDiagnosticsFromSource doc "typecheck"
-        _ : CACommand cmd : _ <- getAllCodeActions doc
+        _ : InL cmd : _ <- getAllCodeActions doc
         executeCommand cmd
+        _ <- anyRequest
         contents <- documentContents doc
         liftIO $ T.lines contents @?=
                 [ "{-# OPTIONS_GHC -Wunused-imports #-}"
@@ -580,12 +584,12 @@ unusedTermTests = testGroup "unused term code actions" [
         doc   <- openDoc "CodeActionOnly.hs" "haskell"
         _     <- waitForDiagnosticsFrom doc
         diags <- getCurrentDiagnostics doc
-        let params = CodeActionParams doc (Range (Position 1 0) (Position 4 0)) caContext Nothing
+        let params = CodeActionParams Nothing Nothing doc (Range (Position 1 0) (Position 4 0)) caContext
             caContext = CodeActionContext (List diags) (Just (List [CodeActionRefactorInline]))
             caContextAllActions = CodeActionContext (List diags) Nothing
         -- Verify that we get code actions of at least two different kinds.
         ResponseMessage _ _ (Right (List allCodeActions))
-          <- request TextDocumentCodeAction (params & L.context .~ caContextAllActions)
+          <- request STextDocumentCodeAction (params & L.context .~ caContextAllActions)
         liftIO $ do
             redundantId <- inspectCodeAction allCodeActions ["Redundant id"]
             redundantId ^. L.kind @?= Just CodeActionQuickFix
@@ -593,7 +597,7 @@ unusedTermTests = testGroup "unused term code actions" [
             unfoldFoo ^. L.kind @?= Just CodeActionRefactorInline
         -- Verify that that when we set the only parameter, we only get actions
         -- of the right kind.
-        ResponseMessage _ _ (Right (List res)) <- request TextDocumentCodeAction params
+        ResponseMessage _ _ (Right (List res)) <- request STextDocumentCodeAction params
         let cas = map fromAction res
             kinds = map (^. L.kind) cas
         liftIO $ do
@@ -605,4 +609,4 @@ noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = C.CodeActionClientCapabilities (Just True) Nothing
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing

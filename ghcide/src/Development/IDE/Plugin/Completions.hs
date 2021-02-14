@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP          #-}
+{-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
 #include "ghc-api-version.h"
 
@@ -7,16 +8,17 @@ module Development.IDE.Plugin.Completions
     , LocalCompletions(..)
     , NonLocalCompletions(..)
     ) where
-import Language.Haskell.LSP.Types
-import qualified Language.Haskell.LSP.Core as LSP
-import qualified Language.Haskell.LSP.VFS as VFS
 
 import Control.Monad
+import Control.Monad.Extra
 import Control.Monad.Trans.Maybe
 import Data.Aeson
 import Data.List (find)
 import Data.Maybe
 import qualified Data.Text as T
+import Language.LSP.Types
+import qualified Language.LSP.Server as LSP
+import qualified Language.LSP.VFS as VFS
 import Development.Shake.Classes
 import Development.Shake
 import GHC.Generics
@@ -42,10 +44,10 @@ import Development.IDE.Import.DependencyInformation
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-    { pluginRules = produceCompletions,
-      pluginCompletionProvider = Just (getCompletionsLSP plId),
-      pluginCommands = [extendImportCommand]
-    }
+  { pluginRules = produceCompletions
+  , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
+  , pluginCommands = [extendImportCommand]
+  }
 
 produceCompletions :: Rules ()
 produceCompletions = do
@@ -81,7 +83,7 @@ produceCompletions = do
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                      cdata <- liftIO $ cacheDataProducer uri env (ms_mod ms) globalEnv inScopeEnv imps parsedDeps
+                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod ms) globalEnv inScopeEnv imps parsedDeps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
@@ -115,20 +117,19 @@ instance Binary   NonLocalCompletions
 
 -- | Generate code actions.
 getCompletionsLSP
-    :: PluginId
-    -> LSP.LspFuncs Config
-    -> IdeState
+    :: IdeState
+    -> PluginId
     -> CompletionParams
-    -> IO (Either ResponseError CompletionResponseResult)
-getCompletionsLSP plId lsp ide
+    -> LSP.LspM Config (Either ResponseError (ResponseResult TextDocumentCompletion))
+getCompletionsLSP ide plId
   CompletionParams{_textDocument=TextDocumentIdentifier uri
                   ,_position=position
                   ,_context=completionContext} = do
-    contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
+    contents <- LSP.getVirtualFile $ toNormalizedUri uri
     fmap Right $ case (contents, uriToFilePath' uri) of
       (Just cnts, Just path) -> do
         let npath = toNormalizedFilePath' path
-        (ideOpts, compls) <- runIdeAction "Completion" (shakeExtras ide) $ do
+        (ideOpts, compls) <- liftIO $ runIdeAction "Completion" (shakeExtras ide) $ do
             opts <- liftIO $ getIdeOptionsIO $ shakeExtras ide
             localCompls <- useWithStaleFast LocalCompletions npath
             nonLocalCompls <- useWithStaleFast NonLocalCompletions npath
@@ -140,16 +141,16 @@ getCompletionsLSP plId lsp ide
             pfix <- VFS.getCompletionPrefix position cnts
             case (pfix, completionContext) of
               (Just (VFS.PosPrefixInfo _ "" _ _), Just CompletionContext { _triggerCharacter = Just "."})
-                -> return (Completions $ List [])
+                -> return (InL $ List [])
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
-                config <- getClientConfig lsp
+                config <- getClientConfig
                 let snippets = WithSnippets . completionSnippetsOn $ config
-                allCompletions <- getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
-                pure $ Completions (List allCompletions)
-              _ -> return (Completions $ List [])
-          _ -> return (Completions $ List [])
-      _ -> return (Completions $ List [])
+                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
+                pure $ InL (List allCompletions)
+              _ -> return (InL $ List [])
+          _ -> return (InL $ List [])
+      _ -> return (InL $ List [])
 
 ----------------------------------------------------------------------------------------------------
 
@@ -158,16 +159,18 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler _lsp ideState edit = do
-  res <- runMaybeT $ extendImportHandler' ideState edit
-  return (Right Null, res)
+extendImportHandler ideState edit = do
+  res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
+  whenJust res $ \wedit ->
+    void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
+  return $ Right Null
 
-extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (ServerMethod, ApplyWorkspaceEditParams)
+extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO WorkspaceEdit
 extendImportHandler' ideState ExtendImport {..}
   | Just fp <- uriToFilePath doc,
     nfp <- toNormalizedFilePath' fp =
     do
-      (ms, ps, imps) <- MaybeT $
+      (ms, ps, imps) <- MaybeT $ liftIO $
         runAction "extend import" ideState $
           runMaybeT $ do
             -- We want accurate edits, so do not use stale data here
@@ -178,11 +181,9 @@ extendImportHandler' ideState ExtendImport {..}
           wantedModule = mkModuleName (T.unpack importName)
           wantedQual = mkModuleName . T.unpack <$> importQual
       imp <- liftMaybe $ find (isWantedModule wantedModule wantedQual) imps
-      wedit <-
-        liftEither $
-          rewriteToWEdit df doc (annsA ps) $
-            extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
-      return (WorkspaceApplyEdit, ApplyWorkspaceEditParams wedit)
+      liftEither $
+        rewriteToWEdit df doc (annsA ps) $
+          extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
   | otherwise =
     mzero
 

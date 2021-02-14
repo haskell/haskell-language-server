@@ -2,8 +2,8 @@
 module Highlight (tests) where
 
 import Control.Monad.IO.Class
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
+import Language.LSP.Test
+import Language.LSP.Types
 import Test.Hls.Util
 import Test.Tasty
 import Test.Tasty.HUnit

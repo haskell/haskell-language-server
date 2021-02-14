@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
+{-# LANGUAGE DuplicateRecordFields #-}
+ 
 module ModuleName
   ( tests
   )
@@ -9,12 +10,11 @@ where
 import           Control.Applicative.Combinators (skipManyTill)
 import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import qualified Data.Text.IO                    as T
-import           Language.Haskell.LSP.Test       (anyMessage, documentContents,
+import           Language.LSP.Test       (anyMessage, documentContents,
                                                   executeCommand, fullCaps,
                                                   getCodeLenses, message,
                                                   openDoc, runSession)
-import           Language.Haskell.LSP.Types      (ApplyWorkspaceEditRequest,
-                                                  CodeLens (..))
+import           Language.LSP.Types
 import           System.FilePath                 ((<.>), (</>))
 import           Test.Hls.Util                   (hlsCommand)
 import           Test.Tasty                      (TestTree, testGroup)
@@ -34,7 +34,7 @@ goldenTest input = runSession hlsCommand fullCaps testdataPath $ do
   -- getCodeLenses doc >>= liftIO . print . length
   [CodeLens { _command = Just c }] <- getCodeLenses doc
   executeCommand c
-  _resp :: ApplyWorkspaceEditRequest <- skipManyTill anyMessage message
+  _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
   edited <- documentContents doc
   -- liftIO $ T.writeFile (testdataPath </> input <.> "expected") edited
   expected <- liftIO $ T.readFile $ testdataPath </> input <.> "expected"

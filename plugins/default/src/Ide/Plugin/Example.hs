@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Ide.Plugin.Example
   (
@@ -29,8 +30,10 @@ import Development.IDE.Core.Shake (getDiagnostics, getHiddenDiagnostics)
 import GHC.Generics
 import Ide.PluginUtils
 import Ide.Types
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
+import Language.LSP.Server
 import Text.Regex.TDFA.Text()
+import Control.Monad.IO.Class
 
 -- ---------------------------------------------------------------------
 
@@ -38,17 +41,17 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = exampleRules
   , pluginCommands = [PluginCommand "codelens.todo" "example adding" addTodoCmd]
-  , pluginCodeActionProvider = Just codeAction
-  , pluginCodeLensProvider   = Just codeLens
-  , pluginHoverProvider      = Just hover
-  , pluginSymbolsProvider    = Just symbols
-  , pluginCompletionProvider = Just completion
+  , pluginHandlers = mkPluginHandler STextDocumentCodeAction     codeAction
+                  <> mkPluginHandler STextDocumentCodeLens       codeLens
+                  <> mkPluginHandler STextDocumentHover          hover
+                  <> mkPluginHandler STextDocumentDocumentSymbol symbols
+                  <> mkPluginHandler STextDocumentCompletion     completion
   }
 
 -- ---------------------------------------------------------------------
 
-hover :: IdeState -> TextDocumentPositionParams -> IO (Either ResponseError (Maybe Hover))
-hover = request "Hover" blah (Right Nothing) foundHover
+hover :: PluginMethodHandler IdeState TextDocumentHover
+hover ide _ HoverParams{..} = liftIO $ request "Hover" blah (Right Nothing) foundHover ide TextDocumentPositionParams{..}
 
 blah :: NormalizedFilePath -> Position -> Action (Maybe (Maybe Range, [T.Text]))
 blah _ (Position line col)
@@ -99,8 +102,8 @@ mkDiag file diagSource sev loc msg = (file, D.ShowDiag,)
 -- ---------------------------------------------------------------------
 
 -- | Generate code actions.
-codeAction :: CodeActionProvider IdeState
-codeAction _lf state _pid (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs} = do
+codeAction :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeAction state _pid (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List _xs}) = liftIO $ do
     let Just nfp = uriToNormalizedFilePath $ toNormalizedUri uri
     Just (ParsedModule{},_) <- runIdeAction "example" (shakeExtras state) $ useWithStaleFast GetParsedModule nfp
     let
@@ -109,12 +112,12 @@ codeAction _lf state _pid (TextDocumentIdentifier uri) _range CodeActionContext{
                "-- TODO1 added by Example Plugin directly\n"]
       edit  = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
     pure $ Right $ List
-        [ CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) (Just edit) Nothing ]
+        [ InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List []) Nothing Nothing (Just edit) Nothing]
 
 -- ---------------------------------------------------------------------
 
-codeLens :: CodeLensProvider IdeState
-codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = do
+codeLens :: PluginMethodHandler IdeState TextDocumentCodeLens
+codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} = liftIO $ do
     logInfo (ideLogger ideState) "Example.codeLens entered (ideLogger)" -- AZ
     case uriToFilePath' uri of
       Just (toNormalizedFilePath -> filePath) -> do
@@ -128,7 +131,7 @@ codeLens _lf ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier u
           -- edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
           range = Range (Position 3 0) (Position 4 0)
         let cmdParams = AddTodoParams uri "do abc"
-        cmd <- mkLspCommand plId "codelens.todo" title (Just [toJSON cmdParams])
+            cmd = mkLspCommand plId "codelens.todo" title (Just [toJSON cmdParams])
         pure $ Right $ List [ CodeLens range (Just cmd) Nothing ]
       Nothing -> pure $ Right $ List []
 
@@ -141,7 +144,7 @@ data AddTodoParams = AddTodoParams
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 addTodoCmd :: CommandFunction IdeState AddTodoParams
-addTodoCmd _lf _ide (AddTodoParams uri todoText) = do
+addTodoCmd _ide (AddTodoParams uri todoText) = do
   let
     pos = Position 3 0
     textEdits = List
@@ -151,7 +154,8 @@ addTodoCmd _lf _ide (AddTodoParams uri todoText) = do
     res = WorkspaceEdit
       (Just $ Map.singleton uri textEdits)
       Nothing
-  return (Right Null, Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+  _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing res) (\_ -> pure ())
+  return $ Right Null
 
 -- ---------------------------------------------------------------------
 
@@ -170,7 +174,7 @@ request
   -> IdeState
   -> TextDocumentPositionParams
   -> IO (Either ResponseError b)
-request label getResults notFound found ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos _) = do
+request label getResults notFound found ide (TextDocumentPositionParams (TextDocumentIdentifier uri) pos) = do
     mbResult <- case uriToFilePath' uri of
         Just path -> logAndRunRequest label getResults ide pos path
         Nothing   -> pure Nothing
@@ -187,9 +191,9 @@ logAndRunRequest label getResults ide pos path = do
 
 -- ---------------------------------------------------------------------
 
-symbols :: SymbolsProvider IdeState
-symbols _lf _ide (DocumentSymbolParams _doc _mt)
-    = pure $ Right [r]
+symbols :: PluginMethodHandler IdeState TextDocumentDocumentSymbol
+symbols _ide _pid (DocumentSymbolParams _ _ _doc)
+    = pure $ Right $ InL $ List [r]
     where
         r = DocumentSymbol name detail kind deprecation range selR chList
         name = "Example_symbol_name"
@@ -202,9 +206,9 @@ symbols _lf _ide (DocumentSymbolParams _doc _mt)
 
 -- ---------------------------------------------------------------------
 
-completion :: CompletionProvider IdeState
-completion _lf _ide (CompletionParams _doc _pos _mctxt _mt)
-    = pure $ Right $ Completions $ List [r]
+completion :: PluginMethodHandler IdeState TextDocumentCompletion
+completion _ide _pid (CompletionParams _doc _pos _ _ _mctxt)
+    = pure $ Right $ InL $ List [r]
     where
         r = CompletionItem label kind tags detail documentation deprecated preselect
                            sortText filterText insertText insertTextFormat

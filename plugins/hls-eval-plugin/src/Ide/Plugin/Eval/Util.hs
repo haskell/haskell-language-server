@@ -15,7 +15,6 @@ module Ide.Plugin.Eval.Util (
     logWith,
 ) where
 
-import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Except (
@@ -36,10 +35,8 @@ import Development.IDE (
 import Exception (ExceptionMonad, SomeException (..), evaluate, gcatch)
 import GHC.Exts (toList)
 import GHC.Stack (HasCallStack, callStack, srcLocFile, srcLocStartCol, srcLocStartLine)
-import Language.Haskell.LSP.Types (
-    ErrorCode (InternalError),
-    ResponseError (ResponseError),
- )
+import Language.LSP.Server
+import Language.LSP.Types
 import Outputable (
     Outputable (ppr),
     ppr,
@@ -50,6 +47,7 @@ import System.Time.Extra (
     duration,
     showDuration,
  )
+import UnliftIO.Exception (catchAny)
 
 asS :: Outputable a => a -> String
 asS = showSDocUnsafe . ppr
@@ -93,14 +91,16 @@ response =
     fmap (first (\msg -> ResponseError InternalError (fromString msg) Nothing))
         . runExceptT
 
-response' :: ExceptT String IO a -> IO (Either ResponseError Value, Maybe a)
+response' :: ExceptT String (LspM c) WorkspaceEdit -> LspM c (Either ResponseError Value)
 response' act = do
-    res <- gStrictTry $ runExceptT act
-    case join res of
-        Left e ->
-            return
-                (Left (ResponseError InternalError (fromString e) Nothing), Nothing)
-        Right a -> return (Right Null, Just a)
+    res <- runExceptT act
+             `catchAny` showErr
+    case res of
+      Left e ->
+          return $ Left (ResponseError InternalError (fromString e) Nothing)
+      Right a -> do
+        _ <- sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing a) (\_ -> pure ())
+        return $ Right Null
 
 gStrictTry :: ExceptionMonad m => m b -> m (Either String b)
 gStrictTry op =

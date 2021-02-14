@@ -13,7 +13,9 @@ import Development.IDE.Spans.Common
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Language.Haskell.LSP.Types (CompletionItemKind, Uri)
+import Language.LSP.Types (CompletionItemKind, Uri)
+
+-- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
 
 data Backtick = Surrounded | LeftSide
   deriving (Eq, Ord, Show)
