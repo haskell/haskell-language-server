@@ -41,7 +41,7 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource, maybeParensAST)
+import           Development.IDE.GHC.ExactPrint (Graft, Annotated, graft, transform, useAnnotatedSource, maybeParensAST)
 import           Development.IDE.GHC.ExactPrint (graftSmallestDeclsWithM, TransformT)
 import           Development.IDE.GHC.ExactPrint (graftWithoutParentheses)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
@@ -61,7 +61,7 @@ import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.Haskell.LSP.Core (clientCapabilities)
+import           Language.Haskell.LSP.Core (LspFuncs, clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
 import           Refinery.Tactic (goal)
@@ -322,35 +322,12 @@ tacticCmd tac lf state (TacticParams uri range var_name)
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
         x <- lift $ timeout 2e8 $
-          case runTactic ctx jdg
-                $ tac
-                $ mkVarOcc
-                $ T.unpack var_name of
+          case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left err ->
               pure $ (, Nothing)
                 $ Left
                 $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-            Right rtr -> do
-              traceMX "solns" $ rtr_other_solns rtr
-              traceMX "simplified" $ rtr_extract rtr
-              let g =
-                    if _jIsTopHole jdg
-                       then graftSmallestDeclsWithM (RealSrcSpan span)
-                          $ stickItIn (RealSrcSpan span)
-                          $ \pats ->
-                            splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
-                          $ iterateSplit
-                          $ mkFirstAgda (fmap unXPat pats)
-                          $ unLoc
-                          $ rtr_extract rtr
-                       else graftWithoutParentheses (RealSrcSpan span)
-                            -- Parenthesize the extract iff we're not in a top level hole
-                          $ bool maybeParensAST id (_jIsTopHole jdg)
-                          $ rtr_extract rtr
-                  response = transform dflags (clientCapabilities lf) uri g pm
-              pure $ case response of
-                Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
-                Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+            Right rtr -> pure $ mkWorkspaceEdits rtr jdg span ctx dflags lf uri pm
         pure $ case x of
           Just y -> y
           Nothing -> (, Nothing)
@@ -360,6 +337,50 @@ tacticCmd _ _ _ _ =
   pure ( Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
        , Nothing
        )
+
+
+mkWorkspaceEdits
+  :: RunTacticResults
+  -> Judgement' a
+  -> RealSrcSpan
+  -> Context
+  -> DynFlags
+  -> LspFuncs c
+  -> Uri
+  -> Annotated ParsedSource
+  -> ( Either ResponseError Value
+     , Maybe (ServerMethod, ApplyWorkspaceEditParams)
+     )
+mkWorkspaceEdits rtr jdg span ctx dflags lf uri pm = do
+  let g = graftHole jdg (RealSrcSpan span) ctx rtr
+      response = transform dflags (clientCapabilities lf) uri g pm
+   in case response of
+        Right res -> (Right Null , Just (WorkspaceApplyEdit, ApplyWorkspaceEditParams res))
+        Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
+
+
+graftHole
+  :: Judgement' a2
+  -> SrcSpan
+  -> Context
+  -> RunTacticResults
+  -> Graft (Either String) ParsedSource
+graftHole jdg span ctx rtr
+  | _jIsTopHole jdg
+      = graftSmallestDeclsWithM span
+      $ stickItIn span
+      $ \pats ->
+        splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
+      $ iterateSplit
+      $ mkFirstAgda (fmap unXPat pats)
+      $ unLoc
+      $ rtr_extract rtr
+graftHole jdg span _ rtr
+  = graftWithoutParentheses span
+    -- Parenthesize the extract iff we're not in a top level hole
+  $ bool maybeParensAST id (_jIsTopHole jdg)
+  $ rtr_extract rtr
+
 
 stickItIn
     :: SrcSpan
@@ -383,6 +404,7 @@ stickItIn span
         }
       }
 
+
 unXPat :: Pat GhcPs -> Pat GhcPs
 unXPat (XPat (L _ pat)) = unXPat pat
 unXPat pat = pat
@@ -390,6 +412,7 @@ unXPat pat = pat
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
+
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
