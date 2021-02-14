@@ -1,7 +1,7 @@
 data Tree a = Leaf a | Branch (Tree a) (Tree a)
 
 instance Functor Tree where
-   fmap = (\ fab ta
-      -> case ta of
-           (Leaf a) -> Leaf (fab a)
-           (Branch ta2 ta3) -> Branch (fmap fab ta2) (fmap fab ta3))
+   fmap = \ fab ta
+     -> case ta of
+          (Leaf a) -> Leaf (fab a)
+          (Branch ta2 ta3) -> Branch (fmap fab ta2) (fmap fab ta3)
