@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.StylishHaskell
   (
     descriptor
@@ -6,14 +8,17 @@ module Ide.Plugin.StylishHaskell
 where
 
 import           Control.Monad.IO.Class
-import           Data.Text (Text)
-import qualified Data.Text as T
-import           Development.IDE (IdeState)
+import           Data.Text                   (Text)
+import qualified Data.Text                   as T
+import           Development.IDE
+import           Development.IDE.GHC.Compat  (ModSummary (ms_hspp_opts))
+import qualified DynFlags                    as D
+import qualified EnumSet                     as ES
+import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types
+import           Language.Haskell.LSP.Types  as J
 import           Language.Haskell.Stylish
-import           Language.Haskell.LSP.Types            as J
-
 import           System.Directory
 import           System.FilePath
 
@@ -26,16 +31,33 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- Formats the given source in either a given Range or the whole Document.
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingProvider IdeState IO
-provider _lf _ideState typ contents fp _opts = do
+provider _lf ide typ contents fp _opts = do
+  (ms_hspp_opts -> dyn, _) <- runAction "stylish-haskell" ide $ use_ GetModSummary fp
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file
+  mergedConfig <- getMergedConfig dyn config
   let (range, selectedContents) = case typ of
         FormatText    -> (fullRange contents, contents)
         FormatRange r -> (normalize r, extractRange r contents)
-      result = runStylishHaskell file config selectedContents
+      result = runStylishHaskell file mergedConfig selectedContents
   case result of
     Left  err -> return $ Left $ responseError $ T.pack $ "stylishHaskellCmd: " ++ err
     Right new -> return $ Right $ J.List [TextEdit range new]
+  where
+    getMergedConfig dyn config
+      | null (configLanguageExtensions config)
+      = do
+          logInfo (ideLogger ide) "stylish-haskell uses the language extensions from DynFlags"
+          pure
+            $ config
+              { configLanguageExtensions = getExtensions dyn }
+      | otherwise
+      = pure config
+
+    getExtensions = map showExtension . ES.toList . D.extensionFlags
+
+    showExtension Cpp   = "CPP"
+    showExtension other = show other
 
 -- | Recursively search in every directory of the given filepath for .stylish-haskell.yaml.
 -- If no such file has been found, return default config.
@@ -45,7 +67,7 @@ loadConfigFrom file = do
   setCurrentDirectory (takeDirectory file)
   config <- loadConfig (makeVerbose False) Nothing
   setCurrentDirectory currDir
-  return config
+  pure config
 
 -- | Run stylish-haskell on the given text with the given configuration.
 runStylishHaskell :: FilePath           -- ^ Location of the file being formatted. Used for error message
