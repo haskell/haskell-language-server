@@ -17,8 +17,7 @@ import           Data.Traversable
 import qualified DataCon as DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts (IsString(fromString))
-import           GHC.SourceGen (funBinds, var, bvar, match, case', lambda)
-import           GHC.SourceGen.Pat
+import           GHC.SourceGen (funBinds, match, case', lambda)
 import           Generics.SYB (mkT, everywhere)
 import           Ide.Plugin.Tactic.Types
 import           OccName
@@ -143,10 +142,7 @@ splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ 
 iterateSplit :: AgdaMatch -> [AgdaMatch]
 iterateSplit am =
   let iterated = iterate (agdaSplit =<<) $ pure am
-   in fst . head
-          . dropWhile (\(a, b) -> length a /= length b)
-          . zip iterated
-          $ tail iterated
+   in head . drop 5 $ iterated
 
 
 
