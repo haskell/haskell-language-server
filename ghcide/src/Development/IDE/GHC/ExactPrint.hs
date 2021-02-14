@@ -62,10 +62,10 @@ import Language.Haskell.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable (Outputable, ppr, showSDoc)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
 import Parser (parseIdentifier)
-#if __GLASGOW_HASKELL__ == 808
-import Control.Arrow
 import Data.List (isPrefixOf)
 import Data.Traversable (for)
+#if __GLASGOW_HASKELL__ == 808
+import Control.Arrow
 #endif
 
 

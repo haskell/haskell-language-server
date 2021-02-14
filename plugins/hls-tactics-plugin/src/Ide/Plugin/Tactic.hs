@@ -42,6 +42,7 @@ import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource, maybeParensAST)
+import           Development.IDE.GHC.ExactPrint (graftSmallestDeclsWithM, TransformT)
 import           Development.IDE.GHC.ExactPrint (graftWithoutParentheses)
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
@@ -50,6 +51,7 @@ import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin.Tactic.Auto
+import           Ide.Plugin.Tactic.CodeGen (bvar')
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
@@ -57,7 +59,6 @@ import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
-import           Ide.Plugin.Tactic.CodeGen (bvar')
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.LSP.Core (clientCapabilities)
@@ -67,8 +68,6 @@ import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
-import Development.IDE.GHC.ExactPrint (graftSmallestDecls)
-import Development.IDE.GHC.ExactPrint (graftSmallestDeclsWithM, TransformT)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
