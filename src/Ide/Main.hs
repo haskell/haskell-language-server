@@ -16,7 +16,7 @@ import Control.Monad.Extra
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import Development.IDE.Core.Rules
-import Development.IDE.Session (setInitialDynFlags, getHieDbLoc, runWithDb)
+import Development.IDE.Session (setInitialDynFlags, getHieDbLoc)
 import Development.IDE.Types.Logger as G
 import qualified Language.LSP.Server as LSP
 import Ide.Arguments
@@ -82,6 +82,7 @@ hlsLogger = G.Logger $ \pri txt ->
 runLspMode :: LspArguments -> IdePlugins IdeState -> IO ()
 runLspMode lspArgs@LspArguments{..} idePlugins = do
     whenJust argsCwd IO.setCurrentDirectory
+    dir <- IO.getCurrentDirectory
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 

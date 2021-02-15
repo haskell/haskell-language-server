@@ -28,7 +28,6 @@ import Control.Monad.Extra
 import UnliftIO.Exception
 import UnliftIO.Async
 import UnliftIO.Concurrent
-import UnliftIO.MVar
 import UnliftIO.Directory
 import Control.Monad.IO.Class
 import Control.Monad.Reader
@@ -137,22 +136,22 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
           :: IO () -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
           -> LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
-            liftIO $ traceWithSpan sp params
+            traceWithSpan sp params
             let root = LSP.resRootPath env
 
             dir <- getCurrentDirectory
-            dbLoc <- liftIO $ getHieDbLoc dir
+            dbLoc <- getHieDbLoc dir
 
             -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference
             -- to 'getIdeState', so we use this dirty trick
             dbMVar <- newEmptyMVar
-            ~(hiedb,hieChan) <- liftIO $ unsafeInterleaveIO $ takeMVar dbMVar
+            ~(hiedb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
 
-            ide <- liftIO $ getIdeState env (makeLSPVFSHandle env) root hiedb hieChan
+            ide <- getIdeState env (makeLSPVFSHandle env) root hiedb hieChan
 
             let initConfig = parseConfiguration params
-            liftIO $ logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
-            liftIO $ registerIdeConfiguration (shakeExtras ide) initConfig
+            logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
+            registerIdeConfiguration (shakeExtras ide) initConfig
 
             _ <- flip forkFinally (const exitClientMsg) $ runWithDb dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
@@ -174,20 +173,20 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
           :: IdeState -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> SomeLspId
           -> IO () -> (ResponseError -> IO ()) -> IO ()
         checkCancelled ide clearReqId waitForCancel _id act k =
-            flip finally (liftIO $ clearReqId _id) $
+            flip finally (clearReqId _id) $
                 catch (do
                     -- We could optimize this by first checking if the id
                     -- is in the cancelled set. However, this is unlikely to be a
                     -- bottleneck and the additional check might hide
                     -- issues with async exceptions that need to be fixed.
-                    cancelOrRes <- race (liftIO $ waitForCancel _id) act
+                    cancelOrRes <- race (waitForCancel _id) act
                     case cancelOrRes of
                         Left () -> do
-                            liftIO $ logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
+                            logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
                             k $ ResponseError RequestCancelled "" Nothing
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
-                    liftIO $ logError (ideLogger ide) $ T.pack $
+                    logError (ideLogger ide) $ T.pack $
                         "Unexpected exception on request, please report!\n" ++
                         "Exception: " ++ show e
                     k $ ResponseError InternalError (T.pack $ show e) Nothing

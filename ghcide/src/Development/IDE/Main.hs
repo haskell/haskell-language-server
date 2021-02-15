@@ -37,9 +37,7 @@ import Development.IDE.Core.Rules (
  )
 import Development.IDE.Core.Service (initialise, runAction)
 import Development.IDE.Core.Shake (
-    HieDb,
     IdeState (shakeExtras),
-    IndexQueue,
     ShakeExtras (state),
     uses,
  )
