@@ -4343,7 +4343,7 @@ cradleTests = testGroup "cradle"
     [testGroup "dependencies" [sessionDepsArePickedUp]
     ,testGroup "ignore-fatal" [ignoreFatalWarning]
     ,testGroup "loading" [loadCradleOnlyonce, retryFailedCradle]
-    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2]
+    ,testGroup "multi"   [simpleMultiTest, simpleMultiTest2, simpleMultiDefTest]
     ,testGroup "sub-directory"   [simpleSubDirectoryTest]
     ]
 
@@ -4500,6 +4500,28 @@ simpleMultiTest2 = testCase "simple-multi-test2" $ runWithExtraFiles "multi" $ \
     expectNoMoreDiagnostics 10
     locs <- getDefinitions bdoc (Position 2 7)
     let fooL = mkL adoc 2 0 2 3
+    checkDefs locs (pure [fooL])
+    expectNoMoreDiagnostics 0.5
+
+-- Like simpleMultiTest but open the files in component 'a' in a seperate session
+simpleMultiDefTest :: TestTree
+simpleMultiDefTest = testCase "simple-multi-def-test" $ runWithExtraFiles "multi" $ \dir -> do
+    let aPath = dir </> "a/A.hs"
+        bPath = dir </> "b/B.hs"
+    adoc <- liftIO $ runInDir dir $ do
+      aSource <- liftIO $ readFileUtf8 aPath
+      adoc <- createDoc aPath "haskell" aSource
+      ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+        FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
+          A.Success fp' <- pure $ fromJSON fp
+          if equalFilePath fp' aPath then pure () else Nothing
+        _ -> Nothing
+      closeDoc adoc
+      pure adoc
+    bSource <- liftIO $ readFileUtf8 bPath
+    bdoc <- createDoc bPath "haskell" bSource
+    locs <- getDefinitions bdoc (Position 2 7)
+    let fooL = mkL (adoc ^. L.uri) 2 0 2 3
     checkDefs locs (pure [fooL])
     expectNoMoreDiagnostics 0.5
 
