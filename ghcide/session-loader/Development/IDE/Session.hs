@@ -112,7 +112,8 @@ setInitialDynFlags :: IO (Maybe LibDir)
 setInitialDynFlags = do
   dir <- IO.getCurrentDirectory
   hieYaml <- runMaybeT $ yamlConfig dir
-  cradle <- maybe (HieBios.loadImplicitCradle $ addTrailingPathSeparator dir) HieBios.loadCradle hieYaml
+  cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) HieBios.loadCradle hieYaml
+  hPutStrLn stderr $ "setInitialDynFlags cradle: " ++ show cradle
   libDirRes <- getRuntimeGhcLibDir cradle
   libdir <- case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
