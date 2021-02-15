@@ -343,6 +343,9 @@ tacticCmd _ _ _ _ =
        )
 
 
+------------------------------------------------------------------------------
+-- | Turn a 'RunTacticResults' into concrete edits to make in the source
+-- document.
 mkWorkspaceEdits
   :: RunTacticResults
   -> Judgement' a
@@ -363,6 +366,10 @@ mkWorkspaceEdits rtr jdg span ctx dflags lf uri pm = do
         Left err -> (Left $ ResponseError InternalError (T.pack err) Nothing, Nothing)
 
 
+------------------------------------------------------------------------------
+-- | Graft a 'RunTacticResults' into the correct place in an AST. Correctly
+-- deals with top-level holes, in which we might need to fiddle with the
+-- 'Match's that bind variables.
 graftHole
   :: Judgement' a2
   -> SrcSpan
@@ -372,7 +379,7 @@ graftHole
 graftHole jdg span ctx rtr
   | _jIsTopHole jdg
       = graftSmallestDeclsWithM span
-      $ stickItIn span
+      $ graftDecl span
       $ \pats ->
         splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
       $ iterateSplit
@@ -386,10 +393,17 @@ graftHole jdg span _ rtr
   $ rtr_extract rtr
 
 
-notSure
-  :: ([LPat GhcPs] -> LHsDecl GhcPs)
-     -> SrcSpan -> HsBind GhcPs -> HsBind GhcPs
-notSure make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alt_src alts}}) =
+------------------------------------------------------------------------------
+-- | Merge in the 'Match'es of a 'FunBind' into a 'HsDecl'. Used to perform
+-- agda-style case splitting in which we need to separate one 'Match' into
+-- many, without affecting any matches which might exist but don't need to be
+-- split.
+mergeFunBindMatches
+    :: ([LPat GhcPs] -> LHsDecl GhcPs)
+    -> SrcSpan
+    -> HsBind GhcPs
+    -> HsBind GhcPs
+mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alt_src alts}}) =
     fb
       { fun_matches = mg
         { mg_alts = L alt_src $ do
@@ -403,35 +417,39 @@ notSure make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alt_src alt
               False -> pure alt
         }
       }
-notSure _ _ _ = error "called on something that isnt a funbind"
+mergeFunBindMatches _ _ _ = error "called on something that isnt a funbind"
 
-stickItIn
+------------------------------------------------------------------------------
+-- | Helper function to route 'mergeFunBindMatches' into the right place in an
+-- AST --- correctly dealing with inserting into instance declarations.
+graftDecl
     :: SrcSpan
     -> ([Pat GhcPs] -> LHsDecl GhcPs)
     -> LHsDecl GhcPs
     -> TransformT (Either String) (Maybe [LHsDecl GhcPs])
-stickItIn span
+graftDecl span
     make_decl
     (L src (ValD ext fb))
-  = pure $ Just $ pure $ L src $ ValD ext $ notSure make_decl span fb
-stickItIn span
+  = pure $ Just $ pure $ L src $ ValD ext $ mergeFunBindMatches make_decl span fb
+-- TODO(sandy): default methods
+graftDecl span
     make_decl
-    (L src (InstD ext cid@ClsInstD{cid_inst = cidi@ClsInstDecl{cid_sigs = sigs, cid_binds = binds}}))
+    (L src (InstD ext cid@ClsInstD{cid_inst = cidi@ClsInstDecl{cid_sigs = _sigs, cid_binds = binds}}))
   = pure $ Just $ pure $ L src $ InstD ext $ cid
       { cid_inst = cidi
         { cid_binds = listToBag $ do
             b@(L bsrc bind) <- bagToList binds
             case bind of
               fb@FunBind{}
-                | span `isSubspanOf` bsrc -> pure $ L bsrc $ notSure make_decl span fb
+                | span `isSubspanOf` bsrc -> pure $ L bsrc $ mergeFunBindMatches make_decl span fb
               _ -> pure b
         }
       }
-stickItIn span _ x = do
-  traceM $ mappend "!!!stickItIn: " $ unsafeRender' $ showAstData BlankSrcSpan x
+graftDecl span _ x = do
+  traceM $ mappend "!!!graftDecl: " $ unsafeRender' $ showAstData BlankSrcSpan x
   traceMX "biggest" $ unsafeRender $ locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
   traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
-  undefined
+  pure $ Just [x]
 
 
 unXPat :: Pat GhcPs -> Pat GhcPs
