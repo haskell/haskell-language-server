@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE GADTs               #-}
@@ -25,7 +26,7 @@ import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ)
+import           Data.Generics.Aliases (GenericQ, mkQ)
 import           Data.Generics.Schemes (everything)
 import           Data.List
 import           Data.Map (Map)
@@ -68,6 +69,9 @@ import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
+import HsDumpAst
+import Data.Data (Data)
+import Bag (listToBag, bagToList)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -382,15 +386,11 @@ graftHole jdg span _ rtr
   $ rtr_extract rtr
 
 
-stickItIn
-    :: SrcSpan
-    -> ([Pat GhcPs] -> LHsDecl GhcPs)
-    -> LHsDecl GhcPs
-    -> TransformT (Either String) (Maybe [LHsDecl GhcPs])
-stickItIn span
-    make_decl
-    (L src (ValD ext fb@FunBind {fun_matches = mg@MG {mg_alts = L alt_src alts}}))
-  = pure $ Just $ pure $ L src $ ValD ext $ fb
+notSure
+  :: ([LPat GhcPs] -> LHsDecl GhcPs)
+     -> SrcSpan -> HsBind GhcPs -> HsBind GhcPs
+notSure make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alt_src alts}}) =
+    fb
       { fun_matches = mg
         { mg_alts = L alt_src $ do
             alt@(L alt_src match) <- alts
@@ -403,6 +403,35 @@ stickItIn span
               False -> pure alt
         }
       }
+notSure _ _ _ = error "called on something that isnt a funbind"
+
+stickItIn
+    :: SrcSpan
+    -> ([Pat GhcPs] -> LHsDecl GhcPs)
+    -> LHsDecl GhcPs
+    -> TransformT (Either String) (Maybe [LHsDecl GhcPs])
+stickItIn span
+    make_decl
+    (L src (ValD ext fb))
+  = pure $ Just $ pure $ L src $ ValD ext $ notSure make_decl span fb
+stickItIn span
+    make_decl
+    (L src (InstD ext cid@ClsInstD{cid_inst = cidi@ClsInstDecl{cid_sigs = sigs, cid_binds = binds}}))
+  = pure $ Just $ pure $ L src $ InstD ext $ cid
+      { cid_inst = cidi
+        { cid_binds = listToBag $ do
+            b@(L bsrc bind) <- bagToList binds
+            case bind of
+              fb@FunBind{}
+                | span `isSubspanOf` bsrc -> pure $ L bsrc $ notSure make_decl span fb
+              _ -> pure b
+        }
+      }
+stickItIn span _ x = do
+  traceM $ mappend "!!!stickItIn: " $ unsafeRender' $ showAstData BlankSrcSpan x
+  traceMX "biggest" $ unsafeRender $ locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
+  traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
+  undefined
 
 
 unXPat :: Pat GhcPs -> Pat GhcPs
@@ -451,4 +480,31 @@ getRhsPosVals rss tcs
 -- TODO(sandy): Make this more robust
 isHole :: OccName -> Bool
 isHole = isPrefixOf "_" . occNameString
+
+
+locateBiggest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
+locateBiggest ss x = getFirst $ everything (<>)
+  ( mkQ mempty $ \case
+    L span r | ss `isSubspanOf` span -> pure r
+    _ -> mempty
+  )x
+
+locateSmallest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
+locateSmallest ss x = getLast $ everything (<>)
+  ( mkQ mempty $ \case
+    L span r | ss `isSubspanOf` span -> pure r
+    _ -> mempty
+  )x
+
+locateFirst :: (Data r, Data a) => a -> Maybe r
+locateFirst x = getFirst $ everything (<>)
+  ( mkQ mempty $ \case
+    r -> pure r
+  ) x
+
+locateLast :: (Data r, Data a) => a -> Maybe r
+locateLast x = getLast $ everything (<>)
+  ( mkQ mempty $ \case
+    r -> pure r
+  ) x
 
