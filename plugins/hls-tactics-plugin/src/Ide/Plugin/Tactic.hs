@@ -50,7 +50,6 @@ import           Development.Shake (Action)
 import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
-import           HsDumpAst
 import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.CaseSplit
 import           Ide.Plugin.Tactic.Context
@@ -443,7 +442,6 @@ graftDecl span
         }
       }
 graftDecl span _ x = do
-  traceM $ mappend "!!!graftDecl: " $ unsafeRender' $ showAstData BlankSrcSpan x
   traceMX "biggest" $ unsafeRender $ locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
   traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
   pure $ Just [x]
