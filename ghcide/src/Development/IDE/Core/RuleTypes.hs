@@ -26,12 +26,10 @@ import Development.IDE.Types.HscEnvEq (HscEnvEq)
 import Development.IDE.Types.KnownTargets
 import           Data.Hashable
 import           Data.Typeable
-import qualified Data.Set as S
 import qualified Data.Map as M
 import           Development.Shake
 import           GHC.Generics                             (Generic)
 
-import Module (InstalledUnitId)
 import HscTypes (ModGuts, hm_iface, HomeModInfo, hm_linkable)
 
 import           Development.IDE.Spans.Common
@@ -223,9 +221,8 @@ type instance RuleResult GhcSession = HscEnvEq
 -- | A GHC session preloaded with all the dependencies
 type instance RuleResult GhcSessionDeps = HscEnvEq
 
--- | Resolve the imports in a module to the file path of a module
--- in the same package or the package id of another package.
-type instance RuleResult GetLocatedImports = ([(Located ModuleName, Maybe ArtifactsLocation)], S.Set InstalledUnitId)
+-- | Resolve the imports in a module to the file path of a module in the same package
+type instance RuleResult GetLocatedImports = [(Located ModuleName, Maybe ArtifactsLocation)]
 
 -- | This rule is used to report import cycles. It depends on GetDependencyInformation.
 -- We cannot report the cycles directly from GetDependencyInformation since
