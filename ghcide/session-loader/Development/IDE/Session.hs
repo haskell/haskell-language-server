@@ -98,6 +98,8 @@ data SessionLoadingOptions = SessionLoadingOptions
   --   return the path for storing generated GHC artifacts,
   --   or 'Nothing' to respect the cradle setting
   , getCacheDirs :: String -> [String] -> IO CacheDirs
+  -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
+  , getInitialGhcLibDir :: IO (Maybe LibDir)
   }
 
 defaultLoadingOptions :: SessionLoadingOptions
@@ -105,17 +107,17 @@ defaultLoadingOptions = SessionLoadingOptions
     {findCradle = HieBios.findCradle
     ,loadCradle = HieBios.loadCradle
     ,getCacheDirs = getCacheDirsDefault
+    ,getInitialGhcLibDir = getInitialGhcLibDirDefault
     }
 
--- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
-setInitialDynFlags :: IO (Maybe LibDir)
-setInitialDynFlags = do
+getInitialGhcLibDirDefault :: IO (Maybe LibDir)
+getInitialGhcLibDirDefault = do
   dir <- IO.getCurrentDirectory
   hieYaml <- runMaybeT $ yamlConfig dir
   cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) HieBios.loadCradle hieYaml
   hPutStrLn stderr $ "setInitialDynFlags cradle: " ++ show cradle
   libDirRes <- getRuntimeGhcLibDir cradle
-  libdir <- case libDirRes of
+  case libDirRes of
       CradleSuccess libdir -> pure $ Just $ LibDir libdir
       CradleFail err -> do
         hPutStrLn stderr $ "Couldn't load cradle for libdir: " ++ show (err,dir,hieYaml,cradle)
@@ -123,6 +125,11 @@ setInitialDynFlags = do
       CradleNone -> do
         hPutStrLn stderr $ "Couldn't load cradle (CradleNone)"
         pure Nothing
+
+-- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir
+setInitialDynFlags :: SessionLoadingOptions -> IO (Maybe LibDir)
+setInitialDynFlags SessionLoadingOptions{..} = do
+  libdir <- getInitialGhcLibDir
   dynFlags <- mapM dynFlagsForPrinting libdir
   mapM_ setUnsafeGlobalDynFlags dynFlags
   pure libdir

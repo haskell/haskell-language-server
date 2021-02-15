@@ -127,7 +127,7 @@ defaultMain Arguments{..} = do
                 -- We do it here since haskell-lsp changes our working directory to the correct place ('rootPath')
                 -- before calling this function
                 _mlibdir <-
-                    setInitialDynFlags
+                    setInitialDynFlags argsSessionLoadingOptions
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
