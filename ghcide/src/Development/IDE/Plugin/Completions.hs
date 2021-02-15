@@ -159,9 +159,12 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit = do
+extendImportHandler ideState edit@ExtendImport {..} = do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
-  whenJust res $ \wedit ->
+  whenJust res $ \wedit -> do
+    LSP.sendNotification SWindowShowMessage $
+      ShowMessageParams MtInfo $
+        "Import " <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent <> "’ from " <> importName
     void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 
