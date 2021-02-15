@@ -57,15 +57,20 @@ providerTests = testGroup "formatting provider" [
         resp <- request STextDocumentFormatting $ DocumentFormattingParams Nothing doc (FormattingOptions 2 True Nothing Nothing Nothing)
         liftIO $ resp ^. LSP.result @?= (Left $ ResponseError InvalidRequest "No plugin enabled for STextDocumentFormatting, available: []" Nothing)
 
-#if AGPL
+    ,  testCase "respects initial" $ runSessionWithConfig (formatConfig "floskell") hlsCommand fullCaps "test/testdata/format" $ do
+        doc <- openDoc "Format.hs" "haskell"
+        formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.initial.hs"
+        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
+        documentContents doc >>= liftIO . (@?= formattedFloskell)
+
     , testCase "can change on the fly" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-        formattedBrittany <- liftIO $ T.readFile "test/testdata/format/Format.brittany.formatted.hs"
+        formattedBrittany <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
         formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"
-        formattedBrittanyPostFloskell <- liftIO $ T.readFile "test/testdata/format/Format.brittany_post_floskell.formatted.hs"
+        formattedBrittanyPostFloskell <- liftIO $ T.readFile "test/testdata/format/Format.ormolu_post_floskell.formatted.hs"
 
         doc <- openDoc "Format.hs" "haskell"
 
-        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedBrittany)
 
@@ -73,23 +78,22 @@ providerTests = testGroup "formatting provider" [
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedFloskell)
 
-        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "brittany"))
+        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "ormolu"))
         formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
         documentContents doc >>= liftIO . (@?= formattedBrittanyPostFloskell)
     , testCase "supports both new and old configuration sections" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-       formattedBrittany <- liftIO $ T.readFile "test/testdata/format/Format.brittany.formatted.hs"
+       formattedBrittany <- liftIO $ T.readFile "test/testdata/format/Format.ormolu.formatted.hs"
        formattedFloskell <- liftIO $ T.readFile "test/testdata/format/Format.floskell.formatted.hs"
 
        doc <- openDoc "Format.hs" "haskell"
 
-       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "brittany"))
+       sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "ormolu"))
        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedBrittany)
 
        sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfigOld "floskell"))
        formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
        documentContents doc >>= liftIO . (@?= formattedFloskell)
-#endif
     ]
 
 stylishHaskellTests :: TestTree
