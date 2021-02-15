@@ -62,7 +62,7 @@ library
         lens,
         hiedb == 0.3.0.1,
         lsp-types == 1.1.*,
-        lsp == 1.1.*,
+        lsp == 1.1.1.0,
         mtl,
         network-uri,
         parallel,
