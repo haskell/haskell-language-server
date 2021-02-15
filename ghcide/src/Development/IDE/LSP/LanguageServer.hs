@@ -32,7 +32,7 @@ import UnliftIO.Directory
 import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Ide.Types (traceWithSpan)
-import Development.IDE.Session (runWithDb, getHieDbLoc)
+import Development.IDE.Session (runWithDb)
 
 import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Shake
@@ -47,11 +47,12 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 runLanguageServer
     :: forall config. (Show config)
     => LSP.Options
+    -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
     -> (IdeState -> Value -> IO (Either T.Text config))
     -> LSP.Handlers (ServerM config)
     -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
     -> IO ()
-runLanguageServer options onConfigurationChange userHandlers getIdeState = do
+runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeState = do
     -- Move stdout to another file descriptor and duplicate stderr
     -- to stdout. This guards against stray prints from corrupting the JSON-RPC
     -- message stream.

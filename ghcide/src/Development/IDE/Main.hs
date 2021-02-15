@@ -82,6 +82,7 @@ data Arguments = Arguments
     , argsIdeOptions :: Maybe Config -> Action IdeGhcSession -> IdeOptions
     , argsLspOptions :: LSP.Options
     , argsDefaultHlsConfig :: Config
+    , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
     }
 
 defArguments :: Arguments
@@ -97,6 +98,7 @@ defArguments =
         , argsIdeOptions = const defaultIdeOptions
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
+        , argsGetHieDbLoc = getHieDbLoc
         }
 
 defaultMain :: Arguments -> IO ()
@@ -114,7 +116,7 @@ defaultMain Arguments{..} = do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-            runLanguageServer options argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
+            runLanguageServer options argsGetHieDbLoc argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
