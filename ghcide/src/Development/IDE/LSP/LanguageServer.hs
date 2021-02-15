@@ -28,9 +28,12 @@ import Control.Monad.Extra
 import UnliftIO.Exception
 import UnliftIO.Async
 import UnliftIO.Concurrent
+import UnliftIO.MVar
+import UnliftIO.Directory
 import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Ide.Types (traceWithSpan)
+import Development.IDE.Session (runWithDb, getHieDbLoc)
 
 import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Shake
@@ -40,12 +43,14 @@ import Development.IDE.Types.Logger
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.Tracing
 
+import System.IO.Unsafe (unsafeInterleaveIO)
+
 runLanguageServer
     :: forall config. (Show config)
     => LSP.Options
     -> (IdeState -> Value -> IO (Either T.Text config))
     -> LSP.Handlers (ServerM config)
-    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
     -> IO ()
 runLanguageServer options onConfigurationChange userHandlers getIdeState = do
     -- Move stdout to another file descriptor and duplicate stderr
@@ -134,13 +139,24 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
             liftIO $ traceWithSpan sp params
             let root = LSP.resRootPath env
-            ide <- liftIO $ getIdeState env (makeLSPVFSHandle env) root
+
+            dir <- getCurrentDirectory
+            dbLoc <- liftIO $ getHieDbLoc dir
+
+            -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference
+            -- to 'getIdeState', so we use this dirty trick
+            dbMVar <- newEmptyMVar
+            ~(hiedb,hieChan) <- liftIO $ unsafeInterleaveIO $ takeMVar dbMVar
+
+            ide <- liftIO $ getIdeState env (makeLSPVFSHandle env) root hiedb hieChan
 
             let initConfig = parseConfiguration params
             liftIO $ logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
             liftIO $ registerIdeConfiguration (shakeExtras ide) initConfig
 
-            _ <- flip forkFinally (const exitClientMsg) $ forever $ do
+            _ <- flip forkFinally (const exitClientMsg) $ runWithDb dbLoc $ \hiedb hieChan -> do
+              putMVar dbMVar (hiedb,hieChan)
+              forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled

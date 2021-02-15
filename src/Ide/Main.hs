@@ -82,8 +82,6 @@ hlsLogger = G.Logger $ \pri txt ->
 runLspMode :: LspArguments -> IdePlugins IdeState -> IO ()
 runLspMode lspArgs@LspArguments{..} idePlugins = do
     whenJust argsCwd IO.setCurrentDirectory
-    dir <- IO.getCurrentDirectory
-    dbLoc <- getHieDbLoc dir
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 
@@ -94,17 +92,16 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
-    runWithDb dbLoc $ \hiedb hiechan ->
-        Main.defaultMain (Main.defArguments hiedb hiechan)
-          { Main.argFiles = if argLSP then Nothing else Just []
-          , Main.argsHlsPlugins = idePlugins
-          , Main.argsLogger = hlsLogger
-          , Main.argsIdeOptions = \_config sessionLoader ->
-            let defOptions = Ghcide.defaultIdeOptions sessionLoader
-            in defOptions
-                { Ghcide.optShakeProfiling = argsShakeProfiling
-                , Ghcide.optTesting = Ghcide.IdeTesting argsTesting
-                , Ghcide.optShakeOptions = (Ghcide.optShakeOptions defOptions)
-                    {shakeThreads = argsThreads}
-                }
-          }
+    Main.defaultMain Main.defArguments
+      { Main.argFiles = if argLSP then Nothing else Just []
+      , Main.argsHlsPlugins = idePlugins
+      , Main.argsLogger = hlsLogger
+      , Main.argsIdeOptions = \_config sessionLoader ->
+        let defOptions = Ghcide.defaultIdeOptions sessionLoader
+        in defOptions
+            { Ghcide.optShakeProfiling = argsShakeProfiling
+            , Ghcide.optTesting = Ghcide.IdeTesting argsTesting
+            , Ghcide.optShakeOptions = (Ghcide.optShakeOptions defOptions)
+                {shakeThreads = argsThreads}
+            }
+      }
