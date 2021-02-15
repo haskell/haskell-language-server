@@ -24,6 +24,7 @@ library
   exposed-modules:
     Ide.Plugin.Tactic
     Ide.Plugin.Tactic.Auto
+    Ide.Plugin.Tactic.CaseSplit
     Ide.Plugin.Tactic.CodeGen
     Ide.Plugin.Tactic.CodeGen.Utils
     Ide.Plugin.Tactic.Context

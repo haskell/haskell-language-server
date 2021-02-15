@@ -17,6 +17,7 @@ module Ide.Plugin.Tactic
   ) where
 
 
+import           Bag (listToBag, bagToList)
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Error.Class (MonadError(throwError))
@@ -25,8 +26,9 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
+import           Data.Data (Data)
 import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (GenericQ, mkQ)
+import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
 import           Data.List
 import           Data.Map (Map)
@@ -42,17 +44,15 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.GHC.ExactPrint (Graft, Annotated, graft, transform, useAnnotatedSource, maybeParensAST)
-import           Development.IDE.GHC.ExactPrint (graftSmallestDeclsWithM, TransformT)
-import           Development.IDE.GHC.ExactPrint (graftWithoutParentheses)
+import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
-import           DynFlags (xopt)
 import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
+import           HsDumpAst
 import           Ide.Plugin.Tactic.Auto
-import           Ide.Plugin.Tactic.CodeGen (bvar')
+import           Ide.Plugin.Tactic.CaseSplit
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
@@ -69,9 +69,6 @@ import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
-import HsDumpAst
-import Data.Data (Data)
-import Bag (listToBag, bagToList)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState

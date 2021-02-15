@@ -376,3 +376,11 @@ data RunTacticResults = RunTacticResults
   , rtr_extract     :: LHsExpr GhcPs
   , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
   } deriving Show
+
+
+data AgdaMatch = AgdaMatch
+  { amPats :: [Pat GhcPs]
+  , amBody :: HsExpr GhcPs
+  }
+  deriving (Show)
+

@@ -9,18 +9,17 @@
 
 module Ide.Plugin.Tactic.GHC where
 
-import qualified Data.Set as S
-import Data.Set (Set)
-import           Control.Lens
 import           Control.Monad.State
 import           Data.Function (on)
+import           Data.List (isPrefixOf)
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
-import           GHC.Exts (IsString(fromString))
-import           GHC.SourceGen (wildP, funBinds, match, case', lambda)
+import           GHC.SourceGen (wildP, match, case', lambda)
 import           Generics.SYB (mkQ, everything, listify, Data, mkT, everywhere)
 import           Ide.Plugin.Tactic.Types
 import           OccName
@@ -30,8 +29,6 @@ import           Type
 import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
 import           Unique
 import           Var
-import Data.Bool (bool)
-import Data.List (isPrefixOf)
 
 
 tcTyVar_maybe :: Type -> Maybe Var
@@ -124,49 +121,6 @@ algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | tycon == funTyCon    = Nothing
   | otherwise = Just tycon
 algebraicTyCon _ = Nothing
-
-
-data AgdaMatch = AgdaMatch
-  { amPats :: [Pat GhcPs]
-  , amBody :: HsExpr GhcPs
-  }
-  deriving (Show)
-
-
-mkFirstAgda :: [Pat GhcPs] -> HsExpr GhcPs -> AgdaMatch
-mkFirstAgda pats (Lambda pats' body) = mkFirstAgda (pats <> pats') body
-mkFirstAgda pats body = AgdaMatch pats body
-
-
-agdaSplit :: AgdaMatch -> [AgdaMatch]
-agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
-  (i, pat) <- zip [id @Int 0 ..] pats
-  case pat of
-    VarPat _ (L _ patname) | eqRdrName patname var -> do
-      (case_pat, body) <- matches
-      -- TODO(sandy): use an at pattern if necessary
-      pure $ AgdaMatch (pats & ix i .~ case_pat) body
-    _ -> []
-agdaSplit x = [x]
-
-
-wildify :: AgdaMatch -> AgdaMatch
-wildify (AgdaMatch pats body) =
-  let make_wild = bool id (wildifyT (allOccNames body)) $ not $ containsHole body
-   in AgdaMatch (make_wild pats) body
-
-
-splitToDecl :: OccName -> [AgdaMatch] -> LHsDecl GhcPs
-splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ name) $ do
-  AgdaMatch pats body <- ams
-  pure $ match pats body
-
-
-iterateSplit :: AgdaMatch -> [AgdaMatch]
-iterateSplit am =
-  let iterated = iterate (agdaSplit =<<) $ pure am
-   in fmap wildify . head . drop 5 $ iterated
-
 
 eqRdrName :: RdrName -> RdrName -> Bool
 eqRdrName = (==) `on` occNameString . occName
@@ -305,3 +259,4 @@ dataConExTys = DataCon.dataConExTyCoVars
 #else
 dataConExTys = DataCon.dataConExTyVars
 #endif
+
