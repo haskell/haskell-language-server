@@ -1,11 +1,11 @@
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE PatternSynonyms     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms   #-}
-{-# LANGUAGE TypeApplications  #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 module Ide.Plugin.Tactic.GHC where
 
@@ -19,7 +19,7 @@ import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
-import           GHC.SourceGen (wildP, match, case', lambda)
+import           GHC.SourceGen (match, case', lambda)
 import           Generics.SYB (mkQ, everything, listify, Data, mkT, everywhere)
 import           Ide.Plugin.Tactic.Types
 import           OccName
@@ -147,11 +147,6 @@ containsHole x = not $ null $ listify (
 allOccNames :: Data a => a -> Set OccName
 allOccNames = everything (<>) $ mkQ mempty $ \case
     a -> S.singleton a
-
-wildifyT :: Data a => Set OccName -> a -> a
-wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
-  VarPat _ (L _ var) | S.notMember (occNameString $ occName var) used -> wildP
-  (x :: Pat GhcPs) -> x
 
 
 
