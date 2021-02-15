@@ -144,11 +144,16 @@ agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
   case pat of
     VarPat _ (L _ patname) | eqRdrName patname var -> do
       (case_pat, body) <- matches
-      let make_wild = bool id (wildify (allOccNames body)) $ not $ containsHole body
       -- TODO(sandy): use an at pattern if necessary
-      pure $ AgdaMatch (make_wild $ pats & ix i .~ case_pat) body
+      pure $ AgdaMatch (pats & ix i .~ case_pat) body
     _ -> []
 agdaSplit x = [x]
+
+
+wildify :: AgdaMatch -> AgdaMatch
+wildify (AgdaMatch pats body) =
+  let make_wild = bool id (wildifyT (allOccNames body)) $ not $ containsHole body
+   in AgdaMatch (make_wild pats) body
 
 
 splitToDecl :: OccName -> [AgdaMatch] -> LHsDecl GhcPs
@@ -160,7 +165,7 @@ splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ 
 iterateSplit :: AgdaMatch -> [AgdaMatch]
 iterateSplit am =
   let iterated = iterate (agdaSplit =<<) $ pure am
-   in head . drop 5 $ iterated
+   in fmap wildify . head . drop 5 $ iterated
 
 
 eqRdrName :: RdrName -> RdrName -> Bool
@@ -189,8 +194,8 @@ allOccNames :: Data a => a -> Set OccName
 allOccNames = everything (<>) $ mkQ mempty $ \case
     a -> S.singleton a
 
-wildify :: Data a => Set OccName -> a -> a
-wildify (S.map occNameString -> used) = everywhere $ mkT $ \case
+wildifyT :: Data a => Set OccName -> a -> a
+wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
   VarPat _ (L _ var) | S.notMember (occNameString $ occName var) used -> wildP
   (x :: Pat GhcPs) -> x
 
