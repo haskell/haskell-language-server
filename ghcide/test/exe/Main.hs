@@ -4511,6 +4511,7 @@ simpleMultiDefTest = testCase "simple-multi-def-test" $ runWithExtraFiles "multi
     adoc <- liftIO $ runInDir dir $ do
       aSource <- liftIO $ readFileUtf8 aPath
       adoc <- createDoc aPath "haskell" aSource
+      liftIO $ hPutStrLn stderr $ "Looking for references/ready from: " ++ aPath
       ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
         FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
           A.Success fp' <- pure $ fromJSON fp
