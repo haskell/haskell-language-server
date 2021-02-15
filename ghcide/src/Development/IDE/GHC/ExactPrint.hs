@@ -207,6 +207,17 @@ graftWithoutParentheses dst val = Graft $ \dflags a -> do
             a
 
 
+------------------------------------------------------------------------------
+-- | 'parseDecl' fails to parse decls that span multiple lines at the top
+-- layout --- eg. things like:
+--
+-- @
+-- not True = False
+-- not False = True
+-- @
+--
+-- This function splits up each top-layout declaration, parses them
+-- individually, and then merges them back into a single decl.
 parseDecls :: DynFlags -> FilePath -> String -> ParseResult (LHsDecl GhcPs)
 parseDecls dflags fp str = do
   let mono_decls = fmap unlines $ groupByFirstLine $ lines str
@@ -214,9 +225,14 @@ parseDecls dflags fp str = do
   pure $ mergeDecls decls
 
 
+------------------------------------------------------------------------------
+-- | Combine decls together. See 'parseDecl' for more information.
 mergeDecls :: [(Anns, LHsDecl GhcPs)] -> (Anns, LHsDecl GhcPs)
 mergeDecls [x] = x
 mergeDecls ((anns,  L _ (ValD ext fb@FunBind{fun_matches = mg@MG {mg_alts = L _ alts}}))
+          -- Since 'groupByFirstLine' separates matches, we are guaranteed to
+          -- only have a single alternative here. We want to add it to 'alts'
+          -- above.
           : (anns', L _ (ValD _ FunBind{fun_matches = MG {mg_alts = L _ [alt]}}))
           : decls) =
   mergeDecls $
@@ -225,15 +241,23 @@ mergeDecls ((anns,  L _ (ValD ext fb@FunBind{fun_matches = mg@MG {mg_alts = L _ 
         { fun_matches = mg { mg_alts = noLoc $ alts <> [alt] }
         }
     ) : decls
-mergeDecls _ = error "huh"
+mergeDecls _ = error "mergeDecls called with something that isn't a ValD FunBind"
 
 
+------------------------------------------------------------------------------
+-- | Groups strings by the Haskell top-layout rules, assuming each element of
+-- the list corresponds to a line. For example, the list
+--
+-- @["a", " a1", " a2", "b", " b1"]@
+--
+-- will be grouped to
+--
+-- @[["a", " a1", " a2"], ["b", " b1"]]@
 groupByFirstLine :: [String] -> [[String]]
 groupByFirstLine [] = []
 groupByFirstLine (str : strs) =
   let (same, diff) = span (isPrefixOf " ") strs
    in (str : same) : groupByFirstLine diff
-
 
 
 ------------------------------------------------------------------------------
