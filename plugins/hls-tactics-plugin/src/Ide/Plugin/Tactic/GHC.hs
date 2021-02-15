@@ -157,7 +157,7 @@ pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
     (MG {mg_alts = L _ [L _
-      (Match { m_pats = pats
+      (Match { m_pats = fmap fromPatCompatPs -> pats
              , m_grhss = UnguardedRHSs body
              })]})
   where
@@ -173,7 +173,7 @@ pattern UnguardedRHSs body <-
 
 pattern SinglePatMatch :: Pat GhcPs -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
 pattern SinglePatMatch pat body <-
-  Match { m_pats = [pat]
+  Match { m_pats = [fromPatCompatPs -> pat]
         , m_grhss = UnguardedRHSs body
         }
 
