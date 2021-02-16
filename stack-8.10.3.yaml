@@ -1,4 +1,4 @@
-resolver: nightly-2021-02-06
+resolver: lts-17.2 # Last ghc-8.10.3 lts
 
 packages:
   - .
