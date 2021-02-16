@@ -1,7 +1,7 @@
 # This file is an alternative to shell.nix that uses haskell.nix
 # instead of the haskell package set from nixpkgs.
 #
-# To run a shell use the shell from this file run:
+# To run the shell from this file run:
 #
 #    nix-shell haskell.nix -A shell
 #
