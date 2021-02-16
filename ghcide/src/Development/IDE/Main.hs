@@ -1,4 +1,4 @@
-module Development.IDE.Main (Arguments(..), defArguments, defaultMain) where
+module Development.IDE.Main (Arguments(..), defaultMain) where
 import Control.Concurrent.Extra (readVar)
 import Control.Exception.Safe (
     Exception (displayException),
@@ -47,7 +47,7 @@ import Development.IDE.Plugin (
     Plugin (pluginHandlers, pluginRules),
  )
 import Development.IDE.Plugin.HLS (asGhcIdePlugin)
-import Development.IDE.Session (SessionLoadingOptions, defaultLoadingOptions, loadSessionWithOptions, setInitialDynFlags, getHieDbLoc, runWithDb)
+import Development.IDE.Session (SessionLoadingOptions, loadSessionWithOptions, setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.IDE.Types.Location (toNormalizedFilePath')
 import Development.IDE.Types.Logger (Logger)
 import Development.IDE.Types.Options (
@@ -85,16 +85,15 @@ data Arguments = Arguments
     , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
     }
 
-defArguments :: Arguments
-defArguments =
-    Arguments
+instance Default Arguments where
+    def = Arguments
         { argsOTMemoryProfiling = False
         , argFiles = Nothing
         , argsLogger = noLogging
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
-        , argsSessionLoadingOptions = defaultLoadingOptions
+        , argsSessionLoadingOptions = def
         , argsIdeOptions = const defaultIdeOptions
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def

@@ -8,7 +8,6 @@ The logic for setting up a ghcide session by tapping into hie-bios.
 module Development.IDE.Session
   (SessionLoadingOptions(..)
   ,CacheDirs(..)
-  ,defaultLoadingOptions
   ,loadSession
   ,loadSessionWithOptions
   ,setInitialDynFlags
@@ -34,6 +33,7 @@ import qualified Data.Text as T
 import Data.Aeson
 import Data.Bifunctor
 import qualified Data.ByteString.Base16 as B16
+import Data.Default
 import Data.Either.Extra
 import Data.Function
 import Data.Hashable
@@ -102,13 +102,13 @@ data SessionLoadingOptions = SessionLoadingOptions
   , getInitialGhcLibDir :: IO (Maybe LibDir)
   }
 
-defaultLoadingOptions :: SessionLoadingOptions
-defaultLoadingOptions = SessionLoadingOptions
-    {findCradle = HieBios.findCradle
-    ,loadCradle = HieBios.loadCradle
-    ,getCacheDirs = getCacheDirsDefault
-    ,getInitialGhcLibDir = getInitialGhcLibDirDefault
-    }
+instance Default SessionLoadingOptions where
+    def = SessionLoadingOptions
+        {findCradle = HieBios.findCradle
+        ,loadCradle = HieBios.loadCradle
+        ,getCacheDirs = getCacheDirsDefault
+        ,getInitialGhcLibDir = getInitialGhcLibDirDefault
+        }
 
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)
 getInitialGhcLibDirDefault = do
@@ -184,7 +184,7 @@ getHieDbLoc dir = do
 -- components mapping to the same hie.yaml file are mapped to the same
 -- HscEnv which is updated as new components are discovered.
 loadSession :: FilePath -> IO (Action IdeGhcSession)
-loadSession = loadSessionWithOptions defaultLoadingOptions
+loadSession = loadSessionWithOptions def
 
 loadSessionWithOptions :: SessionLoadingOptions -> FilePath -> IO (Action IdeGhcSession)
 loadSessionWithOptions SessionLoadingOptions{..} dir = do
