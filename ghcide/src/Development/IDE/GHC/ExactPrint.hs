@@ -3,7 +3,6 @@
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE TypeFamilies       #-}
 
 {- HLINT ignore "Use zipFrom" -}
