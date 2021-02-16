@@ -257,7 +257,7 @@ dataConExTys = DataCon.dataConExTyVars
 
 
 unXPat :: Pat GhcPs -> Pat GhcPs
-#if __GLASGOW_HASKELL__ <= 808
+#if __GLASGOW_HASKELL__ == 808
 unXPat (XPat (L _ pat)) = unXPat pat
 #endif
 unXPat pat = pat
