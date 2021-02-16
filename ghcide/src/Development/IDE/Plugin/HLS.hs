@@ -1,5 +1,9 @@
 {-# LANGUAGE GADTs     #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Development.IDE.Plugin.HLS
     (
@@ -45,6 +49,7 @@ asGhcIdePlugin defaultConfig mp =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
     mkPlugin (extensiblePlugins defaultConfig)  HLS.pluginHandlers
+    mkPlugin extensibleNotificationPlugins HLS.pluginNotificationHandlers
     where
         ls = Map.toList (ipMap mp)
 
@@ -154,6 +159,34 @@ extensiblePlugins defaultConfig xs = Plugin mempty handlers
               Just xs -> do
                 caps <- LSP.getClientCapabilities
                 pure $ Right $ combineResponses m config caps params xs
+-- ---------------------------------------------------------------------
+
+extensibleNotificationPlugins :: [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
+extensibleNotificationPlugins xs = Plugin mempty handlers
+  where
+    IdeNotificationHandlers handlers' = foldMap bakePluginId xs
+    bakePluginId :: (PluginId, PluginNotificationHandlers IdeState) -> IdeNotificationHandlers
+    bakePluginId (pid,PluginNotificationHandlers hs) = IdeNotificationHandlers $ DMap.map
+      (\(PluginNotificationHandler f) -> IdeNotificationHandler [(pid,f pid)])
+      hs
+    handlers = mconcat $ do
+      (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
+      pure $ notificationHandler m $ \ide params -> do
+        liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins handler entered"
+        config <- getClientConfig
+        let fs = filter (\(pid,_) -> pluginEnabledNotification m pid config) fs'
+        case nonEmpty fs of
+          Nothing -> do
+              liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins no enabled plugins"
+              pure ()
+          -- We run the notifications in order, so the built-in ghcide
+          -- processing (which restarts the shake process) comes last
+          -- Just fs -> void $ runConcurrentlyNotification (show m) fs ide params
+          Just fs -> do
+              liftIO $ logInfo (ideLogger ide) $ "extensibleNotificationPlugins number of plugins:" <> T.pack (show (length fs))
+              mapM_ (\(_pid,f) -> f ide params) fs
+
+-- ---------------------------------------------------------------------
 
 runConcurrently
   :: MonadUnliftIO m
@@ -175,12 +208,25 @@ combineErrors xs  = ResponseError InternalError (T.pack (show xs)) Nothing
 newtype IdeHandler (m :: J.Method FromClient Request)
   = IdeHandler [(PluginId,IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))]
 
+-- | Combine the 'PluginHandler' for all plugins
+newtype IdeNotificationHandler (m :: J.Method FromClient Notification)
+  = IdeNotificationHandler [(PluginId,(IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty ())))]
+-- type NotificationHandler (m :: Method FromClient Notification) = MessageParams m -> IO ()`
+
 -- | Combine the 'PluginHandlers' for all plugins
-newtype IdeHandlers = IdeHandlers (DMap IdeMethod IdeHandler)
+newtype IdeHandlers             = IdeHandlers             (DMap IdeMethod       IdeHandler)
+newtype IdeNotificationHandlers = IdeNotificationHandlers (DMap IdeNotification IdeNotificationHandler)
 
 instance Semigroup IdeHandlers where
   (IdeHandlers a) <> (IdeHandlers b) = IdeHandlers $ DMap.unionWithKey go a b
     where
-      go _ (IdeHandler a) (IdeHandler b) = IdeHandler (a ++ b)
+      go _ (IdeHandler a) (IdeHandler b) = IdeHandler (a <> b)
 instance Monoid IdeHandlers where
   mempty = IdeHandlers mempty
+
+instance Semigroup IdeNotificationHandlers where
+  (IdeNotificationHandlers a) <> (IdeNotificationHandlers b) = IdeNotificationHandlers $ DMap.unionWithKey go a b
+    where
+      go _ (IdeNotificationHandler a) (IdeNotificationHandler b) = IdeNotificationHandler (a <> b)
+instance Monoid IdeNotificationHandlers where
+  mempty = IdeNotificationHandlers mempty

@@ -8,6 +8,7 @@
 
 module Development.IDE.LSP.Notifications
     ( setHandlersNotifications
+    , whenUriFile
     ) where
 
 import qualified Language.LSP.Server                   as LSP
