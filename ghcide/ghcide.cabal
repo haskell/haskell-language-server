@@ -151,8 +151,8 @@ library
         Development.IDE.Core.OfInterest
         Development.IDE.Core.PositionMapping
         Development.IDE.Core.Preprocessor
-        Development.IDE.Core.Rules
         Development.IDE.Core.RuleTypes
+        Development.IDE.Core.Rules
         Development.IDE.Core.Service
         Development.IDE.Core.Shake
         Development.IDE.Core.Tracing
@@ -164,12 +164,22 @@ library
         Development.IDE.Import.DependencyInformation
         Development.IDE.LSP.HoverDefinition
         Development.IDE.LSP.LanguageServer
+        Development.IDE.LSP.Notifications
         Development.IDE.LSP.Outline
         Development.IDE.LSP.Protocol
         Development.IDE.LSP.Server
+        Development.IDE.Plugin
+        Development.IDE.Plugin.CodeAction
+        Development.IDE.Plugin.CodeAction.ExactPrint
+        Development.IDE.Plugin.Completions
+        Development.IDE.Plugin.Completions.Types
+        Development.IDE.Plugin.HLS
+        Development.IDE.Plugin.HLS.GhcIde
+        Development.IDE.Plugin.Test
+        Development.IDE.Plugin.TypeLenses
+        Development.IDE.Spans.AtPoint
         Development.IDE.Spans.Common
         Development.IDE.Spans.Documentation
-        Development.IDE.Spans.AtPoint
         Development.IDE.Spans.LocalBindings
         Development.IDE.Types.Diagnostics
         Development.IDE.Types.Exports
@@ -179,15 +189,6 @@ library
         Development.IDE.Types.Logger
         Development.IDE.Types.Options
         Development.IDE.Types.Shake
-        Development.IDE.Plugin
-        Development.IDE.Plugin.Completions
-        Development.IDE.Plugin.Completions.Types
-        Development.IDE.Plugin.CodeAction
-        Development.IDE.Plugin.CodeAction.ExactPrint
-        Development.IDE.Plugin.HLS
-        Development.IDE.Plugin.HLS.GhcIde
-        Development.IDE.Plugin.Test
-        Development.IDE.Plugin.TypeLenses
 
     -- Unfortunately, we cannot use loadSession with ghc-lib since hie-bios uses
     -- the real GHC library and the types are incompatible. Furthermore, when
@@ -208,7 +209,7 @@ library
         Development.IDE.GHC.CPP
         Development.IDE.GHC.Warnings
         Development.IDE.Import.FindImports
-        Development.IDE.LSP.Notifications
+        -- Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Types.Action

@@ -59,10 +59,11 @@ newtype IdePlugins ideState = IdePlugins
 -- ---------------------------------------------------------------------
 
 data PluginDescriptor ideState =
-  PluginDescriptor { pluginId          :: !PluginId
-                   , pluginRules       :: !(Rules ())
-                   , pluginCommands    :: ![PluginCommand ideState]
-                   , pluginHandlers    :: PluginHandlers ideState
+  PluginDescriptor { pluginId                   :: !PluginId
+                   , pluginRules                :: !(Rules ())
+                   , pluginCommands             :: ![PluginCommand ideState]
+                   , pluginHandlers             :: PluginHandlers ideState
+                   , pluginNotificationHandlers :: PluginNotificationHandlers ideState
                    }
 
 -- | Methods that can be handled by plugins.
@@ -181,6 +182,26 @@ instance PluginMethod TextDocumentRangeFormatting where
   pluginEnabled _ pid conf = (PluginId $ formattingProvider conf) == pid
   combineResponses _ _ _ _ (x :| _) = x
 
+-- ---------------------------------------------------------------------
+
+-- | Notifications that can be handled by plugins.
+-- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
+class HasTracing (MessageParams m) => PluginNotification m where
+
+  -- | Parse the configuration to check if this plugin is enabled
+  pluginEnabledNotification :: SMethod m -> PluginId -> Config -> Bool
+
+instance PluginNotification TextDocumentDidOpen where
+    pluginEnabledNotification _ _ _ = True
+
+instance PluginNotification TextDocumentDidChange where
+    pluginEnabledNotification _ _ _ = True
+
+instance PluginNotification TextDocumentDidSave where
+    pluginEnabledNotification _ _ _ = True
+
+-- ---------------------------------------------------------------------
+
 -- | Methods which have a PluginMethod instance
 data IdeMethod (m :: Method FromClient Request) = PluginMethod m => IdeMethod (SMethod m)
 instance GEq IdeMethod where
@@ -188,11 +209,32 @@ instance GEq IdeMethod where
 instance GCompare IdeMethod where
   gcompare (IdeMethod a) (IdeMethod b) = gcompare a b
 
+-- | Methods which have a PluginMethod instance
+data IdeNotification (m :: Method FromClient Notification) = PluginNotification m => IdeNotification (SMethod m)
+instance GEq IdeNotification where
+  geq (IdeNotification a) (IdeNotification b) = geq a b
+instance GCompare IdeNotification where
+  gcompare (IdeNotification a) (IdeNotification b) = gcompare a b
+
 -- | Combine handlers for the
 newtype PluginHandler a (m :: Method FromClient Request)
   = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))
 
-newtype PluginHandlers a = PluginHandlers (DMap IdeMethod (PluginHandler a))
+newtype PluginNotificationHandler a (m :: Method FromClient Notification)
+  = PluginNotificationHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty ()))
+-- newtype PluginNotificationHandler a (m :: Method FromClient Notification)
+--   = PluginNotificationHandler (PluginNotificationMethodHandler a m)`
+
+{-
+From Zubin
+alanz_: I would say `newtype PluginNotificationHandler a (m :: Method FromClient Notification) = PluginNotificationHandler (PluginNotificationMethodHandler a m)`
+16:28 and `newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap SMethod (PluginNotificationHandler a))
+
+-}
+
+newtype PluginHandlers a             = PluginHandlers             (DMap IdeMethod       (PluginHandler a))
+newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap IdeNotification (PluginNotificationHandler a))
+-- newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap SMethod (PluginNotificationHandler a))
 
 instance Semigroup (PluginHandlers a) where
   (PluginHandlers a) <> (PluginHandlers b) = PluginHandlers $ DMap.unionWithKey go a b
@@ -203,7 +245,18 @@ instance Semigroup (PluginHandlers a) where
 instance Monoid (PluginHandlers a) where
   mempty = PluginHandlers mempty
 
+instance Semigroup (PluginNotificationHandlers a) where
+  (PluginNotificationHandlers a) <> (PluginNotificationHandlers b) = PluginNotificationHandlers $ DMap.unionWithKey go a b
+    where
+      go _ (PluginNotificationHandler f) (PluginNotificationHandler g) = PluginNotificationHandler $ \pid ide params ->
+        f pid ide params >> g pid ide params
+
+instance Monoid (PluginNotificationHandlers a) where
+  mempty = PluginNotificationHandlers mempty
+
 type PluginMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config (Either ResponseError (ResponseResult m))
+
+type PluginNotificationMethodHandler a m = a -> PluginId -> MessageParams m -> LspM Config ()
 
 -- | Make a handler for plugins with no extra data
 mkPluginHandler
@@ -215,10 +268,22 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
   where
     f' pid ide params = pure <$> f ide pid params
 
+-- | Make a handler for plugins with no extra data
+mkPluginNotificationHandler
+  :: (PluginNotification m)
+  => SClientMethod (m :: Method FromClient Notification)
+  -> PluginNotificationMethodHandler ideState m
+  -> PluginNotificationHandlers ideState
+mkPluginNotificationHandler m f
+    = PluginNotificationHandlers $ DMap.singleton (IdeNotification m) (PluginNotificationHandler f')
+  where
+    f' pid ide params = pure <$> f ide pid params
+
 defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
   PluginDescriptor
     plId
+    mempty
     mempty
     mempty
     mempty
