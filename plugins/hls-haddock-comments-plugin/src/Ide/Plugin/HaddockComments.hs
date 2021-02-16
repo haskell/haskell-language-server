@@ -11,32 +11,33 @@ import Control.Monad (join)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import Development.IDE
+import Development.IDE hiding (pluginHandlers)
 import Development.IDE.GHC.Compat
 import Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource (..), annsA, astA)
 import Ide.Types
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
 import Language.Haskell.GHC.ExactPrint.Utils
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
+import Control.Monad.IO.Class
 
 -----------------------------------------------------------------------------
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { pluginCodeActionProvider = Just codeActionProvider
+    { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
     }
 
-codeActionProvider :: CodeActionProvider IdeState
-codeActionProvider _lspFuncs ideState _pId (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags} =
+codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider ideState _pId (CodeActionParams _ _ (TextDocumentIdentifier uri) range CodeActionContext {_diagnostics = List diags}) =
   do
     let noErr = and $ (/= Just DsError) . _severity <$> diags
         nfp = uriToNormalizedFilePath $ toNormalizedUri uri
-    (join -> pm) <- runAction "HaddockComments.GetAnnotatedParsedSource" ideState $ use GetAnnotatedParsedSource `traverse` nfp
+    (join -> pm) <- liftIO $ runAction "HaddockComments.GetAnnotatedParsedSource" ideState $ use GetAnnotatedParsedSource `traverse` nfp
     let locDecls = hsmodDecls . unLoc . astA <$> pm
         anns = annsA <$> pm
         edits = [runGenComments gen locDecls anns range | noErr, gen <- genList]
-    return $ Right $ List [CACodeAction $ toAction title uri edit | (Just (title, edit)) <- edits]
+    return $ Right $ List [InR $ toAction title uri edit | (Just (title, edit)) <- edits]
 
 genList :: [GenComments]
 genList =
@@ -121,6 +122,8 @@ toAction title uri edit = CodeAction {..}
     _changes = Just $ HashMap.singleton uri $ List [edit]
     _documentChanges = Nothing
     _edit = Just WorkspaceEdit {..}
+    _isPreferred = Nothing
+    _disabled = Nothing
 
 toRange :: SrcSpan -> Maybe Range
 toRange src

@@ -46,8 +46,6 @@ import qualified Data.IntMap.Lazy as IntMapLazy
 import Data.IntSet (IntSet)
 import qualified Data.IntSet as IntSet
 import Data.Maybe
-import Data.Set (Set)
-import qualified Data.Set as Set
 import GHC.Generics (Generic)
 
 import Development.IDE.Types.Diagnostics
@@ -55,15 +53,12 @@ import Development.IDE.Types.Location
 import Development.IDE.Import.FindImports (ArtifactsLocation(..))
 
 import GHC
-import Module
 
 -- | The imports for a given module.
-data ModuleImports = ModuleImports
-    { moduleImports :: ![(Located ModuleName, Maybe FilePathId)]
+newtype ModuleImports = ModuleImports
+    { moduleImports :: [(Located ModuleName, Maybe FilePathId)]
     -- ^ Imports of a module in the current package and the file path of
     -- that module on disk (if we found it)
-    , packageImports :: !(Set InstalledUnitId)
-    -- ^ Transitive package dependencies unioned for all imports.
     } deriving Show
 
 -- | For processing dependency information, we need lots of maps and sets of
@@ -132,10 +127,6 @@ data RawDependencyInformation = RawDependencyInformation
     , rawBootMap :: !BootIdMap
     } deriving Show
 
-pkgDependencies :: RawDependencyInformation -> FilePathIdMap (Set InstalledUnitId)
-pkgDependencies RawDependencyInformation{..} =
-    IntMap.map (either (const Set.empty) packageImports) rawImports
-
 data DependencyInformation =
   DependencyInformation
     { depErrorNodes :: !(FilePathIdMap (NonEmpty NodeError))
@@ -146,8 +137,6 @@ data DependencyInformation =
     -- in the same package.
     , depReverseModuleDeps :: !(IntMap IntSet)
     -- ^ Contains a reverse mapping from a module to all those that immediately depend on it.
-    , depPkgDeps :: !(FilePathIdMap (Set InstalledUnitId))
-    -- ^ For a non-error node, this contains the set of immediate pkg deps.
     , depPathIdMap :: !PathIdMap
     -- ^ Map from FilePath to FilePathId
     , depBootMap :: !BootIdMap
@@ -222,13 +211,12 @@ instance Semigroup NodeResult where
    SuccessNode a <> SuccessNode _ = SuccessNode a
 
 processDependencyInformation :: RawDependencyInformation -> DependencyInformation
-processDependencyInformation rawDepInfo@RawDependencyInformation{..} =
+processDependencyInformation RawDependencyInformation{..} =
   DependencyInformation
     { depErrorNodes = IntMap.fromList errorNodes
     , depModuleDeps = moduleDeps
     , depReverseModuleDeps = reverseModuleDeps
     , depModuleNames = IntMap.fromList $ coerce moduleNames
-    , depPkgDeps = pkgDependencies rawDepInfo
     , depPathIdMap = rawPathIdMap
     , depBootMap = rawBootMap
     }
@@ -248,8 +236,8 @@ processDependencyInformation rawDepInfo@RawDependencyInformation{..} =
             successEdges
         reverseModuleDeps =
           foldr (\(p, cs) res ->
-                                  let new = IntMap.fromList (map (, IntSet.singleton (coerce p)) (coerce cs))
-                                  in IntMap.unionWith IntSet.union new res ) IntMap.empty successEdges
+            let new = IntMap.fromList (map (, IntSet.singleton (coerce p)) (coerce cs))
+            in IntMap.unionWith IntSet.union new res ) IntMap.empty successEdges
 
 
 -- | Given a dependency graph, buildResultGraph detects and propagates errors in that graph as follows:
@@ -345,17 +333,8 @@ transitiveDeps DependencyInformation{..} file = do
       reachable g <$> toVertex (getFilePathId fileId)
   let transitiveModuleDepIds =
         filter (\v -> v `IntSet.member` reachableVs) $ map (fst3 . fromVertex) vs
-  let transitivePkgDeps =
-          Set.toList $ Set.unions $
-          map (\f -> IntMap.findWithDefault Set.empty f depPkgDeps) $
-          getFilePathId fileId : transitiveModuleDepIds
   let transitiveModuleDeps =
         map (idToPath depPathIdMap . FilePathId) transitiveModuleDepIds
-  let transitiveNamedModuleDeps =
-        [ NamedModuleDep (idToPath depPathIdMap (FilePathId fid)) mn artifactModLocation
-        | (fid, ShowableModuleName mn) <- IntMap.toList depModuleNames
-        , let ArtifactsLocation{artifactModLocation} = idToPathMap depPathIdMap IntMap.! fid
-        ]
   pure TransitiveDependencies {..}
   where
     (g, fromVertex, toVertex) = graphFromEdges edges
@@ -369,15 +348,10 @@ transitiveDeps DependencyInformation{..} file = do
 
     vs = topSort g
 
-data TransitiveDependencies = TransitiveDependencies
+newtype TransitiveDependencies = TransitiveDependencies
   { transitiveModuleDeps :: [NormalizedFilePath]
   -- ^ Transitive module dependencies in topological order.
   -- The module itself is not included.
-  , transitiveNamedModuleDeps :: [NamedModuleDep]
-  -- ^ Transitive module dependencies in topological order.
-  -- The module itself is not included.
-  , transitivePkgDeps :: [InstalledUnitId]
-  -- ^ Transitive pkg dependencies in unspecified order.
   } deriving (Eq, Show, Generic)
 
 instance NFData TransitiveDependencies

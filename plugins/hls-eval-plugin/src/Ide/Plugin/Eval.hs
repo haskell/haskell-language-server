@@ -15,12 +15,14 @@ import Ide.Types (
     PluginDescriptor (..),
     PluginId,
     defaultPluginDescriptor,
+    mkPluginHandler
  )
+import Language.LSP.Types
 
 -- |Plugin descriptor
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
     (defaultPluginDescriptor plId)
-        { pluginCodeLensProvider = Just CL.codeLens
+        { pluginHandlers = mkPluginHandler STextDocumentCodeLens CL.codeLens
         , pluginCommands = [CL.evalCommand]
         }

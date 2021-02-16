@@ -62,9 +62,8 @@ module Development.IDE.Core.Rules(
 
 import Fingerprint
 
-import Data.Aeson (fromJSON,toJSON, Result(Success), FromJSON)
+import Data.Aeson (toJSON, Result(Success))
 import Data.Binary hiding (get, put)
-import Data.Default
 import Data.Tuple.Extra
 import Control.Monad.Extra
 import Control.Monad.Trans.Class
@@ -83,7 +82,6 @@ import Development.IDE.Types.Location
 import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile, TargetModule, TargetFile)
 import Development.IDE.GHC.ExactPrint
 import Development.IDE.GHC.Util
-import Data.Either.Extra
 import qualified Development.IDE.Types.Logger as L
 import Data.Maybe
 import           Data.Foldable
@@ -99,10 +97,9 @@ import           Development.Shake                        hiding (Diagnostic)
 import Development.IDE.Core.RuleTypes
 import qualified Data.ByteString.Char8 as BS
 import Development.IDE.Core.PositionMapping
-import           Language.Haskell.LSP.Types (DocumentHighlight (..), SymbolInformation(..))
-import Language.Haskell.LSP.VFS
-import qualified Language.Haskell.LSP.Messages as LSP
-import qualified Language.Haskell.LSP.Types as LSP
+import           Language.LSP.Types (DocumentHighlight (..), SymbolInformation(..), SMethod(SCustomMethod))
+import qualified Language.LSP.Server as LSP
+import Language.LSP.VFS
 
 import qualified GHC.LanguageExtensions as LangExt
 import HscTypes hiding (TargetModule, TargetFile)
@@ -136,6 +133,8 @@ import GHC.IO.Encoding
 import Data.ByteString.Encoding as T
 
 import qualified HieDb
+import Ide.Plugin.Config
+import qualified Data.Aeson.Types as A
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -402,17 +401,11 @@ getLocatedImportsRule =
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getTargetExists modName mbPkgName isSource
             case diagOrImp of
-                Left diags -> pure (diags, Left (modName, Nothing))
-                Right (FileImport path) -> pure ([], Left (modName, Just path))
-                Right (PackageImport pkgId) -> liftIO $ do
-                    diagsOrPkgDeps <- computePackageDeps env pkgId
-                    case diagsOrPkgDeps of
-                        Left diags -> pure (diags, Right Nothing)
-                        Right pkgIds -> pure ([], Right $ Just $ pkgId : pkgIds)
-        let (moduleImports, pkgImports) = partitionEithers imports'
-        case sequence pkgImports of
-            Nothing -> pure (concat diags, Nothing)
-            Just pkgImports -> pure (concat diags, Just (moduleImports, Set.fromList $ concat pkgImports))
+                Left diags -> pure (diags, Just (modName, Nothing))
+                Right (FileImport path) -> pure ([], Just (modName, Just path))
+                Right PackageImport -> pure ([], Nothing)
+        let moduleImports = catMaybes imports'
+        pure (concat diags, Just moduleImports)
 
 type RawDepM a = StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action a
 
@@ -427,19 +420,23 @@ execRawDepM act =
 -- imports recursively.
 rawDependencyInformation :: [NormalizedFilePath] -> Action RawDependencyInformation
 rawDependencyInformation fs = do
-    (rdi, ss) <- execRawDepM (mapM_ go fs)
+    (rdi, ss) <- execRawDepM (goPlural fs)
     let bm = IntMap.foldrWithKey (updateBootMap rdi) IntMap.empty ss
     return (rdi { rawBootMap = bm })
   where
+    goPlural ff = do
+        mss <- lift $ (fmap.fmap) fst <$> uses GetModSummaryWithoutTimestamps ff
+        zipWithM go ff mss
+
     go :: NormalizedFilePath -- ^ Current module being processed
+       -> Maybe ModSummary   -- ^ ModSummary of the module
        -> StateT (RawDependencyInformation, IntMap ArtifactsLocation) Action FilePathId
-    go f = do
+    go f msum = do
       -- First check to see if we have already processed the FilePath
       -- If we have, just return its Id but don't update any of the state.
       -- Otherwise, we need to process its imports.
       checkAlreadyProcessed f $ do
-          msum <- lift $ fmap fst <$> use GetModSummaryWithoutTimestamps f
-          let al =  modSummaryToArtifactsLocation f msum
+          let al = modSummaryToArtifactsLocation f msum
           -- Get a fresh FilePathId for the new file
           fId <- getFreshFid al
           -- Adding an edge to the bootmap so we can make sure to
@@ -454,19 +451,19 @@ rawDependencyInformation fs = do
             -- elements in the queue
               modifyRawDepInfo (insertImport fId (Left ModuleParseError))
               return fId
-            Just (modImports, pkgImports) -> do
+            Just modImports -> do
               -- Get NFPs of the imports which have corresponding files
               -- Imports either come locally from a file or from a package.
               let (no_file, with_file) = splitImports modImports
                   (mns, ls) = unzip with_file
               -- Recursively process all the imports we just learnt about
               -- and get back a list of their FilePathIds
-              fids <- mapM (go . artifactFilePath) ls
+              fids <- goPlural $ map artifactFilePath ls
               -- Associate together the ModuleName with the FilePathId
               let moduleImports' = map (,Nothing) no_file ++ zip mns (map Just fids)
               -- Insert into the map the information about this modules
               -- imports.
-              modifyRawDepInfo $ insertImport fId (Right $ ModuleImports moduleImports' pkgImports)
+              modifyRawDepInfo $ insertImport fId (Right $ ModuleImports moduleImports')
               return fId
 
 
@@ -594,9 +591,9 @@ getHieAstRuleDefinition f hsc tmr = do
   isFoi <- use_ IsFileOfInterest f
   diagsWrite <- case isFoi of
     IsFOI Modified{firstOpen = False} -> do
-      when (coerce $ ideTesting se) $
-        liftIO $ eventer se $ LSP.NotCustomServer $
-          LSP.NotificationMessage "2.0" (LSP.CustomServerMethod "ghcide/reference/ready") (toJSON $ fromNormalizedFilePath f)
+      when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
+        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+          toJSON $ fromNormalizedFilePath f
       pure []
     _ | Just asts <- masts -> do
           source <- getSourceFileSource f
@@ -612,7 +609,7 @@ getHieAstRuleDefinition f hsc tmr = do
 getImportMapRule :: Rules ()
 getImportMapRule = define $ \GetImportMap f -> do
   im <- use GetLocatedImports f
-  let mkImports (fileImports, _) = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
+  let mkImports fileImports = M.fromList $ mapMaybe (\(m, mfp) -> (unLoc m,) . artifactFilePath <$> mfp) fileImports
   pure ([], ImportMap . mkImports <$> im)
 
 -- | Ensure that go to definition doesn't block on startup
@@ -826,9 +823,9 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ \GetModIfaceFromDiskAndInd
       | hash == HieDb.modInfoHash (HieDb.hieModInfo row)
       , hie_loc == HieDb.hieModuleHieFile row  -> do
       -- All good, the db has indexed the file
-      when (coerce $ ideTesting se) $
-        liftIO $ eventer se $ LSP.NotCustomServer $
-          LSP.NotificationMessage "2.0" (LSP.CustomServerMethod "ghcide/reference/ready") (toJSON $ fromNormalizedFilePath f)
+      when (coerce $ ideTesting se) $ liftIO $ mRunLspT (lspEnv se) $
+        LSP.sendNotification (SCustomMethod "ghcide/reference/ready") $
+          toJSON $ fromNormalizedFilePath f
     -- Not in db, must re-index
     _ -> do
       ehf <- liftIO $ runIdeAction "GetModIfaceFromDiskAndIndex" se $ runExceptT $
@@ -857,7 +854,7 @@ isHiFileStableRule = defineEarlyCutoff $ \IsHiFileStable f -> do
             if modificationTime x < modificationTime modVersion
                 then pure SourceModified
                 else do
-                    (fileImports, _) <- use_ GetLocatedImports f
+                    fileImports <- use_ GetLocatedImports f
                     let imports = fmap artifactFilePath . snd <$> fileImports
                     deps <- uses_ IsHiFileStable (catMaybes imports)
                     pure $ if all (== SourceUnmodifiedAndStable) deps
@@ -1047,12 +1044,13 @@ getClientSettingsRule = defineEarlyCutOffNoFile $ \GetClientSettings -> do
 
 -- | Returns the client configurarion stored in the IdeState.
 -- You can use this function to access it from shake Rules
-getClientConfigAction :: (Default a, FromJSON a) => Action a
-getClientConfigAction = do
+getClientConfigAction :: Config -- ^ default value
+                      -> Action Config
+getClientConfigAction defValue = do
   mbVal <- unhashed <$> useNoFile_ GetClientSettings
-  case fromJSON <$> mbVal of
+  case A.parse (parseConfig defValue) <$> mbVal of
     Just (Success c) -> return c
-    _ -> return def
+    _ -> return defValue
 
 -- | For now we always use bytecode
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)

@@ -2,6 +2,9 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE GADTs #-}
 
 module HaddockComments
   ( tests,
@@ -14,8 +17,8 @@ import Data.Foldable (find)
 import Data.Maybe (mapMaybe)
 import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8)
-import Language.Haskell.LSP.Test
-import Language.Haskell.LSP.Types
+import Language.LSP.Test
+import Language.LSP.Types
 import System.FilePath ((<.>), (</>))
 import Test.Hls.Util
 import Test.Tasty
@@ -43,7 +46,7 @@ goldenTest fp (toTitle -> expectedTitle) l c = goldenVsStringDiff (fp <> " (gold
     _ <- waitForDiagnostics
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
     case find ((== Just expectedTitle) . caTitle) actions of
-      Just (CACodeAction x) -> do
+      Just (InR x) -> do
         executeCodeAction x
         LBS.fromStrict . encodeUtf8 <$> documentContents doc
       _ -> liftIO $ assertFailure "Unable to find CodeAction"
@@ -65,8 +68,8 @@ toTitle :: GenCommentsType -> Text
 toTitle Signature = "Generate signature comments"
 toTitle Record = "Generate fields comments"
 
-caTitle :: CAResult -> Maybe Text
-caTitle (CACodeAction CodeAction {_title}) = Just _title
+caTitle :: (Command |? CodeAction) -> Maybe Text
+caTitle (InR CodeAction {_title}) = Just _title
 caTitle _ = Nothing
 
 haddockCommentsPath :: String

@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE DerivingStrategies #-}
 -- | A plugin that adds custom messages for use in tests
 module Development.IDE.Plugin.Test
@@ -10,6 +11,7 @@ module Development.IDE.Plugin.Test
   ) where
 
 import Control.Monad.STM
+import Control.Monad.IO.Class
 import Data.Aeson
 import Data.Aeson.Types
 import Data.CaseInsensitive (CI, original)
@@ -17,14 +19,12 @@ import Development.IDE.Core.Service
 import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat
 import Development.IDE.Types.HscEnvEq (HscEnvEq(hscEnv))
-import Development.IDE.LSP.Server
 import Development.IDE.Plugin
+import Development.IDE.LSP.Server
 import Development.IDE.Types.Action
 import GHC.Generics (Generic)
 import GhcPlugins (HscEnv(hsc_dflags))
-import Language.Haskell.LSP.Core
-import Language.Haskell.LSP.Messages
-import Language.Haskell.LSP.Types
+import Language.LSP.Types
 import System.Time.Extra
 import Development.IDE.Core.RuleTypes
 import Control.Monad
@@ -36,7 +36,7 @@ import Data.String
 import Development.IDE.Types.Location (fromUri)
 import Control.Concurrent (threadDelay)
 import Ide.Types
-import qualified Language.Haskell.LSP.Core as LSP
+import qualified Language.LSP.Server as LSP
 
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null
@@ -53,42 +53,39 @@ newtype WaitForIdeRuleResult = WaitForIdeRuleResult { ideResultSuccess::Bool}
 plugin :: Plugin c
 plugin = Plugin {
     pluginRules = return (),
-    pluginHandler = PartialHandlers $ \WithMessage{..} x -> return x {
-        customRequestHandler = withResponse RspCustomServer requestHandler'
-    }
+    pluginHandlers = requestHandler (SCustomMethod "test") testRequestHandler'
 }
   where
-      requestHandler' lsp ide req
+      testRequestHandler' ide req
         | Just customReq <- parseMaybe parseJSON req
-        = requestHandler lsp ide customReq
+        = testRequestHandler ide customReq
         | otherwise
         = return $ Left
         $ ResponseError InvalidRequest "Cannot parse request" Nothing
 
-requestHandler :: LspFuncs c
-                -> IdeState
+
+testRequestHandler ::  IdeState
                 -> TestRequest
-                -> IO (Either ResponseError Value)
-requestHandler lsp _ (BlockSeconds secs) = do
-    sendFunc lsp $ NotCustomServer $
-        NotificationMessage "2.0" (CustomServerMethod "ghcide/blocking/request") $
-        toJSON secs
-    sleep secs
+                -> LSP.LspM c (Either ResponseError Value)
+testRequestHandler _ (BlockSeconds secs) = do
+    LSP.sendNotification (SCustomMethod "ghcide/blocking/request") $
+      toJSON secs
+    liftIO $ sleep secs
     return (Right Null)
-requestHandler _ s (GetInterfaceFilesDir fp) = do
+testRequestHandler s (GetInterfaceFilesDir fp) = liftIO $ do
     let nfp = toNormalizedFilePath fp
     sess <- runAction "Test - GhcSession" s $ use_ GhcSession nfp
     let hiPath = hiDir $ hsc_dflags $ hscEnv sess
     return $ Right (toJSON hiPath)
-requestHandler _ s GetShakeSessionQueueCount = do
+testRequestHandler s GetShakeSessionQueueCount = liftIO $ do
     n <- atomically $ countQueue $ actionQueue $ shakeExtras s
     return $ Right (toJSON n)
-requestHandler _ s WaitForShakeQueue = do
+testRequestHandler s WaitForShakeQueue = liftIO $ do
     atomically $ do
         n <- countQueue $ actionQueue $ shakeExtras s
         when (n>0) retry
     return $ Right Null
-requestHandler _ s (WaitForIdeRule k file) = do
+testRequestHandler s (WaitForIdeRule k file) = liftIO $ do
     let nfp = fromUri $ toNormalizedUri file
     success <- runAction ("WaitForIdeRule " <> k <> " " <> show file) s $ parseAction (fromString k) nfp
     let res = WaitForIdeRuleResult <$> success
@@ -120,9 +117,7 @@ blockCommandDescriptor plId = (defaultPluginDescriptor plId) {
 }
 
 blockCommandHandler :: CommandFunction state ExecuteCommandParams
-blockCommandHandler lsp _ideState _params
-    = do
-        LSP.sendFunc lsp $ NotCustomServer $
-            NotificationMessage "2.0" (CustomServerMethod "ghcide/blocking/command") Null
-        threadDelay maxBound
-        return (Right Null, Nothing)
+blockCommandHandler _ideState _params = do
+  LSP.sendNotification (SCustomMethod "ghcide/blocking/command") Null
+  liftIO $ threadDelay maxBound
+  return (Right Null)

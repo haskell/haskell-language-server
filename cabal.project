@@ -12,7 +12,6 @@ packages:
          ./plugins/hls-retrie-plugin
          ./plugins/hls-haddock-comments-plugin
          ./plugins/hls-splice-plugin
-
 tests: true
 
 package *
@@ -25,7 +24,7 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2021-02-08T19:11:03Z
+index-state: 2021-02-15T19:11:03Z
 
 allow-newer:
 	active:base,

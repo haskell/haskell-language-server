@@ -32,7 +32,7 @@ import Development.IDE (Position, Range (Range))
 import Development.IDE.Types.Location (Position (..))
 import GHC.Generics
 import Ide.Plugin.Eval.Types
-import Language.Haskell.LSP.Types.Lens
+import Language.LSP.Types.Lens
     ( character,
       end,
       line,

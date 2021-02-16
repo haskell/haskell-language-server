@@ -2,7 +2,9 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
@@ -14,6 +16,7 @@ module Development.IDE.Plugin.CodeAction
     ) where
 
 import Control.Monad (join, guard)
+import Control.Monad.IO.Class
 import Development.IDE.GHC.Compat
 import Development.IDE.Core.Rules
 import Development.IDE.Core.RuleTypes
@@ -29,9 +32,9 @@ import Development.IDE.Types.HscEnvEq
 import Development.IDE.Types.Location
 import Development.IDE.Types.Options
 import qualified Data.HashMap.Strict as Map
-import qualified Language.Haskell.LSP.Core as LSP
-import Language.Haskell.LSP.VFS
-import Language.Haskell.LSP.Types
+import qualified Language.LSP.Server as LSP
+import Language.LSP.VFS
+import Language.LSP.Types
 import qualified Data.Rope.UTF16 as Rope
 import Data.Char
 import Data.Maybe
@@ -70,20 +73,18 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
     { pluginRules = mempty,
-      pluginCodeActionProvider = Just codeAction
+      pluginHandlers = mkPluginHandler STextDocumentCodeAction codeAction
     }
 
 -- | Generate code actions.
 codeAction
-    :: LSP.LspFuncs c
-    -> IdeState
+    :: IdeState
     -> PluginId
-    -> TextDocumentIdentifier
-    -> Range
-    -> CodeActionContext
-    -> IO (Either ResponseError (List CAResult))
-codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs} = do
-    contents <- LSP.getVirtualFileFunc lsp $ toNormalizedUri uri
+    -> CodeActionParams
+    -> LSP.LspM c (Either ResponseError (List (Command |? CodeAction)))
+codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range CodeActionContext{_diagnostics=List xs}) = do
+  contents <- LSP.getVirtualFile $ toNormalizedUri uri
+  liftIO $ do
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     diag <- fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
@@ -110,9 +111,9 @@ codeAction lsp state _ (TextDocumentIdentifier uri) _range CodeActionContext{_di
                <> caRemoveInvalidExports parsedModule text diag xs uri
     pure $ Right $ List actions'
 
-mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> CAResult
+mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title diags edit =
-  CACodeAction $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) (Just edit) Nothing
+  InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) Nothing Nothing (Just edit) Nothing
 
 rewrite ::
     Maybe DynFlags ->
@@ -258,7 +259,7 @@ isUnusedImportedId
 
 suggestDisableWarning :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestDisableWarning pm contents Diagnostic{..}
-    | Just (StringValue (T.stripPrefix "-W" -> Just w)) <- _code =
+    | Just (InR (T.stripPrefix "-W" -> Just w)) <- _code =
         pure
             ( "Disable \"" <> w <> "\" warnings"
             , [TextEdit (endOfModuleHeader pm contents) $ "{-# OPTIONS_GHC -Wno-" <> w <> " #-}\n"]
@@ -284,7 +285,7 @@ suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmod
         = [("Remove import", [TextEdit (extendToWholeLineIfPossible contents _range) ""])]
     | otherwise = []
 
-caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [CAResult]
+caRemoveRedundantImports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
 caRemoveRedundantImports m contents digs ctxDigs uri
   | Just pm <- m,
     r <- join $ map (\d -> repeat d `zip` suggestRemoveRedundantImport pm contents d) digs,
@@ -299,16 +300,18 @@ caRemoveRedundantImports m contents digs ctxDigs uri
     removeSingle title tedit diagnostic = mkCA title [diagnostic] WorkspaceEdit{..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _documentChanges = Nothing
-    removeAll tedit = CACodeAction CodeAction {..} where
+    removeAll tedit = InR $ CodeAction{..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _title = "Remove all redundant imports"
         _kind = Just CodeActionQuickFix
         _diagnostics = Nothing
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
+        _isPreferred = Nothing
         _command = Nothing
+        _disabled = Nothing
 
-caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [CAResult]
+caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
 caRemoveInvalidExports m contents digs ctxDigs uri
   | Just pm <- m,
     Just txt <- contents,
@@ -332,7 +335,7 @@ caRemoveInvalidExports m contents digs ctxDigs uri
       | otherwise = Nothing
 
     removeSingle (_, _, []) = Nothing
-    removeSingle (title, diagnostic, ranges) = Just $ CACodeAction CodeAction{..} where
+    removeSingle (title, diagnostic, ranges) = Just $ InR $ CodeAction{..} where
         tedit = concatMap (\r -> [TextEdit r ""]) $ nubOrd ranges
         _changes = Just $ Map.singleton uri $ List tedit
         _title = title
@@ -341,8 +344,10 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
+        _isPreferred = Nothing
+        _disabled = Nothing
     removeAll [] = Nothing
-    removeAll ranges = Just $ CACodeAction CodeAction {..} where
+    removeAll ranges = Just $ InR $ CodeAction{..} where
         tedit = concatMap (\r -> [TextEdit r ""]) ranges
         _changes = Just $ Map.singleton uri $ List tedit
         _title = "Remove all redundant exports"
@@ -351,6 +356,8 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _documentChanges = Nothing
         _edit = Just WorkspaceEdit{..}
         _command = Nothing
+        _isPreferred = Nothing
+        _disabled = Nothing
 
 suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Range])
 suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
@@ -701,7 +708,7 @@ processHoleSuggestions mm = (holeSuggestions, refSuggestions)
       Valid refinement hole fits include
         fromMaybe (_ :: LSP.Handlers) (_ :: Maybe LSP.Handlers)
         fromJust (_ :: Maybe LSP.Handlers)
-        haskell-lsp-types-0.22.0.0:Language.Haskell.LSP.Types.Window.$sel:_value:ProgressParams (_ :: ProgressParams
+        haskell-lsp-types-0.22.0.0:Language.LSP.Types.Window.$sel:_value:ProgressParams (_ :: ProgressParams
                                                                                                         LSP.Handlers)
         T.foldl (_ :: LSP.Handlers -> Char -> LSP.Handlers)
                 (_ :: LSP.Handlers)

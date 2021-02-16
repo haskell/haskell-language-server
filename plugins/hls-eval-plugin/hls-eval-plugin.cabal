@@ -51,8 +51,8 @@ library
     , ghc-paths
     , ghcide                >=0.7.3.0
     , hashable
-    , haskell-lsp
-    , haskell-lsp-types
+    , lsp
+    , lsp-types
     , hls-plugin-api        >=0.7
     , lens
     , megaparsec            >=0.9
@@ -67,10 +67,12 @@ library
     , time
     , transformers
     , unordered-containers
+    , unliftio
 
-  ghc-options:      -Wall -Wno-name-shadowing
+  ghc-options:      -Wall -Wno-name-shadowing -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror
 
   default-language: Haskell2010
+  default-extensions: DataKinds, TypeOperators

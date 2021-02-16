@@ -16,9 +16,9 @@ import Control.Monad.Extra
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import Development.IDE.Core.Rules
-import Development.IDE.Session (setInitialDynFlags, getHieDbLoc, runWithDb)
+import Development.IDE.Session (setInitialDynFlags, getHieDbLoc)
 import Development.IDE.Types.Logger as G
-import qualified Language.Haskell.LSP.Core as LSP
+import qualified Language.LSP.Server as LSP
 import Ide.Arguments
 import Ide.Logger
 import Ide.Version
@@ -31,7 +31,6 @@ import HieDb.Run
 import qualified Development.IDE.Main as Main
 import qualified Development.IDE.Types.Options as Ghcide
 import Development.Shake (ShakeOptions(shakeThreads))
-import Ide.Plugin.Config (getInitialConfig, getConfigFromNotification)
 
 defaultMain :: Arguments -> IdePlugins IdeState -> IO ()
 defaultMain args idePlugins = do
@@ -84,7 +83,6 @@ runLspMode :: LspArguments -> IdePlugins IdeState -> IO ()
 runLspMode lspArgs@LspArguments{..} idePlugins = do
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
-    dbLoc <- getHieDbLoc dir
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 
@@ -95,19 +93,16 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
-    runWithDb dbLoc $ \hiedb hiechan ->
-        Main.defaultMain (Main.defArguments hiedb hiechan)
-          { Main.argFiles = if argLSP then Nothing else Just []
-          , Main.argsHlsPlugins = idePlugins
-          , Main.argsLogger = hlsLogger
-          , Main.argsGetInitialConfig = getInitialConfig
-          , Main.argsOnConfigChange = getConfigFromNotification
-          , Main.argsIdeOptions = \_config sessionLoader ->
-            let defOptions = Ghcide.defaultIdeOptions sessionLoader
-            in defOptions
-                { Ghcide.optShakeProfiling = argsShakeProfiling
-                , Ghcide.optTesting = Ghcide.IdeTesting argsTesting
-                , Ghcide.optShakeOptions = (Ghcide.optShakeOptions defOptions)
-                    {shakeThreads = argsThreads}
-                }
-          }
+    Main.defaultMain Main.defArguments
+      { Main.argFiles = if argLSP then Nothing else Just []
+      , Main.argsHlsPlugins = idePlugins
+      , Main.argsLogger = hlsLogger
+      , Main.argsIdeOptions = \_config sessionLoader ->
+        let defOptions = Ghcide.defaultIdeOptions sessionLoader
+        in defOptions
+            { Ghcide.optShakeProfiling = argsShakeProfiling
+            , Ghcide.optTesting = Ghcide.IdeTesting argsTesting
+            , Ghcide.optShakeOptions = (Ghcide.optShakeOptions defOptions)
+                {shakeThreads = argsThreads}
+            }
+      }
