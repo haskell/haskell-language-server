@@ -1,9 +1,10 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
@@ -66,6 +67,11 @@ import Data.List (isPrefixOf)
 import Data.Traversable (for)
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
+#endif
+#if __GLASGOW_HASKELL__ > 808
+import Bag (listToBag)
+import ErrUtils (mkErrMsg)
+import Outputable (text, neverQualify)
 #endif
 
 
@@ -243,8 +249,16 @@ mergeDecls ((anns,  L _ (ValD ext fb@FunBind{fun_matches = mg@MG {mg_alts = L _ 
         { fun_matches = mg { mg_alts = noLoc $ alts <> [alt] }
         }
     ) : decls
-mergeDecls _ =
-  Left (noSrcSpan, "mergeDecls: attempted to merge something that wasn't a ValD FunBind")
+mergeDecls _ = throwParseError "mergeDecls: attempted to merge something that wasn't a ValD FunBind"
+
+
+throwParseError :: String -> ParseResult a
+#if __GLASGOW_HASKELL__ > 808
+throwParseError
+  = Left . listToBag . pure . mkErrMsg unsafeGlobalDynFlags noSrcSpan neverQualify . text
+#else
+throwParseError = Left . (noSrcSpan, )
+#endif
 
 
 ------------------------------------------------------------------------------
