@@ -279,9 +279,11 @@ dataConExTys = DataCon.dataConExTyVars
 
 
 ------------------------------------------------------------------------------
--- | In GHC 8.8, sometimes patterns are wrapped in 'XPat'. It's not clear why,
--- but if we don't remove these wrappers, many functions that operate on
--- patterns fail to match.
+-- | In GHC 8.8, sometimes patterns are wrapped in 'XPat'.
+-- The nitty gritty details are explained at
+-- https://blog.shaynefletcher.org/2020/03/ghc-haskell-pats-and-lpats.html
+--
+-- We need to remove these in order to succesfull find patterns.
 unXPat :: Pat GhcPs -> Pat GhcPs
 #if __GLASGOW_HASKELL__ == 808
 unXPat (XPat (L _ pat)) = unXPat pat
