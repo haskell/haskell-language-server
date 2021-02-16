@@ -395,7 +395,7 @@ graftHole jdg span _ rtr
 -- many, without affecting any matches which might exist but don't need to be
 -- split.
 mergeFunBindMatches
-    :: ([LPat GhcPs] -> LHsDecl GhcPs)
+    :: ([Pat GhcPs] -> LHsDecl GhcPs)
     -> SrcSpan
     -> HsBind GhcPs
     -> HsBind GhcPs
