@@ -117,7 +117,6 @@ import qualified Development.Shake as Shake
 import           Control.Monad.Extra
 import           Data.Time
 import           GHC.Generics
-import           System.IO.Unsafe
 import Language.LSP.Types
 import qualified Control.Monad.STM as STM
 import Control.Monad.IO.Class
@@ -371,28 +370,23 @@ data IdeState = IdeState
     ,shakeSession    :: MVar ShakeSession
     ,shakeClose      :: IO ()
     ,shakeExtras     :: ShakeExtras
-    ,shakeProfileDir :: Maybe FilePath
+    ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopProgressReporting :: IO ()
     }
 
 
 
 -- This is debugging code that generates a series of profiles, if the Boolean is true
-shakeDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> IO (Maybe FilePath)
-shakeDatabaseProfile mbProfileDir shakeDb =
+shakeDatabaseProfileIO :: Maybe FilePath -> IO(ShakeDatabase -> IO (Maybe FilePath))
+shakeDatabaseProfileIO mbProfileDir = do
+    profileStartTime <- formatTime defaultTimeLocale "%Y%m%d-%H%M%S" <$> getCurrentTime
+    profileCounter <- newVar (0::Int)
+    return $ \shakeDb ->
         for mbProfileDir $ \dir -> do
                 count <- modifyVar profileCounter $ \x -> let !y = x+1 in return (y,y)
                 let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) <.> "html"
                 shakeProfileDatabase shakeDb $ dir </> file
                 return (dir </> file)
-
-{-# NOINLINE profileStartTime #-}
-profileStartTime :: String
-profileStartTime = unsafePerformIO $ formatTime defaultTimeLocale "%Y%m%d-%H%M%S" <$> getCurrentTime
-
-{-# NOINLINE profileCounter #-}
-profileCounter :: Var Int
-profileCounter = unsafePerformIO $ newVar 0
 
 setValues :: IdeRule k v
           => Var Values
@@ -502,6 +496,7 @@ shakeOpen lspEnv logger debouncer
     shakeDb <- shakeDbM
     initSession <- newSession shakeExtras shakeDb []
     shakeSession <- newMVar initSession
+    shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
 
     IdeOptions{ optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled } <- getIdeOptionsIO shakeExtras
@@ -628,7 +623,7 @@ shakeRestart IdeState{..} acts =
         shakeSession
         (\runner -> do
               (stopTime,()) <- duration (cancelShakeSession runner)
-              res <- shakeDatabaseProfile shakeProfileDir shakeDb
+              res <- shakeDatabaseProfile shakeDb
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _ -> ""
