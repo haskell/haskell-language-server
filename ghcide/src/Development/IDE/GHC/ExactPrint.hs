@@ -63,8 +63,9 @@ import Language.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable (Outputable, ppr, showSDoc)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
 import Parser (parseIdentifier)
-import Data.List (isPrefixOf)
 import Data.Traversable (for)
+import Data.Foldable (Foldable(fold))
+import Data.Bool (bool)
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
 #endif
@@ -211,70 +212,6 @@ graftWithoutParentheses dst val = Graft $ \dflags a -> do
                     l -> l
             )
             a
-
-
-------------------------------------------------------------------------------
--- | 'parseDecl' fails to parse decls that span multiple lines at the top
--- layout --- eg. things like:
---
--- @
--- not True = False
--- not False = True
--- @
---
--- This function splits up each top-layout declaration, parses them
--- individually, and then merges them back into a single decl.
-parseDecls :: DynFlags -> FilePath -> String -> ParseResult (LHsDecl GhcPs)
-parseDecls dflags fp str = do
-  let mono_decls = fmap unlines $ groupByFirstLine $ lines str
-  decls <-
-    for (zip [id @Int 0..] mono_decls) $ \(ix, line) ->
-      parseDecl dflags (fp <> show ix) line
-  mergeDecls decls
-
-
-------------------------------------------------------------------------------
--- | Combine decls together. See 'parseDecl' for more information.
-mergeDecls :: [(Anns, LHsDecl GhcPs)] -> ParseResult (LHsDecl GhcPs)
-mergeDecls [x] = pure x
-mergeDecls ((anns,  L _ (ValD ext fb@FunBind{fun_matches = mg@MG {mg_alts = L _ alts}}))
-          -- Since 'groupByFirstLine' separates matches, we are guaranteed to
-          -- only have a single alternative here. We want to add it to 'alts'
-          -- above.
-          : (anns', L _ (ValD _ FunBind{fun_matches = MG {mg_alts = L _ [alt]}}))
-          : decls) =
-  mergeDecls $
-    ( anns <> setPrecedingLines alt 1 0 anns'
-    , noLoc $ ValD ext $ fb
-        { fun_matches = mg { mg_alts = noLoc $ alts <> [alt] }
-        }
-    ) : decls
-mergeDecls _ = throwParseError "mergeDecls: attempted to merge something that wasn't a ValD FunBind"
-
-
-throwParseError :: String -> ParseResult a
-#if __GLASGOW_HASKELL__ > 808
-throwParseError
-  = Left . listToBag . pure . mkErrMsg unsafeGlobalDynFlags noSrcSpan neverQualify . text
-#else
-throwParseError = Left . (noSrcSpan, )
-#endif
-
-
-------------------------------------------------------------------------------
--- | Groups strings by the Haskell top-layout rules, assuming each element of
--- the list corresponds to a line. For example, the list
---
--- @["a", " a1", " a2", "b", " b1"]@
---
--- will be grouped to
---
--- @[["a", " a1", " a2"], ["b", " b1"]]@
-groupByFirstLine :: [String] -> [[String]]
-groupByFirstLine [] = []
-groupByFirstLine (str : strs) =
-  let (same, diff) = span (isPrefixOf " ") strs
-   in (str : same) : groupByFirstLine diff
 
 
 ------------------------------------------------------------------------------
@@ -468,12 +405,37 @@ annotate dflags ast = do
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (Anns, LHsDecl GhcPs)
+-- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
+-- multiple matches. To work around this, we split the single
+-- 'FunBind'-of-multiple-matches into multiple 'FunBind's-of-single-matchs, and
+-- then merge them all back together.
+annotateDecl dflags
+            (L src (
+                ValD ext fb@FunBind
+                  { fun_matches = mg@MG { mg_alts = L alt_src alts@(_:_)}
+                  })) = do
+    let set_matches matches =
+          ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
+
+    (anns', alts') <- fmap unzip $ for (zip [0..] alts) $ \(ix :: Int, alt) -> do
+      uniq <- show <$> uniqueSrcSpanT
+      let rendered = render dflags $ set_matches [alt]
+      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
+        (ann, L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
+           -> pure (bool id (setPrecedingLines alt' 1 0) (ix /= 0) ann, alt')
+        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
+
+    let expr' = L src $ set_matches alts'
+        anns'' = setPrecedingLines expr' 1 0 $ fold anns'
+
+    pure (anns'', expr')
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
-    (anns, expr') <- lift $ mapLeft show $ parseDecls dflags uniq rendered
+    (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
     pure (anns', expr')
+------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
 
 -- | Print out something 'Outputable'.
