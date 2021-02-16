@@ -407,8 +407,8 @@ annotate dflags ast = do
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (Anns, LHsDecl GhcPs)
 -- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
 -- multiple matches. To work around this, we split the single
--- 'FunBind'-of-multiple-matches into multiple 'FunBind's-of-single-matchs, and
--- then merge them all back together.
+-- 'FunBind'-of-multiple-'Match'es into multiple 'FunBind's-of-one-'Match',
+-- and then merge them all back together.
 annotateDecl dflags
             (L src (
                 ValD ext fb@FunBind
@@ -435,7 +435,7 @@ annotateDecl dflags ast = do
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
     pure (anns', expr')
-------------------------------------------------------------------------------
+
 ------------------------------------------------------------------------------
 
 -- | Print out something 'Outputable'.
