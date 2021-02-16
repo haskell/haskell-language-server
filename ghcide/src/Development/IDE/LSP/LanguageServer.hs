@@ -28,9 +28,11 @@ import Control.Monad.Extra
 import UnliftIO.Exception
 import UnliftIO.Async
 import UnliftIO.Concurrent
+import UnliftIO.Directory
 import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Ide.Types (traceWithSpan)
+import Development.IDE.Session (runWithDb)
 
 import Development.IDE.Core.IdeConfiguration
 import Development.IDE.Core.Shake
@@ -40,14 +42,17 @@ import Development.IDE.Types.Logger
 import Development.IDE.Core.FileStore
 import Development.IDE.Core.Tracing
 
+import System.IO.Unsafe (unsafeInterleaveIO)
+
 runLanguageServer
     :: forall config. (Show config)
     => LSP.Options
+    -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
     -> (IdeState -> Value -> IO (Either T.Text config))
     -> LSP.Handlers (ServerM config)
-    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> IO IdeState)
+    -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
     -> IO ()
-runLanguageServer options onConfigurationChange userHandlers getIdeState = do
+runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeState = do
     -- Move stdout to another file descriptor and duplicate stderr
     -- to stdout. This guards against stray prints from corrupting the JSON-RPC
     -- message stream.
@@ -132,15 +137,26 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
           :: IO () -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
           -> LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
         handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
-            liftIO $ traceWithSpan sp params
+            traceWithSpan sp params
             let root = LSP.resRootPath env
-            ide <- liftIO $ getIdeState env (makeLSPVFSHandle env) root
+
+            dir <- getCurrentDirectory
+            dbLoc <- getHieDbLoc dir
+
+            -- The database needs to be open for the duration of the reactor thread, but we need to pass in a reference
+            -- to 'getIdeState', so we use this dirty trick
+            dbMVar <- newEmptyMVar
+            ~(hiedb,hieChan) <- unsafeInterleaveIO $ takeMVar dbMVar
+
+            ide <- getIdeState env (makeLSPVFSHandle env) root hiedb hieChan
 
             let initConfig = parseConfiguration params
-            liftIO $ logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
-            liftIO $ registerIdeConfiguration (shakeExtras ide) initConfig
+            logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
+            registerIdeConfiguration (shakeExtras ide) initConfig
 
-            _ <- flip forkFinally (const exitClientMsg) $ forever $ do
+            _ <- flip forkFinally (const exitClientMsg) $ runWithDb dbLoc $ \hiedb hieChan -> do
+              putMVar dbMVar (hiedb,hieChan)
+              forever $ do
                 msg <- readChan clientMsgChan
                 -- We dispatch notifications synchronously and requests asynchronously
                 -- This is to ensure that all file edits and config changes are applied before a request is handled
@@ -158,20 +174,20 @@ runLanguageServer options onConfigurationChange userHandlers getIdeState = do
           :: IdeState -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> SomeLspId
           -> IO () -> (ResponseError -> IO ()) -> IO ()
         checkCancelled ide clearReqId waitForCancel _id act k =
-            flip finally (liftIO $ clearReqId _id) $
+            flip finally (clearReqId _id) $
                 catch (do
                     -- We could optimize this by first checking if the id
                     -- is in the cancelled set. However, this is unlikely to be a
                     -- bottleneck and the additional check might hide
                     -- issues with async exceptions that need to be fixed.
-                    cancelOrRes <- race (liftIO $ waitForCancel _id) act
+                    cancelOrRes <- race (waitForCancel _id) act
                     case cancelOrRes of
                         Left () -> do
-                            liftIO $ logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
+                            logDebug (ideLogger ide) $ T.pack $ "Cancelled request " <> show _id
                             k $ ResponseError RequestCancelled "" Nothing
                         Right res -> pure res
                 ) $ \(e :: SomeException) -> do
-                    liftIO $ logError (ideLogger ide) $ T.pack $
+                    logError (ideLogger ide) $ T.pack $
                         "Unexpected exception on request, please report!\n" ++
                         "Exception: " ++ show e
                     k $ ResponseError InternalError (T.pack $ show e) Nothing

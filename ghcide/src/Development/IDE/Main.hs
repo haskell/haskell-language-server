@@ -37,9 +37,7 @@ import Development.IDE.Core.Rules (
  )
 import Development.IDE.Core.Service (initialise, runAction)
 import Development.IDE.Core.Shake (
-    HieDb,
     IdeState (shakeExtras),
-    IndexQueue,
     ShakeExtras (state),
     uses,
  )
@@ -49,7 +47,7 @@ import Development.IDE.Plugin (
     Plugin (pluginHandlers, pluginRules),
  )
 import Development.IDE.Plugin.HLS (asGhcIdePlugin)
-import Development.IDE.Session (SessionLoadingOptions, defaultLoadingOptions, loadSessionWithOptions, setInitialDynFlags)
+import Development.IDE.Session (SessionLoadingOptions, defaultLoadingOptions, loadSessionWithOptions, setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.IDE.Types.Location (toNormalizedFilePath')
 import Development.IDE.Types.Logger (Logger)
 import Development.IDE.Types.Options (
@@ -77,8 +75,6 @@ data Arguments = Arguments
     { argsOTMemoryProfiling :: Bool
     , argFiles :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
     , argsLogger :: Logger
-    , argsHiedb :: HieDb
-    , argsHieChan :: IndexQueue
     , argsRules :: Rules ()
     , argsHlsPlugins :: IdePlugins IdeState
     , argsGhcidePlugin :: Plugin Config  -- ^ Deprecated
@@ -86,16 +82,15 @@ data Arguments = Arguments
     , argsIdeOptions :: Maybe Config -> Action IdeGhcSession -> IdeOptions
     , argsLspOptions :: LSP.Options
     , argsDefaultHlsConfig :: Config
+    , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
     }
 
-defArguments :: HieDb -> IndexQueue -> Arguments
-defArguments hiedb hiechan =
+defArguments :: Arguments
+defArguments =
     Arguments
         { argsOTMemoryProfiling = False
         , argFiles = Nothing
         , argsLogger = noLogging
-        , argsHiedb = hiedb
-        , argsHieChan = hiechan
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
@@ -103,11 +98,11 @@ defArguments hiedb hiechan =
         , argsIdeOptions = const defaultIdeOptions
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
+        , argsGetHieDbLoc = getHieDbLoc
         }
 
 defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
-    dir <- IO.getCurrentDirectory
     pid <- T.pack . show <$> getProcessID
 
     let hlsPlugin = asGhcIdePlugin argsHlsPlugins
@@ -121,9 +116,11 @@ defaultMain Arguments{..} = do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-            runLanguageServer options argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath -> do
+            runLanguageServer options argsGetHieDbLoc argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
+
+                dir <- IO.getCurrentDirectory
 
                 -- We want to set the global DynFlags right now, so that we can use
                 -- `unsafeGlobalDynFlags` even before the project is configured
@@ -148,9 +145,12 @@ defaultMain Arguments{..} = do
                     debouncer
                     options
                     vfs
-                    argsHiedb
-                    argsHieChan
+                    hiedb
+                    hieChan
         Just argFiles -> do
+          dir <- IO.getCurrentDirectory
+          dbLoc <- getHieDbLoc dir
+          runWithDb dbLoc $ \hiedb hieChan -> do
             -- GHC produces messages with UTF8 in them, so make sure the terminal doesn't error
             hSetEncoding stdout utf8
             hSetEncoding stderr utf8
@@ -178,7 +178,7 @@ defaultMain Arguments{..} = do
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }
-            ide <- initialise mainRule Nothing argsLogger debouncer options vfs argsHiedb argsHieChan
+            ide <- initialise mainRule Nothing argsLogger debouncer options vfs hiedb hieChan
 
             putStrLn "\nStep 4/4: Type checking the files"
             setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') files
