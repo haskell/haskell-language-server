@@ -80,7 +80,7 @@ extra-deps:
   - bytestring-encoding-0.1.0.0@sha256:460b49779fbf0112e8e2f1753c1ed9131eb18827600c298f4d6bb51c4e8c1c0d,1727
   - hiedb-0.3.0.1
   - extra-1.7.9@sha256:f1dec740f0f2025790c540732bfd52c556ec55bde4f5dfd7cf18e22bd44ff3d0,2683
-  - lsp-1.1.0.0
+  - lsp-1.1.1.0
   - lsp-types-1.1.0.0
   - lsp-test-0.13.0.0
   - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657

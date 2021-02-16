@@ -58,7 +58,7 @@ extra-deps:
   - sqlite-simple-0.4.18.0@sha256:3ceea56375c0a3590c814e411a4eb86943f8d31b93b110ca159c90689b6b39e5,3002
   - direct-sqlite-2.3.26@sha256:04e835402f1508abca383182023e4e2b9b86297b8533afbd4e57d1a5652e0c23,3718
   - extra-1.7.9@sha256:f1dec740f0f2025790c540732bfd52c556ec55bde4f5dfd7cf18e22bd44ff3d0,2683
-  - lsp-1.1.0.0
+  - lsp-1.1.1.0
   - lsp-types-1.1.0.0
   - lsp-test-0.13.0.0
   - dependent-map-0.4.0.0@sha256:ca2b131046f4340a1c35d138c5a003fe4a5be96b14efc26291ed35fd08c62221,1657
