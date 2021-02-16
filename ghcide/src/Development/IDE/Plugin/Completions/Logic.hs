@@ -294,9 +294,9 @@ mkPragmaCompl label insertText =
     Nothing Nothing Nothing Nothing Nothing
 
 
-cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> [ParsedModule] -> IO CachedCompletions
-cacheDataProducer uri env curMod globalEnv inScopeEnv limports deps = do
-  let 
+cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> IO CachedCompletions
+cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
+  let
       packageState = hscEnv env
       curModName = moduleName curMod
 
@@ -343,7 +343,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports deps = do
 
       toCompItem :: Parent -> Module -> ModuleName -> Name -> Maybe (LImportDecl GhcPs) -> IO [CompItem]
       toCompItem par m mn n imp' = do
-        docs <- getDocumentationTryGhc packageState curMod deps n
+        docs <- getDocumentationTryGhc packageState curMod n
         let (mbParent, originName) = case par of
                             NoParent -> (Nothing, nameOccName n)
                             ParentIs n' -> (Just $ showNameWithoutUniques n', nameOccName n)
