@@ -3505,10 +3505,10 @@ thTests =
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
     , thReloadingTest False
-    , thReloadingTest True
+    , ignoreInWindowsBecause "Broken in windows" $ thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
     , thLinkingTest False
-    , thLinkingTest True
+    , ignoreInWindowsBecause "Broken in windows" $ thLinkingTest True
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
               T.unlines
