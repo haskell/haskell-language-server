@@ -621,7 +621,7 @@ should be filtered out, such that we dont have to re-compile everything.
 -- For the exact reason, see Note [Avoiding bad interface files].
 setCacheDirs :: MonadIO m => Logger -> CacheDirs -> DynFlags -> m DynFlags
 setCacheDirs logger CacheDirs{..} dflags = do
-    liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack cacheDir
+    liftIO $ logInfo logger $ "Using interface files cache dir: " <> T.pack (fromMaybe cacheDir hiCacheDir)
     pure $ dflags
           & maybe id setHiDir hiCacheDir
           & maybe id setHieDir hieCacheDir
