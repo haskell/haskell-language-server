@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveAnyClass      #-}
 {-# LANGUAGE DeriveGeneric       #-}
 {-# LANGUAGE GADTs               #-}
@@ -7,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
 -- | A plugin that uses tactics to synthesize code
@@ -15,7 +15,6 @@ module Ide.Plugin.Tactic
   , tacticTitle
   , TacticCommand (..)
   ) where
-
 
 import           Bag (listToBag, bagToList)
 import           Control.Arrow
@@ -30,7 +29,6 @@ import           Data.Data (Data)
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
-import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
@@ -64,6 +62,7 @@ import           Ide.Types
 import           Language.Haskell.LSP.Core (LspFuncs, clientCapabilities)
 import           Language.Haskell.LSP.Types
 import           OccName
+import           Prelude hiding (span)
 import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
@@ -196,7 +195,7 @@ codeActions = List . fmap CACodeAction
 provide :: TacticCommand -> T.Text -> TacticProvider
 provide tc name _ plId uri range _ = do
   let title = tacticTitle tc name
-      params = TacticParams { file = uri , range = range , var_name = name }
+      params = TacticParams { tp_file = uri , tp_range = range , tp_var_name = name }
   cmd <- mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
   pure
     $ pure
@@ -243,9 +242,9 @@ filterBindingType p tp dflags plId uri range jdg =
 
 
 data TacticParams = TacticParams
-    { file :: Uri -- ^ Uri of the file to fill the hole in
-    , range :: Range -- ^ The range of the hole
-    , var_name :: T.Text
+    { tp_file :: Uri -- ^ Uri of the file to fill the hole in
+    , tp_range :: Range -- ^ The range of the hole
+    , tp_var_name :: T.Text
     }
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
@@ -271,7 +270,7 @@ judgementForHole state nfp range = do
 
   case asts of
     (HAR _ hf _ _ kind) -> do
-      (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+      (rss, g) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
           case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
             Nothing -> Nothing
             Just ast' -> do
@@ -293,14 +292,14 @@ judgementForHole state nfp range = do
                    $ hypothesisFromBindings rss binds
           cls_hy = contextMethodHypothesis ctx
       case kind of
-        HieFromDisk hf' ->
+        HieFromDisk _hf' ->
           fail "Need a fresh hie file"
         HieFresh ->
           pure ( resulting_range
                , mkFirstJudgement
                    (local_hy <> cls_hy)
                    (isRhsHole rss tcs)
-                   goal
+                   g
                , ctx
                , dflags
                )
@@ -399,10 +398,10 @@ mergeFunBindMatches
     -> SrcSpan
     -> HsBind GhcPs
     -> HsBind GhcPs
-mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alt_src alts}}) =
+mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alts_src alts}}) =
     fb
       { fun_matches = mg
-        { mg_alts = L alt_src $ do
+        { mg_alts = L alts_src $ do
             alt@(L alt_src match) <- alts
             case span `isSubspanOf` alt_src of
               True -> do
@@ -486,11 +485,6 @@ getRhsPosVals rss tcs
   ) tcs
 
 
--- TODO(sandy): Make this more robust
-isHole :: OccName -> Bool
-isHole = isPrefixOf "_" . occNameString
-
-
 locateBiggest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
 locateBiggest ss x = getFirst $ everything (<>)
   ( mkQ mempty $ \case
@@ -498,21 +492,8 @@ locateBiggest ss x = getFirst $ everything (<>)
     _ -> mempty
   )x
 
-locateSmallest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
-locateSmallest ss x = getLast $ everything (<>)
-  ( mkQ mempty $ \case
-    L span r | ss `isSubspanOf` span -> pure r
-    _ -> mempty
-  )x
-
 locateFirst :: (Data r, Data a) => a -> Maybe r
 locateFirst x = getFirst $ everything (<>)
-  ( mkQ mempty $ \case
-    r -> pure r
-  ) x
-
-locateLast :: (Data r, Data a) => a -> Maybe r
-locateLast x = getLast $ everything (<>)
   ( mkQ mempty $ \case
     r -> pure r
   ) x

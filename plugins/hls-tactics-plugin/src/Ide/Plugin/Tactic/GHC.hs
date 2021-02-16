@@ -122,6 +122,10 @@ algebraicTyCon (splitTyConApp_maybe -> Just (tycon, _))
   | otherwise = Just tycon
 algebraicTyCon _ = Nothing
 
+
+------------------------------------------------------------------------------
+-- | We can't compare 'RdrName' for equality directly. Instead, compare them by
+-- their 'OccName's.
 eqRdrName :: RdrName -> RdrName -> Bool
 eqRdrName = (==) `on` occNameString . occName
 
@@ -136,14 +140,26 @@ containsHsVar name x = not $ null $ listify (
     _ -> False
   ) x
 
+
+------------------------------------------------------------------------------
+-- | Does this thing contain any holes?
 containsHole :: Data a => a -> Bool
 containsHole x = not $ null $ listify (
   \case
-    ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isPrefixOf "_" $ occNameString $ occName name
+    ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isHole $ occName name
     _ -> False
   ) x
 
 
+------------------------------------------------------------------------------
+-- | Check if an 'OccName' is a hole
+isHole :: OccName -> Bool
+-- TODO(sandy): Make this more robust
+isHole = isPrefixOf "_" . occNameString
+
+
+------------------------------------------------------------------------------
+-- | Get all of the referenced occnames.
 allOccNames :: Data a => a -> Set OccName
 allOccNames = everything (<>) $ mkQ mempty $ \case
     a -> S.singleton a
@@ -166,11 +182,15 @@ pattern Lambda pats body <-
     Lambda pats body = lambda pats body
 
 
+------------------------------------------------------------------------------
+-- | A GRHS that caontains no guards.
 pattern UnguardedRHSs :: HsExpr GhcPs -> GRHSs GhcPs (LHsExpr GhcPs)
 pattern UnguardedRHSs body <-
   GRHSs {grhssGRHSs = [L _ (GRHS _ [] (L _ body))]}
 
 
+------------------------------------------------------------------------------
+-- | A match with a single pattern. Case matches are always 'SinglePatMatch'es.
 pattern SinglePatMatch :: Pat GhcPs -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
 pattern SinglePatMatch pat body <-
   Match { m_pats = [fromPatCompatPs -> pat]
@@ -178,6 +198,8 @@ pattern SinglePatMatch pat body <-
         }
 
 
+------------------------------------------------------------------------------
+-- | Helper function for defining the 'Case' pattern.
 unpackMatches :: [Match GhcPs (LHsExpr GhcPs)] -> Maybe [(Pat GhcPs, HsExpr GhcPs)]
 unpackMatches [] = Just []
 unpackMatches (SinglePatMatch pat body : matches) =
@@ -256,6 +278,10 @@ dataConExTys = DataCon.dataConExTyVars
 #endif
 
 
+------------------------------------------------------------------------------
+-- | In GHC 8.8, sometimes patterns are wrapped in 'XPat'. It's not clear why,
+-- but if we don't remove these wrappers, many functions that operate on
+-- patterns fail to match.
 unXPat :: Pat GhcPs -> Pat GhcPs
 #if __GLASGOW_HASKELL__ == 808
 unXPat (XPat (L _ pat)) = unXPat pat
