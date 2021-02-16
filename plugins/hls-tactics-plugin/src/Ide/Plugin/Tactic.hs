@@ -397,8 +397,9 @@ mergeFunBindMatches
     :: ([Pat GhcPs] -> LHsDecl GhcPs)
     -> SrcSpan
     -> HsBind GhcPs
-    -> HsBind GhcPs
+    -> Either String (HsBind GhcPs)
 mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alts_src alts}}) =
+  pure $
     fb
       { fun_matches = mg
         { mg_alts = L alts_src $ do
@@ -412,7 +413,11 @@ mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L
               False -> pure alt
         }
       }
-mergeFunBindMatches _ _ _ = error "called on something that isnt a funbind"
+mergeFunBindMatches _ _ _ = Left "mergeFunBindMatches: called on something that isnt a funbind"
+
+
+noteT :: String -> TransformT (Either String) a
+noteT = lift . Left
 
 ------------------------------------------------------------------------------
 -- | Helper function to route 'mergeFunBindMatches' into the right place in an
@@ -425,25 +430,29 @@ graftDecl
 graftDecl span
     make_decl
     (L src (ValD ext fb))
-  = pure $ Just $ pure $ L src $ ValD ext $ mergeFunBindMatches make_decl span fb
--- TODO(sandy): default methods
+  = either noteT (pure . Just . pure . L src . ValD ext) $
+      mergeFunBindMatches make_decl span fb
+-- TODO(sandy): add another case for default methods in class definitions
 graftDecl span
     make_decl
     (L src (InstD ext cid@ClsInstD{cid_inst = cidi@ClsInstDecl{cid_sigs = _sigs, cid_binds = binds}}))
-  = pure $ Just $ pure $ L src $ InstD ext $ cid
-      { cid_inst = cidi
-        { cid_binds = listToBag $ do
-            b@(L bsrc bind) <- bagToList binds
-            case bind of
-              fb@FunBind{}
-                | span `isSubspanOf` bsrc -> pure $ L bsrc $ mergeFunBindMatches make_decl span fb
-              _ -> pure b
+  = do
+      binds' <-
+        for (bagToList binds) $ \b@(L bsrc bind) -> do
+          case bind of
+            fb@FunBind{}
+              | span `isSubspanOf` bsrc -> either noteT (pure . L bsrc) $ mergeFunBindMatches make_decl span fb
+            _ -> pure b
+
+      pure $ Just $ pure $ L src $ InstD ext $ cid
+        { cid_inst = cidi
+          { cid_binds = listToBag binds'
+          }
         }
-      }
 graftDecl span _ x = do
   traceMX "biggest" $ unsafeRender $ locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
   traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
-  pure $ Just [x]
+  noteT "graftDecl: don't know about this AST form"
 
 
 

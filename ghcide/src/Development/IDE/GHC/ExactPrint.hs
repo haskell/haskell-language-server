@@ -221,14 +221,16 @@ graftWithoutParentheses dst val = Graft $ \dflags a -> do
 parseDecls :: DynFlags -> FilePath -> String -> ParseResult (LHsDecl GhcPs)
 parseDecls dflags fp str = do
   let mono_decls = fmap unlines $ groupByFirstLine $ lines str
-  decls <- for (zip [id @Int 0..] mono_decls) $ \(ix, line) -> parseDecl dflags (fp <> show ix) line
-  pure $ mergeDecls decls
+  decls <-
+    for (zip [id @Int 0..] mono_decls) $ \(ix, line) ->
+      parseDecl dflags (fp <> show ix) line
+  mergeDecls decls
 
 
 ------------------------------------------------------------------------------
 -- | Combine decls together. See 'parseDecl' for more information.
-mergeDecls :: [(Anns, LHsDecl GhcPs)] -> (Anns, LHsDecl GhcPs)
-mergeDecls [x] = x
+mergeDecls :: [(Anns, LHsDecl GhcPs)] -> ParseResult (LHsDecl GhcPs)
+mergeDecls [x] = pure x
 mergeDecls ((anns,  L _ (ValD ext fb@FunBind{fun_matches = mg@MG {mg_alts = L _ alts}}))
           -- Since 'groupByFirstLine' separates matches, we are guaranteed to
           -- only have a single alternative here. We want to add it to 'alts'
@@ -241,7 +243,8 @@ mergeDecls ((anns,  L _ (ValD ext fb@FunBind{fun_matches = mg@MG {mg_alts = L _ 
         { fun_matches = mg { mg_alts = noLoc $ alts <> [alt] }
         }
     ) : decls
-mergeDecls _ = error "mergeDecls called with something that isn't a ValD FunBind"
+mergeDecls _ =
+  Left (noSrcSpan, "mergeDecls: attempted to merge something that wasn't a ValD FunBind")
 
 
 ------------------------------------------------------------------------------
