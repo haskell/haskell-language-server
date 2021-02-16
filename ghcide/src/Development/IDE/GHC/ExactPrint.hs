@@ -6,6 +6,8 @@
 {-# LANGUAGE TupleSections      #-}
 {-# LANGUAGE TypeFamilies       #-}
 
+{- HLINT ignore "Use zipFrom" -}
+
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
       graft,
