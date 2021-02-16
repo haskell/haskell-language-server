@@ -32,5 +32,5 @@ main = do
 
   forM_ prsAfterLastTag $ \SimplePullRequest{..} ->
     putStrLn $ T.unpack $ "- " <> simplePullRequestTitle <>
-      "\n([#" <> T.pack (show $ unIssueNumber simplePullRequestNumber) <> ")](" <> getUrl simplePullRequestHtmlUrl <> ")" <>
+      "\n([#" <> T.pack (show $ unIssueNumber simplePullRequestNumber) <> "](" <> getUrl simplePullRequestHtmlUrl <> "))" <>
       " by @" <> untagName (simpleUserLogin simplePullRequestUser)
