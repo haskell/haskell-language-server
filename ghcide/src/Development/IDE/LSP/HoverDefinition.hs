@@ -82,7 +82,7 @@ request label getResults notFound found ide (TextDocumentPositionParams (TextDoc
 logAndRunRequest :: T.Text -> (NormalizedFilePath -> Position -> IdeAction b) -> IdeState -> Position -> String -> IO b
 logAndRunRequest label getResults ide pos path = do
   let filePath = toNormalizedFilePath' path
-  logInfo (ideLogger ide) $
+  logDebug (ideLogger ide) $
     label <> " request at position " <> T.pack (showPosition pos) <>
     " in file: " <> T.pack path
   runIdeAction (T.unpack label) (shakeExtras ide) (getResults filePath pos)

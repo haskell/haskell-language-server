@@ -652,7 +652,7 @@ readHieFileForSrcFromDisk file = do
 readHieFileFromDisk :: FilePath -> ExceptT SomeException IdeAction HieFile
 readHieFileFromDisk hie_loc = do
   nc <- asks ideNc
-  log <- asks $ L.logInfo . logger
+  log <- asks $ L.logDebug . logger
   res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
   liftIO . log $ either (const $ "FAILED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
                         (const $ "SUCCEEDED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
@@ -825,7 +825,7 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ \GetModIfaceFromDiskAndInd
         Left err -> fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++ displayException err
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
-          L.logInfo (logger se) $ "Re-indexing hie file for" <> T.pack (show f)
+          L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (show f)
           indexHieFile se ms f hash hf
 
   let fp = hiFileFingerPrint x
