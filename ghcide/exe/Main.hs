@@ -20,7 +20,7 @@ import Development.IDE.Core.OfInterest (kick)
 import Development.IDE.Core.Rules (mainRule)
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Development.IDE.Plugin.Test as Test
-import Development.IDE.Session (setInitialDynFlags, getHieDbLoc, runWithDb)
+import Development.IDE.Session (setInitialDynFlags, getHieDbLoc)
 import Development.IDE.Types.Options
 import qualified Development.IDE.Main as Main
 import Development.Shake (ShakeOptions(shakeThreads))
@@ -56,9 +56,6 @@ main = do
 
     whenJust argsCwd IO.setCurrentDirectory
 
-    dir <- IO.getCurrentDirectory
-    dbLoc <- getHieDbLoc dir
-
     -- lock to avoid overlapping output on stdout
     lock <- newLock
     let logger = Logger $ \pri msg -> when (pri >= logLevel) $ withLock lock $
@@ -67,6 +64,8 @@ main = do
 
     case argFilesOrCmd of
       DbCmd opts cmd -> do
+        dir <- IO.getCurrentDirectory
+        dbLoc <- getHieDbLoc dir
         mlibdir <- setInitialDynFlags
         case mlibdir of
           Nothing -> exitWith $ ExitFailure 1
@@ -80,40 +79,39 @@ main = do
                 hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
               _ -> return ()
 
-          runWithDb dbLoc $ \hiedb hiechan ->
-              Main.defaultMain (Main.defArguments hiedb hiechan)
-                {Main.argFiles = case argFilesOrCmd of
-                    Typecheck x | not argLSP -> Just x
-                    _ -> Nothing
+          Main.defaultMain Main.defArguments
+            {Main.argFiles = case argFilesOrCmd of
+                Typecheck x | not argLSP -> Just x
+                _ -> Nothing
 
-                ,Main.argsLogger = logger
+            ,Main.argsLogger = logger
 
-                ,Main.argsRules = do
-                    -- install the main and ghcide-plugin rules
-                    mainRule
-                    -- install the kick action, which triggers a typecheck on every
-                    -- Shake database restart, i.e. on every user edit.
-                    unless argsDisableKick $
-                        action kick
+            ,Main.argsRules = do
+                -- install the main and ghcide-plugin rules
+                mainRule
+                -- install the kick action, which triggers a typecheck on every
+                -- Shake database restart, i.e. on every user edit.
+                unless argsDisableKick $
+                    action kick
 
-                ,Main.argsHlsPlugins =
-                    pluginDescToIdePlugins $
-                    GhcIde.descriptors
-                    ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
+            ,Main.argsHlsPlugins =
+                pluginDescToIdePlugins $
+                GhcIde.descriptors
+                ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
 
-                ,Main.argsGhcidePlugin = if argsTesting
-                    then Test.plugin
-                    else mempty
+            ,Main.argsGhcidePlugin = if argsTesting
+                then Test.plugin
+                else mempty
 
-                ,Main.argsIdeOptions = \(fromMaybe def -> config) sessionLoader ->
-                    let defOptions = defaultIdeOptions sessionLoader
-                    in defOptions
-                      { optShakeProfiling = argsShakeProfiling
-                      , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                      , optTesting = IdeTesting argsTesting
-                      , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
-                      , optCheckParents = pure $ checkParents config
-                      , optCheckProject = pure $ checkProject config
-                      }
-                }
+            ,Main.argsIdeOptions = \(fromMaybe def -> config) sessionLoader ->
+                let defOptions = defaultIdeOptions sessionLoader
+                in defOptions
+                  { optShakeProfiling = argsShakeProfiling
+                  , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
+                  , optTesting = IdeTesting argsTesting
+                  , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
+                  , optCheckParents = pure $ checkParents config
+                  , optCheckProject = pure $ checkProject config
+                  }
+            }
 

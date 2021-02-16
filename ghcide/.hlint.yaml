@@ -105,7 +105,7 @@
 #
 - functions:
   # Things that are unsafe in Haskell base library
-  - {name: unsafeInterleaveIO, within: []}
+  - {name: unsafeInterleaveIO, within: [Development.IDE.LSP.LanguageServer]}
   - {name: unsafeDupablePerformIO, within: []}
   - {name: unsafeCoerce, within: []}
   # Things that are a bit dangerous in the GHC API
