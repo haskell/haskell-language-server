@@ -406,7 +406,7 @@ mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L
             alt@(L alt_src match) <- alts
             case span `isSubspanOf` alt_src of
               True -> do
-                let pats = m_pats match
+                let pats = fmap fromPatCompatPs $ m_pats match
                     (L _ (ValD _ (FunBind {fun_matches = MG {mg_alts = L _ to_add}}))) =
                         make_decl pats
                 to_add
@@ -446,10 +446,6 @@ graftDecl span _ x = do
   traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
   pure $ Just [x]
 
-
-unXPat :: Pat GhcPs -> Pat GhcPs
-unXPat (XPat (L _ pat)) = unXPat pat
-unXPat pat = pat
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
