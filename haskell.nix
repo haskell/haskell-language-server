@@ -5,7 +5,7 @@
 #
 #    nix-shell haskell.nix -A shell
 #
-# Significant differnces to shell.nix:
+# Significant differences to shell.nix:
 #
 # * It uses the `nixpkgs-unstable` pin of nixpkgs from haskell.nix
 #   instead of the niv pin (this will increase the chances of getting
@@ -60,4 +60,3 @@ in project // {
     };
   };
 }
-
