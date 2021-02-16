@@ -3504,9 +3504,11 @@ thTests =
         _ <- createDoc "A.hs" "haskell" sourceA
         _ <- createDoc "B.hs" "haskell" sourceB
         return ()
-    , thReloadingTest
+    , thReloadingTest False
+    , thReloadingTest True
     -- Regression test for https://github.com/haskell/haskell-language-server/issues/891
-    , thLinkingTest
+    , thLinkingTest False
+    , thLinkingTest True
     , testSessionWait "findsTHIdentifiers" $ do
         let sourceA =
               T.unlines
@@ -3539,8 +3541,8 @@ thTests =
     ]
 
 -- | test that TH is reevaluated on typecheck
-thReloadingTest :: TestTree
-thReloadingTest = testCase "reloading-th-test" $ runWithExtraFiles "TH" $ \dir -> do
+thReloadingTest :: Bool -> TestTree
+thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 
     let aPath = dir </> "THA.hs"
         bPath = dir </> "THB.hs"
@@ -3572,9 +3574,13 @@ thReloadingTest = testCase "reloading-th-test" $ runWithExtraFiles "TH" $ \dir -
     closeDoc adoc
     closeDoc bdoc
     closeDoc cdoc
+  where
+    name = "reloading-th-test" <> if unboxed then "-unboxed" else ""
+    dir | unboxed = "THUnboxed"
+        | otherwise = "TH"
 
-thLinkingTest :: TestTree
-thLinkingTest = testCase "th-linking-test" $ runWithExtraFiles "TH" $ \dir -> do
+thLinkingTest :: Bool -> TestTree
+thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
 
     let aPath = dir </> "THA.hs"
         bPath = dir </> "THB.hs"
@@ -3598,7 +3604,10 @@ thLinkingTest = testCase "th-linking-test" $ runWithExtraFiles "TH" $ \dir -> do
 
     closeDoc adoc
     closeDoc bdoc
-
+  where
+    name = "th-linking-test" <> if unboxed then "-unboxed" else ""
+    dir | unboxed = "THUnboxed"
+        | otherwise = "TH"
 
 completionTests :: TestTree
 completionTests

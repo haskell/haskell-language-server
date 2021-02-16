@@ -1052,41 +1052,54 @@ getClientConfigAction defValue = do
     Just (Success c) -> return c
     _ -> return defValue
 
--- | For now we always use bytecode
+-- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)
-getLinkableType f = do
-  needsComp <- use_ NeedsCompilation f
-  pure $ if needsComp then Just BCOLinkable else Nothing
+getLinkableType f = use_ NeedsCompilation f
 
 needsCompilationRule :: Rules ()
 needsCompilationRule = defineEarlyCutoff $ \NeedsCompilation file -> do
-  -- It's important to use stale data here to avoid wasted work.
-  -- if NeedsCompilation fails for a module M its result will be  under-approximated
-  -- to False in its dependencies. However, if M actually used TH, this will
-  -- cause a re-evaluation of GetModIface for all dependencies
-  -- (since we don't need to generate object code anymore).
-  -- Once M is fixed we will discover that we actually needed all the object code
-  -- that we just threw away, and thus have to recompile all dependencies once
-  -- again, this time keeping the object code.
-  (ms,_) <- fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
-  -- A file needs object code if it uses TemplateHaskell or any file that depends on it uses TemplateHaskell
-  res <-
-    if uses_th_qq ms
-    then pure True
-    else do
-      graph <- useNoFile GetModuleGraph
-      case graph of
-          -- Treat as False if some reverse dependency header fails to parse
-          Nothing -> pure False
-          Just depinfo -> case immediateReverseDependencies file depinfo of
-            -- If we fail to get immediate reverse dependencies, fail with an error message
-            Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show file
-            Just revdeps -> anyM (fmap (fromMaybe False) . use NeedsCompilation) revdeps
+  graph <- useNoFile GetModuleGraph
+  res <- case graph of
+    -- Treat as False if some reverse dependency header fails to parse
+    Nothing -> pure Nothing
+    Just depinfo -> case immediateReverseDependencies file depinfo of
+      -- If we fail to get immediate reverse dependencies, fail with an error message
+      Nothing -> fail $ "Failed to get the immediate reverse dependencies of " ++ show file
+      Just revdeps -> do
+        -- It's important to use stale data here to avoid wasted work.
+        -- if NeedsCompilation fails for a module M its result will be  under-approximated
+        -- to False in its dependencies. However, if M actually used TH, this will
+        -- cause a re-evaluation of GetModIface for all dependencies
+        -- (since we don't need to generate object code anymore).
+        -- Once M is fixed we will discover that we actually needed all the object code
+        -- that we just threw away, and thus have to recompile all dependencies once
+        -- again, this time keeping the object code.
+        -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
+        (ms,_) <- fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
+        (modsums,needsComps) <- par (map (fmap (fst . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
+                                    (uses NeedsCompilation revdeps)
+        pure $ computeLinkableType ms modsums (map join needsComps)
 
   pure (Just $ BS.pack $ show $ hash res, ([], Just res))
   where
     uses_th_qq (ms_hspp_opts -> dflags) =
       xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
+
+    unboxed_tuples_or_sums (ms_hspp_opts -> d) =
+      xopt LangExt.UnboxedTuples d || xopt LangExt.UnboxedSums d
+
+    computeLinkableType :: ModSummary -> [Maybe ModSummary] -> [Maybe LinkableType] -> Maybe LinkableType
+    computeLinkableType this deps xs
+      | Just ObjectLinkable `elem` xs     = Just ObjectLinkable -- If any dependent needs object code, so do we
+      | Just BCOLinkable    `elem` xs     = Just this_type      -- If any dependent needs bytecode, then we need to be compiled
+      | any (maybe False uses_th_qq) deps = Just this_type      -- If any dependent needs TH, then we need to be compiled
+      | otherwise                         = Nothing             -- If none of these conditions are satisfied, we don't need to compile
+      where
+        -- How should we compile this module? (assuming we do in fact need to compile it)
+        -- Depends on whether it uses unboxed tuples or sums
+        this_type
+          | unboxed_tuples_or_sums this = ObjectLinkable
+          | otherwise                   = BCOLinkable
 
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
