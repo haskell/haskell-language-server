@@ -14,10 +14,12 @@ module Ide.Plugin.Tactic
   ) where
 
 import           Bag (listToBag, bagToList)
+import           Control.Exception (evaluate)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
+import           Data.Bifunctor (Bifunctor(bimap))
 import           Data.Bool (bool)
 import           Data.Data (Data)
 import           Data.Generics.Aliases (mkQ)
@@ -45,8 +47,6 @@ import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           System.Timeout
-import Control.Exception (evaluate)
-import Data.Bifunctor (Bifunctor(bimap))
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -93,7 +93,7 @@ codeActionProvider _ _ _ = pure $ Right $ List []
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
 tacticCmd tac state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      clientCapabilities <- getClientCapabilities
+      ccs <- getClientCapabilities
       res <- liftIO $ fromMaybeT (Right Nothing) $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
@@ -101,7 +101,7 @@ tacticCmd tac state (TacticParams uri range var_name)
 
         timingOut 2e8 $ join $
           bimap (mkErr InvalidRequest . T.pack . show)
-                (mkWorkspaceEdits span dflags clientCapabilities uri pm)
+                (mkWorkspaceEdits span dflags ccs uri pm)
             $ runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name
 
       case res of
@@ -143,9 +143,9 @@ mkWorkspaceEdits
     -> Annotated ParsedSource
     -> RunTacticResults
     -> Either ResponseError (Maybe WorkspaceEdit)
-mkWorkspaceEdits span dflags clientCapabilities uri pm rtr = do
+mkWorkspaceEdits span dflags ccs uri pm rtr = do
   let g = graftHole (RealSrcSpan span) rtr
-      response = transform dflags clientCapabilities uri g pm
+      response = transform dflags ccs uri g pm
    in case response of
         Right res -> Right $ Just res
         Left err -> Left $ mkErr InternalError $ T.pack err
@@ -243,12 +243,8 @@ graftDecl span _ x = do
   noteT "graftDecl: don't know about this AST form"
 
 
-
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
-
-
-
 
 
 locateBiggest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
