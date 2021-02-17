@@ -1,2 +1,2 @@
 pureList :: a -> [a]
-pureList = \ a -> a : []
+pureList a = a : []

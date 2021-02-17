@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
 -- | A plugin that uses tactics to synthesize code
@@ -15,6 +16,7 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
+import           Bag (listToBag, bagToList)
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Error.Class (MonadError(throwError))
@@ -23,10 +25,10 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
+import           Data.Data (Data)
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
-import           Data.List
 import           Data.Map (Map)
 import qualified Data.Map as M
 import           Data.Maybe
@@ -40,15 +42,14 @@ import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.GHC.ExactPrint (graft, transform, useAnnotatedSource, maybeParensAST)
-import           Development.IDE.GHC.ExactPrint (graftWithoutParentheses)
+import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
-import           DynFlags (xopt)
 import qualified FastString
 import           GHC.Generics (Generic)
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin.Tactic.Auto
+import           Ide.Plugin.Tactic.CaseSplit
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
@@ -61,6 +62,7 @@ import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 import           OccName
+import           Prelude hiding (span)
 import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
@@ -193,7 +195,7 @@ codeActions = List . fmap InR
 provide :: TacticCommand -> T.Text -> TacticProvider
 provide tc name _ plId uri range _ = do
   let title = tacticTitle tc name
-      params = TacticParams { file = uri , range = range , var_name = name }
+      params = TacticParams { tp_file = uri , tp_range = range , tp_var_name = name }
       cmd = mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
   pure
     $ pure
@@ -240,9 +242,9 @@ filterBindingType p tp dflags plId uri range jdg =
 
 
 data TacticParams = TacticParams
-    { file :: Uri -- ^ Uri of the file to fill the hole in
-    , range :: Range -- ^ The range of the hole
-    , var_name :: T.Text
+    { tp_file :: Uri -- ^ Uri of the file to fill the hole in
+    , tp_range :: Range -- ^ The range of the hole
+    , tp_var_name :: T.Text
     }
   deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
@@ -268,7 +270,7 @@ judgementForHole state nfp range = do
 
   case asts of
     (HAR _ hf _ _ kind) -> do
-      (rss, goal) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+      (rss, g) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
           case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
             Nothing -> Nothing
             Just ast' -> do
@@ -290,14 +292,14 @@ judgementForHole state nfp range = do
                    $ hypothesisFromBindings rss binds
           cls_hy = contextMethodHypothesis ctx
       case kind of
-        HieFromDisk hf' ->
+        HieFromDisk _hf' ->
           fail "Need a fresh hie file"
         HieFresh ->
           pure ( resulting_range
                , mkFirstJudgement
                    (local_hy <> cls_hy)
                    (isRhsHole rss tcs)
-                   goal
+                   g
                , ctx
                , dflags
                )
@@ -319,29 +321,15 @@ tacticCmd tac state (TacticParams uri range var_name)
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
-        x <- lift $ timeout 2e8 $
-          case runTactic ctx jdg
-                $ tac
-                $ mkVarOcc
-                $ T.unpack var_name of
+
+        x <- lift $ timeout 2e8 $ pure $
+          case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left err ->
-              pure $ Left
-                   $ ResponseError InvalidRequest (T.pack $ show err) Nothing
-            Right rtr -> do
-              traceMX "solns" $ rtr_other_solns rtr
-              traceMX "simplified" $ rtr_extract rtr
-              let g = graftWithoutParentheses (RealSrcSpan span)
-                      -- Parenthesize the extract iff we're not in a top level hole
-                    $ bool maybeParensAST id (_jIsTopHole jdg)
-                    $ rtr_extract rtr
-                  response = transform dflags clientCapabilities uri g pm
-              pure $ case response of
-                Right res -> Right $ Just res
-                Left err -> Left $ ResponseError InternalError (T.pack err) Nothing
-        pure $ case x of
-          Just y -> y
-          Nothing -> Left
-                   $ ResponseError InvalidRequest "timed out" Nothing
+              Left $ mkErr InvalidRequest $ T.pack $ show err
+            Right rtr ->
+              mkWorkspaceEdits rtr jdg span ctx dflags clientCapabilities uri pm
+        pure $ joinNote (mkErr InvalidRequest "timed out") x
+
       case res of
         Left err -> pure $ Left err
         Right medit -> do
@@ -349,11 +337,126 @@ tacticCmd tac state (TacticParams uri range var_name)
             sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
           pure $ Right Null
 tacticCmd _ _ _ =
-  pure $ Left $ ResponseError InvalidRequest (T.pack "Bad URI") Nothing
+  pure $ Left $ mkErr InvalidRequest "Bad URI"
+
+mkErr :: ErrorCode -> T.Text -> ResponseError
+mkErr code err = ResponseError code err Nothing
+
+
+joinNote :: e -> Maybe (Either e a) -> Either e a
+joinNote e Nothing = Left e
+joinNote _ (Just a) = a
+
+
+------------------------------------------------------------------------------
+-- | Turn a 'RunTacticResults' into concrete edits to make in the source
+-- document.
+mkWorkspaceEdits rtr jdg span ctx dflags clientCapabilities uri pm = do
+  let g = graftHole jdg (RealSrcSpan span) ctx rtr
+      response = transform dflags clientCapabilities uri g pm
+   in case response of
+        Right res -> Right $ Just res
+        Left err -> Left $ mkErr InternalError $ T.pack err
+
+
+------------------------------------------------------------------------------
+-- | Graft a 'RunTacticResults' into the correct place in an AST. Correctly
+-- deals with top-level holes, in which we might need to fiddle with the
+-- 'Match's that bind variables.
+graftHole
+  :: Judgement' a2
+  -> SrcSpan
+  -> Context
+  -> RunTacticResults
+  -> Graft (Either String) ParsedSource
+graftHole jdg span ctx rtr
+  | _jIsTopHole jdg
+      = graftSmallestDeclsWithM span
+      $ graftDecl span
+      $ \pats ->
+        splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
+      $ iterateSplit
+      $ mkFirstAgda (fmap unXPat pats)
+      $ unLoc
+      $ rtr_extract rtr
+graftHole jdg span _ rtr
+  = graftWithoutParentheses span
+    -- Parenthesize the extract iff we're not in a top level hole
+  $ bool maybeParensAST id (_jIsTopHole jdg)
+  $ rtr_extract rtr
+
+
+------------------------------------------------------------------------------
+-- | Merge in the 'Match'es of a 'FunBind' into a 'HsDecl'. Used to perform
+-- agda-style case splitting in which we need to separate one 'Match' into
+-- many, without affecting any matches which might exist but don't need to be
+-- split.
+mergeFunBindMatches
+    :: ([Pat GhcPs] -> LHsDecl GhcPs)
+    -> SrcSpan
+    -> HsBind GhcPs
+    -> Either String (HsBind GhcPs)
+mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alts_src alts}}) =
+  pure $
+    fb
+      { fun_matches = mg
+        { mg_alts = L alts_src $ do
+            alt@(L alt_src match) <- alts
+            case span `isSubspanOf` alt_src of
+              True -> do
+                let pats = fmap fromPatCompatPs $ m_pats match
+                    (L _ (ValD _ (FunBind {fun_matches = MG {mg_alts = L _ to_add}}))) =
+                        make_decl pats
+                to_add
+              False -> pure alt
+        }
+      }
+mergeFunBindMatches _ _ _ = Left "mergeFunBindMatches: called on something that isnt a funbind"
+
+
+noteT :: String -> TransformT (Either String) a
+noteT = lift . Left
+
+------------------------------------------------------------------------------
+-- | Helper function to route 'mergeFunBindMatches' into the right place in an
+-- AST --- correctly dealing with inserting into instance declarations.
+graftDecl
+    :: SrcSpan
+    -> ([Pat GhcPs] -> LHsDecl GhcPs)
+    -> LHsDecl GhcPs
+    -> TransformT (Either String) (Maybe [LHsDecl GhcPs])
+graftDecl span
+    make_decl
+    (L src (ValD ext fb))
+  = either noteT (pure . Just . pure . L src . ValD ext) $
+      mergeFunBindMatches make_decl span fb
+-- TODO(sandy): add another case for default methods in class definitions
+graftDecl span
+    make_decl
+    (L src (InstD ext cid@ClsInstD{cid_inst = cidi@ClsInstDecl{cid_sigs = _sigs, cid_binds = binds}}))
+  = do
+      binds' <-
+        for (bagToList binds) $ \b@(L bsrc bind) -> do
+          case bind of
+            fb@FunBind{}
+              | span `isSubspanOf` bsrc -> either noteT (pure . L bsrc) $ mergeFunBindMatches make_decl span fb
+            _ -> pure b
+
+      pure $ Just $ pure $ L src $ InstD ext $ cid
+        { cid_inst = cidi
+          { cid_binds = listToBag binds'
+          }
+        }
+graftDecl span _ x = do
+  traceMX "biggest" $ unsafeRender $ locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
+  traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
+  noteT "graftDecl: don't know about this AST form"
+
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
+
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
@@ -389,7 +492,16 @@ getRhsPosVals rss tcs
   ) tcs
 
 
+locateBiggest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
+locateBiggest ss x = getFirst $ everything (<>)
+  ( mkQ mempty $ \case
+    L span r | ss `isSubspanOf` span -> pure r
+    _ -> mempty
+  )x
 
--- TODO(sandy): Make this more robust
-isHole :: OccName -> Bool
-isHole = isPrefixOf "_" . occNameString
+locateFirst :: (Data r, Data a) => a -> Maybe r
+locateFirst x = getFirst $ everything (<>)
+  ( mkQ mempty $ \case
+    r -> pure r
+  ) x
+

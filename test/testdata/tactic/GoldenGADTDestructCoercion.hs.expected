@@ -5,4 +5,4 @@ data E a b where
   E :: forall a b. (b ~ a, Ord a) => b -> E a [a]
 
 ctxGADT :: E a b -> String
-ctxGADT gadt = case gadt of { (E b) -> _ }
+ctxGADT (E b) = _
