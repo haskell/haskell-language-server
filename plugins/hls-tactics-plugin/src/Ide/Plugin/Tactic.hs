@@ -1,13 +1,8 @@
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE NumDecimals         #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NumDecimals       #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic
@@ -19,7 +14,6 @@ module Ide.Plugin.Tactic
 import           Bag (listToBag, bagToList)
 import           Control.Arrow
 import           Control.Monad
-import           Control.Monad.Error.Class (MonadError(throwError))
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
@@ -46,9 +40,6 @@ import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
 import           Development.Shake (Action)
 import qualified FastString
-import           GHC.Generics (Generic)
-import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
-import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.CaseSplit
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
@@ -57,16 +48,15 @@ import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
-import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
-import           Refinery.Tactic (goal)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
+import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -84,84 +74,12 @@ descriptor plId = (defaultPluginDescriptor plId)
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
 
-------------------------------------------------------------------------------
--- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
--- UI.
-type TacticProvider = DynFlags -> PluginId -> Uri -> Range -> Judgement -> IO [Command |? CodeAction]
-
-
-------------------------------------------------------------------------------
--- | Construct a 'CommandId'
-tcCommandId :: TacticCommand -> CommandId
-tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 
 
 ------------------------------------------------------------------------------
 -- | The name of the command for the LS.
 tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
-
-------------------------------------------------------------------------------
--- | Mapping from tactic commands to their contextual providers. See 'provide',
--- 'filterGoalType' and 'filterBindingType' for the nitty gritty.
-commandProvider :: TacticCommand -> TacticProvider
-commandProvider Auto  = provide Auto ""
-commandProvider Intros =
-  filterGoalType isFunction $
-    provide Intros ""
-commandProvider Destruct =
-  filterBindingType destructFilter $ \occ _ ->
-    provide Destruct $ T.pack $ occNameString occ
-commandProvider Homomorphism =
-  filterBindingType homoFilter $ \occ _ ->
-    provide Homomorphism $ T.pack $ occNameString occ
-commandProvider DestructLambdaCase =
-  requireExtension LambdaCase $
-    filterGoalType (isJust . lambdaCaseable) $
-      provide DestructLambdaCase ""
-commandProvider HomomorphismLambdaCase =
-  requireExtension LambdaCase $
-    filterGoalType ((== Just True) . lambdaCaseable) $
-      provide HomomorphismLambdaCase ""
-
-
-------------------------------------------------------------------------------
--- | A mapping from tactic commands to actual tactics for refinery.
-commandTactic :: TacticCommand -> OccName -> TacticsM ()
-commandTactic Auto         = const auto
-commandTactic Intros       = const intros
-commandTactic Destruct     = useNameFromHypothesis destruct
-commandTactic Homomorphism = useNameFromHypothesis homo
-commandTactic DestructLambdaCase     = const destructLambdaCase
-commandTactic HomomorphismLambdaCase = const homoLambdaCase
-
-
-------------------------------------------------------------------------------
--- | Lift a function over 'HyInfo's to one that takes an 'OccName' and tries to
--- look it up in the hypothesis.
-useNameFromHypothesis :: (HyInfo CType -> TacticsM a) -> OccName -> TacticsM a
-useNameFromHypothesis f name = do
-  hy <- jHypothesis <$> goal
-  case M.lookup name $ hyByName hy of
-    Just hi -> f hi
-    Nothing -> throwError $ NotInScope name
-
-
-
-------------------------------------------------------------------------------
--- | We should show homos only when the goal type is the same as the binding
--- type, and that both are usual algebraic types.
-homoFilter :: Type -> Type -> Bool
-homoFilter (algebraicTyCon -> Just t1) (algebraicTyCon -> Just t2) = t1 == t2
-homoFilter _ _ = False
-
-
-------------------------------------------------------------------------------
--- | We should show destruct for bindings only when those bindings have usual
--- algebraic types.
-destructFilter :: Type -> Type -> Bool
-destructFilter _ (algebraicTyCon -> Just _) = True
-destructFilter _ _ = False
 
 
 runIde :: IdeState -> Action a -> IO a
@@ -182,71 +100,8 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
             range
             jdg
         pure $ Right $ List actions
-codeActionProvider _ _ _ = pure $ Right $ codeActions []
+codeActionProvider _ _ _ = pure $ Right $ List []
 
-
-codeActions :: [CodeAction] -> List (Command |? CodeAction)
-codeActions = List . fmap InR
-
-
-------------------------------------------------------------------------------
--- | Terminal constructor for providing context-sensitive tactics. Tactics
--- given by 'provide' are always available.
-provide :: TacticCommand -> T.Text -> TacticProvider
-provide tc name _ plId uri range _ = do
-  let title = tacticTitle tc name
-      params = TacticParams { tp_file = uri , tp_range = range , tp_var_name = name }
-      cmd = mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
-  pure
-    $ pure
-    $ InR
-    $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing Nothing Nothing
-    $ Just cmd
-
-
-------------------------------------------------------------------------------
--- | Restrict a 'TacticProvider', making sure it appears only when the given
--- predicate holds for the goal.
-requireExtension :: Extension -> TacticProvider -> TacticProvider
-requireExtension ext tp dflags plId uri range jdg =
-  case xopt ext dflags of
-    True  -> tp dflags plId uri range jdg
-    False -> pure []
-
-
-------------------------------------------------------------------------------
--- | Restrict a 'TacticProvider', making sure it appears only when the given
--- predicate holds for the goal.
-filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp dflags plId uri range jdg =
-  case p $ unCType $ jGoal jdg of
-    True  -> tp dflags plId uri range jdg
-    False -> pure []
-
-
-------------------------------------------------------------------------------
--- | Multiply a 'TacticProvider' for each binding, making sure it appears only
--- when the given predicate holds over the goal and binding types.
-filterBindingType
-    :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
-    -> (OccName -> Type -> TacticProvider)
-    -> TacticProvider
-filterBindingType p tp dflags plId uri range jdg =
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
-   in fmap join $ for (unHypothesis hy) $ \hi ->
-        let ty = unCType $ hi_type hi
-         in case p (unCType g) ty of
-              True  -> tp (hi_name hi) ty dflags plId uri range jdg
-              False -> pure []
-
-
-data TacticParams = TacticParams
-    { tp_file :: Uri -- ^ Uri of the file to fill the hole in
-    , tp_range :: Range -- ^ The range of the hole
-    , tp_var_name :: T.Text
-    }
-  deriving (Show, Eq, Generic, ToJSON, FromJSON)
 
 
 ------------------------------------------------------------------------------
