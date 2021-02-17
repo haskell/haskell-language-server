@@ -337,7 +337,7 @@ data Context = Context
   , ctxModuleFuncs :: [(OccName, CType)]
     -- ^ Everything defined in the current module
   }
-  deriving stock (Eq, Ord)
+  deriving stock (Eq, Ord, Show)
 
 
 ------------------------------------------------------------------------------
@@ -374,6 +374,8 @@ data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
   , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
+  , rtr_jdg         :: Judgement
+  , rtr_ctx         :: Context
   } deriving Show
 
 
