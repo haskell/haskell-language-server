@@ -57,7 +57,11 @@ module Development.IDE.Core.Rules(
     getBindingsRule,
     needsCompilationRule,
     generateCoreRule,
-    getImportMapRule
+    getImportMapRule,
+    regenerateHiFile,
+    ghcSessionDepsDefinition,
+    getParsedModuleDefinition,
+    typeCheckRuleDefinition,
     ) where
 
 import Fingerprint
@@ -633,17 +637,7 @@ getDocMapRule =
       (hscEnv -> hsc, _)        <- useWithStale_ GhcSessionDeps file
       (HAR{refMap=rf}, _)       <- useWithStale_ GetHieAst file
 
--- When possible, rely on the haddocks embedded in our interface files
--- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
-#if !defined(GHC_LIB)
-      let parsedDeps = []
-#else
-      deps <- fromMaybe (TransitiveDependencies [] [] []) <$> use GetDependencies file
-      let tdeps = transitiveModuleDeps deps
-      parsedDeps <- uses_ GetParsedModule tdeps
-#endif
-
-      dkMap <- liftIO $ mkDocMap hsc parsedDeps rf tc
+      dkMap <- liftIO $ mkDocMap hsc rf tc
       return ([],Just dkMap)
 
 -- | Persistent rule to ensure that hover doesn't block on startup
@@ -662,7 +656,7 @@ readHieFileForSrcFromDisk file = do
 readHieFileFromDisk :: FilePath -> ExceptT SomeException IdeAction HieFile
 readHieFileFromDisk hie_loc = do
   nc <- asks ideNc
-  log <- asks $ L.logInfo . logger
+  log <- asks $ L.logDebug . logger
   res <- liftIO $ tryAny $ loadHieFile (mkUpdater nc) hie_loc
   liftIO . log $ either (const $ "FAILED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
                         (const $ "SUCCEEDED LOADING HIE FILE FOR:" <> T.pack (show hie_loc))
@@ -835,7 +829,7 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ \GetModIfaceFromDiskAndInd
         Left err -> fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++ displayException err
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
-          L.logInfo (logger se) $ "Re-indexing hie file for" <> T.pack (show f)
+          L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (show f)
           indexHieFile se ms f hash hf
 
   let fp = hiFileFingerPrint x
@@ -921,7 +915,6 @@ generateCoreRule =
 
 getModIfaceRule :: Rules ()
 getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
-#if !defined(GHC_LIB)
   fileOfInterest <- use_ IsFileOfInterest f
   res@(_,(_,mhmi)) <- case fileOfInterest of
     IsFOI status -> do
@@ -948,13 +941,6 @@ getModIfaceRule = defineEarlyCutoff $ \GetModIface f -> do
       compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
       liftIO $ modifyVar_ compiledLinkables $ \old -> pure $ extendModuleEnv old mod time
   pure res
-#else
-    tm <- use_ TypeCheck f
-    hsc <- hscEnv <$> use_ GhcSessionDeps f
-    (diags, !hiFile) <- liftIO $ compileToObjCodeIfNeeded hsc Nothing (error "can't compile with ghc-lib") tm
-    let fp = hiFileFingerPrint <$> hiFile
-    return (fp, (diags, hiFile))
-#endif
 
 getModIfaceWithoutLinkableRule :: Rules ()
 getModIfaceWithoutLinkableRule = defineEarlyCutoff $ \GetModIfaceWithoutLinkable f -> do

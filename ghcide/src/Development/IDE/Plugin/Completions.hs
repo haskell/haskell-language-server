@@ -38,9 +38,9 @@ import Ide.PluginUtils (getClientConfig)
 import Ide.Types
 import TcRnDriver (tcRnImportDecls)
 import Control.Concurrent.Async (concurrently)
-#if defined(GHC_LIB)
-import Development.IDE.Import.DependencyInformation
-#endif
+import GHC.Exts (toList)
+import Development.IDE.GHC.Error (rangeToSrcSpan)
+import Development.IDE.GHC.Util (prettyPrint)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -66,15 +66,6 @@ produceCompletions = do
         ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
         sess <- fmap fst <$> useWithStale GhcSessionDeps file
 
--- When possible, rely on the haddocks embedded in our interface files
--- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
-#if !defined(GHC_LIB)
-        let parsedDeps = []
-#else
-        deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
-        parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps deps)
-#endif
-
         case (ms, sess) of
             (Just (ms,imps), Just sess) -> do
               let env = hscEnv sess
@@ -83,7 +74,7 @@ produceCompletions = do
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod ms) globalEnv inScopeEnv imps parsedDeps
+                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod ms) globalEnv inScopeEnv imps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
@@ -159,13 +150,24 @@ extendImportCommand =
   PluginCommand (CommandId extendImportCommandId) "additional edits for a completion" extendImportHandler
 
 extendImportHandler :: CommandFunction IdeState ExtendImport
-extendImportHandler ideState edit = do
+extendImportHandler ideState edit@ExtendImport {..} = do
   res <- liftIO $ runMaybeT $ extendImportHandler' ideState edit
-  whenJust res $ \wedit ->
+  whenJust res $ \(nfp, wedit@WorkspaceEdit {_changes}) -> do
+    let (_, List (head -> TextEdit {_range})) = fromJust $ _changes >>= listToMaybe . toList
+        srcSpan = rangeToSrcSpan nfp _range
+    LSP.sendNotification SWindowShowMessage $
+      ShowMessageParams MtInfo $
+        "Import "
+          <> maybe ("‘" <> newThing) (\x -> "‘" <> x <> " (" <> newThing <> ")") thingParent
+          <> "’ from "
+          <> importName
+          <> " (at "
+          <> T.pack (prettyPrint srcSpan)
+          <> ")"
     void $ LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 
-extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO WorkspaceEdit
+extendImportHandler' :: IdeState -> ExtendImport -> MaybeT IO (NormalizedFilePath, WorkspaceEdit)
 extendImportHandler' ideState ExtendImport {..}
   | Just fp <- uriToFilePath doc,
     nfp <- toNormalizedFilePath' fp =
@@ -181,7 +183,7 @@ extendImportHandler' ideState ExtendImport {..}
           wantedModule = mkModuleName (T.unpack importName)
           wantedQual = mkModuleName . T.unpack <$> importQual
       imp <- liftMaybe $ find (isWantedModule wantedModule wantedQual) imps
-      liftEither $
+      fmap (nfp,) $ liftEither $
         rewriteToWEdit df doc (annsA ps) $
           extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp
   | otherwise =
