@@ -44,19 +44,20 @@ import           Ide.Plugin.Tactic.CaseSplit
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
 import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.Types
 import           Language.LSP.Server
+import           Language.LSP.Types.Capabilities
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
-import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -206,6 +207,14 @@ joinNote _ (Just a) = a
 ------------------------------------------------------------------------------
 -- | Turn a 'RunTacticResults' into concrete edits to make in the source
 -- document.
+mkWorkspaceEdits
+    :: RunTacticResults
+    -> RealSrcSpan
+    -> DynFlags
+    -> ClientCapabilities
+    -> Uri
+    -> Annotated ParsedSource
+    -> Either ResponseError (Maybe WorkspaceEdit)
 mkWorkspaceEdits rtr span dflags clientCapabilities uri pm = do
   let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags clientCapabilities uri g pm
