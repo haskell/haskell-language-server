@@ -97,11 +97,14 @@ runTactic ctx jdg t =
                 Down $ scoreSolution ext jdg holes
         case sorted of
           (((tr, ext), _) : _) ->
-            Right
-              . RunTacticResults tr (simplify ext)
-              . reverse
-              . fmap fst
-              $ take 5 sorted
+            Right $
+              RunTacticResults
+                { rtr_trace = tr
+                , rtr_extract = simplify ext
+                , rtr_other_solns = reverse . fmap fst $ take 5 sorted
+                , rtr_jdg = jdg
+                , rtr_ctx = ctx
+                }
           -- guaranteed to not be empty
           _ -> Left []
 
