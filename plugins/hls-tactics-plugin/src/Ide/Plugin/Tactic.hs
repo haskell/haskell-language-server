@@ -14,38 +14,25 @@ module Ide.Plugin.Tactic
   ) where
 
 import           Bag (listToBag, bagToList)
-import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Bool (bool)
-import           Data.Coerce
 import           Data.Data (Data)
-import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
-import           Data.Map (Map)
-import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE.Core.PositionMapping
-import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
+import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (RuleResult, Action)
-import qualified FastString
+import           Development.Shake.Classes
 import           Ide.Plugin.Tactic.CaseSplit
-import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.LanguageServer
 import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
@@ -53,14 +40,11 @@ import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.Types
 import           Language.LSP.Server
-import           Language.LSP.Types.Capabilities
 import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
-import           SrcLoc (containsSpan)
 import           System.Timeout
-import           TcRnTypes (tcg_binds)
-import Development.Shake.Classes
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -86,20 +70,6 @@ tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
 
 
-runIde :: IdeState -> Action a -> IO a
-runIde state = runAction "tactic" state
-
-runStaleIde
-    :: forall a r
-     . ( r ~ RuleResult a
-       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
-       , Show r, Typeable r, NFData r
-       )
-    => IdeState
-    -> NormalizedFilePath
-    -> a
-    -> MaybeT IO (r, PositionMapping)
-runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
@@ -117,90 +87,6 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
             jdg
         pure $ Right $ List actions
 codeActionProvider _ _ _ = pure $ Right $ List []
-
-
-
-------------------------------------------------------------------------------
--- | Find the last typechecked module, and find the most specific span, as well
--- as the judgement at the given range.
-judgementForHole
-    :: IdeState
-    -> NormalizedFilePath
-    -> Range
-    -> MaybeT IO (Range, Judgement, Context, DynFlags)
-judgementForHole state nfp range = do
-  (asts, amapping) <- runStaleIde state nfp GetHieAst
-  case asts of
-    HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
-    HAR _ hf _ _ HieFresh -> do
-      (binds, _) <- runStaleIde state nfp GetBindings
-      (tcmod, _) <- runStaleIde state nfp TypeCheck
-      (rss, g)   <- liftMaybe $ getSpanAndTypeAtHole amapping range hf
-      resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-      let (jdg, ctx) = mkJudgementAndContext g binds rss tcmod
-      dflags <- getIdeDynflags state nfp
-      pure (resulting_range, jdg, ctx, dflags)
-
-
-getIdeDynflags
-    :: IdeState
-    -> NormalizedFilePath
-    -> MaybeT IO DynFlags
-getIdeDynflags state nfp = do
-  -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
-  -- which don't change very often.
-  ((modsum,_), _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
-  pure $ ms_hspp_opts modsum
-
-
-getSpanAndTypeAtHole
-    :: PositionMapping
-    -> Range
-    -> HieASTs b
-    -> Maybe (Span, b)
-getSpanAndTypeAtHole amapping range hf = do
-  range' <- fromCurrentRange amapping range
-  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
-    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
-      Nothing -> Nothing
-      Just ast' -> do
-        let info = nodeInfo ast'
-        ty <- listToMaybe $ nodeType info
-        guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
-        pure (nodeSpan ast', ty)
-
-
-mkJudgementAndContext
-    :: Type
-    -> Bindings
-    -> RealSrcSpan
-    -> TcModuleResult
-    -> (Judgement, Context)
-mkJudgementAndContext g binds rss tcmod = do
-      let tcg  = tmrTypechecked tcmod
-          tcs = tcg_binds tcg
-          ctx = mkContext
-                  (mapMaybe (sequenceA . (occName *** coerce))
-                    $ getDefiningBindings binds rss)
-                  tcg
-          top_provs = getRhsPosVals rss tcs
-          local_hy = spliceProvenance top_provs
-                   $ hypothesisFromBindings rss binds
-          cls_hy = contextMethodHypothesis ctx
-       in ( mkFirstJudgement
-              (local_hy <> cls_hy)
-              (isRhsHole rss tcs)
-              g
-          , ctx
-          )
-
-spliceProvenance
-    :: Map OccName Provenance
-    -> Hypothesis a
-    -> Hypothesis a
-spliceProvenance provs x =
-  Hypothesis $ flip fmap (unHypothesis x) $ \hi ->
-    overProvenance (maybe id const $ M.lookup (hi_name hi) provs) hi
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
@@ -355,38 +241,7 @@ fromMaybeT :: Functor m => a -> MaybeT m a -> m a
 fromMaybeT def = fmap (fromMaybe def) . runMaybeT
 
 
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe a = MaybeT $ pure a
 
-
-------------------------------------------------------------------------------
--- | Is this hole immediately to the right of an equals sign?
-isRhsHole :: RealSrcSpan -> TypecheckedSource -> Bool
-isRhsHole rss tcs = everything (||) (mkQ False $ \case
-  TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
-  _ -> False
-  ) tcs
-
-
-------------------------------------------------------------------------------
--- | Compute top-level position vals of a function
-getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Map OccName Provenance
-getRhsPosVals rss tcs
-  = M.fromList
-  $ join
-  $ maybeToList
-  $ getFirst
-  $ everything (<>) (mkQ mempty $ \case
-      TopLevelRHS name ps
-          (L (RealSrcSpan span)  -- body with no guards and a single defn
-            (HsVar _ (L _ hole)))
-        | containsSpan rss span  -- which contains our span
-        , isHole $ occName hole  -- and the span is a hole
-        -> First $ do
-            patnames <- traverse getPatName ps
-            pure $ zip patnames $ [0..] <&> TopLevelArgPrv name
-      _ -> mempty
-  ) tcs
 
 
 locateBiggest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
@@ -394,7 +249,8 @@ locateBiggest ss x = getFirst $ everything (<>)
   ( mkQ mempty $ \case
     L span r | ss `isSubspanOf` span -> pure r
     _ -> mempty
-  )x
+  ) x
+
 
 locateFirst :: (Data r, Data a) => a -> Maybe r
 locateFirst x = getFirst $ everything (<>)
