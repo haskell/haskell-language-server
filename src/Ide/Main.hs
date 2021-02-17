@@ -31,6 +31,7 @@ import HieDb.Run
 import qualified Development.IDE.Main as Main
 import qualified Development.IDE.Types.Options as Ghcide
 import Development.Shake (ShakeOptions(shakeThreads))
+import Data.Default
 
 defaultMain :: Arguments -> IdePlugins IdeState -> IO ()
 defaultMain args idePlugins = do
@@ -55,7 +56,7 @@ defaultMain args idePlugins = do
           dir <- IO.getCurrentDirectory
           dbLoc <- getHieDbLoc dir
           hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-          mlibdir <- setInitialDynFlags
+          mlibdir <- setInitialDynFlags def
           case mlibdir of
             Nothing -> exitWith $ ExitFailure 1
             Just libdir ->
@@ -93,7 +94,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
-    Main.defaultMain Main.defArguments
+    Main.defaultMain def
       { Main.argFiles = if argLSP then Nothing else Just []
       , Main.argsHlsPlugins = idePlugins
       , Main.argsLogger = hlsLogger
