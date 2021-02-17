@@ -58,18 +58,9 @@ descriptor plId = (defaultPluginDescriptor plId)
               (tacticDesc $ tcCommandName tc)
               (tacticCmd $ commandTactic tc))
               [minBound .. maxBound]
-    , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+    , pluginHandlers =
+        mkPluginHandler STextDocumentCodeAction codeActionProvider
     }
-
-
-tacticDesc :: T.Text -> T.Text
-tacticDesc name = "fill the hole using the " <> name <> " tactic"
-
-
-------------------------------------------------------------------------------
--- | The name of the command for the LS.
-tcCommandName :: TacticCommand -> T.Text
-tcCommandName = T.pack . show
 
 
 
@@ -188,22 +179,23 @@ mergeFunBindMatches
     -> SrcSpan
     -> HsBind GhcPs
     -> Either String (HsBind GhcPs)
-mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L alts_src alts}}) =
-  pure $
-    fb
-      { fun_matches = mg
-        { mg_alts = L alts_src $ do
-            alt@(L alt_src match) <- alts
-            case span `isSubspanOf` alt_src of
-              True -> do
-                let pats = fmap fromPatCompatPs $ m_pats match
-                    (L _ (ValD _ (FunBind {fun_matches = MG {mg_alts = L _ to_add}}))) =
-                        make_decl pats
-                to_add
-              False -> pure alt
-        }
+mergeFunBindMatches make_decl span
+    (fb@FunBind {fun_matches = mg@MG {mg_alts = L alts_src alts}}) =
+  pure $ fb
+    { fun_matches = mg
+      { mg_alts = L alts_src $ do
+          alt@(L alt_src match) <- alts
+          case span `isSubspanOf` alt_src of
+            True -> do
+              let pats = fmap fromPatCompatPs $ m_pats match
+                  L _ (ValD _ (FunBind {fun_matches = MG
+                        {mg_alts = L _ to_add}})) = make_decl pats
+              to_add
+            False -> pure alt
       }
-mergeFunBindMatches _ _ _ = Left "mergeFunBindMatches: called on something that isnt a funbind"
+    }
+mergeFunBindMatches _ _ _ =
+  Left "mergeFunBindMatches: called on something that isnt a funbind"
 
 
 throwError :: String -> TransformT (Either String) a
@@ -226,13 +218,16 @@ graftDecl span
 -- TODO(sandy): add another case for default methods in class definitions
 graftDecl span
     make_decl
-    (L src (InstD ext cid@ClsInstD{cid_inst = cidi@ClsInstDecl{cid_sigs = _sigs, cid_binds = binds}}))
+    (L src (InstD ext
+      cid@ClsInstD{cid_inst =
+        cidi@ClsInstDecl{cid_sigs = _sigs, cid_binds = binds}}))
   = do
       binds' <-
         for (bagToList binds) $ \b@(L bsrc bind) -> do
           case bind of
-            fb@FunBind{}
-              | span `isSubspanOf` bsrc -> either throwError (pure . L bsrc) $ mergeFunBindMatches make_decl span fb
+            fb@FunBind{} | span `isSubspanOf` bsrc ->
+              either throwError (pure . L bsrc) $
+                mergeFunBindMatches make_decl span fb
             _ -> pure b
 
       pure $ Just $ pure $ L src $ InstD ext $ cid
@@ -241,8 +236,12 @@ graftDecl span
           }
         }
 graftDecl span _ x = do
-  traceMX "biggest" $ unsafeRender $ locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
-  traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
+  traceMX "biggest" $
+    unsafeRender $
+      locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
+  traceMX "first" $
+    unsafeRender $
+      locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
   throwError "graftDecl: don't know about this AST form"
 
 

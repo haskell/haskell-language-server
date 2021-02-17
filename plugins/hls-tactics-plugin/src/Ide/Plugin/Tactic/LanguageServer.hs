@@ -17,6 +17,7 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Set as S
+import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
@@ -32,12 +33,23 @@ import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
+import           Ide.Plugin.Tactic.TestTypes (TacticCommand)
 import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
 import           TcRnTypes (tcg_binds)
+
+
+tacticDesc :: T.Text -> T.Text
+tacticDesc name = "fill the hole using the " <> name <> " tactic"
+
+
+------------------------------------------------------------------------------
+-- | The name of the command for the LS.
+tcCommandName :: TacticCommand -> T.Text
+tcCommandName = T.pack . show
 
 
 runIde :: IdeState -> Action a -> IO a
