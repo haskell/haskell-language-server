@@ -117,7 +117,10 @@ tacticCmd _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
 
 
-timingOut :: Int -> (Either ResponseError a) -> MaybeT IO (Either ResponseError a)
+timingOut
+    :: Int                     -- ^ Time in microseconds
+    -> Either ResponseError a  -- ^ Computation to run
+    -> MaybeT IO (Either ResponseError a)
 timingOut t m = do
   x <- lift $ timeout t $ evaluate m
   pure $ joinNote (mkErr InvalidRequest "timed out") x
@@ -203,8 +206,8 @@ mergeFunBindMatches make_decl span (fb@FunBind {fun_matches = mg@MG {mg_alts = L
 mergeFunBindMatches _ _ _ = Left "mergeFunBindMatches: called on something that isnt a funbind"
 
 
-noteT :: String -> TransformT (Either String) a
-noteT = lift . Left
+throwError :: String -> TransformT (Either String) a
+throwError = lift . Left
 
 
 ------------------------------------------------------------------------------
@@ -218,7 +221,7 @@ graftDecl
 graftDecl span
     make_decl
     (L src (ValD ext fb))
-  = either noteT (pure . Just . pure . L src . ValD ext) $
+  = either throwError (pure . Just . pure . L src . ValD ext) $
       mergeFunBindMatches make_decl span fb
 -- TODO(sandy): add another case for default methods in class definitions
 graftDecl span
@@ -229,7 +232,7 @@ graftDecl span
         for (bagToList binds) $ \b@(L bsrc bind) -> do
           case bind of
             fb@FunBind{}
-              | span `isSubspanOf` bsrc -> either noteT (pure . L bsrc) $ mergeFunBindMatches make_decl span fb
+              | span `isSubspanOf` bsrc -> either throwError (pure . L bsrc) $ mergeFunBindMatches make_decl span fb
             _ -> pure b
 
       pure $ Just $ pure $ L src $ InstD ext $ cid
@@ -240,7 +243,7 @@ graftDecl span
 graftDecl span _ x = do
   traceMX "biggest" $ unsafeRender $ locateBiggest @(Match GhcPs (LHsExpr GhcPs)) span x
   traceMX "first" $ unsafeRender $ locateFirst @(Match GhcPs (LHsExpr GhcPs)) x
-  noteT "graftDecl: don't know about this AST form"
+  throwError "graftDecl: don't know about this AST form"
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a
