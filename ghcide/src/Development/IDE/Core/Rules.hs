@@ -1080,8 +1080,12 @@ needsCompilationRule = defineEarlyCutoff $ \NeedsCompilation file -> do
         -- How should we compile this module? (assuming we do in fact need to compile it)
         -- Depends on whether it uses unboxed tuples or sums
         this_type
+#if defined(GHC_PATCHED_UNBOXED_BYTECODE)
+          = BCOLinkable
+#else
           | unboxed_tuples_or_sums this = ObjectLinkable
           | otherwise                   = BCOLinkable
+#endif
 
 -- | Tracks which linkables are current, so we don't need to unload them
 newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
