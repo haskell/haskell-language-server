@@ -182,7 +182,7 @@ tacticCmd tac state (TacticParams uri range var_name)
             Left err ->
               Left $ mkErr InvalidRequest $ T.pack $ show err
             Right rtr ->
-              mkWorkspaceEdits rtr jdg span ctx dflags clientCapabilities uri pm
+              mkWorkspaceEdits rtr span dflags clientCapabilities uri pm
         pure $ joinNote (mkErr InvalidRequest "timed out") x
 
       case res of
@@ -206,8 +206,8 @@ joinNote _ (Just a) = a
 ------------------------------------------------------------------------------
 -- | Turn a 'RunTacticResults' into concrete edits to make in the source
 -- document.
-mkWorkspaceEdits rtr jdg span ctx dflags clientCapabilities uri pm = do
-  let g = graftHole jdg (RealSrcSpan span) ctx rtr
+mkWorkspaceEdits rtr span dflags clientCapabilities uri pm = do
+  let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags clientCapabilities uri g pm
    in case response of
         Right res -> Right $ Just res
@@ -219,25 +219,22 @@ mkWorkspaceEdits rtr jdg span ctx dflags clientCapabilities uri pm = do
 -- deals with top-level holes, in which we might need to fiddle with the
 -- 'Match's that bind variables.
 graftHole
-  :: Judgement' a2
-  -> SrcSpan
-  -> Context
-  -> RunTacticResults
-  -> Graft (Either String) ParsedSource
-graftHole jdg span ctx rtr
-  | _jIsTopHole jdg
+    :: SrcSpan
+    -> RunTacticResults
+    -> Graft (Either String) ParsedSource
+graftHole span rtr
+  | _jIsTopHole (rtr_jdg rtr)
       = graftSmallestDeclsWithM span
-      $ graftDecl span
-      $ \pats ->
-        splitToDecl (fst $ last $ ctxDefiningFuncs ctx)
+      $ graftDecl span $ \pats ->
+        splitToDecl (fst $ last $ ctxDefiningFuncs $ rtr_ctx rtr)
       $ iterateSplit
       $ mkFirstAgda (fmap unXPat pats)
       $ unLoc
       $ rtr_extract rtr
-graftHole jdg span _ rtr
+graftHole span rtr
   = graftWithoutParentheses span
     -- Parenthesize the extract iff we're not in a top level hole
-  $ bool maybeParensAST id (_jIsTopHole jdg)
+  $ bool maybeParensAST id (_jIsTopHole $ rtr_jdg rtr)
   $ rtr_extract rtr
 
 
