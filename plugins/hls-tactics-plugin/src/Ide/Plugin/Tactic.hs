@@ -45,6 +45,8 @@ import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           System.Timeout
+import Control.Exception (evaluate)
+import Data.Bifunctor (Bifunctor(bimap))
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -59,16 +61,15 @@ descriptor plId = (defaultPluginDescriptor plId)
     , pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
     }
 
+
 tacticDesc :: T.Text -> T.Text
 tacticDesc name = "fill the hole using the " <> name <> " tactic"
-
 
 
 ------------------------------------------------------------------------------
 -- | The name of the command for the LS.
 tcCommandName :: TacticCommand -> T.Text
 tcCommandName = T.pack . show
-
 
 
 
@@ -98,22 +99,28 @@ tacticCmd tac state (TacticParams uri range var_name)
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
 
-        x <- lift $ timeout 2e8 $ pure $
-          case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
-            Left err ->
-              Left $ mkErr InvalidRequest $ T.pack $ show err
-            Right rtr ->
-              mkWorkspaceEdits rtr span dflags clientCapabilities uri pm
-        pure $ joinNote (mkErr InvalidRequest "timed out") x
+        timingOut 2e8 $ join $
+          bimap (mkErr InvalidRequest . T.pack . show)
+                (mkWorkspaceEdits span dflags clientCapabilities uri pm)
+            $ runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name
 
       case res of
         Left err -> pure $ Left err
         Right medit -> do
           forM_ medit $ \edit ->
-            sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing edit) (\_ -> pure ())
+            sendRequest
+              SWorkspaceApplyEdit
+              (ApplyWorkspaceEditParams Nothing edit)
+              (const $ pure ())
           pure $ Right Null
 tacticCmd _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
+
+
+timingOut :: Int -> (Either ResponseError a) -> MaybeT IO (Either ResponseError a)
+timingOut t m = do
+  x <- lift $ timeout t $ evaluate m
+  pure $ joinNote (mkErr InvalidRequest "timed out") x
 
 
 mkErr :: ErrorCode -> T.Text -> ResponseError
@@ -129,14 +136,14 @@ joinNote _ (Just a) = a
 -- | Turn a 'RunTacticResults' into concrete edits to make in the source
 -- document.
 mkWorkspaceEdits
-    :: RunTacticResults
-    -> RealSrcSpan
+    :: RealSrcSpan
     -> DynFlags
     -> ClientCapabilities
     -> Uri
     -> Annotated ParsedSource
+    -> RunTacticResults
     -> Either ResponseError (Maybe WorkspaceEdit)
-mkWorkspaceEdits rtr span dflags clientCapabilities uri pm = do
+mkWorkspaceEdits span dflags clientCapabilities uri pm rtr = do
   let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags clientCapabilities uri g pm
    in case response of

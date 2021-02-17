@@ -132,7 +132,6 @@ getSpanAndTypeAtHole amapping range hf = do
         pure (nodeSpan ast', ty)
 
 
-
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
 
