@@ -1,8 +1,10 @@
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NumDecimals       #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE NumDecimals         #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
 
 -- | A plugin that uses tactics to synthesize code
 module Ide.Plugin.Tactic
@@ -37,8 +39,8 @@ import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.GHC.ExactPrint
-import           Development.IDE.Spans.LocalBindings (getDefiningBindings)
-import           Development.Shake (Action)
+import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
+import           Development.Shake (RuleResult, Action)
 import qualified FastString
 import           Ide.Plugin.Tactic.CaseSplit
 import           Ide.Plugin.Tactic.Context
@@ -58,6 +60,7 @@ import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
 import           System.Timeout
 import           TcRnTypes (tcg_binds)
+import Development.Shake.Classes
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -85,6 +88,18 @@ tcCommandName = T.pack . show
 
 runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
+
+runStaleIde
+    :: forall a r
+     . ( r ~ RuleResult a
+       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Show r, Typeable r, NFData r
+       )
+    => IdeState
+    -> NormalizedFilePath
+    -> a
+    -> MaybeT IO (r, PositionMapping)
+runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
@@ -114,29 +129,54 @@ judgementForHole
     -> Range
     -> MaybeT IO (Range, Judgement, Context, DynFlags)
 judgementForHole state nfp range = do
-  (asts, amapping) <- MaybeT $ runIde state $ useWithStale GetHieAst nfp
-  range' <- liftMaybe $ fromCurrentRange amapping range
+  (asts, amapping) <- runStaleIde state nfp GetHieAst
+  case asts of
+    HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
+    HAR _ hf _ _ HieFresh -> do
+      (binds, _) <- runStaleIde state nfp GetBindings
+      (tcmod, _) <- runStaleIde state nfp TypeCheck
+      (rss, g)   <- liftMaybe $ getSpanAndTypeAtHole amapping range hf
+      resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
+      let (jdg, ctx) = mkJudgementAndContext g binds rss tcmod
+      dflags <- getIdeDynflags state nfp
+      pure (resulting_range, jdg, ctx, dflags)
 
-  (binds, _) <- MaybeT $ runIde state $ useWithStale GetBindings nfp
 
+getIdeDynflags
+    :: IdeState
+    -> NormalizedFilePath
+    -> MaybeT IO DynFlags
+getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  ((modsum,_), _) <- MaybeT $ runIde state $ useWithStale GetModSummaryWithoutTimestamps nfp
-  let dflags = ms_hspp_opts modsum
+  ((modsum,_), _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
+  pure $ ms_hspp_opts modsum
 
-  case asts of
-    (HAR _ hf _ _ kind) -> do
-      (rss, g) <- liftMaybe $ join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
-          case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
-            Nothing -> Nothing
-            Just ast' -> do
-              let info = nodeInfo ast'
-              ty <- listToMaybe $ nodeType info
-              guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
-              pure (nodeSpan ast', ty)
 
-      resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-      (tcmod, _) <- MaybeT $ runIde state $ useWithStale TypeCheck nfp
+getSpanAndTypeAtHole
+    :: PositionMapping
+    -> Range
+    -> HieASTs b
+    -> Maybe (Span, b)
+getSpanAndTypeAtHole amapping range hf = do
+  range' <- fromCurrentRange amapping range
+  join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
+    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
+      Nothing -> Nothing
+      Just ast' -> do
+        let info = nodeInfo ast'
+        ty <- listToMaybe $ nodeType info
+        guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
+        pure (nodeSpan ast', ty)
+
+
+mkJudgementAndContext
+    :: Type
+    -> Bindings
+    -> RealSrcSpan
+    -> TcModuleResult
+    -> (Judgement, Context)
+mkJudgementAndContext g binds rss tcmod = do
       let tcg  = tmrTypechecked tcmod
           tcs = tcg_binds tcg
           ctx = mkContext
@@ -147,18 +187,12 @@ judgementForHole state nfp range = do
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
           cls_hy = contextMethodHypothesis ctx
-      case kind of
-        HieFromDisk _hf' ->
-          fail "Need a fresh hie file"
-        HieFresh ->
-          pure ( resulting_range
-               , mkFirstJudgement
-                   (local_hy <> cls_hy)
-                   (isRhsHole rss tcs)
-                   g
-               , ctx
-               , dflags
-               )
+       in ( mkFirstJudgement
+              (local_hy <> cls_hy)
+              (isRhsHole rss tcs)
+              g
+          , ctx
+          )
 
 spliceProvenance
     :: Map OccName Provenance
@@ -194,6 +228,7 @@ tacticCmd tac state (TacticParams uri range var_name)
           pure $ Right Null
 tacticCmd _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
+
 
 mkErr :: ErrorCode -> T.Text -> ResponseError
 mkErr code err = ResponseError code err Nothing
@@ -277,6 +312,7 @@ mergeFunBindMatches _ _ _ = Left "mergeFunBindMatches: called on something that 
 
 noteT :: String -> TransformT (Either String) a
 noteT = lift . Left
+
 
 ------------------------------------------------------------------------------
 -- | Helper function to route 'mergeFunBindMatches' into the right place in an
