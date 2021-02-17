@@ -1,4 +1,3 @@
 fmapBoth :: (Functor f, Functor g) => (a -> b) -> (f a, g a) -> (f b, g b)
-fmapBoth = \ fab p_faga
-  -> case p_faga of { (fa, ga) -> (fmap fab fa, fmap fab ga) }
+fmapBoth fab (fa, ga) = (fmap fab fa, fmap fab ga)
 
