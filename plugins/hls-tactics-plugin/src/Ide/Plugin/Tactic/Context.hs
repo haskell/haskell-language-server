@@ -7,8 +7,6 @@ import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.List
-import           Data.Map (Map)
-import qualified Data.Map as M
 import           Data.Maybe (mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
@@ -20,16 +18,18 @@ import           OccName
 import           TcRnTypes
 import           TcType (substTy, tcSplitSigmaTy)
 import           Unify (tcUnifyTy)
+import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
 
 
-mkContext :: [(OccName, CType)] -> TcGblEnv -> Context
-mkContext locals tcg = Context
+mkContext :: FeatureSet -> [(OccName, CType)] -> TcGblEnv -> Context
+mkContext features locals tcg = Context
   { ctxDefiningFuncs = locals
   , ctxModuleFuncs = fmap splitId
                    . (getFunBindId =<<)
                    . fmap unLoc
                    . bagToList
                    $ tcg_binds tcg
+  , ctxFeatureSet = features
   }
 
 
