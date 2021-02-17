@@ -4,6 +4,6 @@ data MyRecord a = Record
     }
 
 blah :: (a -> Int) -> a -> MyRecord a
-blah = \ fai a -> Record {field1 = a, field2 = fai a}
+blah fai a = Record {field1 = a, field2 = fai a}
 
 

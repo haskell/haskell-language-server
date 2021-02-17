@@ -1,5 +1,3 @@
 fromMaybe :: a -> Maybe a -> a
-fromMaybe = \ a ma
-  -> case ma of
-       Nothing -> a
-       (Just a2) -> a2
+fromMaybe a Nothing = a
+fromMaybe _ (Just a2) = a2
