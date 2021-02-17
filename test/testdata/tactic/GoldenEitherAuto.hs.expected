@@ -1,5 +1,3 @@
 either' :: (a -> c) -> (b -> c) -> Either a b -> c
-either' = \ fac fbc eab
-  -> case eab of
-       (Left a) -> fac a
-       (Right b) -> fbc b
+either' fac _ (Left a) = fac a
+either' _ fbc (Right b) = fbc b

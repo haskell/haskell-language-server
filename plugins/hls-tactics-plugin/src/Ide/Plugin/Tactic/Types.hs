@@ -72,6 +72,9 @@ instance Show Class where
 instance Show (HsExpr GhcPs) where
   show  = unsafeRender
 
+instance Show (Pat GhcPs) where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
@@ -372,3 +375,11 @@ data RunTacticResults = RunTacticResults
   , rtr_extract     :: LHsExpr GhcPs
   , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
   } deriving Show
+
+
+data AgdaMatch = AgdaMatch
+  { amPats :: [Pat GhcPs]
+  , amBody :: HsExpr GhcPs
+  }
+  deriving (Show)
+

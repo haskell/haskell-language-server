@@ -365,6 +365,7 @@ executable haskell-language-server-wrapper
     ghc-options: -Werror
 
   build-depends:
+    , data-default
     , ghc
     , ghc-paths
     , ghcide

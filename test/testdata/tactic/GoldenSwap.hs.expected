@@ -1,2 +1,2 @@
 swap :: (a, b) -> (b, a)
-swap = \ p_ab -> case p_ab of { (a, b) -> (b, a) }
+swap (a, b) = (b, a)
