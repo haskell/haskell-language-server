@@ -1,4 +1,4 @@
-name: Nix
+name: HaskellNix
 
 on: [pull_request]
 jobs:
