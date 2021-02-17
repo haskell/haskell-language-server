@@ -12,6 +12,8 @@ pull_request_rules:
 
   - status-success=nix (default, ubuntu-latest)
   - status-success=nix (default, macOS-latest)
+  - status-success=haskell-nix (default, ubuntu-latest)
+  - status-success=haskell-nix (default, macOS-latest)
 
   - status-success=test (8.10.4, ubuntu-latest)
   - status-success=test (8.10.4, macOS-latest)
