@@ -7,6 +7,7 @@ module Ide.Plugin.Tactic.FeatureSet
   , FeatureSet
   , hasFeature
   , defaultFeatures
+  , allFeatures
   , parseFeatureSet
   , prettyFeatureSet
   ) where

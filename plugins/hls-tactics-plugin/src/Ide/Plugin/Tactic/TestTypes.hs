@@ -3,6 +3,8 @@
 module Ide.Plugin.Tactic.TestTypes where
 
 import qualified Data.Text as T
+import Data.Aeson
+import Ide.Plugin.Tactic.FeatureSet
 
 ------------------------------------------------------------------------------
 -- | The list of tactics exposed to the outside world. These are attached to
@@ -25,3 +27,24 @@ tacticTitle Destruct var = "Case split on " <> var
 tacticTitle Homomorphism var = "Homomorphic case split on " <> var
 tacticTitle DestructLambdaCase _ = "Lambda case split"
 tacticTitle HomomorphismLambdaCase _ = "Homomorphic lambda case split"
+
+
+------------------------------------------------------------------------------
+-- | Plugin configuration for tactics
+newtype Config = Config
+  { cfg_feature_set :: FeatureSet
+  }
+
+emptyConfig :: Config
+emptyConfig = Config defaultFeatures
+
+instance ToJSON Config where
+  toJSON (Config features) = object
+    [ "features" .= prettyFeatureSet features
+    ]
+
+instance FromJSON Config where
+  parseJSON = withObject "Config" $ \obj -> do
+    features <- parseFeatureSet <$> obj .: "features"
+    pure $ Config features
+

@@ -9,6 +9,8 @@ module Ide.Plugin.Tactic.LanguageServer where
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans.Maybe
+import           Data.Aeson (Value(Object), fromJSON)
+import           Data.Aeson.Types (Result(Success, Error))
 import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
@@ -30,24 +32,22 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import           Development.Shake (RuleResult, Action)
 import           Development.Shake.Classes
 import qualified FastString
+import           Ide.Plugin.Config (PluginConfig(plcConfig))
+import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.TestTypes (TacticCommand)
+import           Ide.Plugin.Tactic.TestTypes (cfg_feature_set, TacticCommand)
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils (getPluginConfig)
+import           Language.LSP.Server (MonadLsp)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
 import           TcRnTypes (tcg_binds)
-import Ide.Plugin.Config (PluginConfig(plcConfig))
-import qualified Ide.Plugin.Config as Plugin
-import Data.Aeson (Value(Object), fromJSON)
-import Data.Aeson.Types (Result(Success, Error))
-import Language.LSP.Server (MonadLsp)
 
 
 tacticDesc :: T.Text -> T.Text

@@ -388,23 +388,3 @@ data AgdaMatch = AgdaMatch
   }
   deriving (Show)
 
-
-------------------------------------------------------------------------------
--- | Plugin configuration for tactics
-newtype Config = Config
-  { cfg_feature_set :: FeatureSet
-  }
-
-emptyConfig :: Config
-emptyConfig = Config defaultFeatures
-
-instance ToJSON Config where
-  toJSON (Config features) = object
-    [ "features" .= prettyFeatureSet features
-    ]
-
-instance FromJSON Config where
-  parseJSON = withObject "Config" $ \obj -> do
-    features <- parseFeatureSet <$> obj .: "features"
-    pure $ Config features
-
