@@ -72,6 +72,9 @@ instance Show Class where
 instance Show (HsExpr GhcPs) where
   show  = unsafeRender
 
+instance Show (Pat GhcPs) where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
@@ -334,7 +337,7 @@ data Context = Context
   , ctxModuleFuncs :: [(OccName, CType)]
     -- ^ Everything defined in the current module
   }
-  deriving stock (Eq, Ord)
+  deriving stock (Eq, Ord, Show)
 
 
 ------------------------------------------------------------------------------
@@ -371,4 +374,14 @@ data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
   , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
+  , rtr_jdg         :: Judgement
+  , rtr_ctx         :: Context
   } deriving Show
+
+
+data AgdaMatch = AgdaMatch
+  { amPats :: [Pat GhcPs]
+  , amBody :: HsExpr GhcPs
+  }
+  deriving (Show)
+
