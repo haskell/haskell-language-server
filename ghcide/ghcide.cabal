@@ -27,6 +27,11 @@ source-repository head
     type:     git
     location: https://github.com/haskell/ghcide.git
 
+flag ghc-patched-unboxed-bytecode
+    description: The GHC version we link against supports unboxed sums and tuples in bytecode
+    default:     False
+    manual:      True
+
 library
     default-language:   Haskell2010
     build-depends:
@@ -189,6 +194,9 @@ library
         Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
     ghc-options: -Wall -Wno-name-shadowing -Wincomplete-uni-patterns -Wno-unticked-promoted-constructors
+
+    if flag(ghc-patched-unboxed-bytecode)
+      cpp-options: -DGHC_PATCHED_UNBOXED_BYTECODE
 
 executable ghcide-test-preprocessor
     default-language: Haskell2010
