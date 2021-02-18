@@ -48,7 +48,6 @@ import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           System.Timeout
-import Ide.PluginUtils (getPluginConfig)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -103,10 +102,6 @@ tacticCmd tac state (TacticParams uri range var_name)
       case res of
         Left err -> pure $ Left err
         Right medit -> do
-          config <- getConfig
-          traceMX "config" config
-          config2 <- getPluginConfig "tactics"
-          traceMX "plugin config" config2
           forM_ medit $ \edit ->
             sendRequest
               SWorkspaceApplyEdit
@@ -164,7 +159,6 @@ graftHole
     -> Graft (Either String) ParsedSource
 graftHole span rtr
   | _jIsTopHole (rtr_jdg rtr)
-  , hasFeature FeatureAgdaSplit (ctxFeatureSet (rtr_ctx rtr))
       = graftSmallestDeclsWithM span
       $ graftDecl span $ \pats ->
         splitToDecl (fst $ last $ ctxDefiningFuncs $ rtr_ctx rtr)
