@@ -33,14 +33,13 @@ import Development.IDE.GHC.Orphans ()
 import Development.IDE.Types.Location
 import GHC.Generics
 import Ide.Plugin.Tactic.Debug
+import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
 import OccName
 import Refinery.Tactic
 import System.IO.Unsafe (unsafePerformIO)
 import Type
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
-import Ide.Plugin.Tactic.FeatureSet (defaultFeatures, FeatureSet, prettyFeatureSet, parseFeatureSet)
-import Data.Aeson
 
 
 ------------------------------------------------------------------------------
