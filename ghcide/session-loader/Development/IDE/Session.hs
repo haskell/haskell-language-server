@@ -123,7 +123,7 @@ getInitialGhcLibDirDefault = do
         hPutStrLn stderr $ "Couldn't load cradle for libdir: " ++ show (err,dir,hieYaml,cradle)
         pure Nothing
       CradleNone -> do
-        hPutStrLn stderr $ "Couldn't load cradle (CradleNone)"
+        hPutStrLn stderr "Couldn't load cradle (CradleNone)"
         pure Nothing
 
 -- | Sets `unsafeGlobalDynFlags` on using the hie-bios cradle and returns the GHC libdir

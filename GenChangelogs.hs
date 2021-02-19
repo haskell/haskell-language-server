@@ -24,7 +24,7 @@ main = do
 
   prs <- github' $ pullRequestsForR "haskell" "haskell-language-server" stateClosed FetchAll
   let prsAfterLastTag = either (error . show)
-                        (foldMap (\pr -> if inRange pr then [pr] else []))
+                        (foldMap (\pr -> [pr | inRange pr]))
                         prs
       inRange pr
         | Just mergedDate <- simplePullRequestMergedAt pr = mergedDate > lastDate

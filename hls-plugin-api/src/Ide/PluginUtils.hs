@@ -135,7 +135,7 @@ clientSupportsDocumentChanges caps =
         WorkspaceEditClientCapabilities mDc _ _ <- _workspaceEdit wCaps
         mDc
   in
-    fromMaybe False supports
+    Just True == supports
 
 -- ---------------------------------------------------------------------
 
@@ -214,7 +214,7 @@ allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
 
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]
-allLspCmdIds pid commands = concat $ map go commands
+allLspCmdIds pid commands = concatMap go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 

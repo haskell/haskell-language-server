@@ -25,7 +25,7 @@ printInStars = liftIO . putStrLn . embedInStars
 
 -- | Trim whitespace of both ends of a string
 trim :: String -> String
-trim = dropWhileEnd isSpace . dropWhile isSpace
+trim = trimEnd . trimStart
 
 -- | Trim the whitespace of the stdout of a command
 trimmedStdout :: Stdout String -> String
