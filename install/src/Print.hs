@@ -2,8 +2,8 @@ module Print where
 
 import           Development.Shake
 import           Control.Monad.IO.Class
-import           Data.List                                ( dropWhileEnd
-                                                          )
+import           Data.List                                ( dropWhileEnd )
+import           Data.List.Extra                          ( trimStart, trimEnd )
 import           Data.Char                                ( isSpace )
 
 -- | lift putStrLn to MonadIO
