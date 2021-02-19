@@ -3,7 +3,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE GADTs #-}
 
 module Progress (tests) where
@@ -106,9 +105,9 @@ expectProgressReports xs = expectProgressReports' [] xs
                 EndM msg -> do
                     liftIO $ token msg `expectElem` tokens
                     expectProgressReports' (delete (token msg) tokens) expectedTitles
-    title msg = msg ^. L.value ^. L.title
+    title msg = msg ^. L.value . L.title
     token msg = msg ^. L.token
-    create = CreateM . view L.params <$> (message SWindowWorkDoneProgressCreate)
+    create = CreateM . view L.params <$> message SWindowWorkDoneProgressCreate
     begin = BeginM <$> satisfyMaybe (\case
       FromServerMess SProgress (NotificationMessage _ _ (ProgressParams t (Begin x))) -> Just (ProgressParams t x)
       _ -> Nothing)
