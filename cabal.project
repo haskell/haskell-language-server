@@ -24,7 +24,7 @@ package ghcide
 
 write-ghc-environment-files: never
 
-index-state: 2021-02-15T19:02:22Z
+index-state: 2021-02-18T16:01:39Z
 
 allow-newer:
 	active:base,
