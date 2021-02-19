@@ -278,7 +278,7 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
         in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd)
 
     applyOneActions :: [LSP.CodeAction]
-    applyOneActions = catMaybes $ map mkHlintAction (filter validCommand diags)
+    applyOneActions = mapMaybe mkHlintAction (filter validCommand diags)
 
     -- |Some hints do not have an associated refactoring
     validCommand (LSP.Diagnostic _ _ (Just (InR code)) (Just "hlint") _ _ _) =

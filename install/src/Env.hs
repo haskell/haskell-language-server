@@ -54,7 +54,7 @@ findInstalledGhcs = do
     -- sort by version to make it coherent with getHlsVersions
     $ sortBy (comparing fst)
     -- nub by version. knownGhcs takes precedence.
-    $ nubBy ((==) `on` fst)
+    $ nubOrdBy (compare `on` fst)
     -- filter out stack provided GHCs (assuming that stack programs path is the default one in linux)
     $ filter (not . isInfixOf ".stack" . snd) (knownGhcs ++ availableGhcs)
 

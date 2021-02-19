@@ -1,5 +1,4 @@
-import Data.Char
-import Data.List
+import Data.List.Extra (trimEnd)
 import Data.Maybe
 import Test.Hls.Util
 import Test.Tasty
@@ -23,7 +22,7 @@ projectGhcVersionTests = testGroup "--project-ghc-version"
   , testCase "stack with ghc 8.8.3" $
       testDir "test/wrapper/testdata/stack-8.8.3" "8.8.3"
   , testCase "cabal with global ghc" $ do
-      ghcVer <- trim <$> readProcess "ghc" ["--numeric-version"] ""
+      ghcVer <- trimEnd <$> readProcess "ghc" ["--numeric-version"] ""
       testDir "test/wrapper/testdata/cabal-cur-ver" ghcVer
   ]
 
@@ -32,8 +31,5 @@ testDir dir expectedVer =
   withCurrentDirectoryInTmp dir $ do
     testExe <- fromMaybe "haskell-language-server-wrapper"
       <$> lookupEnv "HLS_WRAPPER_TEST_EXE"
-    actualVer <- trim <$> readProcess testExe ["--project-ghc-version"] ""
+    actualVer <- trimEnd <$> readProcess testExe ["--project-ghc-version"] ""
     actualVer @?= expectedVer
-
-trim :: String -> String
-trim = dropWhileEnd isSpace

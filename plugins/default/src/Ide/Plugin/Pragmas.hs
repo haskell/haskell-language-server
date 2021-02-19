@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ViewPatterns          #-}
@@ -12,6 +10,7 @@ module Ide.Plugin.Pragmas
 
 import           Control.Lens                    hiding (List)
 import qualified Data.HashMap.Strict             as H
+import           Data.Maybe                      (catMaybes)
 import qualified Data.Text                       as T
 import           Development.IDE                 as D
 import           Ide.Types
@@ -78,7 +77,7 @@ codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContex
             disabled
               | Just dynFlags <- mDynflags
                 -- GHC does not export 'OnOff', so we have to view it as string
-              = [ e | Just e <- T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags]
+              = catMaybes $ T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags
               | otherwise
                 -- When the module failed to parse, we don't have access to its
                 -- dynFlags. In that case, simply don't disable any pragmas.
