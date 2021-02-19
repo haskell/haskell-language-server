@@ -29,6 +29,7 @@ library
     Ide.Plugin.Tactic.CodeGen.Utils
     Ide.Plugin.Tactic.Context
     Ide.Plugin.Tactic.Debug
+    Ide.Plugin.Tactic.FeatureSet
     Ide.Plugin.Tactic.GHC
     Ide.Plugin.Tactic.Judgements
     Ide.Plugin.Tactic.KnownStrategies

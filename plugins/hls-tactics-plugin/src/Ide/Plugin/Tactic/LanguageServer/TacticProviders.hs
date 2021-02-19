@@ -21,9 +21,10 @@ import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.GHC.Compat
-import           GHC.Generics (Generic)
+import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin.Tactic.Auto
+import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Tactics
@@ -77,6 +78,7 @@ commandProvider HomomorphismLambdaCase =
 -- UI.
 type TacticProvider
      = DynFlags
+    -> FeatureSet
     -> PluginId
     -> Uri
     -> Range
@@ -95,11 +97,20 @@ data TacticParams = TacticParams
 
 ------------------------------------------------------------------------------
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
+-- 'Feature' is in the feature set.
+requireFeature :: Feature -> TacticProvider -> TacticProvider
+requireFeature f tp dflags fs plId uri range jdg = do
+  guard $ hasFeature f fs
+  tp dflags fs plId uri range jdg
+
+
+------------------------------------------------------------------------------
+-- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 requireExtension :: Extension -> TacticProvider -> TacticProvider
-requireExtension ext tp dflags plId uri range jdg =
+requireExtension ext tp dflags fs plId uri range jdg =
   case xopt ext dflags of
-    True  -> tp dflags plId uri range jdg
+    True  -> tp dflags fs plId uri range jdg
     False -> pure []
 
 
@@ -107,9 +118,9 @@ requireExtension ext tp dflags plId uri range jdg =
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp dflags plId uri range jdg =
+filterGoalType p tp dflags fs plId uri range jdg =
   case p $ unCType $ jGoal jdg of
-    True  -> tp dflags plId uri range jdg
+    True  -> tp dflags fs plId uri range jdg
     False -> pure []
 
 
@@ -120,13 +131,13 @@ filterBindingType
     :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
-filterBindingType p tp dflags plId uri range jdg =
+filterBindingType p tp dflags fs plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
    in fmap join $ for (unHypothesis hy) $ \hi ->
         let ty = unCType $ hi_type hi
          in case p (unCType g) ty of
-              True  -> tp (hi_name hi) ty dflags plId uri range jdg
+              True  -> tp (hi_name hi) ty dflags fs plId uri range jdg
               False -> pure []
 
 
@@ -146,7 +157,7 @@ useNameFromHypothesis f name = do
 -- | Terminal constructor for providing context-sensitive tactics. Tactics
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
-provide tc name _ plId uri range _ = do
+provide tc name _ _ plId uri range _ = do
   let title = tacticTitle tc name
       params = TacticParams { tp_file = uri , tp_range = range , tp_var_name = name }
       cmd = mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])

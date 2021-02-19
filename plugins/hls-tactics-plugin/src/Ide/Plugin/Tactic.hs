@@ -33,6 +33,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Development.Shake.Classes
 import           Ide.Plugin.Tactic.CaseSplit
+import           Ide.Plugin.Tactic.FeatureSet (hasFeature, Feature (..))
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.LanguageServer
 import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
@@ -66,13 +67,15 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri =
+  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      features <- getFeatureSet
       liftIO $ fromMaybeT (Right $ List []) $ do
-        (_, jdg, _, dflags) <- judgementForHole state nfp range
+        (_, jdg, _, dflags) <- judgementForHole state nfp range features
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound]
             dflags
+            features
             plId
             uri
             range
@@ -84,9 +87,10 @@ codeActionProvider _ _ _ = pure $ Right $ List []
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
 tacticCmd tac state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+      features <- getFeatureSet
       ccs <- getClientCapabilities
       res <- liftIO $ fromMaybeT (Right Nothing) $ do
-        (range', jdg, ctx, dflags) <- judgementForHole state nfp range
+        (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -8,6 +9,8 @@ module Ide.Plugin.Tactic.LanguageServer where
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans.Maybe
+import           Data.Aeson (Value(Object), fromJSON)
+import           Data.Aeson.Types (Result(Success, Error))
 import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
@@ -29,12 +32,17 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import           Development.Shake (RuleResult, Action)
 import           Development.Shake.Classes
 import qualified FastString
+import           Ide.Plugin.Config (PluginConfig(plcConfig))
+import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Tactic.Context
+import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.TestTypes (TacticCommand)
+import           Ide.Plugin.Tactic.TestTypes (cfg_feature_set, TacticCommand)
 import           Ide.Plugin.Tactic.Types
+import           Ide.PluginUtils (getPluginConfig)
+import           Language.LSP.Server (MonadLsp)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
@@ -69,6 +77,16 @@ runStaleIde
 runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 
+------------------------------------------------------------------------------
+-- | Get the current feature set from the plugin config.
+getFeatureSet :: MonadLsp Plugin.Config m => m FeatureSet
+getFeatureSet = do
+  pcfg <- getPluginConfig "tactics"
+  pure $ case fromJSON $ Object $ plcConfig pcfg of
+    Success cfg -> cfg_feature_set cfg
+    Error _     -> defaultFeatures
+
+
 getIdeDynflags
     :: IdeState
     -> NormalizedFilePath
@@ -87,8 +105,9 @@ judgementForHole
     :: IdeState
     -> NormalizedFilePath
     -> Range
+    -> FeatureSet
     -> MaybeT IO (Range, Judgement, Context, DynFlags)
-judgementForHole state nfp range = do
+judgementForHole state nfp range features = do
   (asts, amapping) <- runStaleIde state nfp GetHieAst
   case asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
@@ -97,21 +116,22 @@ judgementForHole state nfp range = do
       (tcmod, _) <- runStaleIde state nfp TypeCheck
       (rss, g)   <- liftMaybe $ getSpanAndTypeAtHole amapping range hf
       resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-      let (jdg, ctx) = mkJudgementAndContext g binds rss tcmod
+      let (jdg, ctx) = mkJudgementAndContext features g binds rss tcmod
       dflags <- getIdeDynflags state nfp
       pure (resulting_range, jdg, ctx, dflags)
 
 
 mkJudgementAndContext
-    :: Type
+    :: FeatureSet
+    -> Type
     -> Bindings
     -> RealSrcSpan
     -> TcModuleResult
     -> (Judgement, Context)
-mkJudgementAndContext g binds rss tcmod = do
+mkJudgementAndContext features g binds rss tcmod = do
       let tcg  = tmrTypechecked tcmod
           tcs = tcg_binds tcg
-          ctx = mkContext
+          ctx = mkContext features
                   (mapMaybe (sequenceA . (occName *** coerce))
                     $ getDefiningBindings binds rss)
                   tcg
