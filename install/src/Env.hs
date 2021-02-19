@@ -20,6 +20,7 @@ import           Data.List                                ( sort
                                                           , isInfixOf
                                                           , nubBy
                                                           )
+import           Data.List.Extra                          ( nubOrdBy )
 import           Data.Ord                                 ( comparing )
 import           Control.Monad.Extra                      ( mapMaybeM )
 
