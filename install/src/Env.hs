@@ -18,8 +18,8 @@ import           Data.Function                            ( (&)
 import           Data.List                                ( sort
                                                           , sortBy
                                                           , isInfixOf
-                                                          , nubBy
                                                           )
+import           Data.List.Extra                          ( nubOrdBy )
 import           Data.Ord                                 ( comparing )
 import           Control.Monad.Extra                      ( mapMaybeM )
 
