@@ -1,7 +1,7 @@
 cabal-version:      2.2
 category:           Development
 name:               haskell-language-server
-version:            0.9.0.0
+version:            1.0.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
