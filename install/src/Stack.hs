@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 module Stack where
 
+import           Data.List.Extra                          ( trim )
 import           Development.Shake
 import           Development.Shake.FilePath
 import           Control.Monad

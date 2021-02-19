@@ -3,7 +3,7 @@ module Print where
 import           Development.Shake
 import           Control.Monad.IO.Class
 import           Data.List                                ( dropWhileEnd )
-import           Data.List.Extra                          ( trimStart, trimEnd )
+import           Data.List.Extra                          ( trim )
 import           Data.Char                                ( isSpace )
 
 -- | lift putStrLn to MonadIO
@@ -21,11 +21,6 @@ embedInStars str =
 
 printInStars :: MonadIO m => String -> m ()
 printInStars = liftIO . putStrLn . embedInStars
-
-
--- | Trim whitespace of both ends of a string
-trim :: String -> String
-trim = trimEnd . trimStart
 
 -- | Trim the whitespace of the stdout of a command
 trimmedStdout :: Stdout String -> String

@@ -19,7 +19,9 @@ import           Data.List                                ( sort
                                                           , sortBy
                                                           , isInfixOf
                                                           )
-import           Data.List.Extra                          ( nubOrdBy )
+import           Data.List.Extra                          ( nubOrdBy
+                                                          , trim
+                                                          )
 import           Data.Ord                                 ( comparing )
 import           Control.Monad.Extra                      ( mapMaybeM )
 
