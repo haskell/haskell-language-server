@@ -154,7 +154,7 @@ mkTest name fp line col ts =
     for_ ts $ \(f, tc, var) -> do
       let title = tacticTitle tc var
       liftIO $
-        f (elem title titles)
+        f (title `elem` titles)
           @? ("Expected a code action with title " <> T.unpack title)
 
 

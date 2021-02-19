@@ -44,7 +44,7 @@ provider ideState typ contents fp _ = withIndefiniteProgress title Cancellable $
       let
         pp =
           let p = D.sPgm_F $ D.settings df
-          in  if null p then [] else ["-pgmF=" <> p]
+          in  ["-pgmF=" <> p | not (null p)]
         pm = map (("-fplugin=" <>) . moduleNameString) $ D.pluginModNames df
         ex = map showExtension $ S.toList $ D.extensionFlags df
       in

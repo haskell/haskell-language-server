@@ -25,7 +25,7 @@ tests = testGroup "references" [
             , mkRange 4 14 4 17
             , mkRange 4 0 4 3
             , mkRange 2 6 2 9
-            ] `isInfixOf` (coerce refs) @? "Contains references"
+            ] `isInfixOf` coerce refs @? "Contains references"
     -- TODO: Respect withDeclaration parameter
     -- ignoreTestBecause "Broken" $ testCase "works without definitions" $ runSession hlsCommand fullCaps "test/testdata" $ do
     --   doc <- openDoc "References.hs" "haskell"
