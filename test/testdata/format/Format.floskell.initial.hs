@@ -1,8 +1,8 @@
 module Format where
 
-import           Data.Int
 import           Data.List
 import           Prelude
+import           Data.Int
 
 foo :: Int -> Int
 foo 3 = 2
@@ -14,3 +14,4 @@ bar s = do
   return "asdf"
 
 data Baz = Baz { a :: Int, b :: String }
+
