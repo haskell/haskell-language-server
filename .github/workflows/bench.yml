@@ -127,6 +127,13 @@ jobs:
            ghcide/bench-results/results.*
            ghcide/bench-results/**/*.csv
            ghcide/bench-results/**/*.svg
-           ghcide/bench-results/**/*.eventlog
            ghcide/bench-results/**/*.eventlog.html
+
+    - name: Archive benchmark logs
+      uses: actions/upload-artifact@v2
+      with:
+        name: bench-logs-${{ runner.os }}-${{ matrix.ghc }}
+        path: |
+           ghcide/bench-results/**/*.log
+           ghcide/bench-results/**/*.eventlog
            ghcide/bench-results/**/*.hp
