@@ -1,6 +1,6 @@
 { sources ? import ./sources.nix }:
 let
-  nix-pre-commit-hooks = import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/master");
+  nix-pre-commit-hooks = (import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/master/" + "/nix/") { sources = sources; }).packages;
   overlay = _self: pkgs:
     let sharedOverrides = {
         overrides = _self: super: {
