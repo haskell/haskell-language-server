@@ -110,10 +110,10 @@ findPragma str = concatMap check possiblePragmas
     -- extension in an error message.
     possiblePragmas :: [T.Text]
     possiblePragmas =
-      [ name
-        | FlagSpec {flagSpecName = T.pack -> name} <- xFlags,
-          "Strict" /= name
-      ]
+       [ name
+       | FlagSpec{flagSpecName = T.pack -> name} <- xFlags
+       , "Strict" /= name
+       ]
 
 -- | All language pragmas, including the No- variants
 allPragmas :: [T.Text]
