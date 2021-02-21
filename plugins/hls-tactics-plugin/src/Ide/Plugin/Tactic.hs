@@ -13,27 +13,29 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
-import           Bag (listToBag, bagToList)
-import           Control.Exception (evaluate)
+import           Bag                                              (bagToList,
+                                                                   listToBag)
+import           Control.Exception                                (evaluate)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor (Bifunctor(bimap))
-import           Data.Bool (bool)
-import           Data.Data (Data)
-import           Data.Generics.Aliases (mkQ)
-import           Data.Generics.Schemes (everything)
+import           Data.Bifunctor                                   (Bifunctor (bimap))
+import           Data.Bool                                        (bool)
+import           Data.Data                                        (Data)
+import           Data.Generics.Aliases                            (mkQ)
+import           Data.Generics.Schemes                            (everything)
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Text as T
+import qualified Data.Text                                        as T
 import           Data.Traversable
-import           Development.IDE.Core.Shake (IdeState (..))
+import           Development.IDE.Core.Shake                       (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Development.Shake.Classes
 import           Ide.Plugin.Tactic.CaseSplit
-import           Ide.Plugin.Tactic.FeatureSet (hasFeature, Feature (..))
+import           Ide.Plugin.Tactic.FeatureSet                     (Feature (..),
+                                                                   hasFeature)
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.LanguageServer
 import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
@@ -46,7 +48,7 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import           OccName
-import           Prelude hiding (span)
+import           Prelude                                          hiding (span)
 import           System.Timeout
 
 
@@ -68,7 +70,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet
+      features <- getFeatureSet (shakeExtras state)
       liftIO $ fromMaybeT (Right $ List []) $ do
         (_, jdg, _, dflags) <- judgementForHole state nfp range features
         actions <- lift $
@@ -87,7 +89,7 @@ codeActionProvider _ _ _ = pure $ Right $ List []
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
 tacticCmd tac state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet
+      features <- getFeatureSet (shakeExtras state)
       ccs <- getClientCapabilities
       res <- liftIO $ fromMaybeT (Right Nothing) $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
@@ -126,7 +128,7 @@ mkErr code err = ResponseError code err Nothing
 
 
 joinNote :: e -> Maybe (Either e a) -> Either e a
-joinNote e Nothing = Left e
+joinNote e Nothing  = Left e
 joinNote _ (Just a) = a
 
 
@@ -146,7 +148,7 @@ mkWorkspaceEdits span dflags ccs uri pm rtr = do
       response = transform dflags ccs uri g pm
    in case response of
         Right res -> Right $ Just res
-        Left err -> Left $ mkErr InternalError $ T.pack err
+        Left err  -> Left $ mkErr InternalError $ T.pack err
 
 
 ------------------------------------------------------------------------------
@@ -257,7 +259,7 @@ locateBiggest :: (Data r, Data a) => SrcSpan -> a -> Maybe r
 locateBiggest ss x = getFirst $ everything (<>)
   ( mkQ mempty $ \case
     L span r | ss `isSubspanOf` span -> pure r
-    _ -> mempty
+    _                                -> mempty
   ) x
 
 

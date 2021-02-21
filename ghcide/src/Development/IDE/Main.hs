@@ -104,7 +104,7 @@ defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
     pid <- T.pack . show <$> getProcessID
 
-    let hlsPlugin = asGhcIdePlugin argsHlsPlugins
+    let hlsPlugin = asGhcIdePlugin argsDefaultHlsConfig argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
@@ -138,6 +138,7 @@ defaultMain Arguments{..} = do
                     caps = LSP.resClientCapabilities env
                 debouncer <- newAsyncDebouncer
                 initialise
+                    argsDefaultHlsConfig
                     rules
                     (Just env)
                     argsLogger
@@ -177,7 +178,7 @@ defaultMain Arguments{..} = do
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }
-            ide <- initialise rules Nothing argsLogger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules Nothing argsLogger debouncer options vfs hiedb hieChan
 
             putStrLn "\nStep 4/4: Type checking the files"
             setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') files
