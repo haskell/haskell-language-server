@@ -518,8 +518,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected =
-                    [ "{-# LANGUAGE ScopedTypeVariables #-}"
-                    , "{-# LANGUAGE TypeApplications #-}"
+                    [ "{-# LANGUAGE TypeApplications #-}"
+                    , "{-# LANGUAGE ScopedTypeVariables #-}"
                     , "module TypeApplications where"
                     , ""
                     , "foo :: forall a. a -> a"
