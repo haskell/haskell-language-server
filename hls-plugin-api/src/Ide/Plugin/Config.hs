@@ -117,6 +117,7 @@ instance A.ToJSON Config where
                  , "completionSnippetsOn"        .= completionSnippetsOn
                  , "formatOnImportOn"            .= formatOnImportOn
                  , "formattingProvider"          .= formattingProvider
+                 , "maxCompletions"              .= maxCompletions
                  , "plugin"                      .= plugins
                  ]
 
