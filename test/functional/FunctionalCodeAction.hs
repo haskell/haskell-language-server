@@ -518,8 +518,14 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected =
+-- TODO: Why CPP???
+#if __GLASGOW_HASKELL__ < 810
+                    [ "{-# LANGUAGE ScopedTypeVariables #-}"
+                    , "{-# LANGUAGE TypeApplications #-}"
+#else
                     [ "{-# LANGUAGE TypeApplications #-}"
                     , "{-# LANGUAGE ScopedTypeVariables #-}"
+#endif
                     , "module TypeApplications where"
                     , ""
                     , "foo :: forall a. a -> a"
