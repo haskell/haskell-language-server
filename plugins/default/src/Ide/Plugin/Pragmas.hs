@@ -58,7 +58,7 @@ pragmaEditToAction :: Uri -> Range -> PragmaEdit -> (Command |? CodeAction)
 pragmaEditToAction uri range (title, p) =
   InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing
   where
-    render (OptGHC x) = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
+    render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
     textEdits = J.List [J.TextEdit range $ render p]
     edit =
