@@ -181,7 +181,8 @@ benchGhcide samples buildSystem args BenchProject{..} = do
 warmupGhcide :: BuildSystem -> FilePath -> [CmdOption] -> Example -> Action ()
 warmupGhcide buildSystem exePath args example = do
   command args "ghcide-bench" $
-    [ "--no-clean",
+    [ "--timeout=300",
+      "--no-clean",
       "-v",
       "--samples=1",
       "--ghcide=" <> exePath,
