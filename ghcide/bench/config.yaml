@@ -24,15 +24,14 @@ examples:
         - src/Language/LSP/VFS.hs
         - src/Language/LSP/Types/Lens.hs
   # Small but heavily multi-component example
-  # Disabled as it is far to slow. hie-bios >0.7.2 should help
-  # - path: bench/example/HLS
-  #   modules:
-  #       - hls-plugin-api/src/Ide/Plugin/Config.hs
-  #       - ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs
-  #       - ghcide/bench/hist/Main.hs
-  #       - ghcide/bench/lib/Experiments/Types.hs
-  #       - ghcide/test/exe/Main.hs
-  #       - exe/Plugins.hs
+  - path: bench/example/HLS
+    modules:
+        - hls-plugin-api/src/Ide/Plugin/Config.hs
+        - ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs
+        - ghcide/bench/hist/Main.hs
+        - ghcide/bench/lib/Experiments/Types.hs
+        - ghcide/test/exe/Main.hs
+        - exe/Plugins.hs
 
 # The set of experiments to execute
 experiments:
