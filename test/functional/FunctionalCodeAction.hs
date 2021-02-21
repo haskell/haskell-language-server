@@ -1,34 +1,35 @@
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module FunctionalCodeAction (tests) where
 
 import           Control.Applicative.Combinators
-import           Control.Lens hiding (List)
+import           Control.Lens                    hiding (List)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Default
-import qualified Data.HashMap.Strict as HM
+import qualified Data.HashMap.Strict             as HM
 import           Data.List
 import           Data.Maybe
-import qualified Data.Text as T
+import qualified Data.Text                       as T
 import           Ide.Plugin.Config
-import           Language.LSP.Test as Test
+import           Language.LSP.Test               as Test
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens as L
 import qualified Language.LSP.Types.Capabilities as C
+import qualified Language.LSP.Types.Lens         as L
 import           Test.Hls.Util
 import           Test.Hspec.Expectations
 
+import           System.FilePath                 ((</>))
+import           System.IO.Extra                 (withTempDir)
 import           Test.Tasty
-import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
+import           Test.Tasty.ExpectedFailure      (expectFailBecause,
+                                                  ignoreTestBecause)
 import           Test.Tasty.HUnit
-import           System.FilePath ((</>))
-import           System.IO.Extra (withTempDir)
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -517,8 +518,8 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             contents <- documentContents doc
 
             let expected =
-                    [ "{-# LANGUAGE TypeApplications #-}"
-                    , "{-# LANGUAGE ScopedTypeVariables #-}"
+                    [ "{-# LANGUAGE ScopedTypeVariables #-}"
+                    , "{-# LANGUAGE TypeApplications #-}"
                     , "module TypeApplications where"
                     , ""
                     , "foo :: forall a. a -> a"
