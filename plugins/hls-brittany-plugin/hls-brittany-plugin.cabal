@@ -28,3 +28,42 @@ library
                ,    transformers
 
   default-language: Haskell2010
+
+executable test-server
+  default-language:   Haskell2010
+  build-depends:
+    , base
+    , data-default
+    , ghcide
+    , hls-brittany-plugin
+    , hls-plugin-api
+    , shake
+  main-is: Server.hs
+  hs-source-dirs: test
+  ghc-options: -threaded
+
+test-suite tests
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  build-tool-depends:
+    hls-brittany-plugin:test-server -any,
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends:
+    , aeson
+    , base
+    , bytestring
+    , data-default
+    , deepseq
+    , ghcide                >= 0.7.5.0
+    , hls-brittany-plugin
+    , hspec-expectations
+    , megaparsec
+    , lens
+    , lsp-test
+    , tasty
+    , tasty-ant-xml           >=1.1.6
+    , tasty-hunit
+    , tasty-golden
+    , tasty-rerun
+    , text
