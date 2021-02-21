@@ -1,6 +1,8 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns #-}
 
 module FunctionalCodeAction (tests) where
 
@@ -26,6 +28,7 @@ import           Test.Tasty
 import           Test.Tasty.ExpectedFailure (ignoreTestBecause, expectFailBecause)
 import           Test.Tasty.HUnit
 import           System.FilePath ((</>))
+import           System.IO.Extra (withTempDir)
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -34,6 +37,7 @@ tests = testGroup "code actions" [
       hlintTests
     , importTests
     , missingPragmaTests
+    , disableWarningTests
     , packageTests
     , redundantImportTests
     , renameTests
@@ -376,7 +380,7 @@ redundantImportTests = testGroup "redundant import code actions" [
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
         _   <- waitForDiagnosticsFromSource doc "typecheck"
-        _ : InL cmd : _ <- getAllCodeActions doc
+        InL cmd : _ <- getAllCodeActions doc
         executeCommand cmd
         _ <- anyRequest
         contents <- documentContents doc
@@ -554,6 +558,57 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
             liftIO $ T.lines contents @?= expected
     ]
 
+disableWarningTests :: TestTree
+disableWarningTests =
+  testGroup "disable warnings" $
+    [
+      ( "missing-signatures"
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , "main = putStrLn \"hello\""
+          ]
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , "{-# OPTIONS_GHC -Wno-missing-signatures #-}"
+          , "main = putStrLn \"hello\""
+          ]
+      )
+    ,
+      ( "unused-imports"
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , ""
+          , ""
+          , "module M where"
+          , ""
+          , "import Data.Functor"
+          ]
+      , T.unlines
+          [ "{-# OPTIONS_GHC -Wall #-}"
+          , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
+          , ""
+          , ""
+          , "module M where"
+          , ""
+          , "import Data.Functor"
+          ]
+      )
+    ]
+      <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
+        doc <- createDoc "Module.hs" "haskell" initialContent
+        _ <- waitForDiagnostics
+        codeActs <- mapMaybe caResultToCodeAct <$> getCodeActions doc (Range (Position 0 0) (Position 0 0))
+        case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
+          Nothing -> liftIO $ assertFailure "No code action with expected title"
+          Just action -> do
+            executeCodeAction action
+            contentAfterAction <- documentContents doc
+            liftIO $ expectedContent @=? contentAfterAction
+ where
+  caResultToCodeAct = \case
+    InL _ -> Nothing
+    InR c -> Just c
+
 unusedTermTests :: TestTree
 unusedTermTests = testGroup "unused term code actions" [
     ignoreTestBecause "no support for prefixing unused names with _" $ testCase "Prefixes with '_'" $
@@ -610,3 +665,7 @@ noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
     codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing
+
+testSession :: String -> Session () -> TestTree
+testSession name s = testCase name $ withTempDir $ \dir ->
+    runSession hlsCommand fullCaps dir s

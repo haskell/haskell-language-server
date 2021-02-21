@@ -81,7 +81,6 @@ import Development.IDE.Plugin.Test (TestRequest (BlockSeconds, GetInterfaceFiles
 import Control.Monad.Extra (whenJust)
 import qualified Language.LSP.Types.Lens as L
 import Control.Lens ((^.))
-import Data.Functor
 import Data.Tuple.Extra
 
 waitForProgressBegin :: Session ()
@@ -706,7 +705,6 @@ codeActionTests = testGroup "code actions"
   , suggestImportTests
   , suggestHideShadowTests
   , suggestImportDisambiguationTests
-  , disableWarningTests
   , fixConstructorImportTests
   , importRenameActionTests
   , fillTypedHoleTests
@@ -913,8 +911,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
-        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -938,8 +937,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
-        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -966,8 +966,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove stuffA, stuffC from import")
-        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove stuffA, stuffC from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -994,8 +995,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove !!, <?> from import")
-        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove !!, <?> from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1021,8 +1023,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove A from import")
-        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove A from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1047,8 +1050,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove A, E, F from import")
-        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove A, E, F from import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1070,8 +1074,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       docB <- createDoc "ModuleB.hs" "haskell" contentB
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove import")
-        =<< getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      [InR action@CodeAction { _title = actionTitle }, _]
+          <- getCodeActions docB (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove import" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents docB
       let expectedContentAfterAction = T.unlines
@@ -1094,8 +1099,9 @@ removeImportTests = testGroup "remove import actions"
             ]
       doc <- createDoc "ModuleC.hs" "haskell" content
       _ <- waitForDiagnostics
-      action <- assertJust "Code action not found" . firstJust (caWithTitle "Remove all redundant imports")
-        =<< getCodeActions doc (Range (Position 2 0) (Position 2 5))
+      [_, _, _, _, InR action@CodeAction { _title = actionTitle }]
+          <- getCodeActions doc (Range (Position 2 0) (Position 2 5))
+      liftIO $ "Remove all redundant imports" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents doc
       let expectedContentAfterAction = T.unlines
@@ -1111,10 +1117,6 @@ removeImportTests = testGroup "remove import actions"
             ]
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
-  where
-    caWithTitle t = \case
-      InR  a@CodeAction{_title} -> guard (_title == t) >> Just a
-      _ -> Nothing
 
 extendImportTests :: TestTree
 extendImportTests = testGroup "extend import actions"
@@ -1783,57 +1785,6 @@ suggestHideShadowTests =
     [ "module C where"
     , "(++) = id"
     ]
-
-disableWarningTests :: TestTree
-disableWarningTests =
-  testGroup "disable warnings" $
-    [
-      ( "missing-signatures"
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "main = putStrLn \"hello\""
-          ]
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "{-# OPTIONS_GHC -Wno-missing-signatures #-}"
-          , "main = putStrLn \"hello\""
-          ]
-      )
-    ,
-      ( "unused-imports"
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , ""
-          , ""
-          , "module M where"
-          , ""
-          , "import Data.Functor"
-          ]
-      , T.unlines
-          [ "{-# OPTIONS_GHC -Wall #-}"
-          , "{-# OPTIONS_GHC -Wno-unused-imports #-}"
-          , ""
-          , ""
-          , "module M where"
-          , ""
-          , "import Data.Functor"
-          ]
-      )
-    ]
-      <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
-        doc <- createDoc "Module.hs" "haskell" initialContent
-        _ <- waitForDiagnostics
-        codeActs <- mapMaybe caResultToCodeAct <$> getCodeActions doc (Range (Position 0 0) (Position 0 0))
-        case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
-          Nothing -> liftIO $ assertFailure "No code action with expected title"
-          Just action -> do
-            executeCodeAction action
-            contentAfterAction <- documentContents doc
-            liftIO $ expectedContent @=? contentAfterAction
- where
-  caResultToCodeAct = \case
-    InL _ -> Nothing
-    InR c -> Just c
 
 insertNewDefinitionTests :: TestTree
 insertNewDefinitionTests = testGroup "insert new definition actions"
@@ -2586,12 +2537,7 @@ removeRedundantConstraintsTests = let
     doc <- createDoc "Testing.hs" "haskell" code
     _ <- waitForDiagnostics
     actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
-    liftIO $ assertBool "Found some actions (other than \"disable warnings\")"
-      $ all isDisableWarningAction actionsOrCommands
-    where
-      isDisableWarningAction = \case
-        InR CodeAction{_title} -> "Disable" `T.isPrefixOf` _title && "warnings" `T.isSuffixOf` _title
-        _ -> False
+    liftIO $ assertBool "Found some actions" (null actionsOrCommands)
 
   in testGroup "remove redundant function constraints"
   [ check
@@ -4786,9 +4732,7 @@ asyncTests = testGroup "async"
             void waitForDiagnostics
             actions <- getCodeActions doc (Range (Position 1 0) (Position 1 0))
             liftIO $ [ _title | InR CodeAction{_title} <- actions] @=?
-              [ "add signature: foo :: a -> a"
-              , "Disable \"missing-signatures\" warnings"
-              ]
+              [ "add signature: foo :: a -> a" ]
     , testSession "request" $ do
             -- Execute a custom request that will block for 1000 seconds
             void $ sendRequest (SCustomMethod "test") $ toJSON $ BlockSeconds 1000
@@ -4800,9 +4744,7 @@ asyncTests = testGroup "async"
             void waitForDiagnostics
             actions <- getCodeActions doc (Range (Position 0 0) (Position 0 0))
             liftIO $ [ _title | InR CodeAction{_title} <- actions] @=?
-              [ "add signature: foo :: a -> a"
-              , "Disable \"missing-signatures\" warnings"
-              ]
+              [ "add signature: foo :: a -> a" ]
     ]
 
 
