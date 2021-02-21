@@ -56,8 +56,22 @@ columns: 80
 newline: native
 
 language_extensions:
+  - BangPatterns
   - DataKinds
+  - DeriveFunctor
+  - DeriveGeneric
+  - FlexibleContexts
+  - GeneralizedNewtypeDeriving
+  - KindSignatures
+  - LambdaCase
+  - NamedFieldPuns
   - OverloadedStrings
+  - RecordWildCards
+  - ScopedTypeVariables
+  - StandaloneDeriving
+  - TupleSections
+  - TypeApplications
   - TypeOperators
+  - ViewPatterns
 
 cabal: true
