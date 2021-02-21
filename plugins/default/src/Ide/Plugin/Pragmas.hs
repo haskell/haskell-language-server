@@ -24,13 +24,13 @@ import qualified Language.LSP.Types.Lens    as J
 import qualified Language.LSP.VFS           as VFS
 import qualified Text.Fuzzy                 as Fuzzy
 
+-- ---------------------------------------------------------------------
+
 descriptor :: PluginId -> PluginDescriptor IdeState
-descriptor plId =
-  (defaultPluginDescriptor plId)
-    { pluginHandlers =
-        mkPluginHandler STextDocumentCodeAction codeActionProvider
-          <> mkPluginHandler STextDocumentCompletion completion
-    }
+descriptor plId = (defaultPluginDescriptor plId)
+  { pluginHandlers = mkPluginHandler STextDocumentCodeAction codeActionProvider
+                  <> mkPluginHandler STextDocumentCompletion completion
+  }
 
 -- ---------------------------------------------------------------------
 
@@ -88,15 +88,14 @@ suggestAddPragma mDynflags Diagnostic {_message} = genPragma _message
   where
     genPragma target =
       [("Add \"" <> r <> "\"", LangExt r) | r <- findPragma target, r `notElem` disabled]
-      where
-        disabled
-          | Just dynFlags <- mDynflags =
-            -- GHC does not export 'OnOff', so we have to view it as string
-            catMaybes $ T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags
-          | otherwise =
-            -- When the module failed to parse, we don't have access to its
-            -- dynFlags. In that case, simply don't disable any pragmas.
-            []
+    disabled
+      | Just dynFlags <- mDynflags =
+        -- GHC does not export 'OnOff', so we have to view it as string
+        catMaybes $ T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags
+      | otherwise =
+        -- When the module failed to parse, we don't have access to its
+        -- dynFlags. In that case, simply don't disable any pragmas.
+        []
 
 -- | Find all Pragmas are an infix of the search term.
 findPragma :: T.Text -> [T.Text]
@@ -121,61 +120,60 @@ allPragmas :: [T.Text]
 allPragmas =
   concat
     [ [name, "No" <> name]
-      | FlagSpec {flagSpecName = T.pack -> name} <- xFlags
+    | FlagSpec{flagSpecName = T.pack -> name} <- xFlags
     ]
-    <>
-    -- These pragmas are not part of xFlags as they are not reversable
-    -- by prepending "No".
-    [ -- Safe Haskell
-      "Unsafe",
-      "Trustworthy",
-      "Safe",
-      -- Language Version Extensions
-      "Haskell98",
-      "Haskell2010"
-      -- Maybe, GHC 2021 after its release?
-    ]
+  <>
+  -- These pragmas are not part of xFlags as they are not reversable
+  -- by prepending "No".
+  [ -- Safe Haskell
+    "Unsafe"
+  , "Trustworthy"
+  , "Safe"
+
+    -- Language Version Extensions
+  , "Haskell98"
+  , "Haskell2010"
+    -- Maybe, GHC 2021 after its release?
+  ]
 
 -- ---------------------------------------------------------------------
 
 completion :: PluginMethodHandler IdeState TextDocumentCompletion
 completion _ide _ complParams = do
-  let (TextDocumentIdentifier uri) = complParams ^. J.textDocument
-      position = complParams ^. J.position
-  contents <- LSP.getVirtualFile $ toNormalizedUri uri
-  fmap (Right . InL) $ case (contents, uriToFilePath' uri) of
-    (Just cnts, Just _path) ->
-      result <$> VFS.getCompletionPrefix position cnts
-      where
-        result (Just pfix)
-          | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix =
-            List $
-              map
-                buildCompletion
-                (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
-          | otherwise =
-            List []
-        result Nothing = List []
-        buildCompletion p =
-          CompletionItem
-            { _label = p,
-              _kind = Just CiKeyword,
-              _tags = Nothing,
-              _detail = Nothing,
-              _documentation = Nothing,
-              _deprecated = Nothing,
-              _preselect = Nothing,
-              _sortText = Nothing,
-              _filterText = Nothing,
-              _insertText = Nothing,
-              _insertTextFormat = Nothing,
-              _textEdit = Nothing,
-              _additionalTextEdits = Nothing,
-              _commitCharacters = Nothing,
-              _command = Nothing,
-              _xdata = Nothing
-            }
-    _ -> return $ List []
+    let (TextDocumentIdentifier uri) = complParams ^. J.textDocument
+        position = complParams ^. J.position
+    contents <- LSP.getVirtualFile $ toNormalizedUri uri
+    fmap (Right . InL) $ case (contents, uriToFilePath' uri) of
+        (Just cnts, Just _path) ->
+            result <$> VFS.getCompletionPrefix position cnts
+            where
+                result (Just pfix)
+                    | "{-# LANGUAGE" `T.isPrefixOf` VFS.fullLine pfix
+                    = List $ map buildCompletion
+                        (Fuzzy.simpleFilter (VFS.prefixText pfix) allPragmas)
+                    | otherwise
+                    = List []
+                result Nothing = List []
+                buildCompletion p =
+                    CompletionItem
+                      { _label = p,
+                        _kind = Just CiKeyword,
+                        _tags = Nothing,
+                        _detail = Nothing,
+                        _documentation = Nothing,
+                        _deprecated = Nothing,
+                        _preselect = Nothing,
+                        _sortText = Nothing,
+                        _filterText = Nothing,
+                        _insertText = Nothing,
+                        _insertTextFormat = Nothing,
+                        _textEdit = Nothing,
+                        _additionalTextEdits = Nothing,
+                        _commitCharacters = Nothing,
+                        _command = Nothing,
+                        _xdata = Nothing
+                      }
+        _ -> return $ List []
 
 -- ---------------------------------------------------------------------
 
