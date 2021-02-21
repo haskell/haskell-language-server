@@ -1,9 +1,9 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE TypeFamilies      #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -18,26 +18,27 @@ module Development.IDE.Core.Service(
     updatePositionMapping,
     ) where
 
-import Development.IDE.Types.Options (IdeOptions(..))
-import Development.IDE.Core.Debouncer
-import           Development.IDE.Core.FileStore  (fileStoreRules)
+import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
+import           Development.IDE.Core.FileStore  (fileStoreRules)
 import           Development.IDE.Core.OfInterest
-import Development.IDE.Types.Logger as Logger
+import           Development.IDE.Types.Logger    as Logger
+import           Development.IDE.Types.Options   (IdeOptions (..))
 import           Development.Shake
-import qualified Language.LSP.Server as LSP
-import qualified Language.LSP.Types as LSP
 import           Ide.Plugin.Config
+import qualified Language.LSP.Server             as LSP
+import qualified Language.LSP.Types              as LSP
 
+import           Control.Monad
 import           Development.IDE.Core.Shake
-import Control.Monad
 
 
 ------------------------------------------------------------
 -- Exposed API
 
 -- | Initialise the Compiler Service.
-initialise :: Rules ()
+initialise :: Config
+           -> Rules ()
            -> Maybe (LSP.LanguageContextEnv Config)
            -> Logger
            -> Debouncer LSP.NormalizedUri
@@ -46,9 +47,10 @@ initialise :: Rules ()
            -> HieDb
            -> IndexQueue
            -> IO IdeState
-initialise mainRule lspEnv logger debouncer options vfs hiedb hiedbChan =
+initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hiedbChan =
     shakeOpen
         lspEnv
+        defaultConfig
         logger
         debouncer
         (optShakeProfiling options)
