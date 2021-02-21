@@ -250,7 +250,7 @@ type instance RuleResult GetModIfaceWithoutLinkable = HiFileResult
 type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
 
 -- The Shake key type for getModificationTime queries
-data GetModificationTime = GetModificationTime_
+newtype GetModificationTime = GetModificationTime_
     { missingFileDiagnostics :: Bool
       -- ^ If false, missing file diagnostics are not reported
     }
