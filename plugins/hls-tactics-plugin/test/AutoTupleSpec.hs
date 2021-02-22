@@ -17,10 +17,6 @@ import           TysPrim (alphaTyVars)
 import           TysWiredIn (mkBoxedTupleTy)
 
 
-instance Show Type where
-  show = unsafeRender
-
-
 spec :: Spec
 spec = describe "auto for tuple" $ do
   it "should always be able to discover an auto solution" $ do

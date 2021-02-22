@@ -1,14 +1,11 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE ViewPatterns          #-}
 
-module Tactic
-  ( tests
-  )
-where
+module GoldenSpec where
 
 import           Control.Applicative.Combinators ( skipManyTill )
 import           Control.Lens hiding ((<.>))
@@ -28,32 +25,17 @@ import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
 import           Ide.Plugin.Tactic.TestTypes
 import           Language.LSP.Test
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens hiding (id, capabilities, message, executeCommand, applyEdit, rename)
+import           Language.LSP.Types.Lens hiding (id, capabilities, message, executeCommand, applyEdit, rename, line, title, name, actions)
 import           System.Directory (doesFileExist)
 import           System.FilePath
-import           Test.Hls.Util
+import           Test.Hspec
 import           Test.Tasty
 import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
 import           Test.Tasty.HUnit
+import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners (consoleTestReporter, listingTests)
+import           Test.Tasty.Runners.AntXML
 
-
-------------------------------------------------------------------------------
--- | Get a range at the given line and column corresponding to having nothing
--- selected.
---
--- NB: These coordinates are in "file space", ie, 1-indexed.
-pointRange :: Int -> Int -> Range
-pointRange
-  (subtract 1 -> line)
-  (subtract 1 -> col) =
-    Range (Position line col) (Position line $ col + 1)
-
-
-------------------------------------------------------------------------------
--- | Get the title of a code action.
-codeActionTitle :: (Command |? CodeAction) -> Maybe Text
-codeActionTitle InL{} = Nothing
-codeActionTitle (InR(CodeAction title _ _ _ _ _ _)) = Just title
 
 
 tests :: TestTree
@@ -96,39 +78,70 @@ tests = testGroup
       "T2.hs" 11 25
       [ (not, DestructLambdaCase, "")
       ]
-  , goldenTest "GoldenIntros.hs"            2 8  Intros ""
-  , goldenTest "GoldenEitherAuto.hs"        2 11 Auto ""
-  , goldenTest "GoldenJoinCont.hs"          4 12 Auto ""
-  , goldenTest "GoldenIdentityFunctor.hs"   3 11 Auto ""
-  , goldenTest "GoldenIdTypeFam.hs"         7 11 Auto ""
-  , goldenTest "GoldenEitherHomomorphic.hs" 2 15 Auto ""
-  , goldenTest "GoldenNote.hs"              2 8  Auto ""
-  , goldenTest "GoldenPureList.hs"          2 12 Auto ""
-  , goldenTest "GoldenListFmap.hs"          2 12 Auto ""
-  , goldenTest "GoldenFromMaybe.hs"         2 13 Auto ""
-  , goldenTest "GoldenFoldr.hs"             2 10 Auto ""
-  , goldenTest "GoldenSwap.hs"              2 8  Auto ""
-  , goldenTest "GoldenFmapTree.hs"          4 11 Auto ""
-  , goldenTest "GoldenGADTDestruct.hs"      7 17 Destruct "gadt"
-  , goldenTest "GoldenGADTDestructCoercion.hs" 8 17 Destruct "gadt"
-  , goldenTest "GoldenGADTAuto.hs"          7 13 Auto ""
-  , goldenTest "GoldenSwapMany.hs"          2 12 Auto ""
-  , goldenTest "GoldenBigTuple.hs"          4 12 Auto ""
-  , goldenTest "GoldenShow.hs"              2 10 Auto ""
-  , goldenTest "GoldenShowCompose.hs"       2 15 Auto ""
-  , goldenTest "GoldenShowMapChar.hs"       2 8  Auto ""
-  , goldenTest "GoldenSuperclass.hs"        7 8  Auto ""
+  , goldenTest "GoldenIntros.hs"
+      2 8  Intros ""
+  , autoTest "GoldenEitherAuto.hs"        2 11
+  , autoTest "GoldenJoinCont.hs"          4 12
+  , autoTest "GoldenIdentityFunctor.hs"   3 11
+  , autoTest "GoldenIdTypeFam.hs"         7 11
+  , autoTest "GoldenEitherHomomorphic.hs" 2 15
+  , autoTest "GoldenNote.hs"              2 8
+  , autoTest "GoldenPureList.hs"          2 12
+  , autoTest "GoldenListFmap.hs"          2 12
+  , autoTest "GoldenFromMaybe.hs"         2 13
+  , autoTest "GoldenFoldr.hs"             2 10
+  , autoTest "GoldenSwap.hs"              2 8
+  , autoTest "GoldenFmapTree.hs"          4 11
+  , goldenTest "GoldenGADTDestruct.hs"
+      7 17 Destruct "gadt"
+  , goldenTest "GoldenGADTDestructCoercion.hs"
+      8 17 Destruct "gadt"
+  , autoTest "GoldenGADTAuto.hs"    7 13
+  , autoTest "GoldenSwapMany.hs"    2 12
+  , autoTest "GoldenBigTuple.hs"    4 12
+  , autoTest "GoldenShow.hs"        2 10
+  , autoTest "GoldenShowCompose.hs" 2 15
+  , autoTest "GoldenShowMapChar.hs" 2 8
+  , autoTest "GoldenSuperclass.hs"  7 8
   , ignoreTestBecause "It is unreliable in circleci builds"
-      $ goldenTest "GoldenApplicativeThen.hs"   2 11 Auto ""
-  , goldenTest "GoldenSafeHead.hs"          2 12 Auto ""
-  , expectFail "GoldenFish.hs"              5 18 Auto ""
-  , goldenTest "GoldenArbitrary.hs"         25 13 Auto ""
-  , goldenTest "FmapBoth.hs"                2 12 Auto ""
-  , goldenTest "RecordCon.hs"               7  8 Auto ""
-  , goldenTest "FmapJoin.hs"                2 14 Auto ""
-  , goldenTest "Fgmap.hs"                   2 9  Auto ""
-  , goldenTest "FmapJoinInLet.hs"           4 19 Auto ""
+      $ autoTest "GoldenApplicativeThen.hs" 2 11
+  , autoTest "GoldenSafeHead.hs"  2 12
+  , expectFail "GoldenFish.hs"
+      5 18 Auto ""
+  , autoTest "GoldenArbitrary.hs" 25 13
+  , autoTest "FmapBoth.hs"        2 12
+  , autoTest "RecordCon.hs"       7  8
+  , autoTest "FmapJoin.hs"        2 14
+  , autoTest "Fgmap.hs"           2 9
+  , autoTest "FmapJoinInLet.hs"   4 19
   ]
+
+
+spec :: Spec
+spec = do
+  it "GoldenTests" $
+    defaultMainWithIngredients
+        [antXMLRunner, rerunningTests [listingTests, consoleTestReporter]]
+        tests
+
+
+------------------------------------------------------------------------------
+-- | Get a range at the given line and column corresponding to having nothing
+-- selected.
+--
+-- NB: These coordinates are in "file space", ie, 1-indexed.
+pointRange :: Int -> Int -> Range
+pointRange
+  (subtract 1 -> line)
+  (subtract 1 -> col) =
+    Range (Position line col) (Position line $ col + 1)
+
+
+------------------------------------------------------------------------------
+-- | Get the title of a code action.
+codeActionTitle :: (Command |? CodeAction) -> Maybe Text
+codeActionTitle InL{} = Nothing
+codeActionTitle (InR(CodeAction title _ _ _ _ _ _)) = Just title
 
 
 ------------------------------------------------------------------------------
@@ -146,7 +159,7 @@ mkTest
     -> TestTree
 mkTest name fp line col ts =
   testCase name $ do
-  runSession hlsCommand fullCaps tacticPath $ do
+  runSession testCommand fullCaps tacticPath $ do
     doc <- openDoc fp "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col
@@ -156,6 +169,10 @@ mkTest name fp line col ts =
       liftIO $
         f (title `elem` titles)
           @? ("Expected a code action with title " <> T.unpack title)
+
+
+autoTest :: FilePath -> Int -> Int -> TestTree
+autoTest fp line col = goldenTest fp line col Auto ""
 
 
 setFeatureSet :: FeatureSet -> Session ()
@@ -174,13 +191,15 @@ setFeatureSet features = do
     DidChangeConfigurationParams $
       toJSON config
 
+
 goldenTest :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
 goldenTest = goldenTest' allFeatures
+
 
 goldenTest' :: FeatureSet -> FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
 goldenTest' features input line col tc occ =
   testCase (input <> " (golden)") $ do
-    runSession hlsCommand fullCaps tacticPath $ do
+    runSession testCommand fullCaps tacticPath $ do
       setFeatureSet features
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
@@ -201,7 +220,7 @@ goldenTest' features input line col tc occ =
 expectFail :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
 expectFail input line col tc occ =
   testCase (input <> " (golden)") $ do
-    runSession hlsCommand fullCaps tacticPath $ do
+    runSession testCommand fullCaps tacticPath $ do
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col
@@ -213,11 +232,16 @@ expectFail input line col tc occ =
 
 
 tacticPath :: FilePath
-tacticPath = "test/testdata/tactic"
+tacticPath = "test/golden"
 
 
-executeCommandWithResp :: Command -> Session (ResponseMessage WorkspaceExecuteCommand)
+testCommand :: String
+testCommand = "test-server"
+
+
+executeCommandWithResp :: Command -> Session (ResponseMessage 'WorkspaceExecuteCommand)
 executeCommandWithResp cmd = do
   let args = decode $ encode $ fromJust $ cmd ^. arguments
       execParams = ExecuteCommandParams Nothing (cmd ^. command) args
   request SWorkspaceExecuteCommand execParams
+
