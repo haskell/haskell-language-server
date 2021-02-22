@@ -1,8 +1,8 @@
-cabal-version:      1.20
+cabal-version:      2.2
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            0.7.5.0
+version:            1.0.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -57,8 +57,8 @@ library
         Glob,
         haddock-library >= 1.8,
         hashable,
-        hie-compat,
-        hls-plugin-api >= 0.7.1,
+        hie-compat ^>= 1.0.0.0,
+        hls-plugin-api ^>= 1.0.0.0,
         lens,
         hiedb == 0.3.0.1,
         lsp-types == 1.1.*,

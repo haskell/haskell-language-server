@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-class-plugin
-version:            0.1.0.2
+version:            1.0.0.0
 synopsis:           Class/instance management plugin for Haskell Language Server
 description:
     Class/instance management plugin for Haskell Language Server.
@@ -18,13 +18,13 @@ library
   exposed-modules:  Ide.Plugin.Class
   hs-source-dirs:   src
   build-depends:    aeson
-                  , base       >=4.12 && <5
+                  , base           >=4.12 && <5
                   , containers
                   , lsp
-                  , hls-plugin-api
+                  , hls-plugin-api ^>= 1.0.0.0
                   , ghc
                   , ghc-exactprint
-                  , ghcide
+                  , ghcide         ^>= 1.0.0.0
                   , lens
                   , shake
                   , text
