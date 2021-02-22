@@ -11,8 +11,8 @@ import           Control.Lens               hiding (List)
 import           Control.Monad              (join)
 import           Control.Monad.IO.Class
 import qualified Data.HashMap.Strict        as H
-import           Data.List.Extra            (findIndex, nubOrdOn)
-import           Data.Maybe                 (catMaybes, fromMaybe, listToMaybe)
+import           Data.List.Extra            (nubOrdOn)
+import           Data.Maybe                 (catMaybes, listToMaybe)
 import qualified Data.Text                  as T
 import           Development.IDE            as D
 import           Development.IDE.GHC.Compat
@@ -44,10 +44,9 @@ codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = do
   let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
       uri = docId ^. J.uri
-  content <- fmap VFS.virtualFileText <$> LSP.getVirtualFile (toNormalizedUri uri)
   pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
   let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-      insertRange = maybe (Range (Position 0 0) (Position 0 0)) (`endOfModuleHeader` content) pm
+      insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader pm
       pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
   return $ Right $ List $ pragmaEditToAction uri insertRange <$> pedits
 
@@ -179,16 +178,12 @@ completion _ide _ complParams = do
 
 -- | Find the first non-blank line before the first of (module name / imports / declarations).
 -- Useful for inserting pragmas.
-endOfModuleHeader :: ParsedModule -> Maybe T.Text -> Range
-endOfModuleHeader pm contents =
+endOfModuleHeader :: ParsedModule -> Range
+endOfModuleHeader pm =
   let mod = unLoc $ pm_parsed_source pm
       modNameLoc = getLoc <$> hsmodName mod
       firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
       firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
-      line =
-        fromMaybe 0 $
-          firstNonBlankBefore . _line . _start =<< srcSpanToRange
-            =<< modNameLoc <|> firstImportLoc <|> firstDeclLoc
-      firstNonBlankBefore n = (n -) . fromMaybe 0 . findIndex (not . T.null) . reverse . take n . T.lines <$> contents
+      line = maybe 0 (_line . _start) (modNameLoc <|> firstImportLoc <|> firstDeclLoc >>= srcSpanToRange)
       loc = Position line 0
    in Range loc loc
