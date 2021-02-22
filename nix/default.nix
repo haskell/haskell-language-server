@@ -1,6 +1,6 @@
 { sources ? import ./sources.nix }:
 let
-  nix-pre-commit-hooks = import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/master");
+  nix-pre-commit-hooks = (import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/master/" + "/nix/") { sources = sources; }).packages;
   overlay = _self: pkgs:
     let sharedOverrides = {
         overrides = _self: super: {
@@ -54,7 +54,7 @@ in (import sources.nixpkgs
       # default_stages = ["manual" "push"];
       hooks = {
         stylish-haskell.enable = true;
-        stylish-haskell.excludes = [ "/test/testdata/*" "/hie-compat/*" ];
+        stylish-haskell.excludes = [ "test/testdata/.*" "hie-compat/.*" ];
       };
     };
   }

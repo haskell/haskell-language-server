@@ -26,7 +26,7 @@ extra-deps:
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   - heapsize-0.3.0
-  - hie-bios-0.7.3
+  - hie-bios-0.7.4
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
   - monad-dijkstra-0.1.1.2

@@ -38,7 +38,7 @@ extra-deps:
   - haddock-library-1.8.0
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
-  - hie-bios-0.7.3
+  - hie-bios-0.7.4
   - hlint-3.2.3
   - hoogle-5.0.17.11
   - hsimport-0.11.0

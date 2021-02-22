@@ -47,6 +47,8 @@ module Development.IDE.Core.Shake(
     getIdeOptions,
     getIdeOptionsIO,
     GlobalIdeOptions(..),
+    getClientConfig,
+    getPluginConfig,
     garbageCollect,
     knownTargets,
     setPriority,
@@ -140,6 +142,8 @@ import           Control.Exception.Extra hiding (bracket_)
 import UnliftIO.Exception (bracket_)
 import           Ide.Plugin.Config
 import Data.Default
+import qualified Ide.PluginUtils               as HLS
+import           Ide.Types                      ( PluginId )
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -196,6 +200,8 @@ data ShakeExtras = ShakeExtras
       -- ^ Registery for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
     , vfs :: VFSHandle
+    , defaultConfig :: Config
+      -- ^ Default HLS config, only relevant if the client does not provide any Config
     }
 
 type WithProgressFunc = forall a.
@@ -218,6 +224,16 @@ getShakeExtrasRules :: Rules ShakeExtras
 getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
+
+getClientConfig :: LSP.MonadLsp Config m => ShakeExtras -> m Config
+getClientConfig ShakeExtras { defaultConfig } =
+    fromMaybe defaultConfig <$> HLS.getClientConfig
+
+getPluginConfig
+    :: LSP.MonadLsp Config m => ShakeExtras -> PluginId -> m PluginConfig
+getPluginConfig extras plugin = do
+    config <- getClientConfig extras
+    return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
 -- This is called when we don't already have a result, or computing the rule failed.
@@ -445,6 +461,7 @@ seqValue v b = case v of
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
+          -> Config
           -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
@@ -456,7 +473,7 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen lspEnv logger debouncer
+shakeOpen lspEnv defaultConfig logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
 
     inProgress <- newVar HMap.empty
