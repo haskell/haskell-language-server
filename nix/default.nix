@@ -54,7 +54,7 @@ in (import sources.nixpkgs
       # default_stages = ["manual" "push"];
       hooks = {
         stylish-haskell.enable = true;
-        stylish-haskell.excludes = [ "/test/testdata/*" "/hie-compat/*" ];
+        stylish-haskell.excludes = [ "test/testdata/.*" "hie-compat/.*" ];
       };
     };
   }
