@@ -20,6 +20,6 @@ jobs:
         nix_path: nixpkgs=channel:nixos-20.03
     - uses: cachix/cachix-action@v8
       with:
-        name: haskell-language-server
-        authToken: ${{ secrets.HLS_CACHIX_AUTH_TOKEN }}
+        name: haskell-nix-language-server
+        authToken: ${{ secrets.HLS_NIX_CACHIX_AUTH_TOKEN }}
     - run: nix-shell haskell.nix -A shell --argstr compiler-nix-name ${{ matrix.ghc }} --run "cabal update && cabal build"
