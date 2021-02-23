@@ -9,7 +9,6 @@ module Ide.Plugin.Tactic.CaseSplit
   , splitToDecl
   ) where
 
-import           Control.Lens
 import           Data.Bool (bool)
 import           Data.Data
 import           Data.Generics
@@ -37,13 +36,9 @@ mkFirstAgda pats body = AgdaMatch pats body
 -- splitting it into multiple matches: one for each alternative of the case.
 agdaSplit :: AgdaMatch -> [AgdaMatch]
 agdaSplit (AgdaMatch pats (Case (HsVar _ (L _ var)) matches)) = do
-  (i, pat) <- zip [id @Int 0 ..] pats
-  case pat of
-    VarPat _ (L _ patname) | eqRdrName patname var -> do
-      (case_pat, body) <- matches
-      -- TODO(sandy): use an at pattern if necessary
-      pure $ AgdaMatch (pats & ix i .~ case_pat) body
-    _ -> []
+  (pat, body) <- matches
+  -- TODO(sandy): use an at pattern if necessary
+  pure $ AgdaMatch (rewriteVarPat var pat pats) body
 agdaSplit x = [x]
 
 
@@ -60,6 +55,14 @@ wildify (AgdaMatch pats body) =
 wildifyT :: Data a => Set OccName -> a -> a
 wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
   VarPat _ (L _ var) | S.notMember (occNameString $ occName var) used -> wildP
+  (x :: Pat GhcPs) -> x
+
+
+------------------------------------------------------------------------------
+-- | Replace a 'VarPat' with the given @'Pat' GhcPs@.
+rewriteVarPat :: Data a => RdrName -> Pat GhcPs -> a -> a
+rewriteVarPat name rep = everywhere $ mkT $ \case
+  VarPat _ (L _ var) | eqRdrName name var -> rep
   (x :: Pat GhcPs) -> x
 
 

@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name:          hls-haddock-comments-plugin
-version:       0.1.1.1
+version:       1.0.0.0
 synopsis:      Haddock comments plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server>
@@ -23,9 +23,9 @@ library
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide
+    , ghcide                ^>= 1.0.0.0
     , lsp-types
-    , hls-plugin-api
+    , hls-plugin-api        ^>= 1.0.0.0
     , text
     , unordered-containers
 

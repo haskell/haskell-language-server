@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
@@ -9,45 +9,49 @@ module Ide.Plugin.Tactic.LanguageServer where
 import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson (Value(Object), fromJSON)
-import           Data.Aeson.Types (Result(Success, Error))
+import           Data.Aeson                           (Value (Object), fromJSON)
+import           Data.Aeson.Types                     (Result (Error, Success))
 import           Data.Coerce
-import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ)
-import           Data.Generics.Schemes (everything)
-import           Data.Map (Map)
-import qualified Data.Map as M
+import           Data.Functor                         ((<&>))
+import           Data.Generics.Aliases                (mkQ)
+import           Data.Generics.Schemes                (everything)
+import           Data.Map                             (Map)
+import qualified Data.Map                             as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set as S
-import qualified Data.Text as T
+import qualified Data.Set                             as S
+import qualified Data.Text                            as T
 import           Data.Traversable
+import           Development.IDE                      (ShakeExtras,
+                                                       getPluginConfig)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (useWithStale, IdeState (..))
+import           Development.IDE.Core.Service         (runAction)
+import           Development.IDE.Core.Shake           (IdeState (..),
+                                                       useWithStale)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (RuleResult, Action)
+import           Development.IDE.GHC.Error            (realSrcSpanToRange)
+import           Development.IDE.Spans.LocalBindings  (Bindings,
+                                                       getDefiningBindings)
+import           Development.Shake                    (Action, RuleResult)
 import           Development.Shake.Classes
 import qualified FastString
-import           Ide.Plugin.Config (PluginConfig(plcConfig))
-import qualified Ide.Plugin.Config as Plugin
+import           Ide.Plugin.Config                    (PluginConfig (plcConfig))
+import qualified Ide.Plugin.Config                    as Plugin
 import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.TestTypes (cfg_feature_set, TacticCommand)
+import           Ide.Plugin.Tactic.TestTypes          (TacticCommand,
+                                                       cfg_feature_set)
 import           Ide.Plugin.Tactic.Types
-import           Ide.PluginUtils (getPluginConfig)
-import           Language.LSP.Server (MonadLsp)
+import           Language.LSP.Server                  (MonadLsp)
 import           Language.LSP.Types
 import           OccName
-import           Prelude hiding (span)
-import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds)
+import           Prelude                              hiding (span)
+import           SrcLoc                               (containsSpan)
+import           TcRnTypes                            (tcg_binds)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -79,9 +83,9 @@ runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 ------------------------------------------------------------------------------
 -- | Get the current feature set from the plugin config.
-getFeatureSet :: MonadLsp Plugin.Config m => m FeatureSet
-getFeatureSet = do
-  pcfg <- getPluginConfig "tactics"
+getFeatureSet :: MonadLsp Plugin.Config m => ShakeExtras -> m FeatureSet
+getFeatureSet extras = do
+  pcfg <- getPluginConfig extras "tactics"
   pure $ case fromJSON $ Object $ plcConfig pcfg of
     Success cfg -> cfg_feature_set cfg
     Error _     -> defaultFeatures
@@ -203,6 +207,6 @@ getRhsPosVals rss tcs
 isRhsHole :: RealSrcSpan -> TypecheckedSource -> Bool
 isRhsHole rss tcs = everything (||) (mkQ False $ \case
   TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
-  _ -> False
+  _                                        -> False
   ) tcs
 

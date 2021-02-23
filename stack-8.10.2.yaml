@@ -33,7 +33,7 @@ extra-deps:
   - lsp-types-1.1.0.0
   - lsp-test-0.13.0.0
   - heapsize-0.3.0
-  - hie-bios-0.7.3
+  - hie-bios-0.7.4
   - implicit-hie-cradle-0.3.0.2
   - implicit-hie-0.1.2.5
   - monad-dijkstra-0.1.1.2

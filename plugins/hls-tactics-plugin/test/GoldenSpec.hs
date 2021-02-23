@@ -114,6 +114,7 @@ tests = testGroup
   , autoTest "FmapJoin.hs"        2 14
   , autoTest "Fgmap.hs"           2 9
   , autoTest "FmapJoinInLet.hs"   4 19
+  , goldenTest "SplitPattern.hs"  7 25 Destruct "a"
   ]
 
 

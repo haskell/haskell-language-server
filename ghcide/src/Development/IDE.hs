@@ -6,41 +6,45 @@ module Development.IDE
 
 ) where
 
-import Development.IDE.Core.RuleTypes as X
-import Development.IDE.Core.Rules as X
-  (getAtPoint
-  ,getClientConfigAction
-  ,getDefinition
-  ,getParsedModule
-  ,getTypeDefinition
-  )
-import Development.IDE.Core.FileExists as X
-  (getFileExists)
-import Development.IDE.Core.FileStore as X
-  (getFileContents)
-import Development.IDE.Core.IdeConfiguration as X
-  (IdeConfiguration(..)
-  ,isWorkspaceFile)
-import Development.IDE.Core.OfInterest as X (getFilesOfInterest)
-import Development.IDE.Core.Service as X (runAction)
-import Development.IDE.Core.Shake as X
-  ( IdeState,
-    shakeExtras,
-    ShakeExtras,
-    IdeRule,
-    define, defineEarlyCutoff,
-    use, useNoFile, uses, useWithStale, useWithStaleFast, useWithStaleFast',
-    FastResult(..),
-    use_, useNoFile_, uses_, useWithStale_,
-    ideLogger,
-    actionLogger,
-    IdeAction(..), runIdeAction
-  )
-import Development.IDE.GHC.Error as X
-import Development.IDE.GHC.Util as X
-import Development.IDE.Plugin as X
-import Development.IDE.Types.Diagnostics as X
-import Development.IDE.Types.HscEnvEq as X (HscEnvEq(..), hscEnv, hscEnvWithImportPaths)
-import Development.IDE.Types.Location as X
-import Development.IDE.Types.Logger as X
-import Development.Shake as X (Action, action, Rules, RuleResult)
+import           Development.IDE.Core.FileExists       as X (getFileExists)
+import           Development.IDE.Core.FileStore        as X (getFileContents)
+import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (..),
+                                                             isWorkspaceFile)
+import           Development.IDE.Core.OfInterest       as X (getFilesOfInterest)
+import           Development.IDE.Core.RuleTypes        as X
+import           Development.IDE.Core.Rules            as X (getAtPoint,
+                                                             getClientConfigAction,
+                                                             getDefinition,
+                                                             getParsedModule,
+                                                             getTypeDefinition)
+import           Development.IDE.Core.Service          as X (runAction)
+import           Development.IDE.Core.Shake            as X (FastResult (..),
+                                                             IdeAction (..),
+                                                             IdeRule, IdeState,
+                                                             ShakeExtras,
+                                                             actionLogger,
+                                                             define,
+                                                             defineEarlyCutoff,
+                                                             getClientConfig,
+                                                             getPluginConfig,
+                                                             ideLogger,
+                                                             runIdeAction,
+                                                             shakeExtras, use,
+                                                             useNoFile,
+                                                             useNoFile_,
+                                                             useWithStale,
+                                                             useWithStaleFast,
+                                                             useWithStaleFast',
+                                                             useWithStale_,
+                                                             use_, uses, uses_)
+import           Development.IDE.GHC.Error             as X
+import           Development.IDE.GHC.Util              as X
+import           Development.IDE.Plugin                as X
+import           Development.IDE.Types.Diagnostics     as X
+import           Development.IDE.Types.HscEnvEq        as X (HscEnvEq (..),
+                                                             hscEnv,
+                                                             hscEnvWithImportPaths)
+import           Development.IDE.Types.Location        as X
+import           Development.IDE.Types.Logger          as X
+import           Development.Shake                     as X (Action, RuleResult,
+                                                             Rules, action)
