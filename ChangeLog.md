@@ -20,6 +20,10 @@ Among others,
 
 ### Pull requests merged for 1.0.0
 
+- Correctly split non-varpats in tactics
+([#1427](https://github.com/haskell/haskell-language-server/pull/1427)) by @isovector
+- Move tactics tests to be standalone
+([#1425](https://github.com/haskell/haskell-language-server/pull/1425)) by @isovector
 - Fix the handling of default HLS config again
 ([#1419](https://github.com/haskell/haskell-language-server/pull/1419)) by @pepeiborra
 - Patch pre-commit-hook to work with GHCIDE/hls-plugin-api codes
@@ -38,6 +42,8 @@ Among others,
 ([#1406](https://github.com/haskell/haskell-language-server/pull/1406)) by @fendor
 - Update to hie-bios 0.7.4
 ([#1405](https://github.com/haskell/haskell-language-server/pull/1405)) by @fendor
+- Prepare 1.0.0 release
+([#1402](https://github.com/haskell/haskell-language-server/pull/1402)) by @Ailrun
 - Fix install script after hlint fixes
 ([#1400](https://github.com/haskell/haskell-language-server/pull/1400)) by @jhrcek
 - Use last with-utf8 to fix #1372
