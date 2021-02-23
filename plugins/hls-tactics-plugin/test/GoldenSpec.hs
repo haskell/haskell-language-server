@@ -8,17 +8,15 @@
 module GoldenSpec where
 
 import           Control.Applicative.Combinators ( skipManyTill )
-import           Control.Lens hiding ((<.>))
+import           Control.Lens hiding ((<.>), failing)
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Default (Default(def))
-import           Data.Either (isLeft)
 import           Data.Foldable
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Text (Text)
-import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
@@ -29,101 +27,90 @@ import           Language.LSP.Types.Lens hiding (id, capabilities, message, exec
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hspec
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import           Test.Tasty.HUnit
-import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.Runners (consoleTestReporter, listingTests)
-import           Test.Tasty.Runners.AntXML
 
 
-
-tests :: TestTree
-tests = testGroup
-  "tactic"
-  [ mkTest
+spec :: Spec
+spec = do
+  describe "code action availability" $ do
+    mkTest
       "Produces intros code action"
       "T1.hs" 2 14
       [ (id, Intros, "")
       ]
-  , mkTest
+    mkTest
       "Produces destruct and homomorphism code actions"
       "T2.hs" 2 21
       [ (id, Destruct, "eab")
       , (id, Homomorphism, "eab")
       ]
-  , mkTest
+    mkTest
       "Won't suggest homomorphism on the wrong type"
       "T2.hs" 8 8
       [ (not, Homomorphism, "global")
       ]
-  , mkTest
+    mkTest
       "Won't suggest intros on the wrong type"
       "T2.hs" 8 8
       [ (not, Intros, "")
       ]
-  , mkTest
+    mkTest
       "Produces (homomorphic) lambdacase code actions"
       "T3.hs" 4 24
       [ (id, HomomorphismLambdaCase, "")
       , (id, DestructLambdaCase, "")
       ]
-  , mkTest
+    mkTest
       "Produces lambdacase code actions"
       "T3.hs" 7 13
       [ (id, DestructLambdaCase, "")
       ]
-  , mkTest
+    mkTest
       "Doesn't suggest lambdacase without -XLambdaCase"
       "T2.hs" 11 25
       [ (not, DestructLambdaCase, "")
       ]
-  , goldenTest "GoldenIntros.hs"
-      2 8  Intros ""
-  , autoTest "GoldenEitherAuto.hs"        2 11
-  , autoTest "GoldenJoinCont.hs"          4 12
-  , autoTest "GoldenIdentityFunctor.hs"   3 11
-  , autoTest "GoldenIdTypeFam.hs"         7 11
-  , autoTest "GoldenEitherHomomorphic.hs" 2 15
-  , autoTest "GoldenNote.hs"              2 8
-  , autoTest "GoldenPureList.hs"          2 12
-  , autoTest "GoldenListFmap.hs"          2 12
-  , autoTest "GoldenFromMaybe.hs"         2 13
-  , autoTest "GoldenFoldr.hs"             2 10
-  , autoTest "GoldenSwap.hs"              2 8
-  , autoTest "GoldenFmapTree.hs"          4 11
-  , goldenTest "GoldenGADTDestruct.hs"
-      7 17 Destruct "gadt"
-  , goldenTest "GoldenGADTDestructCoercion.hs"
-      8 17 Destruct "gadt"
-  , autoTest "GoldenGADTAuto.hs"    7 13
-  , autoTest "GoldenSwapMany.hs"    2 12
-  , autoTest "GoldenBigTuple.hs"    4 12
-  , autoTest "GoldenShow.hs"        2 10
-  , autoTest "GoldenShowCompose.hs" 2 15
-  , autoTest "GoldenShowMapChar.hs" 2 8
-  , autoTest "GoldenSuperclass.hs"  7 8
-  , ignoreTestBecause "It is unreliable in circleci builds"
-      $ autoTest "GoldenApplicativeThen.hs" 2 11
-  , autoTest "GoldenSafeHead.hs"  2 12
-  , expectFail "GoldenFish.hs"
-      5 18 Auto ""
-  , autoTest "GoldenArbitrary.hs" 25 13
-  , autoTest "FmapBoth.hs"        2 12
-  , autoTest "RecordCon.hs"       7  8
-  , autoTest "FmapJoin.hs"        2 14
-  , autoTest "Fgmap.hs"           2 9
-  , autoTest "FmapJoinInLet.hs"   4 19
-  , goldenTest "SplitPattern.hs"  7 25 Destruct "a"
-  ]
 
+  describe "golden tests" $ do
+    let goldenTest = mkGoldenTest allFeatures
+        autoTest = mkGoldenTest allFeatures Auto ""
 
-spec :: Spec
-spec = do
-  it "GoldenTests" $
-    defaultMainWithIngredients
-        [antXMLRunner, rerunningTests [listingTests, consoleTestReporter]]
-        tests
+    goldenTest Intros "" "GoldenIntros.hs" 2 8
+    autoTest "GoldenEitherAuto.hs"        2 11
+    autoTest "GoldenJoinCont.hs"          4 12
+    autoTest "GoldenIdentityFunctor.hs"   3 11
+    autoTest "GoldenIdTypeFam.hs"         7 11
+    autoTest "GoldenEitherHomomorphic.hs" 2 15
+    autoTest "GoldenNote.hs"              2 8
+    autoTest "GoldenPureList.hs"          2 12
+    autoTest "GoldenListFmap.hs"          2 12
+    autoTest "GoldenFromMaybe.hs"         2 13
+    autoTest "GoldenFoldr.hs"             2 10
+    autoTest "GoldenSwap.hs"              2 8
+    autoTest "GoldenFmapTree.hs"          4 11
+    goldenTest Destruct "gadt"
+             "GoldenGADTDestruct.hs"      7 17
+    goldenTest Destruct "gadt"
+             "GoldenGADTDestructCoercion.hs" 8 17
+    autoTest "GoldenGADTAuto.hs"    7 13
+    autoTest "GoldenSwapMany.hs"    2 12
+    autoTest "GoldenBigTuple.hs"    4 12
+    autoTest "GoldenShow.hs"        2 10
+    autoTest "GoldenShowCompose.hs" 2 15
+    autoTest "GoldenShowMapChar.hs" 2 8
+    autoTest "GoldenSuperclass.hs"  7 8
+    failing "flaky in CI" $
+      autoTest "GoldenApplicativeThen.hs" 2 11
+    autoTest "GoldenSafeHead.hs"  2 12
+    failing "not enough auto gas" $
+      autoTest "GoldenFish.hs" 5 18
+    autoTest "GoldenArbitrary.hs" 25 13
+    autoTest "FmapBoth.hs"        2 12
+    autoTest "RecordCon.hs"       7  8
+    autoTest "FmapJoin.hs"        2 14
+    autoTest "Fgmap.hs"           2 9
+    autoTest "FmapJoinInLet.hs"   4 19
+    goldenTest Destruct "a"
+      "SplitPattern.hs"  7 25
 
 
 ------------------------------------------------------------------------------
@@ -157,9 +144,8 @@ mkTest
          , TacticCommand  -- An expected command ...
          , Text           -- ... for this variable
          ) -- ^ A collection of (un)expected code actions.
-    -> TestTree
-mkTest name fp line col ts =
-  testCase name $ do
+    -> SpecWith (Arg Bool)
+mkTest name fp line col ts = it name $ do
   runSession testCommand fullCaps tacticPath $ do
     doc <- openDoc fp "haskell"
     _ <- waitForDiagnostics
@@ -168,12 +154,7 @@ mkTest name fp line col ts =
     for_ ts $ \(f, tc, var) -> do
       let title = tacticTitle tc var
       liftIO $
-        f (title `elem` titles)
-          @? ("Expected a code action with title " <> T.unpack title)
-
-
-autoTest :: FilePath -> Int -> Int -> TestTree
-autoTest fp line col = goldenTest fp line col Auto ""
+        (title `elem` titles) `shouldSatisfy` f
 
 
 setFeatureSet :: FeatureSet -> Session ()
@@ -193,13 +174,16 @@ setFeatureSet features = do
       toJSON config
 
 
-goldenTest :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
-goldenTest = goldenTest' allFeatures
-
-
-goldenTest' :: FeatureSet -> FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
-goldenTest' features input line col tc occ =
-  testCase (input <> " (golden)") $ do
+mkGoldenTest
+    :: FeatureSet
+    -> TacticCommand
+    -> Text
+    -> FilePath
+    -> Int
+    -> Int
+    -> SpecWith ()
+mkGoldenTest features tc occ input line col =
+  it (input <> " (golden)") $ do
     runSession testCommand fullCaps tacticPath $ do
       setFeatureSet features
       doc <- openDoc input "haskell"
@@ -215,21 +199,13 @@ goldenTest' features input line col tc occ =
       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
         T.writeFile expected_name edited
       expected <- liftIO $ T.readFile expected_name
-      liftIO $ edited @?= expected
+      liftIO $ edited `shouldBe` expected
 
 
-expectFail :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
-expectFail input line col tc occ =
-  testCase (input <> " (golden)") $ do
-    runSession testCommand fullCaps tacticPath $ do
-      doc <- openDoc input "haskell"
-      _ <- waitForDiagnostics
-      actions <- getCodeActions doc $ pointRange line col
-      Just (InR CodeAction {_command = Just c})
-        <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
-      resp <- executeCommandWithResp c
-      liftIO $ unless (isLeft $ _result resp) $
-        assertFailure "didn't fail, but expected one"
+------------------------------------------------------------------------------
+-- | Don't run a test.
+failing :: Applicative m => String -> b -> m ()
+failing _ _ = pure ()
 
 
 tacticPath :: FilePath
