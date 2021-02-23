@@ -15,6 +15,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
     hideImplicitPreludeSymbol,
     hideSymbol,
     liftParseAST,
+    newImport,
   )
 where
 
@@ -31,7 +32,7 @@ import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.GHC.ExactPrint
     ( Annotate, ASTElement(parseAST) )
 import FieldLabel (flLabel)
-import GhcPlugins (sigPrec, mkRealSrcLoc)
+import GhcPlugins (sigPrec, mkRealSrcLoc, realSrcSpanStart)
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
 import Language.LSP.Types
@@ -411,25 +412,61 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
                   (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
         killLie v = Just v
 
--- | Insert a import declaration hiding a symbole from Prelude
-hideImplicitPreludeSymbol
-    :: String -> ParsedSource -> Maybe Rewrite
-hideImplicitPreludeSymbol symbol (L _ HsModule{..}) = do
-    let predLine old = mkRealSrcLoc (srcLocFile old) (srcLocLine old - 1) (srcLocCol old)
-        existingImpSpan =  (fmap (id,) . realSpan . getLoc) =<< lastMaybe hsmodImports
-        existingDeclSpan = (fmap (predLine, ) . realSpan . getLoc) =<< headMaybe hsmodDecls
-    (f, s) <- existingImpSpan <|> existingDeclSpan
-    let beg = f $ realSrcSpanEnd s
-        indentation = srcSpanStartCol s
-        ran = RealSrcSpan $ mkRealSrcSpan beg beg
-    pure $ Rewrite ran $ \df -> do
-        let symOcc = mkVarOcc symbol
-            symImp = T.pack $ showSDoc df $ parenSymOcc symOcc $ ppr symOcc
-            impStmt = "import Prelude hiding (" <> symImp <> ")"
+-- | Insert a import declaration with at most one symbol
+--
+-- newImport "A" (Just "Bar(Cons)") Nothing False --> import A (Bar(Cons))
+-- newImport "A" (Just "foo") Nothing True --> import A hiding (foo)
+-- newImport "A" Nothing (Just "Q") False --> import qualified A as Q
+--
+-- Wrong combinations will result in parse error
+-- Returns Nothing if there is no imports and declarations
+newImport ::
+  -- | module name
+  String ->
+  -- | the symbol
+  Maybe String ->
+  -- | whether to be qualified
+  Maybe String ->
+  -- | the symbol is to be imported or hided
+  Bool ->
+  ParsedSource ->
+  Maybe Rewrite
+newImport modName mSymbol mQual hiding (L _ HsModule {..}) = do
+  -- TODO (berberman): if the previous line is module name and there is no other imports,
+  -- 'AnnWhere' will be crowded out to the next line, which is a bug
+  let predLine old =
+        mkRealSrcLoc
+          (srcLocFile old)
+          (srcLocLine old - 1)
+          (srcLocCol old)
+      existingImpSpan = (fmap (realSrcSpanEnd,) . realSpan . getLoc) =<< lastMaybe hsmodImports
+      existingDeclSpan = (fmap (predLine . realSrcSpanStart,) . realSpan . getLoc) =<< headMaybe hsmodDecls
+  (f, s) <- existingImpSpan <|> existingDeclSpan
+  let beg = f s
+      indentation = srcSpanStartCol s
+      ran = RealSrcSpan $ mkRealSrcSpan beg beg
+  pure $
+    Rewrite ran $ \df -> do
+      let symImp
+            | Just symbol <- mSymbol,
+              symOcc <- mkVarOcc symbol =
+              "(" <> showSDoc df (parenSymOcc symOcc $ ppr symOcc) <> ")"
+            | otherwise = ""
+          impStmt =
+            "import "
+              <> maybe "" (const "qualified ") mQual
+              <> modName
+              <> (if hiding then " hiding " else " ")
+              <> symImp
+              <> maybe "" (" as " <>) mQual
+      -- Re-labeling is needed to reflect annotations correctly
+      L _ idecl0 <- liftParseAST @(ImportDecl GhcPs) df impStmt
+      let idecl = L ran idecl0
+      addSimpleAnnT
+        idecl
+        (DP (1, indentation - 1))
+        [(G AnnImport, DP (1, indentation - 1))]
+      pure idecl
 
-        -- Re-labeling is needed to reflect annotations correctly
-        L _ idecl0 <- liftParseAST @(ImportDecl GhcPs) df $ T.unpack impStmt
-        let idecl = L ran idecl0
-        addSimpleAnnT idecl (DP (1, indentation - 1))
-            [(G AnnImport, DP (1, indentation - 1))]
-        pure idecl
+hideImplicitPreludeSymbol :: String -> ParsedSource -> Maybe Rewrite
+hideImplicitPreludeSymbol symbol = newImport "Prelude" (Just symbol) Nothing True

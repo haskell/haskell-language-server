@@ -702,6 +702,7 @@ codeActionTests = testGroup "code actions"
   , typeWildCardActionTests
   , removeImportTests
   , extendImportTests
+  , suggesImportClassMethodTests
   , suggestImportTests
   , suggestHideShadowTests
   , suggestImportDisambiguationTests
@@ -1416,7 +1417,92 @@ extendImportTestsRegEx = testGroup "regex parsing"
         template message expected = do
             liftIO $ matchRegExMultipleImports message @=? expected
 
-
+suggesImportClassMethodTests :: TestTree
+suggesImportClassMethodTests =
+  testGroup
+    "suggest import class methods"
+    [ testGroup
+        "new"
+        [ testSession "via parent" $
+            template
+              [ "module A where",
+                ""
+              ]
+              (Range (Position 5 2) (Position 5 8))
+              "Import Data.Semigroup with Semigroup(stimes)"
+              [ "module A where",
+                "",
+                "import Data.Semigroup (Semigroup(stimes))"
+              ],
+          testSession "top level" $
+            template
+              [ "module A where",
+                ""
+              ]
+              (Range (Position 5 2) (Position 5 8))
+              "Import Data.Semigroup with stimes"
+              [ "module A where",
+                "",
+                "import Data.Semigroup (stimes)"
+              ],
+          testSession "all" $
+            template
+              [ "module A where",
+                ""
+              ]
+              (Range (Position 5 2) (Position 5 8))
+              "Import Data.Semigroup"
+              [ "module A where",
+                "",
+                "import Data.Semigroup"
+              ]
+        ],
+      testGroup
+        "extend"
+        [ testSession "via parent" $
+            template
+              [ "module A where",
+                "",
+                "import Data.Semigroup ()"
+              ]
+              (Range (Position 6 2) (Position 6 8))
+              "Add Semigroup(stimes) to the import list of Data.Semigroup"
+              [ "module A where",
+                "",
+                "import Data.Semigroup (Semigroup (stimes))"
+              ],
+          testSession "top level" $
+            template
+              [ "module A where",
+                "",
+                "import Data.Semigroup ()"
+              ]
+              (Range (Position 6 2) (Position 6 8))
+              "Add stimes to the import list of Data.Semigroup"
+              [ "module A where",
+                "",
+                "import Data.Semigroup (stimes)"
+              ]
+        ]
+    ]
+  where
+    decls =
+      [ "data X = X",
+        "instance Semigroup X where",
+        "  (<>) _ _ = X",
+        "  stimes _ _ = X"
+      ]
+    template beforeContent range executeTitle expectedContent = do
+      doc <- createDoc "A.hs" "haskell" $ T.unlines (beforeContent <> decls)
+      _ <- waitForDiagnostics
+      waitForProgressDone
+      actions <- getCodeActions doc range
+      let actions' = [x | InR x <- actions]
+          titles = [_title | CodeAction {_title} <- actions']
+      liftIO $ executeTitle `elem` titles @? T.unpack executeTitle <> " does not in " <> show titles
+      executeCodeAction $ fromJust $ find (\CodeAction {_title} -> _title == executeTitle) actions'
+      content <- documentContents doc
+      liftIO $ T.unlines (expectedContent <> decls) @=? content
 
 suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
