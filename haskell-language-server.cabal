@@ -458,12 +458,9 @@ test-suite func-test
     Rename
     Symbol
     TypeDefinition
-    Tactic
     Splice
     HaddockComments
     Ide.Plugin.Splice.Types
-    Ide.Plugin.Tactic.FeatureSet
-    Ide.Plugin.Tactic.TestTypes
     Ide.Plugin.Eval.Types
 
   default-extensions: OverloadedStrings

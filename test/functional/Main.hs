@@ -21,7 +21,6 @@ import Reference
 import Rename
 import Symbol
 import Splice
-import Tactic
 import Test.Tasty
 import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.Runners (
@@ -58,7 +57,6 @@ main =
             , Reference.tests
             , Rename.tests
             , Symbol.tests
-            , Tactic.tests
             , TypeDefinition.tests
             , Splice.tests
             , HaddockComments.tests
