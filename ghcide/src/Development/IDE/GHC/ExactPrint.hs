@@ -1,9 +1,9 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
@@ -15,6 +15,8 @@ module Development.IDE.GHC.ExactPrint
       hoistGraft,
       graftWithM,
       graftWithSmallestM,
+      graftSmallestDecls,
+      graftSmallestDeclsWithM,
       transform,
       transformM,
       useAnnotatedSource,
@@ -60,8 +62,16 @@ import Language.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable (Outputable, ppr, showSDoc)
 import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
 import Parser (parseIdentifier)
+import Data.Traversable (for)
+import Data.Foldable (Foldable(fold))
+import Data.Bool (bool)
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
+#endif
+#if __GLASGOW_HASKELL__ > 808
+import Bag (listToBag)
+import ErrUtils (mkErrMsg)
+import Outputable (text, neverQualify)
 #endif
 
 
@@ -202,6 +212,7 @@ graftWithoutParentheses dst val = Graft $ \dflags a -> do
             )
             a
 
+
 ------------------------------------------------------------------------------
 
 graftWithM ::
@@ -270,6 +281,44 @@ graftDecls dst decs0 = Graft $ \dflags a -> do
             | src == dst = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
+
+graftSmallestDecls ::
+    forall a.
+    (HasDecls a) =>
+    SrcSpan ->
+    [LHsDecl GhcPs] ->
+    Graft (Either String) a
+graftSmallestDecls dst decs0 = Graft $ \dflags a -> do
+    decs <- forM decs0 $ \decl -> do
+        (anns, decl') <- annotateDecl dflags decl
+        modifyAnnsT $ mappend anns
+        pure decl'
+    let go [] = DL.empty
+        go (L src e : rest)
+            | dst `isSubspanOf` src = DL.fromList decs <> DL.fromList rest
+            | otherwise = DL.singleton (L src e) <> go rest
+    modifyDeclsT (pure . DL.toList . go) a
+
+graftSmallestDeclsWithM ::
+    forall a.
+    (HasDecls a) =>
+    SrcSpan ->
+    (LHsDecl GhcPs -> TransformT (Either String) (Maybe [LHsDecl GhcPs])) ->
+    Graft (Either String) a
+graftSmallestDeclsWithM dst toDecls = Graft $ \dflags a -> do
+    let go [] = pure DL.empty
+        go (e@(L src _) : rest)
+            | dst `isSubspanOf` src = toDecls e >>= \case
+                Just decs0 -> do
+                    decs <- forM decs0 $ \decl -> do
+                        (anns, decl') <-
+                            annotateDecl dflags decl
+                        modifyAnnsT $ mappend anns
+                        pure decl'
+                    pure $ DL.fromList decs <> DL.fromList rest
+                Nothing -> (DL.singleton e <>) <$> go rest
+            | otherwise = (DL.singleton e <>) <$> go rest
+    modifyDeclsT (fmap DL.toList . go) a
 
 graftDeclsWithM ::
     forall a m.
@@ -355,12 +404,37 @@ annotate dflags ast = do
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
 annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (Anns, LHsDecl GhcPs)
+-- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
+-- multiple matches. To work around this, we split the single
+-- 'FunBind'-of-multiple-'Match'es into multiple 'FunBind's-of-one-'Match',
+-- and then merge them all back together.
+annotateDecl dflags
+            (L src (
+                ValD ext fb@FunBind
+                  { fun_matches = mg@MG { mg_alts = L alt_src alts@(_:_)}
+                  })) = do
+    let set_matches matches =
+          ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
+
+    (anns', alts') <- fmap unzip $ for (zip [0..] alts) $ \(ix :: Int, alt) -> do
+      uniq <- show <$> uniqueSrcSpanT
+      let rendered = render dflags $ set_matches [alt]
+      lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
+        (ann, L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
+           -> pure (bool id (setPrecedingLines alt' 1 0) (ix /= 0) ann, alt')
+        _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
+
+    let expr' = L src $ set_matches alts'
+        anns'' = setPrecedingLines expr' 1 0 $ fold anns'
+
+    pure (anns'', expr')
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
     pure (anns', expr')
+
 ------------------------------------------------------------------------------
 
 -- | Print out something 'Outputable'.

@@ -1,0 +1,77 @@
+# See https://github.com/jaspervdj/stylish-haskell/blob/main/data/stylish-haskell.yaml
+# for reference.
+
+steps:
+  # - unicode_syntax:
+  #     add_language_pragma: true
+
+  # - module_header:
+  #     indent: 4
+  #     sort: true
+  #     separate_lists: true
+
+  # - records:
+  #     equals: "indent 2"
+  #     first_field: "indent 2"
+  #     field_comment: 2
+  #     deriving: 2
+  #     via: "indent 2"
+  #     sort_deriving: true
+  #     break_enums: false
+  #     break_single_constructors: true
+  #     curried_context: false
+
+  - simple_align:
+      cases: always
+      top_level_patterns: always
+      records: always
+      multi_way_if: always
+
+  - imports:
+      align: global
+      list_align: after_alias
+      pad_module_names: true
+      long_list_align: inline
+      empty_list_align: inherit
+      list_padding: 4
+      separate_lists: true
+      space_surround: false
+      ghc_lib_parser: false
+
+  - language_pragmas:
+      style: vertical
+      align: true
+      remove_redundant: true
+      language_prefix: LANGUAGE
+
+  # - tabs:
+  #     spaces: 8
+
+  - trailing_whitespace: {}
+
+  # - squash: {}
+
+columns: 80
+
+newline: native
+
+language_extensions:
+  - BangPatterns
+  - DataKinds
+  - DeriveFunctor
+  - DeriveGeneric
+  - FlexibleContexts
+  - GeneralizedNewtypeDeriving
+  - KindSignatures
+  - LambdaCase
+  - NamedFieldPuns
+  - OverloadedStrings
+  - RecordWildCards
+  - ScopedTypeVariables
+  - StandaloneDeriving
+  - TupleSections
+  - TypeApplications
+  - TypeOperators
+  - ViewPatterns
+
+cabal: true

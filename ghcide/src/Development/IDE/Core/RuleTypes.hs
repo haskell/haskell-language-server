@@ -45,7 +45,9 @@ import Data.Int (Int64)
 import GHC.Serialized (Serialized)
 
 data LinkableType = ObjectLinkable | BCOLinkable
-  deriving (Eq,Ord,Show)
+  deriving (Eq,Ord,Show, Generic)
+instance Hashable LinkableType
+instance NFData   LinkableType
 
 -- NOTATION
 --   Foo+ means Foo for the dependencies
@@ -337,7 +339,7 @@ instance NFData   GetLocatedImports
 instance Binary   GetLocatedImports
 
 -- | Does this module need to be compiled?
-type instance RuleResult NeedsCompilation = Bool
+type instance RuleResult NeedsCompilation = Maybe LinkableType
 
 data NeedsCompilation = NeedsCompilation
     deriving (Eq, Show, Typeable, Generic)

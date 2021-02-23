@@ -8,17 +8,14 @@ module Ide.Plugin.Tactic.Simplify
   ( simplify
   ) where
 
-import Data.Data (Data)
-import Data.Generics (everywhere, somewhere, something, listify, extT, mkT, GenericT, mkQ)
+import Data.Generics (everywhere, mkT, GenericT)
 import Data.List.Extra (unsnoc)
-import Data.Maybe (isJust)
 import Data.Monoid (Endo (..))
 import Development.IDE.GHC.Compat
-import GHC.Exts (fromString)
-import GHC.SourceGen (var, op)
+import GHC.SourceGen (var)
 import GHC.SourceGen.Expr (lambda)
 import Ide.Plugin.Tactic.CodeGen.Utils
-import Ide.Plugin.Tactic.GHC (fromPatCompatPs)
+import Ide.Plugin.Tactic.GHC (fromPatCompatPs, containsHsVar)
 
 
 ------------------------------------------------------------------------------
@@ -55,17 +52,6 @@ simplify
 -- | Like 'foldMap' but for endomorphisms.
 foldEndo :: Foldable t => t (a -> a) -> a -> a
 foldEndo = appEndo . foldMap Endo
-
-
-------------------------------------------------------------------------------
--- | Does this thing contain any references to 'HsVar's with the given
--- 'RdrName'?
-containsHsVar :: Data a => RdrName -> a -> Bool
-containsHsVar name x = not $ null $ listify (
-  \case
-    ((HsVar _ (L _ a)) :: HsExpr GhcPs) | a == name -> True
-    _ -> False
-  ) x
 
 
 ------------------------------------------------------------------------------

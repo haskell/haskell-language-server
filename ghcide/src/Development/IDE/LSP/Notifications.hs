@@ -50,7 +50,7 @@ setHandlersNotifications = mconcat
           -- For example, vscode restores previously unsaved contents on open
           modifyFilesOfInterest ide (M.insert file Modified{firstOpen=True})
           setFileModified ide False file
-          logInfo (ideLogger ide) $ "Opened text document: " <> getUri _uri
+          logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
   , notificationHandler LSP.STextDocumentDidChange $
       \ide (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
@@ -58,14 +58,14 @@ setHandlersNotifications = mconcat
         whenUriFile _uri $ \file -> do
           modifyFilesOfInterest ide (M.insert file Modified{firstOpen=False})
           setFileModified ide False file
-        logInfo (ideLogger ide) $ "Modified text document: " <> getUri _uri
+        logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
   , notificationHandler LSP.STextDocumentDidSave $
       \ide (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
             modifyFilesOfInterest ide (M.insert file OnDisk)
             setFileModified ide True file
-        logInfo (ideLogger ide) $ "Saved text document: " <> getUri _uri
+        logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
   , notificationHandler LSP.STextDocumentDidClose $
         \ide (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
@@ -74,7 +74,7 @@ setHandlersNotifications = mconcat
               -- Refresh all the files that depended on this
               checkParents <- optCheckParents =<< getIdeOptionsIO (shakeExtras ide)
               when (checkParents >= CheckOnClose) $ typecheckParents ide file
-              logInfo (ideLogger ide) $ "Closed text document: " <> getUri _uri
+              logDebug (ideLogger ide) $ "Closed text document: " <> getUri _uri
 
   , notificationHandler LSP.SWorkspaceDidChangeWatchedFiles $
       \ide (DidChangeWatchedFilesParams fileEvents) -> liftIO $ do
@@ -88,7 +88,7 @@ setHandlersNotifications = mconcat
                     )
                     ( F.toList fileEvents )
         let msg = Text.pack $ show events
-        logInfo (ideLogger ide) $ "Files created or deleted: " <> msg
+        logDebug (ideLogger ide) $ "Files created or deleted: " <> msg
         modifyFileExists ide events
         setSomethingModified ide
 
@@ -103,7 +103,7 @@ setHandlersNotifications = mconcat
   , notificationHandler LSP.SWorkspaceDidChangeConfiguration $
       \ide (DidChangeConfigurationParams cfg) -> liftIO $ do
         let msg = Text.pack $ show cfg
-        logInfo (ideLogger ide) $ "Configuration changed: " <> msg
+        logDebug (ideLogger ide) $ "Configuration changed: " <> msg
         modifyClientSettings ide (const $ Just cfg)
         setSomethingModified ide
 

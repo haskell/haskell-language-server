@@ -1,49 +1,50 @@
+{-# LANGUAGE GADTs     #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE GADTs #-}
 
 module Development.IDE.Plugin.HLS
     (
       asGhcIdePlugin
     ) where
 
-import           Control.Exception(SomeException)
+import           Control.Exception            (SomeException)
 import           Control.Monad
-import qualified Data.Aeson as J
+import qualified Data.Aeson                   as J
+import           Data.Bifunctor
+import           Data.Dependent.Map           (DMap)
+import qualified Data.Dependent.Map           as DMap
+import           Data.Dependent.Sum
 import           Data.Either
-import qualified Data.List                     as List
-import qualified Data.Map  as Map
-import qualified Data.Text                     as T
+import qualified Data.List                    as List
+import           Data.List.NonEmpty           (NonEmpty, nonEmpty, toList)
+import qualified Data.Map                     as Map
+import           Data.Maybe                   (fromMaybe)
+import           Data.String
+import qualified Data.Text                    as T
 import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
+import           Development.Shake            (Rules)
 import           Ide.Plugin.Config
-import           Ide.Types as HLS
-import qualified Language.LSP.Server             as LSP
-import qualified Language.LSP.Types              as J
-import Language.LSP.Types
-import           Text.Regex.TDFA.Text()
-import Development.Shake (Rules)
-import Ide.PluginUtils (getClientConfig)
-import Development.IDE.Core.Tracing
-import UnliftIO.Async (forConcurrently)
-import UnliftIO.Exception (catchAny)
-import           Data.Dependent.Map (DMap)
-import qualified Data.Dependent.Map as DMap
-import           Data.Dependent.Sum
-import Data.List.NonEmpty (nonEmpty,NonEmpty,toList)
-import UnliftIO (MonadUnliftIO)
-import Data.String
-import Data.Bifunctor
+import           Ide.PluginUtils              (getClientConfig)
+import           Ide.Types                    as HLS
+import qualified Language.LSP.Server          as LSP
+import           Language.LSP.Types
+import qualified Language.LSP.Types           as J
+import           Text.Regex.TDFA.Text         ()
+import           UnliftIO                     (MonadUnliftIO)
+import           UnliftIO.Async               (forConcurrently)
+import           UnliftIO.Exception           (catchAny)
 
 -- ---------------------------------------------------------------------
 --
 
 -- | Map a set of plugins to the underlying ghcide engine.
-asGhcIdePlugin :: IdePlugins IdeState -> Plugin Config
-asGhcIdePlugin mp =
-    mkPlugin rulesPlugins          HLS.pluginRules <>
+asGhcIdePlugin :: Config -> IdePlugins IdeState -> Plugin Config
+asGhcIdePlugin defaultConfig mp =
+    mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
-    mkPlugin extensiblePlugins     HLS.pluginHandlers
+    mkPlugin (extensiblePlugins defaultConfig)  HLS.pluginHandlers
     where
         ls = Map.toList (ipMap mp)
 
@@ -75,9 +76,9 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
 
     parseCmdId :: T.Text -> Maybe (PluginId, CommandId)
     parseCmdId x = case T.splitOn ":" x of
-      [plugin, command] -> Just (PluginId plugin, CommandId command)
+      [plugin, command]    -> Just (PluginId plugin, CommandId command)
       [_, plugin, command] -> Just (PluginId plugin, CommandId command)
-      _ -> Nothing
+      _                    -> Nothing
 
     -- The parameters to the HLS command are always the first element
 
@@ -85,7 +86,7 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
       let cmdParams :: J.Value
           cmdParams = case args of
             Just (J.List (x:_)) -> x
-            _ -> J.Null
+            _                   -> J.Null
       case parseCmdId cmdId of
         -- Shortcut for immediately applying a applyWorkspaceEdit as a fallback for v3.8 code actions
         Just ("hls", "fallbackCodeAction") ->
@@ -127,8 +128,8 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
 
 -- ---------------------------------------------------------------------
 
-extensiblePlugins :: [(PluginId, PluginHandlers IdeState)] -> Plugin Config
-extensiblePlugins xs = Plugin mempty handlers
+extensiblePlugins :: Config -> [(PluginId, PluginHandlers IdeState)] -> Plugin Config
+extensiblePlugins defaultConfig xs = Plugin mempty handlers
   where
     IdeHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers
@@ -138,7 +139,7 @@ extensiblePlugins xs = Plugin mempty handlers
     handlers = mconcat $ do
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params -> do
-        config <- getClientConfig
+        config <- fromMaybe defaultConfig <$> Ide.PluginUtils.getClientConfig
         let fs = filter (\(pid,_) -> pluginEnabled m pid config) fs'
         case nonEmpty fs of
           Nothing -> pure $ Left $ ResponseError InvalidRequest
@@ -168,7 +169,7 @@ runConcurrently msg method fs a b = fmap join $ forConcurrently fs $ \(pid,f) ->
 
 combineErrors :: [ResponseError] -> ResponseError
 combineErrors [x] = x
-combineErrors xs = ResponseError InternalError (T.pack (show xs)) Nothing
+combineErrors xs  = ResponseError InternalError (T.pack (show xs)) Nothing
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeHandler (m :: J.Method FromClient Request)

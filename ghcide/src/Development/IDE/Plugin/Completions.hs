@@ -9,41 +9,38 @@ module Development.IDE.Plugin.Completions
     , NonLocalCompletions(..)
     ) where
 
-import Control.Monad
-import Control.Monad.Extra
-import Control.Monad.Trans.Maybe
-import Data.Aeson
-import Data.List (find)
-import Data.Maybe
-import qualified Data.Text as T
-import Language.LSP.Types
-import qualified Language.LSP.Server as LSP
-import qualified Language.LSP.VFS as VFS
-import Development.Shake.Classes
-import Development.Shake
-import GHC.Generics
-import Development.IDE.Core.Service
-import Development.IDE.Core.PositionMapping
-import Development.IDE.Plugin.Completions.Logic
-import Development.IDE.Types.Location
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat
-import Development.IDE.GHC.ExactPrint (Annotated (annsA), GetAnnotatedParsedSource (GetAnnotatedParsedSource))
-import Development.IDE.Types.HscEnvEq (hscEnv)
-import Development.IDE.Plugin.CodeAction.ExactPrint
-import Development.IDE.Plugin.Completions.Types
-import Ide.Plugin.Config (Config (completionSnippetsOn))
-import Ide.PluginUtils (getClientConfig)
-import Ide.Types
-import TcRnDriver (tcRnImportDecls)
-import Control.Concurrent.Async (concurrently)
-import GHC.Exts (toList)
-import Development.IDE.GHC.Error (rangeToSrcSpan)
-import Development.IDE.GHC.Util (prettyPrint)
-#if defined(GHC_LIB)
-import Development.IDE.Import.DependencyInformation
-#endif
+import           Control.Concurrent.Async                     (concurrently)
+import           Control.Monad
+import           Control.Monad.Extra
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson
+import           Data.List                                    (find)
+import           Data.Maybe
+import qualified Data.Text                                    as T
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error                    (rangeToSrcSpan)
+import           Development.IDE.GHC.ExactPrint               (Annotated (annsA),
+                                                               GetAnnotatedParsedSource (GetAnnotatedParsedSource))
+import           Development.IDE.GHC.Util                     (prettyPrint)
+import           Development.IDE.Plugin.CodeAction.ExactPrint
+import           Development.IDE.Plugin.Completions.Logic
+import           Development.IDE.Plugin.Completions.Types
+import           Development.IDE.Types.HscEnvEq               (hscEnv)
+import           Development.IDE.Types.Location
+import           Development.Shake
+import           Development.Shake.Classes
+import           GHC.Exts                                     (toList)
+import           GHC.Generics
+import           Ide.Plugin.Config                            (Config (completionSnippetsOn))
+import           Ide.Types
+import qualified Language.LSP.Server                          as LSP
+import           Language.LSP.Types
+import qualified Language.LSP.VFS                             as VFS
+import           TcRnDriver                                   (tcRnImportDecls)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -69,15 +66,6 @@ produceCompletions = do
         ms <- fmap fst <$> useWithStale GetModSummaryWithoutTimestamps file
         sess <- fmap fst <$> useWithStale GhcSessionDeps file
 
--- When possible, rely on the haddocks embedded in our interface files
--- This creates problems on ghc-lib, see comment on 'getDocumentationTryGhc'
-#if !defined(GHC_LIB)
-        let parsedDeps = []
-#else
-        deps <- maybe (TransitiveDependencies [] [] []) fst <$> useWithStale GetDependencies file
-        parsedDeps <- mapMaybe (fmap fst) <$> usesWithStale GetParsedModule (transitiveModuleDeps deps)
-#endif
-
         case (ms, sess) of
             (Just (ms,imps), Just sess) -> do
               let env = hscEnv sess
@@ -86,7 +74,7 @@ produceCompletions = do
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod ms) globalEnv inScopeEnv imps parsedDeps
+                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod ms) globalEnv inScopeEnv imps
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
@@ -98,7 +86,7 @@ dropListFromImportDecl iDecl = let
     f d@ImportDecl {ideclHiding} = case ideclHiding of
         Just (False, _) -> d {ideclHiding=Nothing}
         -- if hiding or Nothing just return d
-        _ -> d
+        _               -> d
     f x = x
     in f <$> iDecl
 
@@ -147,7 +135,7 @@ getCompletionsLSP ide plId
                 -> return (InL $ List [])
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
-                config <- getClientConfig
+                config <- getClientConfig $ shakeExtras ide
                 let snippets = WithSnippets . completionSnippetsOn $ config
                 allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
                 pure $ InL (List allCompletions)
@@ -212,5 +200,5 @@ liftMaybe :: Monad m => Maybe a -> MaybeT m a
 liftMaybe a = MaybeT $ pure a
 
 liftEither :: Monad m => Either e a -> MaybeT m a
-liftEither (Left _) = mzero
+liftEither (Left _)  = mzero
 liftEither (Right x) = return x

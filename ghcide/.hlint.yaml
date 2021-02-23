@@ -11,7 +11,6 @@
 - ignore: {name: "Redundant do"}
 - ignore: {name: "Avoid lambda"}
 - ignore: {name: "Use newtype instead of data"}
-- ignore: {name: "Use fromMaybe"}
 - ignore: {name: "Use unless"}
 - ignore: {name: "Move brackets to avoid $"}
 - ignore: {name: "Eta reduce"}
@@ -24,6 +23,21 @@
 - ignore: {name: "Use camelCase"}
 - ignore: {name: "Use uncurry"}
 - ignore: {name: "Avoid lambda using `infix`"}
+
+# Gives at least one suggestion we don't like.
+- ignore: {name: "Use <=<"}
+- ignore: {name: "Use zipFrom"}
+- ignore: {name: "Use zipWithFrom"}
+
+# We are using the "redundant" return/pure to assign a name. We do not want to
+# delete it. In particular, this is not an improvement:
+# Found:
+#   do options <- somethingComplicated
+#      pure options
+# Perhaps:
+#   do somethingComplicated
+- ignore: {name: "Redundant return"}
+- ignore: {name: "Redundant pure"}
 
 # Off by default hints we like
 - warn: {name: Use module export list}
@@ -107,7 +121,7 @@
   # Things that are unsafe in Haskell base library
   - {name: unsafeInterleaveIO, within: [Development.IDE.LSP.LanguageServer]}
   - {name: unsafeDupablePerformIO, within: []}
-  - {name: unsafeCoerce, within: []}
+  - {name: unsafeCoerce, within: [Ide.Plugin.Eval.Code]}
   # Things that are a bit dangerous in the GHC API
   - {name: nameModule, within: []}
 

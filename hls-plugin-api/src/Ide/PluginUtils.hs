@@ -1,5 +1,5 @@
+{-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE FlexibleContexts #-}
 module Ide.PluginUtils
   ( WithDeletions(..),
     getProcessID,
@@ -25,18 +25,16 @@ where
 
 import           Data.Algorithm.Diff
 import           Data.Algorithm.DiffOutput
-import qualified Data.HashMap.Strict                     as H
-import           Data.Maybe
-import qualified Data.Text                               as T
+import qualified Data.HashMap.Strict             as H
+import qualified Data.Text                       as T
 import           Ide.Types
 import           Language.LSP.Types
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
 
-import qualified Data.Default
-import qualified Data.Map.Strict                         as Map
+import qualified Data.Map.Strict                 as Map
 import           Ide.Plugin.Config
-import Language.LSP.Server
+import           Language.LSP.Server
 
 -- ---------------------------------------------------------------------
 
@@ -135,7 +133,7 @@ clientSupportsDocumentChanges caps =
         WorkspaceEditClientCapabilities mDc _ _ <- _workspaceEdit wCaps
         mDc
   in
-    fromMaybe False supports
+    Just True == supports
 
 -- ---------------------------------------------------------------------
 
@@ -148,23 +146,18 @@ pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginI
 -- cache the returned value of this function, as clients can at runitime change
 -- their configuration.
 --
--- If no custom configuration has been set by the client, this function returns
--- our own defaults.
-getClientConfig :: MonadLsp Config m => m Config
-getClientConfig = fromMaybe Data.Default.def <$> getConfig
+getClientConfig :: MonadLsp Config m => m (Maybe Config)
+getClientConfig = getConfig
 
 -- ---------------------------------------------------------------------
 
 -- | Returns the current plugin configuration. It is not wise to permanently
 -- cache the returned value of this function, as clients can change their
 -- configuration at runtime.
---
--- If no custom configuration has been set by the client, this function returns
--- our own defaults.
-getPluginConfig :: MonadLsp Config m => PluginId -> m PluginConfig
+getPluginConfig :: MonadLsp Config m => PluginId -> m (Maybe PluginConfig)
 getPluginConfig plugin = do
     config <- getClientConfig
-    return $ configForPlugin config plugin
+    return $ flip configForPlugin plugin <$> config
 
 -- ---------------------------------------------------------------------
 
@@ -214,7 +207,7 @@ allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
 
 
 allLspCmdIds :: T.Text -> [(PluginId, [PluginCommand ideState])] -> [T.Text]
-allLspCmdIds pid commands = concat $ map go commands
+allLspCmdIds pid commands = concatMap go commands
   where
     go (plid, cmds) = map (mkLspCmdId pid plid . commandId) cmds
 

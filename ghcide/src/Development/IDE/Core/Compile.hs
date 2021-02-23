@@ -325,7 +325,12 @@ generateObjectCode session summary guts = do
               (warnings, dot_o_fp) <-
                 withWarnings "object" $ \_tweak -> do
                       let summary' = _tweak summary
-                          session' = session { hsc_dflags = (ms_hspp_opts summary') { outputFile = Just dot_o }}
+#if MIN_GHC_API_VERSION(8,10,0)
+                          target = defaultObjectTarget $ hsc_dflags session
+#else
+                          target = defaultObjectTarget $ targetPlatform $ hsc_dflags session
+#endif
+                          session' = session { hsc_dflags = updOptLevel 0 $ (ms_hspp_opts summary') { outputFile = Just dot_o , hscTarget = target}}
                       (outputFilename, _mStub, _foreign_files) <- hscGenHardCode session' guts
 #if MIN_GHC_API_VERSION(8,10,0)
                                 (ms_location summary')

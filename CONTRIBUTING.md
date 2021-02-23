@@ -1,5 +1,40 @@
 # Contributors Guide
 
+## Pre-commit hook
+We are using [pre-commit-hook.nix](https://github.com/cachix/pre-commit-hooks.nix) to configure git pre-commit hook for formatting. Although it is possible to run formatting manually, we recommend you to use it to set pre-commit hook as our CI checks pre-commit hook is applied or not.
+
+You can configure the pre-commit-hook by running
+
+``` bash
+nix-shell
+```
+
+If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you can instead use [pre-commit](https://pre-commit.com) with the following config.
+
+```json
+{
+  "repos": [
+    {
+      "hooks": [
+        {
+          "entry": "stylish-haskell --inplace",
+          "exclude": "(test/testdata/.*|hie-compat/.*)",
+          "files": "\\.l?hs$",
+          "id": "stylish-haskell",
+          "language": "system",
+          "name": "stylish-haskell",
+          "pass_filenames": true,
+          "types": [
+            "file"
+          ]
+        }
+      ],
+      "repo": "local"
+    }
+  ]
+}
+```
+
 ## Testing
 
 The tests make use of the [Tasty](https://github.com/feuerbach/tasty) test framework.

@@ -1,7 +1,7 @@
 cabal-version:      2.2
 category:           Development
 name:               hls-tactics-plugin
-version:            0.5.1.0
+version:            1.0.0.0
 synopsis:           Tactics plugin for Haskell Language Server
 description:        Please see README.md
 author:             Sandy Maguire, Reed Mullanix
@@ -24,14 +24,18 @@ library
   exposed-modules:
     Ide.Plugin.Tactic
     Ide.Plugin.Tactic.Auto
+    Ide.Plugin.Tactic.CaseSplit
     Ide.Plugin.Tactic.CodeGen
     Ide.Plugin.Tactic.CodeGen.Utils
     Ide.Plugin.Tactic.Context
     Ide.Plugin.Tactic.Debug
+    Ide.Plugin.Tactic.FeatureSet
     Ide.Plugin.Tactic.GHC
     Ide.Plugin.Tactic.Judgements
     Ide.Plugin.Tactic.KnownStrategies
     Ide.Plugin.Tactic.KnownStrategies.QuickCheck
+    Ide.Plugin.Tactic.LanguageServer
+    Ide.Plugin.Tactic.LanguageServer.TacticProviders
     Ide.Plugin.Tactic.Machinery
     Ide.Plugin.Tactic.Naming
     Ide.Plugin.Tactic.Range
@@ -58,9 +62,9 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen
-    , ghcide         >=0.1
+    , ghcide         ^>= 1.0.0.0
     , lsp
-    , hls-plugin-api
+    , hls-plugin-api ^>= 1.0.0.0
     , lens
     , mtl
     , refinery       ^>=0.3

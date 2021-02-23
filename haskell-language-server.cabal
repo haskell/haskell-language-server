@@ -1,7 +1,7 @@
 cabal-version:      2.2
 category:           Development
 name:               haskell-language-server
-version:            0.9.0.0
+version:            1.0.0.0
 synopsis:           LSP server for GHC
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
@@ -64,12 +64,12 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                >=0.7.5
+    , ghcide                ^>= 1.0.0.0
     , gitrev
     , lsp
-    , hls-plugin-api        >=0.7
     , hie-bios
     , hiedb
+    , hls-plugin-api        ^>= 1.0.0.0
     , hslogger
     , optparse-applicative
     , optparse-simple
@@ -187,37 +187,37 @@ common example-plugins
 
 common class
   if flag(class) || flag(all-plugins)
-    build-depends: hls-class-plugin
+    build-depends: hls-class-plugin ^>= 1.0.0.0
     cpp-options: -Dclass
 
 common haddockComments
   if flag(haddockComments) || flag(all-plugins)
-    build-depends: hls-haddock-comments-plugin
+    build-depends: hls-haddock-comments-plugin ^>= 1.0.0.0
     cpp-options: -DhaddockComments
 
 common eval
   if flag(eval) || flag(all-plugins)
-    build-depends: hls-eval-plugin
+    build-depends: hls-eval-plugin ^>= 1.0.0.0
     cpp-options: -Deval
 
 common importLens
   if flag(importLens) || flag(all-plugins)
-    build-depends: hls-explicit-imports-plugin
+    build-depends: hls-explicit-imports-plugin ^>= 1.0.0.0
     cpp-options: -DimportLens
 
 common retrie
   if flag(retrie) || flag(all-plugins)
-    build-depends: hls-retrie-plugin
+    build-depends: hls-retrie-plugin ^>= 1.0.0.0
     cpp-options: -Dretrie
 
 common tactic
   if flag(tactic) || flag(all-plugins)
-    build-depends: hls-tactics-plugin
+    build-depends: hls-tactics-plugin ^>= 1.0.0.0
     cpp-options: -Dtactic
 
 common hlint
   if flag(hlint) || flag(all-plugins)
-    build-depends: hls-hlint-plugin
+    build-depends: hls-hlint-plugin ^>= 1.0.0.0
     cpp-options: -Dhlint
 
 common moduleName
@@ -235,7 +235,7 @@ common pragmas
 
 common splice
   if flag(splice) || flag(all-plugins)
-    build-depends: hls-splice-plugin
+    build-depends: hls-splice-plugin ^>= 1.0.0.0
     cpp-options: -Dsplice
 
 -- formatters
@@ -365,6 +365,7 @@ executable haskell-language-server-wrapper
     ghc-options: -Werror
 
   build-depends:
+    , data-default
     , ghc
     , ghc-paths
     , ghcide
@@ -391,7 +392,7 @@ common hls-test-utils
     , data-default
     , lsp
     , hie-bios
-    , hls-plugin-api        >=0.6
+    , hls-plugin-api        ^>= 1.0.0.0
     , hslogger
     , hspec
     , hspec-core
@@ -461,6 +462,7 @@ test-suite func-test
     Splice
     HaddockComments
     Ide.Plugin.Splice.Types
+    Ide.Plugin.Tactic.FeatureSet
     Ide.Plugin.Tactic.TestTypes
     Ide.Plugin.Eval.Types
 

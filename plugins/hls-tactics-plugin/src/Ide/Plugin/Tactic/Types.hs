@@ -1,11 +1,12 @@
-{-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingVia                #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE TypeApplications           #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
 
 module Ide.Plugin.Tactic.Types
@@ -19,13 +20,12 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
-import Control.Lens hiding (Context)
+import Control.Lens hiding (Context, (.=))
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Coerce
 import Data.Function
 import Data.Generics.Product (field)
-import Data.Map (Map)
 import Data.Set (Set)
 import Data.Tree
 import Development.IDE.GHC.Compat hiding (Node)
@@ -33,6 +33,7 @@ import Development.IDE.GHC.Orphans ()
 import Development.IDE.Types.Location
 import GHC.Generics
 import Ide.Plugin.Tactic.Debug
+import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
 import OccName
 import Refinery.Tactic
 import System.IO.Unsafe (unsafePerformIO)
@@ -70,6 +71,9 @@ instance Show Class where
   show  = unsafeRender
 
 instance Show (HsExpr GhcPs) where
+  show  = unsafeRender
+
+instance Show (Pat GhcPs) where
   show  = unsafeRender
 
 
@@ -333,14 +337,15 @@ data Context = Context
     -- ^ The functions currently being defined
   , ctxModuleFuncs :: [(OccName, CType)]
     -- ^ Everything defined in the current module
+  , ctxFeatureSet :: FeatureSet
   }
-  deriving stock (Eq, Ord)
+  deriving stock (Eq, Ord, Show)
 
 
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty
+emptyContext  = Context mempty mempty mempty
 
 
 newtype Rose a = Rose (Tree a)
@@ -371,4 +376,14 @@ data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
   , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
+  , rtr_jdg         :: Judgement
+  , rtr_ctx         :: Context
   } deriving Show
+
+
+data AgdaMatch = AgdaMatch
+  { amPats :: [Pat GhcPs]
+  , amBody :: HsExpr GhcPs
+  }
+  deriving (Show)
+

@@ -1,5 +1,3 @@
 note :: e -> Maybe a -> Either e a
-note = \ e ma
-  -> case ma of
-       Nothing -> Left e
-       (Just a) -> Right a
+note e Nothing = Left e
+note _ (Just a) = Right a

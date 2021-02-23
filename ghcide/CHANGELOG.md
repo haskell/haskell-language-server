@@ -1,5 +1,14 @@
 ### 0.7.5 (2021-02-??)
+* Tone down some logInfos to logDebug (#1385) - Pepe Iborra
+* Show window message when auto extending import lists (#1371) - Potato Hatsue
+* Catch GHC errors in listing module names (#1367) - Potato Hatsue
+* Upgrade to lsp-1.0 (#1284) - wz1000
 * Added Development.IDE.Main (#1338) - Pepe Iborra
+* Fix completion snippets on DuplicateRecordFields (#1360) - Potato Hatsue
+* Add code action for hiding shadowed identifiers from imports (#1322) - Potato Hatsue
+* Make find-definition work better with multi-components (#1357) - wz1000
+* Index files on first open (#1358) - wz1000
+* Fix code actions regression (#1349) - Pepe Iborra
 
 ### 0.7.4 (2021-02-08)
 * Support for references via hiedb (#704) - wz1000

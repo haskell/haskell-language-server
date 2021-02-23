@@ -66,7 +66,7 @@ main = do
       DbCmd opts cmd -> do
         dir <- IO.getCurrentDirectory
         dbLoc <- getHieDbLoc dir
-        mlibdir <- setInitialDynFlags
+        mlibdir <- setInitialDynFlags def
         case mlibdir of
           Nothing -> exitWith $ ExitFailure 1
           Just libdir -> runCommand libdir opts{database = dbLoc} cmd
@@ -79,7 +79,7 @@ main = do
                 hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
               _ -> return ()
 
-          Main.defaultMain Main.defArguments
+          Main.defaultMain def
             {Main.argFiles = case argFilesOrCmd of
                 Typecheck x | not argLSP -> Just x
                 _ -> Nothing

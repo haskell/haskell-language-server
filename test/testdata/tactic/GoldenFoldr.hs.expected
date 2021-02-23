@@ -1,5 +1,3 @@
 foldr2 :: (a -> b -> b) -> b -> [a] -> b
-foldr2 = \ f_b b l_a
-  -> case l_a of
-       [] -> b
-       (a : l_a4) -> f_b a (foldr2 f_b b l_a4)
+foldr2 _ b [] = b
+foldr2 f_b b (a : l_a4) = f_b a (foldr2 f_b b l_a4)

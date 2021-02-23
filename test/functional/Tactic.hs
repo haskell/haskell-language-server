@@ -15,12 +15,16 @@ import           Control.Lens hiding ((<.>))
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
+import           Data.Default (Default(def))
 import           Data.Either (isLeft)
 import           Data.Foldable
+import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import qualified Ide.Plugin.Config as Plugin
+import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
 import           Ide.Plugin.Tactic.TestTypes
 import           Language.LSP.Test
 import           Language.LSP.Types
@@ -124,6 +128,7 @@ tests = testGroup
   , goldenTest "FmapJoin.hs"                2 14 Auto ""
   , goldenTest "Fgmap.hs"                   2 9  Auto ""
   , goldenTest "FmapJoinInLet.hs"           4 19 Auto ""
+  , goldenTest "SplitPattern.hs"            7 25 Destruct "a"
   ]
 
 
@@ -150,14 +155,34 @@ mkTest name fp line col ts =
     for_ ts $ \(f, tc, var) -> do
       let title = tacticTitle tc var
       liftIO $
-        f (elem title titles)
+        f (title `elem` titles)
           @? ("Expected a code action with title " <> T.unpack title)
 
 
+setFeatureSet :: FeatureSet -> Session ()
+setFeatureSet features = do
+  let unObject (Object obj) = obj
+      unObject _ = undefined
+      def_config = def :: Plugin.Config
+      config =
+        def_config
+          { Plugin.plugins = M.fromList [("tactics",
+              def { Plugin.plcConfig = unObject $ toJSON $
+                emptyConfig { cfg_feature_set = features }}
+          )] <> Plugin.plugins def_config }
+
+  sendNotification SWorkspaceDidChangeConfiguration $
+    DidChangeConfigurationParams $
+      toJSON config
+
 goldenTest :: FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
-goldenTest input line col tc occ =
+goldenTest = goldenTest' allFeatures
+
+goldenTest' :: FeatureSet -> FilePath -> Int -> Int -> TacticCommand -> Text -> TestTree
+goldenTest' features input line col tc occ =
   testCase (input <> " (golden)") $ do
     runSession hlsCommand fullCaps tacticPath $ do
+      setFeatureSet features
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
       actions <- getCodeActions doc $ pointRange line col

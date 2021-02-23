@@ -20,6 +20,7 @@ import           Control.Concurrent.Extra       (readVar)
 import           Control.Exception.Safe         (Exception (..), SomeException,
                                                  catch, throwIO, try)
 import           Control.Monad                  (forM, unless)
+import           Control.Monad.Extra            (maybeM)
 import           Control.Monad.IO.Class         (MonadIO (liftIO))
 import           Control.Monad.Trans.Class      (MonadTrans (lift))
 import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
@@ -146,14 +147,14 @@ extractImports ModSummary{ms_mod} topLevelBinds (Unfold thing)
   , names <- listify p fun_matches
   =
     [ AddImport {..}
-    | name <- names,
-        Just ideclNameString <-
-        [moduleNameString . GHC.moduleName <$> nameModule_maybe name],
-        let ideclSource = False,
+    | let ideclSource = False,
+        name <- names,
         let r = nameRdrName name,
         let ideclQualifiedBool = isQual r,
         let ideclAsString = moduleNameString . fst <$> isQual_maybe r,
-        let ideclThing = Just (IEVar $ occNameString $ rdrNameOcc r)
+        let ideclThing = Just (IEVar $ occNameString $ rdrNameOcc r),
+        Just ideclNameString <-
+        [moduleNameString . GHC.moduleName <$> nameModule_maybe name]
     ]
     where
         p name = nameModule_maybe name /= Just ms_mod
@@ -178,8 +179,8 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
           ++ [ r
                | TyClGroup {group_tyclds} <- hs_tyclds,
                  L l g <- group_tyclds,
-                 r <- suggestTypeRewrites uri ms_mod g,
-                 pos `isInsideSrcSpan` l
+                 pos `isInsideSrcSpan` l,
+                 r <- suggestTypeRewrites uri ms_mod g
 
              ]
 
@@ -235,7 +236,6 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L l' rdrName}
               description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
-  where
 suggestBindRewrites _ _ _ _ = []
 
 describeRestriction :: IsString p => Bool -> p
@@ -409,9 +409,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
     -- TODO add the imports to the resulting edits
     (_user, ast, change@(Change _replacements _imports)) <-
       lift $ runRetrie fixityEnv retrie cpp
-    case ast of
-      _ ->
-        return $ asTextEdits change
+    return $ asTextEdits change
 
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit
@@ -485,7 +483,7 @@ handleMaybe :: Monad m => e -> Maybe b -> ExceptT e m b
 handleMaybe msg = maybe (throwE msg) return
 
 handleMaybeM :: Monad m => e -> m (Maybe b) -> ExceptT e m b
-handleMaybeM msg act = maybe (throwE msg) return =<< lift act
+handleMaybeM msg act = maybeM (throwE msg) return $ lift act
 
 response :: Monad m => ExceptT String m a -> m (Either ResponseError a)
 response =

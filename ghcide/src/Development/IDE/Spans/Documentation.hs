@@ -43,11 +43,10 @@ import HscTypes (HscEnv(hsc_dflags))
 
 mkDocMap
   :: HscEnv
-  -> [ParsedModule]
   -> RefMap a
   -> TcGblEnv
   -> IO DocAndKindMap
-mkDocMap env sources rm this_mod =
+mkDocMap env rm this_mod =
   do let (_ , DeclDocMap this_docs, _) = extractDocs this_mod
      d <- foldrM getDocs (mkNameEnv $ M.toList $ fmap (`SpanDocString` SpanDocUris Nothing Nothing) this_docs) names
      k <- foldrM getType (tcg_type_env this_mod) names
@@ -56,7 +55,7 @@ mkDocMap env sources rm this_mod =
     getDocs n map
       | maybe True (mod ==) $ nameModule_maybe n = pure map -- we already have the docs in this_docs, or they do not exist
       | otherwise = do
-      doc <- getDocumentationTryGhc env mod sources n
+      doc <- getDocumentationTryGhc env mod n
       pure $ extendNameEnv map n doc
     getType n map
       | isTcOcc $ occName n = do
@@ -71,23 +70,21 @@ lookupKind :: HscEnv -> Module -> Name -> IO (Maybe TyThing)
 lookupKind env mod =
     fmap (fromRight Nothing) . catchSrcErrors (hsc_dflags env) "span" . lookupName env mod
 
-getDocumentationTryGhc :: HscEnv -> Module -> [ParsedModule] -> Name -> IO SpanDoc
-getDocumentationTryGhc env mod deps n = head <$> getDocumentationsTryGhc env mod deps [n]
+getDocumentationTryGhc :: HscEnv -> Module -> Name -> IO SpanDoc
+getDocumentationTryGhc env mod n = head <$> getDocumentationsTryGhc env mod [n]
 
-getDocumentationsTryGhc :: HscEnv -> Module -> [ParsedModule] -> [Name] -> IO [SpanDoc]
--- Interfaces are only generated for GHC >= 8.6.
--- In older versions, interface files do not embed Haddocks anyway
-getDocumentationsTryGhc env mod sources names = do
+getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
+getDocumentationsTryGhc env mod names = do
   res <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
   case res of
-      Left _ -> mapM mkSpanDocText names
+      Left _ -> return []
       Right res -> zipWithM unwrap res names
   where
     unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
     unwrap _ n = mkSpanDocText n
 
     mkSpanDocText name =
-      SpanDocText (getDocumentation sources name) <$> getUris name
+      SpanDocText [] <$> getUris name
 
     -- Get the uris to the documentation and source html pages if they exist
     getUris name = do

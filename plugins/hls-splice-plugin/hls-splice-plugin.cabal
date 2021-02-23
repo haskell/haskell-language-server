@@ -1,6 +1,6 @@
 cabal-version:      2.2
 name:               hls-splice-plugin
-version:            0.4.0.0
+version:            1.0.0.0
 synopsis:           HLS Plugin to expand TemplateHaskell Splices and QuasiQuotes
 description:        HLS Plugin to expand TemplateHaskell Splices and QuasiQuotes.
 license:            Apache-2.0
@@ -16,14 +16,15 @@ library
   other-modules:    Ide.Plugin.Splice.Types
   hs-source-dirs:   src
   build-depends:    aeson
-                  , base       >=4.12 && <5
+                  , base                 >=4.12 && <5
                   , containers
+                  , extra
                   , foldl
                   , lsp
-                  , hls-plugin-api
+                  , hls-plugin-api       ^>= 1.0.0.0
                   , ghc
                   , ghc-exactprint
-                  , ghcide >= 0.7.3
+                  , ghcide               ^>= 1.0.0.0
                   , lens
                   , dlist
                   , retrie

@@ -96,7 +96,7 @@ getProjectFile ver = do
             else "cabal.project"
 
 checkCabal_ :: [String] -> Action ()
-checkCabal_ args = checkCabal args >> return ()
+checkCabal_ args = void $ checkCabal args
 
 -- | check `cabal` has the required version
 checkCabal :: [String] -> Action String

@@ -1,2 +1,2 @@
 showCompose :: Show a => (b -> a) -> b -> String
-showCompose = \ fba -> show . fba
+showCompose fba = show . fba

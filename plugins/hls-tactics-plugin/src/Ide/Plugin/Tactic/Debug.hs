@@ -11,6 +11,7 @@ module Ide.Plugin.Tactic.Debug
   , traceX
   , traceIdX
   , traceMX
+  , traceFX
   ) where
 
 import Control.DeepSeq
@@ -52,4 +53,7 @@ traceX str a = trace (mappend ("!!!" <> str <> ": ") $ show a)
 
 traceIdX :: (Show a) => String -> a -> a
 traceIdX str a = trace (mappend ("!!!" <> str <> ": ") $ show a) a
+
+traceFX :: String -> (a -> String) -> a -> a
+traceFX str f a = trace (mappend ("!!!" <> str <> ": ") $ f a) a
 

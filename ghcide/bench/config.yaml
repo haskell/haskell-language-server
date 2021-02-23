@@ -28,11 +28,10 @@ examples:
     modules:
         - hls-plugin-api/src/Ide/Plugin/Config.hs
         - ghcide/src/Development/IDE/Plugin/CodeAction/ExactPrint.hs
-        # Things get too slow with more than 2 components, hie-bios 0.7.3 will help here
-        # - ghcide/bench/hist/Main.hs
-        # - ghcide/bench/lib/Experiments/Types.hs
-        # - ghcide/test/exe/Main.hs
-        # - exe/Plugins.hs
+        - ghcide/bench/hist/Main.hs
+        - ghcide/bench/lib/Experiments/Types.hs
+        - ghcide/test/exe/Main.hs
+        - exe/Plugins.hs
 
 # The set of experiments to execute
 experiments:

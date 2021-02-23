@@ -47,6 +47,8 @@ module Development.IDE.Core.Shake(
     getIdeOptions,
     getIdeOptionsIO,
     GlobalIdeOptions(..),
+    getClientConfig,
+    getPluginConfig,
     garbageCollect,
     knownTargets,
     setPriority,
@@ -117,7 +119,6 @@ import qualified Development.Shake as Shake
 import           Control.Monad.Extra
 import           Data.Time
 import           GHC.Generics
-import           System.IO.Unsafe
 import Language.LSP.Types
 import qualified Control.Monad.STM as STM
 import Control.Monad.IO.Class
@@ -141,6 +142,8 @@ import           Control.Exception.Extra hiding (bracket_)
 import UnliftIO.Exception (bracket_)
 import           Ide.Plugin.Config
 import Data.Default
+import qualified Ide.PluginUtils               as HLS
+import           Ide.Types                      ( PluginId )
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
@@ -197,6 +200,8 @@ data ShakeExtras = ShakeExtras
       -- ^ Registery for functions that compute/get "stale" results for the rule
       -- (possibly from disk)
     , vfs :: VFSHandle
+    , defaultConfig :: Config
+      -- ^ Default HLS config, only relevant if the client does not provide any Config
     }
 
 type WithProgressFunc = forall a.
@@ -219,6 +224,16 @@ getShakeExtrasRules :: Rules ShakeExtras
 getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
+
+getClientConfig :: LSP.MonadLsp Config m => ShakeExtras -> m Config
+getClientConfig ShakeExtras { defaultConfig } =
+    fromMaybe defaultConfig <$> HLS.getClientConfig
+
+getPluginConfig
+    :: LSP.MonadLsp Config m => ShakeExtras -> PluginId -> m PluginConfig
+getPluginConfig extras plugin = do
+    config <- getClientConfig extras
+    return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
 -- This is called when we don't already have a result, or computing the rule failed.
@@ -371,28 +386,23 @@ data IdeState = IdeState
     ,shakeSession    :: MVar ShakeSession
     ,shakeClose      :: IO ()
     ,shakeExtras     :: ShakeExtras
-    ,shakeProfileDir :: Maybe FilePath
+    ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopProgressReporting :: IO ()
     }
 
 
 
 -- This is debugging code that generates a series of profiles, if the Boolean is true
-shakeDatabaseProfile :: Maybe FilePath -> ShakeDatabase -> IO (Maybe FilePath)
-shakeDatabaseProfile mbProfileDir shakeDb =
+shakeDatabaseProfileIO :: Maybe FilePath -> IO(ShakeDatabase -> IO (Maybe FilePath))
+shakeDatabaseProfileIO mbProfileDir = do
+    profileStartTime <- formatTime defaultTimeLocale "%Y%m%d-%H%M%S" <$> getCurrentTime
+    profileCounter <- newVar (0::Int)
+    return $ \shakeDb ->
         for mbProfileDir $ \dir -> do
                 count <- modifyVar profileCounter $ \x -> let !y = x+1 in return (y,y)
                 let file = "ide-" ++ profileStartTime ++ "-" ++ takeEnd 5 ("0000" ++ show count) <.> "html"
                 shakeProfileDatabase shakeDb $ dir </> file
                 return (dir </> file)
-
-{-# NOINLINE profileStartTime #-}
-profileStartTime :: String
-profileStartTime = unsafePerformIO $ formatTime defaultTimeLocale "%Y%m%d-%H%M%S" <$> getCurrentTime
-
-{-# NOINLINE profileCounter #-}
-profileCounter :: Var Int
-profileCounter = unsafePerformIO $ newVar 0
 
 setValues :: IdeRule k v
           => Var Values
@@ -451,6 +461,7 @@ seqValue v b = case v of
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
+          -> Config
           -> Logger
           -> Debouncer NormalizedUri
           -> Maybe FilePath
@@ -462,7 +473,7 @@ shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
           -> ShakeOptions
           -> Rules ()
           -> IO IdeState
-shakeOpen lspEnv logger debouncer
+shakeOpen lspEnv defaultConfig logger debouncer
   shakeProfileDir (IdeReportProgress reportProgress) ideTesting@(IdeTesting testing) hiedb indexQueue vfs opts rules = mdo
 
     inProgress <- newVar HMap.empty
@@ -502,6 +513,7 @@ shakeOpen lspEnv logger debouncer
     shakeDb <- shakeDbM
     initSession <- newSession shakeExtras shakeDb []
     shakeSession <- newMVar initSession
+    shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
 
     IdeOptions{ optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled } <- getIdeOptionsIO shakeExtras
@@ -628,7 +640,7 @@ shakeRestart IdeState{..} acts =
         shakeSession
         (\runner -> do
               (stopTime,()) <- duration (cancelShakeSession runner)
-              res <- shakeDatabaseProfile shakeProfileDir shakeDb
+              res <- shakeDatabaseProfile shakeDb
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
                       _ -> ""

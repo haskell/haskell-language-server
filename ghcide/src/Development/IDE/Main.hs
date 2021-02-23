@@ -1,4 +1,4 @@
-module Development.IDE.Main (Arguments(..), defArguments, defaultMain) where
+module Development.IDE.Main (Arguments(..), defaultMain) where
 import Control.Concurrent.Extra (readVar)
 import Control.Exception.Safe (
     Exception (displayException),
@@ -47,7 +47,7 @@ import Development.IDE.Plugin (
     Plugin (pluginHandlers, pluginRules),
  )
 import Development.IDE.Plugin.HLS (asGhcIdePlugin)
-import Development.IDE.Session (SessionLoadingOptions, defaultLoadingOptions, loadSessionWithOptions, setInitialDynFlags, getHieDbLoc, runWithDb)
+import Development.IDE.Session (SessionLoadingOptions, loadSessionWithOptions, setInitialDynFlags, getHieDbLoc, runWithDb)
 import Development.IDE.Types.Location (toNormalizedFilePath')
 import Development.IDE.Types.Logger (Logger)
 import Development.IDE.Types.Options (
@@ -85,16 +85,15 @@ data Arguments = Arguments
     , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
     }
 
-defArguments :: Arguments
-defArguments =
-    Arguments
+instance Default Arguments where
+    def = Arguments
         { argsOTMemoryProfiling = False
         , argFiles = Nothing
         , argsLogger = noLogging
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
         , argsHlsPlugins = pluginDescToIdePlugins Ghcide.descriptors
-        , argsSessionLoadingOptions = defaultLoadingOptions
+        , argsSessionLoadingOptions = def
         , argsIdeOptions = const defaultIdeOptions
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
@@ -105,11 +104,12 @@ defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
     pid <- T.pack . show <$> getProcessID
 
-    let hlsPlugin = asGhcIdePlugin argsHlsPlugins
+    let hlsPlugin = asGhcIdePlugin argsDefaultHlsConfig argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
         argsOnConfigChange _ide = pure . getConfigFromNotification argsDefaultHlsConfig
+        rules = argsRules >> pluginRules plugins
 
     case argFiles of
         Nothing -> do
@@ -127,7 +127,7 @@ defaultMain Arguments{..} = do
                 -- We do it here since haskell-lsp changes our working directory to the correct place ('rootPath')
                 -- before calling this function
                 _mlibdir <-
-                    setInitialDynFlags
+                    setInitialDynFlags argsSessionLoadingOptions
                         `catchAny` (\e -> (hPutStrLn stderr $ "setInitialDynFlags: " ++ displayException e) >> pure Nothing)
 
                 sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions $ fromMaybe dir rootPath
@@ -135,10 +135,10 @@ defaultMain Arguments{..} = do
                 let options = (argsIdeOptions config sessionLoader)
                             { optReportProgress = clientSupportsProgress caps
                             }
-                    rules = argsRules >> pluginRules plugins
                     caps = LSP.resClientCapabilities env
                 debouncer <- newAsyncDebouncer
                 initialise
+                    argsDefaultHlsConfig
                     rules
                     (Just env)
                     argsLogger
@@ -178,7 +178,7 @@ defaultMain Arguments{..} = do
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }
-            ide <- initialise mainRule Nothing argsLogger debouncer options vfs hiedb hieChan
+            ide <- initialise argsDefaultHlsConfig rules Nothing argsLogger debouncer options vfs hiedb hieChan
 
             putStrLn "\nStep 4/4: Type checking the files"
             setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') files

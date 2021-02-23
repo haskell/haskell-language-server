@@ -1,26 +1,25 @@
-{-# LANGUAGE LambdaCase #-}
--- {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators       #-}
 module Class
   ( tests
   )
 where
 
+import           Control.Applicative.Combinators
 import           Control.Lens                    hiding ((<.>))
-import           Control.Monad.IO.Class          (MonadIO(liftIO))
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
 import qualified Data.ByteString.Lazy            as BS
 import qualified Data.Text.Encoding              as T
 import           Language.LSP.Test
-import           Language.LSP.Types      hiding (_title, _command)
-import qualified Language.LSP.Types.Lens as J
+import           Language.LSP.Types              hiding (_command, _title)
+import qualified Language.LSP.Types.Lens         as J
 import           System.FilePath
 import           Test.Hls.Util
 import           Test.Tasty
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
-import Control.Applicative.Combinators
 
 tests :: TestTree
 tests = testGroup

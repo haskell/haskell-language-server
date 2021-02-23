@@ -1,31 +1,28 @@
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 -- | Provides code actions to add missing pragmas (whenever GHC suggests to)
-module Ide.Plugin.Pragmas
-  (
-      descriptor
-  ) where
+module Ide.Plugin.Pragmas (descriptor) where
 
-import           Control.Lens                    hiding (List)
-import qualified Data.HashMap.Strict             as H
-import qualified Data.Text                       as T
-import           Development.IDE                 as D
-import           Ide.Types
-import           Language.LSP.Types
-import qualified Language.LSP.Types      as J
-import qualified Language.LSP.Types.Lens as J
-
-import           Control.Monad                   (join)
+import           Control.Applicative        ((<|>))
+import           Control.Lens               hiding (List)
+import           Control.Monad              (join)
+import           Control.Monad.IO.Class
+import qualified Data.HashMap.Strict        as H
+import           Data.List.Extra            (nubOrdOn)
+import           Data.Maybe                 (catMaybes, listToMaybe)
+import qualified Data.Text                  as T
+import           Development.IDE            as D
 import           Development.IDE.GHC.Compat
-import qualified Language.LSP.Server       as LSP
-import qualified Language.LSP.VFS as VFS
-import qualified Text.Fuzzy as Fuzzy
-import Data.List.Extra (nubOrd)
-import Control.Monad.IO.Class
+import           Ide.Types
+import qualified Language.LSP.Server        as LSP
+import           Language.LSP.Types
+import qualified Language.LSP.Types         as J
+import qualified Language.LSP.Types.Lens    as J
+import qualified Language.LSP.VFS           as VFS
+import qualified Text.Fuzzy                 as Fuzzy
 
 -- ---------------------------------------------------------------------
 
@@ -37,54 +34,67 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 -- ---------------------------------------------------------------------
 
+-- | Title and pragma
+type PragmaEdit = (T.Text, Pragma)
+
+data Pragma = LangExt T.Text | OptGHC T.Text
+  deriving (Show, Eq, Ord)
+
+codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
+codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = do
+  let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
+      uri = docId ^. J.uri
+  pm <- liftIO $ fmap join $ runAction "Pragmas.GetParsedModule" state $ getParsedModule `traverse` mFile
+  let dflags = ms_hspp_opts . pm_mod_summary <$> pm
+      insertRange = maybe (Range (Position 0 0) (Position 0 0)) endOfModuleHeader pm
+      pedits = nubOrdOn snd . concat $ suggest dflags <$> diags
+  return $ Right $ List $ pragmaEditToAction uri insertRange <$> pedits
+
 -- | Add a Pragma to the given URI at the top of the file.
--- Pragma is added to the first line of the Uri.
 -- It is assumed that the pragma name is a valid pragma,
 -- thus, not validated.
-mkPragmaEdit :: Uri -> T.Text -> WorkspaceEdit
-mkPragmaEdit uri pragmaName = res where
-    pos = J.Position 0 0
-    textEdits = J.List
-      [J.TextEdit (J.Range pos pos)
-                  ("{-# LANGUAGE " <> pragmaName <> " #-}\n")
-      ]
-    res = J.WorkspaceEdit
-      (Just $ H.singleton uri textEdits)
-      Nothing
+pragmaEditToAction :: Uri -> Range -> PragmaEdit -> (Command |? CodeAction)
+pragmaEditToAction uri range (title, p) =
+  InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing
+  where
+    render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
+    render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
+    textEdits = J.List [J.TextEdit range $ render p]
+    edit =
+      J.WorkspaceEdit
+        (Just $ H.singleton uri textEdits)
+        Nothing
+
+suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
+suggest dflags diag =
+  suggestAddPragma dflags diag
+    ++ suggestDisableWarning diag
 
 -- ---------------------------------------------------------------------
+
+suggestDisableWarning :: Diagnostic -> [PragmaEdit]
+suggestDisableWarning Diagnostic {_code}
+  | Just (InR (T.stripPrefix "-W" -> Just w)) <- _code =
+    pure ("Disable \"" <> w <> "\" warnings", OptGHC w)
+  | otherwise = []
+
+-- ---------------------------------------------------------------------
+
 -- | Offer to add a missing Language Pragma to the top of a file.
 -- Pragmas are defined by a curated list of known pragmas, see 'possiblePragmas'.
-codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContext (J.List diags) _monly)) = liftIO $ do
-    let mFile = docId ^. J.uri & uriToFilePath <&> toNormalizedFilePath'
-    pm <- fmap join $ runAction "addPragma" state $ getParsedModule `traverse` mFile
-    let dflags = ms_hspp_opts . pm_mod_summary <$> pm
-        -- Get all potential Pragmas for all diagnostics.
-        pragmas = nubOrd $ concatMap (\d -> genPragma dflags (d ^. J.message)) diags
-    cmds <- mapM mkCodeAction pragmas
-    return $ Right $ List cmds
-      where
-        mkCodeAction pragmaName = do
-          let
-            codeAction = InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing
-            title = "Add \"" <> pragmaName <> "\""
-            edit = mkPragmaEdit (docId ^. J.uri) pragmaName
-          return codeAction
-
-        genPragma mDynflags target =
-            [ r | r <- findPragma target, r `notElem` disabled]
-          where
-            disabled
-              | Just dynFlags <- mDynflags
-                -- GHC does not export 'OnOff', so we have to view it as string
-              = [ e | Just e <- T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags]
-              | otherwise
-                -- When the module failed to parse, we don't have access to its
-                -- dynFlags. In that case, simply don't disable any pragmas.
-              = []
-
--- ---------------------------------------------------------------------
+suggestAddPragma :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
+suggestAddPragma mDynflags Diagnostic {_message} = genPragma _message
+  where
+    genPragma target =
+      [("Add \"" <> r <> "\"", LangExt r) | r <- findPragma target, r `notElem` disabled]
+    disabled
+      | Just dynFlags <- mDynflags =
+        -- GHC does not export 'OnOff', so we have to view it as string
+        catMaybes $ T.stripPrefix "Off " . T.pack . prettyPrint <$> extensions dynFlags
+      | otherwise =
+        -- When the module failed to parse, we don't have access to its
+        -- dynFlags. In that case, simply don't disable any pragmas.
+        []
 
 -- | Find all Pragmas are an infix of the search term.
 findPragma :: T.Text -> [T.Text]
@@ -103,8 +113,6 @@ findPragma str = concatMap check possiblePragmas
        | FlagSpec{flagSpecName = T.pack -> name} <- xFlags
        , "Strict" /= name
        ]
-
--- ---------------------------------------------------------------------
 
 -- | All language pragmas, including the No- variants
 allPragmas :: [T.Text]
@@ -165,3 +173,17 @@ completion _ide _ complParams = do
                         _xdata = Nothing
                       }
         _ -> return $ List []
+
+-- ---------------------------------------------------------------------
+
+-- | Find the first non-blank line before the first of (module name / imports / declarations).
+-- Useful for inserting pragmas.
+endOfModuleHeader :: ParsedModule -> Range
+endOfModuleHeader pm =
+  let mod = unLoc $ pm_parsed_source pm
+      modNameLoc = getLoc <$> hsmodName mod
+      firstImportLoc = getLoc <$> listToMaybe (hsmodImports mod)
+      firstDeclLoc = getLoc <$> listToMaybe (hsmodDecls mod)
+      line = maybe 0 (_line . _start) (modNameLoc <|> firstImportLoc <|> firstDeclLoc >>= srcSpanToRange)
+      loc = Position line 0
+   in Range loc loc
