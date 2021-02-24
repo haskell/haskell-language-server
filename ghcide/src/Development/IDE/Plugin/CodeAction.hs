@@ -1,10 +1,10 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE RankNTypes            #-}
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
@@ -15,59 +15,68 @@ module Development.IDE.Plugin.CodeAction
     , matchRegExMultipleImports
     ) where
 
-import Control.Monad (join, guard)
-import Control.Monad.IO.Class
-import Development.IDE.GHC.Compat
-import Development.IDE.Core.Rules
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Service
-import Development.IDE.Core.Shake
-import Development.IDE.GHC.Error
-import Development.IDE.GHC.ExactPrint
-import Development.IDE.Plugin.CodeAction.ExactPrint
-import Development.IDE.Plugin.CodeAction.PositionIndexed
-import Development.IDE.Plugin.TypeLenses (suggestSignature)
-import Development.IDE.Types.Exports
-import Development.IDE.Types.HscEnvEq
-import Development.IDE.Types.Location
-import Development.IDE.Types.Options
-import qualified Data.HashMap.Strict as Map
-import qualified Language.LSP.Server as LSP
-import Language.LSP.VFS
-import Language.LSP.Types
-import qualified Data.Rope.UTF16 as Rope
-import Data.Char
-import Data.Maybe
-import Data.List.Extra
-import Data.List.NonEmpty (NonEmpty((:|)))
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Text as T
-import Text.Regex.TDFA (mrAfter, (=~), (=~~))
-import Outputable (Outputable, ppr, showSDoc, showSDocUnsafe)
-import Data.Function
-import Control.Arrow ((>>>), second)
-import Data.Functor
-import Control.Applicative ((<|>))
-import Safe (atMay)
-import Bag (isEmptyBag)
-import qualified Data.HashSet as Set
-import Control.Concurrent.Extra (readVar)
-import Development.IDE.GHC.Util (printRdrName, prettyPrint)
-import Ide.PluginUtils (subRange)
-import Ide.Types
-import qualified Data.DList as DL
-import Development.IDE.Spans.Common
-import OccName
-import qualified GHC.LanguageExtensions as Lang
-import Control.Lens (alaf)
-import Data.Monoid (Ap(..))
-import TcRnTypes (TcGblEnv(..), ImportAvails(..))
-import HscTypes (ImportedModsVal(..), importedByUser)
-import RdrName (GlobalRdrElt(..), lookupGlobalRdrEnv)
-import SrcLoc (realSrcSpanStart)
-import Module (moduleEnvElts)
-import qualified Data.Map as M
-import qualified Data.Set as S
+import           Bag                                               (isEmptyBag)
+import           Control.Applicative                               ((<|>))
+import           Control.Arrow                                     (second,
+                                                                    (>>>))
+import           Control.Concurrent.Extra                          (readVar)
+import           Control.Lens                                      (alaf)
+import           Control.Monad                                     (guard, join)
+import           Control.Monad.IO.Class
+import           Data.Char
+import qualified Data.DList                                        as DL
+import           Data.Function
+import           Data.Functor
+import qualified Data.HashMap.Strict                               as Map
+import qualified Data.HashSet                                      as Set
+import           Data.List.Extra
+import           Data.List.NonEmpty                                (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty                                as NE
+import qualified Data.Map                                          as M
+import           Data.Maybe
+import           Data.Monoid                                       (Ap (..))
+import qualified Data.Rope.UTF16                                   as Rope
+import qualified Data.Set                                          as S
+import qualified Data.Text                                         as T
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Rules
+import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.GHC.Util                          (prettyPrint,
+                                                                    printRdrName)
+import           Development.IDE.Plugin.CodeAction.ExactPrint
+import           Development.IDE.Plugin.CodeAction.PositionIndexed
+import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
+import           Development.IDE.Spans.Common
+import           Development.IDE.Types.Exports
+import           Development.IDE.Types.HscEnvEq
+import           Development.IDE.Types.Location
+import           Development.IDE.Types.Options
+import qualified GHC.LanguageExtensions                            as Lang
+import           HscTypes                                          (ImportedModsVal (..),
+                                                                    importedByUser)
+import           Ide.PluginUtils                                   (subRange)
+import           Ide.Types
+import qualified Language.LSP.Server                               as LSP
+import           Language.LSP.Types
+import           Language.LSP.VFS
+import           Module                                            (moduleEnvElts)
+import           OccName
+import           Outputable                                        (Outputable,
+                                                                    ppr,
+                                                                    showSDoc,
+                                                                    showSDocUnsafe)
+import           RdrName                                           (GlobalRdrElt (..),
+                                                                    lookupGlobalRdrEnv)
+import           Safe                                              (atMay)
+import           SrcLoc                                            (realSrcSpanStart)
+import           TcRnTypes                                         (ImportAvails (..),
+                                                                    TcGblEnv (..))
+import           Text.Regex.TDFA                                   (mrAfter,
+                                                                    (=~), (=~~))
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -224,7 +233,7 @@ suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_messag
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
 findImportDeclByModuleName decls modName = flip find decls $ \case
   (L _ ImportDecl {..}) -> modName == moduleNameString (unLoc ideclName)
-  _ -> error "impossible"
+  _                     -> error "impossible"
 
 isTheSameLine :: SrcSpan -> SrcSpan -> Bool
 isTheSameLine s1 s2
@@ -365,7 +374,7 @@ suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} D
     matchExportItem msg = regexSingleMatch msg "The export item ‘([^’]+)’"
     matchDupExport msg = regexSingleMatch msg "Duplicate ‘([^’]+)’ in export list"
     getRanges exports txt = case smallerRangesForBindingExport exports (T.unpack txt) of
-      [] -> (txt, [_range])
+      []     -> (txt, [_range])
       ranges -> (txt, ranges)
 suggestRemoveRedundantExport _ _ = Nothing
 
@@ -534,9 +543,9 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
        in loc >= Just l && loc <= Just r
 
     printExport :: ExportsAs -> T.Text -> T.Text
-    printExport ExportName x = parenthesizeIfNeeds False x
+    printExport ExportName x    = parenthesizeIfNeeds False x
     printExport ExportPattern x = "pattern " <> x
-    printExport ExportAll x = parenthesizeIfNeeds True x <> "(..)"
+    printExport ExportAll x     = parenthesizeIfNeeds True x <> "(..)"
 
     isTopLevel :: Range -> Bool
     isTopLevel l = (_character . _start) l == 0
@@ -733,7 +742,7 @@ processHoleSuggestions mm = (holeSuggestions, refSuggestions)
       return holeFit
 
     mapHead f (a:aa) = f a : aa
-    mapHead _ [] = []
+    mapHead _ []     = []
 
 -- > getIndentedGroups [" H1", "  l1", "  l2", " H2", "  l3"] = [[" H1,", "  l1", "  l2"], [" H2", "  l3"]]
 getIndentedGroups :: [T.Text] -> [[T.Text]]
@@ -802,13 +811,13 @@ data ModuleTarget
     deriving (Show)
 
 targetImports :: ModuleTarget -> [LImportDecl GhcPs]
-targetImports (ExistingImp ne) = NE.toList ne
+targetImports (ExistingImp ne)     = NE.toList ne
 targetImports (ImplicitPrelude xs) = xs
 
 oneAndOthers :: [a] -> [(a, [a])]
 oneAndOthers = go
     where
-        go [] = []
+        go []       = []
         go (x : xs) = (x, xs) : map (second (x :)) (go xs)
 
 isPreludeImplicit :: DynFlags -> Bool
@@ -870,7 +879,7 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@
                             (targetImports modTarget)
                         || case modTarget of
                             ImplicitPrelude{} -> True
-                            _ -> False
+                            _                 -> False
                         ]
                 ]
             | otherwise = []
@@ -1174,12 +1183,12 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message
           -- new
           _ ->
             [ ( "Import " <> moduleNameText <> " with " <> rendered,
-                maybeToList $ newImport (T.unpack moduleNameText) (Just $ T.unpack rendered) Nothing False ps
+                maybeToList $ newUnqualImport (T.unpack moduleNameText) (T.unpack rendered) False ps
               )
               | style <- importStyle,
                 let rendered = renderImportStyle style
             ]
-              <> maybeToList (("Import " <> moduleNameText,) <$> fmap pure (newImport (T.unpack moduleNameText) Nothing Nothing False ps))
+              <> maybeToList (("Import " <> moduleNameText,) <$> fmap pure (newImportAll (T.unpack moduleNameText) ps))
 
 suggestNewImport :: ExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
@@ -1189,10 +1198,10 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
   , Just insertLine <- case hsmodImports of
         [] -> case srcSpanStart $ getLoc (head hsmodDecls) of
           RealSrcLoc s -> Just $ srcLocLine s - 1
-          _ -> Nothing
+          _            -> Nothing
         _ -> case srcSpanEnd $ getLoc (last hsmodImports) of
           RealSrcLoc s -> Just $ srcLocLine s
-          _ -> Nothing
+          _            -> Nothing
   , insertPos <- Position insertLine 0
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
@@ -1235,9 +1244,9 @@ data NotInScope
     deriving Show
 
 notInScope :: NotInScope -> T.Text
-notInScope (NotInScopeDataConstructor t) = t
+notInScope (NotInScopeDataConstructor t)        = t
 notInScope (NotInScopeTypeConstructorOrClass t) = t
-notInScope (NotInScopeThing t) = t
+notInScope (NotInScopeThing t)                  = t
 
 extractNotInScopeName :: T.Text -> Maybe NotInScope
 extractNotInScopeName x
@@ -1384,7 +1393,7 @@ allMatchRegexUnifySpaces message =
 matchRegex :: T.Text -> T.Text -> Maybe [T.Text]
 matchRegex message regex = case message =~~ regex of
     Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, bindings) -> Just bindings
-    Nothing -> Nothing
+    Nothing                                                -> Nothing
 
 -- | Returns Just (all matches) for the first capture, or Nothing.
 allMatchRegex :: T.Text -> T.Text -> Maybe [[T.Text]]
@@ -1400,7 +1409,7 @@ unifySpaces    = T.unwords . T.words
 regexSingleMatch :: T.Text -> T.Text -> Maybe T.Text
 regexSingleMatch msg regex = case matchRegexUnifySpaces msg regex of
     Just (h:_) -> Just h
-    _ -> Nothing
+    _          -> Nothing
 
 -- | Parses tuples like (‘Data.Map’, (app/ModuleB.hs:2:1-18)) and
 -- | return (Data.Map, app/ModuleB.hs:2:1-18)
@@ -1428,7 +1437,7 @@ matchRegExMultipleImports message = do
   let pat = T.pack "Perhaps you want to add ‘([^’]*)’ to one of these import lists: *(‘.*\\))$"
   (binding, imports) <- case matchRegexUnifySpaces message pat of
                             Just [x, xs] -> Just (x, xs)
-                            _ -> Nothing
+                            _            -> Nothing
   imps <- regExImports imports
   return (binding, imps)
 
@@ -1471,9 +1480,9 @@ importStyles IdentInfo {parent, rendered, isDatacon}
   = ImportTopLevel rendered :| []
 
 renderImportStyle :: ImportStyle -> T.Text
-renderImportStyle (ImportTopLevel x) = x
+renderImportStyle (ImportTopLevel x)    = x
 renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
 
 unImportStyle :: ImportStyle -> (Maybe String, String)
-unImportStyle (ImportTopLevel x) = (Nothing, T.unpack x)
+unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)

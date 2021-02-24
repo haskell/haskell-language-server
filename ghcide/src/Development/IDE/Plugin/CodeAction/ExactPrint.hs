@@ -16,6 +16,8 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
     hideSymbol,
     liftParseAST,
     newImport,
+    newUnqualImport,
+    newImportAll,
   )
 where
 
@@ -76,22 +78,23 @@ rewriteToEdit ::
   Either String [TextEdit]
 rewriteToEdit dflags anns (Rewrite dst f) = do
   (ast, (anns, _), _) <- runTransformT anns $ do
-      ast <- f dflags
-      ast <$ setEntryDPT ast (DP (0,0))
-  let editMap = [ TextEdit (fromJust $ srcSpanToRange dst) $
-                    T.pack $ exactPrint ast anns
-                ]
+    ast <- f dflags
+    ast <$ setEntryDPT ast (DP (0, 0))
+  let editMap =
+        [ TextEdit (fromJust $ srcSpanToRange dst) $
+            T.pack $ exactPrint ast anns
+        ]
   pure editMap
 
 -- | Convert a 'Rewrite' into a 'WorkspaceEdit'
 rewriteToWEdit :: DynFlags -> Uri -> Anns -> Rewrite -> Either String WorkspaceEdit
 rewriteToWEdit dflags uri anns r = do
-    edits <- rewriteToEdit dflags anns r
-    return $
-        WorkspaceEdit
-            { _changes = Just (fromList [(uri, List edits)])
-            , _documentChanges = Nothing
-            }
+  edits <- rewriteToEdit dflags anns r
+  return $
+    WorkspaceEdit
+      { _changes = Just (fromList [(uri, List edits)]),
+        _documentChanges = Nothing
+      }
 
 ------------------------------------------------------------------------------
 
@@ -158,13 +161,13 @@ appendConstraint constraintT = go
       lTop <- uniqueSrcSpanT
       let context = L lContext [constraint]
       addSimpleAnnT context (DP (0, 0)) $
-        (G AnnDarrow, DP (0, 1))
-        : concat
-            [ [ (G AnnOpenP, dp00),
-                (G AnnCloseP, dp00)
-              ]
-              | hsTypeNeedsParens sigPrec $ unLoc constraint
+        (G AnnDarrow, DP (0, 1)) :
+        concat
+          [ [ (G AnnOpenP, dp00),
+              (G AnnCloseP, dp00)
             ]
+            | hsTypeNeedsParens sigPrec $ unLoc constraint
+          ]
       return $ L lTop $ HsQualTy noExtField context (L l other)
 
 liftParseAST :: ASTElement ast => DynFlags -> String -> TransformT (Either String) (Located ast)
@@ -225,22 +228,24 @@ extendImportTopLevel df idnetifier (L l it@ImportDecl {..})
     rdr <- liftParseAST df idnetifier
 
     let alreadyImported =
-            showNameWithoutUniques (occName (unLoc rdr)) `elem`
-            map (showNameWithoutUniques @OccName) (listify (const True) lies)
+          showNameWithoutUniques (occName (unLoc rdr))
+            `elem` map (showNameWithoutUniques @OccName) (listify (const True) lies)
     when alreadyImported $
-        lift (Left $ idnetifier <> " already imported")
+      lift (Left $ idnetifier <> " already imported")
 
     let lie = L src $ IEName rdr
         x = L top $ IEVar noExtField lie
-    if x `elem` lies then lift (Left $ idnetifier <> " already imported") else do
+    if x `elem` lies
+      then lift (Left $ idnetifier <> " already imported")
+      else do
         when hasSibling $
-            addTrailingCommaT (last lies)
+          addTrailingCommaT (last lies)
         addSimpleAnnT x (DP (0, if hasSibling then 1 else 0)) []
         addSimpleAnnT rdr dp00 $ unqalDP $ hasParen idnetifier
         -- Parens are attachted to `lies`, so if `lies` was empty previously,
         -- we need change the ann key from `[]` to `:` to keep parens and other anns.
         unless hasSibling $
-            transferAnn (L l' lies) (L l' [x]) id
+          transferAnn (L l' lies) (L l' [x]) id
         return $ L l it {ideclHiding = Just (hide, L l' $ lies ++ [x])}
 extendImportTopLevel _ _ _ = lift $ Left "Unable to extend the import list"
 
@@ -281,8 +286,8 @@ extendImportViaParent df parent child (L l it@ImportDecl {..})
           childRdr <- liftParseAST df child
 
           let alreadyImported =
-                showNameWithoutUniques(occName (unLoc childRdr)) `elem`
-                map (showNameWithoutUniques @OccName) (listify (const True) lies')
+                showNameWithoutUniques (occName (unLoc childRdr))
+                  `elem` map (showNameWithoutUniques @OccName) (listify (const True) lies')
           when alreadyImported $
             lift (Left $ child <> " already included in " <> parent <> " imports")
 
@@ -331,94 +336,103 @@ unqalDP paren =
     (G AnnVal, dp00)
 
 ------------------------------------------------------------------------------
+
 -- | Hide a symbol from import declaration
 hideSymbol ::
-    String -> LImportDecl GhcPs -> Rewrite
+  String -> LImportDecl GhcPs -> Rewrite
 hideSymbol symbol lidecl@(L loc ImportDecl {..}) =
-    case ideclHiding of
-        Nothing -> Rewrite loc $ extendHiding symbol lidecl Nothing
-        Just (True, hides) -> Rewrite loc $ extendHiding symbol lidecl (Just hides)
-        Just (False, imports) -> Rewrite loc $ deleteFromImport symbol lidecl imports
+  case ideclHiding of
+    Nothing -> Rewrite loc $ extendHiding symbol lidecl Nothing
+    Just (True, hides) -> Rewrite loc $ extendHiding symbol lidecl (Just hides)
+    Just (False, imports) -> Rewrite loc $ deleteFromImport symbol lidecl imports
 hideSymbol _ (L _ (XImportDecl _)) =
-    error "cannot happen"
+  error "cannot happen"
 
 extendHiding ::
-    String ->
-    LImportDecl GhcPs ->
-    Maybe (Located [LIE GhcPs]) ->
-    DynFlags ->
-    TransformT (Either String) (LImportDecl GhcPs)
+  String ->
+  LImportDecl GhcPs ->
+  Maybe (Located [LIE GhcPs]) ->
+  DynFlags ->
+  TransformT (Either String) (LImportDecl GhcPs)
 extendHiding symbol (L l idecls) mlies df = do
-    L l' lies <- case mlies of
-        Nothing -> flip L [] <$> uniqueSrcSpanT
-        Just pr -> pure pr
-    let hasSibling = not $ null lies
-    src <- uniqueSrcSpanT
-    top <- uniqueSrcSpanT
-    rdr <- liftParseAST df symbol
-    let lie = L src $ IEName rdr
-        x = L top $ IEVar noExtField lie
-        singleHide = L l' [x]
-    when (isNothing mlies) $ do
-        addSimpleAnnT
-            singleHide
-            dp00
-            [ (G AnnHiding, DP (0, 1))
-            , (G AnnOpenP, DP (0, 1))
-            , (G AnnCloseP, DP (0, 0))
-            ]
-    addSimpleAnnT x (DP (0, 0)) []
-    addSimpleAnnT rdr dp00 $ unqalDP $ isOperator $ unLoc rdr
-    if hasSibling
-        then when hasSibling $ do
-            addTrailingCommaT x
-            addSimpleAnnT (head lies) (DP (0, 1)) []
-            unless (null $ tail lies) $
-                addTrailingCommaT (head lies) -- Why we need this?
-        else forM_ mlies $ \lies0 -> do
-            transferAnn lies0 singleHide id
-    return $ L l idecls {ideclHiding = Just (True, L l' $ x : lies)}
-    where
-        isOperator = not . all isAlphaNum . occNameString . rdrNameOcc
+  L l' lies <- case mlies of
+    Nothing -> flip L [] <$> uniqueSrcSpanT
+    Just pr -> pure pr
+  let hasSibling = not $ null lies
+  src <- uniqueSrcSpanT
+  top <- uniqueSrcSpanT
+  rdr <- liftParseAST df symbol
+  let lie = L src $ IEName rdr
+      x = L top $ IEVar noExtField lie
+      singleHide = L l' [x]
+  when (isNothing mlies) $ do
+    addSimpleAnnT
+      singleHide
+      dp00
+      [ (G AnnHiding, DP (0, 1)),
+        (G AnnOpenP, DP (0, 1)),
+        (G AnnCloseP, DP (0, 0))
+      ]
+  addSimpleAnnT x (DP (0, 0)) []
+  addSimpleAnnT rdr dp00 $ unqalDP $ isOperator $ unLoc rdr
+  if hasSibling
+    then when hasSibling $ do
+      addTrailingCommaT x
+      addSimpleAnnT (head lies) (DP (0, 1)) []
+      unless (null $ tail lies) $
+        addTrailingCommaT (head lies) -- Why we need this?
+    else forM_ mlies $ \lies0 -> do
+      transferAnn lies0 singleHide id
+  return $ L l idecls {ideclHiding = Just (True, L l' $ x : lies)}
+  where
+    isOperator = not . all isAlphaNum . occNameString . rdrNameOcc
 
 deleteFromImport ::
-    String ->
-    LImportDecl GhcPs ->
-    Located [LIE GhcPs] ->
-    DynFlags ->
-    TransformT (Either String) (LImportDecl GhcPs)
-deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ =do
-    let edited = L lieLoc deletedLies
-        lidecl' = L l $ idecl
+  String ->
+  LImportDecl GhcPs ->
+  Located [LIE GhcPs] ->
+  DynFlags ->
+  TransformT (Either String) (LImportDecl GhcPs)
+deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
+  let edited = L lieLoc deletedLies
+      lidecl' =
+        L l $
+          idecl
             { ideclHiding = Just (False, edited)
             }
-    -- avoid import A (foo,)
-    whenJust (lastMaybe deletedLies) removeTrailingCommaT
-    when (not (null lies) && null deletedLies) $ do
-        transferAnn llies edited id
-        addSimpleAnnT edited dp00
-            [(G AnnOpenP, DP (0, 1))
-            ,(G AnnCloseP, DP (0,0))
-            ]
-    pure lidecl'
-    where
-        deletedLies =
-            mapMaybe killLie lies
-        killLie :: LIE GhcPs -> Maybe (LIE GhcPs)
-        killLie v@(L _ (IEVar _ (L _ (unqualIEWrapName -> nam))))
-            | nam == symbol  = Nothing
-            | otherwise = Just v
-        killLie v@(L _ (IEThingAbs _ (L _ (unqualIEWrapName -> nam))))
-            | nam == symbol = Nothing
-            | otherwise = Just v
-
-        killLie (L lieL (IEThingWith xt ty@(L _ (unqualIEWrapName -> nam)) wild cons flds))
-            | nam == symbol = Nothing
-            | otherwise = Just $
-                L lieL $ IEThingWith xt ty wild
-                  (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
-                  (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
-        killLie v = Just v
+  -- avoid import A (foo,)
+  whenJust (lastMaybe deletedLies) removeTrailingCommaT
+  when (not (null lies) && null deletedLies) $ do
+    transferAnn llies edited id
+    addSimpleAnnT
+      edited
+      dp00
+      [ (G AnnOpenP, DP (0, 1)),
+        (G AnnCloseP, DP (0, 0))
+      ]
+  pure lidecl'
+  where
+    deletedLies =
+      mapMaybe killLie lies
+    killLie :: LIE GhcPs -> Maybe (LIE GhcPs)
+    killLie v@(L _ (IEVar _ (L _ (unqualIEWrapName -> nam))))
+      | nam == symbol = Nothing
+      | otherwise = Just v
+    killLie v@(L _ (IEThingAbs _ (L _ (unqualIEWrapName -> nam))))
+      | nam == symbol = Nothing
+      | otherwise = Just v
+    killLie (L lieL (IEThingWith xt ty@(L _ (unqualIEWrapName -> nam)) wild cons flds))
+      | nam == symbol = Nothing
+      | otherwise =
+        Just $
+          L lieL $
+            IEThingWith
+              xt
+              ty
+              wild
+              (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
+              (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
+    killLie v = Just v
 
 -- | Insert a import declaration with at most one symbol
 --
@@ -476,5 +490,12 @@ newImport modName mSymbol mQual hiding (L _ HsModule {..}) = do
         [(G AnnImport, DP (1, indentation - 1))]
       pure idecl
 
+newUnqualImport :: String -> String -> Bool -> ParsedSource -> Maybe Rewrite
+newUnqualImport modName symbol = newImport modName (Just symbol) Nothing
+
+newImportAll :: String -> ParsedSource -> Maybe Rewrite
+newImportAll modName = newImport modName Nothing Nothing False
+
+-- | Insert "import Prelude hiding (symbol)"
 hideImplicitPreludeSymbol :: String -> ParsedSource -> Maybe Rewrite
-hideImplicitPreludeSymbol symbol = newImport "Prelude" (Just symbol) Nothing True
+hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True
