@@ -87,6 +87,9 @@ data IdeOptions = IdeOptions
   , optShakeOptions       :: ShakeOptions
   , optFakeUid            :: InstalledUnitId
     -- ^ unit id used to tag the internal component built by ghcide
+    --   To reuse external interface files the unit ids must match,
+    --   thus make sure to build them with `--this-unit-id` set to the
+    --   same value as the ghcide fake uid
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
