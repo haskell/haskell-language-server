@@ -76,25 +76,29 @@ type FilePathIdSet = IntSet
 data PathIdMap = PathIdMap
   { idToPathMap :: !(FilePathIdMap ArtifactsLocation)
   , pathToIdMap :: !(HashMap NormalizedFilePath FilePathId)
+  , nextFreshId :: !Int
   }
   deriving (Show, Generic)
 
 instance NFData PathIdMap
 
 emptyPathIdMap :: PathIdMap
-emptyPathIdMap = PathIdMap IntMap.empty HMS.empty
+emptyPathIdMap = PathIdMap IntMap.empty HMS.empty 0
 
 getPathId :: ArtifactsLocation -> PathIdMap -> (FilePathId, PathIdMap)
 getPathId path m@PathIdMap{..} =
     case HMS.lookup (artifactFilePath path) pathToIdMap of
         Nothing ->
-            let !newId = FilePathId $ HMS.size pathToIdMap
+            let !newId = FilePathId nextFreshId
             in (newId, insertPathId path newId m)
         Just id -> (id, m)
-
-insertPathId :: ArtifactsLocation -> FilePathId -> PathIdMap -> PathIdMap
-insertPathId path id PathIdMap{..} =
-    PathIdMap (IntMap.insert (getFilePathId id) path idToPathMap) (HMS.insert (artifactFilePath path) id pathToIdMap)
+  where
+    insertPathId :: ArtifactsLocation -> FilePathId -> PathIdMap -> PathIdMap
+    insertPathId path id PathIdMap{..} =
+        PathIdMap
+            (IntMap.insert (getFilePathId id) path idToPathMap)
+            (HMS.insert (artifactFilePath path) id pathToIdMap)
+            (succ nextFreshId)
 
 insertImport :: FilePathId -> Either ModuleParseError ModuleImports -> RawDependencyInformation -> RawDependencyInformation
 insertImport (FilePathId k) v rawDepInfo = rawDepInfo { rawImports = IntMap.insert k v (rawImports rawDepInfo) }
