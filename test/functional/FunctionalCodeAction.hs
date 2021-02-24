@@ -561,6 +561,35 @@ missingPragmaTests = testGroup "missing pragma warning code actions" [
                     , ""
                     , "f Record{a, b} = a"
                     ]
+            liftIO $ T.lines contents @?= expected
+    , testCase "After Shebang" $ do
+        runSession hlsCommand fullCaps "test/testdata/addPragmas" $ do
+            doc <- openDoc "AfterShebang.hs" "haskell"
+
+            _ <- waitForDiagnosticsFrom doc
+            cas <- map fromAction <$> getAllCodeActions doc
+
+            liftIO $ "Add \"NamedFieldPuns\"" `elem` map (^. L.title) cas @? "Contains NamedFieldPuns code action"
+
+            executeCodeAction $ head cas
+
+            contents <- documentContents doc
+
+            let expected =
+                    [ "#! /usr/bin/env nix-shell"
+                    , "#! nix-shell --pure -i runghc -p \"haskellPackages.ghcWithPackages (hp: with hp; [ turtle ])\""
+                    , ""
+                    , "{-# LANGUAGE NamedFieldPuns #-}"
+                    , "module AfterShebang where"
+                    , ""
+                    , "data Record = Record"
+                    , "  { a :: Int,"
+                    , "    b :: Double,"
+                    , "    c :: String"
+                    , "  }"
+                    , ""
+                    , "f Record{a, b} = a"
+                    ]
 
             liftIO $ T.lines contents @?= expected
     ]
