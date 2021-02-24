@@ -30,17 +30,17 @@ module Ide.Plugin.Tactic.Judgements
   ) where
 
 import           Control.Arrow
-import           Control.Lens hiding (Context)
+import           Control.Lens                        hiding (Context)
 import           Data.Bool
 import           Data.Char
 import           Data.Coerce
-import           Data.Generics.Product (field)
-import           Data.Map (Map)
-import qualified Data.Map as M
+import           Data.Generics.Product               (field)
+import           Data.Map                            (Map)
+import qualified Data.Map                            as M
 import           Data.Maybe
-import           Data.Set (Set)
-import qualified Data.Set as S
-import           DataCon (DataCon)
+import           Data.Set                            (Set)
+import qualified Data.Set                            as S
+import           DataCon                             (DataCon)
 import           Development.IDE.Spans.LocalBindings
 import           Ide.Plugin.Tactic.Types
 import           OccName
@@ -272,7 +272,7 @@ disallowing :: DisallowReason -> [OccName] -> Judgement' a -> Judgement' a
 disallowing reason (S.fromList -> ns) =
   field @"_jHypothesis" %~ (\z -> Hypothesis . flip fmap (unHypothesis z) $ \hi ->
     case S.member (hi_name hi) ns of
-      True -> overProvenance (DisallowedPrv reason) hi
+      True  -> overProvenance (DisallowedPrv reason) hi
       False -> hi
                            )
 
@@ -404,4 +404,4 @@ isDisallowed _               = False
 -- | Eliminates 'DisallowedPrv' provenances.
 expandDisallowed :: Provenance -> Provenance
 expandDisallowed (DisallowedPrv _ prv) = expandDisallowed prv
-expandDisallowed prv = prv
+expandDisallowed prv                   = prv

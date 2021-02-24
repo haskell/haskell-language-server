@@ -1,13 +1,13 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE CPP               #-}
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PackageImports    #-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PackageImports        #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
 {-# OPTIONS_GHC -Wno-orphans   #-}
 
 module Ide.Plugin.Hlint
@@ -15,62 +15,76 @@ module Ide.Plugin.Hlint
     descriptor
   --, provider
   ) where
-import Refact.Apply
-import Control.Arrow ((&&&))
-import Control.DeepSeq
-import Control.Exception
-import Control.Lens ((^.))
-import Control.Monad
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Except
-import Data.Aeson.Types (ToJSON(..), FromJSON(..), Value(..))
-import Data.Binary
-import Data.Default
-import Data.Hashable
-import qualified Data.HashMap.Strict as Map
-import Data.Maybe
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.Typeable
-import Development.IDE
-import Development.IDE.Core.Rules (getParsedModuleWithComments, defineNoFile)
-import Development.IDE.Core.Shake (getDiagnostics)
+import           Control.Arrow                                      ((&&&))
+import           Control.DeepSeq
+import           Control.Exception
+import           Control.Lens                                       ((^.))
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Except
+import           Data.Aeson.Types                                   (FromJSON (..),
+                                                                     ToJSON (..),
+                                                                     Value (..))
+import           Data.Binary
+import           Data.Default
+import qualified Data.HashMap.Strict                                as Map
+import           Data.Hashable
+import           Data.Maybe
+import qualified Data.Text                                          as T
+import qualified Data.Text.IO                                       as T
+import           Data.Typeable
+import           Development.IDE
+import           Development.IDE.Core.Rules                         (defineNoFile,
+                                                                     getParsedModuleWithComments)
+import           Development.IDE.Core.Shake                         (getDiagnostics)
+import           Refact.Apply
 
 #ifdef HLINT_ON_GHC_LIB
-import Data.List (nub)
-import "ghc-lib" GHC hiding (DynFlags(..), ms_hspp_opts)
-import "ghc-lib-parser" GHC.LanguageExtensions (Extension)
-import "ghc" DynFlags as RealGHC.DynFlags (topDir)
-import "ghc" GHC as RealGHC (DynFlags(..))
-import "ghc" HscTypes as RealGHC.HscTypes (hsc_dflags, ms_hspp_opts)
-import qualified "ghc" EnumSet as EnumSet
-import Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
-import System.Environment(setEnv, unsetEnv)
-import System.FilePath (takeFileName)
-import System.IO (hPutStr, noNewlineTranslation, hSetNewlineMode, utf8, hSetEncoding, IOMode(WriteMode), withFile, hClose)
-import System.IO.Temp
+import           Data.List                                          (nub)
+import           "ghc" DynFlags                                     as RealGHC.DynFlags (topDir)
+import qualified "ghc" EnumSet                                      as EnumSet
+import           "ghc" GHC                                          as RealGHC (DynFlags (..))
+import           "ghc-lib" GHC                                      hiding
+                                                                    (DynFlags (..),
+                                                                     ms_hspp_opts)
+import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
+import           "ghc" HscTypes                                     as RealGHC.HscTypes (hsc_dflags,
+                                                                                         ms_hspp_opts)
+import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
+import           System.Environment                                 (setEnv,
+                                                                     unsetEnv)
+import           System.FilePath                                    (takeFileName)
+import           System.IO                                          (IOMode (WriteMode),
+                                                                     hClose,
+                                                                     hPutStr,
+                                                                     hSetEncoding,
+                                                                     hSetNewlineMode,
+                                                                     noNewlineTranslation,
+                                                                     utf8,
+                                                                     withFile)
+import           System.IO.Temp
 #else
-import Development.IDE.GHC.Compat hiding (DynFlags(..))
-import Language.Haskell.GHC.ExactPrint.Parsers (postParseTransform)
-import Language.Haskell.GHC.ExactPrint.Delta (deltaOptions)
-import Language.Haskell.GHC.ExactPrint.Types (Rigidity(..))
+import           Development.IDE.GHC.Compat                         hiding
+                                                                    (DynFlags (..))
+import           Language.Haskell.GHC.ExactPrint.Delta              (deltaOptions)
+import           Language.Haskell.GHC.ExactPrint.Parsers            (postParseTransform)
+import           Language.Haskell.GHC.ExactPrint.Types              (Rigidity (..))
 #endif
 
-import Ide.Logger
-import Ide.Types
-import Ide.Plugin.Config
-import Ide.PluginUtils
-import Language.Haskell.HLint as Hlint
-import Language.LSP.Server
-    ( withIndefiniteProgress,
-      sendRequest,
-      ProgressCancellable(Cancellable) )
-import Language.LSP.Types
-import qualified Language.LSP.Types      as LSP
-import qualified Language.LSP.Types.Lens as LSP
+import           Ide.Logger
+import           Ide.Plugin.Config
+import           Ide.PluginUtils
+import           Ide.Types
+import           Language.Haskell.HLint                             as Hlint
+import           Language.LSP.Server                                (ProgressCancellable (Cancellable),
+                                                                     sendRequest,
+                                                                     withIndefiniteProgress)
+import           Language.LSP.Types
+import qualified Language.LSP.Types                                 as LSP
+import qualified Language.LSP.Types.Lens                            as LSP
 
-import Text.Regex.TDFA.Text()
-import GHC.Generics (Generic)
+import           GHC.Generics                                       (Generic)
+import           Text.Regex.TDFA.Text                               ()
 
 -- ---------------------------------------------------------------------
 
@@ -249,7 +263,7 @@ getHlintSettingsRule usage =
     defineNoFile $ \GetHlintSettings ->
       liftIO $ case usage of
           HlintEnabled cmdArgs -> argsSettings cmdArgs
-          HlintDisabled -> fail "hlint configuration unspecified"
+          HlintDisabled        -> fail "hlint configuration unspecified"
 
 -- ---------------------------------------------------------------------
 
@@ -329,7 +343,7 @@ data ApplyOneParams = AOP
 type HintTitle = T.Text
 
 data OneHint = OneHint
-  { oneHintPos :: Position
+  { oneHintPos   :: Position
   , oneHintTitle :: HintTitle
   } deriving (Eq, Show)
 

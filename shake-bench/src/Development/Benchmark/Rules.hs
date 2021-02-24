@@ -1,13 +1,13 @@
+{-# LANGUAGE AllowAmbiguousTypes       #-}
+{-# LANGUAGE ApplicativeDo             #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DeriveAnyClass            #-}
+{-# LANGUAGE DerivingStrategies        #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ApplicativeDo     #-}
-{-# LANGUAGE ConstraintKinds     #-}
-{-# LANGUAGE DeriveAnyClass      #-}
-{-# LANGUAGE DerivingStrategies  #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TypeFamilies              #-}
 
 {- |
     This module provides a bunch of Shake rules to build multiple revisions of a
@@ -72,9 +72,12 @@ import           Data.Aeson                                (FromJSON (..),
                                                             ToJSON (..),
                                                             Value (..), (.!=),
                                                             (.:?))
-import Data.List (find, isInfixOf, stripPrefix, transpose)
+import           Data.Char                                 (isDigit)
+import           Data.List                                 (find, isInfixOf,
+                                                            stripPrefix,
+                                                            transpose)
 import           Data.List.Extra                           (lower)
-import Data.Maybe (fromMaybe)
+import           Data.Maybe                                (fromMaybe)
 import           Data.Text                                 (Text)
 import qualified Data.Text                                 as T
 import           Development.Shake
@@ -87,15 +90,16 @@ import           GHC.Stack                                 (HasCallStack)
 import qualified Graphics.Rendering.Chart.Backend.Diagrams as E
 import           Graphics.Rendering.Chart.Easy             ((.=))
 import qualified Graphics.Rendering.Chart.Easy             as E
-import           System.Directory (createDirectoryIfMissing, findExecutable, renameFile)
+import           System.Directory                          (createDirectoryIfMissing,
+                                                            findExecutable,
+                                                            renameFile)
 import           System.FilePath
+import           System.Time.Extra                         (Seconds)
 import qualified Text.ParserCombinators.ReadP              as P
+import           Text.Printf
 import           Text.Read                                 (Read (..), get,
                                                             readMaybe,
                                                             readP_to_Prec)
-import Text.Printf
-import Data.Char (isDigit)
-import System.Time.Extra (Seconds)
 
 newtype GetExperiments = GetExperiments () deriving newtype (Binary, Eq, Hashable, NFData, Show)
 newtype GetVersions = GetVersions () deriving newtype (Binary, Eq, Hashable, NFData, Show)
@@ -257,7 +261,7 @@ profilingP inp | Just delay <- stripPrefix "profiled-" inp, Just i <- readMaybe 
 profilingP _ = Nothing
 
 profilingPath :: ProfilingMode -> FilePath
-profilingPath NoProfiling = "unprofiled"
+profilingPath NoProfiling            = "unprofiled"
 profilingPath (CheapHeapProfiling i) = "profiled-" <> show i
 
 -- TODO generalize BuildSystem
@@ -328,7 +332,7 @@ benchRules build MkBenchRules{..} = do
         liftIO $ renameFile "ghcide.eventlog" outEventlog
         liftIO $ case prof of
             CheapHeapProfiling{} -> renameFile "ghcide.hp" outHp
-            NoProfiling -> writeFile outHp dummyHp
+            NoProfiling          -> writeFile outHp dummyHp
 
         -- extend csv output with allocation data
         csvContents <- liftIO $ lines <$> readFile outcsv
@@ -352,7 +356,7 @@ parseMaxResidencyAndAllocations input =
   where
     inps = reverse $ lines input
     f label = case find (label `isInfixOf`) inps of
-        Just l -> read $ filter isDigit $ head $ words l
+        Just l  -> read $ filter isDigit $ head $ words l
         Nothing -> -1
 
 
@@ -550,9 +554,9 @@ instance Read Frame where
 
 -- | A file path containing the output of -S for a given run
 data RunLog = RunLog
-  { runVersion     :: !String,
-    runFrames      :: ![Frame],
-    runSuccess     :: !Bool
+  { runVersion :: !String,
+    runFrames  :: ![Frame],
+    runSuccess :: !Bool
   }
 
 loadRunLog :: HasCallStack => Escaped FilePath -> String -> Action RunLog

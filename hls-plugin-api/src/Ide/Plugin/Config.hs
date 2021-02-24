@@ -1,10 +1,10 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TypeFamilies       #-}
 module Ide.Plugin.Config
     ( getConfigFromNotification
     , Config(..)
@@ -14,13 +14,13 @@ module Ide.Plugin.Config
     ) where
 
 import           Control.Applicative
-import qualified Data.Aeson                    as A
-import qualified Data.Aeson.Types              as A
-import           Data.Aeson              hiding ( Error )
+import           Data.Aeson          hiding (Error)
+import qualified Data.Aeson          as A
+import qualified Data.Aeson.Types    as A
 import           Data.Default
-import qualified Data.Text                     as T
-import qualified Data.Map as Map
-import GHC.Generics (Generic)
+import qualified Data.Map            as Map
+import qualified Data.Text           as T
+import           GHC.Generics        (Generic)
 
 -- ---------------------------------------------------------------------
 

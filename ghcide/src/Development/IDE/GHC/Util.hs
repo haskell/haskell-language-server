@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
@@ -28,46 +28,53 @@ module Development.IDE.GHC.Util(
     disableWarningsAsErrors,
     ) where
 
-import Control.Concurrent
-import Data.List.Extra
-import Data.ByteString.Internal (ByteString(..))
-import Data.Maybe
-import Data.Typeable
-import qualified Data.ByteString.Internal as BS
-import Fingerprint
-import GhcMonad
-import DynFlags
-import Control.Exception
-import Data.IORef
-import FileCleanup
-import Foreign.Ptr
-import Foreign.ForeignPtr
-import Foreign.Storable
-import GHC.IO.BufferedIO (BufferedIO)
-import GHC.IO.Device as IODevice
-import GHC.IO.Encoding
-import GHC.IO.Exception
-import GHC.IO.Handle.Types
-import GHC.IO.Handle.Internals
-import qualified Data.Text                as T
-import qualified Data.Text.Encoding       as T
-import qualified Data.Text.Encoding.Error as T
-import qualified Data.ByteString          as BS
-import Lexer
-import StringBuffer
-import System.FilePath
-import HscTypes (cg_binds, md_types, cg_module, ModDetails, CgGuts, ic_dflags, hsc_IC, HscEnv(hsc_dflags))
-import PackageConfig (PackageConfig)
-import Outputable (SDoc, showSDocUnsafe, ppr, Outputable, mkUserStyle, renderWithStyle, neverQualify, Depth(..))
-import Packages (getPackageConfigMap, lookupPackage')
-import SrcLoc (mkRealSrcLoc)
-import FastString (mkFastString)
-import Module (moduleNameSlashes)
-import OccName (parenSymOcc)
-import RdrName (nameRdrName, rdrNameOcc)
+import           Control.Concurrent
+import           Control.Exception
+import qualified Data.ByteString                as BS
+import           Data.ByteString.Internal       (ByteString (..))
+import qualified Data.ByteString.Internal       as BS
+import           Data.IORef
+import           Data.List.Extra
+import           Data.Maybe
+import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as T
+import qualified Data.Text.Encoding.Error       as T
+import           Data.Typeable
+import           DynFlags
+import           FastString                     (mkFastString)
+import           FileCleanup
+import           Fingerprint
+import           Foreign.ForeignPtr
+import           Foreign.Ptr
+import           Foreign.Storable
+import           GHC.IO.BufferedIO              (BufferedIO)
+import           GHC.IO.Device                  as IODevice
+import           GHC.IO.Encoding
+import           GHC.IO.Exception
+import           GHC.IO.Handle.Internals
+import           GHC.IO.Handle.Types
+import           GhcMonad
+import           HscTypes                       (CgGuts, HscEnv (hsc_dflags),
+                                                 ModDetails, cg_binds,
+                                                 cg_module, hsc_IC, ic_dflags,
+                                                 md_types)
+import           Lexer
+import           Module                         (moduleNameSlashes)
+import           OccName                        (parenSymOcc)
+import           Outputable                     (Depth (..), Outputable, SDoc,
+                                                 mkUserStyle, neverQualify, ppr,
+                                                 renderWithStyle,
+                                                 showSDocUnsafe)
+import           PackageConfig                  (PackageConfig)
+import           Packages                       (getPackageConfigMap,
+                                                 lookupPackage')
+import           RdrName                        (nameRdrName, rdrNameOcc)
+import           SrcLoc                         (mkRealSrcLoc)
+import           StringBuffer
+import           System.FilePath
 
-import Development.IDE.GHC.Compat as GHC
-import Development.IDE.Types.Location
+import           Development.IDE.GHC.Compat     as GHC
+import           Development.IDE.Types.Location
 
 
 ----------------------------------------------------------------------

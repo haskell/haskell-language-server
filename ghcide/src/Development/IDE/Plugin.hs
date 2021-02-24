@@ -1,13 +1,13 @@
 module Development.IDE.Plugin ( Plugin(..) ) where
 
-import Data.Default
-import Development.Shake
+import           Data.Default
+import           Development.Shake
 
-import Development.IDE.LSP.Server
-import qualified Language.LSP.Server as LSP
+import           Development.IDE.LSP.Server
+import qualified Language.LSP.Server        as LSP
 
 data Plugin c = Plugin
-    {pluginRules :: Rules ()
+    {pluginRules    :: Rules ()
     ,pluginHandlers :: LSP.Handlers (ServerM c)
     }
 

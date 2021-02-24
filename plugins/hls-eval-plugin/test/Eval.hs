@@ -1,45 +1,36 @@
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Eval (
     tests,
 ) where
 
-import Control.Applicative.Combinators (
-    skipManyTill
- )
-import Control.Monad (when)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Language.LSP.Test
-import Language.LSP.Types
-import Language.LSP.Types.Lens (command, title, range)
-import Control.Lens (view, _Just, preview)
-import System.Directory (doesFileExist)
-import System.FilePath (
-    (<.>),
-    (</>),
- )
-import Test.Hls.Util (hlsCommand, GhcVersion (GHC84, GHC86), knownBrokenForGhcVersions, knownBrokenInEnv, EnvSpec (HostOS, GhcVer), OS (Windows))
-import Test.Tasty (
-    TestTree,
-    testGroup,
- )
-import Test.Tasty.ExpectedFailure (
-    expectFailBecause,
- )
-import Test.Tasty.HUnit (
-    testCase,
-    (@?=),
- )
-import Data.List.Extra (nubOrdOn)
-import Ide.Plugin.Eval.Types (EvalParams(..))
-import Data.Aeson (fromJSON)
-import Data.Aeson.Types (Result(Success))
+import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Lens                    (_Just, preview, view)
+import           Control.Monad                   (when)
+import           Control.Monad.IO.Class          (MonadIO (liftIO))
+import           Data.Aeson                      (fromJSON)
+import           Data.Aeson.Types                (Result (Success))
+import           Data.List.Extra                 (nubOrdOn)
+import qualified Data.Text                       as T
+import qualified Data.Text.IO                    as T
+import           Ide.Plugin.Eval.Types           (EvalParams (..))
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Language.LSP.Types.Lens         (command, range, title)
+import           System.Directory                (doesFileExist)
+import           System.FilePath                 ((<.>), (</>))
+import           Test.Hls.Util                   (EnvSpec (GhcVer, HostOS),
+                                                  GhcVersion (GHC84, GHC86),
+                                                  OS (Windows), hlsCommand,
+                                                  knownBrokenForGhcVersions,
+                                                  knownBrokenInEnv)
+import           Test.Tasty                      (TestTree, testGroup)
+import           Test.Tasty.ExpectedFailure      (expectFailBecause)
+import           Test.Tasty.HUnit                (testCase, (@?=))
 
 tests :: TestTree
 tests =

@@ -1,5 +1,5 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 
 {-|
@@ -19,85 +19,88 @@ module Development.IDE.Session
 -- the real GHC library and the types are incompatible. Furthermore, when
 -- building with ghc-lib we need to make this Haskell agnostic, so no hie-bios!
 
-import Control.Concurrent.Async
-import Control.Concurrent.Extra
-import Control.Exception.Safe
-import Control.Monad
-import Control.Monad.Extra
-import Control.Monad.IO.Class
-import qualified Crypto.Hash.SHA1 as H
-import qualified Data.ByteString.Char8 as B
-import qualified Data.HashMap.Strict as HM
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as T
-import Data.Aeson
-import Data.Bifunctor
-import qualified Data.ByteString.Base16 as B16
-import Data.Default
-import Data.Either.Extra
-import Data.Function
-import Data.Hashable
-import Data.List
-import Data.IORef
-import Data.Maybe
-import Data.Time.Clock
-import Data.Version
-import Development.IDE.Core.Shake
-import Development.IDE.Core.RuleTypes
-import Development.IDE.GHC.Compat hiding (Target, TargetModule, TargetFile)
-import qualified Development.IDE.GHC.Compat as GHC
-import Development.IDE.GHC.Util
-import Development.IDE.Session.VersionCheck
-import Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Exports
-import Development.IDE.Types.HscEnvEq (HscEnvEq, newHscEnvEqPreserveImportPaths, newHscEnvEq)
-import Development.IDE.Types.Location
-import Development.IDE.Types.Logger
-import Development.IDE.Types.Options
-import Development.Shake (Action)
-import GHC.Check
-import qualified HIE.Bios as HieBios
-import HIE.Bios.Environment hiding (getCacheDir)
-import HIE.Bios.Types
-import Hie.Implicit.Cradle (loadImplicitHieCradle)
-import Language.LSP.Server
-import Language.LSP.Types
-import System.Directory
-import qualified System.Directory.Extra as IO
-import System.FilePath
-import System.Info
-import System.IO
+import           Control.Concurrent.Async
+import           Control.Concurrent.Extra
+import           Control.Exception.Safe
+import           Control.Monad
+import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import qualified Crypto.Hash.SHA1                     as H
+import           Data.Aeson
+import           Data.Bifunctor
+import qualified Data.ByteString.Base16               as B16
+import qualified Data.ByteString.Char8                as B
+import           Data.Default
+import           Data.Either.Extra
+import           Data.Function
+import qualified Data.HashMap.Strict                  as HM
+import           Data.Hashable
+import           Data.IORef
+import           Data.List
+import qualified Data.Map.Strict                      as Map
+import           Data.Maybe
+import qualified Data.Text                            as T
+import           Data.Time.Clock
+import           Data.Version
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat           hiding (Target,
+                                                       TargetFile, TargetModule)
+import qualified Development.IDE.GHC.Compat           as GHC
+import           Development.IDE.GHC.Util
+import           Development.IDE.Session.VersionCheck
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Exports
+import           Development.IDE.Types.HscEnvEq       (HscEnvEq, newHscEnvEq,
+                                                       newHscEnvEqPreserveImportPaths)
+import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger
+import           Development.IDE.Types.Options
+import           Development.Shake                    (Action)
+import           GHC.Check
+import qualified HIE.Bios                             as HieBios
+import           HIE.Bios.Environment                 hiding (getCacheDir)
+import           HIE.Bios.Types
+import           Hie.Implicit.Cradle                  (loadImplicitHieCradle)
+import           Language.LSP.Server
+import           Language.LSP.Types
+import           System.Directory
+import qualified System.Directory.Extra               as IO
+import           System.FilePath
+import           System.IO
+import           System.Info
 
-import GHCi
-import HscTypes (ic_dflags, hsc_IC, hsc_dflags, hsc_NC)
-import Linker
-import Module
-import NameCache
-import Packages
-import Control.Exception (evaluate)
-import Data.Void
-import Control.Applicative (Alternative((<|>)))
+import           Control.Applicative                  (Alternative ((<|>)))
+import           Control.Exception                    (evaluate)
+import           Data.Void
+import           GHCi
+import           HscTypes                             (hsc_IC, hsc_NC,
+                                                       hsc_dflags, ic_dflags)
+import           Linker
+import           Module
+import           NameCache
+import           Packages
 
-import HieDb.Create
-import HieDb.Types
-import HieDb.Utils
-import Database.SQLite.Simple
-import Control.Concurrent.STM.TQueue
-import Control.Concurrent.STM (atomically)
-import Maybes (MaybeT(runMaybeT))
-import HIE.Bios.Cradle (yamlConfig)
+import           Control.Concurrent.STM               (atomically)
+import           Control.Concurrent.STM.TQueue
+import           Database.SQLite.Simple
+import           HIE.Bios.Cradle                      (yamlConfig)
+import           HieDb.Create
+import           HieDb.Types
+import           HieDb.Utils
+import           Maybes                               (MaybeT (runMaybeT))
 
 
 data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
 
 data SessionLoadingOptions = SessionLoadingOptions
-  { findCradle :: FilePath -> IO (Maybe FilePath)
-  , loadCradle :: FilePath -> IO (HieBios.Cradle Void)
+  { findCradle          :: FilePath -> IO (Maybe FilePath)
+  , loadCradle          :: FilePath -> IO (HieBios.Cradle Void)
   -- | Given the project name and a set of command line flags,
   --   return the path for storing generated GHC artifacts,
   --   or 'Nothing' to respect the cradle setting
-  , getCacheDirs :: String -> [String] -> IO CacheDirs
+  , getCacheDirs        :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir :: IO (Maybe LibDir)
   }
@@ -480,10 +483,10 @@ cradleToOptsAndLibDir cradle file = do
             case libDirRes of
                 -- This is the successful path
                 CradleSuccess libDir -> pure (Right (r, libDir))
-                CradleFail err -> return (Left [err])
+                CradleFail err       -> return (Left [err])
                 -- For the None cradle perhaps we still want to report an Info
                 -- message about the fact that the file is being ignored.
-                CradleNone -> return (Left [])
+                CradleNone           -> return (Left [])
 
         CradleFail err -> return (Left [err])
         -- Same here
@@ -497,9 +500,9 @@ emptyHscEnv nc libDir = do
 
 data TargetDetails = TargetDetails
   {
-      targetTarget :: !Target,
-      targetEnv :: !(IdeResult HscEnvEq),
-      targetDepends :: !DependencyInfo,
+      targetTarget    :: !Target,
+      targetEnv       :: !(IdeResult HscEnvEq),
+      targetDepends   :: !DependencyInfo,
       targetLocations :: ![NormalizedFilePath]
   }
 
@@ -643,16 +646,16 @@ type FilesMap = HM.HashMap NormalizedFilePath (Maybe FilePath)
 
 -- This is pristine information about a component
 data RawComponentInfo = RawComponentInfo
-  { rawComponentUnitId :: InstalledUnitId
+  { rawComponentUnitId         :: InstalledUnitId
   -- | Unprocessed DynFlags. Contains inplace packages such as libraries.
   -- We do not want to use them unprocessed.
-  , rawComponentDynFlags :: DynFlags
+  , rawComponentDynFlags       :: DynFlags
   -- | All targets of this components.
-  , rawComponentTargets :: [GHC.Target]
+  , rawComponentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , rawComponentFP :: NormalizedFilePath
+  , rawComponentFP             :: NormalizedFilePath
   -- | Component Options used to load the component.
-  , rawComponentCOptions :: ComponentOptions
+  , rawComponentCOptions       :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
   -- to last modification time. See Note [Multi Cradle Dependency Info].
   , rawComponentDependencyInfo :: DependencyInfo
@@ -660,20 +663,20 @@ data RawComponentInfo = RawComponentInfo
 
 -- This is processed information about the component, in particular the dynflags will be modified.
 data ComponentInfo = ComponentInfo
-  { componentUnitId :: InstalledUnitId
+  { componentUnitId         :: InstalledUnitId
   -- | Processed DynFlags. Does not contain inplace packages such as local
   -- libraries. Can be used to actually load this Component.
-  , componentDynFlags :: DynFlags
+  , componentDynFlags       :: DynFlags
   -- | Internal units, such as local libraries, that this component
   -- is loaded with. These have been extracted from the original
   -- ComponentOptions.
   , _componentInternalUnits :: [InstalledUnitId]
   -- | All targets of this components.
-  , componentTargets :: [GHC.Target]
+  , componentTargets        :: [GHC.Target]
   -- | Filepath which caused the creation of this component
-  , componentFP :: NormalizedFilePath
+  , componentFP             :: NormalizedFilePath
   -- | Component Options used to load the component.
-  , _componentCOptions :: ComponentOptions
+  , _componentCOptions      :: ComponentOptions
   -- | Maps cradle dependencies, such as `stack.yaml`, or `.cabal` file
   -- to last modification time. See Note [Multi Cradle Dependency Info]
   , componentDependencyInfo :: DependencyInfo

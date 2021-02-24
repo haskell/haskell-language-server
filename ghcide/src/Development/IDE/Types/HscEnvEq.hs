@@ -11,41 +11,47 @@ module Development.IDE.Types.HscEnvEq
 ) where
 
 
-import Development.IDE.Types.Exports (ExportsMap, createExportsMap)
-import Data.Unique
-import Development.Shake.Classes
-import Module (InstalledUnitId)
-import System.Directory (canonicalizePath)
-import Development.IDE.GHC.Compat
-import GhcPlugins(HscEnv (hsc_dflags), PackageState (explicitPackages), InstalledPackageInfo (exposedModules), Module(..), packageConfigId, listVisibleModuleNames)
-import System.FilePath
-import Development.IDE.GHC.Util (lookupPackageConfig)
-import Control.Monad.IO.Class
-import TcRnMonad (initIfaceLoad, WhereFrom (ImportByUser))
-import LoadIface (loadInterface)
+import           Control.Concurrent.Async      (Async, async, waitCatch)
+import           Control.Concurrent.Extra      (modifyVar, newVar)
+import           Control.DeepSeq               (force)
+import           Control.Exception             (evaluate, mask, throwIO)
+import           Control.Monad.Extra           (eitherM, join, mapMaybeM)
+import           Control.Monad.IO.Class
+import           Data.Either                   (fromRight)
+import           Data.Unique
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error     (catchSrcErrors)
+import           Development.IDE.GHC.Util      (lookupPackageConfig)
+import           Development.IDE.Types.Exports (ExportsMap, createExportsMap)
+import           Development.Shake.Classes
+import           GhcPlugins                    (HscEnv (hsc_dflags),
+                                                InstalledPackageInfo (exposedModules),
+                                                Module (..),
+                                                PackageState (explicitPackages),
+                                                listVisibleModuleNames,
+                                                packageConfigId)
+import           LoadIface                     (loadInterface)
 import qualified Maybes
-import OpenTelemetry.Eventlog (withSpan)
-import Control.Monad.Extra (mapMaybeM, join, eitherM)
-import Control.Concurrent.Extra (newVar, modifyVar)
-import Control.Concurrent.Async (Async, async, waitCatch)
-import Control.Exception (throwIO, mask, evaluate)
-import Development.IDE.GHC.Error (catchSrcErrors)
-import Control.DeepSeq (force)
-import Data.Either (fromRight)
+import           Module                        (InstalledUnitId)
+import           OpenTelemetry.Eventlog        (withSpan)
+import           System.Directory              (canonicalizePath)
+import           System.FilePath
+import           TcRnMonad                     (WhereFrom (ImportByUser),
+                                                initIfaceLoad)
 
 -- | An 'HscEnv' with equality. Two values are considered equal
 --   if they are created with the same call to 'newHscEnvEq'.
 data HscEnvEq = HscEnvEq
-    { envUnique :: !Unique
-    , hscEnv :: !HscEnv
-    , deps   :: [(InstalledUnitId, DynFlags)]
+    { envUnique             :: !Unique
+    , hscEnv                :: !HscEnv
+    , deps                  :: [(InstalledUnitId, DynFlags)]
                -- ^ In memory components for this HscEnv
                -- This is only used at the moment for the import dirs in
                -- the DynFlags
-    , envImportPaths :: Maybe [String]
+    , envImportPaths        :: Maybe [String]
         -- ^ If Just, import dirs originally configured in this env
         --   If Nothing, the env import dirs are unaltered
-    , envPackageExports :: IO ExportsMap
+    , envPackageExports     :: IO ExportsMap
     , envVisibleModuleNames :: IO (Maybe [ModuleName])
         -- ^ 'listVisibleModuleNames' is a pure function,
         -- but it could panic due to a ghc bug: https://github.com/haskell/haskell-language-server/issues/1365

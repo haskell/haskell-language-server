@@ -20,26 +20,28 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
-import Control.Lens hiding (Context, (.=))
-import Control.Monad.Reader
-import Control.Monad.State
-import Data.Coerce
-import Data.Function
-import Data.Generics.Product (field)
-import Data.Set (Set)
-import Data.Tree
-import Development.IDE.GHC.Compat hiding (Node)
-import Development.IDE.GHC.Orphans ()
-import Development.IDE.Types.Location
-import GHC.Generics
-import Ide.Plugin.Tactic.Debug
-import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
-import OccName
-import Refinery.Tactic
-import System.IO.Unsafe (unsafePerformIO)
-import Type
-import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
-import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
+import           Control.Lens                   hiding (Context, (.=))
+import           Control.Monad.Reader
+import           Control.Monad.State
+import           Data.Coerce
+import           Data.Function
+import           Data.Generics.Product          (field)
+import           Data.Set                       (Set)
+import           Data.Tree
+import           Development.IDE.GHC.Compat     hiding (Node)
+import           Development.IDE.GHC.Orphans    ()
+import           Development.IDE.Types.Location
+import           GHC.Generics
+import           Ide.Plugin.Tactic.Debug
+import           Ide.Plugin.Tactic.FeatureSet   (FeatureSet)
+import           OccName
+import           Refinery.Tactic
+import           System.IO.Unsafe               (unsafePerformIO)
+import           Type
+import           UniqSupply                     (UniqSupply, mkSplitUniqSupply,
+                                                 takeUniqFromSupply)
+import           Unique                         (Uniquable, Unique, getUnique,
+                                                 nonDetCmpUnique)
 
 
 ------------------------------------------------------------------------------
@@ -79,13 +81,13 @@ instance Show (Pat GhcPs) where
 
 ------------------------------------------------------------------------------
 data TacticState = TacticState
-    { ts_skolems   :: !(Set TyVar)
+    { ts_skolems         :: !(Set TyVar)
       -- ^ The known skolems.
-    , ts_unifier   :: !TCvSubst
+    , ts_unifier         :: !TCvSubst
       -- ^ The current substitution of univars.
-    , ts_used_vals :: !(Set OccName)
+    , ts_used_vals       :: !(Set OccName)
       -- ^ Set of values used by tactics.
-    , ts_intro_vals :: !(Set OccName)
+    , ts_intro_vals      :: !(Set OccName)
       -- ^ Set of values introduced by tactics.
     , ts_unused_top_vals :: !(Set OccName)
       -- ^ Set of currently unused arguments to the function being defined.
@@ -95,7 +97,7 @@ data TacticState = TacticState
       -- value is 'False' are guaranteed to loop, and must be pruned.
     , ts_recursion_count :: !Int
       -- ^ Number of calls to recursion. We penalize each.
-    , ts_unique_gen :: !UniqSupply
+    , ts_unique_gen      :: !UniqSupply
     } deriving stock (Show, Generic)
 
 instance Show UniqSupply where
@@ -247,11 +249,11 @@ overProvenance f (HyInfo name prv ty) = HyInfo name (f prv) ty
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis :: !(Hypothesis a)
+  { _jHypothesis        :: !(Hypothesis a)
   , _jBlacklistDestruct :: !Bool
-  , _jWhitelistSplit :: !Bool
-  , _jIsTopHole    :: !Bool
-  , _jGoal         :: !a
+  , _jWhitelistSplit    :: !Bool
+  , _jIsTopHole         :: !Bool
+  , _jGoal              :: !a
   }
   deriving stock (Eq, Generic, Functor, Show)
 
@@ -335,9 +337,9 @@ type Trace = Rose String
 data Context = Context
   { ctxDefiningFuncs :: [(OccName, CType)]
     -- ^ The functions currently being defined
-  , ctxModuleFuncs :: [(OccName, CType)]
+  , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
-  , ctxFeatureSet :: FeatureSet
+  , ctxFeatureSet    :: FeatureSet
   }
   deriving stock (Eq, Ord, Show)
 

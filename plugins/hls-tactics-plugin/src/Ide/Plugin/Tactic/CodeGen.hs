@@ -1,21 +1,20 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns     #-}
 
 module Ide.Plugin.Tactic.CodeGen
   ( module Ide.Plugin.Tactic.CodeGen
   , module Ide.Plugin.Tactic.CodeGen.Utils
   ) where
 
-import           Control.Lens ((+~), (%~), (<>~))
+import           Control.Lens                    ((%~), (+~), (<>~))
 import           Control.Monad.Except
-import           Control.Monad.State (MonadState)
-import           Control.Monad.State.Class (modify)
-import           Data.Generics.Product (field)
+import           Control.Monad.State             (MonadState)
+import           Control.Monad.State.Class       (modify)
+import           Data.Generics.Product           (field)
 import           Data.List
-import qualified Data.Map as M
-import qualified Data.Set as S
+import qualified Data.Map                        as M
+import qualified Data.Set                        as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
@@ -24,13 +23,13 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
+import           Ide.Plugin.Tactic.CodeGen.Utils
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Ide.Plugin.Tactic.CodeGen.Utils
-import           Type hiding (Var)
+import           Type                            hiding (Var)
 
 
 useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()

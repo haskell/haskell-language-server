@@ -1,43 +1,42 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 #include "ghc-api-version.h"
 
 module Ide.Plugin.ExplicitImports (descriptor) where
 
-import Control.DeepSeq
-import Control.Monad.IO.Class
-import Data.Aeson (ToJSON (toJSON), Value (Null))
-import Data.Aeson.Types (FromJSON)
-import qualified Data.HashMap.Strict as HashMap
-import Data.IORef (readIORef)
-import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromMaybe)
-import qualified Data.Text as T
-import Development.IDE
-import Development.IDE.Core.PositionMapping
-import Development.IDE.GHC.Compat
-import Development.Shake.Classes
-import GHC.Generics (Generic)
-import Ide.PluginUtils ( mkLspCommand )
-import Ide.Types
-import Language.LSP.Types
-import Language.LSP.Server
-import PrelNames (pRELUDE)
-import RnNames
-  ( findImportUsage,
-    getMinimalImports,
-  )
-import TcRnMonad (initTcWithGbl)
-import TcRnTypes (TcGblEnv (tcg_used_gres))
+import           Control.DeepSeq
+import           Control.Monad.IO.Class
+import           Data.Aeson                           (ToJSON (toJSON),
+                                                       Value (Null))
+import           Data.Aeson.Types                     (FromJSON)
+import qualified Data.HashMap.Strict                  as HashMap
+import           Data.IORef                           (readIORef)
+import qualified Data.Map.Strict                      as Map
+import           Data.Maybe                           (catMaybes, fromMaybe)
+import qualified Data.Text                            as T
+import           Development.IDE
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.GHC.Compat
+import           Development.Shake.Classes
+import           GHC.Generics                         (Generic)
+import           Ide.PluginUtils                      (mkLspCommand)
+import           Ide.Types
+import           Language.LSP.Server
+import           Language.LSP.Types
+import           PrelNames                            (pRELUDE)
+import           RnNames                              (findImportUsage,
+                                                       getMinimalImports)
+import           TcRnMonad                            (initTcWithGbl)
+import           TcRnTypes                            (TcGblEnv (tcg_used_gres))
 
 importCommandId :: CommandId
 importCommandId = "ImportLensCommand"
@@ -46,7 +45,7 @@ importCommandId = "ImportLensCommand"
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
-    { 
+    {
       -- This plugin provides a command handler
       pluginCommands = [importLensCommand],
       -- This plugin defines a new rule

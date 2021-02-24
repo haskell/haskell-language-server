@@ -1,17 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Symbol (tests) where
 
-import Control.Lens (to, ix, (^?), _Just)
-import Control.Monad.IO.Class
-import Data.List
-import Language.LSP.Test as Test
-import Language.LSP.Types
-import qualified Language.LSP.Types.Lens as L
-import Language.LSP.Types.Capabilities
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import Test.Tasty.HUnit
+import           Control.Lens                    (_Just, ix, to, (^?))
+import           Control.Monad.IO.Class
+import           Data.List
+import           Language.LSP.Test               as Test
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens         as L
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.ExpectedFailure      (ignoreTestBecause)
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "document symbols" [

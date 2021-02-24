@@ -1,15 +1,15 @@
 {-# LANGUAGE CPP #-}
 module Stack where
 
-import           Data.List.Extra                          ( trim )
+import           Control.Monad
+import           Data.List.Extra            (trim)
 import           Development.Shake
 import           Development.Shake.FilePath
-import           Control.Monad
-import           System.Directory                         ( copyFile )
+import           System.Directory           (copyFile)
 -- import           System.FilePath                          ( (</>) )
-import           System.Info                              ( os )
-import           Version
 import           Print
+import           System.Info                (os)
+import           Version
 
 stackInstallHlsWithErrMsg :: Maybe VersionNumber -> [String] -> Action ()
 stackInstallHlsWithErrMsg mbVersionNumber args =
@@ -123,17 +123,17 @@ stackBuildFailMsg =
 getVerbosityArg :: Verbosity -> String
 getVerbosityArg v = "--verbosity=" ++ stackVerbosity
   where stackVerbosity = case v of
-          Silent ->     "silent"
+          Silent     ->     "silent"
 #if MIN_VERSION_shake(0,18,4)
-          Error ->      "error"
-          Warn ->       "warn"
-          Info ->       "info"
-          Verbose ->    "info"
+          Error      ->      "error"
+          Warn       ->       "warn"
+          Info       ->       "info"
+          Verbose    ->    "info"
 #else
-          Quiet ->      "error"
-          Normal ->     "warn"
-          Loud ->       "info"
-          Chatty ->     "info"
+          Quiet      ->      "error"
+          Normal     ->     "warn"
+          Loud       ->       "info"
+          Chatty     ->     "info"
 #endif
 
           Diagnostic -> "debug"

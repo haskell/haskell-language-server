@@ -4,11 +4,10 @@
 {-# LANGUAGE RecordWildCards   #-}
 module Main(main) where
 
-import           Ide.Arguments             (Arguments (..), LspArguments (..),
-                                            getArguments)
-import           Ide.Main                  (defaultMain)
+import           Ide.Arguments (Arguments (..), LspArguments (..), getArguments)
+import           Ide.Main      (defaultMain)
+import           Main.Utf8     (withUtf8)
 import           Plugins
-import Main.Utf8 (withUtf8)
 
 main :: IO ()
 main = withUtf8 $ do

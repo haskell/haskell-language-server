@@ -38,24 +38,24 @@
    > cabal bench --benchmark-options "bench-results/HEAD/results.csv bench-results/HEAD/edit.diff.svg"
 
  -}
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DerivingStrategies#-}
-{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE TypeFamilies       #-}
 {-# OPTIONS -Wno-orphans #-}
 
-import Data.Foldable (find)
-import Data.Yaml (FromJSON (..), decodeFileThrow)
-import Development.Benchmark.Rules
-import Development.Shake
-import Experiments.Types (Example, exampleToOptions)
-import qualified Experiments.Types as E
-import GHC.Generics (Generic)
-import Numeric.Natural (Natural)
-import Development.Shake.Classes
-import System.Console.GetOpt
-import Data.Maybe
-import Control.Monad.Extra
-import System.FilePath
+import           Control.Monad.Extra
+import           Data.Foldable               (find)
+import           Data.Maybe
+import           Data.Yaml                   (FromJSON (..), decodeFileThrow)
+import           Development.Benchmark.Rules
+import           Development.Shake
+import           Development.Shake.Classes
+import           Experiments.Types           (Example, exampleToOptions)
+import qualified Experiments.Types           as E
+import           GHC.Generics                (Generic)
+import           Numeric.Natural             (Natural)
+import           System.Console.GetOpt
+import           System.FilePath
 
 
 configPath :: FilePath
@@ -82,7 +82,7 @@ main = shakeArgsWith shakeOpts [configOpt] $ \configs wants -> pure $ Just $ do
   _configStatic <- createBuildSystem config
   case wants of
       [] -> want ["all"]
-      _ -> want wants
+      _  -> want wants
 
 ghcideBuildRules :: MkBuildRules BuildSystem
 ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" projectDepends buildGhcide
@@ -95,13 +95,13 @@ ghcideBuildRules = MkBuildRules findGhcForBuildSystem "ghcide" projectDepends bu
 --------------------------------------------------------------------------------
 
 data Config buildSystem = Config
-  { experiments :: [Unescaped String],
-    examples :: [Example],
-    samples :: Natural,
-    versions :: [GitCommit],
+  { experiments     :: [Unescaped String],
+    examples        :: [Example],
+    samples         :: Natural,
+    versions        :: [GitCommit],
     -- | Output folder ('foo' works, 'foo/bar' does not)
-    outputFolder :: String,
-    buildTool :: buildSystem,
+    outputFolder    :: String,
+    buildTool       :: buildSystem,
     profileInterval :: Maybe Double
   }
   deriving (Generic, Show)

@@ -7,18 +7,18 @@ import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.List
-import           Data.Maybe (mapMaybe)
-import           Data.Set (Set)
-import qualified Data.Set as S
+import           Data.Maybe                   (mapMaybe)
+import           Data.Set                     (Set)
+import qualified Data.Set                     as S
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.Tactic.GHC (tacticsThetaTy)
-import           Ide.Plugin.Tactic.Machinery (methodHypothesis)
+import           Ide.Plugin.Tactic.FeatureSet (FeatureSet)
+import           Ide.Plugin.Tactic.GHC        (tacticsThetaTy)
+import           Ide.Plugin.Tactic.Machinery  (methodHypothesis)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcRnTypes
-import           TcType (substTy, tcSplitSigmaTy)
-import           Unify (tcUnifyTy)
-import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
+import           TcType                       (substTy, tcSplitSigmaTy)
+import           Unify                        (tcUnifyTy)
 
 
 mkContext :: FeatureSet -> [(OccName, CType)] -> TcGblEnv -> Context
@@ -84,7 +84,7 @@ getFunBindId :: HsBindLR GhcTc GhcTc -> [Id]
 getFunBindId (AbsBinds _ _ _ abes _ _ _)
   = abes >>= \case
       ABE _ poly _ _ _ -> pure poly
-      _ -> []
+      _                -> []
 getFunBindId _ = []
 
 

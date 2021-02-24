@@ -2,14 +2,14 @@
 
 module Ide.Plugin.Tactic.CodeGen.Utils where
 
-import Data.List
-import DataCon
-import Development.IDE.GHC.Compat
-import GHC.Exts
-import GHC.SourceGen (recordConE, RdrNameStr)
-import GHC.SourceGen.Overloaded
-import Ide.Plugin.Tactic.GHC (getRecordFields)
-import Name
+import           Data.List
+import           DataCon
+import           Development.IDE.GHC.Compat
+import           GHC.Exts
+import           GHC.SourceGen              (RdrNameStr, recordConE)
+import           GHC.SourceGen.Overloaded
+import           Ide.Plugin.Tactic.GHC      (getRecordFields)
+import           Name
 
 
 ------------------------------------------------------------------------------

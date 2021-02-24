@@ -18,7 +18,7 @@ import           GHC.LanguageExtensions.Type
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.Stylish
-import           Language.LSP.Types            as J
+import           Language.LSP.Types          as J
 
 import           System.Directory
 import           System.FilePath

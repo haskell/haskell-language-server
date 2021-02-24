@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Rename (tests) where
 
-import Control.Monad.IO.Class (liftIO)
-import Language.LSP.Test
-import Language.LSP.Types
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
+import           Control.Monad.IO.Class     (liftIO)
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "rename" [

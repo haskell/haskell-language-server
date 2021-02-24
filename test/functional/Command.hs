@@ -1,16 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Command (tests) where
 
-import Control.Lens hiding (List)
-import Control.Monad.IO.Class
-import qualified Data.Text as T
-import Data.Char
-import Language.LSP.Test
-import Language.LSP.Types as LSP
-import Language.LSP.Types.Lens as LSP
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.HUnit
+import           Control.Lens            hiding (List)
+import           Control.Monad.IO.Class
+import           Data.Char
+import qualified Data.Text               as T
+import           Language.LSP.Test
+import           Language.LSP.Types      as LSP
+import           Language.LSP.Types.Lens as LSP
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "commands" [

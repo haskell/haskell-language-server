@@ -8,14 +8,14 @@ module Development.IDE.Core.Debouncer
     , noopDebouncer
     ) where
 
-import Control.Concurrent.Extra
-import Control.Concurrent.Async
-import Control.Exception
-import Control.Monad.Extra
-import Data.Hashable
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as Map
-import System.Time.Extra
+import           Control.Concurrent.Async
+import           Control.Concurrent.Extra
+import           Control.Exception
+import           Control.Monad.Extra
+import           Data.HashMap.Strict      (HashMap)
+import qualified Data.HashMap.Strict      as Map
+import           Data.Hashable
+import           System.Time.Extra
 
 -- | A debouncer can be used to avoid triggering many events
 -- (e.g. diagnostics) for the same key (e.g. the same file)

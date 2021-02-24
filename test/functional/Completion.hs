@@ -2,19 +2,19 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Completion(tests) where
 
-import Control.Monad.IO.Class
-import Control.Lens hiding ((.=))
-import Data.Aeson (object, (.=))
-import Language.LSP.Test
-import Language.LSP.Types
-import Language.LSP.Types.Lens hiding (applyEdit)
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import Test.Tasty.HUnit
-import qualified Data.Text as T
-import Data.Default (def)
-import Ide.Plugin.Config (Config (maxCompletions))
+import           Control.Lens               hiding ((.=))
+import           Control.Monad.IO.Class
+import           Data.Aeson                 (object, (.=))
+import           Data.Default               (def)
+import qualified Data.Text                  as T
+import           Ide.Plugin.Config          (Config (maxCompletions))
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Language.LSP.Types.Lens    hiding (applyEdit)
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "completions" [

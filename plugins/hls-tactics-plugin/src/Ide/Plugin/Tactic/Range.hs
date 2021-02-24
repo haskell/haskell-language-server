@@ -1,7 +1,7 @@
 module Ide.Plugin.Tactic.Range where
 
-import qualified FastString as FS
 import           Development.IDE.Types.Location
+import qualified FastString                     as FS
 import           SrcLoc
 
 ------------------------------------------------------------------------------

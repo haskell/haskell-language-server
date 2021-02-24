@@ -1,17 +1,17 @@
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
 module Development.IDE.Types.KnownTargets (KnownTargets, Target(..), toKnownFiles) where
 
-import Data.HashMap.Strict
-import Development.IDE.Types.Location
-import Development.IDE.GHC.Compat (ModuleName)
-import Development.IDE.GHC.Orphans ()
-import Data.Hashable
-import GHC.Generics
-import Control.DeepSeq
-import Data.HashSet
-import qualified Data.HashSet as HSet
-import qualified Data.HashMap.Strict as HMap
+import           Control.DeepSeq
+import           Data.HashMap.Strict
+import qualified Data.HashMap.Strict            as HMap
+import           Data.HashSet
+import qualified Data.HashSet                   as HSet
+import           Data.Hashable
+import           Development.IDE.GHC.Compat     (ModuleName)
+import           Development.IDE.GHC.Orphans    ()
+import           Development.IDE.Types.Location
+import           GHC.Generics
 
 -- | A mapping of module name to known files
 type KnownTargets = HashMap Target [NormalizedFilePath]

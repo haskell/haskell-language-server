@@ -3,18 +3,18 @@
 module Ide.Plugin.Tactic.Naming where
 
 import           Control.Monad.State.Strict
-import           Data.Bool (bool)
+import           Data.Bool                  (bool)
 import           Data.Char
-import           Data.Map (Map)
-import qualified Data.Map as M
-import           Data.Set (Set)
-import qualified Data.Set as S
+import           Data.Map                   (Map)
+import qualified Data.Map                   as M
+import           Data.Set                   (Set)
+import qualified Data.Set                   as S
 import           Data.Traversable
 import           Name
 import           TcType
 import           TyCon
 import           Type
-import           TysWiredIn (listTyCon, pairTyCon, unitTyCon)
+import           TysWiredIn                 (listTyCon, pairTyCon, unitTyCon)
 
 
 ------------------------------------------------------------------------------
@@ -72,7 +72,7 @@ mkGoodName
 mkGoodName in_scope t =
   let tn = mkTyName t
    in mkVarOcc $ case S.member (mkVarOcc tn) in_scope of
-        True -> tn ++ show (length in_scope)
+        True  -> tn ++ show (length in_scope)
         False -> tn
 
 

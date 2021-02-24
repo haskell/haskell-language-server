@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Highlight (tests) where
 
-import Control.Monad.IO.Class
-import Language.LSP.Test
-import Language.LSP.Types
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.HUnit
+import           Control.Monad.IO.Class
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "highlight" [
