@@ -142,7 +142,7 @@ defaultIdeOptions session = IdeOptions
     ,optCheckParents = pure CheckOnSaveAndClose
     ,optHaddockParse = HaddockParse
     ,optCustomDynFlags = id
-    ,optFakeUid = toInstalledUnitId (stringToUnitId "fake_uid")
+    ,optFakeUid = toInstalledUnitId (stringToUnitId "main")
     }
 
 
