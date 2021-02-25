@@ -153,6 +153,7 @@ suggestAction packageExports ideOptions parsedModule text df annSource tcM har d
     , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
     , rewrite df annSource $ \df ps ->
         suggestImportDisambiguation df text ps diag
+    , rewrite df annSource $ \_ ps -> suggestNewOrExtendImportForClassMethod packageExports ps diag
     , suggestFillTypeWildcard diag
     , suggestFixConstructorImport text diag
     , suggestModuleTypo diag
@@ -769,8 +770,6 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
     = mod_srcspan >>= uncurry (suggestions hsmodImports binding)
     | otherwise = []
     where
-        unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
-        unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
         suggestions decls binding mod srcspan
           |  range <- case [ x | (x,"") <- readSrcSpan (T.unpack srcspan)] of
                 [s] -> let x = realSrcSpanToRange s
@@ -1158,6 +1157,39 @@ removeRedundantConstraints mContents Diagnostic{..}
 
 -------------------------------------------------------------------------------------------------
 
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, [Rewrite])]
+suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message}
+  | Just [methodName, className] <-
+      matchRegexUnifySpaces
+        _message
+        "‘([^’]*)’ is not a \\(visible\\) method of class ‘([^’]*)’",
+    idents <-
+      maybe [] (Set.toList . Set.filter (\x -> parent x == Just className)) $
+        Map.lookup methodName $ getExportsMap packageExportsMap =
+    mconcat $ suggest <$> idents
+  | otherwise = []
+  where
+    suggest identInfo@IdentInfo {moduleNameText}
+      | importStyle <- NE.toList $ importStyles identInfo,
+        mImportDecl <- findImportDeclByModuleName (hsmodImports $ unLoc ps) (T.unpack moduleNameText) =
+        case mImportDecl of
+          -- extend
+          Just decl ->
+            [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
+                [uncurry extendImport (unImportStyle style) decl]
+              )
+              | style <- importStyle
+            ]
+          -- new
+          _ ->
+            [ ( "Import " <> moduleNameText <> " with " <> rendered,
+                maybeToList $ newUnqualImport (T.unpack moduleNameText) (T.unpack rendered) False ps
+              )
+              | style <- importStyle,
+                let rendered = renderImportStyle style
+            ]
+              <> maybeToList (("Import " <> moduleNameText,) <$> fmap pure (newImportAll (T.unpack moduleNameText) ps))
+
 suggestNewImport :: ExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
 suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
   | msg <- unifySpaces _message
@@ -1451,3 +1483,6 @@ renderImportStyle :: ImportStyle -> T.Text
 renderImportStyle (ImportTopLevel x)    = x
 renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
 
+unImportStyle :: ImportStyle -> (Maybe String, String)
+unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
+unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
