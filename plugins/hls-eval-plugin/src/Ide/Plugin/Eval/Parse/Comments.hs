@@ -1,54 +1,50 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric      #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TupleSections      #-}
 
 module Ide.Plugin.Eval.Parse.Comments where
 
 import qualified Control.Applicative.Combinators.NonEmpty as NE
-import Control.Arrow (first, (&&&), (>>>))
-import Control.Lens (lensField, lensRules, view, (.~), (^.))
-import Control.Lens.Extras (is)
-import Control.Lens.TH (makeLensesWith, makePrisms, mappingNamer)
-import Control.Monad (guard, void, when)
-import Control.Monad.Combinators ()
-import Control.Monad.Reader (ask)
-import Control.Monad.Trans.Reader (Reader, runReader)
-import qualified Data.Char as C
-import qualified Data.DList as DL
-import qualified Data.Foldable as F
-import Data.Function ((&))
-import Data.Functor.Identity
-import Data.List.NonEmpty (NonEmpty ((:|)))
-import qualified Data.List.NonEmpty as NE
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import Data.Void (Void)
-import Development.IDE (Position, Range (Range))
-import Development.IDE.Types.Location (Position (..))
-import GHC.Generics
-import Ide.Plugin.Eval.Types
-import Language.LSP.Types.Lens
-    ( character,
-      end,
-      line,
-      start,
-    )
-import Text.Megaparsec
-import qualified Text.Megaparsec as P
-import Text.Megaparsec.Char
-    ( alphaNumChar,
-      char,
-      eol,
-      hspace,
-      letterChar,
-    )
-import Data.Functor ((<&>))
-import qualified Data.Text as T
+import           Control.Arrow                            (first, (&&&), (>>>))
+import           Control.Lens                             (lensField, lensRules,
+                                                           view, (.~), (^.))
+import           Control.Lens.Extras                      (is)
+import           Control.Lens.TH                          (makeLensesWith,
+                                                           makePrisms,
+                                                           mappingNamer)
+import           Control.Monad                            (guard, void, when)
+import           Control.Monad.Combinators                ()
+import           Control.Monad.Reader                     (ask)
+import           Control.Monad.Trans.Reader               (Reader, runReader)
+import qualified Data.Char                                as C
+import qualified Data.DList                               as DL
+import qualified Data.Foldable                            as F
+import           Data.Function                            ((&))
+import           Data.Functor                             ((<&>))
+import           Data.Functor.Identity
+import           Data.List.NonEmpty                       (NonEmpty ((:|)))
+import qualified Data.List.NonEmpty                       as NE
+import           Data.Map.Strict                          (Map)
+import qualified Data.Map.Strict                          as Map
+import qualified Data.Text                                as T
+import           Data.Void                                (Void)
+import           Development.IDE                          (Position,
+                                                           Range (Range))
+import           Development.IDE.Types.Location           (Position (..))
+import           GHC.Generics
+import           Ide.Plugin.Eval.Types
+import           Language.LSP.Types.Lens                  (character, end, line,
+                                                           start)
+import           Text.Megaparsec
+import qualified Text.Megaparsec                          as P
+import           Text.Megaparsec.Char                     (alphaNumChar, char,
+                                                           eol, hspace,
+                                                           letterChar)
 
 {-
 We build parsers combining the following three kinds of them:
@@ -73,7 +69,7 @@ type LineParser a = forall m. Monad m => ParsecT Void String m a
 type LineGroupParser = Parsec Void [(Range, RawLineComment)]
 
 data BlockEnv = BlockEnv
-    { isLhs :: Bool
+    { isLhs      :: Bool
     , blockRange :: Range
     }
     deriving (Read, Show, Eq, Ord)
@@ -96,13 +92,13 @@ newtype ExampleLine = ExampleLine {getExampleLine :: String}
 data TestComment
     = AProp
         { testCommentRange :: Range
-        , lineProp :: PropLine
-        , propResults :: [String]
+        , lineProp         :: PropLine
+        , propResults      :: [String]
         }
     | AnExample
         { testCommentRange :: Range
-        , lineExamples :: NonEmpty ExampleLine
-        , exampleResults :: [String]
+        , lineExamples     :: NonEmpty ExampleLine
+        , exampleResults   :: [String]
         }
     deriving (Show)
 
@@ -229,11 +225,11 @@ testsToSection style flav tests =
         sectionLanguage = case flav of
             HaddockNext -> Haddock
             HaddockPrev -> Haddock
-            _ -> Plain
+            _           -> Plain
         sectionTests = map fromTestComment tests
         sectionFormat =
             case style of
-                Line -> SingleLine
+                Line      -> SingleLine
                 Block ran -> MultiLine ran
      in Section {..}
 
@@ -364,7 +360,7 @@ lineGroupP = do
     (_, flav) <- lookAhead $ parseLine (commentFlavourP <* takeRest)
     case flav of
         Named "setup" -> (Nothing,) <$> lineCommentSectionsP
-        flav -> (,mempty) . Just . (flav,) <$> lineCommentSectionsP
+        flav          -> (,mempty) . Just . (flav,) <$> lineCommentSectionsP
 
 -- >>>  parse (lineGroupP <*eof) "" $ (dummyPosition, ) . RawLineComment <$> ["-- a", "-- b"]
 -- Variable not in scope: dummyPosition :: Position
@@ -475,7 +471,7 @@ nonEmptyNormalLineP isLHS style = try $ do
     guard $
         case style of
             Block{} -> T.strip (T.pack ln) `notElem` ["{-", "-}", ""]
-            _ -> not $ all C.isSpace ln
+            _       -> not $ all C.isSpace ln
     pure (ln, pos)
 
 {- | Normal line is a line neither a example nor prop.
@@ -496,7 +492,7 @@ normalLineP isLHS style = do
 consume :: CommentStyle -> LineParser (String, Position)
 consume style =
     case style of
-        Line -> (,) <$> takeRest <*> getPosition
+        Line     -> (,) <$> takeRest <*> getPosition
         Block {} -> manyTill_ anySingle (getPosition <* eob)
 
 getPosition :: (Ord v, TraversableStream s) => ParsecT v s m Position

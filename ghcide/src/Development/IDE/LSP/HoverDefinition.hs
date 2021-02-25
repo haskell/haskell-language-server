@@ -1,7 +1,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs      #-}
+{-# LANGUAGE RankNTypes #-}
 
 -- | Display information on hover.
 module Development.IDE.LSP.HoverDefinition
@@ -12,16 +12,16 @@ module Development.IDE.LSP.HoverDefinition
     , gotoTypeDefinition
     ) where
 
-import Control.Monad.IO.Class
+import           Control.Monad.IO.Class
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.LSP.Server
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
-import qualified Language.LSP.Server as LSP
+import qualified Language.LSP.Server            as LSP
 import           Language.LSP.Types
 
-import qualified Data.Text as T
+import qualified Data.Text                      as T
 
 gotoDefinition :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (ResponseResult TextDocumentDefinition))
 hover          :: IdeState -> TextDocumentPositionParams -> LSP.LspM c (Either ResponseError (Maybe Hover))

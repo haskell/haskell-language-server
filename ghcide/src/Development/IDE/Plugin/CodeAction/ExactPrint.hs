@@ -1,7 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
 
 module Development.IDE.Plugin.CodeAction.ExactPrint
   ( Rewrite (..),
@@ -18,31 +18,37 @@ module Development.IDE.Plugin.CodeAction.ExactPrint
   )
 where
 
-import Control.Applicative
-import Control.Monad
-import Control.Monad.Trans
-import Data.Char (isAlphaNum)
-import Data.Data (Data)
-import Data.Functor
-import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust, isNothing, mapMaybe)
-import qualified Data.Text as T
-import Development.IDE.GHC.Compat hiding (parseExpr)
-import Development.IDE.GHC.ExactPrint
-    ( Annotate, ASTElement(parseAST) )
-import FieldLabel (flLabel)
-import GhcPlugins (sigPrec, mkRealSrcLoc)
-import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP), KeywordId (G), mkAnnKey)
-import Language.LSP.Types
-import OccName
-import Outputable (ppr, showSDocUnsafe, showSDoc)
-import Retrie.GHC (rdrNameOcc, unpackFS, mkRealSrcSpan, realSrcSpanEnd)
-import Development.IDE.Spans.Common
-import Development.IDE.GHC.Error
-import Data.Generics (listify)
-import GHC.Exts (IsList (fromList))
-import Control.Monad.Extra (whenJust)
+import           Control.Applicative
+import           Control.Monad
+import           Control.Monad.Extra                   (whenJust)
+import           Control.Monad.Trans
+import           Data.Char                             (isAlphaNum)
+import           Data.Data                             (Data)
+import           Data.Functor
+import           Data.Generics                         (listify)
+import qualified Data.Map.Strict                       as Map
+import           Data.Maybe                            (fromJust, isNothing,
+                                                        mapMaybe)
+import qualified Data.Text                             as T
+import           Development.IDE.GHC.Compat            hiding (parseExpr)
+import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.ExactPrint        (ASTElement (parseAST),
+                                                        Annotate)
+import           Development.IDE.Spans.Common
+import           FieldLabel                            (flLabel)
+import           GHC.Exts                              (IsList (fromList))
+import           GhcPlugins                            (mkRealSrcLoc, sigPrec)
+import           Language.Haskell.GHC.ExactPrint
+import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
+                                                        KeywordId (G), mkAnnKey)
+import           Language.LSP.Types
+import           OccName
+import           Outputable                            (ppr, showSDoc,
+                                                        showSDocUnsafe)
+import           Retrie.GHC                            (mkRealSrcSpan,
+                                                        rdrNameOcc,
+                                                        realSrcSpanEnd,
+                                                        unpackFS)
 
 ------------------------------------------------------------------------------
 
@@ -115,7 +121,7 @@ fixParens openDP closeDP ctxt@(L _ elems) = do
 
     dropHsParTy :: LHsType pass -> LHsType pass
     dropHsParTy (L _ (HsParTy _ ty)) = ty
-    dropHsParTy other = other
+    dropHsParTy other                = other
 
 -- | Append a constraint at the end of a type context.
 --   If no context is present, a new one will be created.
@@ -161,7 +167,7 @@ appendConstraint constraintT = go
 liftParseAST :: ASTElement ast => DynFlags -> String -> TransformT (Either String) (Located ast)
 liftParseAST df s = case parseAST df "" s of
   Right (anns, x) -> modifyAnnsT (anns <>) $> x
-  Left _ -> lift $ Left $ "No parse: " <> s
+  Left _          -> lift $ Left $ "No parse: " <> s
 
 lookupAnn :: (Data a, Monad m) => KeywordId -> Located a -> TransformT m (Maybe DeltaPos)
 lookupAnn comment la = do
@@ -172,16 +178,16 @@ dp00 :: DeltaPos
 dp00 = DP (0, 0)
 
 headMaybe :: [a] -> Maybe a
-headMaybe [] = Nothing
+headMaybe []      = Nothing
 headMaybe (a : _) = Just a
 
 lastMaybe :: [a] -> Maybe a
-lastMaybe [] = Nothing
+lastMaybe []    = Nothing
 lastMaybe other = Just $ last other
 
 liftMaybe :: String -> Maybe a -> TransformT (Either String) a
 liftMaybe _ (Just x) = return x
-liftMaybe s _ = lift $ Left s
+liftMaybe s _        = lift $ Left s
 
 -- | Copy anns attached to a into b with modification, then delete anns of a
 transferAnn :: (Data a, Data b) => Located a -> Located b -> (Annotation -> Annotation) -> TransformT (Either String) ()
@@ -198,7 +204,7 @@ extendImport mparent identifier lDecl@(L l _) =
   Rewrite l $ \df -> do
     case mparent of
       Just parent -> extendImportViaParent df parent identifier lDecl
-      _ -> extendImportTopLevel df identifier lDecl
+      _           -> extendImportTopLevel df identifier lDecl
 
 -- | Add an identifier to import list
 --
@@ -311,7 +317,7 @@ unIEWrappedName (occName -> occ) = showSDocUnsafe $ parenSymOcc occ (ppr occ)
 
 hasParen :: String -> Bool
 hasParen ('(' : _) = True
-hasParen _ = False
+hasParen _         = False
 
 unqalDP :: Bool -> [(KeywordId, DeltaPos)]
 unqalDP paren =

@@ -7,7 +7,10 @@
 
 {- HLINT ignore -} -- since copied from upstream
 
-{-# LANGUAGE CPP, NamedFieldPuns, NondecreasingIndentation, BangPatterns, MultiWayIf #-}
+{-# LANGUAGE CPP                      #-}
+{-# LANGUAGE MultiWayIf               #-}
+{-# LANGUAGE NamedFieldPuns           #-}
+{-# LANGUAGE NondecreasingIndentation #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 #include "ghc-api-version.h"
 
@@ -22,29 +25,29 @@
 module Development.IDE.GHC.CPP(doCpp, addOptP)
 where
 
-import Development.IDE.GHC.Compat
-import Packages
-import SysTools
-import Module
-import Panic
-import FileCleanup
+import           Development.IDE.GHC.Compat
+import           FileCleanup
+import           Module
+import           Packages
+import           Panic
+import           SysTools
 #if MIN_GHC_API_VERSION(8,8,2)
-import LlvmCodeGen (llvmVersionList)
+import           LlvmCodeGen                (llvmVersionList)
 #elif MIN_GHC_API_VERSION(8,8,0)
-import LlvmCodeGen (LlvmVersion (..))
+import           LlvmCodeGen                (LlvmVersion (..))
 #endif
 #if MIN_GHC_API_VERSION (8,10,0)
-import Fingerprint
-import ToolSettings
+import           Fingerprint
+import           ToolSettings
 #endif
 
-import System.Directory
-import System.FilePath
-import Control.Monad
-import System.Info
-import Data.List        ( intercalate )
-import Data.Maybe
-import Data.Version
+import           Control.Monad
+import           Data.List                  (intercalate)
+import           Data.Maybe
+import           Data.Version
+import           System.Directory
+import           System.FilePath
+import           System.Info
 
 
 

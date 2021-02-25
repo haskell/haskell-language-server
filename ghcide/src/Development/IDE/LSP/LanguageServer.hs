@@ -1,10 +1,10 @@
       -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE PolyKinds                 #-}
+{-# LANGUAGE RankNTypes                #-}
 
 -- WARNING: A copy of DA.Daml.LanguageServer, try to keep them in sync
 -- This version removes the daml: handling
@@ -12,37 +12,39 @@ module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     ) where
 
-import           Language.LSP.Types
+import           Control.Concurrent.Extra              (newBarrier,
+                                                        signalBarrier,
+                                                        waitBarrier)
+import           Control.Concurrent.STM
+import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import           Control.Monad.Reader
+import           Data.Aeson                            (Value)
+import           Data.Maybe
+import qualified Data.Set                              as Set
+import qualified Data.Text                             as T
+import qualified Development.IDE.GHC.Util              as Ghcide
 import           Development.IDE.LSP.Server
-import qualified Development.IDE.GHC.Util as Ghcide
-import qualified Language.LSP.Server as LSP
-import Control.Concurrent.Extra (newBarrier, signalBarrier, waitBarrier)
-import Control.Concurrent.STM
-import Data.Maybe
-import Data.Aeson (Value)
-import qualified Data.Set as Set
-import qualified Data.Text as T
-import GHC.IO.Handle (hDuplicate)
-import System.IO
-import Control.Monad.Extra
-import UnliftIO.Exception
-import UnliftIO.Async
-import UnliftIO.Concurrent
-import UnliftIO.Directory
-import Control.Monad.IO.Class
-import Control.Monad.Reader
-import Ide.Types (traceWithSpan)
-import Development.IDE.Session (runWithDb)
+import           Development.IDE.Session               (runWithDb)
+import           GHC.IO.Handle                         (hDuplicate)
+import           Ide.Types                             (traceWithSpan)
+import qualified Language.LSP.Server                   as LSP
+import           Language.LSP.Types
+import           System.IO
+import           UnliftIO.Async
+import           UnliftIO.Concurrent
+import           UnliftIO.Directory
+import           UnliftIO.Exception
 
-import Development.IDE.Core.IdeConfiguration
-import Development.IDE.Core.Shake
-import Development.IDE.LSP.HoverDefinition
-import Development.IDE.LSP.Notifications
-import Development.IDE.Types.Logger
-import Development.IDE.Core.FileStore
-import Development.IDE.Core.Tracing
+import           Development.IDE.Core.FileStore
+import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Tracing
+import           Development.IDE.LSP.HoverDefinition
+import           Development.IDE.LSP.Notifications
+import           Development.IDE.Types.Logger
 
-import System.IO.Unsafe (unsafeInterleaveIO)
+import           System.IO.Unsafe                      (unsafeInterleaveIO)
 
 runLanguageServer
     :: forall config. (Show config)

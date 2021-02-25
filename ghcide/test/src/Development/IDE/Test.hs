@@ -1,9 +1,9 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE PolyKinds             #-}
 
 module Development.IDE.Test
   ( Cursor
@@ -22,23 +22,24 @@ module Development.IDE.Test
   , waitForAction
   ) where
 
-import qualified Data.Aeson as A
-import Control.Applicative.Combinators
-import Control.Lens hiding (List)
-import Control.Monad
-import Control.Monad.IO.Class
-import Data.Bifunctor (second)
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as T
-import Language.LSP.Test hiding (message)
-import qualified Language.LSP.Test as LspTest
-import Language.LSP.Types
-import Language.LSP.Types.Lens as Lsp
-import System.Time.Extra
-import Test.Tasty.HUnit
-import System.Directory (canonicalizePath)
-import Data.Maybe (fromJust)
-import Development.IDE.Plugin.Test (WaitForIdeRuleResult, TestRequest(..))
+import           Control.Applicative.Combinators
+import           Control.Lens                    hiding (List)
+import           Control.Monad
+import           Control.Monad.IO.Class
+import qualified Data.Aeson                      as A
+import           Data.Bifunctor                  (second)
+import qualified Data.Map.Strict                 as Map
+import           Data.Maybe                      (fromJust)
+import qualified Data.Text                       as T
+import           Development.IDE.Plugin.Test     (TestRequest (..),
+                                                  WaitForIdeRuleResult)
+import           Language.LSP.Test               hiding (message)
+import qualified Language.LSP.Test               as LspTest
+import           Language.LSP.Types
+import           Language.LSP.Types.Lens         as Lsp
+import           System.Directory                (canonicalizePath)
+import           System.Time.Extra
+import           Test.Tasty.HUnit
 
 -- | (0-based line number, 0-based column number)
 type Cursor = (Int, Int)
@@ -62,8 +63,8 @@ requireDiagnostic actuals expected@(severity, cursor, expectedMsg, expectedTag) 
         && hasTag expectedTag (d ^. tags)
 
     hasTag :: Maybe DiagnosticTag -> Maybe (List DiagnosticTag) -> Bool
-    hasTag Nothing  _       = True
-    hasTag (Just _) Nothing = False
+    hasTag Nothing  _                          = True
+    hasTag (Just _) Nothing                    = False
     hasTag (Just actualTag) (Just (List tags)) = actualTag `elem` tags
 
 -- |wait for @timeout@ seconds and report an assertion failure
@@ -186,7 +187,7 @@ standardizeQuotes msg = let
         repl '‘' = '\''
         repl '’' = '\''
         repl '`' = '\''
-        repl  c   = c
+        repl  c  = c
     in  T.map repl msg
 
 waitForAction :: String -> TextDocumentIdentifier -> Session (Either ResponseError WaitForIdeRuleResult)
@@ -197,5 +198,5 @@ waitForAction key TextDocumentIdentifier{_uri} = do
     return $ do
       e <- _result
       case A.fromJSON e of
-        A.Error e -> Left $ ResponseError InternalError (T.pack e) Nothing
+        A.Error e   -> Left $ ResponseError InternalError (T.pack e) Nothing
         A.Success a -> pure a

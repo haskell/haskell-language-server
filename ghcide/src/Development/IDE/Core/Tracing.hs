@@ -13,35 +13,40 @@ import           Control.Concurrent.Async       (Async, async)
 import           Control.Concurrent.Extra       (Var, modifyVar_, newVar,
                                                  readVar, threadDelay)
 import           Control.Exception              (evaluate)
-import           Control.Exception.Safe         (catch, SomeException)
-import           Control.Monad                  (void, when, unless, forM_, forever, (>=>))
+import           Control.Exception.Safe         (SomeException, catch)
+import           Control.Monad                  (forM_, forever, unless, void,
+                                                 when, (>=>))
 import           Control.Monad.Extra            (whenJust)
+import           Control.Monad.IO.Unlift
 import           Control.Seq                    (r0, seqList, seqTuple2, using)
+import           Data.ByteString                (ByteString)
 import           Data.Dynamic                   (Dynamic)
 import qualified Data.HashMap.Strict            as HMap
 import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
 import           Data.String                    (IsString (fromString))
+import           Data.Text.Encoding             (encodeUtf8)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
-import           Development.IDE.Types.Logger   (logInfo, Logger, logDebug)
-import           Development.IDE.Types.Shake    (ValueWithDiagnostics(..), Key (..), Value, Values)
+import           Development.IDE.Types.Location (Uri (..))
+import           Development.IDE.Types.Logger   (Logger, logDebug, logInfo)
+import           Development.IDE.Types.Shake    (Key (..), Value,
+                                                 ValueWithDiagnostics (..),
+                                                 Values)
 import           Development.Shake              (Action, actionBracket)
-import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Foreign.Storable               (Storable (sizeOf))
 import           HeapSize                       (recursiveSize, runHeapsize)
+import           Ide.PluginUtils                (installSigUsr1Handler)
+import           Ide.Types                      (PluginId (..))
 import           Language.LSP.Types             (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (SpanInFlight, Synchronicity(Asynchronous), Instrument, addEvent, beginSpan, endSpan,
+import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight,
+                                                 Synchronicity (Asynchronous),
+                                                 addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
-import Data.ByteString (ByteString)
-import Data.Text.Encoding (encodeUtf8)
-import Ide.Types (PluginId (..))
-import Development.IDE.Types.Location (Uri (..))
-import Control.Monad.IO.Unlift
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler

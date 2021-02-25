@@ -1,6 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.Core.FileStore(
@@ -17,51 +17,53 @@ module Development.IDE.Core.FileStore(
     isFileOfInterestRule
     ) where
 
-import Development.IDE.GHC.Orphans()
-import           Development.IDE.Core.Shake
-import Control.Concurrent.Extra
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TQueue (writeTQueue)
-import qualified Data.Map.Strict as Map
-import qualified Data.HashMap.Strict as HM
-import Data.Maybe
-import qualified Data.Text as T
+import           Control.Concurrent.Extra
+import           Control.Concurrent.STM                       (atomically)
+import           Control.Concurrent.STM.TQueue                (writeTQueue)
+import           Control.Exception
 import           Control.Monad.Extra
+import qualified Data.ByteString.Char8                        as BS
+import           Data.Either.Extra
+import qualified Data.HashMap.Strict                          as HM
+import           Data.Int                                     (Int64)
+import qualified Data.Map.Strict                              as Map
+import           Data.Maybe
+import qualified Data.Rope.UTF16                              as Rope
+import qualified Data.Text                                    as T
+import           Data.Time
+import           Development.IDE.Core.OfInterest              (getFilesOfInterest)
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Orphans                  ()
+import           Development.IDE.Import.DependencyInformation
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
+import           Development.IDE.Types.Options
 import           Development.Shake
 import           Development.Shake.Classes
-import           Control.Exception
-import Data.Either.Extra
-import Data.Int (Int64)
-import Data.Time
-import System.IO.Error
-import qualified Data.ByteString.Char8 as BS
-import Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Location
-import Development.IDE.Core.OfInterest (getFilesOfInterest)
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Types.Options
-import qualified Data.Rope.UTF16 as Rope
-import Development.IDE.Import.DependencyInformation
-import Ide.Plugin.Config (CheckParents(..))
-import HieDb.Create (deleteMissingRealFiles)
+import           HieDb.Create                                 (deleteMissingRealFiles)
+import           Ide.Plugin.Config                            (CheckParents (..))
+import           System.IO.Error
 
 #ifdef mingw32_HOST_OS
-import qualified System.Directory as Dir
+import qualified System.Directory                             as Dir
 #else
-import Data.Time.Clock.System (systemToUTCTime, SystemTime(MkSystemTime))
-import Foreign.Ptr
-import Foreign.C.String
-import Foreign.C.Types
-import Foreign.Marshal (alloca)
-import Foreign.Storable
-import qualified System.Posix.Error as Posix
+import           Data.Time.Clock.System                       (SystemTime (MkSystemTime),
+                                                               systemToUTCTime)
+import           Foreign.C.String
+import           Foreign.C.Types
+import           Foreign.Marshal                              (alloca)
+import           Foreign.Ptr
+import           Foreign.Storable
+import qualified System.Posix.Error                           as Posix
 #endif
 
-import qualified Development.IDE.Types.Logger as L
+import qualified Development.IDE.Types.Logger                 as L
 
-import Language.LSP.Server hiding (getVirtualFile)
-import qualified Language.LSP.Server as LSP
-import Language.LSP.VFS
+import           Language.LSP.Server                          hiding
+                                                              (getVirtualFile)
+import qualified Language.LSP.Server                          as LSP
+import           Language.LSP.VFS
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
@@ -161,7 +163,7 @@ getFileContentsRule vfs =
             mbVirtual <- getVirtualFile vfs $ filePathToUri' file
             pure $ Rope.toText . _text <$> mbVirtual
         case res of
-            Left err -> return ([err], Nothing)
+            Left err       -> return ([err], Nothing)
             Right contents -> return ([], Just (time, contents))
 
 ideTryIOException :: NormalizedFilePath -> IO a -> IO (Either FileDiagnostic a)
@@ -203,9 +205,9 @@ setFileModified state saved nfp = do
     ideOptions <- getIdeOptionsIO $ shakeExtras state
     doCheckParents <- optCheckParents ideOptions
     let checkParents = case doCheckParents of
-          AlwaysCheck -> True
+          AlwaysCheck         -> True
           CheckOnSaveAndClose -> saved
-          _ -> False
+          _                   -> False
     VFSHandle{..} <- getIdeGlobalState state
     when (isJust setVirtualFileContents) $
         fail "setFileModified can't be called on this type of VFSHandle"

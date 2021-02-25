@@ -4,16 +4,16 @@
 
 module Development.IDE.GHC.Warnings(withWarnings) where
 
-import Data.List
-import ErrUtils
-import GhcPlugins as GHC hiding (Var, (<>))
+import           Data.List
+import           ErrUtils
+import           GhcPlugins                        as GHC hiding (Var, (<>))
 
 import           Control.Concurrent.Extra
-import qualified           Data.Text as T
+import qualified Data.Text                         as T
 
-import           Development.IDE.Types.Diagnostics
 import           Development.IDE.GHC.Error
-import           Language.LSP.Types (type (|?)(..))
+import           Development.IDE.Types.Diagnostics
+import           Language.LSP.Types                (type (|?) (..))
 
 
 -- | Take a GHC monadic action (e.g. @typecheckModule pm@ for some
@@ -40,8 +40,8 @@ attachReason :: WarnReason -> Diagnostic -> Diagnostic
 attachReason wr d = d{_code = InR <$> showReason wr}
  where
   showReason = \case
-    NoReason -> Nothing
-    Reason flag -> showFlag flag
+    NoReason       -> Nothing
+    Reason flag    -> showFlag flag
     ErrReason flag -> showFlag =<< flag
 
 showFlag :: WarningFlag -> Maybe T.Text

@@ -1,12 +1,13 @@
-import Data.List.Extra (trimEnd)
-import Data.Maybe
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.HUnit
-import Test.Tasty.Ingredients.Rerun
-import Test.Tasty.Runners ( listingTests, consoleTestReporter)
-import System.Process
-import System.Environment
+import           Data.List.Extra              (trimEnd)
+import           Data.Maybe
+import           System.Environment
+import           System.Process
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners           (consoleTestReporter,
+                                               listingTests)
 
 main :: IO ()
 main = do

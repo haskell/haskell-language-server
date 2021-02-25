@@ -1,8 +1,8 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP   #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 
 -- | Gives information about symbols at a given point in DAML files.
@@ -19,45 +19,45 @@ module Development.IDE.Spans.AtPoint (
   , defRowToSymbolInfo
   ) where
 
-import Development.IDE.GHC.Error
-import Development.IDE.GHC.Orphans()
-import Development.IDE.Types.Location
+import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.Orphans          ()
+import           Development.IDE.Types.Location
 import           Language.LSP.Types
 
 -- compiler and infrastructure
-import Development.IDE.GHC.Compat
-import Development.IDE.Types.Options
-import Development.IDE.Spans.Common
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.GHC.Compat
+import           Development.IDE.Spans.Common
+import           Development.IDE.Types.Options
 
 -- GHC API imports
-import Name
-import Outputable hiding ((<>))
-import SrcLoc
-import TyCoRep hiding (FunTy)
-import TyCon
+import           FastString                           (unpackFS)
+import           IfaceType
+import           Name
+import           NameEnv
+import           Outputable                           hiding ((<>))
+import           SrcLoc
+import           TyCoRep                              hiding (FunTy)
+import           TyCon
 import qualified Var
-import NameEnv
-import IfaceType
-import FastString (unpackFS)
 
-import Control.Applicative
-import Control.Monad.Extra
-import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.Class
-import Control.Monad.IO.Class
+import           Control.Applicative
+import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Maybe
+import qualified Data.HashMap.Strict                  as HM
+import qualified Data.Map.Strict                      as M
 import           Data.Maybe
-import qualified Data.Text as T
-import qualified Data.Map.Strict as M
-import qualified Data.HashMap.Strict as HM
+import qualified Data.Text                            as T
 
-import qualified Data.Array as A
-import Data.Either
-import Data.List.Extra (nubOrd, dropEnd1)
-import Data.List (isSuffixOf)
+import qualified Data.Array                           as A
+import           Data.Either
+import           Data.List                            (isSuffixOf)
+import           Data.List.Extra                      (dropEnd1, nubOrd)
 
-import HieDb hiding (pointCommand)
+import           HieDb                                hiding (pointCommand)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
@@ -135,7 +135,7 @@ rowToLoc (row:.info) = flip Location range <$> mfile
     start = Position (refSLine row - 1) (refSCol row -1)
     end = Position (refELine row - 1) (refECol row -1)
     mfile = case modInfoSrcFile info of
-      Just f -> Just $ toUri f
+      Just f  -> Just $ toUri f
       Nothing -> Nothing
 
 typeRowToLoc :: Res TypeRef -> Maybe Location
@@ -362,7 +362,7 @@ pointCommand :: HieASTs t -> Position -> (HieAST t -> a) -> [a]
 pointCommand hf pos k =
     catMaybes $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
       case selectSmallestContaining (sp fs) ast of
-        Nothing -> Nothing
+        Nothing   -> Nothing
         Just ast' -> Just $ k ast'
  where
    sloc fs = mkRealSrcLoc fs (line+1) (cha+1)

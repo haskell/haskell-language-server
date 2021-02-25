@@ -28,31 +28,31 @@ module Development.IDE.Import.DependencyInformation
   , insertBootId
   ) where
 
-import Control.DeepSeq
-import Data.Bifunctor
-import Data.Coerce
-import Data.List
-import Data.Tuple.Extra hiding (first, second)
-import Development.IDE.GHC.Orphans()
-import Data.Either
-import Data.Graph
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HMS
-import Data.List.NonEmpty (NonEmpty(..), nonEmpty)
-import qualified Data.List.NonEmpty as NonEmpty
-import Data.IntMap (IntMap)
-import qualified Data.IntMap.Strict as IntMap
-import qualified Data.IntMap.Lazy as IntMapLazy
-import Data.IntSet (IntSet)
-import qualified Data.IntSet as IntSet
-import Data.Maybe
-import GHC.Generics (Generic)
+import           Control.DeepSeq
+import           Data.Bifunctor
+import           Data.Coerce
+import           Data.Either
+import           Data.Graph
+import           Data.HashMap.Strict                (HashMap)
+import qualified Data.HashMap.Strict                as HMS
+import           Data.IntMap                        (IntMap)
+import qualified Data.IntMap.Lazy                   as IntMapLazy
+import qualified Data.IntMap.Strict                 as IntMap
+import           Data.IntSet                        (IntSet)
+import qualified Data.IntSet                        as IntSet
+import           Data.List
+import           Data.List.NonEmpty                 (NonEmpty (..), nonEmpty)
+import qualified Data.List.NonEmpty                 as NonEmpty
+import           Data.Maybe
+import           Data.Tuple.Extra                   hiding (first, second)
+import           Development.IDE.GHC.Orphans        ()
+import           GHC.Generics                       (Generic)
 
-import Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Location
-import Development.IDE.Import.FindImports (ArtifactsLocation(..))
+import           Development.IDE.Import.FindImports (ArtifactsLocation (..))
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
 
-import GHC
+import           GHC
 
 -- | The imports for a given module.
 newtype ModuleImports = ModuleImports
@@ -122,28 +122,28 @@ insertBootId k = IntMap.insert (getFilePathId k)
 
 -- | Unprocessed results that we find by following imports recursively.
 data RawDependencyInformation = RawDependencyInformation
-    { rawImports :: !(FilePathIdMap (Either ModuleParseError ModuleImports))
+    { rawImports   :: !(FilePathIdMap (Either ModuleParseError ModuleImports))
     , rawPathIdMap :: !PathIdMap
     -- The rawBootMap maps the FilePathId of a hs-boot file to its
     -- corresponding hs file. It is used when topologically sorting as we
     -- need to add edges between .hs-boot and .hs so that the .hs files
     -- appear later in the sort.
-    , rawBootMap :: !BootIdMap
+    , rawBootMap   :: !BootIdMap
     } deriving Show
 
 data DependencyInformation =
   DependencyInformation
-    { depErrorNodes :: !(FilePathIdMap (NonEmpty NodeError))
+    { depErrorNodes        :: !(FilePathIdMap (NonEmpty NodeError))
     -- ^ Nodes that cannot be processed correctly.
-    , depModuleNames :: !(FilePathIdMap ShowableModuleName)
-    , depModuleDeps :: !(FilePathIdMap FilePathIdSet)
+    , depModuleNames       :: !(FilePathIdMap ShowableModuleName)
+    , depModuleDeps        :: !(FilePathIdMap FilePathIdSet)
     -- ^ For a non-error node, this contains the set of module immediate dependencies
     -- in the same package.
     , depReverseModuleDeps :: !(IntMap IntSet)
     -- ^ Contains a reverse mapping from a module to all those that immediately depend on it.
-    , depPathIdMap :: !PathIdMap
+    , depPathIdMap         :: !PathIdMap
     -- ^ Map from FilePath to FilePathId
-    , depBootMap :: !BootIdMap
+    , depBootMap           :: !BootIdMap
     -- ^ Map from hs-boot file to the corresponding hs file
     } deriving (Show, Generic)
 
@@ -188,10 +188,10 @@ data NodeError
   deriving (Show, Generic)
 
 instance NFData NodeError where
-  rnf (PartOfCycle m fs) = m `seq` rnf fs
+  rnf (PartOfCycle m fs)       = m `seq` rnf fs
   rnf (FailedToLocateImport m) = m `seq` ()
-  rnf (ParseError e) = rnf e
-  rnf (ParentOfErrorNode m) = m `seq` ()
+  rnf (ParseError e)           = rnf e
+  rnf (ParentOfErrorNode m)    = m `seq` ()
 
 -- | A processed node in the dependency graph. If there was any error
 -- during processing the node or any of its dependencies, this is an
@@ -205,14 +205,14 @@ partitionNodeResults
     :: [(a, NodeResult)]
     -> ([(a, NonEmpty NodeError)], [(a, [(Located ModuleName, FilePathId)])])
 partitionNodeResults = partitionEithers . map f
-  where f (a, ErrorNode errs) = Left (a, errs)
+  where f (a, ErrorNode errs)   = Left (a, errs)
         f (a, SuccessNode imps) = Right (a, imps)
 
 instance Semigroup NodeResult where
    ErrorNode errs <> ErrorNode errs' = ErrorNode (errs <> errs')
-   ErrorNode errs <> SuccessNode _ = ErrorNode errs
-   SuccessNode _ <> ErrorNode errs = ErrorNode errs
-   SuccessNode a <> SuccessNode _ = SuccessNode a
+   ErrorNode errs <> SuccessNode _   = ErrorNode errs
+   SuccessNode _ <> ErrorNode errs   = ErrorNode errs
+   SuccessNode a <> SuccessNode _    = SuccessNode a
 
 processDependencyInformation :: RawDependencyInformation -> DependencyInformation
 processDependencyInformation RawDependencyInformation{..} =
@@ -267,11 +267,11 @@ buildResultGraph g = propagatedErrors
         otherErrorsForFile :: Either ModuleParseError ModuleImports -> NodeResult
         otherErrorsForFile (Left err) = ErrorNode (ParseError err :| [])
         otherErrorsForFile (Right ModuleImports{moduleImports}) =
-          let toEither (imp, Nothing) = Left imp
+          let toEither (imp, Nothing)   = Left imp
               toEither (imp, Just path) = Right (imp, path)
               (errs, imports') = partitionEithers (map toEither moduleImports)
           in case nonEmpty errs of
-            Nothing -> SuccessNode imports'
+            Nothing    -> SuccessNode imports'
             Just errs' -> ErrorNode (NonEmpty.map FailedToLocateImport errs')
 
         unpropagatedErrors = IntMap.unionWith (<>) cycleErrors otherErrors
@@ -300,7 +300,7 @@ graphEdges :: FilePathIdMap (Either ModuleParseError ModuleImports) -> [(FilePat
 graphEdges g =
   map (\(k, v) -> (FilePathId k, FilePathId k, deps v)) $ IntMap.toList g
   where deps :: Either e ModuleImports -> [FilePathId]
-        deps (Left _) = []
+        deps (Left _)                             = []
         deps (Right ModuleImports{moduleImports}) = mapMaybe snd moduleImports
 
 partitionSCC :: [SCC a] -> ([a], [[a]])
@@ -361,8 +361,8 @@ newtype TransitiveDependencies = TransitiveDependencies
 instance NFData TransitiveDependencies
 
 data NamedModuleDep = NamedModuleDep {
-  nmdFilePath :: !NormalizedFilePath,
-  nmdModuleName :: !ModuleName,
+  nmdFilePath    :: !NormalizedFilePath,
+  nmdModuleName  :: !ModuleName,
   nmdModLocation :: !(Maybe ModLocation)
   }
   deriving Generic

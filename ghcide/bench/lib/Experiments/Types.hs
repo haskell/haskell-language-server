@@ -1,14 +1,14 @@
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings  #-}
 module Experiments.Types (module Experiments.Types ) where
 
-import Data.Aeson
-import Data.Version
-import Numeric.Natural
-import System.FilePath (isPathSeparator)
-import Development.Shake.Classes
-import GHC.Generics
+import           Data.Aeson
+import           Data.Version
+import           Development.Shake.Classes
+import           GHC.Generics
+import           Numeric.Natural
+import           System.FilePath           (isPathSeparator)
 
 data CabalStack = Cabal | Stack
   deriving (Eq, Show)
@@ -16,18 +16,18 @@ data CabalStack = Cabal | Stack
 data Verbosity = Quiet | Normal | All
   deriving (Eq, Show)
 data Config = Config
-  { verbosity :: !Verbosity,
+  { verbosity         :: !Verbosity,
     -- For some reason, the Shake profile files are truncated and won't load
-    shakeProfiling :: !(Maybe FilePath),
+    shakeProfiling    :: !(Maybe FilePath),
     otMemoryProfiling :: !(Maybe FilePath),
-    outputCSV :: !FilePath,
-    buildTool :: !CabalStack,
-    ghcideOptions :: ![String],
-    matches :: ![String],
-    repetitions :: Maybe Natural,
-    ghcide :: FilePath,
-    timeoutLsp :: Int,
-    example :: Example
+    outputCSV         :: !FilePath,
+    buildTool         :: !CabalStack,
+    ghcideOptions     :: ![String],
+    matches           :: ![String],
+    repetitions       :: Maybe Natural,
+    ghcide            :: FilePath,
+    timeoutLsp        :: Int,
+    example           :: Example
   }
   deriving (Eq, Show)
 

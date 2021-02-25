@@ -1,34 +1,32 @@
 module Main where
 
-import Class
-import Command
-import Completion
-import Config
-import Deferred
-import Definition
-import Diagnostic
-import Eval
-import Format
-import FunctionalBadProject
-import FunctionalCodeAction
-import FunctionalLiquid
-import HaddockComments
-import HieBios
-import Highlight
-import ModuleName
-import Progress
-import Reference
-import Rename
-import Symbol
-import Splice
-import Test.Tasty
-import Test.Tasty.Ingredients.Rerun
-import Test.Tasty.Runners (
-    consoleTestReporter,
-    listingTests,
- )
-import Test.Tasty.Runners.AntXML
-import TypeDefinition
+import           Class
+import           Command
+import           Completion
+import           Config
+import           Deferred
+import           Definition
+import           Diagnostic
+import           Eval
+import           Format
+import           FunctionalBadProject
+import           FunctionalCodeAction
+import           FunctionalLiquid
+import           HaddockComments
+import           HieBios
+import           Highlight
+import           ModuleName
+import           Progress
+import           Reference
+import           Rename
+import           Splice
+import           Symbol
+import           Test.Tasty
+import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.Runners           (consoleTestReporter,
+                                               listingTests)
+import           Test.Tasty.Runners.AntXML
+import           TypeDefinition
 
 main :: IO ()
 main =

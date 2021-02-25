@@ -3,24 +3,24 @@
 
 module Arguments(Arguments, Arguments'(..), getArguments, IdeCmd(..)) where
 
-import Options.Applicative
-import HieDb.Run
+import           HieDb.Run
+import           Options.Applicative
 
 type Arguments = Arguments' IdeCmd
 
 data IdeCmd = Typecheck [FilePath] | DbCmd Options Command | LSP
 
 data Arguments' a = Arguments
-    {argLSP :: Bool
-    ,argsCwd :: Maybe FilePath
-    ,argsVersion :: Bool
-    ,argsShakeProfiling :: Maybe FilePath
+    {argLSP                :: Bool
+    ,argsCwd               :: Maybe FilePath
+    ,argsVersion           :: Bool
+    ,argsShakeProfiling    :: Maybe FilePath
     ,argsOTMemoryProfiling :: Bool
-    ,argsTesting :: Bool
-    ,argsDisableKick :: Bool
-    ,argsThreads :: Int
-    ,argsVerbose :: Bool
-    ,argFilesOrCmd :: a
+    ,argsTesting           :: Bool
+    ,argsDisableKick       :: Bool
+    ,argsThreads           :: Int
+    ,argsVerbose           :: Bool
+    ,argFilesOrCmd         :: a
     }
 
 getArguments :: IO Arguments

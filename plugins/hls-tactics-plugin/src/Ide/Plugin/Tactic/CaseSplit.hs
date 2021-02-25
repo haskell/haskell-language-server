@@ -9,14 +9,14 @@ module Ide.Plugin.Tactic.CaseSplit
   , splitToDecl
   ) where
 
-import           Data.Bool (bool)
+import           Data.Bool                  (bool)
 import           Data.Data
 import           Data.Generics
-import           Data.Set (Set)
-import qualified Data.Set as S
+import           Data.Set                   (Set)
+import qualified Data.Set                   as S
 import           Development.IDE.GHC.Compat
-import           GHC.Exts (IsString(fromString))
-import           GHC.SourceGen (funBinds, match, wildP)
+import           GHC.Exts                   (IsString (fromString))
+import           GHC.SourceGen              (funBinds, match, wildP)
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Types
 import           OccName
@@ -28,7 +28,7 @@ import           OccName
 -- match) and a body.
 mkFirstAgda :: [Pat GhcPs] -> HsExpr GhcPs -> AgdaMatch
 mkFirstAgda pats (Lambda pats' body) = mkFirstAgda (pats <> pats') body
-mkFirstAgda pats body = AgdaMatch pats body
+mkFirstAgda pats body                = AgdaMatch pats body
 
 
 ------------------------------------------------------------------------------
@@ -55,7 +55,7 @@ wildify (AgdaMatch pats body) =
 wildifyT :: Data a => Set OccName -> a -> a
 wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
   VarPat _ (L _ var) | S.notMember (occNameString $ occName var) used -> wildP
-  (x :: Pat GhcPs) -> x
+  (x :: Pat GhcPs)                                                    -> x
 
 
 ------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ wildifyT (S.map occNameString -> used) = everywhere $ mkT $ \case
 rewriteVarPat :: Data a => RdrName -> Pat GhcPs -> a -> a
 rewriteVarPat name rep = everywhere $ mkT $ \case
   VarPat _ (L _ var) | eqRdrName name var -> rep
-  (x :: Pat GhcPs) -> x
+  (x :: Pat GhcPs)                        -> x
 
 
 ------------------------------------------------------------------------------

@@ -1,9 +1,9 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveAnyClass             #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances       #-}
 {-# OPTIONS_GHC -Wwarn #-}
 
 module Ide.Plugin.Eval.Types
@@ -29,16 +29,16 @@ module Ide.Plugin.Eval.Types
     )
 where
 
-import Control.DeepSeq (NFData (rnf), deepseq)
-import Data.Aeson (FromJSON, ToJSON)
-import Data.List (partition)
-import Data.List.NonEmpty (NonEmpty)
-import Data.Map.Strict (Map)
-import Data.String (IsString (..))
-import Development.IDE (Range)
-import GHC.Generics (Generic)
-import qualified Text.Megaparsec as P
-import Language.LSP.Types (TextDocumentIdentifier)
+import           Control.DeepSeq    (NFData (rnf), deepseq)
+import           Data.Aeson         (FromJSON, ToJSON)
+import           Data.List          (partition)
+import           Data.List.NonEmpty (NonEmpty)
+import           Data.Map.Strict    (Map)
+import           Data.String        (IsString (..))
+import           Development.IDE    (Range)
+import           GHC.Generics       (Generic)
+import           Language.LSP.Types (TextDocumentIdentifier)
+import qualified Text.Megaparsec    as P
 
 -- | A thing with a location attached.
 data Located l a = Located {location :: l, located :: a}
@@ -65,15 +65,15 @@ type Txt = String
 
 data Sections = Sections
     { nonSetupSections :: [Section]
-    , setupSections :: [Section]
+    , setupSections    :: [Section]
     }
     deriving (Show, Eq, Generic)
 
 data Section = Section
-    { sectionName :: Txt
-    , sectionTests :: [Test]
+    { sectionName     :: Txt
+    , sectionTests    :: [Test]
     , sectionLanguage :: Language
-    , sectionFormat :: Format
+    , sectionFormat   :: Format
     }
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
@@ -93,7 +93,7 @@ data Test
     deriving (Eq, Show, Generic, FromJSON, ToJSON, NFData)
 
 data Comments = Comments
-    { lineComments :: Map Range RawLineComment
+    { lineComments  :: Map Range RawLineComment
     , blockComments :: Map Range RawBlockComment
     }
     deriving (Show, Eq, Ord, Generic)
@@ -128,7 +128,7 @@ instance Monoid Comments where
 
 isProperty :: Test -> Bool
 isProperty Property {} = True
-isProperty _ = False
+isProperty _           = False
 
 data Format
     = SingleLine
@@ -156,7 +156,7 @@ type EvalId = Int
 -- | Specify the test section to execute
 data EvalParams = EvalParams
     { sections :: [Section]
-    , module_ :: !TextDocumentIdentifier
-    , evalId :: !EvalId -- ^ unique group id; for test uses
+    , module_  :: !TextDocumentIdentifier
+    , evalId   :: !EvalId -- ^ unique group id; for test uses
     }
     deriving (Eq, Show, Generic, FromJSON, ToJSON)

@@ -1,60 +1,62 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE MagicHash #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Splice
     ( descriptor,
     )
 where
 
-import Control.Applicative (Alternative ((<|>)))
-import Control.Arrow
-import qualified Control.Foldl as L
-import Control.Lens (ix, view, (%~), (<&>), (^.))
-import Control.Monad
-import Control.Monad.Extra (eitherM)
-import qualified Control.Monad.Fail as Fail
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Maybe
-import Data.Aeson
-import Data.Function
-import Data.Generics
-import qualified Data.Kind as Kinds
-import Data.List (sortOn)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
-import qualified Data.Text as T
-import Development.IDE
-import Development.IDE.GHC.Compat hiding (getLoc)
-import Exception
-import GHC.Exts
-import GhcMonad
-import GhcPlugins hiding (Var, getLoc, (<>))
-import Ide.Plugin.Splice.Types
-import Development.IDE.GHC.ExactPrint
-import Ide.Types
-import Language.Haskell.GHC.ExactPrint (setPrecedingLines, uniqueSrcSpanT)
-import Language.LSP.Server
-import Language.LSP.Types
-import Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens as J
-import RnSplice
-import TcRnMonad
-import Data.Foldable (Foldable(foldl'))
-import Control.Monad.IO.Unlift
+import           Control.Applicative             (Alternative ((<|>)))
+import           Control.Arrow
+import qualified Control.Foldl                   as L
+import           Control.Lens                    (ix, view, (%~), (<&>), (^.))
+import           Control.Monad
+import           Control.Monad.Extra             (eitherM)
+import qualified Control.Monad.Fail              as Fail
+import           Control.Monad.IO.Unlift
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson
+import           Data.Foldable                   (Foldable (foldl'))
+import           Data.Function
+import           Data.Generics
+import qualified Data.Kind                       as Kinds
+import           Data.List                       (sortOn)
+import           Data.Maybe                      (fromMaybe, listToMaybe,
+                                                  mapMaybe)
+import qualified Data.Text                       as T
+import           Development.IDE
+import           Development.IDE.GHC.Compat      hiding (getLoc)
+import           Development.IDE.GHC.ExactPrint
+import           Exception
+import           GHC.Exts
+import           GhcMonad
+import           GhcPlugins                      hiding (Var, getLoc, (<>))
+import           Ide.Plugin.Splice.Types
+import           Ide.Types
+import           Language.Haskell.GHC.ExactPrint (setPrecedingLines,
+                                                  uniqueSrcSpanT)
+import           Language.LSP.Server
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens         as J
+import           RnSplice
+import           TcRnMonad
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -280,25 +282,25 @@ class (Outputable (ast GhcRn), ASTElement (ast GhcPs)) => HasSplice ast where
 
 instance HasSplice HsExpr where
     matchSplice _ (HsSpliceE _ spl) = Just spl
-    matchSplice _ _ = Nothing
+    matchSplice _ _                 = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceExpr
 
 instance HasSplice Pat where
     matchSplice _ (SplicePat _ spl) = Just spl
-    matchSplice _ _ = Nothing
+    matchSplice _ _                 = Nothing
     expandSplice _ = rnSplicePat
 
 
 instance HasSplice HsType where
     matchSplice _ (HsSpliceTy _ spl) = Just spl
-    matchSplice _ _ = Nothing
+    matchSplice _ _                  = Nothing
     expandSplice _ = fmap (first Right) . rnSpliceType
 
 classifyAST :: SpliceContext -> SpliceClass
 classifyAST = \case
-    Expr -> OneToOneAST @HsExpr proxy#
+    Expr   -> OneToOneAST @HsExpr proxy#
     HsDecl -> IsHsDecl
-    Pat -> OneToOneAST @Pat proxy#
+    Pat    -> OneToOneAST @Pat proxy#
     HsType -> OneToOneAST @HsType proxy#
 
 type ReportEditor = forall m. MonadIO m => MessageType -> [T.Text] -> m ()
@@ -382,7 +384,7 @@ data SearchResult r =
 
 fromSearchResult :: SearchResult a -> Maybe a
 fromSearchResult (Here r) = Just r
-fromSearchResult _ = Nothing
+fromSearchResult _        = Nothing
 
 -- TODO: workaround when HieAst unavailable (e.g. when the module itself errors)
 -- TODO: Declaration Splices won't appear in HieAst; perhaps we must just use Parsed/Renamed ASTs?
@@ -419,7 +421,7 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                         | RealSrcSpan spn `isSubspanOf` l ->
                             case expr of
                                 HsSpliceE {} -> Here (spLoc, Expr)
-                                _ -> Continue
+                                _            -> Continue
                     _ -> Stop
                 )
                 `extQ` \case
@@ -431,21 +433,21 @@ codeAction state plId (CodeActionParams _ _ docId ran _) = liftIO $
                         | RealSrcSpan spn `isSubspanOf` l ->
                             case pat of
                                 SplicePat{} -> Here (spLoc, Pat)
-                                _ -> Continue
+                                _           -> Continue
                     _ -> Stop
                 `extQ` \case
                     (L l@(RealSrcSpan spLoc) ty :: LHsType GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l ->
                             case ty of
                                 HsSpliceTy {} -> Here (spLoc, HsType)
-                                _ -> Continue
+                                _             -> Continue
                     _ -> Stop
                 `extQ` \case
                     (L l@(RealSrcSpan spLoc) decl :: LHsDecl GhcPs)
                         | RealSrcSpan spn `isSubspanOf` l ->
                             case decl of
                                 SpliceD {} -> Here (spLoc, HsDecl)
-                                _ -> Continue
+                                _          -> Continue
                     _ -> Stop
 
 -- | Like 'something', but performs top-down searching, cutoffs when 'Stop' received,

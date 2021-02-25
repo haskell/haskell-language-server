@@ -126,7 +126,7 @@ extendToIncludePreviousNewlineIfPossible indexedString range
   | Just (before, _, _) <- unconsRange range indexedString
   , maybeFirstSpacePos <- lastSpacePos $ reverse before
   = case maybeFirstSpacePos of
-      Nothing -> range
+      Nothing  -> range
       Just pos -> range { _start = pos }
   | otherwise = range
   where
@@ -137,4 +137,4 @@ extendToIncludePreviousNewlineIfPossible indexedString range
       then Nothing -- didn't find any space
       else case xs of
               (y:ys) | isSpace $ snd y -> lastSpacePos (y:ys)
-              _ -> Just pos
+              _                        -> Just pos

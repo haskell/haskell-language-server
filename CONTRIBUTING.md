@@ -18,7 +18,7 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
       "hooks": [
         {
           "entry": "stylish-haskell --inplace",
-          "exclude": "(test/testdata/.*|hie-compat/.*)",
+          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|^hie-compat/.*$)",
           "files": "\\.l?hs$",
           "id": "stylish-haskell",
           "language": "system",

@@ -14,9 +14,9 @@ import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.Monad.Extra
 import           Data.Binary
-import qualified Data.ByteString               as BS
-import           Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HashMap
+import qualified Data.ByteString                       as BS
+import           Data.HashMap.Strict                   (HashMap)
+import qualified Data.HashMap.Strict                   as HashMap
 import           Data.Maybe
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.IdeConfiguration
@@ -26,11 +26,11 @@ import           Development.IDE.Types.Options
 import           Development.Shake
 import           Development.Shake.Classes
 import           GHC.Generics
-import           Language.LSP.Server hiding (getVirtualFile)
+import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
-import qualified System.Directory as Dir
-import qualified System.FilePath.Glob as Glob
+import qualified System.Directory                      as Dir
+import qualified System.FilePath.Glob                  as Glob
 
 {- Note [File existence cache and LSP file watchers]
 Some LSP servers provide the ability to register file watches with the client, which will then notify
@@ -212,7 +212,7 @@ fileExistsFast vfs file = do
       Just exist -> pure exist
       -- We don't know about it: use the slow route.
       -- Note that we do *not* call 'fileExistsSlow', as that would trigger 'alwaysRerun'.
-      Nothing -> liftIO $ getFileExistsVFS vfs file
+      Nothing    -> liftIO $ getFileExistsVFS vfs file
     pure (summarizeExists exist, ([], Just exist))
 
 summarizeExists :: Bool -> Maybe BS.ByteString

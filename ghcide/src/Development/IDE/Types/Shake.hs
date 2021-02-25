@@ -1,6 +1,6 @@
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DerivingStrategies        #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TypeFamilies              #-}
 module Development.IDE.Types.Shake
   ( Q (..),
     A (..),
@@ -15,21 +15,22 @@ module Development.IDE.Types.Shake
   toShakeValue,encodeShakeValue,decodeShakeValue)
 where
 
-import Control.DeepSeq
-import Control.Exception
-import qualified Data.ByteString.Char8 as BS
-import Data.Dynamic
-import Data.Hashable
-import Data.HashMap.Strict
-import Data.Vector (Vector)
-import Data.Typeable
-import Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Location
-import Development.Shake (RuleResult, ShakeException (shakeExceptionInner))
-import Development.Shake.Classes
-import GHC.Generics
-import Language.LSP.Types
-import Development.IDE.Core.PositionMapping
+import           Control.DeepSeq
+import           Control.Exception
+import qualified Data.ByteString.Char8                as BS
+import           Data.Dynamic
+import           Data.HashMap.Strict
+import           Data.Hashable
+import           Data.Typeable
+import           Data.Vector                          (Vector)
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
+import           Development.Shake                    (RuleResult,
+                                                       ShakeException (shakeExceptionInner))
+import           Development.Shake.Classes
+import           GHC.Generics
+import           Language.LSP.Types
 
 data Value v
     = Succeeded TextDocumentVersion v
@@ -43,8 +44,8 @@ instance NFData v => NFData (Value v)
 -- up2date results not for stale values.
 currentValue :: Value v -> Maybe v
 currentValue (Succeeded _ v) = Just v
-currentValue (Stale _ _ _) = Nothing
-currentValue Failed{} = Nothing
+currentValue (Stale _ _ _)   = Nothing
+currentValue Failed{}        = Nothing
 
 data ValueWithDiagnostics
   = ValueWithDiagnostics !(Value Dynamic) !(Vector FileDiagnostic)
@@ -122,7 +123,7 @@ encodeShakeValue :: ShakeValue -> BS.ByteString
 encodeShakeValue = \case
   ShakeNoCutoff -> BS.empty
   ShakeResult r -> BS.cons 'r' r
-  ShakeStale r -> BS.cons 's' r
+  ShakeStale r  -> BS.cons 's' r
 
 decodeShakeValue :: BS.ByteString -> ShakeValue
 decodeShakeValue bs = case BS.uncons bs of

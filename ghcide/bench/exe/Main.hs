@@ -34,11 +34,11 @@
 
 {-# LANGUAGE ImplicitParams #-}
 
-import Control.Exception.Safe
-import Experiments
-import Options.Applicative
-import System.IO
+import           Control.Exception.Safe
 import           Control.Monad
+import           Experiments
+import           Options.Applicative
+import           System.IO
 
 optsP :: Parser (Config, Bool)
 optsP = (,) <$> configP <*> switch (long "no-clean")

@@ -2,77 +2,77 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Plugins where
 
-import Ide.Types (IdePlugins)
-import           Ide.PluginUtils           (pluginDescToIdePlugins)
+import           Ide.PluginUtils                   (pluginDescToIdePlugins)
+import           Ide.Types                         (IdePlugins)
 
 -- fixed plugins
-import           Ide.Plugin.Example        as Example
-import           Ide.Plugin.Example2       as Example2
-import           Development.IDE           (IdeState)
-import Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import           Development.IDE                   (IdeState)
+import           Development.IDE.Plugin.HLS.GhcIde as GhcIde
+import           Ide.Plugin.Example                as Example
+import           Ide.Plugin.Example2               as Example2
 
 -- haskell-language-server optional plugins
 
 #if class
-import           Ide.Plugin.Class          as Class
+import           Ide.Plugin.Class                  as Class
 #endif
 
 #if haddockComments
-import           Ide.Plugin.HaddockComments as HaddockComments
+import           Ide.Plugin.HaddockComments        as HaddockComments
 #endif
 
 #if eval
-import           Ide.Plugin.Eval           as Eval
+import           Ide.Plugin.Eval                   as Eval
 #endif
 
 #if importLens
-import           Ide.Plugin.ExplicitImports as ExplicitImports
+import           Ide.Plugin.ExplicitImports        as ExplicitImports
 #endif
 
 #if retrie
-import           Ide.Plugin.Retrie         as Retrie
+import           Ide.Plugin.Retrie                 as Retrie
 #endif
 
 #if tactic
-import           Ide.Plugin.Tactic         as Tactic
+import           Ide.Plugin.Tactic                 as Tactic
 #endif
 
 #if hlint
-import           Ide.Plugin.Hlint          as Hlint
+import           Ide.Plugin.Hlint                  as Hlint
 #endif
 
 #if moduleName
-import           Ide.Plugin.ModuleName     as ModuleName
+import           Ide.Plugin.ModuleName             as ModuleName
 #endif
 
 #if pragmas
-import           Ide.Plugin.Pragmas        as Pragmas
+import           Ide.Plugin.Pragmas                as Pragmas
 #endif
 
 #if splice
-import           Ide.Plugin.Splice        as Splice
+import           Ide.Plugin.Splice                 as Splice
 #endif
 
 -- formatters
 
 #if floskell
-import           Ide.Plugin.Floskell       as Floskell
+import           Ide.Plugin.Floskell               as Floskell
 #endif
 
 #if fourmolu
-import           Ide.Plugin.Fourmolu       as Fourmolu
+import           Ide.Plugin.Fourmolu               as Fourmolu
 #endif
 
 #if ormolu
-import           Ide.Plugin.Ormolu         as Ormolu
+import           Ide.Plugin.Ormolu                 as Ormolu
 #endif
 
 #if stylishHaskell
-import           Ide.Plugin.StylishHaskell as StylishHaskell
+import           Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
 #if AGPL && brittany
-import           Ide.Plugin.Brittany       as Brittany
+import           Ide.Plugin.Brittany               as Brittany
 #endif
 
 -- ---------------------------------------------------------------------

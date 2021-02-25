@@ -3,16 +3,17 @@
 build-depends: base, process, text, github, time
 -}
 
-{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
-import Control.Monad
-import Data.List
-import Data.Maybe
-import qualified Data.Text as T
-import Data.Time.Format.ISO8601
-import Data.Time.LocalTime
-import System.Process
-import GitHub
+import           Control.Monad
+import           Data.List
+import           Data.Maybe
+import qualified Data.Text                as T
+import           Data.Time.Format.ISO8601
+import           Data.Time.LocalTime
+import           GitHub
+import           System.Process
 
 main = do
   callCommand "git fetch --tags"
