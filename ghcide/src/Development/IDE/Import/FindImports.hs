@@ -14,26 +14,26 @@ module Development.IDE.Import.FindImports
   , mkImportDirs
   ) where
 
-import           Development.IDE.GHC.Error as ErrUtils
-import Development.IDE.GHC.Orphans()
-import Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Location
-import Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Error         as ErrUtils
+import           Development.IDE.GHC.Orphans       ()
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
 -- GHC imports
+import           Control.DeepSeq
 import           FastString
-import qualified Module                      as M
-import           Packages
-import           Outputable                  (showSDoc, ppr, pprPanic)
 import           Finder
-import Control.DeepSeq
+import qualified Module                            as M
+import           Outputable                        (ppr, pprPanic, showSDoc)
+import           Packages
 
 -- standard imports
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
+import           Data.List                         (isSuffixOf)
+import           Data.Maybe
+import           DriverPhases
 import           System.FilePath
-import DriverPhases
-import Data.Maybe
-import Data.List (isSuffixOf)
 
 data Import
   = FileImport !ArtifactsLocation
@@ -55,13 +55,13 @@ isBootLocation = not . artifactIsSource
 
 instance NFData Import where
   rnf (FileImport x) = rnf x
-  rnf PackageImport = ()
+  rnf PackageImport  = ()
 
 modSummaryToArtifactsLocation :: NormalizedFilePath -> Maybe ModSummary -> ArtifactsLocation
 modSummaryToArtifactsLocation nfp ms = ArtifactsLocation nfp (ms_location <$> ms) source
   where
     isSource HsSrcFile = True
-    isSource _ = False
+    isSource _         = False
     source = case ms of
       Nothing -> "-boot" `isSuffixOf` fromNormalizedFilePath nfp
       Just ms -> isSource (ms_hsc_src ms)
@@ -121,7 +121,7 @@ locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
       -- each component will end up being found in the wrong place and cause a multi-cradle match failure.
       mbFile <- locateModuleFile (importPaths dflags : map snd import_paths) exts doesExist isSource $ unLoc modName
       case mbFile of
-        Nothing -> lookupInPackageDB dflags
+        Nothing   -> lookupInPackageDB dflags
         Just file -> toModLocation file
   where
     import_paths = mapMaybe (mkImportDirs dflags) comp_info

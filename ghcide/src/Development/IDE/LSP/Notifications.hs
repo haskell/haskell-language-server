@@ -2,39 +2,42 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE GADTs                 #-}
 {-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE RankNTypes            #-}
 
 module Development.IDE.LSP.Notifications
     ( setHandlersNotifications
     ) where
 
-import qualified Language.LSP.Server      as LSP
+import qualified Language.LSP.Server                   as LSP
 import           Language.LSP.Types
-import qualified Language.LSP.Types       as LSP
-import qualified Language.LSP.Types.Capabilities as LSP
+import qualified Language.LSP.Types                    as LSP
+import qualified Language.LSP.Types.Capabilities       as LSP
 
 import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Service
-import           Development.IDE.LSP.Server
 import           Development.IDE.Core.Shake
+import           Development.IDE.LSP.Server
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
 
 import           Control.Monad.Extra
-import           Data.Foldable                    as F
+import           Data.Foldable                         as F
+import qualified Data.HashMap.Strict                   as M
+import qualified Data.HashSet                          as S
 import           Data.Maybe
-import qualified Data.HashMap.Strict              as M
-import qualified Data.HashSet                     as S
-import qualified Data.Text                        as Text
+import qualified Data.Text                             as Text
 
-import           Development.IDE.Core.FileStore   (setSomethingModified, setFileModified, typecheckParents)
-import           Development.IDE.Core.FileExists  (modifyFileExists, watchedGlobs)
+import           Control.Monad.IO.Class
+import           Development.IDE.Core.FileExists       (modifyFileExists,
+                                                        watchedGlobs)
+import           Development.IDE.Core.FileStore        (setFileModified,
+                                                        setSomethingModified,
+                                                        typecheckParents)
 import           Development.IDE.Core.OfInterest
-import Ide.Plugin.Config (CheckParents(CheckOnClose))
-import Control.Monad.IO.Class
+import           Ide.Plugin.Config                     (CheckParents (CheckOnClose))
 
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()

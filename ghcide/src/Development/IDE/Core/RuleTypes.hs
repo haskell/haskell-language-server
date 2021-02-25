@@ -1,12 +1,12 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleInstances  #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE PatternSynonyms    #-}
+{-# LANGUAGE TemplateHaskell    #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 -- | A Shake implementation of the compiler service, built
 --   using the "Shaker" abstraction layer for in-memory use.
@@ -16,33 +16,37 @@ module Development.IDE.Core.RuleTypes(
     ) where
 
 import           Control.DeepSeq
-import Control.Lens
-import Data.Aeson.Types (Value)
-import Data.Binary
-import           Development.IDE.Import.DependencyInformation
-import Development.IDE.GHC.Compat hiding (HieFileResult)
-import Development.IDE.GHC.Util
-import Development.IDE.Types.HscEnvEq (HscEnvEq)
-import Development.IDE.Types.KnownTargets
+import           Control.Lens
+import           Data.Aeson.Types                             (Value)
+import           Data.Binary
 import           Data.Hashable
+import qualified Data.Map                                     as M
 import           Data.Typeable
-import qualified Data.Map as M
+import           Development.IDE.GHC.Compat                   hiding
+                                                              (HieFileResult)
+import           Development.IDE.GHC.Util
+import           Development.IDE.Import.DependencyInformation
+import           Development.IDE.Types.HscEnvEq               (HscEnvEq)
+import           Development.IDE.Types.KnownTargets
 import           Development.Shake
-import           GHC.Generics                             (Generic)
+import           GHC.Generics                                 (Generic)
 
-import HscTypes (ModGuts, hm_iface, HomeModInfo, hm_linkable)
+import           HscTypes                                     (HomeModInfo,
+                                                               ModGuts,
+                                                               hm_iface,
+                                                               hm_linkable)
 
+import           Data.ByteString                              (ByteString)
+import qualified Data.ByteString.Char8                        as BS
+import           Data.Int                                     (Int64)
+import           Data.Text                                    (Text)
+import           Development.IDE.Import.FindImports           (ArtifactsLocation)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
-import           Development.IDE.Import.FindImports (ArtifactsLocation)
-import Data.ByteString (ByteString)
-import Language.LSP.Types (NormalizedFilePath)
-import TcRnMonad (TcGblEnv)
-import qualified Data.ByteString.Char8 as BS
-import Development.IDE.Types.Options (IdeGhcSession)
-import Data.Text (Text)
-import Data.Int (Int64)
-import GHC.Serialized (Serialized)
+import           Development.IDE.Types.Options                (IdeGhcSession)
+import           GHC.Serialized                               (Serialized)
+import           Language.LSP.Types                           (NormalizedFilePath)
+import           TcRnMonad                                    (TcGblEnv)
 
 data LinkableType = ObjectLinkable | BCOLinkable
   deriving (Eq,Ord,Show, Generic)
@@ -101,10 +105,10 @@ newtype ImportMap = ImportMap
 
 data Splices = Splices
     { exprSplices :: [(LHsExpr GhcTc, LHsExpr GhcPs)]
-    , patSplices :: [(LHsExpr GhcTc, LPat GhcPs)]
+    , patSplices  :: [(LHsExpr GhcTc, LPat GhcPs)]
     , typeSplices :: [(LHsExpr GhcTc, LHsType GhcPs)]
     , declSplices :: [(LHsExpr GhcTc, [LHsDecl GhcPs])]
-    , awSplices :: [(LHsExpr GhcTc, Serialized)]
+    , awSplices   :: [(LHsExpr GhcTc, Serialized)]
     }
 
 instance Semigroup Splices where
@@ -128,12 +132,12 @@ instance NFData Splices where
 -- | Contains the typechecked module and the OrigNameCache entry for
 -- that module.
 data TcModuleResult = TcModuleResult
-    { tmrParsed :: ParsedModule
-    , tmrRenamed :: RenamedSource
-    , tmrTypechecked :: TcGblEnv
+    { tmrParsed          :: ParsedModule
+    , tmrRenamed         :: RenamedSource
+    , tmrTypechecked     :: TcGblEnv
     , tmrTopLevelSplices :: Splices
     -- ^ Typechecked splice information
-    , tmrDeferedError :: !Bool
+    , tmrDeferedError    :: !Bool
     -- ^ Did we defer any type errors for this module?
     }
 instance Show TcModuleResult where
@@ -149,7 +153,7 @@ data HiFileResult = HiFileResult
     { hirModSummary :: !ModSummary
     -- Bang patterns here are important to stop the result retaining
     -- a reference to a typechecked module
-    , hirHomeMod :: !HomeModInfo
+    , hirHomeMod    :: !HomeModInfo
     -- ^ Includes the Linkable iff we need object files
     }
 
@@ -159,7 +163,7 @@ hiFileFingerPrint hfr = ifaceBS <> linkableBS
     ifaceBS = fingerprintToBS . getModuleHash . hirModIface $ hfr -- will always be two bytes
     linkableBS = case hm_linkable $ hirHomeMod hfr of
       Nothing -> ""
-      Just l -> BS.pack $ show $ linkableTime l
+      Just l  -> BS.pack $ show $ linkableTime l
 
 hirModIface :: HiFileResult -> ModIface
 hirModIface = hm_iface . hirHomeMod
@@ -174,14 +178,14 @@ instance Show HiFileResult where
 data HieAstResult
   = forall a. HAR
   { hieModule :: Module
-  , hieAst :: !(HieASTs a)
-  , refMap :: RefMap a
+  , hieAst    :: !(HieASTs a)
+  , refMap    :: RefMap a
   -- ^ Lazy because its value only depends on the hieAst, which is bundled in this type
   -- Lazyness can't cause leaks here because the lifetime of `refMap` will be the same
   -- as that of `hieAst`
-  , typeRefs :: M.Map Name [RealSrcSpan]
+  , typeRefs  :: M.Map Name [RealSrcSpan]
   -- ^ type references in this file
-  , hieKind :: !(HieKind a)
+  , hieKind   :: !(HieKind a)
   -- ^ Is this hie file loaded from the disk, or freshly computed?
   }
 
@@ -191,7 +195,7 @@ data HieKind a where
 
 instance NFData (HieKind a) where
     rnf (HieFromDisk hf) = rnf hf
-    rnf HieFresh = ()
+    rnf HieFresh         = ()
 
 instance NFData HieAstResult where
     rnf (HAR m hf _rm _tr kind) = rnf m `seq` rwhnf hf `seq` rnf kind
@@ -250,7 +254,7 @@ type instance RuleResult GetModIfaceWithoutLinkable = HiFileResult
 type instance RuleResult GetFileContents = (FileVersion, Maybe Text)
 
 -- The Shake key type for getModificationTime queries
-data GetModificationTime = GetModificationTime_
+newtype GetModificationTime = GetModificationTime_
     { missingFileDiagnostics :: Bool
       -- ^ If false, missing file diagnostics are not reported
     }
@@ -285,7 +289,7 @@ data FileVersion
 instance NFData FileVersion
 
 vfsVersion :: FileVersion -> Maybe Int
-vfsVersion (VFSVersion i) = Just i
+vfsVersion (VFSVersion i)     = Just i
 vfsVersion ModificationTime{} = Nothing
 
 data GetFileContents = GetFileContents

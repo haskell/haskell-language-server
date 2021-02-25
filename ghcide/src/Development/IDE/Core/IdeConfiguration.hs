@@ -14,20 +14,20 @@ where
 
 import           Control.Concurrent.Extra
 import           Control.Monad
-import           Data.Hashable                  (Hashed, hashed, unhashed)
-import           Data.HashSet                   (HashSet, singleton)
-import           Data.Text                      (Text, isPrefixOf)
 import           Data.Aeson.Types               (Value)
+import           Data.HashSet                   (HashSet, singleton)
+import           Data.Hashable                  (Hashed, hashed, unhashed)
+import           Data.Text                      (Text, isPrefixOf)
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.Shake
 import           Language.LSP.Types
-import           System.FilePath (isRelative)
+import           System.FilePath                (isRelative)
 
 -- | Lsp client relevant configuration details
 data IdeConfiguration = IdeConfiguration
   { workspaceFolders :: HashSet NormalizedUri
-  , clientSettings :: Hashed (Maybe Value)
+  , clientSettings   :: Hashed (Maybe Value)
   }
   deriving (Show)
 

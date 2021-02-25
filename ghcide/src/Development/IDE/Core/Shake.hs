@@ -1,13 +1,13 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE ExistentialQuantification  #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE ConstraintKinds            #-}
-{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE ConstraintKinds           #-}
+{-# LANGUAGE DerivingStrategies        #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE PolyKinds                 #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE RecursiveDo               #-}
+{-# LANGUAGE TypeFamilies              #-}
 
 -- | A Shake implementation of the compiler service.
 --
@@ -73,86 +73,88 @@ module Development.IDE.Core.Shake(
     addPersistentRule
     ) where
 
-import           Development.Shake hiding (ShakeValue, doesFileExist, Info)
-import           Development.Shake.Database
-import           Development.Shake.Classes
-import           Development.Shake.Rule
-import qualified Data.HashMap.Strict as HMap
-import qualified Data.Map.Strict as Map
-import qualified Data.ByteString.Char8 as BS
-import           Data.Dynamic
-import           Data.Maybe
-import           Data.Map.Strict (Map)
-import           Data.List.Extra (partition, takeEnd)
-import qualified Data.Set as Set
-import qualified Data.Text as T
-import Data.Vector (Vector)
-import qualified Data.Vector as Vector
-import Data.Tuple.Extra
-import Data.Unique
-import Development.IDE.Core.Debouncer
-import Development.IDE.GHC.Compat (NameCacheUpdater(..), upNameCache )
-import Development.IDE.GHC.Orphans ()
-import Development.IDE.Core.PositionMapping
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Types.Action
-import Development.IDE.Types.Logger hiding (Priority)
-import Development.IDE.Types.KnownTargets
-import Development.IDE.Types.Shake
-import qualified Development.IDE.Types.Logger as Logger
-import Language.LSP.Diagnostics
-import qualified Data.SortedList as SL
-import           Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Exports
-import Development.IDE.Types.Location
-import Development.IDE.Types.Options
 import           Control.Concurrent.Async
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM
 import           Control.DeepSeq
-import           System.Time.Extra
-import           Data.Typeable
-import qualified Language.LSP.Server as LSP
-import qualified Language.LSP.Types as LSP
-import           System.FilePath hiding (makeRelative)
-import qualified Development.Shake as Shake
 import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import           Control.Monad.Reader
+import qualified Control.Monad.STM                    as STM
+import           Control.Monad.Trans.Maybe
+import qualified Data.ByteString.Char8                as BS
+import           Data.Dynamic
+import qualified Data.HashMap.Strict                  as HMap
+import           Data.Hashable
+import           Data.List.Extra                      (partition, takeEnd)
+import           Data.Map.Strict                      (Map)
+import qualified Data.Map.Strict                      as Map
+import           Data.Maybe
+import qualified Data.Set                             as Set
+import qualified Data.SortedList                      as SL
+import qualified Data.Text                            as T
 import           Data.Time
+import           Data.Traversable
+import           Data.Tuple.Extra
+import           Data.Typeable
+import           Data.Unique
+import           Data.Vector                          (Vector)
+import qualified Data.Vector                          as Vector
+import           Development.IDE.Core.Debouncer
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Tracing
+import           Development.IDE.GHC.Compat           (NameCacheUpdater (..),
+                                                       upNameCache)
+import           Development.IDE.GHC.Orphans          ()
+import           Development.IDE.Types.Action
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Exports
+import           Development.IDE.Types.KnownTargets
+import           Development.IDE.Types.Location
+import           Development.IDE.Types.Logger         hiding (Priority)
+import qualified Development.IDE.Types.Logger         as Logger
+import           Development.IDE.Types.Options
+import           Development.IDE.Types.Shake
+import           Development.Shake                    hiding (Info, ShakeValue,
+                                                       doesFileExist)
+import qualified Development.Shake                    as Shake
+import           Development.Shake.Classes
+import           Development.Shake.Database
+import           Development.Shake.Rule
 import           GHC.Generics
-import Language.LSP.Types
-import qualified Control.Monad.STM as STM
-import Control.Monad.IO.Class
-import Control.Monad.Reader
-import Control.Monad.Trans.Maybe
-import Data.Traversable
-import Data.Hashable
-import Development.IDE.Core.Tracing
-import Language.LSP.VFS
+import           Language.LSP.Diagnostics
+import qualified Language.LSP.Server                  as LSP
+import           Language.LSP.Types
+import qualified Language.LSP.Types                   as LSP
+import           Language.LSP.VFS
+import           System.FilePath                      hiding (makeRelative)
+import           System.Time.Extra
 
-import Data.IORef
-import NameCache
-import UniqSupply
-import PrelInfo
-import Language.LSP.Types.Capabilities
-import OpenTelemetry.Eventlog
-import GHC.Fingerprint
+import           Data.IORef
+import           GHC.Fingerprint
+import           Language.LSP.Types.Capabilities
+import           NameCache
+import           OpenTelemetry.Eventlog
+import           PrelInfo
+import           UniqSupply
 
-import HieDb.Types
-import           Control.Exception.Extra hiding (bracket_)
-import UnliftIO.Exception (bracket_)
+import           Control.Exception.Extra              hiding (bracket_)
+import           Data.Default
+import           HieDb.Types
 import           Ide.Plugin.Config
-import Data.Default
-import qualified Ide.PluginUtils               as HLS
-import           Ide.Types                      ( PluginId )
+import qualified Ide.PluginUtils                      as HLS
+import           Ide.Types                            (PluginId)
+import           UnliftIO.Exception                   (bracket_)
 
 -- | We need to serialize writes to the database, so we send any function that
 -- needs to write to the database over the channel, where it will be picked up by
 -- a worker thread.
 data HieDbWriter
   = HieDbWriter
-  { indexQueue :: IndexQueue
-  , indexPending :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
-  , indexCompleted :: TVar Int -- ^ to report progress
+  { indexQueue         :: IndexQueue
+  , indexPending       :: TVar (HMap.HashMap NormalizedFilePath Fingerprint) -- ^ Avoid unnecessary/out of date indexing
+  , indexCompleted     :: TVar Int -- ^ to report progress
   , indexProgressToken :: Var (Maybe LSP.ProgressToken)
   -- ^ This is a Var instead of a TVar since we need to do IO to initialise/update, so we need a lock
   }
@@ -253,7 +255,7 @@ class Typeable a => IsIdeGlobal a where
 -- the builtin VFS without spawning up an LSP server. To be able to test things
 -- like `setBufferModified` we abstract over the VFS implementation.
 data VFSHandle = VFSHandle
-    { getVirtualFile :: NormalizedUri -> IO (Maybe VirtualFile)
+    { getVirtualFile         :: NormalizedUri -> IO (Maybe VirtualFile)
         -- ^ get the contents of a virtual file
     , setVirtualFileContents :: Maybe (NormalizedUri -> Maybe T.Text -> IO ())
         -- ^ set a specific file to a value. If Nothing then we are ignoring these
@@ -331,7 +333,7 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
           -- Old failed, we can update it preserving diagnostics
           Failed{} -> ValueWithDiagnostics new diags
           -- Something already succeeded before, leave it alone
-          _ -> old
+          _        -> old
 
     case HMap.lookup (file,Key k) hm of
       Nothing -> readPersistent
@@ -351,8 +353,8 @@ lastValue key file = do
 valueVersion :: Value v -> Maybe TextDocumentVersion
 valueVersion = \case
     Succeeded ver _ -> Just ver
-    Stale _ ver _ -> Just ver
-    Failed _ -> Nothing
+    Stale _ ver _   -> Just ver
+    Failed _        -> Nothing
 
 mappingForVersion
     :: HMap.HashMap NormalizedUri (Map TextDocumentVersion (a, PositionMapping))
@@ -382,11 +384,11 @@ newtype ShakeSession = ShakeSession
 -- | A Shake database plus persistent store. Can be thought of as storing
 --   mappings from @(FilePath, k)@ to @RuleResult k@.
 data IdeState = IdeState
-    {shakeDb         :: ShakeDatabase
-    ,shakeSession    :: MVar ShakeSession
-    ,shakeClose      :: IO ()
-    ,shakeExtras     :: ShakeExtras
-    ,shakeDatabaseProfile :: ShakeDatabase -> IO (Maybe FilePath)
+    {shakeDb               :: ShakeDatabase
+    ,shakeSession          :: MVar ShakeSession
+    ,shakeClose            :: IO ()
+    ,shakeExtras           :: ShakeExtras
+    ,shakeDatabaseProfile  :: ShakeDatabase -> IO (Maybe FilePath)
     ,stopProgressReporting :: IO ()
     }
 
@@ -456,8 +458,8 @@ knownTargets = do
 seqValue :: Value v -> b -> b
 seqValue v b = case v of
     Succeeded ver v -> rnf ver `seq` v `seq` b
-    Stale d ver v -> rnf d `seq` rnf ver `seq` v `seq` b
-    Failed _ -> b
+    Stale d ver v   -> rnf d `seq` rnf ver `seq` v `seq` b
+    Failed _        -> b
 
 -- | Open a 'IdeState', should be shut using 'shakeShut'.
 shakeOpen :: Maybe (LSP.LanguageContextEnv Config)
@@ -534,14 +536,14 @@ shakeOpen lspEnv defaultConfig logger debouncer
                     v <- readTVar mostRecentProgressEvent
                     case v of
                         KickCompleted -> STM.retry
-                        KickStarted -> return ()
+                        KickStarted   -> return ()
                 asyncReporter <- async $ mRunLspT lspEnv lspShakeProgress
                 progressLoopReporting asyncReporter
             progressLoopReporting asyncReporter = do
                 atomically $ do
                     v <- readTVar mostRecentProgressEvent
                     case v of
-                        KickStarted -> STM.retry
+                        KickStarted   -> STM.retry
                         KickCompleted -> return ()
                 cancel asyncReporter
                 progressLoopIdle
@@ -643,7 +645,7 @@ shakeRestart IdeState{..} acts =
               res <- shakeDatabaseProfile shakeDb
               let profile = case res of
                       Just fp -> ", profile saved at " <> fp
-                      _ -> ""
+                      _       -> ""
               let msg = T.pack $ "Restarting build session (aborting the previous one took "
                               ++ showDuration stopTime ++ profile ++ ")"
               logDebug (logger shakeExtras) msg
@@ -712,7 +714,7 @@ newSession extras@ShakeExtras{..} shakeDb acts = do
           let acts' = pumpActionThread otSpan : map (run otSpan) (reenqueued ++ acts)
           res <- try @SomeException (restore $ shakeRunDatabase shakeDb acts')
           let res' = case res of
-                      Left e -> "exception: " <> displayException e
+                      Left e  -> "exception: " <> displayException e
                       Right _ -> "completed"
           let msg = T.pack $ "Finishing build session(" ++ res' ++ ")"
           return $ do
@@ -753,7 +755,7 @@ instantiateDelayedAction (DelayedAction _ s p a) = do
 
 mRunLspT :: Applicative m => Maybe (LSP.LanguageContextEnv c ) -> LSP.LspT c m () -> m ()
 mRunLspT (Just lspEnv) f = LSP.runLspT lspEnv f
-mRunLspT Nothing _ = pure ()
+mRunLspT Nothing _       = pure ()
 
 mRunLspTCallback :: Monad m
                  => Maybe (LSP.LanguageContextEnv c)
@@ -761,7 +763,7 @@ mRunLspTCallback :: Monad m
                  -> m a
                  -> m a
 mRunLspTCallback (Just lspEnv) f g = LSP.runLspT lspEnv $ f (lift g)
-mRunLspTCallback Nothing _ g = g
+mRunLspTCallback Nothing _ g       = g
 
 getDiagnostics :: IdeState -> IO [FileDiagnostic]
 getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
@@ -818,7 +820,7 @@ usesWithStale_ key files = do
     res <- usesWithStale key files
     case sequence res of
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
-        Just v -> return v
+        Just v  -> return v
 
 newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
     deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
@@ -886,7 +888,7 @@ uses_ key files = do
     res <- uses key files
     case sequence res of
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
-        Just v -> return v
+        Just v  -> return v
 
 -- | Plural version of 'use'
 uses :: IdeRule k v
@@ -947,10 +949,10 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                 updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> a == b
-                        (ShakeStale a, Just (ShakeStale b)) -> a == b
+                        (ShakeStale a, Just (ShakeStale b))   -> a == b
                         -- If we do not have a previous result
                         -- or we got ShakeNoCutoff we always return False.
-                        _ -> False
+                        _                                     -> False
                 return $ RunResult
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
@@ -965,7 +967,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
 
 isSuccess :: RunResult (A v) -> Bool
 isSuccess (RunResult _ _ (A Failed{})) = False
-isSuccess _ = True
+isSuccess _                            = True
 
 -- | Rule type, input file
 data QDisk k = QDisk k NormalizedFilePath

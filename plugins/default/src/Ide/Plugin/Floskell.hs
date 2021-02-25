@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Ide.Plugin.Floskell
@@ -8,16 +8,16 @@ module Ide.Plugin.Floskell
   )
 where
 
-import qualified Data.ByteString.Lazy           as BS
-import qualified Data.Text as T
-import qualified Data.Text.Encoding             as T
-import           Development.IDE as D           hiding (pluginHandlers)
+import           Control.Monad.IO.Class
+import qualified Data.ByteString.Lazy   as BS
+import qualified Data.Text              as T
+import qualified Data.Text.Encoding     as T
+import           Development.IDE        as D hiding (pluginHandlers)
 import           Floskell
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
-import           Text.Regex.TDFA.Text()
-import Control.Monad.IO.Class
+import           Text.Regex.TDFA.Text   ()
 
 -- ---------------------------------------------------------------------
 

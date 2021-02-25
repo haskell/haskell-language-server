@@ -2,9 +2,9 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE CPP                   #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE TypeFamilies          #-}
 #include "ghc-api-version.h"
 
 -- | A Shake implementation of the compiler service, built
@@ -64,81 +64,94 @@ module Development.IDE.Core.Rules(
     typeCheckRuleDefinition,
     ) where
 
-import Fingerprint
+import           Fingerprint
 
-import Data.Aeson (toJSON, Result(Success))
-import Data.Binary hiding (get, put)
-import Data.Tuple.Extra
-import Control.Monad.Extra
-import Control.Monad.Trans.Class
-import Control.Monad.Trans.Maybe
-import Development.IDE.Core.Compile
-import Development.IDE.Core.OfInterest
-import Development.IDE.Types.Options
-import Development.IDE.Spans.Documentation
-import Development.IDE.Spans.LocalBindings
-import Development.IDE.Import.DependencyInformation
-import Development.IDE.Import.FindImports
-import           Development.IDE.Core.FileExists
-import           Development.IDE.Core.FileStore        (modificationTime, getFileContents)
-import           Development.IDE.Types.Diagnostics as Diag
-import Development.IDE.Types.Location
-import Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile, TargetModule, TargetFile)
-import Development.IDE.GHC.ExactPrint
-import Development.IDE.GHC.Util
-import qualified Development.IDE.Types.Logger as L
-import Data.Maybe
+import           Control.Monad.Extra
+import           Control.Monad.Trans.Class
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson                                   (Result (Success),
+                                                               toJSON)
+import           Data.Binary                                  hiding (get, put)
+import qualified Data.ByteString.Char8                        as BS
 import           Data.Foldable
-import qualified Data.IntMap.Strict as IntMap
-import Data.IntMap.Strict (IntMap)
-import Data.List
-import qualified Data.Set                                 as Set
-import qualified Data.Map as M
-import qualified Data.Text                                as T
-import qualified Data.Text.Encoding                       as T
+import           Data.IntMap.Strict                           (IntMap)
+import qualified Data.IntMap.Strict                           as IntMap
+import           Data.List
+import qualified Data.Map                                     as M
+import           Data.Maybe
+import qualified Data.Set                                     as Set
+import qualified Data.Text                                    as T
+import qualified Data.Text.Encoding                           as T
+import           Data.Tuple.Extra
+import           Development.IDE.Core.Compile
+import           Development.IDE.Core.FileExists
+import           Development.IDE.Core.FileStore               (getFileContents,
+                                                               modificationTime)
+import           Development.IDE.Core.OfInterest
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.GHC.Compat                   hiding
+                                                              (TargetFile,
+                                                               TargetModule,
+                                                               parseModule,
+                                                               typecheckModule,
+                                                               writeHieFile)
 import           Development.IDE.GHC.Error
-import           Development.Shake                        hiding (Diagnostic)
-import Development.IDE.Core.RuleTypes
-import qualified Data.ByteString.Char8 as BS
-import Development.IDE.Core.PositionMapping
-import           Language.LSP.Types (DocumentHighlight (..), SymbolInformation(..), SMethod(SCustomMethod))
-import qualified Language.LSP.Server as LSP
-import Language.LSP.VFS
+import           Development.IDE.GHC.ExactPrint
+import           Development.IDE.GHC.Util
+import           Development.IDE.Import.DependencyInformation
+import           Development.IDE.Import.FindImports
+import           Development.IDE.Spans.Documentation
+import           Development.IDE.Spans.LocalBindings
+import           Development.IDE.Types.Diagnostics            as Diag
+import           Development.IDE.Types.Location
+import qualified Development.IDE.Types.Logger                 as L
+import           Development.IDE.Types.Options
+import           Development.Shake                            hiding
+                                                              (Diagnostic)
+import qualified Language.LSP.Server                          as LSP
+import           Language.LSP.Types                           (DocumentHighlight (..),
+                                                               SMethod (SCustomMethod),
+                                                               SymbolInformation (..))
+import           Language.LSP.VFS
 
-import qualified GHC.LanguageExtensions as LangExt
-import HscTypes hiding (TargetModule, TargetFile)
-import GHC.Generics(Generic)
+import           GHC.Generics                                 (Generic)
+import qualified GHC.LanguageExtensions                       as LangExt
+import           HscTypes                                     hiding
+                                                              (TargetFile,
+                                                               TargetModule)
 
-import qualified Development.IDE.Spans.AtPoint as AtPoint
-import Development.IDE.Core.IdeConfiguration
-import Development.IDE.Core.Service
-import Development.IDE.Core.Shake
-import Development.IDE.Types.HscEnvEq
-import Development.Shake.Classes hiding (get, put)
-import Control.Monad.Trans.Except (runExceptT,ExceptT,except)
-import Control.Concurrent.Async (concurrently)
-import Control.Monad.Reader
-import Control.Exception.Safe
+import           Control.Concurrent.Async                     (concurrently)
+import           Control.Exception.Safe
+import           Control.Monad.Reader
+import           Control.Monad.Trans.Except                   (ExceptT, except,
+                                                               runExceptT)
+import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
+import qualified Development.IDE.Spans.AtPoint                as AtPoint
+import           Development.IDE.Types.HscEnvEq
+import           Development.Shake.Classes                    hiding (get, put)
 
-import Data.Coerce
-import Control.Monad.State
-import FastString (FastString(uniq))
-import qualified HeaderInfo as Hdr
-import Data.Time (UTCTime(..))
-import Data.Hashable
-import qualified Data.HashSet as HashSet
-import qualified Data.HashMap.Strict as HM
-import TcRnMonad (tcg_dependent_files)
-import Data.IORef
-import Control.Concurrent.Extra
-import Module
-import qualified Data.Rope.UTF16 as Rope
-import GHC.IO.Encoding
-import Data.ByteString.Encoding as T
+import           Control.Concurrent.Extra
+import           Control.Monad.State
+import           Data.ByteString.Encoding                     as T
+import           Data.Coerce
+import qualified Data.HashMap.Strict                          as HM
+import qualified Data.HashSet                                 as HashSet
+import           Data.Hashable
+import           Data.IORef
+import qualified Data.Rope.UTF16                              as Rope
+import           Data.Time                                    (UTCTime (..))
+import           FastString                                   (FastString (uniq))
+import           GHC.IO.Encoding
+import qualified HeaderInfo                                   as Hdr
+import           Module
+import           TcRnMonad                                    (tcg_dependent_files)
 
+import qualified Data.Aeson.Types                             as A
 import qualified HieDb
-import Ide.Plugin.Config
-import qualified Data.Aeson.Types as A
+import           Ide.Plugin.Config
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -262,7 +275,7 @@ getSourceFileSource :: NormalizedFilePath -> Action BS.ByteString
 getSourceFileSource nfp = do
     (_, msource) <- getFileContents nfp
     case msource of
-        Nothing -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
+        Nothing     -> liftIO $ BS.readFile (fromNormalizedFilePath nfp)
         Just source -> pure $ T.encodeUtf8 source
 
 -- | Parse the contents of a haskell file.
@@ -405,9 +418,9 @@ getLocatedImportsRule =
         (diags, imports') <- fmap unzip $ forM imports $ \(isSource, (mbPkgName, modName)) -> do
             diagOrImp <- locateModule dflags import_dirs (optExtensions opt) getTargetExists modName mbPkgName isSource
             case diagOrImp of
-                Left diags -> pure (diags, Just (modName, Nothing))
+                Left diags              -> pure (diags, Just (modName, Nothing))
                 Right (FileImport path) -> pure ([], Just (modName, Just path))
-                Right PackageImport -> pure ([], Nothing)
+                Right PackageImport     -> pure ([], Nothing)
         let moduleImports = catMaybes imports'
         pure (concat diags, Just moduleImports)
 
@@ -499,7 +512,7 @@ rawDependencyInformation fs = do
                  -> ([Located ModuleName], [(Located ModuleName, ArtifactsLocation)])
     splitImports = foldr splitImportsLoop ([],[])
 
-    splitImportsLoop (imp, Nothing) (ns, ls) = (imp:ns, ls)
+    splitImportsLoop (imp, Nothing) (ns, ls)       = (imp:ns, ls)
     splitImportsLoop (imp, Just artifact) (ns, ls) = (ns, (imp,artifact) : ls)
 
     updateBootMap pm boot_mod_id ArtifactsLocation{..} bm =
@@ -625,7 +638,7 @@ getBindingsRule =
   define $ \GetBindings f -> do
     HAR{hieKind=kind, refMap=rm} <- use_ GetHieAst f
     case kind of
-      HieFresh -> pure ([], Just $ bindings rm)
+      HieFresh      -> pure ([], Just $ bindings rm)
       HieFromDisk _ -> pure ([], Nothing)
 
 getDocMapRule :: Rules ()
@@ -1036,7 +1049,7 @@ getClientConfigAction defValue = do
   mbVal <- unhashed <$> useNoFile_ GetClientSettings
   case A.parse (parseConfig defValue) <$> mbVal of
     Just (Success c) -> return c
-    _ -> return defValue
+    _                -> return defValue
 
 -- | For now we always use bytecode unless something uses unboxed sums and tuples along with TH
 getLinkableType :: NormalizedFilePath -> Action (Maybe LinkableType)

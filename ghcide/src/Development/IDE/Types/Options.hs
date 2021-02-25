@@ -17,15 +17,16 @@ module Development.IDE.Types.Options
   , OptHaddockParse(..)
   ,optShakeFiles) where
 
-import Development.Shake
-import Development.IDE.Types.HscEnvEq (HscEnvEq)
-import           GHC hiding (parseModule, typecheckModule)
-import           GhcPlugins                     as GHC hiding (fst3, (<>))
-import qualified Language.LSP.Types.Capabilities as LSP
-import qualified Data.Text as T
-import Development.IDE.Types.Diagnostics
-import Control.DeepSeq (NFData(..))
-import Ide.Plugin.Config
+import           Control.DeepSeq                   (NFData (..))
+import qualified Data.Text                         as T
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.HscEnvEq    (HscEnvEq)
+import           Development.Shake
+import           GHC                               hiding (parseModule,
+                                                    typecheckModule)
+import           GhcPlugins                        as GHC hiding (fst3, (<>))
+import           Ide.Plugin.Config
+import qualified Language.LSP.Types.Capabilities   as LSP
 
 data IdeGhcSession = IdeGhcSession
   { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
@@ -38,52 +39,52 @@ instance Show IdeGhcSession where show _ = "IdeGhcSession"
 instance NFData IdeGhcSession where rnf !_ = ()
 
 data IdeOptions = IdeOptions
-  { optPreprocessor :: GHC.ParsedSource -> IdePreprocessedSource
+  { optPreprocessor       :: GHC.ParsedSource -> IdePreprocessedSource
     -- ^ Preprocessor to run over all parsed source trees, generating a list of warnings
     --   and a list of errors, along with a new parse tree.
-  , optGhcSession :: Action IdeGhcSession
+  , optGhcSession         :: Action IdeGhcSession
     -- ^ Setup a GHC session for a given file, e.g. @Foo.hs@.
     --   For the same 'ComponentOptions' from hie-bios, the resulting function will be applied once per file.
     --   It is desirable that many files get the same 'HscEnvEq', so that more IDE features work.
-  , optPkgLocationOpts :: IdePkgLocationOptions
+  , optPkgLocationOpts    :: IdePkgLocationOptions
     -- ^ How to locate source and @.hie@ files given a module name.
-  , optExtensions :: [String]
+  , optExtensions         :: [String]
     -- ^ File extensions to search for code, defaults to Haskell sources (including @.hs@)
-  , optShakeProfiling :: Maybe FilePath
+  , optShakeProfiling     :: Maybe FilePath
     -- ^ Set to 'Just' to create a directory of profiling reports.
-  , optOTMemoryProfiling :: IdeOTMemoryProfiling
+  , optOTMemoryProfiling  :: IdeOTMemoryProfiling
     -- ^ Whether to record profiling information with OpenTelemetry. You must
     --   also enable the -l RTS flag for this to have any effect
-  , optTesting :: IdeTesting
+  , optTesting            :: IdeTesting
     -- ^ Whether to enable additional lsp messages used by the test suite for checking invariants
-  , optReportProgress :: IdeReportProgress
+  , optReportProgress     :: IdeReportProgress
     -- ^ Whether to report progress during long operations.
-  , optLanguageSyntax :: String
+  , optLanguageSyntax     :: String
     -- ^ the ```language to use
   , optNewColonConvention :: Bool
     -- ^ whether to use new colon convention
-  , optKeywords :: [T.Text]
+  , optKeywords           :: [T.Text]
     -- ^ keywords used for completions. These are customizable
     -- since DAML has a different set of keywords than Haskell.
-  , optDefer :: IdeDefer
+  , optDefer              :: IdeDefer
     -- ^ Whether to defer type errors, typed holes and out of scope
     --   variables. Deferral allows the IDE to continue to provide
     --   features such as diagnostics and go-to-definition, in
     --   situations in which they would become unavailable because of
     --   the presence of type errors, holes or unbound variables.
-  , optCheckProject :: IO Bool
+  , optCheckProject       :: IO Bool
     -- ^ Whether to typecheck the entire project on load
-  , optCheckParents :: IO CheckParents
+  , optCheckParents       :: IO CheckParents
     -- ^ When to typecheck reverse dependencies of a file
-  , optHaddockParse :: OptHaddockParse
+  , optHaddockParse       :: OptHaddockParse
     -- ^ Whether to return result of parsing module with Opt_Haddock.
     --   Otherwise, return the result of parsing without Opt_Haddock, so
     --   that the parsed module contains the result of Opt_KeepRawTokenStream,
     --   which might be necessary for hlint.
-  , optCustomDynFlags :: DynFlags -> DynFlags
+  , optCustomDynFlags     :: DynFlags -> DynFlags
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
-  , optShakeOptions :: ShakeOptions
+  , optShakeOptions       :: ShakeOptions
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
@@ -99,9 +100,9 @@ data OptHaddockParse = HaddockParse | NoHaddockParse
 data IdePreprocessedSource = IdePreprocessedSource
   { preprocWarnings :: [(GHC.SrcSpan, String)]
     -- ^ Warnings emitted by the preprocessor.
-  , preprocErrors :: [(GHC.SrcSpan, String)]
+  , preprocErrors   :: [(GHC.SrcSpan, String)]
     -- ^ Errors emitted by the preprocessor.
-  , preprocSource :: GHC.ParsedSource
+  , preprocSource   :: GHC.ParsedSource
     -- ^ New parse tree emitted by the preprocessor.
   }
 

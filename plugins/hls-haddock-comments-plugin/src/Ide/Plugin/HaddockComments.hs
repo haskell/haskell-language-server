@@ -1,25 +1,26 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE NamedFieldPuns            #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE ViewPatterns              #-}
 
 module Ide.Plugin.HaddockComments (descriptor) where
 
-import Control.Monad (join)
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Map as Map
-import qualified Data.Text as T
-import Development.IDE hiding (pluginHandlers)
-import Development.IDE.GHC.Compat
-import Development.IDE.GHC.ExactPrint (GetAnnotatedParsedSource (..), annsA, astA)
-import Ide.Types
-import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
-import Language.Haskell.GHC.ExactPrint.Utils
-import Language.LSP.Types
-import Control.Monad.IO.Class
+import           Control.Monad                         (join)
+import           Control.Monad.IO.Class
+import qualified Data.HashMap.Strict                   as HashMap
+import qualified Data.Map                              as Map
+import qualified Data.Text                             as T
+import           Development.IDE                       hiding (pluginHandlers)
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.ExactPrint        (GetAnnotatedParsedSource (..),
+                                                        annsA, astA)
+import           Ide.Types
+import           Language.Haskell.GHC.ExactPrint
+import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs)
+import           Language.Haskell.GHC.ExactPrint.Utils
+import           Language.LSP.Types
 
 -----------------------------------------------------------------------------
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -50,11 +51,11 @@ genList =
 -- | Defines how to generate haddock comments by tweaking annotations of AST
 data GenComments = forall a.
   GenComments
-  { title :: T.Text,
-    fromDecl :: HsDecl GhcPs -> Maybe a,
-    collectKeys :: a -> [AnnKey],
-    isFresh :: Annotation -> Bool,
-    updateAnn :: Annotation -> Annotation,
+  { title         :: T.Text,
+    fromDecl      :: HsDecl GhcPs -> Maybe a,
+    collectKeys   :: a -> [AnnKey],
+    isFresh       :: Annotation -> Bool,
+    updateAnn     :: Annotation -> Annotation,
     updateDeclAnn :: Annotation -> Annotation
   }
 
@@ -81,7 +82,7 @@ genForSig = GenComments {..}
     title = "Generate signature comments"
 
     fromDecl (SigD _ (TypeSig _ _ (HsWC _ (HsIB _ x)))) = Just x
-    fromDecl _ = Nothing
+    fromDecl _                                          = Nothing
 
     updateAnn x = x {annEntryDelta = DP (0, 1), annsDP = dp}
     updateDeclAnn = cleanPriorComments

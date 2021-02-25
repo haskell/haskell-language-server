@@ -1,6 +1,6 @@
+{-# LANGUAGE CPP        #-}
+{-# LANGUAGE GADTs      #-}
 {-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE GADTs#-}
 
 #include "ghc-api-version.h"
 
@@ -13,52 +13,55 @@ module Development.IDE.Plugin.Completions.Logic (
 , getCompletions
 ) where
 
-import Control.Applicative
-import Data.Char (isUpper)
-import Data.Generics
-import Data.List.Extra as List hiding (stripPrefix)
-import qualified Data.Map  as Map
+import           Control.Applicative
+import           Data.Char                                (isUpper)
+import           Data.Generics
+import           Data.List.Extra                          as List hiding
+                                                                  (stripPrefix)
+import qualified Data.Map                                 as Map
 
-import Data.Maybe (fromMaybe, isJust, listToMaybe, mapMaybe)
-import qualified Data.Text as T
-import qualified Text.Fuzzy as Fuzzy
+import           Data.Maybe                               (fromMaybe, isJust,
+                                                           listToMaybe,
+                                                           mapMaybe)
+import qualified Data.Text                                as T
+import qualified Text.Fuzzy                               as Fuzzy
 
-import HscTypes
-import Name
-import RdrName
-import Type
+import           HscTypes
+import           Name
+import           RdrName
+import           Type
 #if MIN_GHC_API_VERSION(8,10,0)
-import Predicate (isDictTy)
-import Pair
-import Coercion
+import           Coercion
+import           Pair
+import           Predicate                                (isDictTy)
 #endif
 
-import Language.LSP.Types
-import Language.LSP.Types.Capabilities
-import qualified Language.LSP.VFS as VFS
-import Development.IDE.Core.Compile
-import Development.IDE.Core.PositionMapping
-import Development.IDE.Plugin.Completions.Types
-import Development.IDE.Spans.Documentation
-import Development.IDE.Spans.LocalBindings
-import Development.IDE.GHC.Compat as GHC
-import Development.IDE.GHC.Error
-import Development.IDE.Types.Options
-import Development.IDE.Spans.Common
-import Development.IDE.GHC.Util
-import Outputable (Outputable)
-import qualified Data.Set as Set
-import ConLike
-import GhcPlugins (
-    flLabel,
-    unpackFS)
-import Data.Either (fromRight)
-import Data.Aeson (ToJSON (toJSON))
-import Data.Functor
-import Ide.PluginUtils (mkLspCommand)
-import Ide.Types (CommandId (..), PluginId, WithSnippets (..))
-import Control.Monad
-import Development.IDE.Types.HscEnvEq
+import           ConLike
+import           Control.Monad
+import           Data.Aeson                               (ToJSON (toJSON))
+import           Data.Either                              (fromRight)
+import           Data.Functor
+import qualified Data.Set                                 as Set
+import           Development.IDE.Core.Compile
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.GHC.Compat               as GHC
+import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.Util
+import           Development.IDE.Plugin.Completions.Types
+import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.Documentation
+import           Development.IDE.Spans.LocalBindings
+import           Development.IDE.Types.HscEnvEq
+import           Development.IDE.Types.Options
+import           GhcPlugins                               (flLabel, unpackFS)
+import           Ide.PluginUtils                          (mkLspCommand)
+import           Ide.Types                                (CommandId (..),
+                                                           PluginId,
+                                                           WithSnippets (..))
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.VFS                         as VFS
+import           Outputable                               (Outputable)
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -195,7 +198,7 @@ mkCompl
   where kind = Just compKind
         docs' = imported : spanDocToMarkdown docs
         imported = case importedFrom of
-          Left pos -> "*Defined at '" <> ppr pos <> "'*\n'"
+          Left pos  -> "*Defined at '" <> ppr pos <> "'*\n'"
           Right mod -> "*Defined in '" <> mod <> "'*\n"
         colon = if optNewColonConvention then ": " else ":: "
         documentation = Just $ CompletionDocMarkup $
@@ -215,7 +218,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
     label = stripPrefix $ showGhc origName
     insertText = case isInfix of
             Nothing -> case getArgText <$> thingType of
-                            Nothing -> label
+                            Nothing      -> label
                             Just argText -> label <> " " <> argText
             Just LeftSide -> label <> "`"
 
@@ -447,9 +450,9 @@ findRecordCompl uri pmod mn DataDecl {tcdLName, tcdDataDefn} = result
 
         getFlds :: HsConDetails arg (Located [LConDeclField GhcPs]) -> Maybe [ConDeclField GhcPs]
         getFlds conArg = case conArg of
-                             RecCon rec -> Just $ unLoc <$> unLoc rec
+                             RecCon rec  -> Just $ unLoc <$> unLoc rec
                              PrefixCon _ -> Just []
-                             _ -> Nothing
+                             _           -> Nothing
 
         extract ConDeclField{..}
              -- TODO: Why is cd_fld_names a list?
@@ -522,10 +525,10 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
 
           -- completions specific to the current context
           ctxCompls' = case mcc of
-                        Nothing -> compls
-                        Just TypeContext -> filter isTypeCompl compls
+                        Nothing           -> compls
+                        Just TypeContext  -> filter isTypeCompl compls
                         Just ValueContext -> filter (not . isTypeCompl) compls
-                        Just _ -> filter (not . isTypeCompl) compls
+                        Just _            -> filter (not . isTypeCompl) compls
           -- Add whether the text to insert has backticks
           ctxCompls = map (\comp -> comp { isInfix = infixCompls }) ctxCompls'
 
@@ -546,7 +549,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
               ty = ppr <$> typ
               thisModName = case nameModule_maybe name of
                 Nothing -> Left $ nameSrcSpan name
-                Just m -> Right $ ppr m
+                Just m  -> Right $ ppr m
 
           compls = if T.null prefixModule
             then localCompls ++ unqualCompls

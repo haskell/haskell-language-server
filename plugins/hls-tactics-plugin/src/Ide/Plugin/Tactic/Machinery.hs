@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DerivingVia           #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -6,6 +5,7 @@
 {-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
@@ -13,29 +13,29 @@ module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
-import           Class (Class(classTyVars))
+import           Class                        (Class (classTyVars))
 import           Control.Arrow
 import           Control.Monad.Error.Class
 import           Control.Monad.Reader
-import           Control.Monad.State (MonadState(..))
-import           Control.Monad.State.Class (gets, modify)
-import           Control.Monad.State.Strict (StateT (..))
-import           Data.Bool (bool)
+import           Control.Monad.State          (MonadState (..))
+import           Control.Monad.State.Class    (gets, modify)
+import           Control.Monad.State.Strict   (StateT (..))
+import           Data.Bool                    (bool)
 import           Data.Coerce
 import           Data.Either
 import           Data.Foldable
-import           Data.Functor ((<&>))
-import           Data.Generics (mkQ, everything, gcount)
-import           Data.List (sortBy)
-import qualified Data.Map as M
-import           Data.Ord (comparing, Down(..))
-import           Data.Set (Set)
-import qualified Data.Set as S
+import           Data.Functor                 ((<&>))
+import           Data.Generics                (everything, gcount, mkQ)
+import           Data.List                    (sortBy)
+import qualified Data.Map                     as M
+import           Data.Ord                     (Down (..), comparing)
+import           Data.Set                     (Set)
+import qualified Data.Set                     as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Simplify (simplify)
+import           Ide.Plugin.Tactic.Simplify   (simplify)
 import           Ide.Plugin.Tactic.Types
-import           OccName (HasOccName(occName))
+import           OccName                      (HasOccName (occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -204,7 +204,7 @@ tryUnifyUnivarsButNotSkolems skolems goal inst =
          [unCType inst]
          [unCType goal] of
     Unifiable subst -> pure subst
-    _ -> Nothing
+    _               -> Nothing
 
 
 

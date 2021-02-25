@@ -1,11 +1,8 @@
 module Version where
 
-import           Data.Version                             ( Version
-                                                          , parseVersion
-                                                          , makeVersion
-                                                          , showVersion
-                                                          )
-import           Text.ParserCombinators.ReadP             ( readP_to_S )
+import           Data.Version                 (Version, makeVersion,
+                                               parseVersion, showVersion)
+import           Text.ParserCombinators.ReadP (readP_to_S)
 
 
 type VersionNumber = String

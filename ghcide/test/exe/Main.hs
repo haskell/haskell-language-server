@@ -2,86 +2,96 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE ImplicitParams  #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE ImplicitParams        #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE TypeOperators         #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 #include "ghc-api-version.h"
 
 module Main (main) where
 
-import Control.Applicative.Combinators
-import Control.Exception (bracket_, catch)
-import qualified Control.Lens as Lens
-import Control.Monad
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Aeson (toJSON,fromJSON)
-import qualified Data.Aeson as A
-import qualified Data.Binary as Binary
-import Data.Default
-import Data.Foldable
-import Data.List.Extra
-import Data.Maybe
-import Data.Rope.UTF16 (Rope)
-import qualified Data.Rope.UTF16 as Rope
-import qualified Data.Set as Set
-import Development.IDE.Core.PositionMapping (fromCurrent, toCurrent, PositionResult(..), positionResultToMaybe)
-import Development.IDE.Core.Shake (Q(..))
-import Development.IDE.GHC.Util
-import qualified Data.Text as T
-import Development.IDE.Plugin.Completions.Types (extendImportCommandId)
-import Development.IDE.Plugin.TypeLenses (typeLensCommandId)
-import Development.IDE.Spans.Common
-import Development.IDE.Test
-    ( canonicalizeUri,
-      diagnostic,
-      expectCurrentDiagnostics,
-      expectDiagnostics,
-      expectDiagnosticsWithTags,
-      expectNoMoreDiagnostics,
-      flushMessages,
-      standardizeQuotes,
-      waitForAction,
-      Cursor, expectMessages )
-import Development.IDE.Test.Runfiles
-import qualified Development.IDE.Types.Diagnostics as Diagnostics
-import Development.IDE.Types.Location
-import Development.Shake (getDirectoryFilesIO)
-import Ide.Plugin.Config
-import qualified Experiments as Bench
-import Language.LSP.Test
-import Language.LSP.Types hiding (mkRange)
-import Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens as Lsp (diagnostics, params, message)
-import Language.LSP.VFS (applyChange)
-import Network.URI
-import System.Environment.Blank (unsetEnv, getEnv, setEnv)
-import System.FilePath
-import System.IO.Extra hiding (withTempDir)
+import           Control.Applicative.Combinators
+import           Control.Exception                        (bracket_, catch)
+import qualified Control.Lens                             as Lens
+import           Control.Monad
+import           Control.Monad.IO.Class                   (MonadIO, liftIO)
+import           Data.Aeson                               (fromJSON, toJSON)
+import qualified Data.Aeson                               as A
+import qualified Data.Binary                              as Binary
+import           Data.Default
+import           Data.Foldable
+import           Data.List.Extra
+import           Data.Maybe
+import           Data.Rope.UTF16                          (Rope)
+import qualified Data.Rope.UTF16                          as Rope
+import qualified Data.Set                                 as Set
+import qualified Data.Text                                as T
+import           Development.IDE.Core.PositionMapping     (PositionResult (..),
+                                                           fromCurrent,
+                                                           positionResultToMaybe,
+                                                           toCurrent)
+import           Development.IDE.Core.Shake               (Q (..))
+import           Development.IDE.GHC.Util
+import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
+import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
+import           Development.IDE.Spans.Common
+import           Development.IDE.Test                     (Cursor,
+                                                           canonicalizeUri,
+                                                           diagnostic,
+                                                           expectCurrentDiagnostics,
+                                                           expectDiagnostics,
+                                                           expectDiagnosticsWithTags,
+                                                           expectMessages,
+                                                           expectNoMoreDiagnostics,
+                                                           flushMessages,
+                                                           standardizeQuotes,
+                                                           waitForAction)
+import           Development.IDE.Test.Runfiles
+import qualified Development.IDE.Types.Diagnostics        as Diagnostics
+import           Development.IDE.Types.Location
+import           Development.Shake                        (getDirectoryFilesIO)
+import qualified Experiments                              as Bench
+import           Ide.Plugin.Config
+import           Language.LSP.Test
+import           Language.LSP.Types                       hiding (mkRange)
+import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens                  as Lsp (diagnostics,
+                                                                  message,
+                                                                  params)
+import           Language.LSP.VFS                         (applyChange)
+import           Network.URI
+import           System.Directory
+import           System.Environment.Blank                 (getEnv, setEnv,
+                                                           unsetEnv)
+import           System.Exit                              (ExitCode (ExitSuccess))
+import           System.FilePath
+import           System.IO.Extra                          hiding (withTempDir)
 import qualified System.IO.Extra
-import System.Directory
-import System.Exit (ExitCode(ExitSuccess))
-import System.Process.Extra (readCreateProcessWithExitCode, CreateProcess(cwd), proc)
-import System.Info.Extra (isWindows)
-import Test.QuickCheck
+import           System.Info.Extra                        (isWindows)
+import           System.Process.Extra                     (CreateProcess (cwd),
+                                                           proc,
+                                                           readCreateProcessWithExitCode)
+import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
-import Test.Tasty
-import Test.Tasty.ExpectedFailure
-import Test.Tasty.Ingredients.Rerun
-import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck
-import System.Time.Extra
-import Development.IDE.Plugin.CodeAction (matchRegExMultipleImports)
-import Development.IDE.Plugin.Test (TestRequest (BlockSeconds, GetInterfaceFilesDir), WaitForIdeRuleResult (..), blockCommandId)
-import Control.Monad.Extra (whenJust)
-import qualified Language.LSP.Types.Lens as L
-import Control.Lens ((^.))
-import Data.Tuple.Extra
+import           Control.Lens                             ((^.))
+import           Control.Monad.Extra                      (whenJust)
+import           Data.Tuple.Extra
+import           Development.IDE.Plugin.CodeAction        (matchRegExMultipleImports)
+import           Development.IDE.Plugin.Test              (TestRequest (BlockSeconds, GetInterfaceFilesDir),
+                                                           WaitForIdeRuleResult (..),
+                                                           blockCommandId)
+import qualified Language.LSP.Types.Lens                  as L
+import           System.Time.Extra
+import           Test.Tasty
+import           Test.Tasty.ExpectedFailure
+import           Test.Tasty.HUnit
+import           Test.Tasty.Ingredients.Rerun
+import           Test.Tasty.QuickCheck
 
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
@@ -2559,7 +2569,7 @@ addImplicitParamsConstraintTests =
         ]
     ]
   where
-    mkContext "" = ""
+    mkContext ""       = ""
     mkContext contents = "(" <> contents <> ") => "
 
     exampleCode bodyBase contextBase contextCaller =
@@ -2944,7 +2954,7 @@ exportTemplate mRange initialContent expectedAction expectedContents = do
   doc <- createDoc "A.hs" "haskell" initialContent
   _ <- waitForDiagnostics
   actions <- case mRange of
-    Nothing -> getAllCodeActions doc
+    Nothing    -> getAllCodeActions doc
     Just range -> getCodeActions doc range
   case expectedContents of
     Just content -> do
@@ -3679,7 +3689,7 @@ completionCommandTest name src pos wanted expected = testSession name $ do
   compls <- skipManyTill anyMessage (getCompletions docId pos)
   let wantedC = find ( \case
             CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
-            _ -> False
+            _                                     -> False
             ) compls
   case wantedC of
     Nothing ->
@@ -3708,7 +3718,7 @@ completionNoCommandTest name src pos wanted = testSession name $ do
   compls <- getCompletions docId pos
   let wantedC = find ( \case
             CompletionItem {_insertText = Just x} -> wanted `T.isPrefixOf` x
-            _ -> False
+            _                                     -> False
             ) compls
   case wantedC of
     Nothing ->
@@ -4488,7 +4498,7 @@ dependentFileTest = testGroup "addDependentFile"
 cradleLoadedMessage :: Session FromServerMessage
 cradleLoadedMessage = satisfy $ \case
         FromServerMess (SCustomMethod m) (NotMess _) -> m == cradleLoadedMethod
-        _ -> False
+        _                                            -> False
 
 cradleLoadedMethod :: T.Text
 cradleLoadedMethod = "ghcide/cradle/loaded"
@@ -4977,7 +4987,7 @@ getReferences' (file, l, c) includeDeclaration = do
     doc <- openDoc file "haskell"
     getReferences doc (Position l c) $ toBool includeDeclaration
     where toBool YesIncludeDeclaration = True
-          toBool NoExcludeDeclaration = False
+          toBool NoExcludeDeclaration  = False
 
 referenceTestSession :: String -> FilePath -> [FilePath] -> (FilePath -> Session ()) -> TestTree
 referenceTestSession name thisDoc docs' f = testSessionWithExtraFiles "references" name $ \dir -> do
@@ -5120,7 +5130,7 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
     checkEnv :: String -> IO (Maybe Bool)
     checkEnv s = fmap convertVal <$> getEnv s
     convertVal "0" = False
-    convertVal _ = True
+    convertVal _   = True
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
@@ -5150,7 +5160,7 @@ findCodeActions' op errMsg doc range expectedTitles = do
             ++ show expectedTitles
   liftIO $ case matches of
     Nothing -> assertFailure msg
-    Just _ -> pure ()
+    Just _  -> pure ()
   return (fromJust matches)
 
 findCodeAction :: TextDocumentIdentifier -> Range -> T.Text -> Session CodeAction
@@ -5381,4 +5391,4 @@ withTempDir f = System.IO.Extra.withTempDir $ \dir -> do
 assertJust :: MonadIO m => String -> Maybe a -> m a
 assertJust s = \case
   Nothing -> liftIO $ assertFailure s
-  Just x -> pure x
+  Just x  -> pure x

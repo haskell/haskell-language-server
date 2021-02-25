@@ -1,7 +1,7 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Tactic.Tactics
@@ -9,18 +9,18 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
-import           Control.Monad (when)
-import           Control.Monad.Except (throwError)
-import           Control.Monad.Reader.Class (MonadReader(ask))
+import           Control.Monad                (when)
+import           Control.Monad.Except         (throwError)
+import           Control.Monad.Reader.Class   (MonadReader (ask))
 import           Control.Monad.State.Class
-import           Control.Monad.State.Strict (StateT(..), runStateT)
-import           Data.Bool (bool)
+import           Control.Monad.State.Strict   (StateT (..), runStateT)
+import           Data.Bool                    (bool)
 import           Data.Foldable
 import           Data.List
-import qualified Data.Map as M
+import qualified Data.Map                     as M
 import           Data.Maybe
-import           Data.Set (Set)
-import qualified Data.Set as S
+import           Data.Set                     (Set)
+import qualified Data.Set                     as S
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
@@ -33,11 +33,11 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name (occNameString)
+import           Name                         (occNameString)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
-import           Type hiding (Var)
+import           Type                         hiding (Var)
 
 
 ------------------------------------------------------------------------------
@@ -224,7 +224,7 @@ splitDataCon dc =
     case splitTyConApp_maybe $ unCType g of
       Just (tc, apps) -> do
         case elem dc $ tyConDataCons tc of
-          True -> buildDataCon (unwhitelistingSplit jdg) dc apps
+          True  -> buildDataCon (unwhitelistingSplit jdg) dc apps
           False -> throwError $ IncorrectDataCon dc
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
 

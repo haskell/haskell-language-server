@@ -16,6 +16,6 @@ build-depends:
 -- TODO: set `shake.project` in cabal-config above, when supported
 -- (see https://github.com/haskell/cabal/issues/6353)
 
-import HlsInstall (defaultMain)
+import           HlsInstall (defaultMain)
 
 main = defaultMain

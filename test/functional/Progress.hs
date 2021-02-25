@@ -1,30 +1,31 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE OverloadedStrings     #-}
 
 module Progress (tests) where
 
-import Control.Applicative.Combinators
-import Control.Lens hiding ((.=))
-import Control.Monad.IO.Class
-import Data.Aeson (Value, decode, encode, object, toJSON, (.=))
-import Data.Default
-import Data.List (delete)
-import Data.Maybe (fromJust)
-import Data.Text (Text, pack)
-import Ide.Plugin.Config
-import Language.LSP.Test
-import Language.LSP.Types
-import Language.LSP.Types.Capabilities
-import qualified Language.LSP.Types.Lens as L
-import System.FilePath ((</>))
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import Test.Tasty.HUnit
+import           Control.Applicative.Combinators
+import           Control.Lens                    hiding ((.=))
+import           Control.Monad.IO.Class
+import           Data.Aeson                      (Value, decode, encode, object,
+                                                  toJSON, (.=))
+import           Data.Default
+import           Data.List                       (delete)
+import           Data.Maybe                      (fromJust)
+import           Data.Text                       (Text, pack)
+import           Ide.Plugin.Config
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
+import qualified Language.LSP.Types.Lens         as L
+import           System.FilePath                 ((</>))
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.ExpectedFailure      (ignoreTestBecause)
+import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests =

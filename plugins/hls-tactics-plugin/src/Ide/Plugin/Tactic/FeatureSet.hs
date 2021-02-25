@@ -1,6 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
-{-# LANGUAGE ViewPatterns      #-}
 
 module Ide.Plugin.Tactic.FeatureSet
   ( Feature (..)
@@ -12,11 +11,11 @@ module Ide.Plugin.Tactic.FeatureSet
   , prettyFeatureSet
   ) where
 
-import           Data.List (intercalate)
-import           Data.Maybe (mapMaybe, listToMaybe)
-import           Data.Set (Set)
-import qualified Data.Set as S
-import qualified Data.Text as T
+import           Data.List  (intercalate)
+import           Data.Maybe (listToMaybe, mapMaybe)
+import           Data.Set   (Set)
+import qualified Data.Set   as S
+import qualified Data.Text  as T
 
 
 ------------------------------------------------------------------------------

@@ -25,16 +25,17 @@ module Development.IDE.Types.Location
     , readSrcSpan
     ) where
 
-import Control.Applicative
-import Language.LSP.Types (Location(..), Range(..), Position(..))
-import Control.Monad
-import Data.Hashable (Hashable(hash))
-import Data.String
-import FastString
-import qualified Language.LSP.Types as LSP
-import SrcLoc as GHC
-import Text.ParserCombinators.ReadP as ReadP
-import Data.Maybe (fromMaybe)
+import           Control.Applicative
+import           Control.Monad
+import           Data.Hashable                (Hashable (hash))
+import           Data.Maybe                   (fromMaybe)
+import           Data.String
+import           FastString
+import           Language.LSP.Types           (Location (..), Position (..),
+                                               Range (..))
+import qualified Language.LSP.Types           as LSP
+import           SrcLoc                       as GHC
+import           Text.ParserCombinators.ReadP as ReadP
 
 toNormalizedFilePath' :: FilePath -> LSP.NormalizedFilePath
 -- We want to keep empty paths instead of normalising them to "."

@@ -14,18 +14,18 @@ module Ide.Plugin.Tactic.Debug
   , traceFX
   ) where
 
-import Control.DeepSeq
-import Control.Exception
-import Debug.Trace
-import DynFlags (unsafeGlobalDynFlags)
-import Outputable hiding ((<>))
-import System.IO.Unsafe (unsafePerformIO)
+import           Control.DeepSeq
+import           Control.Exception
+import           Debug.Trace
+import           DynFlags          (unsafeGlobalDynFlags)
+import           Outputable        hiding ((<>))
+import           System.IO.Unsafe  (unsafePerformIO)
 
 #if __GLASGOW_HASKELL__ >= 808
-import PlainPanic (PlainGhcException)
+import           PlainPanic        (PlainGhcException)
 type GHC_EXCEPTION = PlainGhcException
 #else
-import Panic (GhcException)
+import           Panic             (GhcException)
 type GHC_EXCEPTION = GhcException
 #endif
 

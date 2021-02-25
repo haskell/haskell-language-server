@@ -1,15 +1,15 @@
 module HlsInstall where
 
-import           Development.Shake
 import           Control.Monad
-import           System.Environment                       ( unsetEnv )
+import           Development.Shake
+import           System.Environment (unsetEnv)
 
 import           BuildSystem
-import           Stack
 import           Cabal
-import           Version
 import           Env
 import           Help
+import           Stack
+import           Version
 
 defaultMain :: IO ()
 defaultMain = do

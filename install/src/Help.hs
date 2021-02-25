@@ -1,13 +1,13 @@
 -- |Module for Help messages and traget descriptions
 module Help where
 
+import           Data.List         (intercalate)
 import           Development.Shake
-import           Data.List                                ( intercalate )
 
+import           BuildSystem
 import           Env
 import           Print
 import           Version
-import           BuildSystem
 
 stackCommand :: TargetDescription -> String
 stackCommand target = "stack install.hs " ++ fst target ++ " [options]"

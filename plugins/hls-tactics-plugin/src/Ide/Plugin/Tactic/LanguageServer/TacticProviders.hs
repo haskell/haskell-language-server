@@ -12,17 +12,17 @@ module Ide.Plugin.Tactic.LanguageServer.TacticProviders
   ) where
 
 import           Control.Monad
-import           Control.Monad.Error.Class (MonadError(throwError))
+import           Control.Monad.Error.Class    (MonadError (throwError))
 import           Data.Aeson
 import           Data.Coerce
-import qualified Data.Map as M
+import qualified Data.Map                     as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Text as T
+import qualified Data.Text                    as T
 import           Data.Traversable
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
-import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
+import           GHC.LanguageExtensions.Type  (Extension (LambdaCase))
 import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
@@ -34,17 +34,17 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
 import           OccName
-import           Prelude hiding (span)
-import           Refinery.Tactic (goal)
+import           Prelude                      hiding (span)
+import           Refinery.Tactic              (goal)
 
 
 ------------------------------------------------------------------------------
 -- | A mapping from tactic commands to actual tactics for refinery.
 commandTactic :: TacticCommand -> OccName -> TacticsM ()
-commandTactic Auto         = const auto
-commandTactic Intros       = const intros
-commandTactic Destruct     = useNameFromHypothesis destruct
-commandTactic Homomorphism = useNameFromHypothesis homo
+commandTactic Auto                   = const auto
+commandTactic Intros                 = const intros
+commandTactic Destruct               = useNameFromHypothesis destruct
+commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
 
@@ -180,7 +180,7 @@ tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
 -- type, and that both are usual algebraic types.
 homoFilter :: Type -> Type -> Bool
 homoFilter (algebraicTyCon -> Just t1) (algebraicTyCon -> Just t2) = t1 == t2
-homoFilter _ _ = False
+homoFilter _ _                                                     = False
 
 
 ------------------------------------------------------------------------------
@@ -188,5 +188,5 @@ homoFilter _ _ = False
 -- algebraic types.
 destructFilter :: Type -> Type -> Bool
 destructFilter _ (algebraicTyCon -> Just _) = True
-destructFilter _ _ = False
+destructFilter _ _                          = False
 

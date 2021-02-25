@@ -9,8 +9,8 @@ module FunctionalBadProject (tests) where
 -- import           Language.LSP.Types as LSP
 -- import           Language.LSP.Types.Lens as LSP hiding (contents, error )
 -- import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.HUnit
+import           Test.Tasty
+import           Test.Tasty.HUnit
 
 -- ---------------------------------------------------------------------
 -- TODO: Currently this can not succeed, since such an error is thrown in "runActionWithContext" which

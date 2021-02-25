@@ -6,7 +6,7 @@ module Main
     main
   ) where
 
-import Test (main)
+import           Test (main)
 
 
 

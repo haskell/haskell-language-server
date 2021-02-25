@@ -1,6 +1,6 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GADTs              #-}
 -- | A plugin that adds custom messages for use in tests
 module Development.IDE.Plugin.Test
   ( TestRequest(..)
@@ -10,33 +10,33 @@ module Development.IDE.Plugin.Test
   , blockCommandId
   ) where
 
-import Control.Monad.STM
-import Control.Monad.IO.Class
-import Data.Aeson
-import Data.Aeson.Types
-import Data.CaseInsensitive (CI, original)
-import Development.IDE.Core.Service
-import Development.IDE.Core.Shake
-import Development.IDE.GHC.Compat
-import Development.IDE.Types.HscEnvEq (HscEnvEq(hscEnv))
-import Development.IDE.Plugin
-import Development.IDE.LSP.Server
-import Development.IDE.Types.Action
-import GHC.Generics (Generic)
-import GhcPlugins (HscEnv(hsc_dflags))
-import Language.LSP.Types
-import System.Time.Extra
-import Development.IDE.Core.RuleTypes
-import Control.Monad
-import Development.Shake (Action)
-import Data.Maybe (isJust)
-import Data.Bifunctor
-import Data.Text (pack, Text)
-import Data.String
-import Development.IDE.Types.Location (fromUri)
-import Control.Concurrent (threadDelay)
-import Ide.Types
-import qualified Language.LSP.Server as LSP
+import           Control.Concurrent             (threadDelay)
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.STM
+import           Data.Aeson
+import           Data.Aeson.Types
+import           Data.Bifunctor
+import           Data.CaseInsensitive           (CI, original)
+import           Data.Maybe                     (isJust)
+import           Data.String
+import           Data.Text                      (Text, pack)
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Service
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Compat
+import           Development.IDE.LSP.Server
+import           Development.IDE.Plugin
+import           Development.IDE.Types.Action
+import           Development.IDE.Types.HscEnvEq (HscEnvEq (hscEnv))
+import           Development.IDE.Types.Location (fromUri)
+import           Development.Shake              (Action)
+import           GHC.Generics                   (Generic)
+import           GhcPlugins                     (HscEnv (hsc_dflags))
+import           Ide.Types
+import qualified Language.LSP.Server            as LSP
+import           Language.LSP.Types
+import           System.Time.Extra
 
 data TestRequest
     = BlockSeconds Seconds           -- ^ :: Null

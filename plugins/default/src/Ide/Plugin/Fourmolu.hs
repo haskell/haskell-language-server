@@ -1,34 +1,34 @@
 {-# LANGUAGE DisambiguateRecordFields #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PackageImports #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase               #-}
+{-# LANGUAGE OverloadedStrings        #-}
+{-# LANGUAGE PackageImports           #-}
+{-# LANGUAGE TypeApplications         #-}
 
 module Ide.Plugin.Fourmolu (
     descriptor,
     provider,
 ) where
 
-import Control.Exception
-import Data.Either.Extra
-import System.FilePath
+import           Control.Exception
+import           Data.Either.Extra
+import           System.FilePath
 
-import Control.Lens ((^.))
-import qualified Data.Text as T
-import Development.IDE as D hiding (pluginHandlers)
-import qualified DynFlags as D
-import qualified EnumSet as S
-import GHC (DynFlags, moduleNameString)
-import GHC.LanguageExtensions.Type (Extension (Cpp))
-import GhcPlugins (HscEnv (hsc_dflags))
-import Ide.PluginUtils (makeDiffTextEdit)
+import           Control.Lens                ((^.))
+import qualified Data.Text                   as T
+import           Development.IDE             as D hiding (pluginHandlers)
+import qualified DynFlags                    as D
+import qualified EnumSet                     as S
+import           GHC                         (DynFlags, moduleNameString)
+import           GHC.LanguageExtensions.Type (Extension (Cpp))
+import           GhcPlugins                  (HscEnv (hsc_dflags))
+import           Ide.PluginUtils             (makeDiffTextEdit)
 
-import Ide.Types
-import Language.LSP.Server
-import Language.LSP.Types
-import Language.LSP.Types.Lens
-import "fourmolu" Ormolu
-import Control.Monad.IO.Class
+import           Control.Monad.IO.Class
+import           Ide.Types
+import           Language.LSP.Server
+import           Language.LSP.Types
+import           Language.LSP.Types.Lens
+import           "fourmolu" Ormolu
 
 -- ---------------------------------------------------------------------
 
@@ -99,5 +99,5 @@ convertDynFlags df =
         ex = map showExtension $ S.toList $ D.extensionFlags df
         showExtension = \case
             Cpp -> "-XCPP"
-            x -> "-X" ++ show x
+            x   -> "-X" ++ show x
      in return $ map DynOption $ pp <> pm <> ex

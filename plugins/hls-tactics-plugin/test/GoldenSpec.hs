@@ -7,24 +7,27 @@
 
 module GoldenSpec where
 
-import           Control.Applicative.Combinators ( skipManyTill )
-import           Control.Lens hiding ((<.>), failing)
-import           Control.Monad (unless)
+import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Lens                    hiding (failing, (<.>))
+import           Control.Monad                   (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default (Default(def))
+import           Data.Default                    (Default (def))
 import           Data.Foldable
-import qualified Data.Map as M
+import qualified Data.Map                        as M
 import           Data.Maybe
-import           Data.Text (Text)
-import qualified Data.Text.IO as T
-import qualified Ide.Plugin.Config as Plugin
-import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
+import           Data.Text                       (Text)
+import qualified Data.Text.IO                    as T
+import qualified Ide.Plugin.Config               as Plugin
+import           Ide.Plugin.Tactic.FeatureSet    (FeatureSet, allFeatures)
 import           Ide.Plugin.Tactic.TestTypes
 import           Language.LSP.Test
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens hiding (id, capabilities, message, executeCommand, applyEdit, rename, line, title, name, actions)
-import           System.Directory (doesFileExist)
+import           Language.LSP.Types.Lens         hiding (actions, applyEdit,
+                                                  capabilities, executeCommand,
+                                                  id, line, message, name,
+                                                  rename, title)
+import           System.Directory                (doesFileExist)
 import           System.FilePath
 import           Test.Hspec
 
@@ -128,7 +131,7 @@ pointRange
 ------------------------------------------------------------------------------
 -- | Get the title of a code action.
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
-codeActionTitle InL{} = Nothing
+codeActionTitle InL{}                               = Nothing
 codeActionTitle (InR(CodeAction title _ _ _ _ _ _)) = Just title
 
 
@@ -160,7 +163,7 @@ mkTest name fp line col ts = it name $ do
 setFeatureSet :: FeatureSet -> Session ()
 setFeatureSet features = do
   let unObject (Object obj) = obj
-      unObject _ = undefined
+      unObject _            = undefined
       def_config = def :: Plugin.Config
       config =
         def_config

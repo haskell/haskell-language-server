@@ -3,24 +3,24 @@
 -- https://github.com/alanz/vscode-hie-server
 module Main where
 
-import Control.Monad.Extra
-import Data.Default
-import Data.Foldable
-import Data.List
-import Data.Void
-import Development.IDE.Session (findCradle)
-import HIE.Bios hiding (findCradle)
-import HIE.Bios.Environment
-import HIE.Bios.Types
-import Ide.Arguments
-import Ide.Version
-import System.Directory
-import System.Environment
-import System.Exit
-import System.FilePath
-import System.IO
-import System.Info
-import System.Process
+import           Control.Monad.Extra
+import           Data.Default
+import           Data.Foldable
+import           Data.List
+import           Data.Void
+import           Development.IDE.Session (findCradle)
+import           HIE.Bios                hiding (findCradle)
+import           HIE.Bios.Environment
+import           HIE.Bios.Types
+import           Ide.Arguments
+import           Ide.Version
+import           System.Directory
+import           System.Environment
+import           System.Exit
+import           System.FilePath
+import           System.IO
+import           System.Info
+import           System.Process
 
 -- ---------------------------------------------------------------------
 
@@ -50,7 +50,7 @@ launchHaskellLanguageServer :: Arguments -> IO ()
 launchHaskellLanguageServer parsedArgs = do
   case parsedArgs of
     LspMode LspArguments{..} -> whenJust argsCwd setCurrentDirectory
-    _ -> pure ()
+    _                        -> pure ()
 
   d <- getCurrentDirectory
 

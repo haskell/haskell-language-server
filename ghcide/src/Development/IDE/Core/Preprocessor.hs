@@ -5,32 +5,34 @@ module Development.IDE.Core.Preprocessor
   ( preprocessor
   ) where
 
-import Development.IDE.GHC.CPP
-import Development.IDE.GHC.Orphans()
-import Development.IDE.GHC.Compat
-import GhcMonad
-import StringBuffer as SB
+import           Development.IDE.GHC.CPP
+import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Orphans       ()
+import           GhcMonad
+import           StringBuffer                      as SB
 
-import Data.List.Extra
-import System.FilePath
-import System.IO.Extra
-import Data.Char
-import qualified HeaderInfo as Hdr
-import Development.IDE.Types.Diagnostics
-import Development.IDE.Types.Location
-import Development.IDE.GHC.Error
-import SysTools (Option (..), runUnlit, runPp)
-import Control.Monad.Trans.Except
-import qualified GHC.LanguageExtensions as LangExt
-import Data.Maybe
-import Control.Exception.Safe (catch, throw)
-import Data.IORef (IORef, modifyIORef, newIORef, readIORef)
-import Data.Text (Text)
-import qualified Data.Text as T
-import Outputable (showSDoc)
-import Control.DeepSeq (NFData(rnf))
-import Control.Exception (evaluate)
-import HscTypes (HscEnv(hsc_dflags))
+import           Control.DeepSeq                   (NFData (rnf))
+import           Control.Exception                 (evaluate)
+import           Control.Exception.Safe            (catch, throw)
+import           Control.Monad.Trans.Except
+import           Data.Char
+import           Data.IORef                        (IORef, modifyIORef,
+                                                    newIORef, readIORef)
+import           Data.List.Extra
+import           Data.Maybe
+import           Data.Text                         (Text)
+import qualified Data.Text                         as T
+import           Development.IDE.GHC.Error
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
+import qualified GHC.LanguageExtensions            as LangExt
+import qualified HeaderInfo                        as Hdr
+import           HscTypes                          (HscEnv (hsc_dflags))
+import           Outputable                        (showSDoc)
+import           SysTools                          (Option (..), runPp,
+                                                    runUnlit)
+import           System.FilePath
+import           System.IO.Extra
 
 
 -- | Given a file and some contents, apply any necessary preprocessors,
@@ -62,7 +64,7 @@ preprocessor env filename mbContents = do
                             ( \(e :: GhcException) -> do
                                 logs <- readIORef cppLogs
                                 case diagsFromCPPLogs filename (reverse logs) of
-                                  [] -> throw e
+                                  []    -> throw e
                                   diags -> return $ Left diags
                             )
             dflags <- ExceptT $ parsePragmasIntoDynFlags env filename contents
@@ -88,9 +90,9 @@ data CPPLog = CPPLog Severity SrcSpan Text
 
 data CPPDiag
   = CPPDiag
-      { cdRange :: Range,
+      { cdRange    :: Range,
         cdSeverity :: Maybe DiagnosticSeverity,
-        cdMessage :: [Text]
+        cdMessage  :: [Text]
       }
   deriving (Show)
 

@@ -1,17 +1,17 @@
 {-# LANGUAGE CPP #-}
 module Cabal where
 
+import           Control.Monad
 import           Development.Shake
 import           Development.Shake.FilePath
-import           Control.Monad
-import           System.Directory                         ( copyFile )
-import           System.Info                              ( os )
+import           System.Directory           (copyFile)
+import           System.Info                (os)
 
-import           Version
-import           Print
 import           Env
+import           Print
+import           Version
 #if RUN_FROM_STACK
-import           Control.Exception                        ( throwIO )
+import           Control.Exception          (throwIO)
 #else
 import           Cabal.Config
 import           Data.Functor.Identity
@@ -131,16 +131,16 @@ requiredCabalVersionForWindows = [3, 0, 0, 0]
 getVerbosityArg :: Verbosity -> String
 getVerbosityArg v = "-v" ++ cabalVerbosity
   where cabalVerbosity = case v of
-          Silent ->     "0"
+          Silent     ->     "0"
 #if MIN_VERSION_shake(0,18,4)
-          Error ->      "0"
-          Warn ->       "1"
-          Info ->       "1"
-          Verbose ->    "2"
+          Error      ->      "0"
+          Warn       ->       "1"
+          Info       ->       "1"
+          Verbose    ->    "2"
 #else
-          Quiet ->      "0"
-          Normal ->     "1"
-          Loud ->       "2"
-          Chatty ->     "2"
+          Quiet      ->      "0"
+          Normal     ->     "1"
+          Loud       ->       "2"
+          Chatty     ->     "2"
 #endif
           Diagnostic -> "3"

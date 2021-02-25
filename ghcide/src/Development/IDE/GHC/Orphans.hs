@@ -12,16 +12,16 @@ module Development.IDE.GHC.Orphans() where
 
 import           Bag
 import           Control.DeepSeq
-import Data.Aeson
+import           Data.Aeson
 import           Data.Hashable
+import           Data.String                (IsString (fromString))
+import           Data.Text                  (Text)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 import           GHC                        ()
 import           GhcPlugins
+import           Retrie.ExactPrint          (Annotated)
 import qualified StringBuffer               as SB
-import Data.Text (Text)
-import Data.String (IsString(fromString))
-import Retrie.ExactPrint (Annotated)
 
 
 -- Orphan instances for types from the GHC API.

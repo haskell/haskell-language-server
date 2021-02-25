@@ -12,30 +12,32 @@ import           BooleanFormula
 import           Class
 import           ConLike
 import           Control.Applicative
-import           Control.Lens hiding (List, use)
+import           Control.Lens                            hiding (List, use)
 import           Control.Monad
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Char
 import           Data.List
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Strict                         as Map
 import           Data.Maybe
-import qualified Data.Text as T
-import           Development.IDE hiding (pluginHandlers)
-import           Development.IDE.Core.PositionMapping (fromCurrentRange, toCurrentRange)
-import           Development.IDE.GHC.Compat hiding (getLoc)
+import qualified Data.Text                               as T
+import           Development.IDE                         hiding (pluginHandlers)
+import           Development.IDE.Core.PositionMapping    (fromCurrentRange,
+                                                          toCurrentRange)
+import           Development.IDE.GHC.Compat              hiding (getLoc)
 import           Development.IDE.Spans.AtPoint
-import qualified GHC.Generics as Generics
-import           GhcPlugins hiding (Var, getLoc, (<>))
+import qualified GHC.Generics                            as Generics
+import           GhcPlugins                              hiding (Var, getLoc,
+                                                          (<>))
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Parsers (parseDecl)
-import           Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, Parens)
+import           Language.Haskell.GHC.ExactPrint.Types   hiding (GhcPs, Parens)
 import           Language.LSP.Server
 import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens as J
+import qualified Language.LSP.Types.Lens                 as J
 import           SrcLoc
 import           TcEnv
 import           TcRnMonad
@@ -87,7 +89,7 @@ addMethodPlaceholders state AddMinimalMethodsParams{..} = do
     makeMethodDecl df mName =
       case parseDecl df (T.unpack mName) . T.unpack $ toMethodName mName <> " = _" of
         Right (ann, d) -> Just (setPrecedingLines d 1 indent ann, d)
-        Left _ -> Nothing
+        Left _         -> Nothing
 
     addMethodDecls :: ParsedSource -> [LHsDecl GhcPs] -> Transform (Located (HsModule GhcPs))
     addMethodDecls ps mDecls = do
@@ -203,7 +205,7 @@ isClassMethodWarning = T.isPrefixOf "• No explicit implementation for"
 minDefToMethodGroups :: BooleanFormula Name -> [[T.Text]]
 minDefToMethodGroups = go
   where
-    go (Var mn) = [[T.pack . occNameString . occName $ mn]]
-    go (Or ms) = concatMap (go . unLoc) ms
-    go (And ms) = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
+    go (Var mn)   = [[T.pack . occNameString . occName $ mn]]
+    go (Or ms)    = concatMap (go . unLoc) ms
+    go (And ms)   = foldr (liftA2 (<>)) [[]] (fmap (go . unLoc) ms)
     go (Parens m) = go (unLoc m)
