@@ -286,16 +286,21 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
   where
 
     getCodeActions = do
-        diags <- getDiagnostics ideState
+        allDiags <- getDiagnostics ideState
         let docNfp = toNormalizedFilePath' <$> uriToFilePath' (docId ^. LSP.uri)
             numHintsInDoc = length
-              [d | (nfp, _, d) <- diags
+              [d | (nfp, _, d) <- allDiags
                  , validCommand d
                  , Just nfp == docNfp
               ]
+            numHintsInContext = length
+              [d | d <- diags
+                 , validCommand d
+              ]
         -- We only want to show the applyAll code action if there is more than 1
-        -- hint in the current document
-        if numHintsInDoc > 1 then do
+        -- hint in the current document and if code action range contains at
+        -- least one hint
+        if numHintsInDoc > 1 && numHintsInContext > 0 then do
           pure $ applyAllAction:applyOneActions
         else
           pure applyOneActions
