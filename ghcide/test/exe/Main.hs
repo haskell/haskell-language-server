@@ -1559,6 +1559,19 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
+    , test True 
+      ["qualified Data.Text as T"
+      ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
+    , test True 
+      [ "qualified Data.Text as T"
+      , "qualified Data.Function as T"
+      ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
+    , test True 
+      [ "qualified Data.Text as T"
+      , "qualified Data.Function as T"
+      , "qualified Data.Functor as T"
+      , "qualified Data.Data as T"
+      ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
     ]
   ]
   where
