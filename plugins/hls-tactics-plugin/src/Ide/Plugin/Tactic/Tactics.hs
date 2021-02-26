@@ -65,6 +65,10 @@ recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> do
+    -- TODO(sandy): When we can inspect the extract of a TacticsM bind
+    -- (requires refinery support), this recursion stack stuff is unnecessary.
+    -- We can just inspect the extract to see i we used any pattern vals, and
+    -- then be on our merry way.
     modify $ pushRecursionStack .  countRecursiveCall
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
       let hy' = recursiveHypothesis defs

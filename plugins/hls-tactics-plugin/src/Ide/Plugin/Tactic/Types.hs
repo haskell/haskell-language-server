@@ -83,6 +83,8 @@ instance Show (Pat GhcPs) where
 
 
 ------------------------------------------------------------------------------
+-- | The state that should be shared between subgoals. Extracts move towards
+-- the root, judgments move towards the leaves, and the state moves *sideways*.
 data TacticState = TacticState
     { ts_skolems   :: !(Set TyVar)
       -- ^ The known skolems.
@@ -92,8 +94,16 @@ data TacticState = TacticState
       -- ^ Stack for tracking whether or not the current recursive call has
       -- used at least one smaller pat val. Recursive calls for which this
       -- value is 'False' are guaranteed to loop, and must be pruned.
+      --
+      -- TODO(sandy): This thing need not exist; we should just inspect
+      -- 'syn_used_vals' to see if anything was a pattern val.
     , ts_recursion_count :: !Int
       -- ^ Number of calls to recursion. We penalize each.
+      --
+      -- TODO(sandy): This thing need not exist; it should just be a field
+      -- inside of 'Synthesized', but can't implement that without support from
+      -- refinery directly. Need the ability to get the extract of a TacticT
+      -- inside of TacticT, first.
     , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
 
@@ -320,6 +330,11 @@ type Rule      = RuleM (Synthesized (LHsExpr GhcPs))
 
 type Trace = Rose String
 
+------------------------------------------------------------------------------
+-- | The extract for refinery. Represents a "synthesized attribute" in the
+-- context of attribute grammars. In essence, 'Synthesized' describes
+-- information we'd like to pass from leaves of the tactics search upwards.
+-- This includes the actual AST we've generated (in 'syn_val').
 data Synthesized a = Synthesized
   { syn_trace  :: Trace
     -- ^ A tree describing which tactics were used produce the 'syn_val'.
@@ -339,7 +354,8 @@ mapTrace f (Synthesized tr sc uv a) = Synthesized (f tr) sc uv a
 
 ------------------------------------------------------------------------------
 -- | This might not be lawful, due to the semigroup on 'Trace' maybe not being
--- lawful.
+-- lawful. But that's only for debug output, so it's not anything I'm concerned
+-- about.
 instance Applicative Synthesized where
   pure = Synthesized mempty mempty mempty
   Synthesized tr1 sc1 uv1 f <*> Synthesized tr2 sc2 uv2 a =
