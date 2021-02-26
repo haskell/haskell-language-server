@@ -2,17 +2,17 @@
 
 module AutoTupleSpec where
 
-import Data.Either (isRight)
-import Ide.Plugin.Tactic.Judgements (mkFirstJudgement)
-import Ide.Plugin.Tactic.Machinery
-import Ide.Plugin.Tactic.Tactics (auto')
-import Ide.Plugin.Tactic.Types
-import OccName (mkVarOcc)
-import Test.Hspec
-import Test.QuickCheck
-import Type (mkTyVarTy)
-import TysPrim (alphaTyVars)
-import TysWiredIn (mkBoxedTupleTy)
+import           Data.Either                  (isRight)
+import           Ide.Plugin.Tactic.Judgements (mkFirstJudgement)
+import           Ide.Plugin.Tactic.Machinery
+import           Ide.Plugin.Tactic.Tactics    (auto')
+import           Ide.Plugin.Tactic.Types
+import           OccName                      (mkVarOcc)
+import           Test.Hspec
+import           Test.QuickCheck
+import           Type                         (mkTyVarTy)
+import           TysPrim                      (alphaTyVars)
+import           TysWiredIn                   (mkBoxedTupleTy)
 
 
 spec :: Spec

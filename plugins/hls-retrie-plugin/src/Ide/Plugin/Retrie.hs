@@ -16,76 +16,92 @@
 
 module Ide.Plugin.Retrie (descriptor) where
 
-import           Control.Concurrent.Extra       (readVar)
-import           Control.Exception.Safe         (Exception (..), SomeException,
-                                                 catch, throwIO, try)
-import           Control.Monad                  (forM, unless)
-import           Control.Monad.Extra            (maybeM)
-import           Control.Monad.IO.Class         (MonadIO (liftIO))
-import           Control.Monad.Trans.Class      (MonadTrans (lift))
-import           Control.Monad.Trans.Except     (ExceptT (..), runExceptT,
-                                                 throwE)
-import           Data.Aeson                     (genericParseJSON, FromJSON(..), ToJSON (..), Value (Null))
-import           Data.Bifunctor                 (Bifunctor (first), second)
+import           Control.Concurrent.Extra             (readVar)
+import           Control.Exception.Safe               (Exception (..),
+                                                       SomeException, catch,
+                                                       throwIO, try)
+import           Control.Monad                        (forM, unless)
+import           Control.Monad.Extra                  (maybeM)
+import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Class            (MonadTrans (lift))
+import           Control.Monad.Trans.Except           (ExceptT (..), runExceptT,
+                                                       throwE)
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson                           (FromJSON (..),
+                                                       ToJSON (..),
+                                                       Value (Null),
+                                                       genericParseJSON)
+import qualified Data.Aeson                           as Aeson
+import           Data.Bifunctor                       (Bifunctor (first),
+                                                       second)
 import           Data.Coerce
-import           Data.Either                    (partitionEithers)
-import           Data.Hashable                  (unhashed)
-import qualified Data.HashMap.Strict            as HM
-import qualified Data.HashSet                   as Set
-import           Data.IORef.Extra               (atomicModifyIORef'_, newIORef,
-                                                 readIORef)
-import           Data.List.Extra                (find, nubOrdOn)
-import           Data.String                    (IsString (fromString))
-import qualified Data.Text                      as T
-import qualified Data.Text.IO                   as T
-import           Data.Typeable                  (Typeable)
-import           Development.IDE                hiding (pluginHandlers)
-import           Development.IDE.Core.Shake     (toKnownFiles, ShakeExtras(knownTargetsVar))
-import           Development.IDE.GHC.Compat     (GenLocated (L), GhcRn,
-                                                 HsBindLR (FunBind),
-                                                 HsGroup (..),
-                                                 HsValBindsLR (..), HscEnv, IdP,
-                                                 LRuleDecls,
-                                                 ModSummary (ModSummary, ms_hspp_buf, ms_mod),
-                                                 NHsValBindsLR (..),
-                                                 ParsedModule (..),
-                                                 RuleDecl (HsRule),
-                                                 RuleDecls (HsRules),
-                                                 SrcSpan (..),
-                                                 TyClDecl (SynDecl),
-                                                 TyClGroup (..), fun_id,
-                                                 mi_fixities, moduleNameString,
-                                                 parseModule, rds_rules,
-                                                 srcSpanFile)
-import           GHC.Generics                   (Generic)
-import           GhcPlugins                     (Outputable,
-                                                 SourceText (NoSourceText),
-                                                 hm_iface, isQual, isQual_maybe,
-                                                 nameModule_maybe, nameRdrName,
-                                                 occNameFS, occNameString,
-                                                 rdrNameOcc, unpackFS)
+import           Data.Either                          (partitionEithers)
+import qualified Data.HashMap.Strict                  as HM
+import qualified Data.HashSet                         as Set
+import           Data.Hashable                        (unhashed)
+import           Data.IORef.Extra                     (atomicModifyIORef'_,
+                                                       newIORef, readIORef)
+import           Data.List.Extra                      (find, nubOrdOn)
+import           Data.String                          (IsString (fromString))
+import qualified Data.Text                            as T
+import qualified Data.Text.IO                         as T
+import           Data.Typeable                        (Typeable)
+import           Development.IDE                      hiding (pluginHandlers)
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.Core.Shake           (ShakeExtras (knownTargetsVar),
+                                                       toKnownFiles)
+import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
+                                                       HsBindLR (FunBind),
+                                                       HsGroup (..),
+                                                       HsValBindsLR (..),
+                                                       HscEnv, IdP, LRuleDecls,
+                                                       ModSummary (ModSummary, ms_hspp_buf, ms_mod),
+                                                       NHsValBindsLR (..),
+                                                       ParsedModule (..),
+                                                       RuleDecl (HsRule),
+                                                       RuleDecls (HsRules),
+                                                       SrcSpan (..),
+                                                       TyClDecl (SynDecl),
+                                                       TyClGroup (..), fun_id,
+                                                       mi_fixities,
+                                                       moduleNameString,
+                                                       parseModule, rds_rules,
+                                                       srcSpanFile)
+import           GHC.Generics                         (Generic)
+import           GhcPlugins                           (Outputable,
+                                                       SourceText (NoSourceText),
+                                                       hm_iface, isQual,
+                                                       isQual_maybe,
+                                                       nameModule_maybe,
+                                                       nameRdrName, occNameFS,
+                                                       occNameString,
+                                                       rdrNameOcc, unpackFS)
 import           Ide.PluginUtils
 import           Ide.Types
-import           Language.LSP.Server      (ProgressCancellable (Cancellable), withIndefiniteProgress, LspM, sendRequest, sendNotification)
-import           Language.LSP.Types     as J
-import           Retrie.CPP                     (CPP (NoCPP), parseCPP)
-import           Retrie.ExactPrint              (fix, relativiseApiAnns,
-                                                 transformA, unsafeMkA)
-import           Retrie.Fixity                  (mkFixityEnv)
-import qualified Retrie.GHC                     as GHC
-import           Retrie.Monad                   (addImports, apply,
-                                                 getGroundTerms, runRetrie)
-import           Retrie.Options                 (defaultOptions, getTargetFiles)
-import qualified Retrie.Options                 as Retrie
-import           Retrie.Replace                 (Change (..), Replacement (..))
+import           Language.LSP.Server                  (LspM,
+                                                       ProgressCancellable (Cancellable),
+                                                       sendNotification,
+                                                       sendRequest,
+                                                       withIndefiniteProgress)
+import           Language.LSP.Types                   as J
+import           Retrie.CPP                           (CPP (NoCPP), parseCPP)
+import           Retrie.ExactPrint                    (fix, relativiseApiAnns,
+                                                       transformA, unsafeMkA)
+import           Retrie.Fixity                        (mkFixityEnv)
+import qualified Retrie.GHC                           as GHC
+import           Retrie.Monad                         (addImports, apply,
+                                                       getGroundTerms,
+                                                       runRetrie)
+import           Retrie.Options                       (defaultOptions,
+                                                       getTargetFiles)
+import qualified Retrie.Options                       as Retrie
+import           Retrie.Replace                       (Change (..),
+                                                       Replacement (..))
 import           Retrie.Rewrites
-import           Retrie.SYB                     (listify)
-import           Retrie.Util                    (Verbosity (Loud))
-import           StringBuffer                   (stringToStringBuffer)
-import           System.Directory               (makeAbsolute)
-import Control.Monad.Trans.Maybe
-import Development.IDE.Core.PositionMapping
-import qualified Data.Aeson as Aeson
+import           Retrie.SYB                           (listify)
+import           Retrie.Util                          (Verbosity (Loud))
+import           StringBuffer                         (stringToStringBuffer)
+import           System.Directory                     (makeAbsolute)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =

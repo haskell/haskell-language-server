@@ -2,27 +2,28 @@
 
 module Ide.Plugin.Tactic.KnownStrategies.QuickCheck where
 
-import Control.Monad.Except (MonadError(throwError))
-import Data.Bool (bool)
-import Data.List (partition)
-import DataCon ( DataCon, dataConName )
-import Development.IDE.GHC.Compat (HsExpr, GhcPs, noLoc)
-import GHC.Exts ( IsString(fromString) )
-import GHC.List ( foldl' )
-import GHC.SourceGen (int)
-import GHC.SourceGen.Binds ( match, valBind )
-import GHC.SourceGen.Expr ( case', lambda, let' )
-import GHC.SourceGen.Overloaded ( App((@@)), HasList(list) )
-import GHC.SourceGen.Pat ( conP )
-import Ide.Plugin.Tactic.CodeGen
-import Ide.Plugin.Tactic.Judgements (jGoal)
-import Ide.Plugin.Tactic.Machinery (tracePrim)
-import Ide.Plugin.Tactic.Types
-import OccName (occNameString,  mkVarOcc, HasOccName(occName) )
-import Refinery.Tactic (goal,  rule )
-import TyCon (tyConName,  TyCon, tyConDataCons )
-import Type ( splitTyConApp_maybe )
-import Data.Generics (mkQ, everything)
+import           Control.Monad.Except         (MonadError (throwError))
+import           Data.Bool                    (bool)
+import           Data.Generics                (everything, mkQ)
+import           Data.List                    (partition)
+import           DataCon                      (DataCon, dataConName)
+import           Development.IDE.GHC.Compat   (GhcPs, HsExpr, noLoc)
+import           GHC.Exts                     (IsString (fromString))
+import           GHC.List                     (foldl')
+import           GHC.SourceGen                (int)
+import           GHC.SourceGen.Binds          (match, valBind)
+import           GHC.SourceGen.Expr           (case', lambda, let')
+import           GHC.SourceGen.Overloaded     (App ((@@)), HasList (list))
+import           GHC.SourceGen.Pat            (conP)
+import           Ide.Plugin.Tactic.CodeGen
+import           Ide.Plugin.Tactic.Judgements (jGoal)
+import           Ide.Plugin.Tactic.Machinery  (tracePrim)
+import           Ide.Plugin.Tactic.Types
+import           OccName                      (HasOccName (occName), mkVarOcc,
+                                               occNameString)
+import           Refinery.Tactic              (goal, rule)
+import           TyCon                        (TyCon, tyConDataCons, tyConName)
+import           Type                         (splitTyConApp_maybe)
 
 
 ------------------------------------------------------------------------------
@@ -68,7 +69,7 @@ deriveArbitrary = do
 -- | Helper data type for the generator of a specific data con.
 data Generator = Generator
   { genRecursiveCount :: Integer
-  , genExpr :: HsExpr GhcPs
+  , genExpr           :: HsExpr GhcPs
   }
 
 

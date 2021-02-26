@@ -10,23 +10,25 @@
 module Ide.Plugin.Tactic.GHC where
 
 import           Control.Monad.State
-import           Data.Function (on)
-import           Data.List (isPrefixOf)
-import qualified Data.Map as M
-import           Data.Maybe (isJust)
-import           Data.Set (Set)
-import qualified Data.Set as S
+import           Data.Function              (on)
+import           Data.List                  (isPrefixOf)
+import qualified Data.Map                   as M
+import           Data.Maybe                 (isJust)
+import           Data.Set                   (Set)
+import qualified Data.Set                   as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
-import           GHC.SourceGen (match, case', lambda)
-import           Generics.SYB (mkQ, everything, listify, Data, mkT, everywhere)
+import           GHC.SourceGen              (case', lambda, match)
+import           Generics.SYB               (Data, everything, everywhere,
+                                             listify, mkQ, mkT)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcType
 import           TyCoRep
 import           Type
-import           TysWiredIn (intTyCon, floatTyCon, doubleTyCon, charTyCon)
+import           TysWiredIn                 (charTyCon, doubleTyCon, floatTyCon,
+                                             intTyCon)
 import           Unique
 import           Var
 
@@ -60,7 +62,7 @@ cloneTyVar t =
 -- | Is this a function type?
 isFunction :: Type -> Bool
 isFunction (tacticsSplitFunTy -> (_, _, [], _)) = False
-isFunction _ = True
+isFunction _                                    = True
 
 
 ------------------------------------------------------------------------------
@@ -94,7 +96,7 @@ freshTyvars t = do
       (mkT $ \tv ->
         case M.lookup tv reps of
           Just tv' -> tv'
-          Nothing -> tv
+          Nothing  -> tv
       ) t
 
 
@@ -137,7 +139,7 @@ containsHsVar :: Data a => RdrName -> a -> Bool
 containsHsVar name x = not $ null $ listify (
   \case
     ((HsVar _ (L _ a)) :: HsExpr GhcPs) | eqRdrName a name -> True
-    _ -> False
+    _                                                      -> False
   ) x
 
 
@@ -147,7 +149,7 @@ containsHole :: Data a => a -> Bool
 containsHole x = not $ null $ listify (
   \case
     ((HsVar _ (L _ name)) :: HsExpr GhcPs) -> isHole $ occName name
-    _ -> False
+    _                                      -> False
   ) x
 
 
@@ -288,5 +290,5 @@ unXPat :: Pat GhcPs -> Pat GhcPs
 #if __GLASGOW_HASKELL__ == 808
 unXPat (XPat (L _ pat)) = unXPat pat
 #endif
-unXPat pat = pat
+unXPat pat              = pat
 

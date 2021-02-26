@@ -1,9 +1,9 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
+{-# LANGUAGE CPP        #-}
+{-# LANGUAGE GADTs      #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 
 -- | Based on https://ghc.haskell.org/trac/ghc/wiki/Commentary/Compiler/API.
@@ -33,89 +33,94 @@ module Development.IDE.Core.Compile
   , lookupName
   ) where
 
-import Development.IDE.Core.RuleTypes
-import Development.IDE.Core.Preprocessor
-import Development.IDE.Core.Shake
-import Development.IDE.GHC.Error
-import Development.IDE.GHC.Warnings
-import Development.IDE.Spans.Common
-import Development.IDE.Types.Diagnostics
-import Development.IDE.GHC.Orphans()
-import Development.IDE.GHC.Util
-import Development.IDE.Types.Options
-import Development.IDE.Types.Location
-import Outputable hiding ((<>))
+import           Development.IDE.Core.Preprocessor
+import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Shake
+import           Development.IDE.GHC.Error
+import           Development.IDE.GHC.Orphans       ()
+import           Development.IDE.GHC.Util
+import           Development.IDE.GHC.Warnings
+import           Development.IDE.Spans.Common
+import           Development.IDE.Types.Diagnostics
+import           Development.IDE.Types.Location
+import           Development.IDE.Types.Options
+import           Outputable                        hiding ((<>))
 
-import HieDb
+import           HieDb
 
-import Language.LSP.Types (DiagnosticTag(..))
+import           Language.LSP.Types                (DiagnosticTag (..))
 
-import LoadIface (loadModuleInterface)
-import DriverPhases
-import HscTypes
-import DriverPipeline hiding (unP)
+import           DriverPhases
+import           DriverPipeline                    hiding (unP)
+import           HscTypes
+import           LoadIface                         (loadModuleInterface)
 
-import qualified Parser
 import           Lexer
+import qualified Parser
 #if MIN_GHC_API_VERSION(8,10,0)
-import Control.DeepSeq (force, rnf)
+import           Control.DeepSeq                   (force, rnf)
 #else
-import Control.DeepSeq (rnf)
-import ErrUtils
+import           Control.DeepSeq                   (rnf)
+import           ErrUtils
 #endif
 
+import           Development.IDE.GHC.Compat        hiding (parseModule,
+                                                    typecheckModule,
+                                                    writeHieFile)
+import qualified Development.IDE.GHC.Compat        as Compat
+import qualified Development.IDE.GHC.Compat        as GHC
 import           Finder
-import           Development.IDE.GHC.Compat hiding (parseModule, typecheckModule, writeHieFile)
-import qualified Development.IDE.GHC.Compat     as GHC
-import qualified Development.IDE.GHC.Compat     as Compat
 import           GhcMonad
-import           GhcPlugins                     as GHC hiding (fst3, (<>))
-import           HscMain                        (makeSimpleDetails, hscDesugar, hscTypecheckRename, hscSimplify, hscGenHardCode, hscInteractive)
-import           MkIface
-import           StringBuffer                   as SB
-import           TcRnMonad                      hiding (newUnique)
-import           TcIface                        (typecheckIface)
-import           TidyPgm
+import           GhcPlugins                        as GHC hiding (fst3, (<>))
 import           Hooks
+import           HscMain                           (hscDesugar, hscGenHardCode,
+                                                    hscInteractive, hscSimplify,
+                                                    hscTypecheckRename,
+                                                    makeSimpleDetails)
+import           MkIface
+import           StringBuffer                      as SB
+import           TcIface                           (typecheckIface)
+import           TcRnMonad                         hiding (newUnique)
 import           TcSplice
+import           TidyPgm
 
-import Control.Exception.Safe
-import Control.Lens hiding (List)
-import Control.Monad.Extra
-import Control.Monad.Except
-import Control.Monad.Trans.Except
-import Data.Bifunctor                           (first, second)
-import qualified Data.ByteString as BS
-import qualified Data.Text as T
+import           Bag
+import           Control.Exception                 (evaluate)
+import           Control.Exception.Safe
+import           Control.Lens                      hiding (List)
+import           Control.Monad.Except
+import           Control.Monad.Extra
+import           Control.Monad.Trans.Except
+import           Data.Bifunctor                    (first, second)
+import qualified Data.ByteString                   as BS
+import qualified Data.DList                        as DL
 import           Data.IORef
 import           Data.List.Extra
+import qualified Data.Map.Strict                   as Map
 import           Data.Maybe
-import qualified Data.Map.Strict                          as Map
-import           System.FilePath
+import qualified Data.Text                         as T
+import           Data.Time                         (UTCTime, getCurrentTime)
+import qualified GHC.LanguageExtensions            as LangExt
+import           HeaderInfo
+import           Linker                            (unload)
+import           Maybes                            (orElse)
+import           PrelNames
 import           System.Directory
-import System.IO.Extra ( fixIO, newTempFileWithin )
-import Control.Exception (evaluate)
-import TcEnv (tcLookup)
-import qualified Data.DList as DL
-import Data.Time (UTCTime, getCurrentTime)
-import Bag
-import Linker (unload)
-import qualified GHC.LanguageExtensions as LangExt
-import PrelNames
-import HeaderInfo
-import Maybes (orElse)
+import           System.FilePath
+import           System.IO.Extra                   (fixIO, newTempFileWithin)
+import           TcEnv                             (tcLookup)
 
-import qualified Data.HashMap.Strict as HashMap
-import qualified Language.LSP.Types as LSP
-import qualified Language.LSP.Server as LSP
-import Control.Concurrent.STM hiding (orElse)
-import Control.Concurrent.Extra
-import Data.Functor
-import Data.Unique
-import GHC.Fingerprint
-import Data.Coerce
-import Data.Aeson (toJSON)
-import Data.Tuple.Extra (dupe)
+import           Control.Concurrent.Extra
+import           Control.Concurrent.STM            hiding (orElse)
+import           Data.Aeson                        (toJSON)
+import           Data.Coerce
+import           Data.Functor
+import qualified Data.HashMap.Strict               as HashMap
+import           Data.Tuple.Extra                  (dupe)
+import           Data.Unique
+import           GHC.Fingerprint
+import qualified Language.LSP.Server               as LSP
+import qualified Language.LSP.Types                as LSP
 
 -- | Given a string buffer, return the string (after preprocessing) and the 'ParsedModule'.
 parseModule
@@ -218,7 +223,7 @@ tcRnModule hsc_env keep_lbls pmod = do
                                            hpm_src_files = pm_extra_src_files pmod,
                                            hpm_annotations = pm_annotations pmod }
   let rn_info = case mrn_info of
-        Just x -> x
+        Just x  -> x
         Nothing -> error "no renamed info tcRnModule"
   pure (TcModuleResult pmod rn_info tc_gbl_env splices False)
 
@@ -250,7 +255,7 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
 
   let genLinkable = case ltype of
         ObjectLinkable -> generateObjectCode
-        BCOLinkable -> generateByteCode
+        BCOLinkable    -> generateByteCode
 
   (linkable, details, diags) <-
     if mg_hsc_src simplified_guts == HsBootFile
@@ -522,7 +527,7 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
         newerScheduled <- atomically $ do
           pending <- readTVar indexPending
           pure $ case HashMap.lookup srcPath pending of
-            Nothing -> False
+            Nothing          -> False
             -- If the hash in the pending list doesn't match the current hash, then skip
             Just pendingHash -> pendingHash /= hash
         unless newerScheduled $ do
@@ -677,7 +682,7 @@ loadModulesHome mod_infos e =
 
 withBootSuffix :: HscSource -> ModLocation -> ModLocation
 withBootSuffix HsBootFile = addBootSuffixLocnOut
-withBootSuffix _ = id
+withBootSuffix _          = id
 
 -- | Given a buffer, env and filepath, produce a module summary by parsing only the imports.
 --   Runs preprocessors as needed.
@@ -905,7 +910,7 @@ loadInterface session ms sourceMod linkableNeeded regen = do
 
              -- We don't need to regenerate if the object is up do date, or we don't need one
              let objUpToDate = isNothing linkableNeeded || case linkable of
-                   Nothing -> False
+                   Nothing                -> False
                    Just (LM obj_time _ _) -> obj_time > ms_hs_date ms
              if objUpToDate
              then do
@@ -943,14 +948,14 @@ getDocsBatch hsc_env _mod _names = do
                else pure (Right ( Map.lookup name dmap
                                 , Map.findWithDefault Map.empty name amap))
     case res of
-        Just x -> return $ map (first $ T.unpack . showGhc) x
+        Just x  -> return $ map (first $ T.unpack . showGhc) x
         Nothing -> throwErrors errs
   where
     throwErrors = liftIO . throwIO . mkSrcErr
     compiled n =
       -- TODO: Find a more direct indicator.
       case nameSrcLoc n of
-        RealSrcLoc {} -> False
+        RealSrcLoc {}   -> False
         UnhelpfulLoc {} -> True
 
 fakeSpan :: RealSrcSpan
@@ -969,5 +974,5 @@ lookupName hsc_env mod name = do
         case tcthing of
             AGlobal thing    -> return thing
             ATcId{tct_id=id} -> return (AnId id)
-            _ -> panic "tcRnLookupName'"
+            _                -> panic "tcRnLookupName'"
     return res

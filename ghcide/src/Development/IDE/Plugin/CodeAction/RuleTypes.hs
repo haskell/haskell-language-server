@@ -4,14 +4,14 @@ module Development.IDE.Plugin.CodeAction.RuleTypes
     ,IdentInfo(..)
     ) where
 
-import Data.Hashable (Hashable)
-import Control.DeepSeq (NFData)
-import Data.Binary (Binary)
-import Development.IDE.Types.HscEnvEq (HscEnvEq)
-import Development.IDE.Types.Exports
-import Development.Shake (RuleResult)
-import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
+import           Control.DeepSeq                (NFData)
+import           Data.Binary                    (Binary)
+import           Data.Hashable                  (Hashable)
+import           Data.Typeable                  (Typeable)
+import           Development.IDE.Types.Exports
+import           Development.IDE.Types.HscEnvEq (HscEnvEq)
+import           Development.Shake              (RuleResult)
+import           GHC.Generics                   (Generic)
 
 -- Rule type for caching Package Exports
 type instance RuleResult PackageExports = ExportsMap

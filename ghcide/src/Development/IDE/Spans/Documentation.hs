@@ -2,7 +2,7 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP        #-}
 #include "ghc-api-version.h"
 
 module Development.IDE.Spans.Documentation (
@@ -14,32 +14,32 @@ module Development.IDE.Spans.Documentation (
   ) where
 
 import           Control.Monad
-import           Control.Monad.Extra (findM)
+import           Control.Monad.Extra            (findM)
 import           Data.Either
 import           Data.Foldable
 import           Data.List.Extra
-import qualified Data.Map as M
-import qualified Data.Set as S
+import qualified Data.Map                       as M
 import           Data.Maybe
-import qualified Data.Text as T
+import qualified Data.Set                       as S
+import qualified Data.Text                      as T
 import           Development.IDE.Core.Compile
+import           Development.IDE.Core.RuleTypes
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.Spans.Common
-import           Development.IDE.Core.RuleTypes
 import           System.Directory
 import           System.FilePath
 
-import           FastString
-import           SrcLoc (RealLocated)
-import           GhcMonad
-import           Packages
-import           Name
-import           Language.LSP.Types (getUri, filePathToUri)
-import           TcRnTypes
 import           ExtractDocs
+import           FastString
+import           GhcMonad
+import           HscTypes                       (HscEnv (hsc_dflags))
+import           Language.LSP.Types             (filePathToUri, getUri)
+import           Name
 import           NameEnv
-import HscTypes (HscEnv(hsc_dflags))
+import           Packages
+import           SrcLoc                         (RealLocated)
+import           TcRnTypes
 
 mkDocMap
   :: HscEnv
@@ -77,11 +77,11 @@ getDocumentationsTryGhc :: HscEnv -> Module -> [Name] -> IO [SpanDoc]
 getDocumentationsTryGhc env mod names = do
   res <- catchSrcErrors (hsc_dflags env) "docs" $ getDocsBatch env mod names
   case res of
-      Left _ -> return []
+      Left _    -> return []
       Right res -> zipWithM unwrap res names
   where
     unwrap (Right (Just docs, _)) n = SpanDocString docs <$> getUris n
-    unwrap _ n = mkSpanDocText n
+    unwrap _ n                      = mkSpanDocText n
 
     mkSpanDocText name =
       SpanDocText [] <$> getUris name
@@ -152,7 +152,7 @@ getDocumentation sources targetName = fromMaybe [] $ do
     -- @FunBind@ (which covers functions and variables).
     name_of_bind :: HsBind GhcPs -> Maybe (Located RdrName)
     name_of_bind FunBind {fun_id} = Just fun_id
-    name_of_bind _ = Nothing
+    name_of_bind _                = Nothing
     -- Get source spans from names, discard unhelpful spans, remove
     -- duplicates and sort.
     sortedNameSpans :: [Located RdrName] -> [RealSrcSpan]

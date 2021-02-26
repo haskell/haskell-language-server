@@ -1,6 +1,6 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StandaloneDeriving  #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports -Wno-orphans #-}
 
 -- |GHC API utilities
@@ -14,29 +14,25 @@ module Ide.Plugin.Eval.GHC (
     showDynFlags,
 ) where
 
-import Data.List (isPrefixOf)
-import Data.Maybe (mapMaybe)
-import Development.IDE.GHC.Compat
+import           Data.List                   (isPrefixOf)
+import           Data.Maybe                  (mapMaybe)
+import           Data.String                 (fromString)
+import           Development.IDE.GHC.Compat
 import qualified EnumSet
-import GHC.LanguageExtensions.Type (Extension (..))
-import GhcMonad (modifySession)
-import GhcPlugins (DefUnitId (..), InstalledUnitId (..), fsLit, hsc_IC, pprHsString)
-import HscTypes (InteractiveContext (ic_dflags))
-import Ide.Plugin.Eval.Util (asS, gStrictTry)
+import           GHC.LanguageExtensions.Type (Extension (..))
+import           GhcMonad                    (modifySession)
+import           GhcPlugins                  (DefUnitId (..),
+                                              InstalledUnitId (..), fsLit,
+                                              hsc_IC, pprHsString)
+import           HscTypes                    (InteractiveContext (ic_dflags))
+import           Ide.Plugin.Eval.Util        (asS, gStrictTry)
 import qualified Lexer
-import Module (UnitId (DefiniteUnitId))
-import Outputable (
-    Outputable (ppr),
-    SDoc,
-    showSDocUnsafe,
-    text,
-    vcat,
-    (<+>),
- )
+import           Module                      (UnitId (DefiniteUnitId))
+import           Outputable                  (Outputable (ppr), SDoc,
+                                              showSDocUnsafe, text, vcat, (<+>))
 import qualified Parser
-import SrcLoc (mkRealSrcLoc)
-import StringBuffer (stringToStringBuffer)
-import Data.String (fromString)
+import           SrcLoc                      (mkRealSrcLoc)
+import           StringBuffer                (stringToStringBuffer)
 
 {- $setup
 >>> import GHC
@@ -63,7 +59,7 @@ False
 -}
 isExpr :: DynFlags -> String -> Bool
 isExpr df stmt = case parseThing Parser.parseExpression df stmt of
-    Lexer.POk _ _ -> True
+    Lexer.POk _ _   -> True
     Lexer.PFailed{} -> False
 
 parseThing :: Lexer.P thing -> DynFlags -> String -> Lexer.ParseResult thing
@@ -107,9 +103,9 @@ pkgNames_ :: [PackageFlag] -> [String]
 pkgNames_ =
     mapMaybe
         ( \case
-            ExposePackage _ (PackageArg n) _ -> Just n
+            ExposePackage _ (PackageArg n) _                 -> Just n
             ExposePackage _ (UnitIdArg (DefiniteUnitId n)) _ -> Just $ asS n
-            _ -> Nothing
+            _                                                -> Nothing
         )
 
 {- | Expose a list of packages.

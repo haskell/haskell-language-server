@@ -1,75 +1,66 @@
 module Development.IDE.Main (Arguments(..), defaultMain) where
-import Control.Concurrent.Extra (readVar)
-import Control.Exception.Safe (
-    Exception (displayException),
-    catchAny,
- )
-import Control.Monad.Extra (concatMapM, unless, when)
-import Data.Default (Default (def))
-import qualified Data.HashMap.Strict as HashMap
-import Data.List.Extra (
-    intercalate,
-    isPrefixOf,
-    nub,
-    nubOrd,
-    partition,
- )
-import Data.Maybe (catMaybes, fromMaybe, isJust)
-import qualified Data.Text as T
-import Development.IDE (Action, Rules, noLogging)
-import Development.IDE.Core.Debouncer (newAsyncDebouncer)
-import Development.IDE.Core.FileStore (makeVFSHandle)
-import Development.IDE.Core.OfInterest (
-    FileOfInterestStatus (OnDisk),
-    kick,
-    setFilesOfInterest,
- )
-import Development.IDE.Core.RuleTypes (
-    GenerateCore (GenerateCore),
-    GetHieAst (GetHieAst),
-    GhcSession (GhcSession),
-    GhcSessionDeps (GhcSessionDeps),
-    TypeCheck (TypeCheck),
- )
-import Development.IDE.Core.Rules (
-    GhcSessionIO (GhcSessionIO),
-    mainRule,
- )
-import Development.IDE.Core.Service (initialise, runAction)
-import Development.IDE.Core.Shake (
-    IdeState (shakeExtras),
-    ShakeExtras (state),
-    uses,
- )
-import Development.IDE.Core.Tracing (measureMemory)
-import Development.IDE.LSP.LanguageServer (runLanguageServer)
-import Development.IDE.Plugin (
-    Plugin (pluginHandlers, pluginRules),
- )
-import Development.IDE.Plugin.HLS (asGhcIdePlugin)
-import Development.IDE.Session (SessionLoadingOptions, loadSessionWithOptions, setInitialDynFlags, getHieDbLoc, runWithDb)
-import Development.IDE.Types.Location (toNormalizedFilePath')
-import Development.IDE.Types.Logger (Logger)
-import Development.IDE.Types.Options (
-    IdeGhcSession,
-    IdeOptions (optCheckParents, optCheckProject, optReportProgress),
-    clientSupportsProgress,
-    defaultIdeOptions,
- )
-import Development.IDE.Types.Shake (Key (Key))
-import Development.Shake (action)
-import HIE.Bios.Cradle (findCradle)
-import Ide.Plugin.Config (CheckParents (NeverCheck), Config, getConfigFromNotification)
-import Ide.PluginUtils (allLspCmdIds', getProcessID, pluginDescToIdePlugins)
-import Ide.Types (IdePlugins)
-import qualified Language.LSP.Server as LSP
-import qualified System.Directory.Extra as IO
-import System.Exit (ExitCode (ExitFailure), exitWith)
-import System.FilePath (takeExtension, takeFileName)
-import System.IO (hPutStrLn, hSetEncoding, stderr, stdout, utf8)
-import System.Time.Extra (offsetTime, showDuration)
-import Text.Printf (printf)
-import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
+import           Control.Concurrent.Extra           (readVar)
+import           Control.Exception.Safe             (Exception (displayException),
+                                                     catchAny)
+import           Control.Monad.Extra                (concatMapM, unless, when)
+import           Data.Default                       (Default (def))
+import qualified Data.HashMap.Strict                as HashMap
+import           Data.List.Extra                    (intercalate, isPrefixOf,
+                                                     nub, nubOrd, partition)
+import           Data.Maybe                         (catMaybes, fromMaybe,
+                                                     isJust)
+import qualified Data.Text                          as T
+import           Development.IDE                    (Action, Rules, noLogging)
+import           Development.IDE.Core.Debouncer     (newAsyncDebouncer)
+import           Development.IDE.Core.FileStore     (makeVFSHandle)
+import           Development.IDE.Core.OfInterest    (FileOfInterestStatus (OnDisk),
+                                                     kick, setFilesOfInterest)
+import           Development.IDE.Core.RuleTypes     (GenerateCore (GenerateCore),
+                                                     GetHieAst (GetHieAst),
+                                                     GhcSession (GhcSession),
+                                                     GhcSessionDeps (GhcSessionDeps),
+                                                     TypeCheck (TypeCheck))
+import           Development.IDE.Core.Rules         (GhcSessionIO (GhcSessionIO),
+                                                     mainRule)
+import           Development.IDE.Core.Service       (initialise, runAction)
+import           Development.IDE.Core.Shake         (IdeState (shakeExtras),
+                                                     ShakeExtras (state), uses)
+import           Development.IDE.Core.Tracing       (measureMemory)
+import           Development.IDE.LSP.LanguageServer (runLanguageServer)
+import           Development.IDE.Plugin             (Plugin (pluginHandlers, pluginRules))
+import           Development.IDE.Plugin.HLS         (asGhcIdePlugin)
+import qualified Development.IDE.Plugin.HLS.GhcIde  as Ghcide
+import           Development.IDE.Session            (SessionLoadingOptions,
+                                                     getHieDbLoc,
+                                                     loadSessionWithOptions,
+                                                     runWithDb,
+                                                     setInitialDynFlags)
+import           Development.IDE.Types.Location     (toNormalizedFilePath')
+import           Development.IDE.Types.Logger       (Logger)
+import           Development.IDE.Types.Options      (IdeGhcSession,
+                                                     IdeOptions (optCheckParents, optCheckProject, optReportProgress),
+                                                     clientSupportsProgress,
+                                                     defaultIdeOptions)
+import           Development.IDE.Types.Shake        (Key (Key))
+import           Development.Shake                  (action)
+import           HIE.Bios.Cradle                    (findCradle)
+import           Ide.Plugin.Config                  (CheckParents (NeverCheck),
+                                                     Config,
+                                                     getConfigFromNotification)
+import           Ide.PluginUtils                    (allLspCmdIds',
+                                                     getProcessID,
+                                                     pluginDescToIdePlugins)
+import           Ide.Types                          (IdePlugins)
+import qualified Language.LSP.Server                as LSP
+import qualified System.Directory.Extra             as IO
+import           System.Exit                        (ExitCode (ExitFailure),
+                                                     exitWith)
+import           System.FilePath                    (takeExtension,
+                                                     takeFileName)
+import           System.IO                          (hPutStrLn, hSetEncoding,
+                                                     stderr, stdout, utf8)
+import           System.Time.Extra                  (offsetTime, showDuration)
+import           Text.Printf                        (printf)
 
 data Arguments = Arguments
     { argsOTMemoryProfiling :: Bool

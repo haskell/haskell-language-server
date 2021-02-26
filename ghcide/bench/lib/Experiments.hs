@@ -1,8 +1,8 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ConstraintKinds           #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE ImplicitParams            #-}
+{-# LANGUAGE ImpredicativeTypes        #-}
 {-# OPTIONS_GHC -Wno-deprecations -Wno-unticked-promoted-constructors #-}
 
 module Experiments
@@ -21,29 +21,30 @@ module Experiments
 , runBench
 , exampleToOptions
 ) where
-import Control.Applicative.Combinators (skipManyTill)
-import Control.Exception.Safe (IOException, handleAny, try)
-import Control.Monad.Extra
-import Control.Monad.IO.Class
-import Data.Aeson (Value(Null), toJSON)
-import Data.List
-import Data.Maybe
-import qualified Data.Text as T
-import Data.Version
-import Development.IDE.Plugin.Test
-import Experiments.Types
-import Language.LSP.Test
-import Language.LSP.Types
-import Language.LSP.Types.Capabilities
-import Numeric.Natural
-import Options.Applicative
-import System.Directory
-import System.Environment.Blank (getEnv)
-import System.FilePath ((</>), (<.>))
-import System.Process
-import System.Time.Extra
-import Text.ParserCombinators.ReadP (readP_to_S)
-import Development.Shake (cmd_, CmdOption (Cwd, FileStdout))
+import           Control.Applicative.Combinators (skipManyTill)
+import           Control.Exception.Safe          (IOException, handleAny, try)
+import           Control.Monad.Extra
+import           Control.Monad.IO.Class
+import           Data.Aeson                      (Value (Null), toJSON)
+import           Data.List
+import           Data.Maybe
+import qualified Data.Text                       as T
+import           Data.Version
+import           Development.IDE.Plugin.Test
+import           Development.Shake               (CmdOption (Cwd, FileStdout),
+                                                  cmd_)
+import           Experiments.Types
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
+import           Numeric.Natural
+import           Options.Applicative
+import           System.Directory
+import           System.Environment.Blank        (getEnv)
+import           System.FilePath                 ((<.>), (</>))
+import           System.Process
+import           System.Time.Extra
+import           Text.ParserCombinators.ReadP    (readP_to_S)
 
 charEdit :: Position -> TextDocumentContentChangeEvent
 charEdit p =
@@ -54,9 +55,9 @@ charEdit p =
     }
 
 data DocumentPositions = DocumentPositions {
-    identifierP :: Maybe Position,
+    identifierP    :: Maybe Position,
     stringLiteralP :: !Position,
-    doc :: !TextDocumentIdentifier
+    doc            :: !TextDocumentIdentifier
 }
 
 allWithIdentifierPos :: Monad m => (DocumentPositions -> m Bool) -> [DocumentPositions] -> m Bool
@@ -225,9 +226,9 @@ type Experiment = [DocumentPositions] -> Session Bool
 
 data Bench =
   Bench
-  { name :: !String,
-    enabled :: !Bool,
-    samples :: !Natural,
+  { name       :: !String,
+    enabled    :: !Bool,
+    samples    :: !Natural,
     benchSetup :: [DocumentPositions] -> Session (),
     experiment :: Experiment
   }
@@ -344,12 +345,12 @@ runBenchmarksFun dir allBenchmarks = do
         }
 
 data BenchRun = BenchRun
-  { startup :: !Seconds,
-    runSetup :: !Seconds,
+  { startup       :: !Seconds,
+    runSetup      :: !Seconds,
     runExperiment :: !Seconds,
-    userWaits :: !Seconds,
-    delayedWork :: !Seconds,
-    success :: !Bool
+    userWaits     :: !Seconds,
+    delayedWork   :: !Seconds,
+    success       :: !Bool
   }
 
 badRun :: BenchRun
@@ -416,8 +417,8 @@ runBench runSess b = handleAny (\e -> print e >> return badRun)
 data SetupResult = SetupResult {
     runBenchmarks :: [Bench] -> IO (),
     -- | Path to the setup benchmark example
-    benchDir :: FilePath,
-    cleanUp :: IO ()
+    benchDir      :: FilePath,
+    cleanUp       :: IO ()
 }
 
 callCommandLogging :: HasConfig => String -> IO ()
@@ -456,9 +457,9 @@ setup = do
                     ""
             Stack -> do
                 let stackVerbosity = case verbosity ?config of
-                        Quiet -> "--silent"
+                        Quiet  -> "--silent"
                         Normal -> ""
-                        All -> "--verbose"
+                        All    -> "--verbose"
                 callCommandLogging $ "stack " <> stackVerbosity <> " unpack " <> package <> " --to " <> examplesPath
                 -- Generate the stack descriptor to match the one used to build ghcide
                 stack_yaml <- fromMaybe "stack.yaml" <$> getEnv "STACK_YAML"
@@ -526,8 +527,8 @@ findEndOfImports _ = Nothing
 --------------------------------------------------------------------------------------------
 
 pad :: Int -> String -> String
-pad n [] = replicate n ' '
-pad 0 _ = error "pad"
+pad n []     = replicate n ' '
+pad 0 _      = error "pad"
 pad n (x:xx) = x : pad (n-1) xx
 
 -- | Search for a position where:
@@ -568,6 +569,6 @@ searchSymbol doc@TextDocumentIdentifier{_uri} fileContents pos = do
         defs <- getDefinitions doc pos
         case defs of
             (InL [Location uri _]) -> return $ uri /= _uri
-            _ -> return False
+            _                      -> return False
       checkCompletions pos =
         not . null <$> getCompletions doc pos

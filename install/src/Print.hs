@@ -1,10 +1,10 @@
 module Print where
 
-import           Development.Shake
 import           Control.Monad.IO.Class
-import           Data.List                                ( dropWhileEnd )
-import           Data.List.Extra                          ( trim )
-import           Data.Char                                ( isSpace )
+import           Data.Char              (isSpace)
+import           Data.List              (dropWhileEnd)
+import           Data.List.Extra        (trim)
+import           Development.Shake
 
 -- | lift putStrLn to MonadIO
 printLine :: MonadIO m => String -> m ()

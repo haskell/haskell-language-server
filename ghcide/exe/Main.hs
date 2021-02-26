@@ -5,41 +5,45 @@
 
 module Main(main) where
 
-import Arguments ( Arguments'(..), IdeCmd(..), getArguments )
-import Control.Concurrent.Extra ( newLock, withLock )
-import Control.Monad.Extra ( unless, when, whenJust )
-import Data.Default ( Default(def) )
-import Data.List.Extra ( upper )
-import Data.Maybe (fromMaybe)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
-import Data.Version ( showVersion )
-import Development.GitRev ( gitHash )
-import Development.IDE ( Logger(Logger), Priority(Info), action )
-import Development.IDE.Core.OfInterest (kick)
-import Development.IDE.Core.Rules (mainRule)
+import           Arguments                         (Arguments' (..),
+                                                    IdeCmd (..), getArguments)
+import           Control.Concurrent.Extra          (newLock, withLock)
+import           Control.Monad.Extra               (unless, when, whenJust)
+import           Data.Default                      (Default (def))
+import           Data.List.Extra                   (upper)
+import           Data.Maybe                        (fromMaybe)
+import qualified Data.Text                         as T
+import qualified Data.Text.IO                      as T
+import           Data.Version                      (showVersion)
+import           Development.GitRev                (gitHash)
+import           Development.IDE                   (Logger (Logger),
+                                                    Priority (Info), action)
+import           Development.IDE.Core.OfInterest   (kick)
+import           Development.IDE.Core.Rules        (mainRule)
+import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
-import qualified Development.IDE.Plugin.Test as Test
-import Development.IDE.Session (setInitialDynFlags, getHieDbLoc)
-import Development.IDE.Types.Options
-import qualified Development.IDE.Main as Main
-import Development.Shake (ShakeOptions(shakeThreads))
-import Ide.Plugin.Config (Config(checkParents, checkProject))
-import Ide.PluginUtils (pluginDescToIdePlugins)
-import HieDb.Run (Options(..), runCommand)
-import Paths_ghcide ( version )
-import qualified System.Directory.Extra as IO
-import System.Environment ( getExecutablePath )
-import System.Exit ( ExitCode(ExitFailure), exitSuccess, exitWith )
-import System.Info ( compilerVersion )
-import System.IO ( stderr, hPutStrLn )
+import qualified Development.IDE.Plugin.Test       as Test
+import           Development.IDE.Session           (getHieDbLoc,
+                                                    setInitialDynFlags)
+import           Development.IDE.Types.Options
+import           Development.Shake                 (ShakeOptions (shakeThreads))
+import           HieDb.Run                         (Options (..), runCommand)
+import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
+import           Ide.PluginUtils                   (pluginDescToIdePlugins)
+import           Paths_ghcide                      (version)
+import qualified System.Directory.Extra            as IO
+import           System.Environment                (getExecutablePath)
+import           System.Exit                       (ExitCode (ExitFailure),
+                                                    exitSuccess, exitWith)
+import           System.IO                         (hPutStrLn, stderr)
+import           System.Info                       (compilerVersion)
 
 ghcideVersion :: IO String
 ghcideVersion = do
   path <- getExecutablePath
   let gitHashSection = case $(gitHash) of
         x | x == "UNKNOWN" -> ""
-        x -> " (GIT hash: " <> x <> ")"
+        x                  -> " (GIT hash: " <> x <> ")"
   return $ "ghcide version: " <> showVersion version
              <> " (GHC: " <> showVersion compilerVersion
              <> ") (PATH: " <> path <> ")"
@@ -68,7 +72,7 @@ main = do
         dbLoc <- getHieDbLoc dir
         mlibdir <- setInitialDynFlags def
         case mlibdir of
-          Nothing -> exitWith $ ExitFailure 1
+          Nothing     -> exitWith $ ExitFailure 1
           Just libdir -> runCommand libdir opts{database = dbLoc} cmd
 
       _ -> do
@@ -82,7 +86,7 @@ main = do
           Main.defaultMain def
             {Main.argFiles = case argFilesOrCmd of
                 Typecheck x | not argLSP -> Just x
-                _ -> Nothing
+                _                        -> Nothing
 
             ,Main.argsLogger = logger
 

@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE CPP                #-}
+{-# LANGUAGE DeriveAnyClass     #-}
+{-# LANGUAGE DerivingStrategies #-}
 #include "ghc-api-version.h"
 
 module Development.IDE.Spans.Common (
@@ -18,25 +18,25 @@ module Development.IDE.Spans.Common (
 , KindMap
 ) where
 
-import Data.Maybe
-import qualified Data.Text as T
-import Data.List.Extra
-import Control.DeepSeq
-import GHC.Generics
+import           Control.DeepSeq
+import           Data.List.Extra
+import           Data.Maybe
+import qualified Data.Text                    as T
+import           GHC.Generics
 
-import GHC
-import Outputable hiding ((<>))
-import ConLike
-import DataCon
-import Var
-import NameEnv
-import DynFlags
+import           ConLike
+import           DataCon
+import           DynFlags
+import           GHC
+import           NameEnv
+import           Outputable                   hiding ((<>))
+import           Var
 
+import           Development.IDE.GHC.Orphans  ()
+import           Development.IDE.GHC.Util
 import qualified Documentation.Haddock.Parser as H
-import qualified Documentation.Haddock.Types as H
-import Development.IDE.GHC.Orphans ()
-import Development.IDE.GHC.Util
-import RdrName (rdrNameOcc)
+import qualified Documentation.Haddock.Types  as H
+import           RdrName                      (rdrNameOcc)
 
 type DocMap = NameEnv SpanDoc
 type KindMap = NameEnv TyThing
@@ -174,19 +174,19 @@ haddockToMarkdown (H.DocProperty _)
   = ""  -- don't really know what to do
 
 escapeBackticks :: String -> String
-escapeBackticks "" = ""
+escapeBackticks ""       = ""
 escapeBackticks ('`':ss) = '\\':'`':escapeBackticks ss
 escapeBackticks (s  :ss) = s:escapeBackticks ss
 
 removeUnescapedBackticks :: String -> String
 removeUnescapedBackticks = \case
   '\\' : '`' : ss -> '\\' : '`' : removeUnescapedBackticks ss
-  '`' : ss -> removeUnescapedBackticks ss
-  "" -> ""
-  s : ss -> s : removeUnescapedBackticks ss
+  '`' : ss        -> removeUnescapedBackticks ss
+  ""              -> ""
+  s : ss          -> s : removeUnescapedBackticks ss
 
 splitForList :: String -> String
 splitForList s
   = case lines s of
-      [] -> ""
+      []           -> ""
       (first:rest) -> unlines $ first : map (("  " ++) . trimStart) rest

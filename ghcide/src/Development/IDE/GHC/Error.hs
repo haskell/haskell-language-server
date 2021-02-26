@@ -29,20 +29,20 @@ module Development.IDE.GHC.Error
   , toDSeverity
   ) where
 
-import                     Development.IDE.Types.Diagnostics as D
-import qualified           Data.Text as T
-import Data.Maybe
-import Development.IDE.Types.Location
-import Development.IDE.GHC.Orphans()
-import qualified FastString as FS
-import           GHC
 import           Bag
-import HscTypes
-import Panic
+import           Data.Maybe
+import           Data.String                       (fromString)
+import qualified Data.Text                         as T
+import           Development.IDE.GHC.Orphans       ()
+import           Development.IDE.Types.Diagnostics as D
+import           Development.IDE.Types.Location
 import           ErrUtils
+import qualified FastString                        as FS
+import           GHC
+import           HscTypes
+import qualified Outputable                        as Out
+import           Panic
 import           SrcLoc
-import qualified Outputable                 as Out
-import Data.String (fromString)
 
 
 
@@ -92,7 +92,7 @@ realSrcLocToPosition real =
 -- | Extract a file name from a GHC SrcSpan (use message for unhelpful ones)
 -- FIXME This may not be an _absolute_ file name, needs fixing.
 srcSpanToFilename :: SrcSpan -> Maybe FilePath
-srcSpanToFilename (UnhelpfulSpan _) = Nothing
+srcSpanToFilename (UnhelpfulSpan _)  = Nothing
 srcSpanToFilename (RealSrcSpan real) = Just $ FS.unpackFS $ srcSpanFile real
 
 realSrcSpanToLocation :: RealSrcSpan -> Location
@@ -123,7 +123,7 @@ positionToRealSrcLoc nfp (Position l c)=
 isInsideSrcSpan :: Position -> SrcSpan -> Bool
 p `isInsideSrcSpan` r = case srcSpanToRange r of
   Just (Range sp ep) -> sp <= p && p <= ep
-  _ -> False
+  _                  -> False
 
 -- | Convert a GHC severity to a DAML compiler Severity. Severities below
 -- "Warning" level are dropped (returning Nothing).
@@ -160,7 +160,7 @@ zeroSpan file = realSrcLocSpan (mkRealSrcLoc file 1 1)
 realSpan :: SrcSpan
          -> Maybe RealSrcSpan
 realSpan = \case
-  RealSrcSpan r -> Just r
+  RealSrcSpan r   -> Just r
   UnhelpfulSpan _ -> Nothing
 
 

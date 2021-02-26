@@ -6,10 +6,10 @@ module Ide.Plugin.Eval.Parse.Option (
     parseSetFlags,
 ) where
 
-import Text.Megaparsec.Char
-import Text.Megaparsec
-import Data.Void (Void)
-import Control.Arrow (left)
+import           Control.Arrow        (left)
+import           Data.Void            (Void)
+import           Text.Megaparsec
+import           Text.Megaparsec.Char
 
 {- |
 >>> langOptions ":set   -XBinaryLiterals  -XOverloadedStrings "

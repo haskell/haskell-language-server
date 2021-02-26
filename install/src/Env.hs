@@ -1,34 +1,23 @@
 module Env where
 
-import           Development.Shake
-import           Control.Monad.IO.Class
 import           Control.Monad
+import           Control.Monad.Extra        (mapMaybeM)
+import           Control.Monad.IO.Class
+import           Data.Function              (on, (&))
+import           Data.List                  (isInfixOf, sort, sortBy)
+import           Data.List.Extra            (nubOrdBy, trim)
+import           Data.Maybe                 (isJust, mapMaybe)
+import           Data.Ord                   (comparing)
+import           Development.Shake
 import           Development.Shake.FilePath
-import           System.Info                              ( os )
-import           Data.Maybe                               ( isJust
-                                                          , mapMaybe
-                                                          )
-import           System.Directory                         ( findExecutable
-                                                          , findExecutables
-                                                          , listDirectory
-                                                          )
-import           Data.Function                            ( (&)
-                                                          , on
-                                                          )
-import           Data.List                                ( sort
-                                                          , sortBy
-                                                          , isInfixOf
-                                                          )
-import           Data.List.Extra                          ( nubOrdBy
-                                                          , trim
-                                                          )
-import           Data.Ord                                 ( comparing )
-import           Control.Monad.Extra                      ( mapMaybeM )
+import           System.Directory           (findExecutable, findExecutables,
+                                             listDirectory)
+import           System.Info                (os)
 
-import qualified Data.Text                     as T
+import qualified Data.Text                  as T
 
-import           Version
 import           Print
+import           Version
 
 
 type GhcPath = String
@@ -86,7 +75,7 @@ getGhcPathOf :: MonadIO m => VersionNumber -> m (Maybe GhcPath)
 getGhcPathOf ghcVersion =
   liftIO $ findExecutable ("ghc-" ++ ghcVersion <.> exe) >>= \case
     Nothing -> lookup ghcVersion <$> getGhcPaths
-    path -> return path
+    path    -> return path
 
 -- | Get a list of GHCs that are available in $PATH
 getGhcPaths :: MonadIO m => m [(VersionNumber, GhcPath)]

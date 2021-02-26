@@ -1,7 +1,7 @@
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Tactic.Tactics
@@ -9,9 +9,8 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
-import           Control.Monad (when)
 import           Control.Monad.Except (throwError)
-import           Control.Monad.Reader.Class (MonadReader(ask))
+import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Foldable
@@ -230,7 +229,7 @@ splitDataCon dc =
     case splitTyConApp_maybe $ unCType g of
       Just (tc, apps) -> do
         case elem dc $ tyConDataCons tc of
-          True -> buildDataCon (unwhitelistingSplit jdg) dc apps
+          True  -> buildDataCon (unwhitelistingSplit jdg) dc apps
           False -> throwError $ IncorrectDataCon dc
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
 

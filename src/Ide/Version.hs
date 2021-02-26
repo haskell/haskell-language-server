@@ -1,21 +1,21 @@
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TemplateHaskell   #-}
 -- | Information and display strings for HIE's version
 -- and the current project's version
 module Ide.Version where
 
+import           Data.Maybe                    (listToMaybe)
+import           Data.Version
 import           Development.GitRev            (gitCommitCount)
 import           Options.Applicative.Simple    (simpleVersion)
 import qualified Paths_haskell_language_server as Meta
-import           System.Info
-import           Data.Version
-import           Data.Maybe (listToMaybe)
 import           System.Directory
-import           System.Process
 import           System.Exit
+import           System.Info
+import           System.Process
 import           Text.ParserCombinators.ReadP
 
 -- >>> hlsVersion
@@ -37,7 +37,7 @@ hlsVersion =
 data ProgramsOfInterest = ProgramsOfInterest
   { cabalVersion :: Maybe Version
   , stackVersion :: Maybe Version
-  , ghcVersion :: Maybe Version
+  , ghcVersion   :: Maybe Version
   }
 
 showProgramVersionOfInterest :: ProgramsOfInterest -> String
@@ -67,7 +67,7 @@ findVersionOf tool =
     Just path ->
       readProcessWithExitCode path ["--numeric-version"] "" >>= \case
         (ExitSuccess, sout, _) -> pure $ consumeParser myVersionParser sout
-        _ -> pure Nothing
+        _                      -> pure Nothing
   where
     myVersionParser = do
       skipSpaces

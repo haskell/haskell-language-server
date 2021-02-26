@@ -1,10 +1,9 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP #-} -- To get precise GHC version
+{-# LANGUAGE CPP             #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TupleSections   #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
 
 module Ide.Arguments
@@ -16,12 +15,12 @@ module Ide.Arguments
   , haskellLanguageServerNumericVersion
   ) where
 
-import Data.Version
-import Development.GitRev
-import Options.Applicative
-import Paths_haskell_language_server
-import System.Environment
-import HieDb.Run
+import           Data.Version
+import           Development.GitRev
+import           HieDb.Run
+import           Options.Applicative
+import           Paths_haskell_language_server
+import           System.Environment
 
 -- ---------------------------------------------------------------------
 
@@ -32,17 +31,17 @@ data Arguments
   | LspMode LspArguments
 
 data LspArguments = LspArguments
-    {argLSP :: Bool
-    ,argsCwd :: Maybe FilePath
-    ,argFiles :: [FilePath]
-    ,argsShakeProfiling :: Maybe FilePath
-    ,argsTesting :: Bool
-    ,argsExamplePlugin :: Bool
+    {argLSP                 :: Bool
+    ,argsCwd                :: Maybe FilePath
+    ,argFiles               :: [FilePath]
+    ,argsShakeProfiling     :: Maybe FilePath
+    ,argsTesting            :: Bool
+    ,argsExamplePlugin      :: Bool
     -- These next two are for compatibility with existing hie clients, allowing
     -- them to just change the name of the exe and still work.
-    , argsDebugOn       :: Bool
-    , argsLogFile       :: Maybe String
-    , argsThreads       :: Int
+    , argsDebugOn           :: Bool
+    , argsLogFile           :: Maybe String
+    , argsThreads           :: Int
     , argsProjectGhcVersion :: Bool
     } deriving Show
 
@@ -122,7 +121,7 @@ haskellLanguageServerVersion = do
   path <- getExecutablePath
   let gitHashSection = case $(gitHash) of
         x | x == "UNKNOWN" -> ""
-        x -> " (GIT hash: " <> x <> ")"
+        x                  -> " (GIT hash: " <> x <> ")"
   return $ "haskell-language-server version: " <> haskellLanguageServerNumericVersion
              <> " (GHC: " <> VERSION_ghc
              <> ") (PATH: " <> path <> ")"

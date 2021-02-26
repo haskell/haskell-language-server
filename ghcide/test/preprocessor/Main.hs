@@ -1,7 +1,7 @@
 
 module Main(main) where
 
-import System.Environment
+import           System.Environment
 
 main :: IO ()
 main = do

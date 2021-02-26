@@ -11,21 +11,21 @@ module Ide.Plugin.Ormolu
 where
 
 import           Control.Exception
-import qualified Data.Text                         as T
-import           Development.IDE hiding (pluginHandlers)
-import qualified DynFlags                          as D
-import qualified EnumSet                           as S
+import           Control.Monad.IO.Class
+import qualified Data.Text                   as T
+import           Development.IDE             hiding (pluginHandlers)
+import qualified DynFlags                    as D
+import qualified EnumSet                     as S
 import           GHC
 import           GHC.LanguageExtensions.Type
-import           GhcPlugins                        (HscEnv (hsc_dflags))
+import           GhcPlugins                  (HscEnv (hsc_dflags))
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
-import "ormolu"  Ormolu
-import           System.FilePath                   (takeFileName)
-import           Text.Regex.TDFA.Text              ()
-import Control.Monad.IO.Class
+import           "ormolu" Ormolu
+import           System.FilePath             (takeFileName)
+import           Text.Regex.TDFA.Text        ()
 
 -- ---------------------------------------------------------------------
 

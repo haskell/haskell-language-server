@@ -1,8 +1,8 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                   #-}
 
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE RankNTypes            #-}
 #include "ghc-api-version.h"
 
 module Development.IDE.LSP.Outline
@@ -10,25 +10,21 @@ module Development.IDE.LSP.Outline
   )
 where
 
-import           Language.LSP.Types
-import           Language.LSP.Server (LspM)
 import           Control.Monad.IO.Class
 import           Data.Functor
 import           Data.Generics
 import           Data.Maybe
-import           Data.Text                      ( Text
-                                                , pack
-                                                )
-import qualified Data.Text                     as T
+import           Data.Text                      (Text, pack)
+import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error      ( realSrcSpanToRange )
+import           Development.IDE.GHC.Error      (realSrcSpanToRange)
 import           Development.IDE.Types.Location
-import           Outputable                     ( Outputable
-                                                , ppr
-                                                , showSDocUnsafe
-                                                )
+import           Language.LSP.Server            (LspM)
+import           Language.LSP.Types
+import           Outputable                     (Outputable, ppr,
+                                                 showSDocUnsafe)
 
 moduleOutline
   :: IdeState -> DocumentSymbolParams -> LspM c (Either ResponseError (List DocumentSymbol |? List SymbolInformation))

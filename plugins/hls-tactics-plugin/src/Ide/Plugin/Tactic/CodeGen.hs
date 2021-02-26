@@ -1,7 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns     #-}
 
 module Ide.Plugin.Tactic.CodeGen
   ( module Ide.Plugin.Tactic.CodeGen

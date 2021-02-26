@@ -16,21 +16,20 @@ module Development.IDE.Types.Diagnostics (
   showDiagnosticsColored,
   ) where
 
-import Control.DeepSeq
-import Data.Maybe as Maybe
-import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc
-import Language.LSP.Types as LSP (DiagnosticSource,
-    DiagnosticSeverity(..)
-  , Diagnostic(..)
-  , List(..)
-  )
-import Language.LSP.Diagnostics
-import Data.Text.Prettyprint.Doc.Render.Text
+import           Control.DeepSeq
+import           Data.Maybe                                as Maybe
+import qualified Data.Text                                 as T
+import           Data.Text.Prettyprint.Doc
+import           Data.Text.Prettyprint.Doc.Render.Terminal (Color (..), color)
 import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Terminal
-import Data.Text.Prettyprint.Doc.Render.Terminal (Color(..), color)
+import           Data.Text.Prettyprint.Doc.Render.Text
+import           Language.LSP.Diagnostics
+import           Language.LSP.Types                        as LSP (Diagnostic (..),
+                                                                   DiagnosticSeverity (..),
+                                                                   DiagnosticSource,
+                                                                   List (..))
 
-import Development.IDE.Types.Location
+import           Development.IDE.Types.Location
 
 
 -- | The result of an IDE operation. Warnings and errors are in the Diagnostic,
@@ -114,10 +113,10 @@ prettyDiagnostic (fp, sh, LSP.Diagnostic{..}) =
         , slabel_ "Severity:" $ pretty $ show sev
         , slabel_ "Message: "
             $ case sev of
-              LSP.DsError -> annotate $ color Red
+              LSP.DsError   -> annotate $ color Red
               LSP.DsWarning -> annotate $ color Yellow
-              LSP.DsInfo -> annotate $ color Blue
-              LSP.DsHint -> annotate $ color Magenta
+              LSP.DsInfo    -> annotate $ color Blue
+              LSP.DsHint    -> annotate $ color Magenta
             $ stringParagraphs _message
         ]
     where

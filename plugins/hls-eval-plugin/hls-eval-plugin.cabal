@@ -55,7 +55,7 @@ library
     , lsp-types
     , hls-plugin-api        ^>= 1.0.0.0
     , lens
-    , megaparsec            >=0.9
+    , megaparsec            >=9.0
     , mtl
     , parser-combinators
     , pretty-simple

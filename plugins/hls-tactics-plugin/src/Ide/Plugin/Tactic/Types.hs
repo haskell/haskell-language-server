@@ -22,19 +22,21 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
-import Data.Semigroup
 import Control.Lens hiding (Context, (.=))
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Coerce
 import Data.Function
 import Data.Generics.Product (field)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.Semigroup
 import Data.Set (Set)
 import Data.Tree
 import Development.IDE.GHC.Compat hiding (Node)
 import Development.IDE.GHC.Orphans ()
 import Development.IDE.Types.Location
 import GHC.Generics
+import GHC.SourceGen (var)
 import Ide.Plugin.Tactic.Debug
 import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
 import OccName
@@ -43,8 +45,6 @@ import System.IO.Unsafe (unsafePerformIO)
 import Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
-import Data.List.NonEmpty (NonEmpty (..))
-import GHC.SourceGen (var)
 
 
 ------------------------------------------------------------------------------
@@ -86,9 +86,9 @@ instance Show (Pat GhcPs) where
 -- | The state that should be shared between subgoals. Extracts move towards
 -- the root, judgments move towards the leaves, and the state moves *sideways*.
 data TacticState = TacticState
-    { ts_skolems   :: !(Set TyVar)
+    { ts_skolems         :: !(Set TyVar)
       -- ^ The known skolems.
-    , ts_unifier   :: !TCvSubst
+    , ts_unifier         :: !TCvSubst
       -- ^ The current substitution of univars.
     , ts_recursion_stack :: ![Maybe PatVal]
       -- ^ Stack for tracking whether or not the current recursive call has
@@ -244,11 +244,11 @@ overProvenance f (HyInfo name prv ty) = HyInfo name (f prv) ty
 ------------------------------------------------------------------------------
 -- | The current bindings and goal for a hole to be filled by refinery.
 data Judgement' a = Judgement
-  { _jHypothesis :: !(Hypothesis a)
+  { _jHypothesis        :: !(Hypothesis a)
   , _jBlacklistDestruct :: !Bool
-  , _jWhitelistSplit :: !Bool
-  , _jIsTopHole    :: !Bool
-  , _jGoal         :: !a
+  , _jWhitelistSplit    :: !Bool
+  , _jIsTopHole         :: !Bool
+  , _jGoal              :: !a
   }
   deriving stock (Eq, Generic, Functor, Show)
 
@@ -367,9 +367,9 @@ instance Applicative Synthesized where
 data Context = Context
   { ctxDefiningFuncs :: [(OccName, CType)]
     -- ^ The functions currently being defined
-  , ctxModuleFuncs :: [(OccName, CType)]
+  , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
-  , ctxFeatureSet :: FeatureSet
+  , ctxFeatureSet    :: FeatureSet
   }
   deriving stock (Eq, Ord, Show)
 

@@ -1,54 +1,54 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE BangPatterns         #-}
+{-# LANGUAGE CPP                  #-}
+{-# LANGUAGE ConstraintKinds      #-}
+{-# LANGUAGE DefaultSignatures    #-}
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE PolyKinds            #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ViewPatterns         #-}
 
 module Ide.Types
     where
 
 #ifdef mingw32_HOST_OS
-import qualified System.Win32.Process                    as P (getCurrentProcessId)
+import qualified System.Win32.Process            as P (getCurrentProcessId)
 #else
+import qualified System.Posix.Process            as P (getProcessID)
 import           System.Posix.Signals
-import qualified System.Posix.Process                    as P (getProcessID)
 #endif
-import           Data.Aeson                    hiding (defaultOptions)
-import           GHC.Generics
-import qualified Data.Map  as Map
-import           Data.String
-import qualified Data.Text                     as T
-import           Development.Shake hiding (command)
-import           Ide.Plugin.Config
-import           Language.LSP.Types
-import           Language.LSP.VFS
-import           Language.LSP.Types.Lens as J hiding (id)
-import           Language.LSP.Types.Capabilities
-import           Language.LSP.Server (LspM, getVirtualFile)
-import           Text.Regex.TDFA.Text()
-import           Data.Dependent.Map (DMap)
-import qualified Data.Dependent.Map as DMap
-import Data.List.NonEmpty (NonEmpty(..), toList)
-import Data.GADT.Compare
-import Data.Maybe
-import Data.Semigroup
-import Control.Lens ((^.))
-import qualified Data.DList as DList
+import           Control.Lens                    ((^.))
+import           Control.Monad
+import           Data.Aeson                      hiding (defaultOptions)
+import qualified Data.DList                      as DList
 import qualified Data.Default
-import System.IO.Unsafe
-import Control.Monad
-import OpenTelemetry.Eventlog
-import Data.Text.Encoding (encodeUtf8)
+import           Data.Dependent.Map              (DMap)
+import qualified Data.Dependent.Map              as DMap
+import           Data.GADT.Compare
+import           Data.List.NonEmpty              (NonEmpty (..), toList)
+import qualified Data.Map                        as Map
+import           Data.Maybe
+import           Data.Semigroup
+import           Data.String
+import qualified Data.Text                       as T
+import           Data.Text.Encoding              (encodeUtf8)
+import           Development.Shake               hiding (command)
+import           GHC.Generics
+import           Ide.Plugin.Config
+import           Language.LSP.Server             (LspM, getVirtualFile)
+import           Language.LSP.Types
+import           Language.LSP.Types.Capabilities
+import           Language.LSP.Types.Lens         as J hiding (id)
+import           Language.LSP.VFS
+import           OpenTelemetry.Eventlog
+import           System.IO.Unsafe
+import           Text.Regex.TDFA.Text            ()
 
 -- ---------------------------------------------------------------------
 
@@ -58,10 +58,10 @@ newtype IdePlugins ideState = IdePlugins
 -- ---------------------------------------------------------------------
 
 data PluginDescriptor ideState =
-  PluginDescriptor { pluginId          :: !PluginId
-                   , pluginRules       :: !(Rules ())
-                   , pluginCommands    :: ![PluginCommand ideState]
-                   , pluginHandlers    :: PluginHandlers ideState
+  PluginDescriptor { pluginId       :: !PluginId
+                   , pluginRules    :: !(Rules ())
+                   , pluginCommands :: ![PluginCommand ideState]
+                   , pluginHandlers :: PluginHandlers ideState
                    }
 
 -- | Methods that can be handled by plugins.

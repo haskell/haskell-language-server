@@ -1,21 +1,21 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings     #-}
 module Deferred(tests) where
 
-import Control.Applicative.Combinators
-import Control.Monad.IO.Class
-import Control.Lens hiding (List)
+import           Control.Applicative.Combinators
+import           Control.Lens                    hiding (List)
+import           Control.Monad.IO.Class
 -- import Control.Monad
 -- import Data.Maybe
-import Language.LSP.Test
-import Language.LSP.Types
-import Language.LSP.Types.Lens hiding (id, message)
+import           Language.LSP.Test
+import           Language.LSP.Types
+import           Language.LSP.Types.Lens         hiding (id, message)
 -- import qualified Language.LSP.Types.Lens as LSP
-import Test.Hls.Util
-import Test.Tasty
-import Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import Test.Tasty.HUnit
+import           Test.Hls.Util
+import           Test.Tasty
+import           Test.Tasty.ExpectedFailure      (ignoreTestBecause)
+import           Test.Tasty.HUnit
 
 
 tests :: TestTree

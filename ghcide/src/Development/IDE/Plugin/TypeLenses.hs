@@ -6,44 +6,36 @@ module Development.IDE.Plugin.TypeLenses
   )
 where
 
-import Control.Monad.IO.Class
-import Data.Aeson.Types (Value (..), toJSON)
-import qualified Data.HashMap.Strict as Map
-import qualified Data.Text as T
-import Development.IDE.Core.RuleTypes (TypeCheck (TypeCheck))
-import Development.IDE.Core.Rules (IdeState, runAction)
-import Development.IDE.Core.Service (getDiagnostics)
-import Development.IDE.Core.Shake (getHiddenDiagnostics, use)
-import Development.IDE.Types.Location
-  ( Position (Position, _character, _line),
-    Range (Range, _end, _start),
-    toNormalizedFilePath',
-    uriToFilePath',
-  )
-import Ide.PluginUtils (mkLspCommand)
-import Ide.Types
-  ( CommandFunction,
-    CommandId (CommandId),
-    PluginCommand (PluginCommand),
-    PluginDescriptor(..),
-    PluginId,
-    defaultPluginDescriptor,
-    mkPluginHandler
-  )
-import qualified Language.LSP.Server as LSP
-import Language.LSP.Types
-  ( ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
-    CodeLens (CodeLens),
-    CodeLensParams (CodeLensParams, _textDocument),
-    Diagnostic (..),
-    List (..),
-    ResponseError,
-    TextDocumentIdentifier (TextDocumentIdentifier),
-    TextEdit (TextEdit),
-    WorkspaceEdit (WorkspaceEdit),
-    SMethod(..)
-  )
-import Text.Regex.TDFA ((=~))
+import           Control.Monad.IO.Class
+import           Data.Aeson.Types               (Value (..), toJSON)
+import qualified Data.HashMap.Strict            as Map
+import qualified Data.Text                      as T
+import           Development.IDE.Core.RuleTypes (TypeCheck (TypeCheck))
+import           Development.IDE.Core.Rules     (IdeState, runAction)
+import           Development.IDE.Core.Service   (getDiagnostics)
+import           Development.IDE.Core.Shake     (getHiddenDiagnostics, use)
+import           Development.IDE.Types.Location (Position (Position, _character, _line),
+                                                 Range (Range, _end, _start),
+                                                 toNormalizedFilePath',
+                                                 uriToFilePath')
+import           Ide.PluginUtils                (mkLspCommand)
+import           Ide.Types                      (CommandFunction,
+                                                 CommandId (CommandId),
+                                                 PluginCommand (PluginCommand),
+                                                 PluginDescriptor (..),
+                                                 PluginId,
+                                                 defaultPluginDescriptor,
+                                                 mkPluginHandler)
+import qualified Language.LSP.Server            as LSP
+import           Language.LSP.Types             (ApplyWorkspaceEditParams (ApplyWorkspaceEditParams),
+                                                 CodeLens (CodeLens),
+                                                 CodeLensParams (CodeLensParams, _textDocument),
+                                                 Diagnostic (..), List (..),
+                                                 ResponseError, SMethod (..),
+                                                 TextDocumentIdentifier (TextDocumentIdentifier),
+                                                 TextEdit (TextEdit),
+                                                 WorkspaceEdit (WorkspaceEdit))
+import           Text.Regex.TDFA                ((=~))
 
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"

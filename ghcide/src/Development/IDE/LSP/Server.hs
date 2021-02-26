@@ -1,12 +1,12 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE UndecidableInstances  #-}
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE KindSignatures        #-}
+{-# LANGUAGE RankNTypes            #-}
 module Development.IDE.LSP.Server
   ( ReactorMessage(..)
   , ReactorChan
@@ -15,14 +15,14 @@ module Development.IDE.LSP.Server
   , notificationHandler
   ) where
 
-import Language.LSP.Server (LspM, Handlers)
-import Language.LSP.Types
-import qualified Language.LSP.Server as LSP
-import Development.IDE.Core.Shake
-import UnliftIO.Chan
-import Control.Monad.Reader
-import Ide.Types (HasTracing, traceWithSpan)
-import Development.IDE.Core.Tracing
+import           Control.Monad.Reader
+import           Development.IDE.Core.Shake
+import           Development.IDE.Core.Tracing
+import           Ide.Types                    (HasTracing, traceWithSpan)
+import           Language.LSP.Server          (Handlers, LspM)
+import qualified Language.LSP.Server          as LSP
+import           Language.LSP.Types
+import           UnliftIO.Chan
 
 data ReactorMessage
   = ReactorNotification (IO ())

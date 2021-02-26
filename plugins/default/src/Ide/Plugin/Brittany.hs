@@ -1,28 +1,28 @@
-{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE PolyKinds    #-}
 {-# LANGUAGE TypeFamilies #-}
 module Ide.Plugin.Brittany where
-  
-import           Control.Exception (bracket_)
+
+import           Control.Exception           (bracket_)
 import           Control.Lens
 import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
+import           Control.Monad.Trans.Maybe   (MaybeT, runMaybeT)
 import           Data.Coerce
-import           Data.Maybe (mapMaybe, maybeToList)
+import           Data.Maybe                  (mapMaybe, maybeToList)
 import           Data.Semigroup
-import           Data.Text                             (Text)
-import qualified Data.Text                             as T
-import           Development.IDE hiding (pluginHandlers)
-import           Development.IDE.GHC.Compat (topDir, ModSummary(ms_hspp_opts))
-import qualified DynFlags                          as D
-import qualified EnumSet                           as S
+import           Data.Text                   (Text)
+import qualified Data.Text                   as T
+import           Development.IDE             hiding (pluginHandlers)
+import           Development.IDE.GHC.Compat  (ModSummary (ms_hspp_opts), topDir)
+import qualified DynFlags                    as D
+import qualified EnumSet                     as S
 import           GHC.LanguageExtensions.Type
-import           Language.Haskell.Brittany
-import           Language.LSP.Types            as J
-import qualified Language.LSP.Types.Lens       as J
 import           Ide.PluginUtils
 import           Ide.Types
+import           Language.Haskell.Brittany
+import           Language.LSP.Types          as J
+import qualified Language.LSP.Types.Lens     as J
+import           System.Environment          (setEnv, unsetEnv)
 import           System.FilePath
-import           System.Environment (setEnv, unsetEnv)
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
@@ -108,11 +108,11 @@ showErr (ErrorUnknownNode s _)  = s
 showErr ErrorOutputCheck        = "Brittany error - invalid output"
 
 showExtension :: Extension -> Maybe String
-showExtension Cpp = Just "-XCPP"
+showExtension Cpp              = Just "-XCPP"
 -- Brittany chokes on parsing extensions that produce warnings
 showExtension DatatypeContexts = Nothing
-showExtension RecordPuns = Just "-XNamedFieldPuns"
-showExtension other = Just $ "-X" ++ show other
+showExtension RecordPuns       = Just "-XNamedFieldPuns"
+showExtension other            = Just $ "-X" ++ show other
 
 getExtensions :: D.DynFlags -> [String]
 getExtensions = mapMaybe showExtension . S.toList . D.extensionFlags
