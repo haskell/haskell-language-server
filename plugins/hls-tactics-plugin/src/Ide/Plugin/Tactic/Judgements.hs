@@ -1,33 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns     #-}
 
-module Ide.Plugin.Tactic.Judgements
-  ( blacklistingDestruct
-  , unwhitelistingSplit
-  , introducingLambda
-  , introducingRecursively
-  , introducingPat
-  , jGoal
-  , jHypothesis
-  , jEntireHypothesis
-  , jPatHypothesis
-  , substJdg
-  , unsetIsTopHole
-  , filterSameTypeFromOtherPositions
-  , isDestructBlacklisted
-  , withNewGoal
-  , jLocalHypothesis
-  , isSplitWhitelisted
-  , isPatternMatch
-  , filterPosition
-  , isTopHole
-  , disallowing
-  , mkFirstJudgement
-  , hypothesisFromBindings
-  , isTopLevel
-  , hyNamesInScope
-  , hyByName
-  ) where
+module Ide.Plugin.Tactic.Judgements where
 
 import           Control.Arrow
 import           Control.Lens hiding (Context)
@@ -99,8 +73,18 @@ introducing
     -> Judgement' a
     -> Judgement' a
 introducing f ns =
-  field @"_jHypothesis" <>~ (Hypothesis $ zip [0..] ns <&>
-    \(pos, (name, ty)) -> HyInfo name (f (length ns) pos) ty)
+  field @"_jHypothesis" <>~ introduceHypothesis f ns
+
+
+introduceHypothesis
+    :: (Int -> Int -> Provenance)
+        -- ^ A function from the total number of args and position of this arg
+        -- to its provenance.
+    -> [(OccName, a)]
+    -> Hypothesis a
+introduceHypothesis f ns =
+  Hypothesis $ zip [0..] ns <&> \(pos, (name, ty)) ->
+    HyInfo name (f (length ns) pos) ty
 
 
 ------------------------------------------------------------------------------
@@ -116,9 +100,24 @@ introducingLambda func = introducing $ \count pos ->
 
 
 ------------------------------------------------------------------------------
+-- | Introduce bindings in the context of a lamba.
+introduceLambdaHypothesis
+    :: Maybe OccName   -- ^ The name of the top level function. For any other
+                       -- function, this should be 'Nothing'.
+    -> [(OccName, a)]
+    -> Hypothesis a
+introduceLambdaHypothesis func =
+  introduceHypothesis $ \count pos ->
+    maybe UserPrv (\x -> TopLevelArgPrv x pos count) func
+
+
+------------------------------------------------------------------------------
 -- | Introduce a binding in a recursive context.
 introducingRecursively :: [(OccName, a)] -> Judgement' a -> Judgement' a
 introducingRecursively = introducing $ const $ const RecursivePrv
+
+introduceRecursiveHypothesis :: [(OccName, a)] -> Hypothesis a
+introduceRecursiveHypothesis = introduceHypothesis $ const $ const RecursivePrv
 
 
 ------------------------------------------------------------------------------
@@ -264,6 +263,23 @@ introducingPat scrutinee dc ns jdg
           (Uniquely dc)
           pos
     ) ns jdg
+
+introducePatHypothesis
+    :: Maybe OccName
+    -> DataCon
+    -> Judgement' a
+    -> [(OccName, a)]
+    -> Hypothesis a
+introducePatHypothesis scrutinee dc jdg
+  = introduceHypothesis $ \_ pos ->
+      PatternMatchPrv $
+        PatVal
+            scrutinee
+            (maybe mempty
+                  (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
+                  scrutinee)
+            (Uniquely dc)
+            pos
 
 
 ------------------------------------------------------------------------------
