@@ -1195,6 +1195,11 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
+  , qual' <-
+      extractDoesNotExportModuleName msg
+        >>= (findImportDeclByModuleName hsmodImports . T.unpack)
+        >>= ideclAs . unLoc
+        <&> T.pack . moduleNameString . unLoc
   , Just insertLine <- case hsmodImports of
         [] -> case srcSpanStart $ getLoc (head hsmodDecls) of
           RealSrcLoc s -> Just $ srcLocLine s - 1
@@ -1206,7 +1211,7 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
   = [(imp, [TextEdit (Range insertPos insertPos) (imp <> "\n")])
-    | imp <- sort $ constructNewImportSuggestions packageExportsMap (qual, thingMissing) extendImportSuggestions
+    | imp <- sort $ constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
     ]
 suggestNewImport _ _ _ = []
 
@@ -1272,6 +1277,37 @@ extractQualifiedModuleName x
   | otherwise
   = Nothing
 
+-- | If a module has been imported qualified, and we want to ues the same qualifier for other modules
+-- which haven't been imported, 'extractQualifiedModuleName' won't work. Thus we need extract the qualifier
+-- from the imported one.
+--
+-- For example, we write f = T.putStrLn, where putStrLn comes from Data.Text.IO, with the following import(s):
+-- 1.
+-- import qualified Data.Text as T
+--
+-- Module ‘Data.Text’ does not export ‘putStrLn’.
+--
+-- 2.
+-- import qualified Data.Text as T
+-- import qualified Data.Functor as T
+--
+-- Neither ‘Data.Functor’ nor ‘Data.Text’ exports ‘putStrLn’.
+--
+-- 3.
+-- import qualified Data.Text as T
+-- import qualified Data.Functor as T
+-- import qualified Data.Function as T
+--
+-- Neither ‘Data.Function’,
+--         ‘Data.Functor’ nor ‘Data.Text’ exports ‘putStrLn’.
+extractDoesNotExportModuleName :: T.Text -> Maybe T.Text
+extractDoesNotExportModuleName x
+  | Just [m] <-
+    matchRegexUnifySpaces x "Module ‘([^’]*)’ does not export"
+      <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ exports"
+  = Just m
+  | otherwise
+  = Nothing
 -------------------------------------------------------------------------------------------------
 
 
