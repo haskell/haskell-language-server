@@ -272,7 +272,7 @@ newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
 instance MonadExtract (Synthesized (LHsExpr GhcPs)) ExtractM where
   hole
     = pure
-    . Synthesized mempty
+    . Synthesized mempty mempty
     . noLoc
     $ var "_"
 
@@ -340,21 +340,27 @@ type Rule      = RuleM (Synthesized (LHsExpr GhcPs))
 type Trace = Rose String
 
 data Synthesized a = Synthesized
-  { syn_trace :: Trace
-  , syn_val   :: a
+  { syn_trace  :: Trace
+    -- ^ A tree describing which tactics were used produce the 'syn_val'.
+    -- Mainly for debugging when you get the wrong answer, to see the other
+    -- things it tried.
+  , syn_scoped :: Hypothesis CType
+    -- ^ All of the bindings created to produce the 'syn_val'.
+  , syn_val    :: a
   }
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 mapTrace :: (Trace -> Trace) -> Synthesized a -> Synthesized a
-mapTrace f (Synthesized tr a) = Synthesized (f tr) a
+mapTrace f (Synthesized tr sc a) = Synthesized (f tr) sc a
 
 
 ------------------------------------------------------------------------------
 -- | This might not be lawful, due to the semigroup on 'Trace' maybe not being
 -- lawful.
 instance Applicative Synthesized where
-  pure = Synthesized mempty
-  Synthesized tr1 f <*> Synthesized tr2 a = Synthesized (tr1 <> tr2) $ f a
+  pure = Synthesized mempty mempty
+  Synthesized tr1 sc1 f <*> Synthesized tr2 sc2 a =
+    Synthesized (tr1 <> tr2) (sc1 <> sc2) $ f a
 
 
 ------------------------------------------------------------------------------

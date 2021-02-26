@@ -82,13 +82,14 @@ destructMatches f scrut t jdg = do
                   $ coerce args
               j = introduce hy'
                 $ withNewGoal g jdg
-          Synthesized tr sg <- f dc j
+          Synthesized tr sc sg <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
           pure
             $ Synthesized
               ( rose ("match " <> show dc <> " {" <>
                           intercalate ", " (fmap show names) <> "}")
                     $ pure tr)
+              (sc <> hy')
             $ match [mkDestructPat dc names]
             $ unLoc sg
 
@@ -158,14 +159,14 @@ destruct' f hi jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let term = hi_name hi
   useOccName jdg term
-  Synthesized tr ms
+  Synthesized tr sc ms
       <- destructMatches
            f
            (Just term)
            (hi_type hi)
            $ disallowing AlreadyDestructed [term] jdg
   pure
-    $ Synthesized (rose ("destruct " <> show term) $ pure tr)
+    $ Synthesized (rose ("destruct " <> show term) $ pure tr) sc
     $ noLoc
     $ case' (var' term) ms
 
@@ -193,7 +194,7 @@ buildDataCon
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon jdg dc tyapps = do
   let args = dataConInstOrigArgTys' dc tyapps
-  Synthesized tr sgs
+  Synthesized tr sc sgs
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
@@ -203,6 +204,6 @@ buildDataCon jdg dc tyapps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
-    $ Synthesized (rose (show dc) $ pure tr)
+    $ Synthesized (rose (show dc) $ pure tr) sc
     $ mkCon dc sgs
 

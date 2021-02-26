@@ -55,7 +55,7 @@ assume name = rule $ \jdg -> do
       unify ty $ jGoal jdg
       for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
       useOccName jdg name
-      pure $ Synthesized (tracePrim $ "assume " <> occNameString name)
+      pure $ Synthesized (tracePrim $ "assume " <> occNameString name) mempty
            $ noLoc
            $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
@@ -69,6 +69,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
       let hy' = recursiveHypothesis defs
 
+      -- TODO(sandy): do we need to add this to syn_scoped?
       localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
@@ -89,9 +90,11 @@ intros = rule $ \jdg -> do
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
       when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
-      Synthesized tr sg <- newSubgoal jdg'
+      Synthesized tr sc sg <- newSubgoal jdg'
       pure
-        . Synthesized (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr)
+        . Synthesized
+            (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr)
+            (sc <> hy')
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg
