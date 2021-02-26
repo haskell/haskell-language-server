@@ -63,19 +63,12 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
+introduce :: Hypothesis a -> Judgement' a -> Judgement' a
+introduce hy = field @"_jHypothesis" <>~ hy
+
+
 ------------------------------------------------------------------------------
 -- | Helper function for implementing functions which introduce new hypotheses.
-introducing
-    :: (Int -> Int -> Provenance)
-        -- ^ A function from the total number of args and position of this arg
-        -- to its provenance.
-    -> [(OccName, a)]
-    -> Judgement' a
-    -> Judgement' a
-introducing f ns =
-  field @"_jHypothesis" <>~ introduceHypothesis f ns
-
-
 introduceHypothesis
     :: (Int -> Int -> Provenance)
         -- ^ A function from the total number of args and position of this arg
@@ -89,35 +82,20 @@ introduceHypothesis f ns =
 
 ------------------------------------------------------------------------------
 -- | Introduce bindings in the context of a lamba.
-introducingLambda
-    :: Maybe OccName   -- ^ The name of the top level function. For any other
-                       -- function, this should be 'Nothing'.
-    -> [(OccName, a)]
-    -> Judgement' a
-    -> Judgement' a
-introducingLambda func = introducing $ \count pos ->
-  maybe UserPrv (\x -> TopLevelArgPrv x pos count) func
-
-
-------------------------------------------------------------------------------
--- | Introduce bindings in the context of a lamba.
-introduceLambdaHypothesis
+lambdaHypothesis
     :: Maybe OccName   -- ^ The name of the top level function. For any other
                        -- function, this should be 'Nothing'.
     -> [(OccName, a)]
     -> Hypothesis a
-introduceLambdaHypothesis func =
+lambdaHypothesis func =
   introduceHypothesis $ \count pos ->
     maybe UserPrv (\x -> TopLevelArgPrv x pos count) func
 
 
 ------------------------------------------------------------------------------
 -- | Introduce a binding in a recursive context.
-introducingRecursively :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducingRecursively = introducing $ const $ const RecursivePrv
-
-introduceRecursiveHypothesis :: [(OccName, a)] -> Hypothesis a
-introduceRecursiveHypothesis = introduceHypothesis $ const $ const RecursivePrv
+recursiveHypothesis :: [(OccName, a)] -> Hypothesis a
+recursiveHypothesis = introduceHypothesis $ const $ const RecursivePrv
 
 
 ------------------------------------------------------------------------------
@@ -243,34 +221,13 @@ extremelyStupid__definingFunction =
   fst . head . ctxDefiningFuncs
 
 
-------------------------------------------------------------------------------
--- | Pattern vals are currently tracked in jHypothesis, with an extra piece of
--- data sitting around in jPatternVals.
-introducingPat
-    :: Maybe OccName
-    -> DataCon
-    -> [(OccName, a)]
-    -> Judgement' a
-    -> Judgement' a
-introducingPat scrutinee dc ns jdg
-  = introducing (\_ pos ->
-      PatternMatchPrv $
-        PatVal
-          scrutinee
-          (maybe mempty
-                (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
-                scrutinee)
-          (Uniquely dc)
-          pos
-    ) ns jdg
-
-introducePatHypothesis
+patternHypothesis
     :: Maybe OccName
     -> DataCon
     -> Judgement' a
     -> [(OccName, a)]
     -> Hypothesis a
-introducePatHypothesis scrutinee dc jdg
+patternHypothesis scrutinee dc jdg
   = introduceHypothesis $ \_ pos ->
       PatternMatchPrv $
         PatVal

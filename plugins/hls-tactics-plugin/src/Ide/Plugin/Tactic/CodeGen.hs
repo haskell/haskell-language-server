@@ -77,8 +77,10 @@ destructMatches f scrut t jdg = do
         _ -> fmap unzipTrace $ for dcs $ \dc -> do
           let args = dataConInstOrigArgTys' dc apps
           names <- mkManyGoodNames (hyNamesInScope hy) args
-          let hy' = zip names $ coerce args
-              j = introducingPat scrut dc hy'
+          let hy' = patternHypothesis scrut dc jdg
+                  $ zip names
+                  $ coerce args
+              j = introduce hy'
                 $ withNewGoal g jdg
           Synthesized tr sg <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
