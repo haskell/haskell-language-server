@@ -148,12 +148,14 @@ homoLambdaCase =
 apply :: HyInfo CType -> TacticsM ()
 apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
   jdg <- goal
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
+  let g  = jGoal jdg
       ty = unCType $ hi_type hi
       func = hi_name hi
   ty' <- freshTyvars ty
   let (_, _, args, ret) = tacticsSplitFunTy ty'
+  -- TODO(sandy): Bug here! Prevents us from doing mono-map like things
+  -- Don't require new holes for locally bound vars; only respect linearity
+  -- requireNewHoles $
   requireNewHoles $ rule $ \jdg -> do
     unify g (CType ret)
     useOccName jdg func
