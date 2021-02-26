@@ -23,6 +23,7 @@ import           Data.Aeson
 import           Data.Bifunctor                                   (Bifunctor (bimap))
 import           Data.Bool                                        (bool)
 import           Data.Data                                        (Data)
+import           Data.Foldable (for_)
 import           Data.Generics.Aliases                            (mkQ)
 import           Data.Generics.Schemes                            (everything)
 import           Data.Maybe
@@ -50,7 +51,6 @@ import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude                                          hiding (span)
 import           System.Timeout
-import Data.Foldable (for_)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState

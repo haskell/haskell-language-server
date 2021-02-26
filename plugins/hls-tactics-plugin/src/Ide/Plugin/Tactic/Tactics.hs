@@ -72,8 +72,6 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
     modify $ pushRecursionStack .  countRecursiveCall
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
       let hy' = recursiveHypothesis defs
-
-      -- TODO(sandy): do we need to add this to syn_scoped?
       localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
@@ -164,6 +162,7 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
   let (_, _, args, ret) = tacticsSplitFunTy ty'
   -- TODO(sandy): Bug here! Prevents us from doing mono-map like things
   -- Don't require new holes for locally bound vars; only respect linearity
+  -- see https://github.com/haskell/haskell-language-server/issues/1447
   requireNewHoles $ rule $ \jdg -> do
     unify g (CType ret)
     Synthesized tr sc uv sgs
