@@ -93,7 +93,7 @@ runTactic ctx jdg t =
       (errs, []) -> Left $ take 50 errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
-              flip sortBy solns $ comparing $ \((syn_val -> ext), (jdg, holes)) ->
+              flip sortBy solns $ comparing $ \(ext, (jdg, holes)) ->
                 Down $ scoreSolution ext jdg holes
         case sorted of
           ((syn, _) : _) ->
@@ -155,10 +155,10 @@ markStructuralySmallerRecursion pv = do
 -- | Given the results of running a tactic, score the solutions by
 -- desirability.
 --
--- TODO(sandy): This function is completely unprincipled and was just hacked
--- together to produce the right test results.
+-- NOTE: This function is completely unprincipled and was just hacked together
+-- to produce the right test results.
 scoreSolution
-    :: LHsExpr GhcPs
+    :: Synthesized (LHsExpr GhcPs)
     -> TacticState
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
@@ -171,13 +171,15 @@ scoreSolution
        )
 scoreSolution ext TacticState{..} holes
   = ( Penalize $ length holes
-    , Reward   $ S.null $ ts_intro_vals S.\\ ts_used_vals
+    , Reward   $ S.null $ intro_vals S.\\ ts_used_vals
     , Penalize $ S.size ts_unused_top_vals
-    , Penalize $ S.size ts_intro_vals
+    , Penalize $ S.size intro_vals
     , Reward   $ S.size ts_used_vals
     , Penalize ts_recursion_count
-    , Penalize $ solutionSize ext
+    , Penalize $ solutionSize $ syn_val ext
     )
+  where
+    intro_vals = M.keysSet $ hyByName $ syn_scoped ext
 
 
 ------------------------------------------------------------------------------

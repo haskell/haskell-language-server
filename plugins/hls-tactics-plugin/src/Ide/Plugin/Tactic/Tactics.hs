@@ -88,7 +88,6 @@ intros = rule $ \jdg -> do
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
                $ withNewGoal (CType b) jdg
-      modify $ withIntroducedVals $ mappend $ S.fromList vs
       when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
       Synthesized tr sc sg <- newSubgoal jdg'
       pure

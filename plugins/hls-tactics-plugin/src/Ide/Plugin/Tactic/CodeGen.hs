@@ -83,7 +83,6 @@ destructMatches f scrut t jdg = do
               j = introduce hy'
                 $ withNewGoal g jdg
           Synthesized tr sc sg <- f dc j
-          modify $ withIntroducedVals $ mappend $ S.fromList names
           pure
             $ Synthesized
               ( rose ("match " <> show dc <> " {" <>

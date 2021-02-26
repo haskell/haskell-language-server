@@ -90,8 +90,6 @@ data TacticState = TacticState
       -- ^ The current substitution of univars.
     , ts_used_vals :: !(Set OccName)
       -- ^ Set of values used by tactics.
-    , ts_intro_vals :: !(Set OccName)
-      -- ^ Set of values introduced by tactics.
     , ts_unused_top_vals :: !(Set OccName)
       -- ^ Set of currently unused arguments to the function being defined.
     , ts_recursion_stack :: ![Maybe PatVal]
@@ -121,7 +119,6 @@ defaultTacticState =
     { ts_skolems         = mempty
     , ts_unifier         = emptyTCvSubst
     , ts_used_vals       = mempty
-    , ts_intro_vals      = mempty
     , ts_unused_top_vals = mempty
     , ts_recursion_stack = mempty
     , ts_recursion_count = 0
@@ -153,11 +150,6 @@ popRecursionStack = withRecursionStack tail
 withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
 withUsedVals f =
   field @"ts_used_vals" %~ f
-
-
-withIntroducedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
-withIntroducedVals f =
-  field @"ts_intro_vals" %~ f
 
 
 ------------------------------------------------------------------------------
