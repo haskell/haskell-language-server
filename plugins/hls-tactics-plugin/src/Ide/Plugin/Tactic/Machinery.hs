@@ -169,7 +169,7 @@ scoreSolution ext TacticState{..} holes
     , Reward   $ S.null $ intro_vals S.\\ used_vals
     , Penalize $ S.size unused_top_vals
     , Penalize $ S.size intro_vals
-    , Reward   $ S.size $ traceIdX "used vals" $ used_vals
+    , Reward   $ S.size used_vals
     , Penalize ts_recursion_count
     , Penalize $ solutionSize $ syn_val ext
     )
