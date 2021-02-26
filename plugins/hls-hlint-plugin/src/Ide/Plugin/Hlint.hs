@@ -268,8 +268,14 @@ getHlintSettingsRule usage =
 -- ---------------------------------------------------------------------
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right . LSP.List . map InR <$> liftIO getCodeActions
+codeActionProvider ideState plId (CodeActionParams _ _ docId caRange context) = Right . LSP.List . map InR <$> liftIO getCodeActions
   where
+    areOverlapping :: LSP.Range -> LSP.Range -> Bool
+    areOverlapping (LSP.Range from1 to1) (LSP.Range from2 to2) =
+        not $ to1 `lt` from2 || to2 `lt` from1
+        where
+            lt :: LSP.Position -> LSP.Position -> Bool
+            lt (LSP.Position l1 c1) (LSP.Position l2 c2) = l1 < l2 || l1 == l2 && c1 < c2
 
     getCodeActions = do
         diags <- getDiagnostics ideState
@@ -279,9 +285,10 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
                  , validCommand d
                  , Just nfp == docNfp
               ]
+        let isOnHint = any (\(_, _, (LSP.Diagnostic {LSP._range = range})) -> areOverlapping range caRange) diags
         -- We only want to show the applyAll code action if there is more than 1
-        -- hint in the current document
-        if numHintsInDoc > 1 then do
+        -- hint in the current document and the cursor is on one of these hints
+        if numHintsInDoc > 1 && isOnHint then do
           pure $ applyAllAction:applyOneActions
         else
           pure applyOneActions
