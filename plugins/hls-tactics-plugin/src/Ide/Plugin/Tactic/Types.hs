@@ -88,10 +88,6 @@ data TacticState = TacticState
       -- ^ The known skolems.
     , ts_unifier   :: !TCvSubst
       -- ^ The current substitution of univars.
-    , ts_used_vals :: !(Set OccName)
-      -- ^ Set of values used by tactics.
-    , ts_unused_top_vals :: !(Set OccName)
-      -- ^ Set of currently unused arguments to the function being defined.
     , ts_recursion_stack :: ![Maybe PatVal]
       -- ^ Stack for tracking whether or not the current recursive call has
       -- used at least one smaller pat val. Recursive calls for which this
@@ -118,8 +114,6 @@ defaultTacticState =
   TacticState
     { ts_skolems         = mempty
     , ts_unifier         = emptyTCvSubst
-    , ts_used_vals       = mempty
-    , ts_unused_top_vals = mempty
     , ts_recursion_stack = mempty
     , ts_recursion_count = 0
     , ts_unique_gen      = unsafeDefaultUniqueSupply
@@ -145,11 +139,6 @@ pushRecursionStack = withRecursionStack (Nothing :)
 
 popRecursionStack :: TacticState -> TacticState
 popRecursionStack = withRecursionStack tail
-
-
-withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
-withUsedVals f =
-  field @"ts_used_vals" %~ f
 
 
 ------------------------------------------------------------------------------
@@ -264,7 +253,7 @@ newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
 instance MonadExtract (Synthesized (LHsExpr GhcPs)) ExtractM where
   hole
     = pure
-    . Synthesized mempty mempty
+    . Synthesized mempty mempty mempty
     . noLoc
     $ var "_"
 
@@ -338,21 +327,23 @@ data Synthesized a = Synthesized
     -- things it tried.
   , syn_scoped :: Hypothesis CType
     -- ^ All of the bindings created to produce the 'syn_val'.
+  , syn_used_vals :: Set OccName
+    -- ^ The values used when synthesizing the 'syn_val'.
   , syn_val    :: a
   }
   deriving (Eq, Show, Functor, Foldable, Traversable)
 
 mapTrace :: (Trace -> Trace) -> Synthesized a -> Synthesized a
-mapTrace f (Synthesized tr sc a) = Synthesized (f tr) sc a
+mapTrace f (Synthesized tr sc uv a) = Synthesized (f tr) sc uv a
 
 
 ------------------------------------------------------------------------------
 -- | This might not be lawful, due to the semigroup on 'Trace' maybe not being
 -- lawful.
 instance Applicative Synthesized where
-  pure = Synthesized mempty mempty
-  Synthesized tr1 sc1 f <*> Synthesized tr2 sc2 a =
-    Synthesized (tr1 <> tr2) (sc1 <> sc2) $ f a
+  pure = Synthesized mempty mempty mempty
+  Synthesized tr1 sc1 uv1 f <*> Synthesized tr2 sc2 uv2 a =
+    Synthesized (tr1 <> tr2) (sc1 <> sc2) (uv1 <> uv2) $ f a
 
 
 ------------------------------------------------------------------------------

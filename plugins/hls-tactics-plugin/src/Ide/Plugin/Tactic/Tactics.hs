@@ -14,7 +14,6 @@ import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader(ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
-import           Data.Bool (bool)
 import           Data.Foldable
 import           Data.List
 import qualified Data.Map as M
@@ -54,8 +53,9 @@ assume name = rule $ \jdg -> do
     Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
       for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
-      useOccName jdg name
-      pure $ Synthesized (tracePrim $ "assume " <> occNameString name) mempty
+      pure $ Synthesized (tracePrim $ "assume " <> occNameString name)
+               mempty
+               (S.singleton name)
            $ noLoc
            $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
@@ -88,12 +88,12 @@ intros = rule $ \jdg -> do
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
                $ withNewGoal (CType b) jdg
-      when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
-      Synthesized tr sc sg <- newSubgoal jdg'
+      Synthesized tr sc uv sg <- newSubgoal jdg'
       pure
         . Synthesized
             (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr)
             (sc <> hy')
+            uv
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg
@@ -162,15 +162,16 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
   -- Don't require new holes for locally bound vars; only respect linearity
   requireNewHoles $ rule $ \jdg -> do
     unify g (CType ret)
-    useOccName jdg func
-    sgs
+    Synthesized tr sc uv sgs
         <- fmap unzipTrace
         $ traverse ( newSubgoal
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
                     ) args
-    pure $ fmap (noLoc . foldl' (@@) (var' func) . fmap unLoc) sgs
+    pure $ Synthesized tr sc (S.insert func uv)
+         $ noLoc . foldl' (@@) (var' func)
+         $ fmap unLoc sgs
 
 
 ------------------------------------------------------------------------------

@@ -8,13 +8,10 @@ module Ide.Plugin.Tactic.CodeGen
   , module Ide.Plugin.Tactic.CodeGen.Utils
   ) where
 
-import           Control.Lens ((+~), (%~), (<>~))
+import           Control.Lens ((+~))
 import           Control.Monad.Except
-import           Control.Monad.State (MonadState)
-import           Control.Monad.State.Class (modify)
 import           Data.Generics.Product (field)
 import           Data.List
-import qualified Data.Map as M
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
@@ -24,36 +21,20 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
+import           Ide.Plugin.Tactic.CodeGen.Utils
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Ide.Plugin.Tactic.CodeGen.Utils
 import           Type hiding (Var)
 
-
-useOccName :: MonadState TacticState m => Judgement -> OccName -> m ()
-useOccName jdg name =
-  -- Only score points if this is in the local hypothesis
-  case M.lookup name $ hyByName $ jLocalHypothesis jdg of
-    Just{}  -> modify
-             $ (withUsedVals $ S.insert name)
-             . (field @"ts_unused_top_vals" %~ S.delete name)
-    Nothing -> pure ()
 
 
 ------------------------------------------------------------------------------
 -- | Doing recursion incurs a small penalty in the score.
 countRecursiveCall :: TacticState -> TacticState
 countRecursiveCall = field @"ts_recursion_count" +~ 1
-
-
-------------------------------------------------------------------------------
--- | Insert some values into the unused top values field. These are
--- subsequently removed via 'useOccName'.
-addUnusedTopVals :: MonadState TacticState m => S.Set OccName -> m ()
-addUnusedTopVals vals = modify $ field @"ts_unused_top_vals" <>~ vals
 
 
 destructMatches
@@ -82,13 +63,14 @@ destructMatches f scrut t jdg = do
                   $ coerce args
               j = introduce hy'
                 $ withNewGoal g jdg
-          Synthesized tr sc sg <- f dc j
+          Synthesized tr sc uv sg <- f dc j
           pure
             $ Synthesized
               ( rose ("match " <> show dc <> " {" <>
                           intercalate ", " (fmap show names) <> "}")
                     $ pure tr)
               (sc <> hy')
+              uv
             $ match [mkDestructPat dc names]
             $ unLoc sg
 
@@ -157,15 +139,17 @@ destruct' :: (DataCon -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' f hi jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let term = hi_name hi
-  useOccName jdg term
-  Synthesized tr sc ms
+  Synthesized tr sc uv ms
       <- destructMatches
            f
            (Just term)
            (hi_type hi)
            $ disallowing AlreadyDestructed [term] jdg
   pure
-    $ Synthesized (rose ("destruct " <> show term) $ pure tr) sc
+    $ Synthesized
+        (rose ("destruct " <> show term) $ pure tr)
+        sc
+        (S.insert term uv)
     $ noLoc
     $ case' (var' term) ms
 
@@ -193,7 +177,7 @@ buildDataCon
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon jdg dc tyapps = do
   let args = dataConInstOrigArgTys' dc tyapps
-  Synthesized tr sc sgs
+  Synthesized tr sc uv sgs
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
@@ -203,6 +187,6 @@ buildDataCon jdg dc tyapps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
-    $ Synthesized (rose (show dc) $ pure tr) sc
+    $ Synthesized (rose (show dc) $ pure tr) sc uv
     $ mkCon dc sgs
 

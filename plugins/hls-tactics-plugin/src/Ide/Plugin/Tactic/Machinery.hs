@@ -77,14 +77,9 @@ runTactic ctx jdg t =
                 $ toList
                 $ hyByName
                 $ jHypothesis jdg
-        unused_topvals = M.keysSet
-                       $ M.filter (isTopLevel . hi_provenance)
-                       $ hyByName
-                       $ jHypothesis jdg
         tacticState =
           defaultTacticState
             { ts_skolems = skolems
-            , ts_unused_top_vals = unused_topvals
             }
     in case partitionEithers
           . flip runReader ctx
@@ -171,15 +166,18 @@ scoreSolution
        )
 scoreSolution ext TacticState{..} holes
   = ( Penalize $ length holes
-    , Reward   $ S.null $ intro_vals S.\\ ts_used_vals
-    , Penalize $ S.size ts_unused_top_vals
+    , Reward   $ S.null $ intro_vals S.\\ used_vals
+    , Penalize $ S.size unused_top_vals
     , Penalize $ S.size intro_vals
-    , Reward   $ S.size ts_used_vals
+    , Reward   $ S.size $ traceIdX "used vals" $ used_vals
     , Penalize ts_recursion_count
     , Penalize $ solutionSize $ syn_val ext
     )
   where
     intro_vals = M.keysSet $ hyByName $ syn_scoped ext
+    used_vals = S.intersection intro_vals $ syn_used_vals ext
+    top_vals = S.fromList . fmap hi_name . filter (isTopLevel . hi_provenance) $ unHypothesis $ syn_scoped ext
+    unused_top_vals = top_vals S.\\ used_vals
 
 
 ------------------------------------------------------------------------------

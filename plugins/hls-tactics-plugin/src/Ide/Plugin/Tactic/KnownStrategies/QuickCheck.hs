@@ -48,6 +48,7 @@ deriveArbitrary = do
               -- a bespoke binding "terminal", and a not-so-bespoke "n".
               -- But maybe it's fine for known rules?
               mempty
+              mempty
           $ noLoc $
               let' [valBind (fromString "terminal") $ list $ fmap genExpr terminal] $
                 appDollar (mkFunc "sized") $ lambda [bvar' (mkVarOcc "n")] $
