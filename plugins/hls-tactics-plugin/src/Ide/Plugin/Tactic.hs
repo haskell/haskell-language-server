@@ -50,6 +50,7 @@ import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude                                          hiding (span)
 import           System.Timeout
+import Data.Foldable (for_)
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -144,7 +145,7 @@ mkWorkspaceEdits
     -> RunTacticResults
     -> Either ResponseError (Maybe WorkspaceEdit)
 mkWorkspaceEdits span dflags ccs uri pm rtr = do
-  traceMX "other solutions" $ rtr_other_solns rtr
+  for_ (rtr_other_solns rtr) $ traceMX "other solution"
   let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags ccs uri g pm
    in case response of
