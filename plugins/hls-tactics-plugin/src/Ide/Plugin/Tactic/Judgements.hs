@@ -92,14 +92,15 @@ withNewGoal t = field @"_jGoal" .~ t
 ------------------------------------------------------------------------------
 -- | Helper function for implementing functions which introduce new hypotheses.
 introducing
-    :: (Int -> Provenance)  -- ^ A function from the position of the arg to its
-                            -- provenance.
+    :: (Int -> Int -> Provenance)
+        -- ^ A function from the total number of args and position of this arg
+        -- to its provenance.
     -> [(OccName, a)]
     -> Judgement' a
     -> Judgement' a
 introducing f ns =
   field @"_jHypothesis" <>~ (Hypothesis $ zip [0..] ns <&>
-    \(pos, (name, ty)) -> HyInfo name (f pos) ty)
+    \(pos, (name, ty)) -> HyInfo name (f (length ns) pos) ty)
 
 
 ------------------------------------------------------------------------------
@@ -110,14 +111,14 @@ introducingLambda
     -> [(OccName, a)]
     -> Judgement' a
     -> Judgement' a
-introducingLambda func = introducing $ \pos ->
-  maybe UserPrv (\x -> TopLevelArgPrv x pos) func
+introducingLambda func = introducing $ \count pos ->
+  maybe UserPrv (\x -> TopLevelArgPrv x pos count) func
 
 
 ------------------------------------------------------------------------------
 -- | Introduce a binding in a recursive context.
 introducingRecursively :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducingRecursively = introducing $ const RecursivePrv
+introducingRecursively = introducing $ const $ const RecursivePrv
 
 
 ------------------------------------------------------------------------------
@@ -176,7 +177,7 @@ findPositionVal jdg defn pos = listToMaybe $ do
   -- ancstry through potentially disallowed terms in the hypothesis.
   (name, hi) <- M.toList $ M.map (overProvenance expandDisallowed) $ hyByName $ jEntireHypothesis jdg
   case hi_provenance hi of
-    TopLevelArgPrv defn' pos'
+    TopLevelArgPrv defn' pos' _
       | defn == defn'
       , pos  == pos' -> pure name
     PatternMatchPrv pv
@@ -253,7 +254,7 @@ introducingPat
     -> Judgement' a
     -> Judgement' a
 introducingPat scrutinee dc ns jdg
-  = introducing (\pos ->
+  = introducing (\_ pos ->
       PatternMatchPrv $
         PatVal
           scrutinee

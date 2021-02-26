@@ -165,6 +165,7 @@ data Provenance
     TopLevelArgPrv
       OccName   -- ^ Binding function
       Int       -- ^ Argument Position
+      Int       -- ^ of how many arguments total?
     -- | A binding created in a pattern match.
   | PatternMatchPrv PatVal
     -- | A class method from the given context.

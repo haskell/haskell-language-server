@@ -197,7 +197,8 @@ getRhsPosVals rss tcs
         , isHole $ occName hole  -- and the span is a hole
         -> First $ do
             patnames <- traverse getPatName ps
-            pure $ zip patnames $ [0..] <&> TopLevelArgPrv name
+            pure $ zip patnames $ [0..] <&> \n ->
+              TopLevelArgPrv name n (length patnames)
       _ -> mempty
   ) tcs
 
