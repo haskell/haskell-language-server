@@ -43,8 +43,8 @@ deriveArbitrary = do
             terminal_expr = mkVal "terminal"
             oneof_expr = mkVal "oneof"
         pure
-          ( tracePrim "deriveArbitrary"
-          , noLoc $
+          $ Synthesized (tracePrim "deriveArbitrary")
+          $ noLoc $
               let' [valBind (fromString "terminal") $ list $ fmap genExpr terminal] $
                 appDollar (mkFunc "sized") $ lambda [bvar' (mkVarOcc "n")] $
                   case' (infixCall "<=" (mkVal "n") (int 1))
@@ -56,7 +56,6 @@ deriveArbitrary = do
                             (list $ fmap genExpr big)
                             terminal_expr
                     ]
-          )
     _ -> throwError $ GoalMismatch "deriveArbitrary" ty
 
 

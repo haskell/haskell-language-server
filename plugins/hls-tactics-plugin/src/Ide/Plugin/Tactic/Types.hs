@@ -1,5 +1,7 @@
+{-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -20,6 +22,7 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
+import Data.Semigroup
 import Control.Lens hiding (Context, (.=))
 import Control.Monad.Reader
 import Control.Monad.State
@@ -37,9 +40,11 @@ import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
 import OccName
 import Refinery.Tactic
 import System.IO.Unsafe (unsafePerformIO)
-import Type
+import Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
+import Data.List.NonEmpty (NonEmpty (..))
+import GHC.SourceGen (var)
 
 
 ------------------------------------------------------------------------------
@@ -264,8 +269,12 @@ newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
-instance MonadExtract (Trace, LHsExpr GhcPs) ExtractM where
-  hole = pure (mempty, noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_")
+instance MonadExtract (Synthesized (LHsExpr GhcPs)) ExtractM where
+  hole
+    = pure
+    . Synthesized mempty
+    . noLoc
+    $ var "_"
 
 
 ------------------------------------------------------------------------------
@@ -324,11 +333,28 @@ instance Show TacticError where
 
 
 ------------------------------------------------------------------------------
-type TacticsM  = TacticT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
-type RuleM     = RuleT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
-type Rule      = RuleM (Trace, LHsExpr GhcPs)
+type TacticsM  = TacticT Judgement (Synthesized (LHsExpr GhcPs)) TacticError TacticState ExtractM
+type RuleM     = RuleT Judgement (Synthesized (LHsExpr GhcPs)) TacticError TacticState ExtractM
+type Rule      = RuleM (Synthesized (LHsExpr GhcPs))
 
 type Trace = Rose String
+
+data Synthesized a = Synthesized
+  { syn_trace :: Trace
+  , syn_val   :: a
+  }
+  deriving (Eq, Show, Functor, Foldable, Traversable)
+
+mapTrace :: (Trace -> Trace) -> Synthesized a -> Synthesized a
+mapTrace f (Synthesized tr a) = Synthesized (f tr) a
+
+
+------------------------------------------------------------------------------
+-- | This might not be lawful, due to the semigroup on 'Trace' maybe not being
+-- lawful.
+instance Applicative Synthesized where
+  pure = Synthesized mempty
+  Synthesized tr1 f <*> Synthesized tr2 a = Synthesized (tr1 <> tr2) $ f a
 
 
 ------------------------------------------------------------------------------
@@ -360,10 +386,13 @@ dropEveryOther []           = []
 dropEveryOther [a]          = [a]
 dropEveryOther (a : _ : as) = a : dropEveryOther as
 
-instance Semigroup a => Semigroup (Rose a) where
+------------------------------------------------------------------------------
+-- | This might not be lawful! I didn't check, and it feels sketchy.
+instance (Eq a, Monoid a) => Semigroup (Rose a) where
   Rose (Node a as) <> Rose (Node b bs) = Rose $ Node (a <> b) (as <> bs)
+  sconcat (a :| as) = rose mempty $ a : as
 
-instance Monoid a => Monoid (Rose a) where
+instance (Eq a, Monoid a) => Monoid (Rose a) where
   mempty = Rose $ Node mempty mempty
 
 rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
@@ -376,7 +405,7 @@ rose a rs = Rose $ Node a $ coerce rs
 data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
-  , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
+  , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context
   } deriving Show

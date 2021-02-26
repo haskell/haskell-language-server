@@ -93,14 +93,14 @@ runTactic ctx jdg t =
       (errs, []) -> Left $ take 50 errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
-              flip sortBy solns $ comparing $ \((_, ext), (jdg, holes)) ->
+              flip sortBy solns $ comparing $ \((syn_val -> ext), (jdg, holes)) ->
                 Down $ scoreSolution ext jdg holes
         case sorted of
-          (((tr, ext), _) : _) ->
+          ((syn, _) : _) ->
             Right $
               RunTacticResults
-                { rtr_trace = tr
-                , rtr_extract = simplify ext
+                { rtr_trace = syn_trace syn
+                , rtr_extract = simplify $ syn_val syn
                 , rtr_other_solns = reverse . fmap fst $ take 5 sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
@@ -119,11 +119,11 @@ tracePrim = flip rose []
 tracing
     :: Functor m
     => String
-    -> TacticT jdg (Trace, ext) err s m a
-    -> TacticT jdg (Trace, ext) err s m a
+    -> TacticT jdg (Synthesized ext) err s m a
+    -> TacticT jdg (Synthesized ext) err s m a
 tracing s (TacticT m)
   = TacticT $ StateT $ \jdg ->
-      mapExtract' (first $ rose s . pure) $ runStateT m jdg
+      mapExtract' (mapTrace $ rose s . pure) $ runStateT m jdg
 
 
 ------------------------------------------------------------------------------

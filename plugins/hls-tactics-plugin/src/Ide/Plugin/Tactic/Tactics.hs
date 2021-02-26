@@ -50,13 +50,14 @@ assumption = attemptOn (S.toList . allNames) assume
 -- | Use something named in the hypothesis to fill the hole.
 assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
-  let g  = jGoal jdg
   case M.lookup name $ hyByName $ jHypothesis jdg of
     Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
       for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
       useOccName jdg name
-      pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
+      pure $ Synthesized (tracePrim $ "assume " <> occNameString name)
+           $ noLoc
+           $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
 
 
@@ -74,8 +75,7 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
 intros = rule $ \jdg -> do
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
+  let g  = jGoal jdg
   ctx <- ask
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
@@ -86,9 +86,9 @@ intros = rule $ \jdg -> do
                $ withNewGoal (CType b) jdg
       modify $ withIntroducedVals $ mappend $ S.fromList vs
       when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
-      (tr, sg) <- newSubgoal jdg'
+      Synthesized tr sg <- newSubgoal jdg'
       pure
-        . (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr, )
+        . Synthesized (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr)
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg
@@ -155,22 +155,17 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
   let (_, _, args, ret) = tacticsSplitFunTy ty'
   -- TODO(sandy): Bug here! Prevents us from doing mono-map like things
   -- Don't require new holes for locally bound vars; only respect linearity
-  -- requireNewHoles $
   requireNewHoles $ rule $ \jdg -> do
     unify g (CType ret)
     useOccName jdg func
-    (tr, sgs)
+    sgs
         <- fmap unzipTrace
         $ traverse ( newSubgoal
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
                     ) args
-    pure
-      . (tr, )
-      . noLoc
-      . foldl' (@@) (var' func)
-      $ fmap unLoc sgs
+    pure $ fmap (noLoc . foldl' (@@) (var' func) . fmap unLoc) sgs
 
 
 ------------------------------------------------------------------------------

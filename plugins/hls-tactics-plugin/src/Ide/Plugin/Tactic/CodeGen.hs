@@ -64,7 +64,7 @@ destructMatches
     -> CType
        -- ^ Type being destructed
     -> Judgement
-    -> RuleM (Trace, [RawMatch])
+    -> RuleM (Synthesized [RawMatch])
 destructMatches f scrut t jdg = do
   let hy = jEntireHypothesis jdg
       g  = jGoal jdg
@@ -80,13 +80,15 @@ destructMatches f scrut t jdg = do
           let hy' = zip names $ coerce args
               j = introducingPat scrut dc hy'
                 $ withNewGoal g jdg
-          (tr, sg) <- f dc j
+          Synthesized tr sg <- f dc j
           modify $ withIntroducedVals $ mappend $ S.fromList names
-          pure ( rose ("match " <> show dc <> " {" <>
+          pure
+            $ Synthesized
+              ( rose ("match " <> show dc <> " {" <>
                           intercalate ", " (fmap show names) <> "}")
-                    $ pure tr
-               , match [mkDestructPat dc names] $ unLoc sg
-               )
+                    $ pure tr)
+            $ match [mkDestructPat dc names]
+            $ unLoc sg
 
 
 ------------------------------------------------------------------------------
@@ -115,10 +117,8 @@ infixifyPatIfNecessary dcon x
 
 
 
-unzipTrace :: [(Trace, a)] -> (Trace, [a])
-unzipTrace l =
-  let (trs, as) = unzip l
-   in (rose mempty trs, as)
+unzipTrace :: [Synthesized a] -> Synthesized [a]
+unzipTrace = sequenceA
 
 
 -- | Essentially same as 'dataConInstOrigArgTys' in GHC,
@@ -156,15 +156,16 @@ destruct' f hi jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let term = hi_name hi
   useOccName jdg term
-  (tr, ms)
+  Synthesized tr ms
       <- destructMatches
            f
            (Just term)
            (hi_type hi)
            $ disallowing AlreadyDestructed [term] jdg
-  pure ( rose ("destruct " <> show term) $ pure tr
-       , noLoc $ case' (var' term) ms
-       )
+  pure
+    $ Synthesized (rose ("destruct " <> show term) $ pure tr)
+    $ noLoc
+    $ case' (var' term) ms
 
 
 ------------------------------------------------------------------------------
@@ -187,10 +188,10 @@ buildDataCon
     :: Judgement
     -> DataCon            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
-    -> RuleM (Trace, LHsExpr GhcPs)
+    -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon jdg dc tyapps = do
   let args = dataConInstOrigArgTys' dc tyapps
-  (tr, sgs)
+  Synthesized tr sgs
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
@@ -200,6 +201,6 @@ buildDataCon jdg dc tyapps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
-    . (rose (show dc) $ pure tr,)
+    $ Synthesized (rose (show dc) $ pure tr)
     $ mkCon dc sgs
 
