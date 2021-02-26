@@ -1284,7 +1284,7 @@ extractQualifiedModuleName x
 -- For example, we write f = T.putStrLn, where putStrLn comes from Data.Text.IO, with the following import(s):
 -- 1.
 -- import qualified Data.Text as T
--- 
+--
 -- Module ‘Data.Text’ does not export ‘putStrLn’.
 --
 -- 2.
@@ -1302,8 +1302,8 @@ extractQualifiedModuleName x
 --         ‘Data.Functor’ nor ‘Data.Text’ exports ‘putStrLn’.
 extractDoesNotExportModuleName :: T.Text -> Maybe T.Text
 extractDoesNotExportModuleName x
-  | Just [m] <- 
-    matchRegexUnifySpaces x "Module ‘([^’]*)’ does not export" 
+  | Just [m] <-
+    matchRegexUnifySpaces x "Module ‘([^’]*)’ does not export"
       <|> matchRegexUnifySpaces x "nor ‘([^’]*)’ exports"
   = Just m
   | otherwise
