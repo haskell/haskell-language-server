@@ -144,6 +144,7 @@ mkWorkspaceEdits
     -> RunTacticResults
     -> Either ResponseError (Maybe WorkspaceEdit)
 mkWorkspaceEdits span dflags ccs uri pm rtr = do
+  traceMX "other solutions" $ rtr_other_solns rtr
   let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags ccs uri g pm
    in case response of
