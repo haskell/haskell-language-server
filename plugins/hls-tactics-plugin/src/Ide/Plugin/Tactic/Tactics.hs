@@ -1,21 +1,25 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
+{-# LANGUAGE TypeApplications #-}
 module Ide.Plugin.Tactic.Tactics
   ( module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
 import           Control.Applicative (Alternative(empty))
+import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Foldable
+import           Data.Generics.Labels ()
 import           Data.List
 import qualified Data.Map as M
 import           Data.Maybe
@@ -53,12 +57,14 @@ assume name = rule $ \jdg -> do
   case M.lookup name $ hyByName $ jHypothesis jdg of
     Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
-      pure $ Synthesized (tracePrim $ "assume " <> occNameString name)
-               mempty
-               (S.singleton name)
-               0
-           $ noLoc
-           $ var' name
+      pure $
+        -- This slightly terrible construct is producing a mostly-empty
+        -- 'Synthesized'; but there is no monoid instance to do something more
+        -- reasonable for a default value.
+        (pure (noLoc $ var' name))
+          { syn_trace = tracePrim $ "assume " <> occNameString name
+          , syn_used_vals = S.singleton name
+          }
     Nothing -> throwError $ UndefinedHypothesis name
 
 
@@ -89,16 +95,12 @@ intros = rule $ \jdg -> do
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
                $ withNewGoal (CType b) jdg
-      Synthesized tr sc uv rc sg <- newSubgoal jdg'
-      pure
-        . Synthesized
-            (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr)
-            (sc <> hy')
-            uv
-            rc
-        . noLoc
-        . lambda (fmap bvar' vs)
-        $ unLoc sg
+      ext <- newSubgoal jdg'
+      pure $
+        ext
+          & #syn_trace %~ rose ("intros {" <> intercalate ", " (fmap show vs) <> "}")
+                        . pure
+          & #syn_val   %~ noLoc . lambda (fmap bvar' vs) . unLoc
 
 
 ------------------------------------------------------------------------------
@@ -165,16 +167,17 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
   -- see https://github.com/haskell/haskell-language-server/issues/1447
   requireNewHoles $ rule $ \jdg -> do
     unify g (CType ret)
-    Synthesized tr sc uv rc sgs
+    ext
         <- fmap unzipTrace
         $ traverse ( newSubgoal
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
                     ) args
-    pure $ Synthesized tr sc (S.insert func uv) rc
-         $ noLoc . foldl' (@@) (var' func)
-         $ fmap unLoc sgs
+    pure $
+      ext
+        & #syn_used_vals %~ S.insert func
+        & #syn_val       %~ noLoc . foldl' (@@) (var' func) . fmap unLoc
 
 
 ------------------------------------------------------------------------------

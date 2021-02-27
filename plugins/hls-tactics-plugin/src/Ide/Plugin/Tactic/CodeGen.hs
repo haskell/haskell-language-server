@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -7,8 +8,10 @@ module Ide.Plugin.Tactic.CodeGen
   , module Ide.Plugin.Tactic.CodeGen.Utils
   ) where
 
-import           Control.Lens ((+~))
+
+import           Control.Lens ((+~), (%~), (<>~), (&))
 import           Control.Monad.Except
+import           Data.Generics.Labels ()
 import           Data.Generics.Product (field)
 import           Data.List
 import qualified Data.Set as S
@@ -55,17 +58,12 @@ destructMatches f scrut t jdg = do
                   $ coerce args
               j = introduce hy'
                 $ withNewGoal g jdg
-          Synthesized tr sc uv rc sg <- f dc j
-          pure
-            $ Synthesized
-              ( rose ("match " <> show dc <> " {" <>
-                          intercalate ", " (fmap show names) <> "}")
-                    $ pure tr)
-              (sc <> hy')
-              uv
-              rc
-            $ match [mkDestructPat dc names]
-            $ unLoc sg
+          ext <- f dc j
+          pure $ ext
+            & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names) <> "}")
+                          . pure
+            & #syn_scoped <>~ hy'
+            & #syn_val     %~ match [mkDestructPat dc names] . unLoc
 
 
 ------------------------------------------------------------------------------
@@ -132,20 +130,16 @@ destruct' :: (DataCon -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' f hi jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let term = hi_name hi
-  Synthesized tr sc uv rc ms
+  ext
       <- destructMatches
            f
            (Just term)
            (hi_type hi)
            $ disallowing AlreadyDestructed [term] jdg
-  pure
-    $ Synthesized
-        (rose ("destruct " <> show term) $ pure tr)
-        sc
-        (S.insert term uv)
-        rc
-    $ noLoc
-    $ case' (var' term) ms
+  pure $ ext
+    & #syn_trace     %~ rose ("destruct " <> show term) . pure
+    & #syn_used_vals %~ S.insert term
+    & #syn_val       %~ noLoc . case' (var' term)
 
 
 ------------------------------------------------------------------------------
@@ -171,7 +165,7 @@ buildDataCon
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon jdg dc tyapps = do
   let args = dataConInstOrigArgTys' dc tyapps
-  Synthesized tr sc uv rc sgs
+  ext
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
@@ -180,7 +174,7 @@ buildDataCon jdg dc tyapps = do
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip args [0..]
-  pure
-    $ Synthesized (rose (show dc) $ pure tr) sc uv rc
-    $ mkCon dc sgs
+  pure $ ext
+    & #syn_trace %~ rose (show dc) . pure
+    & #syn_val   %~ mkCon dc
 
