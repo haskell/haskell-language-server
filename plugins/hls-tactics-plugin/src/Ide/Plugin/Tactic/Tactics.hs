@@ -12,11 +12,10 @@ module Ide.Plugin.Tactic.Tactics
   ) where
 
 import           Control.Applicative (Alternative(empty))
-import           Control.Lens ((&), (%~), (<>~))
+import           Control.Lens ((&), (%~))
 import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
-import           Control.Monad.State.Class
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Foldable
 import           Data.Generics.Labels ()

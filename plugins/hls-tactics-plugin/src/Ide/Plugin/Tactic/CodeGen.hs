@@ -9,10 +9,9 @@ module Ide.Plugin.Tactic.CodeGen
   ) where
 
 
-import           Control.Lens ((+~), (%~), (<>~), (&))
+import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
 import           Data.Generics.Labels ()
-import           Data.Generics.Product (field)
 import           Data.List
 import qualified Data.Set as S
 import           Data.Traversable
