@@ -9,18 +9,16 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
-import           Control.Monad                (when)
-import           Control.Monad.Except         (throwError)
-import           Control.Monad.Reader.Class   (MonadReader (ask))
+import           Control.Monad.Except (throwError)
+import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Class
-import           Control.Monad.State.Strict   (StateT (..), runStateT)
-import           Data.Bool                    (bool)
+import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Foldable
 import           Data.List
-import qualified Data.Map                     as M
+import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Set                     (Set)
-import qualified Data.Set                     as S
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
@@ -33,11 +31,11 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name                         (occNameString)
+import           Name (occNameString)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
-import           Type                         hiding (Var)
+import           Type hiding (Var)
 
 
 ------------------------------------------------------------------------------
@@ -50,13 +48,15 @@ assumption = attemptOn (S.toList . allNames) assume
 -- | Use something named in the hypothesis to fill the hole.
 assume :: OccName -> TacticsM ()
 assume name = rule $ \jdg -> do
-  let g  = jGoal jdg
   case M.lookup name $ hyByName $ jHypothesis jdg of
     Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
       for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
-      useOccName jdg name
-      pure $ (tracePrim $ "assume " <> occNameString name, ) $ noLoc $ var' name
+      pure $ Synthesized (tracePrim $ "assume " <> occNameString name)
+               mempty
+               (S.singleton name)
+           $ noLoc
+           $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
 
 
@@ -64,9 +64,14 @@ recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> do
+    -- TODO(sandy): When we can inspect the extract of a TacticsM bind
+    -- (requires refinery support), this recursion stack stuff is unnecessary.
+    -- We can just inspect the extract to see i we used any pattern vals, and
+    -- then be on our merry way.
     modify $ pushRecursionStack .  countRecursiveCall
     ensure guardStructurallySmallerRecursion popRecursionStack $ do
-      (localTactic (apply $ HyInfo name RecursivePrv ty) $ introducingRecursively defs)
+      let hy' = recursiveHypothesis defs
+      localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
         <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
@@ -74,21 +79,22 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
 -- | Introduce a lambda binding every variable.
 intros :: TacticsM ()
 intros = rule $ \jdg -> do
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
+  let g  = jGoal jdg
   ctx <- ask
   case tcSplitFunTys $ unCType g of
     ([], _) -> throwError $ GoalMismatch "intros" g
     (as, b) -> do
       vs <- mkManyGoodNames (hyNamesInScope $ jEntireHypothesis jdg) as
       let top_hole = isTopHole ctx jdg
-          jdg' = introducingLambda top_hole (zip vs $ coerce as)
+          hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
+          jdg' = introduce hy'
                $ withNewGoal (CType b) jdg
-      modify $ withIntroducedVals $ mappend $ S.fromList vs
-      when (isJust top_hole) $ addUnusedTopVals $ S.fromList vs
-      (tr, sg) <- newSubgoal jdg'
+      Synthesized tr sc uv sg <- newSubgoal jdg'
       pure
-        . (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr, )
+        . Synthesized
+            (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr)
+            (sc <> hy')
+            uv
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg
@@ -148,27 +154,26 @@ homoLambdaCase =
 apply :: HyInfo CType -> TacticsM ()
 apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
   jdg <- goal
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
+  let g  = jGoal jdg
       ty = unCType $ hi_type hi
       func = hi_name hi
   ty' <- freshTyvars ty
   let (_, _, args, ret) = tacticsSplitFunTy ty'
+  -- TODO(sandy): Bug here! Prevents us from doing mono-map like things
+  -- Don't require new holes for locally bound vars; only respect linearity
+  -- see https://github.com/haskell/haskell-language-server/issues/1447
   requireNewHoles $ rule $ \jdg -> do
     unify g (CType ret)
-    useOccName jdg func
-    (tr, sgs)
+    Synthesized tr sc uv sgs
         <- fmap unzipTrace
         $ traverse ( newSubgoal
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
                     ) args
-    pure
-      . (tr, )
-      . noLoc
-      . foldl' (@@) (var' func)
-      $ fmap unLoc sgs
+    pure $ Synthesized tr sc (S.insert func uv)
+         $ noLoc . foldl' (@@) (var' func)
+         $ fmap unLoc sgs
 
 
 ------------------------------------------------------------------------------

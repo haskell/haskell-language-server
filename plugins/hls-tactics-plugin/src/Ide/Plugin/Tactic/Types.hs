@@ -1,5 +1,7 @@
+{-# LANGUAGE DeriveFoldable             #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE DeriveTraversable          #-}
 {-# LANGUAGE DerivingVia                #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
@@ -20,28 +22,29 @@ module Ide.Plugin.Tactic.Types
   , Range
   ) where
 
-import           Control.Lens                   hiding (Context, (.=))
-import           Control.Monad.Reader
-import           Control.Monad.State
-import           Data.Coerce
-import           Data.Function
-import           Data.Generics.Product          (field)
-import           Data.Set                       (Set)
-import           Data.Tree
-import           Development.IDE.GHC.Compat     hiding (Node)
-import           Development.IDE.GHC.Orphans    ()
-import           Development.IDE.Types.Location
-import           GHC.Generics
-import           Ide.Plugin.Tactic.Debug
-import           Ide.Plugin.Tactic.FeatureSet   (FeatureSet)
-import           OccName
-import           Refinery.Tactic
-import           System.IO.Unsafe               (unsafePerformIO)
-import           Type
-import           UniqSupply                     (UniqSupply, mkSplitUniqSupply,
-                                                 takeUniqFromSupply)
-import           Unique                         (Uniquable, Unique, getUnique,
-                                                 nonDetCmpUnique)
+import Control.Lens hiding (Context, (.=))
+import Control.Monad.Reader
+import Control.Monad.State
+import Data.Coerce
+import Data.Function
+import Data.Generics.Product (field)
+import Data.List.NonEmpty (NonEmpty (..))
+import Data.Semigroup
+import Data.Set (Set)
+import Data.Tree
+import Development.IDE.GHC.Compat hiding (Node)
+import Development.IDE.GHC.Orphans ()
+import Development.IDE.Types.Location
+import GHC.Generics
+import GHC.SourceGen (var)
+import Ide.Plugin.Tactic.Debug
+import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
+import OccName
+import Refinery.Tactic
+import System.IO.Unsafe (unsafePerformIO)
+import Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
+import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
+import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 
 
 ------------------------------------------------------------------------------
@@ -80,24 +83,28 @@ instance Show (Pat GhcPs) where
 
 
 ------------------------------------------------------------------------------
+-- | The state that should be shared between subgoals. Extracts move towards
+-- the root, judgments move towards the leaves, and the state moves *sideways*.
 data TacticState = TacticState
     { ts_skolems         :: !(Set TyVar)
       -- ^ The known skolems.
     , ts_unifier         :: !TCvSubst
       -- ^ The current substitution of univars.
-    , ts_used_vals       :: !(Set OccName)
-      -- ^ Set of values used by tactics.
-    , ts_intro_vals      :: !(Set OccName)
-      -- ^ Set of values introduced by tactics.
-    , ts_unused_top_vals :: !(Set OccName)
-      -- ^ Set of currently unused arguments to the function being defined.
     , ts_recursion_stack :: ![Maybe PatVal]
       -- ^ Stack for tracking whether or not the current recursive call has
       -- used at least one smaller pat val. Recursive calls for which this
       -- value is 'False' are guaranteed to loop, and must be pruned.
+      --
+      -- TODO(sandy): This thing need not exist; we should just inspect
+      -- 'syn_used_vals' to see if anything was a pattern val.
     , ts_recursion_count :: !Int
       -- ^ Number of calls to recursion. We penalize each.
-    , ts_unique_gen      :: !UniqSupply
+      --
+      -- TODO(sandy): This thing need not exist; it should just be a field
+      -- inside of 'Synthesized', but can't implement that without support from
+      -- refinery directly. Need the ability to get the extract of a TacticT
+      -- inside of TacticT, first.
+    , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
 
 instance Show UniqSupply where
@@ -117,9 +124,6 @@ defaultTacticState =
   TacticState
     { ts_skolems         = mempty
     , ts_unifier         = emptyTCvSubst
-    , ts_used_vals       = mempty
-    , ts_intro_vals      = mempty
-    , ts_unused_top_vals = mempty
     , ts_recursion_stack = mempty
     , ts_recursion_count = 0
     , ts_unique_gen      = unsafeDefaultUniqueSupply
@@ -147,16 +151,6 @@ popRecursionStack :: TacticState -> TacticState
 popRecursionStack = withRecursionStack tail
 
 
-withUsedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
-withUsedVals f =
-  field @"ts_used_vals" %~ f
-
-
-withIntroducedVals :: (Set OccName -> Set OccName) -> TacticState -> TacticState
-withIntroducedVals f =
-  field @"ts_intro_vals" %~ f
-
-
 ------------------------------------------------------------------------------
 -- | Describes where hypotheses came from. Used extensively to prune stupid
 -- solutions from the search space.
@@ -167,6 +161,7 @@ data Provenance
     TopLevelArgPrv
       OccName   -- ^ Binding function
       Int       -- ^ Argument Position
+      Int       -- ^ of how many arguments total?
     -- | A binding created in a pattern match.
   | PatternMatchPrv PatVal
     -- | A class method from the given context.
@@ -265,8 +260,12 @@ newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
-instance MonadExtract (Trace, LHsExpr GhcPs) ExtractM where
-  hole = pure (mempty, noLoc $ HsVar noExtField $ noLoc $ Unqual $ mkVarOcc "_")
+instance MonadExtract (Synthesized (LHsExpr GhcPs)) ExtractM where
+  hole
+    = pure
+    . Synthesized mempty mempty mempty
+    . noLoc
+    $ var "_"
 
 
 ------------------------------------------------------------------------------
@@ -325,11 +324,42 @@ instance Show TacticError where
 
 
 ------------------------------------------------------------------------------
-type TacticsM  = TacticT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
-type RuleM     = RuleT Judgement (Trace, LHsExpr GhcPs) TacticError TacticState ExtractM
-type Rule      = RuleM (Trace, LHsExpr GhcPs)
+type TacticsM  = TacticT Judgement (Synthesized (LHsExpr GhcPs)) TacticError TacticState ExtractM
+type RuleM     = RuleT Judgement (Synthesized (LHsExpr GhcPs)) TacticError TacticState ExtractM
+type Rule      = RuleM (Synthesized (LHsExpr GhcPs))
 
 type Trace = Rose String
+
+------------------------------------------------------------------------------
+-- | The extract for refinery. Represents a "synthesized attribute" in the
+-- context of attribute grammars. In essence, 'Synthesized' describes
+-- information we'd like to pass from leaves of the tactics search upwards.
+-- This includes the actual AST we've generated (in 'syn_val').
+data Synthesized a = Synthesized
+  { syn_trace  :: Trace
+    -- ^ A tree describing which tactics were used produce the 'syn_val'.
+    -- Mainly for debugging when you get the wrong answer, to see the other
+    -- things it tried.
+  , syn_scoped :: Hypothesis CType
+    -- ^ All of the bindings created to produce the 'syn_val'.
+  , syn_used_vals :: Set OccName
+    -- ^ The values used when synthesizing the 'syn_val'.
+  , syn_val    :: a
+  }
+  deriving (Eq, Show, Functor, Foldable, Traversable)
+
+mapTrace :: (Trace -> Trace) -> Synthesized a -> Synthesized a
+mapTrace f (Synthesized tr sc uv a) = Synthesized (f tr) sc uv a
+
+
+------------------------------------------------------------------------------
+-- | This might not be lawful, due to the semigroup on 'Trace' maybe not being
+-- lawful. But that's only for debug output, so it's not anything I'm concerned
+-- about.
+instance Applicative Synthesized where
+  pure = Synthesized mempty mempty mempty
+  Synthesized tr1 sc1 uv1 f <*> Synthesized tr2 sc2 uv2 a =
+    Synthesized (tr1 <> tr2) (sc1 <> sc2) (uv1 <> uv2) $ f a
 
 
 ------------------------------------------------------------------------------
@@ -361,10 +391,13 @@ dropEveryOther []           = []
 dropEveryOther [a]          = [a]
 dropEveryOther (a : _ : as) = a : dropEveryOther as
 
-instance Semigroup a => Semigroup (Rose a) where
+------------------------------------------------------------------------------
+-- | This might not be lawful! I didn't check, and it feels sketchy.
+instance (Eq a, Monoid a) => Semigroup (Rose a) where
   Rose (Node a as) <> Rose (Node b bs) = Rose $ Node (a <> b) (as <> bs)
+  sconcat (a :| as) = rose mempty $ a : as
 
-instance Monoid a => Monoid (Rose a) where
+instance (Eq a, Monoid a) => Monoid (Rose a) where
   mempty = Rose $ Node mempty mempty
 
 rose :: (Eq a, Monoid a) => a -> [Rose a] -> Rose a
@@ -377,7 +410,7 @@ rose a rs = Rose $ Node a $ coerce rs
 data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
-  , rtr_other_solns :: [(Trace, LHsExpr GhcPs)]
+  , rtr_other_solns :: [Synthesized (LHsExpr GhcPs)]
   , rtr_jdg         :: Judgement
   , rtr_ctx         :: Context
   } deriving Show

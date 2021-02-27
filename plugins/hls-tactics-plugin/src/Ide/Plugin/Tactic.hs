@@ -23,6 +23,7 @@ import           Data.Aeson
 import           Data.Bifunctor                                   (Bifunctor (bimap))
 import           Data.Bool                                        (bool)
 import           Data.Data                                        (Data)
+import           Data.Foldable (for_)
 import           Data.Generics.Aliases                            (mkQ)
 import           Data.Generics.Schemes                            (everything)
 import           Data.Maybe
@@ -144,6 +145,7 @@ mkWorkspaceEdits
     -> RunTacticResults
     -> Either ResponseError (Maybe WorkspaceEdit)
 mkWorkspaceEdits span dflags ccs uri pm rtr = do
+  for_ (rtr_other_solns rtr) $ traceMX "other solution"
   let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags ccs uri g pm
    in case response of

@@ -1,33 +1,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns     #-}
 
-module Ide.Plugin.Tactic.Judgements
-  ( blacklistingDestruct
-  , unwhitelistingSplit
-  , introducingLambda
-  , introducingRecursively
-  , introducingPat
-  , jGoal
-  , jHypothesis
-  , jEntireHypothesis
-  , jPatHypothesis
-  , substJdg
-  , unsetIsTopHole
-  , filterSameTypeFromOtherPositions
-  , isDestructBlacklisted
-  , withNewGoal
-  , jLocalHypothesis
-  , isSplitWhitelisted
-  , isPatternMatch
-  , filterPosition
-  , isTopHole
-  , disallowing
-  , mkFirstJudgement
-  , hypothesisFromBindings
-  , isTopLevel
-  , hyNamesInScope
-  , hyByName
-  ) where
+module Ide.Plugin.Tactic.Judgements where
 
 import           Control.Arrow
 import           Control.Lens                        hiding (Context)
@@ -89,35 +63,39 @@ withNewGoal :: a -> Judgement' a -> Judgement' a
 withNewGoal t = field @"_jGoal" .~ t
 
 
+introduce :: Hypothesis a -> Judgement' a -> Judgement' a
+introduce hy = field @"_jHypothesis" <>~ hy
+
+
 ------------------------------------------------------------------------------
 -- | Helper function for implementing functions which introduce new hypotheses.
-introducing
-    :: (Int -> Provenance)  -- ^ A function from the position of the arg to its
-                            -- provenance.
+introduceHypothesis
+    :: (Int -> Int -> Provenance)
+        -- ^ A function from the total number of args and position of this arg
+        -- to its provenance.
     -> [(OccName, a)]
-    -> Judgement' a
-    -> Judgement' a
-introducing f ns =
-  field @"_jHypothesis" <>~ (Hypothesis $ zip [0..] ns <&>
-    \(pos, (name, ty)) -> HyInfo name (f pos) ty)
+    -> Hypothesis a
+introduceHypothesis f ns =
+  Hypothesis $ zip [0..] ns <&> \(pos, (name, ty)) ->
+    HyInfo name (f (length ns) pos) ty
 
 
 ------------------------------------------------------------------------------
 -- | Introduce bindings in the context of a lamba.
-introducingLambda
+lambdaHypothesis
     :: Maybe OccName   -- ^ The name of the top level function. For any other
                        -- function, this should be 'Nothing'.
     -> [(OccName, a)]
-    -> Judgement' a
-    -> Judgement' a
-introducingLambda func = introducing $ \pos ->
-  maybe UserPrv (\x -> TopLevelArgPrv x pos) func
+    -> Hypothesis a
+lambdaHypothesis func =
+  introduceHypothesis $ \count pos ->
+    maybe UserPrv (\x -> TopLevelArgPrv x pos count) func
 
 
 ------------------------------------------------------------------------------
 -- | Introduce a binding in a recursive context.
-introducingRecursively :: [(OccName, a)] -> Judgement' a -> Judgement' a
-introducingRecursively = introducing $ const RecursivePrv
+recursiveHypothesis :: [(OccName, a)] -> Hypothesis a
+recursiveHypothesis = introduceHypothesis $ const $ const RecursivePrv
 
 
 ------------------------------------------------------------------------------
@@ -176,7 +154,7 @@ findPositionVal jdg defn pos = listToMaybe $ do
   -- ancstry through potentially disallowed terms in the hypothesis.
   (name, hi) <- M.toList $ M.map (overProvenance expandDisallowed) $ hyByName $ jEntireHypothesis jdg
   case hi_provenance hi of
-    TopLevelArgPrv defn' pos'
+    TopLevelArgPrv defn' pos' _
       | defn == defn'
       , pos  == pos' -> pure name
     PatternMatchPrv pv
@@ -243,26 +221,22 @@ extremelyStupid__definingFunction =
   fst . head . ctxDefiningFuncs
 
 
-------------------------------------------------------------------------------
--- | Pattern vals are currently tracked in jHypothesis, with an extra piece of
--- data sitting around in jPatternVals.
-introducingPat
+patternHypothesis
     :: Maybe OccName
     -> DataCon
+    -> Judgement' a
     -> [(OccName, a)]
-    -> Judgement' a
-    -> Judgement' a
-introducingPat scrutinee dc ns jdg
-  = introducing (\pos ->
+    -> Hypothesis a
+patternHypothesis scrutinee dc jdg
+  = introduceHypothesis $ \_ pos ->
       PatternMatchPrv $
         PatVal
-          scrutinee
-          (maybe mempty
-                (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
-                scrutinee)
-          (Uniquely dc)
-          pos
-    ) ns jdg
+            scrutinee
+            (maybe mempty
+                  (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
+                  scrutinee)
+            (Uniquely dc)
+            pos
 
 
 ------------------------------------------------------------------------------
