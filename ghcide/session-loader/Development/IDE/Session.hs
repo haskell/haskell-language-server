@@ -90,6 +90,9 @@ import           HieDb.Types
 import           HieDb.Utils
 import           Maybes                               (MaybeT (runMaybeT))
 
+-- | Bump this version number when making changes to the format of the data stored in hiedb
+hiedbDataVersion :: String
+hiedbDataVersion = "1"
 
 data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
@@ -173,7 +176,7 @@ runWithDb fp k = do
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
-  let db = dirHash++"-"++takeBaseName dir++"-"++VERSION_ghc <.> "hiedb"
+  let db = intercalate "-" [dirHash, takeBaseName dir, VERSION_ghc, hiedbDataVersion] <.> "hiedb"
       dirHash = B.unpack $ B16.encode $ H.hash $ B.pack dir
   cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
   createDirectoryIfMissing True cDir
