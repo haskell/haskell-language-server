@@ -77,14 +77,9 @@ runTactic ctx jdg t =
                 $ toList
                 $ hyByName
                 $ jHypothesis jdg
-        unused_topvals = M.keysSet
-                       $ M.filter (isTopLevel . hi_provenance)
-                       $ hyByName
-                       $ jHypothesis jdg
         tacticState =
           defaultTacticState
             { ts_skolems = skolems
-            , ts_unused_top_vals = unused_topvals
             }
     in case partitionEithers
           . flip runReader ctx
@@ -93,14 +88,14 @@ runTactic ctx jdg t =
       (errs, []) -> Left $ take 50 errs
       (_, fmap assoc23 -> solns) -> do
         let sorted =
-              flip sortBy solns $ comparing $ \((_, ext), (jdg, holes)) ->
+              flip sortBy solns $ comparing $ \(ext, (jdg, holes)) ->
                 Down $ scoreSolution ext jdg holes
         case sorted of
-          (((tr, ext), _) : _) ->
+          ((syn, _) : _) ->
             Right $
               RunTacticResults
-                { rtr_trace = tr
-                , rtr_extract = simplify ext
+                { rtr_trace = syn_trace syn
+                , rtr_extract = simplify $ syn_val syn
                 , rtr_other_solns = reverse . fmap fst $ take 5 sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
@@ -119,11 +114,11 @@ tracePrim = flip rose []
 tracing
     :: Functor m
     => String
-    -> TacticT jdg (Trace, ext) err s m a
-    -> TacticT jdg (Trace, ext) err s m a
+    -> TacticT jdg (Synthesized ext) err s m a
+    -> TacticT jdg (Synthesized ext) err s m a
 tracing s (TacticT m)
   = TacticT $ StateT $ \jdg ->
-      mapExtract' (first $ rose s . pure) $ runStateT m jdg
+      mapExtract' (mapTrace $ rose s . pure) $ runStateT m jdg
 
 
 ------------------------------------------------------------------------------
@@ -155,10 +150,10 @@ markStructuralySmallerRecursion pv = do
 -- | Given the results of running a tactic, score the solutions by
 -- desirability.
 --
--- TODO(sandy): This function is completely unprincipled and was just hacked
--- together to produce the right test results.
+-- NOTE: This function is completely unprincipled and was just hacked together
+-- to produce the right test results.
 scoreSolution
-    :: LHsExpr GhcPs
+    :: Synthesized (LHsExpr GhcPs)
     -> TacticState
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
@@ -171,13 +166,18 @@ scoreSolution
        )
 scoreSolution ext TacticState{..} holes
   = ( Penalize $ length holes
-    , Reward   $ S.null $ ts_intro_vals S.\\ ts_used_vals
-    , Penalize $ S.size ts_unused_top_vals
-    , Penalize $ S.size ts_intro_vals
-    , Reward   $ S.size ts_used_vals
+    , Reward   $ S.null $ intro_vals S.\\ used_vals
+    , Penalize $ S.size unused_top_vals
+    , Penalize $ S.size intro_vals
+    , Reward   $ S.size used_vals
     , Penalize ts_recursion_count
-    , Penalize $ solutionSize ext
+    , Penalize $ solutionSize $ syn_val ext
     )
+  where
+    intro_vals = M.keysSet $ hyByName $ syn_scoped ext
+    used_vals = S.intersection intro_vals $ syn_used_vals ext
+    top_vals = S.fromList . fmap hi_name . filter (isTopLevel . hi_provenance) $ unHypothesis $ syn_scoped ext
+    unused_top_vals = top_vals S.\\ used_vals
 
 
 ------------------------------------------------------------------------------

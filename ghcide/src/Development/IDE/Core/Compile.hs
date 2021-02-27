@@ -571,7 +571,7 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
         LSP.sendNotification LSP.SProgress $ LSP.ProgressParams tok $
           LSP.Report $ LSP.WorkDoneProgressReportParams
             { _cancellable = Nothing
-            , _message = Just $ T.pack (show srcPath) <> progress
+            , _message = Just $ T.pack (fromNormalizedFilePath srcPath) <> progress
             , _percentage = Nothing
             }
 
