@@ -842,7 +842,7 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ \GetModIfaceFromDiskAndInd
         Left err -> fail $ "failed to read .hie file " ++ show hie_loc ++ ": " ++ displayException err
         -- can just re-index the file we read from disk
         Right hf -> liftIO $ do
-          L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (show f)
+          L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (fromNormalizedFilePath f)
           indexHieFile se ms f hash hf
 
   let fp = hiFileFingerPrint x
