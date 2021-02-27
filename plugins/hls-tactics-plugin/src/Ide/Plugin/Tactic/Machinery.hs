@@ -9,10 +9,12 @@
 {-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -fno-warn-orphans  #-}
 
+{-# LANGUAGE TypeApplications #-}
 module Ide.Plugin.Tactic.Machinery
   ( module Ide.Plugin.Tactic.Machinery
   ) where
 
+import Control.Lens ((<>~))
 import           Class                        (Class (classTyVars))
 import           Control.Arrow
 import           Control.Monad.Error.Class
@@ -42,6 +44,8 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
+import Data.Generics.Product (field')
+import Data.Monoid (getSum)
 
 
 substCTy :: TCvSubst -> CType -> CType
@@ -116,34 +120,26 @@ tracing
     => String
     -> TacticT jdg (Synthesized ext) err s m a
     -> TacticT jdg (Synthesized ext) err s m a
-tracing s (TacticT m)
+tracing s = mappingExtract (mapTrace $ rose s . pure)
+
+
+------------------------------------------------------------------------------
+-- | Doing recursion incurs a small penalty in the score.
+markRecursion
+    :: Functor m
+    => TacticT jdg (Synthesized ext) err s m a
+    -> TacticT jdg (Synthesized ext) err s m a
+markRecursion = mappingExtract (field' @"syn_recursion_count" <>~ 1)
+
+
+mappingExtract
+    :: Functor m
+    => (ext -> ext)
+    -> TacticT jdg ext err s m a
+    -> TacticT jdg ext err s m a
+mappingExtract f (TacticT m)
   = TacticT $ StateT $ \jdg ->
-      mapExtract' (mapTrace $ rose s . pure) $ runStateT m jdg
-
-
-------------------------------------------------------------------------------
--- | Recursion is allowed only when we can prove it is on a structurally
--- smaller argument. The top of the 'ts_recursion_stack' witnesses the smaller
--- pattern val.
-guardStructurallySmallerRecursion
-    :: TacticState
-    -> Maybe TacticError
-guardStructurallySmallerRecursion s =
-  case head $ ts_recursion_stack s of
-     Just _  -> Nothing
-     Nothing -> Just NoProgress
-
-
-------------------------------------------------------------------------------
--- | Mark that the current recursive call is structurally smaller, due to
--- having been matched on a pattern value.
---
--- Implemented by setting the top of the 'ts_recursion_stack'.
-markStructuralySmallerRecursion :: MonadState TacticState m => PatVal -> m ()
-markStructuralySmallerRecursion pv = do
-  modify $ withRecursionStack $ \case
-    (_ : bs) -> Just pv : bs
-    []       -> []
+      mapExtract' f $ runStateT m jdg
 
 
 ------------------------------------------------------------------------------
@@ -164,13 +160,13 @@ scoreSolution
        , Penalize Int  -- number of recursive calls
        , Penalize Int  -- size of extract
        )
-scoreSolution ext TacticState{..} holes
+scoreSolution ext _ holes
   = ( Penalize $ length holes
     , Reward   $ S.null $ intro_vals S.\\ used_vals
     , Penalize $ S.size unused_top_vals
     , Penalize $ S.size intro_vals
     , Reward   $ S.size used_vals
-    , Penalize ts_recursion_count
+    , Penalize $ getSum $ syn_recursion_count ext
     , Penalize $ solutionSize $ syn_val ext
     )
   where
@@ -238,6 +234,9 @@ methodHypothesis ty = do
     let (_, _, ty) = tcSplitSigmaTy $ idType method
     in ( HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
        )
+
+peek :: (ext -> TacticT jdg ext err s m ()) -> TacticT jdg ext err s m ()
+peek k = tactic $ \j -> Subgoal ((), j) $ \e -> proofState (k e) j
 
 
 ------------------------------------------------------------------------------

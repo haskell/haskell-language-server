@@ -29,13 +29,6 @@ import           Ide.Plugin.Tactic.Types
 import           Type hiding (Var)
 
 
-
-------------------------------------------------------------------------------
--- | Doing recursion incurs a small penalty in the score.
-countRecursiveCall :: TacticState -> TacticState
-countRecursiveCall = field @"ts_recursion_count" +~ 1
-
-
 destructMatches
     :: (DataCon -> Judgement -> Rule)
        -- ^ How to construct each match
@@ -62,7 +55,7 @@ destructMatches f scrut t jdg = do
                   $ coerce args
               j = introduce hy'
                 $ withNewGoal g jdg
-          Synthesized tr sc uv sg <- f dc j
+          Synthesized tr sc uv rc sg <- f dc j
           pure
             $ Synthesized
               ( rose ("match " <> show dc <> " {" <>
@@ -70,6 +63,7 @@ destructMatches f scrut t jdg = do
                     $ pure tr)
               (sc <> hy')
               uv
+              rc
             $ match [mkDestructPat dc names]
             $ unLoc sg
 
@@ -138,7 +132,7 @@ destruct' :: (DataCon -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' f hi jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let term = hi_name hi
-  Synthesized tr sc uv ms
+  Synthesized tr sc uv rc ms
       <- destructMatches
            f
            (Just term)
@@ -149,6 +143,7 @@ destruct' f hi jdg = do
         (rose ("destruct " <> show term) $ pure tr)
         sc
         (S.insert term uv)
+        rc
     $ noLoc
     $ case' (var' term) ms
 
@@ -176,7 +171,7 @@ buildDataCon
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon jdg dc tyapps = do
   let args = dataConInstOrigArgTys' dc tyapps
-  Synthesized tr sc uv sgs
+  Synthesized tr sc uv rc sgs
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
@@ -186,6 +181,6 @@ buildDataCon jdg dc tyapps = do
                   $ CType arg
                   ) $ zip args [0..]
   pure
-    $ Synthesized (rose (show dc) $ pure tr) sc uv
+    $ Synthesized (rose (show dc) $ pure tr) sc uv rc
     $ mkCon dc sgs
 

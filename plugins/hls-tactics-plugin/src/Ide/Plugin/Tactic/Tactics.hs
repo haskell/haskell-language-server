@@ -9,6 +9,8 @@ module Ide.Plugin.Tactic.Tactics
   , runTactic
   ) where
 
+import           Control.Applicative (Alternative(empty))
+import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Class
@@ -51,10 +53,10 @@ assume name = rule $ \jdg -> do
   case M.lookup name $ hyByName $ jHypothesis jdg of
     Just (hi_type -> ty) -> do
       unify ty $ jGoal jdg
-      for_ (M.lookup name $ jPatHypothesis jdg) markStructuralySmallerRecursion
       pure $ Synthesized (tracePrim $ "assume " <> occNameString name)
                mempty
                (S.singleton name)
+               0
            $ noLoc
            $ var' name
     Nothing -> throwError $ UndefinedHypothesis name
@@ -63,16 +65,14 @@ assume name = rule $ \jdg -> do
 recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
-  attemptOn (const defs) $ \(name, ty) -> do
-    -- TODO(sandy): When we can inspect the extract of a TacticsM bind
-    -- (requires refinery support), this recursion stack stuff is unnecessary.
-    -- We can just inspect the extract to see i we used any pattern vals, and
-    -- then be on our merry way.
-    modify $ pushRecursionStack .  countRecursiveCall
-    ensure guardStructurallySmallerRecursion popRecursionStack $ do
-      let hy' = recursiveHypothesis defs
-      localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
-        <@> fmap (localTactic assumption . filterPosition name) [0..]
+  attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
+    peek $ \ext -> do
+      jdg <- goal
+      let pat_vals = jPatHypothesis jdg
+      unless (any (flip M.member pat_vals) $ syn_used_vals ext) empty
+    let hy' = recursiveHypothesis defs
+    localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
+      <@> fmap (localTactic assumption . filterPosition name) [0..]
 
 
 ------------------------------------------------------------------------------
@@ -89,12 +89,13 @@ intros = rule $ \jdg -> do
           hy' = lambdaHypothesis top_hole $ zip vs $ coerce as
           jdg' = introduce hy'
                $ withNewGoal (CType b) jdg
-      Synthesized tr sc uv sg <- newSubgoal jdg'
+      Synthesized tr sc uv rc sg <- newSubgoal jdg'
       pure
         . Synthesized
             (rose ("intros {" <> intercalate ", " (fmap show vs) <> "}") $ pure tr)
             (sc <> hy')
             uv
+            rc
         . noLoc
         . lambda (fmap bvar' vs)
         $ unLoc sg
@@ -164,14 +165,14 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
   -- see https://github.com/haskell/haskell-language-server/issues/1447
   requireNewHoles $ rule $ \jdg -> do
     unify g (CType ret)
-    Synthesized tr sc uv sgs
+    Synthesized tr sc uv rc sgs
         <- fmap unzipTrace
         $ traverse ( newSubgoal
                     . blacklistingDestruct
                     . flip withNewGoal jdg
                     . CType
                     ) args
-    pure $ Synthesized tr sc (S.insert func uv)
+    pure $ Synthesized tr sc (S.insert func uv) rc
          $ noLoc . foldl' (@@) (var' func)
          $ fmap unLoc sgs
 
