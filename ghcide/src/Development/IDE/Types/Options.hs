@@ -85,11 +85,6 @@ data IdeOptions = IdeOptions
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   , optShakeOptions       :: ShakeOptions
-  , optFakeUid            :: InstalledUnitId
-    -- ^ unit id used to tag the internal component built by ghcide
-    --   To reuse external interface files the unit ids must match,
-    --   thus make sure to build them with `--this-unit-id` set to the
-    --   same value as the ghcide fake uid
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
@@ -142,7 +137,6 @@ defaultIdeOptions session = IdeOptions
     ,optCheckParents = pure CheckOnSaveAndClose
     ,optHaddockParse = HaddockParse
     ,optCustomDynFlags = id
-    ,optFakeUid = toInstalledUnitId (stringToUnitId "main")
     }
 
 

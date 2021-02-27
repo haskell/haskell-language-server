@@ -103,6 +103,11 @@ data SessionLoadingOptions = SessionLoadingOptions
   , getCacheDirs        :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir :: IO (Maybe LibDir)
+  , fakeUid             :: InstalledUnitId
+    -- ^ unit id used to tag the internal component built by ghcide
+    --   To reuse external interface files the unit ids must match,
+    --   thus make sure to build them with `--this-unit-id` set to the
+    --   same value as the ghcide fake uid
   }
 
 instance Default SessionLoadingOptions where
@@ -111,6 +116,7 @@ instance Default SessionLoadingOptions where
         ,loadCradle = HieBios.loadCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
+        ,fakeUid = toInstalledUnitId (stringToUnitId "main")
         }
 
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)
@@ -225,7 +231,6 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               , optCheckProject = getCheckProject
               , optCustomDynFlags
               , optExtensions
-              , optFakeUid
               } <- getIdeOptions
 
         -- populate the knownTargetsVar with all the
@@ -278,7 +283,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               new_deps' <- forM new_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
                   -- components in this HscEnv
-                  let (df2, uids) = removeInplacePackages optFakeUid inplace rawComponentDynFlags
+                  let (df2, uids) = removeInplacePackages fakeUid inplace rawComponentDynFlags
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
                   let hscComponents = sort $ map show uids
