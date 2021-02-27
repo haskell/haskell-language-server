@@ -71,10 +71,15 @@ recursion :: TacticsM ()
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
+    -- Peek allows us to look at the extract produced by this block.
     peek $ \ext -> do
       jdg <- goal
       let pat_vals = jPatHypothesis jdg
+      -- Make sure that the recursive call contains at least one already-bound
+      -- pattern value. This ensures it is structurally smaller, and thus
+      -- suggests termination.
       unless (any (flip M.member pat_vals) $ syn_used_vals ext) empty
+
     let hy' = recursiveHypothesis defs
     localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
       <@> fmap (localTactic assumption . filterPosition name) [0..]
