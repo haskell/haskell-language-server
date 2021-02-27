@@ -90,6 +90,9 @@ import           HieDb.Types
 import           HieDb.Utils
 import           Maybes                               (MaybeT (runMaybeT))
 
+-- | Bump this version number when making changes to the format of the data stored in hiedb
+hiedbDataVersion :: String
+hiedbDataVersion = "1"
 
 data CacheDirs = CacheDirs
   { hiCacheDir, hieCacheDir, oCacheDir :: Maybe FilePath}
@@ -103,6 +106,11 @@ data SessionLoadingOptions = SessionLoadingOptions
   , getCacheDirs        :: String -> [String] -> IO CacheDirs
   -- | Return the GHC lib dir to use for the 'unsafeGlobalDynFlags'
   , getInitialGhcLibDir :: IO (Maybe LibDir)
+  , fakeUid             :: InstalledUnitId
+    -- ^ unit id used to tag the internal component built by ghcide
+    --   To reuse external interface files the unit ids must match,
+    --   thus make sure to build them with `--this-unit-id` set to the
+    --   same value as the ghcide fake uid
   }
 
 instance Default SessionLoadingOptions where
@@ -111,6 +119,7 @@ instance Default SessionLoadingOptions where
         ,loadCradle = HieBios.loadCradle
         ,getCacheDirs = getCacheDirsDefault
         ,getInitialGhcLibDir = getInitialGhcLibDirDefault
+        ,fakeUid = toInstalledUnitId (stringToUnitId "main")
         }
 
 getInitialGhcLibDirDefault :: IO (Maybe LibDir)
@@ -167,7 +176,7 @@ runWithDb fp k = do
 
 getHieDbLoc :: FilePath -> IO FilePath
 getHieDbLoc dir = do
-  let db = dirHash++"-"++takeBaseName dir++"-"++VERSION_ghc <.> "hiedb"
+  let db = intercalate "-" [dirHash, takeBaseName dir, VERSION_ghc, hiedbDataVersion] <.> "hiedb"
       dirHash = B.unpack $ B16.encode $ H.hash $ B.pack dir
   cDir <- IO.getXdgDirectory IO.XdgCache cacheDir
   createDirectoryIfMissing True cDir
@@ -277,7 +286,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               new_deps' <- forM new_deps $ \RawComponentInfo{..} -> do
                   -- Remove all inplace dependencies from package flags for
                   -- components in this HscEnv
-                  let (df2, uids) = removeInplacePackages inplace rawComponentDynFlags
+                  let (df2, uids) = removeInplacePackages fakeUid inplace rawComponentDynFlags
                   let prefix = show rawComponentUnitId
                   -- See Note [Avoiding bad interface files]
                   let hscComponents = sort $ map show uids
@@ -716,12 +725,15 @@ getDependencyInfo fs = Map.fromList <$> mapM do_one fs
 -- There are several places in GHC (for example the call to hptInstances in
 -- tcRnImports) which assume that all modules in the HPT have the same unit
 -- ID. Therefore we create a fake one and give them all the same unit id.
-removeInplacePackages :: [InstalledUnitId] -> DynFlags -> (DynFlags, [InstalledUnitId])
-removeInplacePackages us df = (df { packageFlags = ps
+removeInplacePackages
+    :: InstalledUnitId     -- ^ fake uid to use for our internal component
+    -> [InstalledUnitId]
+    -> DynFlags
+    -> (DynFlags, [InstalledUnitId])
+removeInplacePackages fake_uid us df = (df { packageFlags = ps
                                   , thisInstalledUnitId = fake_uid }, uids)
   where
     (uids, ps) = partitionEithers (map go (packageFlags df))
-    fake_uid = toInstalledUnitId (stringToUnitId "fake_uid")
     go p@(ExposePackage _ (UnitIdArg u) _) = if toInstalledUnitId u `elem` us
                                                   then Left (toInstalledUnitId u)
                                                   else Right p
