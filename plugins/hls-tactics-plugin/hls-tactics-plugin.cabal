@@ -2,16 +2,18 @@ cabal-version:      2.2
 category:           Development
 name:               hls-tactics-plugin
 version:            1.0.0.0
-synopsis:           Tactics plugin for Haskell Language Server
+synopsis:           Wingman plugin for Haskell Language Server
 description:        Please see README.md
 author:             Sandy Maguire, Reed Mullanix
 maintainer:         sandy@sandymaguire.me
 copyright:          Sandy Maguire, Reed Mullanix
+homepage:           https://haskellwingman.dev
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
 license:            Apache-2.0
 license-file:       LICENSE
 build-type:         Simple
--- extra-source-files:
---   README.md
+extra-source-files:
+  README.md
 --   ChangeLog.md
 
 flag pedantic
