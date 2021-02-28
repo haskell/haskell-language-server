@@ -208,6 +208,19 @@ splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
 
 
 ------------------------------------------------------------------------------
+-- | Like 'split', but only works if there is a single matching data
+-- constructor for the goal.
+splitSingle :: TacticsM ()
+splitSingle = tracing "splitSingle" $ do
+  jdg <- goal
+  let g = jGoal jdg
+  case tacticsGetDataCons $ unCType g of
+    Just ([dc], _) -> do
+      splitDataCon dc
+    _ -> throwError $ GoalMismatch "splitSingle" g
+
+
+------------------------------------------------------------------------------
 -- | Allow the given tactic to proceed if and only if it introduces holes that
 -- have a different goal than current goal.
 requireNewHoles :: TacticsM () -> TacticsM ()
@@ -266,6 +279,17 @@ localTactic :: TacticsM a -> (Judgement -> Judgement) -> TacticsM a
 localTactic t f = do
   TacticT $ StateT $ \jdg ->
     runStateT (unTacticT t) $ f jdg
+
+
+refine :: TacticsM ()
+refine = go 3
+  where
+    go 0 = pure ()
+    go n = do
+      let try_that_doesnt_suck t = commit t $ pure ()
+      try_that_doesnt_suck intros
+      try_that_doesnt_suck splitSingle
+      go $ n - 1
 
 
 auto' :: Int -> TacticsM ()
