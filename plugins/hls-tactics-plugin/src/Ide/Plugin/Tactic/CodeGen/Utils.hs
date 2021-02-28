@@ -21,7 +21,8 @@ mkCon dcon (fmap unLoc -> args)
   | dataConIsInfix dcon
   , (lhs : rhs : args') <- args =
       noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
-  | Just fields <- getRecordFields dcon =
+  | Just fields <- getRecordFields dcon
+  , length fields >= 2 =
       noLoc $ recordConE (coerceName dcon_name) $ do
         (arg, (field, _)) <- zip args fields
         pure (coerceName field, arg)
