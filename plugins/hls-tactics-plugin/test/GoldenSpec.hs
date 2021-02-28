@@ -8,26 +8,24 @@
 module GoldenSpec where
 
 import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Lens                    hiding (failing, (<.>))
-import           Control.Monad                   (unless)
+import           Control.Lens hiding (failing, (<.>))
+import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default                    (Default (def))
+import           Data.Default (Default (def))
 import           Data.Foldable
-import qualified Data.Map                        as M
+import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Text                       (Text)
-import qualified Data.Text.IO                    as T
-import qualified Ide.Plugin.Config               as Plugin
-import           Ide.Plugin.Tactic.FeatureSet    (FeatureSet, allFeatures)
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import qualified Ide.Plugin.Config as Plugin
+import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
 import           Ide.Plugin.Tactic.TestTypes
 import           Language.LSP.Test
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens         hiding (actions, applyEdit,
-                                                  capabilities, executeCommand,
-                                                  id, line, message, name,
-                                                  rename, title)
-import           System.Directory                (doesFileExist)
+import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
+import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hspec
 
@@ -73,9 +71,33 @@ spec = do
       [ (not, DestructLambdaCase, "")
       ]
 
+  let goldenTest = mkGoldenTest allFeatures
+
+  describe "use constructor" $ do
+    let useTest = mkGoldenTest allFeatures UseDataCon
+    describe "provider" $ do
+      mkTest
+        "Suggests all data cons for Either"
+        "ConProviders.hs" 3 6
+        [ (id, UseDataCon, "Left")
+        , (id, UseDataCon, "Right")
+        , (not, UseDataCon, ":")
+        , (not, UseDataCon, "[]")
+        , (not, UseDataCon, "C1")
+        ]
+      mkTest
+        "Suggests no data cons for big types"
+        "ConProviders.hs" 9 17 $ do
+          c <- [1 :: Int .. 10]
+          pure $ (not, UseDataCon, T.pack $ show c)
+
+    describe "golden" $ do
+      useTest "(,)"   "UseConPair.hs"  2 8
+      useTest "Left"  "UseConLeft.hs"  2 8
+      useTest "Right" "UseConRight.hs" 2 8
+
   describe "golden tests" $ do
-    let goldenTest = mkGoldenTest allFeatures
-        autoTest = mkGoldenTest allFeatures Auto ""
+    let autoTest = mkGoldenTest allFeatures Auto ""
 
     goldenTest Intros "" "GoldenIntros.hs" 2 8
     autoTest "GoldenEitherAuto.hs"        2 11
@@ -150,6 +172,7 @@ mkTest
     -> SpecWith (Arg Bool)
 mkTest name fp line col ts = it name $ do
   runSession testCommand fullCaps tacticPath $ do
+    setFeatureSet allFeatures
     doc <- openDoc fp "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col

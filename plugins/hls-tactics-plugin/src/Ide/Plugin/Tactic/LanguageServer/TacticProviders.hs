@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE ViewPatterns       #-}
+{-# OPTIONS_GHC -Wall           #-}
 
 module Ide.Plugin.Tactic.LanguageServer.TacticProviders
   ( commandProvider
@@ -14,12 +15,14 @@ module Ide.Plugin.Tactic.LanguageServer.TacticProviders
 import           Control.Monad
 import           Control.Monad.Error.Class    (MonadError (throwError))
 import           Data.Aeson
+import           Data.Bool (bool)
 import           Data.Coerce
 import qualified Data.Map                     as M
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text                    as T
 import           Data.Traversable
+import           DataCon (dataConName)
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type  (Extension (LambdaCase))
@@ -47,6 +50,7 @@ commandTactic Destruct               = useNameFromHypothesis destruct
 commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
+commandTactic UseDataCon             = userSplit
 
 
 ------------------------------------------------------------------------------
@@ -71,6 +75,22 @@ commandProvider HomomorphismLambdaCase =
   requireExtension LambdaCase $
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
+commandProvider UseDataCon =
+  requireFeature FeatureUseDataCon $
+    filterTypeProjection
+        ( guardLength (<= 5)
+        . fromMaybe []
+        . fmap fst
+        . tacticsGetDataCons
+        ) $ \dcon ->
+      provide UseDataCon
+        . T.pack
+        . occNameString
+        . occName
+        $ dataConName dcon
+
+guardLength :: (Int -> Bool) -> [a] -> [a]
+guardLength f as = bool [] as $ f $ length as
 
 
 ------------------------------------------------------------------------------
@@ -140,6 +160,13 @@ filterBindingType p tp dflags fs plId uri range jdg =
               True  -> tp (hi_name hi) ty dflags fs plId uri range jdg
               False -> pure []
 
+filterTypeProjection
+    :: (Type -> [a])  -- ^ Features of the goal to look into further
+    -> (a -> TacticProvider)
+    -> TacticProvider
+filterTypeProjection p tp dflags fs plId uri range jdg =
+  fmap join $ for ( p $ unCType $ jGoal jdg) $ \a ->
+      tp a dflags fs plId uri range jdg
 
 
 ------------------------------------------------------------------------------

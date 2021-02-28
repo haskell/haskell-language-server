@@ -31,7 +31,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name (occNameString)
+import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
@@ -197,10 +197,9 @@ splitAuto :: TacticsM ()
 splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
-  case splitTyConApp_maybe $ unCType g of
+  case tacticsGetDataCons $ unCType g of
     Nothing -> throwError $ GoalMismatch "split" g
-    Just (tc, _) -> do
-      let dcs = tyConDataCons tc
+    Just (dcs, _) -> do
       case isSplitWhitelisted jdg of
         True -> choice $ fmap splitDataCon dcs
         False -> do
@@ -222,16 +221,34 @@ requireNewHoles m = do
 
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
+--
+-- INVARIANT: Assumes the give datacon is appropriate to construct the type
+-- with.
 splitDataCon :: DataCon -> TacticsM ()
 splitDataCon dc =
   requireConcreteHole $ tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
     let g = jGoal jdg
     case splitTyConApp_maybe $ unCType g of
       Just (tc, apps) -> do
-        case elem dc $ tyConDataCons tc of
-          True  -> buildDataCon (unwhitelistingSplit jdg) dc apps
-          False -> throwError $ IncorrectDataCon dc
+        buildDataCon (unwhitelistingSplit jdg) dc apps
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
+
+
+------------------------------------------------------------------------------
+-- | User-facing tactic to implement "Use constructor <x>"
+userSplit :: OccName -> TacticsM ()
+userSplit occ = do
+  jdg <- goal
+  let g = jGoal jdg
+  -- TODO(sandy): It's smelly that we need to find the datacon to generate the
+  -- code action, send it as a string, and then look it up again. Can we push
+  -- this over LSP somehow instead?
+  case splitTyConApp_maybe $ unCType g of
+    Just (tc, apps) -> do
+      case find (sloppyEqOccName occ . occName . dataConName)
+             $ tyConDataCons tc of
+        Just dc -> splitDataCon dc
+        Nothing -> throwError $ NotInScope occ
 
 
 ------------------------------------------------------------------------------

@@ -9,26 +9,25 @@
 
 module Ide.Plugin.Tactic.GHC where
 
+import           Control.Arrow
 import           Control.Monad.State
-import           Data.Function              (on)
-import           Data.List                  (isPrefixOf)
-import qualified Data.Map                   as M
-import           Data.Maybe                 (isJust)
-import           Data.Set                   (Set)
-import qualified Data.Set                   as S
+import           Data.Function (on)
+import           Data.List (isPrefixOf)
+import qualified Data.Map as M
+import           Data.Maybe (isJust)
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
-import           GHC.SourceGen              (case', lambda, match)
-import           Generics.SYB               (Data, everything, everywhere,
-                                             listify, mkQ, mkT)
+import           GHC.SourceGen (case', lambda, match)
+import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcType
 import           TyCoRep
 import           Type
-import           TysWiredIn                 (charTyCon, doubleTyCon, floatTyCon,
-                                             intTyCon)
+import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unique
 import           Var
 
@@ -82,6 +81,12 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 
 
 ------------------------------------------------------------------------------
+-- | Get the data cons of a type, if it has any.
+tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
+tacticsGetDataCons =
+  fmap (first tyConDataCons) . splitTyConApp_maybe
+
+------------------------------------------------------------------------------
 -- | Instantiate all of the quantified type variables in a type with fresh
 -- skolems.
 freshTyvars :: MonadState TacticState m => Type -> m Type
@@ -130,6 +135,9 @@ algebraicTyCon _ = Nothing
 -- their 'OccName's.
 eqRdrName :: RdrName -> RdrName -> Bool
 eqRdrName = (==) `on` occNameString . occName
+
+sloppyEqOccName :: OccName -> OccName -> Bool
+sloppyEqOccName = (==) `on` occNameString
 
 
 ------------------------------------------------------------------------------
