@@ -76,18 +76,19 @@ commandProvider HomomorphismLambdaCase =
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
 commandProvider UseDataCon =
-  requireFeature FeatureUseDataCon $
-    filterTypeProjection
-        ( guardLength (<= 5)
-        . fromMaybe []
-        . fmap fst
-        . tacticsGetDataCons
-        ) $ \dcon ->
-      provide UseDataCon
-        . T.pack
-        . occNameString
-        . occName
-        $ dataConName dcon
+  withConfig $ \cfg ->
+    requireFeature FeatureUseDataCon $
+      filterTypeProjection
+          ( guardLength (<= cfg_max_use_ctor_actions cfg)
+          . fromMaybe []
+          . fmap fst
+          . tacticsGetDataCons
+          ) $ \dcon ->
+        provide UseDataCon
+          . T.pack
+          . occNameString
+          . occName
+          $ dataConName dcon
 
 
 ------------------------------------------------------------------------------
@@ -101,7 +102,7 @@ guardLength f as = bool [] as $ f $ length as
 -- UI.
 type TacticProvider
      = DynFlags
-    -> FeatureSet
+    -> Config
     -> PluginId
     -> Uri
     -> Range
@@ -122,18 +123,18 @@ data TacticParams = TacticParams
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- 'Feature' is in the feature set.
 requireFeature :: Feature -> TacticProvider -> TacticProvider
-requireFeature f tp dflags fs plId uri range jdg = do
-  guard $ hasFeature f fs
-  tp dflags fs plId uri range jdg
+requireFeature f tp dflags cfg plId uri range jdg = do
+  guard $ hasFeature f $ cfg_feature_set cfg
+  tp dflags cfg plId uri range jdg
 
 
 ------------------------------------------------------------------------------
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 requireExtension :: Extension -> TacticProvider -> TacticProvider
-requireExtension ext tp dflags fs plId uri range jdg =
+requireExtension ext tp dflags cfg plId uri range jdg =
   case xopt ext dflags of
-    True  -> tp dflags fs plId uri range jdg
+    True  -> tp dflags cfg plId uri range jdg
     False -> pure []
 
 
@@ -141,9 +142,9 @@ requireExtension ext tp dflags fs plId uri range jdg =
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp dflags fs plId uri range jdg =
+filterGoalType p tp dflags cfg plId uri range jdg =
   case p $ unCType $ jGoal jdg of
-    True  -> tp dflags fs plId uri range jdg
+    True  -> tp dflags cfg plId uri range jdg
     False -> pure []
 
 
@@ -154,13 +155,13 @@ filterBindingType
     :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
-filterBindingType p tp dflags fs plId uri range jdg =
+filterBindingType p tp dflags cfg plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
    in fmap join $ for (unHypothesis hy) $ \hi ->
         let ty = unCType $ hi_type hi
          in case p (unCType g) ty of
-              True  -> tp (hi_name hi) ty dflags fs plId uri range jdg
+              True  -> tp (hi_name hi) ty dflags cfg plId uri range jdg
               False -> pure []
 
 
@@ -171,9 +172,16 @@ filterTypeProjection
     :: (Type -> [a])  -- ^ Features of the goal to look into further
     -> (a -> TacticProvider)
     -> TacticProvider
-filterTypeProjection p tp dflags fs plId uri range jdg =
+filterTypeProjection p tp dflags cfg plId uri range jdg =
   fmap join $ for (p $ unCType $ jGoal jdg) $ \a ->
-      tp a dflags fs plId uri range jdg
+      tp a dflags cfg plId uri range jdg
+
+
+------------------------------------------------------------------------------
+-- | Get access to the 'Config' when building a 'TacticProvider'.
+withConfig :: (Config -> TacticProvider) -> TacticProvider
+withConfig tp dflags cfg plId uri range jdg = tp cfg dflags cfg plId uri range jdg
+
 
 
 ------------------------------------------------------------------------------

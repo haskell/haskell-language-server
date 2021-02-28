@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Ide.Plugin.Tactic.TestTypes where
 
@@ -33,20 +34,23 @@ tacticTitle UseDataCon dcon          = "Use constructor " <> dcon
 
 ------------------------------------------------------------------------------
 -- | Plugin configuration for tactics
-newtype Config = Config
-  { cfg_feature_set :: FeatureSet
+data Config = Config
+  { cfg_feature_set          :: FeatureSet
+  , cfg_max_use_ctor_actions :: Int
   }
 
 emptyConfig :: Config
-emptyConfig = Config defaultFeatures
+emptyConfig = Config defaultFeatures 5
 
 instance ToJSON Config where
-  toJSON (Config features) = object
-    [ "features" .= prettyFeatureSet features
+  toJSON Config{..} = object
+    [ "features" .= prettyFeatureSet cfg_feature_set
+    , "max_use_ctor_actions" .= cfg_max_use_ctor_actions
     ]
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \obj -> do
-    features <- parseFeatureSet <$> obj .: "features"
-    pure $ Config features
+    cfg_feature_set          <- parseFeatureSet <$> obj .: "features"
+    cfg_max_use_ctor_actions <- obj .: "max_use_ctor_actions"
+    pure $ Config{..}
 
