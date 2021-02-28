@@ -43,7 +43,7 @@ cabal update
 cabal build
 ```
 
-If you run into any issues trying to build the binaries, the #haskell-ide-engine IRC chat room in
+If you run into any issues trying to build the binaries, the #haskell-language-server IRC chat room in
 Freenode is always a good place to ask for help.
 
 Once cabal is done take a note of the location of the `haskell-language-server` binary and point your LSP client to it. In VSCode this is done by editing the "Haskell Server Executable Path" setting. This way you can simply test your changes by reloading your editor after rebuilding the binary.
