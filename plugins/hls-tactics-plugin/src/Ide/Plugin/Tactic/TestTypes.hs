@@ -20,7 +20,6 @@ data TacticCommand
   | DestructLambdaCase
   | HomomorphismLambdaCase
   | UseDataCon
-  | Refine
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
@@ -32,7 +31,6 @@ tacticTitle Homomorphism var         = "Homomorphic case split on " <> var
 tacticTitle DestructLambdaCase _     = "Lambda case split"
 tacticTitle HomomorphismLambdaCase _ = "Homomorphic lambda case split"
 tacticTitle UseDataCon dcon          = "Use constructor " <> dcon
-tacticTitle Refine _                 = "Refine hole"
 
 
 ------------------------------------------------------------------------------

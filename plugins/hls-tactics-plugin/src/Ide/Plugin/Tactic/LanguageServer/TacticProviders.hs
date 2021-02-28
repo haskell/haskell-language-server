@@ -51,7 +51,6 @@ commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
 commandTactic UseDataCon             = userSplit
-commandTactic Refine                 = const refine
 
 
 ------------------------------------------------------------------------------
@@ -90,9 +89,6 @@ commandProvider UseDataCon =
           . occNameString
           . occName
           $ dataConName dcon
-commandProvider Refine =
-  requireFeature FeatureRefineHole $
-    provide Refine ""
 
 
 ------------------------------------------------------------------------------

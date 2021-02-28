@@ -84,12 +84,11 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 ------------------------------------------------------------------------------
 -- | Get the data cons of a type, if it has any.
 tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
-tacticsGetDataCons ty | Just _ <- algebraicTyCon ty =
+tacticsGetDataCons ty =
   splitTyConApp_maybe ty <&> \(tc, apps) ->
     ( filter (not . dataConCannotMatch apps) $ tyConDataCons tc
     , apps
     )
-tacticsGetDataCons _ = Nothing
 
 ------------------------------------------------------------------------------
 -- | Instantiate all of the quantified type variables in a type with fresh
