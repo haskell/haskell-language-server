@@ -295,6 +295,15 @@ hyNamesInScope :: Hypothesis a -> Set OccName
 hyNamesInScope = M.keysSet . hyByName
 
 
+jHasBoundArgs :: Judgement' a -> Bool
+jHasBoundArgs
+  = not
+  . null
+  . filter (isTopLevel . hi_provenance)
+  . unHypothesis
+  . jLocalHypothesis
+
+
 ------------------------------------------------------------------------------
 -- | Fold a hypothesis into a single mapping from name to info. This
 -- unavoidably will cause duplicate names (things like methods) to shadow one

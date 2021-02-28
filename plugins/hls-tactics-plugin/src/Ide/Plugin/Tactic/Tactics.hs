@@ -234,6 +234,22 @@ splitDataCon dc =
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 
+destructAll :: TacticsM ()
+destructAll = do
+  jdg <- goal
+  let args = fmap fst
+           $ sortOn (Down . snd)
+           $ mapMaybe (\(hi, prov) ->
+              case prov of
+                TopLevelArgPrv _ idx _ -> pure (hi, idx)
+                _ -> Nothing
+                )
+           $ fmap (\hi -> (hi, hi_provenance hi))
+           $ unHypothesis
+           $ jHypothesis jdg
+  for_ args destruct
+
+
 ------------------------------------------------------------------------------
 -- | @matching f@ takes a function from a judgement to a @Tactic@, and
 -- then applies the resulting @Tactic@.

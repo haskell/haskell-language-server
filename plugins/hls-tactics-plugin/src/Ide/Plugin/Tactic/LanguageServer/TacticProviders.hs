@@ -3,6 +3,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE ViewPatterns       #-}
+{-# OPTIONS_GHC -Wall           #-}
 
 module Ide.Plugin.Tactic.LanguageServer.TacticProviders
   ( commandProvider
@@ -47,6 +48,7 @@ commandTactic Destruct               = useNameFromHypothesis destruct
 commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
+commandTactic DestructAll            = const destructAll
 
 
 ------------------------------------------------------------------------------
@@ -71,6 +73,11 @@ commandProvider HomomorphismLambdaCase =
   requireExtension LambdaCase $
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
+commandProvider DestructAll =
+  withJudgement $ \jdg ->
+    case _jIsTopHole jdg && jHasBoundArgs jdg of
+      True  -> provide DestructAll ""
+      False -> mempty
 
 
 ------------------------------------------------------------------------------
@@ -122,6 +129,14 @@ filterGoalType p tp dflags fs plId uri range jdg =
   case p $ unCType $ jGoal jdg of
     True  -> tp dflags fs plId uri range jdg
     False -> pure []
+
+
+------------------------------------------------------------------------------
+-- | Restrict a 'TacticProvider', making sure it appears only when the given
+-- predicate holds for the goal.
+withJudgement :: (Judgement -> TacticProvider) -> TacticProvider
+withJudgement tp dflags fs plId uri range jdg =
+  tp jdg dflags fs plId uri range jdg
 
 
 ------------------------------------------------------------------------------
