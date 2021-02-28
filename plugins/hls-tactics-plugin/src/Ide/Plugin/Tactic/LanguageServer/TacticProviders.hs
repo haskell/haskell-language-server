@@ -122,8 +122,9 @@ data TacticParams = TacticParams
 -- 'Feature' is in the feature set.
 requireFeature :: Feature -> TacticProvider -> TacticProvider
 requireFeature f tp dflags cfg plId uri range jdg = do
-  guard $ hasFeature f $ cfg_feature_set cfg
-  tp dflags cfg plId uri range jdg
+  case hasFeature f $ cfg_feature_set cfg of
+    True  -> tp dflags cfg plId uri range jdg
+    False -> pure []
 
 
 ------------------------------------------------------------------------------

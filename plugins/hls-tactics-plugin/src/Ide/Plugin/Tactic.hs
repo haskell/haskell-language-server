@@ -88,7 +88,7 @@ codeActionProvider _ _ _ = pure $ Right $ List []
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
 tacticCmd tac state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet (shakeExtras state)
+      features <- getFeatureSet $ shakeExtras state
       ccs <- getClientCapabilities
       res <- liftIO $ fromMaybeT (Right Nothing) $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
