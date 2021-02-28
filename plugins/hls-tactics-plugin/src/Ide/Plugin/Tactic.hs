@@ -13,30 +13,28 @@ module Ide.Plugin.Tactic
   , TacticCommand (..)
   ) where
 
-import           Bag                                              (bagToList,
-                                                                   listToBag)
-import           Control.Exception                                (evaluate)
+import           Bag (bagToList, listToBag)
+import           Control.Exception (evaluate)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor                                   (Bifunctor (bimap))
-import           Data.Bool                                        (bool)
-import           Data.Data                                        (Data)
+import           Data.Bifunctor (Bifunctor (bimap))
+import           Data.Bool (bool)
+import           Data.Data (Data)
 import           Data.Foldable (for_)
-import           Data.Generics.Aliases                            (mkQ)
-import           Data.Generics.Schemes                            (everything)
+import           Data.Generics.Aliases (mkQ)
+import           Data.Generics.Schemes (everything)
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Text                                        as T
+import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE.Core.Shake                       (IdeState (..))
+import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Development.Shake.Classes
 import           Ide.Plugin.Tactic.CaseSplit
-import           Ide.Plugin.Tactic.FeatureSet                     (Feature (..),
-                                                                   hasFeature)
+import           Ide.Plugin.Tactic.FeatureSet (Feature (..), hasFeature)
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.LanguageServer
 import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
@@ -49,7 +47,7 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import           OccName
-import           Prelude                                          hiding (span)
+import           Prelude hiding (span)
 import           System.Timeout
 
 
@@ -71,14 +69,14 @@ descriptor plId = (defaultPluginDescriptor plId)
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet (shakeExtras state)
+      cfg <- getTacticConfig $ shakeExtras state
       liftIO $ fromMaybeT (Right $ List []) $ do
-        (_, jdg, _, dflags) <- judgementForHole state nfp range features
+        (_, jdg, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
         actions <- lift $
           -- This foldMap is over the function monoid.
           foldMap commandProvider [minBound .. maxBound]
             dflags
-            features
+            cfg
             plId
             uri
             range
@@ -90,7 +88,7 @@ codeActionProvider _ _ _ = pure $ Right $ List []
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
 tacticCmd tac state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet (shakeExtras state)
+      features <- getFeatureSet $ shakeExtras state
       ccs <- getClientCapabilities
       res <- liftIO $ fromMaybeT (Right Nothing) $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
