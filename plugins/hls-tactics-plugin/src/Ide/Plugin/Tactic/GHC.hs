@@ -30,6 +30,7 @@ import           Type
 import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unique
 import           Var
+import Data.Functor ((<&>))
 
 
 tcTyVar_maybe :: Type -> Maybe Var
@@ -83,8 +84,11 @@ tacticsThetaTy (tcSplitSigmaTy -> (_, theta,  _)) = theta
 ------------------------------------------------------------------------------
 -- | Get the data cons of a type, if it has any.
 tacticsGetDataCons :: Type -> Maybe ([DataCon], [Type])
-tacticsGetDataCons =
-  fmap (first tyConDataCons) . splitTyConApp_maybe
+tacticsGetDataCons ty =
+  splitTyConApp_maybe ty <&> \(tc, apps) ->
+    ( filter (not . dataConCannotMatch apps) $ tyConDataCons tc
+    , apps
+    )
 
 ------------------------------------------------------------------------------
 -- | Instantiate all of the quantified type variables in a type with fresh

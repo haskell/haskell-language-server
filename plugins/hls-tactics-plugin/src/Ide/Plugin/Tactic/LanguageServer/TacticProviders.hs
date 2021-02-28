@@ -22,7 +22,7 @@ import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
-import           DataCon (dataConName, dataConCannotMatch)
+import           DataCon (dataConName)
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
@@ -80,7 +80,9 @@ commandProvider UseDataCon =
     requireFeature FeatureUseDataCon $
       filterTypeProjection
           ( guardLength (<= cfg_max_use_ctor_actions cfg)
-          . useCtorFilter
+          . fromMaybe []
+          . fmap fst
+          . tacticsGetDataCons
           ) $ \dcon ->
         provide UseDataCon
           . T.pack
@@ -229,15 +231,4 @@ homoFilter _ _                                                     = False
 destructFilter :: Type -> Type -> Bool
 destructFilter _ (algebraicTyCon -> Just _) = True
 destructFilter _ _                          = False
-
-
-------------------------------------------------------------------------------
--- | Only show data cons in "Use constructor" if they can unify with the goal
-useCtorFilter :: Type -> [DataCon]
-useCtorFilter ty
-  | Just (dcs, apps) <- tacticsGetDataCons ty = do
-      dc <- dcs
-      guard $ not $ dataConCannotMatch apps dc
-      pure dc
-useCtorFilter _ = []
 
