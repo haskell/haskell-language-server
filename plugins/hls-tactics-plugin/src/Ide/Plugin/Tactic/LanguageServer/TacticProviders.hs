@@ -89,6 +89,9 @@ commandProvider UseDataCon =
         . occName
         $ dataConName dcon
 
+
+------------------------------------------------------------------------------
+-- | Return an empty list if the given predicate doesn't hold over the length
 guardLength :: (Int -> Bool) -> [a] -> [a]
 guardLength f as = bool [] as $ f $ length as
 
@@ -160,12 +163,16 @@ filterBindingType p tp dflags fs plId uri range jdg =
               True  -> tp (hi_name hi) ty dflags fs plId uri range jdg
               False -> pure []
 
+
+------------------------------------------------------------------------------
+-- | Multiply a 'TacticProvider' by some feature projection out of the goal
+-- type. Used e.g. to crete a code action for every data constructor.
 filterTypeProjection
     :: (Type -> [a])  -- ^ Features of the goal to look into further
     -> (a -> TacticProvider)
     -> TacticProvider
 filterTypeProjection p tp dflags fs plId uri range jdg =
-  fmap join $ for ( p $ unCType $ jGoal jdg) $ \a ->
+  fmap join $ for (p $ unCType $ jGoal jdg) $ \a ->
       tp a dflags fs plId uri range jdg
 
 
@@ -199,7 +206,6 @@ provide tc name _ _ plId uri range _ = do
 -- | Construct a 'CommandId'
 tcCommandId :: TacticCommand -> CommandId
 tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
-
 
 
 ------------------------------------------------------------------------------

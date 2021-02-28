@@ -73,6 +73,8 @@ spec = do
 
   let goldenTest = mkGoldenTest allFeatures
 
+  -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/use constructor/"'
   describe "use constructor" $ do
     let useTest = mkGoldenTest allFeatures UseDataCon
     describe "provider" $ do

@@ -131,11 +131,14 @@ algebraicTyCon _ = Nothing
 
 
 ------------------------------------------------------------------------------
--- | We can't compare 'RdrName' for equality directly. Instead, compare them by
--- their 'OccName's.
+-- | We can't compare 'RdrName' for equality directly. Instead, sloppily
+-- compare them by their 'OccName's.
 eqRdrName :: RdrName -> RdrName -> Bool
 eqRdrName = (==) `on` occNameString . occName
 
+
+------------------------------------------------------------------------------
+-- | Compare two 'OccName's for unqualified equality.
 sloppyEqOccName :: OccName -> OccName -> Bool
 sloppyEqOccName = (==) `on` occNameString
 
