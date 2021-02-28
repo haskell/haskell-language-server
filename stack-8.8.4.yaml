@@ -29,6 +29,8 @@ extra-deps:
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   - ghc-exactprint-0.6.3.4
+  - ghc-lib-8.10.4.20210206
+  - ghc-lib-parser-8.10.4.20210206
   - ghc-trace-events-0.1.2.1
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
