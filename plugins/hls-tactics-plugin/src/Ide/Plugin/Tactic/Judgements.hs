@@ -295,6 +295,8 @@ hyNamesInScope :: Hypothesis a -> Set OccName
 hyNamesInScope = M.keysSet . hyByName
 
 
+------------------------------------------------------------------------------
+-- | Are there any top-level function argument bindings in this judgement?
 jHasBoundArgs :: Judgement' a -> Bool
 jHasBoundArgs
   = not

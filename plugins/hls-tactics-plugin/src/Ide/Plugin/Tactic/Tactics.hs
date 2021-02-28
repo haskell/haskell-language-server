@@ -234,6 +234,9 @@ splitDataCon dc =
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 
+------------------------------------------------------------------------------
+-- | Perform a case split on each top-level argument. Used to implement the
+-- "Destruct all function arguments" action.
 destructAll :: TacticsM ()
 destructAll = do
   jdg <- goal
