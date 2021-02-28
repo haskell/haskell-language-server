@@ -107,8 +107,9 @@ data TacticParams = TacticParams
 -- 'Feature' is in the feature set.
 requireFeature :: Feature -> TacticProvider -> TacticProvider
 requireFeature f tp dflags fs plId uri range jdg = do
-  guard $ hasFeature f fs
-  tp dflags fs plId uri range jdg
+  case hasFeature f fs of
+    True  -> tp dflags fs plId uri range jdg
+    False -> pure []
 
 
 ------------------------------------------------------------------------------
