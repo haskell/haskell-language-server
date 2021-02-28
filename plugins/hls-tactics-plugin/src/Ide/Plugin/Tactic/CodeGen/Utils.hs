@@ -22,7 +22,7 @@ mkCon dcon (fmap unLoc -> args)
   , (lhs : rhs : args') <- args =
       noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
   | Just fields <- getRecordFields dcon
-  , length fields >= 2 =
+  , length fields >= 2 =  --  record notation is unnatural on single field ctors
       noLoc $ recordConE (coerceName dcon_name) $ do
         (arg, (field, _)) <- zip args fields
         pure (coerceName field, arg)
