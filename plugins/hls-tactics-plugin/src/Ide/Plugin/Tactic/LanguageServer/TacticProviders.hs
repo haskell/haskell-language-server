@@ -74,10 +74,11 @@ commandProvider HomomorphismLambdaCase =
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
 commandProvider DestructAll =
-  withJudgement $ \jdg ->
-    case _jIsTopHole jdg && jHasBoundArgs jdg of
-      True  -> provide DestructAll ""
-      False -> mempty
+  requireFeature FeatureDestructAll $
+    withJudgement $ \jdg ->
+      case _jIsTopHole jdg && jHasBoundArgs jdg of
+        True  -> provide DestructAll ""
+        False -> mempty
 
 
 ------------------------------------------------------------------------------

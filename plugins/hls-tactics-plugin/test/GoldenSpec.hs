@@ -73,6 +73,34 @@ spec = do
       [ (not, DestructLambdaCase, "")
       ]
 
+
+  -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/destruct all/"'
+  describe "destruct all" $ do
+    let destructAllTest = mkGoldenTest allFeatures DestructAll ""
+    describe "provider" $ do
+      mkTest
+        "Requires args on lhs of ="
+        "DestructAllProvider.hs" 3 21
+        [ (not, DestructAll, "")
+        ]
+      mkTest
+        "Can't be a non-top-hole"
+        "DestructAllProvider.hs" 8 19
+        [ (not, DestructAll, "")
+        , (id, Destruct, "a")
+        , (id, Destruct, "b")
+        ]
+      mkTest
+        "Provides a destruct all otherwise"
+        "DestructAllProvider.hs" 12 22
+        [ (id, DestructAll, "")
+        ]
+
+    describe "golden" $ do
+      destructAllTest "DestructAllAnd.hs"  2 11
+      destructAllTest "DestructAllMany.hs" 4 23
+
   describe "golden tests" $ do
     let goldenTest = mkGoldenTest allFeatures
         autoTest = mkGoldenTest allFeatures Auto ""
@@ -150,6 +178,7 @@ mkTest
     -> SpecWith (Arg Bool)
 mkTest name fp line col ts = it name $ do
   runSession testCommand fullCaps tacticPath $ do
+    setFeatureSet allFeatures
     doc <- openDoc fp "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col
