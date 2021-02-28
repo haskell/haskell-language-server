@@ -4,6 +4,7 @@
 module Ide.Plugin.Tactic.TestTypes where
 
 import           Data.Aeson
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text                    as T
 import           Ide.Plugin.Tactic.FeatureSet
 
@@ -50,7 +51,9 @@ instance ToJSON Config where
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \obj -> do
-    cfg_feature_set          <- parseFeatureSet <$> obj .: "features"
-    cfg_max_use_ctor_actions <- obj .: "max_use_ctor_actions"
+    cfg_feature_set          <-
+      parseFeatureSet . fromMaybe "" <$> obj .:? "features"
+    cfg_max_use_ctor_actions <-
+      fromMaybe 5 <$> obj .:? "max_use_ctor_actions"
     pure $ Config{..}
 
