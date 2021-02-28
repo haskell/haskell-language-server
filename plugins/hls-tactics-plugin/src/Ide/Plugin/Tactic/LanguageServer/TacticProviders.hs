@@ -13,19 +13,19 @@ module Ide.Plugin.Tactic.LanguageServer.TacticProviders
   ) where
 
 import           Control.Monad
-import           Control.Monad.Error.Class    (MonadError (throwError))
+import           Control.Monad.Error.Class (MonadError (throwError))
 import           Data.Aeson
 import           Data.Bool (bool)
 import           Data.Coerce
-import qualified Data.Map                     as M
+import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Text                    as T
+import qualified Data.Text as T
 import           Data.Traversable
 import           DataCon (dataConName)
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
-import           GHC.LanguageExtensions.Type  (Extension (LambdaCase))
+import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
@@ -37,8 +37,8 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
 import           OccName
-import           Prelude                      hiding (span)
-import           Refinery.Tactic              (goal)
+import           Prelude hiding (span)
+import           Refinery.Tactic (goal)
 
 
 ------------------------------------------------------------------------------
