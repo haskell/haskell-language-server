@@ -80,7 +80,7 @@ spec = do
     describe "provider" $ do
       mkTest
         "Suggests all data cons for Either"
-        "ConProviders.hs" 3 6
+        "ConProviders.hs" 5 6
         [ (id, UseDataCon, "Left")
         , (id, UseDataCon, "Right")
         , (not, UseDataCon, ":")
@@ -89,9 +89,16 @@ spec = do
         ]
       mkTest
         "Suggests no data cons for big types"
-        "ConProviders.hs" 9 17 $ do
+        "ConProviders.hs" 11 17 $ do
           c <- [1 :: Int .. 10]
           pure $ (not, UseDataCon, T.pack $ show c)
+      mkTest
+        "Suggests only matching data cons for GADT"
+        "ConProviders.hs" 20 12
+        [ (id, UseDataCon, "IntGADT")
+        , (id, UseDataCon, "VarGADT")
+        , (not, UseDataCon, "BoolGADT")
+        ]
 
     describe "golden" $ do
       useTest "(,)"   "UseConPair.hs"  2 8
