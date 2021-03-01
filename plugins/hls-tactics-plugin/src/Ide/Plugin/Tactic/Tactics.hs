@@ -184,8 +184,7 @@ split = tracing "split(user)" $ do
   let g = jGoal jdg
   case tacticsGetDataCons $ unCType g of
     Nothing -> throwError $ GoalMismatch "split" g
-    Just (dcs, _) -> do
-      choice $ fmap splitDataCon dcs
+    Just (dcs, _) -> choice $ fmap splitDataCon dcs
 
 
 ------------------------------------------------------------------------------
