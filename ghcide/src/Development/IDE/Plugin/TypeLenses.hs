@@ -6,6 +6,7 @@ module Development.IDE.Plugin.TypeLenses
   )
 where
 
+import           ConLike                             (ConLike (PatSynCon))
 import           Control.Applicative                 ((<|>))
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types                    (Value (..), toJSON)
@@ -94,7 +95,7 @@ commandHandler _ideState wedit = do
   return $ Right Null
 
 suggestSignature :: Bool -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = _range@Range {..}}
+suggestSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = Range {..}}
   | _message
       =~ ("(Top-level binding|Polymorphic local binding|Pattern synonym) with no type signature" :: T.Text),
     Just bindings <- mBindings,
@@ -102,21 +103,22 @@ suggestSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = _range
     localScope <- getFuzzyScope bindings _start _end,
     Just group <- tcg_rn_decls,
     Just name <- getFirstIdAtLine (succ $ _line _start) group,
-    Just ty <- (lookupTypeEnv tcg_type_env name >>= safeTyThingType) <|> (find (\(x, _) -> x == name) localScope >>= snd),
+    Just (isPatSyn, ty) <-
+      (lookupTypeEnv tcg_type_env name >>= \x -> (isTyThingPatSyn x,) <$> safeTyThingType x)
+        <|> ((False,) <$> (find (\(x, _) -> x == name) localScope >>= snd)),
     tyMsg <- showSDocForUser unsafeGlobalDynFlags (mkPrintUnqualified unsafeGlobalDynFlags tcg_rdr_env) $ pprSigmaType ty,
-    signature <- T.pack $ printName name <> " :: " <> tyMsg,
+    signature <- T.pack $ (if isPatSyn then "pattern " else "") <> printName name <> " :: " <> tyMsg,
+    startCharacter <- if "local binding" `T.isInfixOf` _message then _character _start else 0,
     startOfLine <- Position (_line _start) startCharacter,
     beforeLine <- Range startOfLine startOfLine,
     title <- if isQuickFix then "add signature: " <> signature else signature,
     action <- TextEdit beforeLine $ signature <> "\n" <> T.replicate startCharacter " " =
     [(title, [action])]
   | otherwise = []
-  where
-    startCharacter
-      | "Polymorphic local binding" `T.isPrefixOf` _message =
-        _character _start
-      | otherwise =
-        0
+
+isTyThingPatSyn :: TyThing -> Bool
+isTyThingPatSyn (AConLike (PatSynCon _)) = True
+isTyThingPatSyn _                        = False
 
 getFirstIdAtLine :: Int -> HsGroup GhcRn -> Maybe Name
 getFirstIdAtLine line = something (mkQ Nothing f)

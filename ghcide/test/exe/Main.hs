@@ -3183,6 +3183,8 @@ addSigLensesTests = let
       , sigSession enableWarnings "a `haha` b = a b"        "haha :: (t1 -> t2) -> t1 -> t2"
       , sigSession enableWarnings "pattern Some a = Just a" "pattern Some :: a -> Maybe a"
       , sigSession enableWarnings "qualifiedSigTest= C.realPart" "qualifiedSigTest :: C.Complex a -> a"
+      , sigSession enableWarnings "head = 233" "head :: Integer"
+      , sigSession enableWarnings "a *.* b = a b" "(*.*) :: (t1 -> t2) -> t1 -> t2"
       ]
       | (title, enableWarnings) <-
         [("with warnings enabled", True)
