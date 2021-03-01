@@ -105,6 +105,17 @@ spec = do
       useTest "Left"  "UseConLeft.hs"  2 8
       useTest "Right" "UseConRight.hs" 2 8
 
+  -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/refine/"'
+  describe "refine" $ do
+    let refineTest = mkGoldenTest allFeatures Refine ""
+    describe "golden" $ do
+      refineTest "RefineIntro.hs"  2 8
+      refineTest "RefineCon.hs"    2 8
+      refineTest "RefineReader.hs" 4 8
+      refineTest "RefineGADT.hs"   8 8
+
+
   describe "golden tests" $ do
     let autoTest = mkGoldenTest allFeatures Auto ""
 
