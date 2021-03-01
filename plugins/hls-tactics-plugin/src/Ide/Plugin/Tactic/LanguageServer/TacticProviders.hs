@@ -13,17 +13,19 @@ module Ide.Plugin.Tactic.LanguageServer.TacticProviders
   ) where
 
 import           Control.Monad
-import           Control.Monad.Error.Class    (MonadError (throwError))
+import           Control.Monad.Error.Class (MonadError (throwError))
 import           Data.Aeson
+import           Data.Bool (bool)
 import           Data.Coerce
-import qualified Data.Map                     as M
+import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Text                    as T
+import qualified Data.Text as T
 import           Data.Traversable
+import           DataCon (dataConName)
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
-import           GHC.LanguageExtensions.Type  (Extension (LambdaCase))
+import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
 import           Ide.Plugin.Tactic.Auto
 import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
@@ -35,8 +37,8 @@ import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
 import           OccName
-import           Prelude                      hiding (span)
-import           Refinery.Tactic              (goal)
+import           Prelude hiding (span)
+import           Refinery.Tactic (goal)
 
 
 ------------------------------------------------------------------------------
@@ -49,6 +51,8 @@ commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
 commandTactic DestructAll            = const destructAll
+commandTactic UseDataCon             = userSplit
+commandTactic Refine                 = const refine
 
 
 ------------------------------------------------------------------------------
@@ -79,6 +83,29 @@ commandProvider DestructAll =
       case _jIsTopHole jdg && jHasBoundArgs jdg of
         True  -> provide DestructAll ""
         False -> mempty
+commandProvider UseDataCon =
+  withConfig $ \cfg ->
+    requireFeature FeatureUseDataCon $
+      filterTypeProjection
+          ( guardLength (<= cfg_max_use_ctor_actions cfg)
+          . fromMaybe []
+          . fmap fst
+          . tacticsGetDataCons
+          ) $ \dcon ->
+        provide UseDataCon
+          . T.pack
+          . occNameString
+          . occName
+          $ dataConName dcon
+commandProvider Refine =
+  requireFeature FeatureRefineHole $
+    provide Refine ""
+
+
+------------------------------------------------------------------------------
+-- | Return an empty list if the given predicate doesn't hold over the length
+guardLength :: (Int -> Bool) -> [a] -> [a]
+guardLength f as = bool [] as $ f $ length as
 
 
 ------------------------------------------------------------------------------
@@ -86,7 +113,7 @@ commandProvider DestructAll =
 -- UI.
 type TacticProvider
      = DynFlags
-    -> FeatureSet
+    -> Config
     -> PluginId
     -> Uri
     -> Range
@@ -107,9 +134,9 @@ data TacticParams = TacticParams
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- 'Feature' is in the feature set.
 requireFeature :: Feature -> TacticProvider -> TacticProvider
-requireFeature f tp dflags fs plId uri range jdg = do
-  case hasFeature f fs of
-    True  -> tp dflags fs plId uri range jdg
+requireFeature f tp dflags cfg plId uri range jdg = do
+  case hasFeature f $ cfg_feature_set cfg of
+    True  -> tp dflags cfg plId uri range jdg
     False -> pure []
 
 
@@ -117,9 +144,9 @@ requireFeature f tp dflags fs plId uri range jdg = do
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 requireExtension :: Extension -> TacticProvider -> TacticProvider
-requireExtension ext tp dflags fs plId uri range jdg =
+requireExtension ext tp dflags cfg plId uri range jdg =
   case xopt ext dflags of
-    True  -> tp dflags fs plId uri range jdg
+    True  -> tp dflags cfg plId uri range jdg
     False -> pure []
 
 
@@ -127,9 +154,9 @@ requireExtension ext tp dflags fs plId uri range jdg =
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp dflags fs plId uri range jdg =
+filterGoalType p tp dflags cfg plId uri range jdg =
   case p $ unCType $ jGoal jdg of
-    True  -> tp dflags fs plId uri range jdg
+    True  -> tp dflags cfg plId uri range jdg
     False -> pure []
 
 
@@ -148,14 +175,32 @@ filterBindingType
     :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
-filterBindingType p tp dflags fs plId uri range jdg =
+filterBindingType p tp dflags cfg plId uri range jdg =
   let hy = jHypothesis jdg
       g  = jGoal jdg
    in fmap join $ for (unHypothesis hy) $ \hi ->
         let ty = unCType $ hi_type hi
          in case p (unCType g) ty of
-              True  -> tp (hi_name hi) ty dflags fs plId uri range jdg
+              True  -> tp (hi_name hi) ty dflags cfg plId uri range jdg
               False -> pure []
+
+
+------------------------------------------------------------------------------
+-- | Multiply a 'TacticProvider' by some feature projection out of the goal
+-- type. Used e.g. to crete a code action for every data constructor.
+filterTypeProjection
+    :: (Type -> [a])  -- ^ Features of the goal to look into further
+    -> (a -> TacticProvider)
+    -> TacticProvider
+filterTypeProjection p tp dflags cfg plId uri range jdg =
+  fmap join $ for (p $ unCType $ jGoal jdg) $ \a ->
+      tp a dflags cfg plId uri range jdg
+
+
+------------------------------------------------------------------------------
+-- | Get access to the 'Config' when building a 'TacticProvider'.
+withConfig :: (Config -> TacticProvider) -> TacticProvider
+withConfig tp dflags cfg plId uri range jdg = tp cfg dflags cfg plId uri range jdg
 
 
 
@@ -189,7 +234,6 @@ provide tc name _ _ plId uri range _ = do
 -- | Construct a 'CommandId'
 tcCommandId :: TacticCommand -> CommandId
 tcCommandId c = coerce $ T.pack $ "tactics" <> show c <> "Command"
-
 
 
 ------------------------------------------------------------------------------

@@ -31,7 +31,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
-import           Name (occNameString)
+import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
@@ -197,15 +197,27 @@ splitAuto :: TacticsM ()
 splitAuto = requireConcreteHole $ tracing "split(auto)" $ do
   jdg <- goal
   let g = jGoal jdg
-  case splitTyConApp_maybe $ unCType g of
+  case tacticsGetDataCons $ unCType g of
     Nothing -> throwError $ GoalMismatch "split" g
-    Just (tc, _) -> do
-      let dcs = tyConDataCons tc
+    Just (dcs, _) -> do
       case isSplitWhitelisted jdg of
         True -> choice $ fmap splitDataCon dcs
         False -> do
           choice $ flip fmap dcs $ \dc -> requireNewHoles $
             splitDataCon dc
+
+
+------------------------------------------------------------------------------
+-- | Like 'split', but only works if there is a single matching data
+-- constructor for the goal.
+splitSingle :: TacticsM ()
+splitSingle = tracing "splitSingle" $ do
+  jdg <- goal
+  let g = jGoal jdg
+  case tacticsGetDataCons $ unCType g of
+    Just ([dc], _) -> do
+      splitDataCon dc
+    _ -> throwError $ GoalMismatch "splitSingle" g
 
 
 ------------------------------------------------------------------------------
@@ -222,15 +234,16 @@ requireNewHoles m = do
 
 ------------------------------------------------------------------------------
 -- | Attempt to instantiate the given data constructor to solve the goal.
+--
+-- INVARIANT: Assumes the give datacon is appropriate to construct the type
+-- with.
 splitDataCon :: DataCon -> TacticsM ()
 splitDataCon dc =
   requireConcreteHole $ tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
     let g = jGoal jdg
     case splitTyConApp_maybe $ unCType g of
       Just (tc, apps) -> do
-        case elem dc $ tyConDataCons tc of
-          True  -> buildDataCon (unwhitelistingSplit jdg) dc apps
-          False -> throwError $ IncorrectDataCon dc
+        buildDataCon (unwhitelistingSplit jdg) dc apps
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 
@@ -252,6 +265,22 @@ destructAll = do
            $ jHypothesis jdg
   for_ args destruct
 
+--------------------------------------------------------------------------------
+-- | User-facing tactic to implement "Use constructor <x>"
+userSplit :: OccName -> TacticsM ()
+userSplit occ = do
+  jdg <- goal
+  let g = jGoal jdg
+  -- TODO(sandy): It's smelly that we need to find the datacon to generate the
+  -- code action, send it as a string, and then look it up again. Can we push
+  -- this over LSP somehow instead?
+  case splitTyConApp_maybe $ unCType g of
+    Just (tc, apps) -> do
+      case find (sloppyEqOccName occ . occName . dataConName)
+             $ tyConDataCons tc of
+        Just dc -> splitDataCon dc
+        Nothing -> throwError $ NotInScope occ
+
 
 ------------------------------------------------------------------------------
 -- | @matching f@ takes a function from a judgement to a @Tactic@, and
@@ -268,6 +297,17 @@ localTactic :: TacticsM a -> (Judgement -> Judgement) -> TacticsM a
 localTactic t f = do
   TacticT $ StateT $ \jdg ->
     runStateT (unTacticT t) $ f jdg
+
+
+refine :: TacticsM ()
+refine = go 3
+  where
+    go 0 = pure ()
+    go n = do
+      let try_that_doesnt_suck t = commit t $ pure ()
+      try_that_doesnt_suck intros
+      try_that_doesnt_suck splitSingle
+      go $ n - 1
 
 
 auto' :: Int -> TacticsM ()

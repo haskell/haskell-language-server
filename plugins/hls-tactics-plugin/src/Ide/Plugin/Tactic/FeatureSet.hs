@@ -23,6 +23,8 @@ import qualified Data.Text  as T
 -- available to the user.
 data Feature
   = FeatureDestructAll
+  | FeatureUseDataCon
+  | FeatureRefineHole
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 
