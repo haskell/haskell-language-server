@@ -250,15 +250,18 @@ lambdaCaseable _ = Nothing
 
 -- It's hard to generalize over these since weird type families are involved.
 fromPatCompatTc :: PatCompat GhcTc -> Pat GhcTc
+toPatCompatTc :: Pat GhcTc -> PatCompat GhcTc
 fromPatCompatPs :: PatCompat GhcPs -> Pat GhcPs
 #if __GLASGOW_HASKELL__ == 808
 type PatCompat pass = Pat pass
 fromPatCompatTc = id
 fromPatCompatPs = id
+toPatCompatTc = id
 #else
 type PatCompat pass = LPat pass
 fromPatCompatTc = unLoc
 fromPatCompatPs = unLoc
+toPatCompatTc = noLoc
 #endif
 
 ------------------------------------------------------------------------------

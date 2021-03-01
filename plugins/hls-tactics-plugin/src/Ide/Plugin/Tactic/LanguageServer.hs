@@ -37,7 +37,7 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins (mkAppTys)
+import           GhcPlugins (mkAppTys, tupleDataCon, consDataCon)
 import           Ide.Plugin.Config (PluginConfig (plcConfig))
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Tactic.Context
@@ -234,11 +234,28 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     ParPat  _ p   -> buildPatHy prov p
     BangPat _ p   -> buildPatHy prov p
     ViewPat _ _ p -> buildPatHy prov p
+    -- Desugar lists into cons
+    ListPat _ [] -> pure mempty
+    ListPat x@(ListPatTc ty _) (fmap fromPatCompatTc -> (p : ps)) ->
+      mkDerivedConHypothesis prov consDataCon [ty]
+        [ (0, toPatCompatTc p)
+        , (1, ListPat x $ fmap toPatCompatTc ps)
+        ]
+    -- Desugar tuples into an explicit constructor
+    TuplePat tys pats boxity ->
+      mkDerivedConHypothesis
+        prov
+        (tupleDataCon boxity $ length pats)
+        tys
+          $ zip [0.. ] pats
     ConPatOut (L _ (RealDataCon dc)) args _ _ _ f _ ->
       case f of
-        PrefixCon l_pgt -> mkDerivedConHypothesis prov dc args $ zip [0..] l_pgt
-        InfixCon pgt pgt5 -> mkDerivedConHypothesis prov dc args $ zip [0..] [pgt, pgt5]
-        RecCon r -> mkDerivedRecordHypothesis prov dc args r
+        PrefixCon l_pgt ->
+          mkDerivedConHypothesis prov dc args $ zip [0..] l_pgt
+        InfixCon pgt pgt5 ->
+          mkDerivedConHypothesis prov dc args $ zip [0..] [pgt, pgt5]
+        RecCon r ->
+          mkDerivedRecordHypothesis prov dc args r
 #if __GLASGOW_HASKELL__ >= 808
     SigPat  _ p _ -> buildPatHy prov p
 #endif
