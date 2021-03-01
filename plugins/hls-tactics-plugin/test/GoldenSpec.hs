@@ -74,6 +74,34 @@ spec = do
   let goldenTest = mkGoldenTest allFeatures
 
   -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/destruct all/"'
+  describe "destruct all" $ do
+    let destructAllTest = mkGoldenTest allFeatures DestructAll ""
+    describe "provider" $ do
+      mkTest
+        "Requires args on lhs of ="
+        "DestructAllProvider.hs" 3 21
+        [ (not, DestructAll, "")
+        ]
+      mkTest
+        "Can't be a non-top-hole"
+        "DestructAllProvider.hs" 8 19
+        [ (not, DestructAll, "")
+        , (id, Destruct, "a")
+        , (id, Destruct, "b")
+        ]
+      mkTest
+        "Provides a destruct all otherwise"
+        "DestructAllProvider.hs" 12 22
+        [ (id, DestructAll, "")
+        ]
+
+    describe "golden" $ do
+      destructAllTest "DestructAllAnd.hs"  2 11
+      destructAllTest "DestructAllMany.hs" 4 23
+
+
+  -- test via:
   -- stack test hls-tactics-plugin --test-arguments '--match "Golden/use constructor/"'
   describe "use constructor" $ do
     let useTest = mkGoldenTest allFeatures UseDataCon
@@ -114,7 +142,6 @@ spec = do
       refineTest "RefineCon.hs"    2 8
       refineTest "RefineReader.hs" 4 8
       refineTest "RefineGADT.hs"   8 8
-
 
   describe "golden tests" $ do
     let autoTest = mkGoldenTest allFeatures Auto ""
