@@ -210,6 +210,15 @@ jAncestryMap jdg =
   flip M.map (jPatHypothesis jdg) pv_ancestry
 
 
+provAncestryOf :: Provenance -> Set OccName
+provAncestryOf (TopLevelArgPrv o i i3) = S.singleton o
+provAncestryOf (PatternMatchPrv (PatVal mo so ud i)) = maybe mempty S.singleton mo <> so
+provAncestryOf (ClassMethodPrv uc) = mempty
+provAncestryOf UserPrv = mempty
+provAncestryOf RecursivePrv = mempty
+provAncestryOf (DisallowedPrv d p2) = provAncestryOf p2
+
+
 ------------------------------------------------------------------------------
 -- TODO(sandy): THIS THING IS A BIG BIG HACK
 --
