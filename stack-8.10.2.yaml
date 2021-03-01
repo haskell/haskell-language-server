@@ -27,8 +27,8 @@ extra-deps:
   - floskell-0.10.4
   - fourmolu-0.3.0.0
   - ghc-exactprint-0.6.3.4
-  - ghc-lib-8.10.3.20201220
-  - ghc-lib-parser-8.10.3.20201220
+  - ghc-lib-8.10.4.20210206
+  - ghc-lib-parser-8.10.4.20210206
   - lsp-1.1.1.0
   - lsp-types-1.1.0.0
   - lsp-test-0.13.0.0
