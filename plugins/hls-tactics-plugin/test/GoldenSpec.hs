@@ -74,6 +74,34 @@ spec = do
   let goldenTest = mkGoldenTest allFeatures
 
   -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/destruct all/"'
+  describe "destruct all" $ do
+    let destructAllTest = mkGoldenTest allFeatures DestructAll ""
+    describe "provider" $ do
+      mkTest
+        "Requires args on lhs of ="
+        "DestructAllProvider.hs" 3 21
+        [ (not, DestructAll, "")
+        ]
+      mkTest
+        "Can't be a non-top-hole"
+        "DestructAllProvider.hs" 8 19
+        [ (not, DestructAll, "")
+        , (id, Destruct, "a")
+        , (id, Destruct, "b")
+        ]
+      mkTest
+        "Provides a destruct all otherwise"
+        "DestructAllProvider.hs" 12 22
+        [ (id, DestructAll, "")
+        ]
+
+    describe "golden" $ do
+      destructAllTest "DestructAllAnd.hs"  2 11
+      destructAllTest "DestructAllMany.hs" 4 23
+
+
+  -- test via:
   -- stack test hls-tactics-plugin --test-arguments '--match "Golden/use constructor/"'
   describe "use constructor" $ do
     let useTest = mkGoldenTest allFeatures UseDataCon
@@ -115,7 +143,6 @@ spec = do
       refineTest "RefineReader.hs" 4 8
       refineTest "RefineGADT.hs"   8 8
 
-
   describe "golden tests" $ do
     let autoTest = mkGoldenTest allFeatures Auto ""
 
@@ -151,6 +178,7 @@ spec = do
     autoTest "GoldenArbitrary.hs" 25 13
     autoTest "FmapBoth.hs"        2 12
     autoTest "RecordCon.hs"       7  8
+    autoTest "NewtypeRecord.hs"   6  8
     autoTest "FmapJoin.hs"        2 14
     autoTest "Fgmap.hs"           2 9
     autoTest "FmapJoinInLet.hs"   4 19
