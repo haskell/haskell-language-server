@@ -434,7 +434,7 @@ test-suite func-test
     , deepseq
     , ghcide
 
-  hs-source-dirs:     test/functional plugins/hls-tactics-plugin/src plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src plugins/hls-eval-plugin/src
+  hs-source-dirs:     test/functional plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src plugins/hls-eval-plugin/src
 
   main-is:            Main.hs
   other-modules:
