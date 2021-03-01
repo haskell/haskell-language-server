@@ -146,7 +146,7 @@ mkJudgementAndContext features g binds rss tcmod = do
                   (mapMaybe (sequenceA . (occName *** coerce))
                     $ getDefiningBindings binds rss)
                   tcg
-          top_provs = traceIdX "top_provs" $ getRhsPosVals rss tcs
+          top_provs = getRhsPosVals rss tcs
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
           cls_hy = contextMethodHypothesis ctx
