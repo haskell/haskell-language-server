@@ -44,7 +44,7 @@ import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.TestTypes          (TacticCommand,
-                                                       cfg_feature_set)
+                                                       cfg_feature_set, emptyConfig, Config)
 import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Server                  (MonadLsp)
 import           Language.LSP.Types
@@ -82,13 +82,19 @@ runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 
 ------------------------------------------------------------------------------
--- | Get the current feature set from the plugin config.
-getFeatureSet :: MonadLsp Plugin.Config m => ShakeExtras -> m FeatureSet
-getFeatureSet extras = do
+-- | Get the the plugin config
+getTacticConfig :: MonadLsp Plugin.Config m => ShakeExtras -> m Config
+getTacticConfig extras = do
   pcfg <- getPluginConfig extras "tactics"
   pure $ case fromJSON $ Object $ plcConfig pcfg of
-    Success cfg -> cfg_feature_set cfg
-    Error _     -> defaultFeatures
+    Success cfg -> cfg
+    Error _     -> emptyConfig
+
+
+------------------------------------------------------------------------------
+-- | Get the current feature set from the plugin config.
+getFeatureSet :: MonadLsp Plugin.Config m => ShakeExtras -> m FeatureSet
+getFeatureSet  = fmap cfg_feature_set . getTacticConfig
 
 
 getIdeDynflags
