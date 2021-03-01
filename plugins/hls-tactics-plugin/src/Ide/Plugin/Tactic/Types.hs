@@ -89,21 +89,6 @@ data TacticState = TacticState
     { ts_skolems         :: !(Set TyVar)
       -- ^ The known skolems.
     , ts_unifier         :: !TCvSubst
-      -- ^ The current substitution of univars.
-    , ts_recursion_stack :: ![Maybe PatVal]
-      -- ^ Stack for tracking whether or not the current recursive call has
-      -- used at least one smaller pat val. Recursive calls for which this
-      -- value is 'False' are guaranteed to loop, and must be pruned.
-      --
-      -- TODO(sandy): This thing need not exist; we should just inspect
-      -- 'syn_used_vals' to see if anything was a pattern val.
-    , ts_recursion_count :: !Int
-      -- ^ Number of calls to recursion. We penalize each.
-      --
-      -- TODO(sandy): This thing need not exist; it should just be a field
-      -- inside of 'Synthesized', but can't implement that without support from
-      -- refinery directly. Need the ability to get the extract of a TacticT
-      -- inside of TacticT, first.
     , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
 
@@ -124,8 +109,6 @@ defaultTacticState =
   TacticState
     { ts_skolems         = mempty
     , ts_unifier         = emptyTCvSubst
-    , ts_recursion_stack = mempty
-    , ts_recursion_count = 0
     , ts_unique_gen      = unsafeDefaultUniqueSupply
     }
 
@@ -137,18 +120,6 @@ freshUnique = do
   (uniq, supply) <- gets $ takeUniqFromSupply . ts_unique_gen
   modify' $! field @"ts_unique_gen" .~ supply
   pure uniq
-
-
-withRecursionStack
-  :: ([Maybe PatVal] -> [Maybe PatVal]) -> TacticState -> TacticState
-withRecursionStack f =
-  field @"ts_recursion_stack" %~ f
-
-pushRecursionStack :: TacticState -> TacticState
-pushRecursionStack = withRecursionStack (Nothing :)
-
-popRecursionStack :: TacticState -> TacticState
-popRecursionStack = withRecursionStack tail
 
 
 ------------------------------------------------------------------------------
@@ -261,11 +232,7 @@ newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
 instance MonadExtract (Synthesized (LHsExpr GhcPs)) ExtractM where
-  hole
-    = pure
-    . Synthesized mempty mempty mempty
-    . noLoc
-    $ var "_"
+  hole = pure . pure . noLoc $ var "_"
 
 
 ------------------------------------------------------------------------------
@@ -344,12 +311,14 @@ data Synthesized a = Synthesized
     -- ^ All of the bindings created to produce the 'syn_val'.
   , syn_used_vals :: Set OccName
     -- ^ The values used when synthesizing the 'syn_val'.
+  , syn_recursion_count :: Sum Int
+    -- ^ The number of recursive calls
   , syn_val    :: a
   }
-  deriving (Eq, Show, Functor, Foldable, Traversable)
+  deriving (Eq, Show, Functor, Foldable, Traversable, Generic)
 
 mapTrace :: (Trace -> Trace) -> Synthesized a -> Synthesized a
-mapTrace f (Synthesized tr sc uv a) = Synthesized (f tr) sc uv a
+mapTrace f (Synthesized tr sc uv rc a) = Synthesized (f tr) sc uv rc a
 
 
 ------------------------------------------------------------------------------
@@ -357,9 +326,9 @@ mapTrace f (Synthesized tr sc uv a) = Synthesized (f tr) sc uv a
 -- lawful. But that's only for debug output, so it's not anything I'm concerned
 -- about.
 instance Applicative Synthesized where
-  pure = Synthesized mempty mempty mempty
-  Synthesized tr1 sc1 uv1 f <*> Synthesized tr2 sc2 uv2 a =
-    Synthesized (tr1 <> tr2) (sc1 <> sc2) (uv1 <> uv2) $ f a
+  pure = Synthesized mempty mempty mempty mempty
+  Synthesized tr1 sc1 uv1 rc1 f <*> Synthesized tr2 sc2 uv2 rc2 a =
+    Synthesized (tr1 <> tr2) (sc1 <> sc2) (uv1 <> uv2) (rc1 <> rc2) $ f a
 
 
 ------------------------------------------------------------------------------
