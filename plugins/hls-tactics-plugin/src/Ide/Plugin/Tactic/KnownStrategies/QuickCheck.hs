@@ -50,6 +50,7 @@ deriveArbitrary = do
               -- But maybe it's fine for known rules?
               mempty
               mempty
+              mempty
           $ noLoc $
               let' [valBind (fromString "terminal") $ list $ fmap genExpr terminal] $
                 appDollar (mkFunc "sized") $ lambda [bvar' (mkVarOcc "n")] $

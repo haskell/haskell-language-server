@@ -178,6 +178,7 @@ spec = do
     autoTest "GoldenArbitrary.hs" 25 13
     autoTest "FmapBoth.hs"        2 12
     autoTest "RecordCon.hs"       7  8
+    autoTest "NewtypeRecord.hs"   6  8
     autoTest "FmapJoin.hs"        2 14
     autoTest "Fgmap.hs"           2 9
     autoTest "FmapJoinInLet.hs"   4 19
