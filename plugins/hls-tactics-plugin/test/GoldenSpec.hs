@@ -99,6 +99,7 @@ spec = do
     describe "golden" $ do
       destructAllTest "DestructAllAnd.hs"  2 11
       destructAllTest "DestructAllMany.hs" 4 23
+      destructAllTest "DestructAllNonVarTopMatch.hs" 2 18
 
 
   -- test via:
