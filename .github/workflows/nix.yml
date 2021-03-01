@@ -1,6 +1,16 @@
 name: Nix
 
-on: [pull_request]
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - '**/docs/**'
+      - '**.md'
+      - '**/LICENSE'
+      - '.circleci/**'
+      - 'install/**'
+
 jobs:
   nix:
     runs-on: ${{ matrix.os }}

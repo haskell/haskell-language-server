@@ -4,7 +4,17 @@ defaults:
   run:
     shell: bash
 
-on: [pull_request]
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - '**/docs/**'
+      - '**.md'
+      - '**/LICENSE'
+      - '.circleci/**'
+      - 'install/**'
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
