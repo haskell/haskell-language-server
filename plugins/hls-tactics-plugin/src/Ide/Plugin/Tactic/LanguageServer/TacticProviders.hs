@@ -50,6 +50,7 @@ commandTactic Destruct               = useNameFromHypothesis destruct
 commandTactic Homomorphism           = useNameFromHypothesis homo
 commandTactic DestructLambdaCase     = const destructLambdaCase
 commandTactic HomomorphismLambdaCase = const homoLambdaCase
+commandTactic DestructAll            = const destructAll
 commandTactic UseDataCon             = userSplit
 commandTactic Refine                 = const refine
 
@@ -76,6 +77,12 @@ commandProvider HomomorphismLambdaCase =
   requireExtension LambdaCase $
     filterGoalType ((== Just True) . lambdaCaseable) $
       provide HomomorphismLambdaCase ""
+commandProvider DestructAll =
+  requireFeature FeatureDestructAll $
+    withJudgement $ \jdg ->
+      case _jIsTopHole jdg && jHasBoundArgs jdg of
+        True  -> provide DestructAll ""
+        False -> mempty
 commandProvider UseDataCon =
   withConfig $ \cfg ->
     requireFeature FeatureUseDataCon $
@@ -151,6 +158,14 @@ filterGoalType p tp dflags cfg plId uri range jdg =
   case p $ unCType $ jGoal jdg of
     True  -> tp dflags cfg plId uri range jdg
     False -> pure []
+
+
+------------------------------------------------------------------------------
+-- | Restrict a 'TacticProvider', making sure it appears only when the given
+-- predicate holds for the goal.
+withJudgement :: (Judgement -> TacticProvider) -> TacticProvider
+withJudgement tp dflags fs plId uri range jdg =
+  tp jdg dflags fs plId uri range jdg
 
 
 ------------------------------------------------------------------------------
