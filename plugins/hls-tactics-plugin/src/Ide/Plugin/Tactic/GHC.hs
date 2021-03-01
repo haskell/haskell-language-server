@@ -274,22 +274,6 @@ pattern TopLevelRHS name ps body <-
     (GRHSs _
       [L _ (GRHS _ [] body)] _)
 
-getPatName :: PatCompat GhcTc -> Maybe OccName
-getPatName (fromPatCompatTc -> p0) =
-  case p0 of
-    VarPat  _ x   -> Just $ occName $ unLoc x
-    LazyPat _ p   -> getPatName p
-    AsPat   _ x _ -> Just $ occName $ unLoc x
-    ParPat  _ p   -> getPatName p
-    BangPat _ p   -> getPatName p
-    ViewPat _ _ p -> getPatName p
-#if __GLASGOW_HASKELL__ >= 808
-    SigPat  _ p _ -> getPatName p
-#endif
-#if __GLASGOW_HASKELL__ == 808
-    XPat   p      -> getPatName $ unLoc p
-#endif
-    _             -> Nothing
 
 dataConExTys :: DataCon -> [TyCoVar]
 #if __GLASGOW_HASKELL__ >= 808
