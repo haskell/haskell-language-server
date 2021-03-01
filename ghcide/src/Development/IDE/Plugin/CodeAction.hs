@@ -51,6 +51,7 @@ import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.TypeLenses                 (suggestSignature)
 import           Development.IDE.Spans.Common
+import           Development.IDE.Spans.LocalBindings               (Bindings)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
@@ -97,13 +98,14 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
     let text = Rope.toText . (_text :: VirtualFile -> Rope.Rope) <$> contents
         mbFile = toNormalizedFilePath' <$> uriToFilePath uri
     diag <- fmap (\(_, _, d) -> d) . filter (\(p, _, _) -> mbFile == Just p) <$> getDiagnostics state
-    (ideOptions, join -> parsedModule, join -> env, join -> annotatedPS, join -> tcM, join -> har) <- runAction "CodeAction" state $
-      (,,,,,) <$> getIdeOptions
+    (ideOptions, join -> parsedModule, join -> env, join -> annotatedPS, join -> tcM, join -> har, join -> bindings) <- runAction "CodeAction" state $
+      (,,,,,,) <$> getIdeOptions
             <*> getParsedModule `traverse` mbFile
             <*> use GhcSession `traverse` mbFile
             <*> use GetAnnotatedParsedSource `traverse` mbFile
             <*> use TypeCheck `traverse` mbFile
             <*> use GetHieAst `traverse` mbFile
+            <*> use GetBindings `traverse` mbFile
     -- This is quite expensive 0.6-0.7s on GHC
     pkgExports   <- maybe mempty envPackageExports env
     localExports <- readVar (exportsMap $ shakeExtras state)
@@ -112,7 +114,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS tcM har x
+        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
       actions' = caRemoveRedundantImports parsedModule text diag xs uri
@@ -144,12 +146,13 @@ suggestAction
   -> Maybe (Annotated ParsedSource)
   -> Maybe TcModuleResult
   -> Maybe HieAstResult
+  -> Maybe Bindings
   -> Diagnostic
   -> [(T.Text, [TextEdit])]
-suggestAction packageExports ideOptions parsedModule text df annSource tcM har diag =
+suggestAction packageExports ideOptions parsedModule text df annSource tcM har bindings diag =
     concat
    -- Order these suggestions by priority
-    [ suggestSignature True diag
+    [ suggestSignature True tcM bindings diag
     , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
     , rewrite df annSource $ \df ps ->
         suggestImportDisambiguation df text ps diag
