@@ -296,6 +296,17 @@ hyNamesInScope = M.keysSet . hyByName
 
 
 ------------------------------------------------------------------------------
+-- | Are there any top-level function argument bindings in this judgement?
+jHasBoundArgs :: Judgement' a -> Bool
+jHasBoundArgs
+  = not
+  . null
+  . filter (isTopLevel . hi_provenance)
+  . unHypothesis
+  . jLocalHypothesis
+
+
+------------------------------------------------------------------------------
 -- | Fold a hypothesis into a single mapping from name to info. This
 -- unavoidably will cause duplicate names (things like methods) to shadow one
 -- another.
