@@ -308,14 +308,10 @@ localTactic t f = do
 
 
 refine :: TacticsM ()
-refine = go 3
-  where
-    go 0 = pure ()
-    go n = do
-      let try_that_doesnt_suck t = commit t $ pure ()
-      try_that_doesnt_suck intros
-      try_that_doesnt_suck splitSingle
-      go $ n - 1
+refine = do
+  try' intros
+  try' splitSingle
+  try' intros
 
 
 auto' :: Int -> TacticsM ()
