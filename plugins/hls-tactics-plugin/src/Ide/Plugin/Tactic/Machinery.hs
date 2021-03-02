@@ -278,6 +278,10 @@ requireConcreteHole m = do
 -- balloons the search space. This thing just tries it, but doesn't backtrack
 -- if it fails.
 --
+-- NOTE(sandy): But there's a bug! Or at least, something not understood here.
+-- Using this everywhere breaks te tests, and neither I nor TOTBWF are sure
+-- why.  Prefer 'try' if you can, and only try this as a last resort.
+--
 -- TODO(sandy): Remove this when we upgrade to 0.4
 try'
     :: Functor m

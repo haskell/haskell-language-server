@@ -319,7 +319,7 @@ auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
   let loop = auto' (n - 1)
-  try' intros
+  try intros
   choice
     [ overFunctions $ \fname -> do
         apply fname
