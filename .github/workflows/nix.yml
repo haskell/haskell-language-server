@@ -3,7 +3,7 @@ name: Nix
 on:
   pull_request:
     branches:
-      - master
+      - '**'
     paths-ignore:
       - '**/docs/**'
       - '**.md'
