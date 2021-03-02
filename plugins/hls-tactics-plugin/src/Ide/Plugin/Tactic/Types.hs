@@ -75,6 +75,9 @@ instance Show DataCon where
 instance Show Class where
   show  = unsafeRender
 
+instance Show RdrName where
+  show  = unsafeRender
+
 instance Show (HsExpr GhcPs) where
   show  = unsafeRender
 
@@ -100,7 +103,7 @@ instance Show UniqSupply where
 -- | A 'UniqSupply' to use in 'defaultTacticState'
 unsafeDefaultUniqueSupply :: UniqSupply
 unsafeDefaultUniqueSupply =
-  unsafePerformIO $ mkSplitUniqSupply '🚒'
+  unsafePerformIO $ mkSplitUniqSupply 'h'
 {-# NOINLINE unsafeDefaultUniqueSupply #-}
 
 

@@ -1,5 +1,8 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE ViewPatterns   #-}
 
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Ide.Plugin.Tactic.Naming where
 
 import           Control.Monad.State.Strict
@@ -10,13 +13,19 @@ import qualified Data.Map                   as M
 import           Data.Set                   (Set)
 import qualified Data.Set                   as S
 import           Data.Traversable
+import           GhcPlugins (Unique, listTyConKey,Uniquable (getUnique), RdrName)
+import           Ide.Plugin.Tactic.Types (CType(CType), AgdaMatch (amPats), TacticState, freshUnique)
 import           Name
 import           TcType
 import           TyCon
 import           Type
 import           TysWiredIn                 (listTyCon, pairTyCon, unitTyCon, boolTy, intTy)
-import Ide.Plugin.Tactic.Types (CType(CType))
-import GhcPlugins (Unique, listTyConKey,Uniquable (getUnique))
+import Ide.Plugin.Tactic.GHC
+import Development.IDE.GHC.Compat (GhcPs, Pat)
+import Ide.Plugin.Tactic.SYB (gzipQ, mkQQ)
+import Data.Data (Data)
+import Control.Applicative (ZipList(ZipList))
+import Data.List (transpose)
 
 
 ------------------------------------------------------------------------------
@@ -68,29 +77,22 @@ filterReplace f r = fmap (\a -> bool a r $ f a)
 ------------------------------------------------------------------------------
 -- | Produce a unique, good name for a type.
 mkGoodName
-    :: Set OccName  -- ^ Bindings in scope; used to ensure we don't shadow anything
-    -> Type       -- ^ The type to produce a name for
-    -> OccName
-mkGoodName in_scope t =
-  let tn = mkTyName t
-   in mkVarOcc $ case S.member (mkVarOcc tn) in_scope of
-        True  -> tn ++ show (length in_scope)
-        False -> tn
+    :: MonadState TacticState m
+    => Type       -- ^ The type to produce a name for
+    -> m OccName
+mkGoodName ty = do
+  uniq <- freshUnique
+  pure $ mkVarOcc $ mkTyName ty <> "_" <> show uniq
 
 
 ------------------------------------------------------------------------------
 -- | Like 'mkGoodName' but creates several apart names.
 mkManyGoodNames
-  :: (Traversable t, Monad m)
+  :: (Traversable t, MonadState TacticState m)
   => Set OccName
   -> t Type
   -> m (t OccName)
-mkManyGoodNames in_scope args =
-  flip evalStateT in_scope $ for args $ \at -> do
-    in_scope <- get
-    let n = mkGoodName in_scope at
-    modify $ S.insert n
-    pure n
+mkManyGoodNames _ args = for args mkGoodName
 
 
 ------------------------------------------------------------------------------
@@ -200,4 +202,51 @@ is_tc uniq ty = case tcSplitTyConApp_maybe ty of
                         Just (tc, _) -> uniq == getUnique tc
                         Nothing      -> False
 
+
+data PatternUnification
+  = SameVar RdrName RdrName
+  | Analogous RdrName RdrName
+  deriving (Eq, Ord, Show)
+
+
+unifyPatterns
+    :: Data a
+    => (RdrName -> RdrName -> r)
+    -> a
+    -> a
+    -> [r]
+unifyPatterns f = gzipQ $ mkQQ $ \a b -> pure $ f a b
+
+data Order = MatchMajorOrder | ArgMajorOrder
+
+newtype BoundTogether (o :: Order) = BoundTogether
+  { unBoundTogether :: [[Pat GhcPs]]
+  }
+
+
+getBoundTogether :: [AgdaMatch] -> BoundTogether 'MatchMajorOrder
+getBoundTogether ms = BoundTogether $ fmap amPats ms
+
+
+toArgMajor :: BoundTogether 'MatchMajorOrder -> BoundTogether 'ArgMajorOrder
+toArgMajor (BoundTogether l_l_pgp) = BoundTogether $ transpose l_l_pgp
+
+
+pairwise :: Monoid m => (a -> a -> m) -> [a] -> m
+pairwise f = foldMap (uncurry f) . allPairs
+
+
+allPairs :: [a] -> [(a,a)]
+allPairs [] = []
+allPairs (x:xs) = go x xs
+  where
+    go _ [] = allPairs xs
+    go x (y:ys) = (x, y) : go x ys
+
+
+analogous :: [AgdaMatch] -> [PatternUnification]
+analogous ams =
+  let bt = getBoundTogether ams
+   in pairwise (unifyPatterns SameVar) (unBoundTogether bt)
+        <> pairwise (unifyPatterns Analogous) (unBoundTogether $ toArgMajor bt)
 
