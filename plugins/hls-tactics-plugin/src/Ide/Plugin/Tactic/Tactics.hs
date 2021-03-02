@@ -12,7 +12,7 @@ module Ide.Plugin.Tactic.Tactics
   ) where
 
 import           Control.Applicative (Alternative(empty))
-import           Control.Lens ((&), (%~))
+import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
@@ -104,6 +104,7 @@ intros = rule $ \jdg -> do
         ext
           & #syn_trace %~ rose ("intros {" <> intercalate ", " (fmap show vs) <> "}")
                         . pure
+          & #syn_scoped <>~ hy'
           & #syn_val   %~ noLoc . lambda (fmap bvar' vs) . unLoc
 
 
