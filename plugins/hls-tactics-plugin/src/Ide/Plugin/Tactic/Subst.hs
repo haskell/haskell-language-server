@@ -5,11 +5,13 @@
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
+{-# LANGUAGE DeriveDataTypeable #-}
 module Ide.Plugin.Tactic.Subst
   ( Subst
   , subst
-  , substFromList
-  , substSingleton
+  , mkSubst
+  , singleSubst
+  , flatten
   ) where
 
 import           Data.Data (Data)
@@ -27,40 +29,37 @@ newtype Subst a = Subst
   deriving (Eq, Show)
 
 class Sub s a where
-  subst ::Subst s -> a -> a
+  subst' :: Subst s -> a -> a
 
 instance Ord a => Semigroup (Subst a) where
-  s1 <> s2 = flatten $ add s1 s2
-  sconcat (a :| as) = flatten $ foldr add a as
+  s1 <> (Subst s2) = Subst $ M.filterWithKey (/=) $ fmap (subst' s1) s2 <> unSubst s1
 
 instance Ord a => Monoid (Subst a) where
   mempty = Subst mempty
-  mconcat [] = mempty
-  mconcat (x : xs) = sconcat $ x :| xs
 
 
-substFromList :: Ord a => [(a, a)] -> Subst a
-substFromList = mconcat . fmap (uncurry substSingleton)
+mkSubst :: Ord a => [(a, a)] -> Subst a
+mkSubst = mconcat . fmap (uncurry singleSubst)
 
 
-substSingleton :: a -> a -> Subst a
-substSingleton a b = Subst $ M.singleton a b
+singleSubst :: a -> a -> Subst a
+singleSubst a b = Subst $ M.singleton a b
 
-
-add :: Ord a => Subst a -> Subst a -> Subst a
-add s1 (Subst s2) = Subst $ fmap (subst s1) s2 <> unSubst s1
 
 
 flatten :: Ord a => Subst a -> Subst a
 flatten (Subst x) = fix $ \(Subst final) ->
   Subst $ M.fromList $ M.assocs x <&> \(a, b) -> (a,) $
-    subst (Subst final) $ maybe b id $ M.lookup b final
+    subst' (Subst final) $ maybe b id $ M.lookup b final
 
 
 instance {-# OVERLAPPING #-} Ord a => Sub a a where
-  subst (Subst x) a = fromMaybe a $ M.lookup a x
+  subst' (Subst x) a = fromMaybe a $ M.lookup a x
 
 instance {-# OVERLAPPABLE #-} (Typeable a, Data b, Ord a) => Sub a b where
-  subst x = everywhere $ mkT $ \case
-    (b :: a) -> subst x b
+  subst' x = everywhere $ mkT $ \case
+    (b :: a) -> subst' x b
+
+subst :: (Ord s, Sub s a) => Subst s -> a -> a
+subst = subst' . flatten
 
