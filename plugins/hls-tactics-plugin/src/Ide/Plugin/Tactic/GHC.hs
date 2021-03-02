@@ -3,16 +3,15 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
 module Ide.Plugin.Tactic.GHC where
 
-import           Control.Arrow
 import           Control.Monad.State
 import           Data.Function (on)
+import           Data.Functor ((<&>))
 import           Data.List (isPrefixOf)
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
@@ -22,7 +21,7 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.SourceGen (case', lambda, match)
-import           Generics.SYB (Data (toConstr), everything, everywhere, listify, mkQ, mkT, GenericQ, GenericM, orElse, gzipWithM)
+import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcType
@@ -31,7 +30,6 @@ import           Type
 import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unique
 import           Var
-import Data.Functor ((<&>))
 
 
 tcTyVar_maybe :: Type -> Maybe Var
