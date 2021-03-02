@@ -12,7 +12,7 @@ module Ide.Plugin.Tactic.Tactics
   ) where
 
 import           Control.Applicative (Alternative(empty))
-import           Control.Lens ((&), (%~))
+import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (unless)
 import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
@@ -104,6 +104,7 @@ intros = rule $ \jdg -> do
         ext
           & #syn_trace %~ rose ("intros {" <> intercalate ", " (fmap show vs) <> "}")
                         . pure
+          & #syn_scoped <>~ hy'
           & #syn_val   %~ noLoc . lambda (fmap bvar' vs) . unLoc
 
 
@@ -308,21 +309,17 @@ localTactic t f = do
 
 
 refine :: TacticsM ()
-refine = go 3
-  where
-    go 0 = pure ()
-    go n = do
-      let try_that_doesnt_suck t = commit t $ pure ()
-      try_that_doesnt_suck intros
-      try_that_doesnt_suck splitSingle
-      go $ n - 1
+refine = do
+  try' intros
+  try' splitSingle
+  try' intros
 
 
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
   let loop = auto' (n - 1)
-  try intros
+  try' intros
   choice
     [ overFunctions $ \fname -> do
         apply fname
