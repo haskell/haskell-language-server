@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE ViewPatterns   #-}
 
@@ -26,6 +27,7 @@ import Ide.Plugin.Tactic.SYB (gzipQ, mkQQ)
 import Data.Data (Data)
 import Control.Applicative (ZipList(ZipList))
 import Data.List (transpose)
+import Ide.Plugin.Tactic.Subst
 
 
 ------------------------------------------------------------------------------
@@ -249,4 +251,10 @@ analogous ams =
   let bt = getBoundTogether ams
    in pairwise (unifyPatterns SameVar) (unBoundTogether bt)
         <> pairwise (unifyPatterns Analogous) (unBoundTogether $ toArgMajor bt)
+
+
+mkSameVarSubst :: [PatternUnification] -> Subst RdrName
+mkSameVarSubst = foldMap $ \case
+  SameVar a b -> singleSubst a b
+  _           -> mempty
 

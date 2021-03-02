@@ -20,8 +20,9 @@ import           GHC.SourceGen              (funBinds, match, wildP)
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Types
 import           OccName
-import Ide.Plugin.Tactic.Naming (unifyPatterns, PatternUnification (Analogous), analogous)
+import Ide.Plugin.Tactic.Naming (unifyPatterns, PatternUnification (Analogous), analogous, mkSameVarSubst)
 import Data.Function (on)
+import Ide.Plugin.Tactic.Subst (subst)
 
 
 
@@ -75,9 +76,10 @@ splitToDecl
     -> [AgdaMatch]
     -> LHsDecl GhcPs
 splitToDecl name ams = noLoc $ funBinds (fromString . occNameString . occName $ name) $ do
-  traceMX "analogous" $ analogous ams
+  let analogs = analogous ams
+      sub = mkSameVarSubst analogs
   AgdaMatch pats body <- ams
-  pure $ match pats body
+  pure $ match (subst sub pats) (subst sub body)
 
 
 ------------------------------------------------------------------------------
