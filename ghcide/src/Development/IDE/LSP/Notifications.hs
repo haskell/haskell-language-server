@@ -133,7 +133,7 @@ setHandlersNotifications = mconcat
           regOptions =
             DidChangeWatchedFilesRegistrationOptions { _watchers = List watchers }
           -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind
-          watchKind = WatchKind { _watchCreate = True, _watchChange = False, _watchDelete = True}
+          watchKind = WatchKind { _watchCreate = True, _watchChange = True, _watchDelete = True}
           -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
           -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
           -- followed by a file with an extension 'hs'.

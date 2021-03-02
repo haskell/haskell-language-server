@@ -88,17 +88,27 @@ getFileExistsMapUntracked = do
   liftIO $ readVar v
 
 -- | Modify the global store of file exists.
-modifyFileExists :: IdeState -> [(NormalizedFilePath, Bool)] -> IO ()
+modifyFileExists :: IdeState -> [FileEvent] -> IO ()
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
-  changesMap           <- evaluate $ HashMap.fromList changes
+  changesMap           <- evaluate $ HashMap.fromList $
+    [ (toNormalizedFilePath' f, newState)
+    | FileEvent uri change <- changes
+    , Just f <- [uriToFilePath uri]
+    , Just newState <- [fromChange change]
+    ]
   -- Masked to ensure that the previous values are flushed together with the map update
   mask $ \_ -> do
     -- update the map
     modifyVar_ var $ evaluate . HashMap.union changesMap
     -- See Note [Invalidating file existence results]
     -- flush previous values
-    mapM_ (deleteValue state GetFileExists . fst) changes
+    mapM_ (deleteValue state GetFileExists) (HashMap.keys changesMap)
+
+fromChange :: FileChangeType -> Maybe Bool
+fromChange FcCreated = Just True
+fromChange FcDeleted = Just True
+fromChange FcChanged = Nothing
 
 -------------------------------------------------------------------------------------
 
