@@ -14,7 +14,9 @@ import           Name
 import           TcType
 import           TyCon
 import           Type
-import           TysWiredIn                 (listTyCon, pairTyCon, unitTyCon)
+import           TysWiredIn                 (listTyCon, pairTyCon, unitTyCon, boolTy, intTy)
+import Ide.Plugin.Tactic.Types (CType(CType))
+import GhcPlugins (Unique, listTyConKey,Uniquable (getUnique))
 
 
 ------------------------------------------------------------------------------
@@ -95,3 +97,107 @@ mkManyGoodNames in_scope args =
 -- | Which names are in scope?
 getInScope :: Map OccName a -> [OccName]
 getInScope = M.keys
+
+
+
+data VarPurpose
+  = PredicatePurpose
+  | ContinuationPurpose
+  | CountPurpose
+  | FunctionPurpose
+  | MonadPurpose
+  | ListPurpose
+  | ErrorPurpose
+  deriving (Eq, Ord, Show, Enum, Bounded, Read)
+
+data Modifier
+  = Prefix String
+  | Suffix String
+  deriving (Eq, Ord, Show, Read)
+
+
+getNames :: Set VarPurpose -> Set String
+getNames ps = S.fromList $ mconcat $
+  [ [ "p", "q" ]
+  | S.member PredicatePurpose ps
+  ] <>
+  [ [ "k" ]
+  | S.member ContinuationPurpose ps
+  ] <>
+  [ [ "n", "i", "j" ]
+  | S.member CountPurpose ps
+  ] <>
+  [ [ "f", "g", "h" ]
+  | S.member FunctionPurpose ps
+  ] <>
+  [ [ "m" ]
+  | S.member MonadPurpose ps
+  ] <>
+  [ [ "e" ]
+  | S.member ErrorPurpose ps
+  ] <>
+  [ [ "l" ]
+  | S.member ListPurpose ps
+  ]
+
+
+regularNames :: Set String
+regularNames = S.fromList
+  [ "a", "b", "c", "d"
+  , "o", "r", "s", "t"
+  , "u", "v", "w", "x"
+  , "y", "z"
+  ]
+
+
+getModifiers :: Set VarPurpose -> Set Modifier
+getModifiers ps = S.fromList $ mconcat $
+  [ [ Suffix "s" ]
+  | S.member FunctionPurpose ps
+  ]
+
+
+getPurpose :: Type -> Type -> Set VarPurpose
+getPurpose goal ty = mconcat
+  [ purpose PredicatePurpose $ const hasPredicatePurpose
+  , purpose CountPurpose     $ const hasCountPurpose
+  , purpose FunctionPurpose  $ const hasFunctionPurpose
+  , purpose ListPurpose      $ const hasListPurpose
+  , purpose ContinuationPurpose hasContinuationPurpose
+  ]
+  where
+    purpose p f = bool mempty (S.singleton p) $ f goal ty
+
+
+hasPredicatePurpose :: Type -> Bool
+hasPredicatePurpose (tcSplitFunTys -> ([_], ty)) = isBoolTy ty
+hasPredicatePurpose _ = False
+
+
+hasContinuationPurpose :: Type -> Type -> Bool
+hasContinuationPurpose (tcSplitFunTys -> (_, goal)) (tcSplitFunTys -> (_:_, ty))
+  | CType goal == CType ty
+  , isTyVarTy ty = True
+hasContinuationPurpose _ _ = False
+
+
+hasCountPurpose :: Type -> Bool
+hasCountPurpose ty = isIntTy ty || isIntegerTy ty
+
+
+hasFunctionPurpose :: Type -> Bool
+hasFunctionPurpose (tcSplitFunTys -> (_:_, _)) = True
+hasFunctionPurpose _ = False
+
+
+hasListPurpose :: Type -> Bool
+hasListPurpose = is_tc listTyConKey
+
+
+is_tc :: Unique -> Type -> Bool
+-- Newtypes are opaque to this
+is_tc uniq ty = case tcSplitTyConApp_maybe ty of
+                        Just (tc, _) -> uniq == getUnique tc
+                        Nothing      -> False
+
+

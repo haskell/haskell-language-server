@@ -1,8 +1,12 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TupleSections    #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE TypeApplications    #-}
 
+{-# LANGUAGE DeriveDataTypeable #-}
 module Ide.Plugin.Tactic.CodeGen
   ( module Ide.Plugin.Tactic.CodeGen
   , module Ide.Plugin.Tactic.CodeGen.Utils
@@ -29,6 +33,11 @@ import           Ide.Plugin.Tactic.Machinery
 import           Ide.Plugin.Tactic.Naming
 import           Ide.Plugin.Tactic.Types
 import           Type hiding (Var)
+import Data.Generics.Twins
+import Data.Data (Data, Typeable, cast)
+import GhcPlugins (occName, occNameString)
+import Control.Monad.Writer
+import Data.Generics hiding (isAlgType)
 
 
 destructMatches
@@ -176,4 +185,44 @@ buildDataCon jdg dc tyapps = do
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
     & #syn_val   %~ mkCon dc
+
+
+data Tree =  Leaf | Branch Tree Int Tree
+  deriving (Data, Typeable)
+
+test = case' (var "x") [match [bvar "y"] $ var "z"]
+test2 = case' (var "z") [match [bvar "y"] $ var "x"]
+
+instance Show RdrName where
+  show = unsafeRender
+
+-- mkQQ :: (Typeable a, Typeable b, Typeable c, Monad m)
+--      => (a -> a -> m a) -> b -> c -> m c
+-- mkQQ (f::a -> a -> m a) x y =
+--   case (cast x,cast y) of
+--     (Just (x'::a),Just (y'::a)) -> cast (f x' y')
+--     _                           -> pure ()
+
+
+
+
+gzipQ :: forall r. GenericQ (GenericQ [r]) -> GenericQ (GenericQ [r])
+gzipQ f = go
+  where
+    go :: GenericQ (GenericQ [r])
+    go x y = f x y <>
+      if toConstr x == toConstr y
+        then join $ gzipWithQ go x y
+        else mempty
+
+mkQQ :: (Monoid r, Typeable a, Typeable b) => (a -> b -> r) -> GenericQ (GenericQ r)
+mkQQ f a1 a2 =
+  case (cast a1, cast a2) of
+    (Just x, Just y) -> f x y
+    _ -> mempty
+
+
+bleck :: [(RdrName, RdrName)]
+bleck = gzipQ (mkQQ $ \x y -> pure (x, y)) test test2
+
 

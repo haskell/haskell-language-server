@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE PatternSynonyms     #-}
+{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
@@ -21,7 +22,7 @@ import           Data.Traversable
 import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.SourceGen (case', lambda, match)
-import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
+import           Generics.SYB (Data (toConstr), everything, everywhere, listify, mkQ, mkT, GenericQ, GenericM, orElse, gzipWithM)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcType
@@ -307,4 +308,7 @@ unXPat :: Pat GhcPs -> Pat GhcPs
 unXPat (XPat (L _ pat)) = unXPat pat
 #endif
 unXPat pat              = pat
+
+
+
 
