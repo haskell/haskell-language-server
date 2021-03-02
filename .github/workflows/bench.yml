@@ -10,6 +10,7 @@ on:
       - '**/LICENSE'
       - '.circleci/**'
       - 'install/**'
+      - 'nix/**'
       - 'test/**'
 
 jobs:
