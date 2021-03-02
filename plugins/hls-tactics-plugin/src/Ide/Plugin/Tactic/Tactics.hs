@@ -191,11 +191,9 @@ split :: TacticsM ()
 split = tracing "split(user)" $ do
   jdg <- goal
   let g = jGoal jdg
-  case splitTyConApp_maybe $ unCType g of
+  case tacticsGetDataCons $ unCType g of
     Nothing -> throwError $ GoalMismatch "split" g
-    Just (tc, _) -> do
-      let dcs = tyConDataCons tc
-      choice $ fmap splitDataCon dcs
+    Just (dcs, _) -> choice $ fmap splitDataCon dcs
 
 
 ------------------------------------------------------------------------------

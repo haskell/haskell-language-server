@@ -143,9 +143,12 @@ spec = do
       refineTest "RefineReader.hs" 4 8
       refineTest "RefineGADT.hs"   8 8
 
+  -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/golden tests/"'
   describe "golden tests" $ do
     let autoTest = mkGoldenTest allFeatures Auto ""
 
+    autoTest "AutoSplitGADT.hs"          11  8
     goldenTest Intros "" "GoldenIntros.hs" 2 8
     autoTest "GoldenEitherAuto.hs"        2 11
     autoTest "GoldenJoinCont.hs"          4 12
