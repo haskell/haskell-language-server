@@ -51,8 +51,6 @@ import           "ghc-lib-parser" GHC.LanguageExtensions            (Extension)
 import           "ghc" HscTypes                                     as RealGHC.HscTypes (hsc_dflags,
                                                                                          ms_hspp_opts)
 import           Language.Haskell.GhclibParserEx.GHC.Driver.Session as GhclibParserEx (readExtension)
-import           System.Environment                                 (setEnv,
-                                                                     unsetEnv)
 import           System.FilePath                                    (takeFileName)
 import           System.IO                                          (IOMode (WriteMode),
                                                                      hClose,
@@ -86,6 +84,8 @@ import qualified Language.LSP.Types.Lens                            as LSP
 import           GHC.Generics                                       (Generic)
 import           Text.Regex.TDFA.Text                               ()
 
+import           System.Environment                                 (setEnv,
+                                                                     unsetEnv)
 -- ---------------------------------------------------------------------
 
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -380,27 +380,6 @@ applyHint ide nfp mhint =
     oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
     (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
     let dflags = ms_hspp_opts modsum
-    -- set Nothing as "position" for "applyRefactorings" because
-    -- applyRefactorings expects the provided position to be _within_ the scope
-    -- of each refactoring it will apply.
-    -- But "Idea"s returned by HLint point to starting position of the expressions
-    -- that contain refactorings, so they are often outside the refactorings' boundaries.
-    -- Example:
-    -- Given an expression "hlintTest = reid $ (myid ())"
-    -- Hlint returns an idea at the position (1,13)
-    -- That contains "Redundant brackets" refactoring at position (1,20):
-    --
-    -- [("src/App/Test.hs:5:13: Warning: Redundant bracket\nFound:\n  reid $ (myid ())\nWhy not:\n  reid $ myid ()\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 5, startCol = 20, endLine = 5, endCol = 29}, subts = [("x",SrcSpan {startLine = 5, startCol = 21, endLine = 5, endCol = 28})], orig = "x"}])]
-    --
-    -- If we provide "applyRefactorings" with "Just (1,13)" then
-    -- the "Redundant bracket" hint will never be executed
-    -- because SrcSpan (1,20,??,??) doesn't contain position (1,13).
-#ifdef HLINT_ON_GHC_LIB
-    let writeFileUTF8NoNewLineTranslation file txt =
-            withFile file WriteMode $ \h -> do
-                hSetEncoding h utf8
-                hSetNewlineMode h noNewlineTranslation
-                hPutStr h (T.unpack txt)
     -- Setting a environment variable with the libdir used by ghc-exactprint.
     -- It is a workaround for an error caused by the use of a hadcoded at compile time libdir
     -- in ghc-exactprint that makes dependent executables non portables.
@@ -410,6 +389,18 @@ applyHint ide nfp mhint =
     let withRuntimeLibdir :: IO a -> IO a
         withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
             where key = "GHC_EXACTPRINT_GHC_LIBDIR"
+    -- set Nothing as "position" for "applyRefactorings" because
+    -- applyRefactorings expects the provided position to be _within_ the scope
+    -- of each refactoring it will apply.
+    -- But "Idea"s returned by HLint point to starting position of the expressions
+    -- that contain refactorings, so they are often outside the refactorings' boundaries.
+    let position = Nothing
+#ifdef HLINT_ON_GHC_LIB
+    let writeFileUTF8NoNewLineTranslation file txt =
+            withFile file WriteMode $ \h -> do
+                hSetEncoding h utf8
+                hSetNewlineMode h noNewlineTranslation
+                hPutStr h (T.unpack txt)
     res <-
         liftIO $ withSystemTempFile (takeFileName fp) $ \temp h -> do
             hClose h
@@ -419,7 +410,7 @@ applyHint ide nfp mhint =
             -- We have to reparse extensions to remove the invalid ones
             let (enabled, disabled, _invalid) = parseExtensions $ map show exts
             let refactExts = map show $ enabled ++ disabled
-            (Right <$> withRuntimeLibdir (applyRefactorings Nothing commands temp refactExts))
+            (Right <$> withRuntimeLibdir (applyRefactorings position commands temp refactExts))
                 `catches` errorHandlers
 #else
     mbParsedModule <- liftIO $ runAction' $ getParsedModuleWithComments nfp
@@ -433,7 +424,7 @@ applyHint ide nfp mhint =
                 let rigidLayout = deltaOptions RigidLayout
                 (anns', modu') <-
                     ExceptT $ return $ postParseTransform (Right (anns, [], dflags, modu)) rigidLayout
-                liftIO $ (Right <$> applyRefactorings' Nothing commands anns' modu')
+                liftIO $ (Right <$> withRuntimeLibdir (applyRefactorings' position commands anns' modu'))
                             `catches` errorHandlers
 #endif
     case res of

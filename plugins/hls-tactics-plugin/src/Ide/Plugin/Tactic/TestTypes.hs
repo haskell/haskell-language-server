@@ -1,8 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Ide.Plugin.Tactic.TestTypes where
 
 import           Data.Aeson
+import           Data.Maybe (fromMaybe)
 import qualified Data.Text                    as T
 import           Ide.Plugin.Tactic.FeatureSet
 
@@ -17,6 +19,9 @@ data TacticCommand
   | Homomorphism
   | DestructLambdaCase
   | HomomorphismLambdaCase
+  | DestructAll
+  | UseDataCon
+  | Refine
   deriving (Eq, Ord, Show, Enum, Bounded)
 
 -- | Generate a title for the command.
@@ -27,24 +32,32 @@ tacticTitle Destruct var             = "Case split on " <> var
 tacticTitle Homomorphism var         = "Homomorphic case split on " <> var
 tacticTitle DestructLambdaCase _     = "Lambda case split"
 tacticTitle HomomorphismLambdaCase _ = "Homomorphic lambda case split"
+tacticTitle DestructAll _            = "Split all function arguments"
+tacticTitle UseDataCon dcon          = "Use constructor " <> dcon
+tacticTitle Refine _                 = "Refine hole"
 
 
 ------------------------------------------------------------------------------
 -- | Plugin configuration for tactics
-newtype Config = Config
-  { cfg_feature_set :: FeatureSet
+data Config = Config
+  { cfg_feature_set          :: FeatureSet
+  , cfg_max_use_ctor_actions :: Int
   }
 
 emptyConfig :: Config
-emptyConfig = Config defaultFeatures
+emptyConfig = Config defaultFeatures 5
 
 instance ToJSON Config where
-  toJSON (Config features) = object
-    [ "features" .= prettyFeatureSet features
+  toJSON Config{..} = object
+    [ "features" .= prettyFeatureSet cfg_feature_set
+    , "max_use_ctor_actions" .= cfg_max_use_ctor_actions
     ]
 
 instance FromJSON Config where
   parseJSON = withObject "Config" $ \obj -> do
-    features <- parseFeatureSet <$> obj .: "features"
-    pure $ Config features
+    cfg_feature_set          <-
+      parseFeatureSet . fromMaybe "" <$> obj .:? "features"
+    cfg_max_use_ctor_actions <-
+      fromMaybe 5 <$> obj .:? "max_use_ctor_actions"
+    pure $ Config{..}
 

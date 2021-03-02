@@ -8,26 +8,24 @@
 module GoldenSpec where
 
 import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Lens                    hiding (failing, (<.>))
-import           Control.Monad                   (unless)
+import           Control.Lens hiding (failing, (<.>))
+import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default                    (Default (def))
+import           Data.Default (Default (def))
 import           Data.Foldable
-import qualified Data.Map                        as M
+import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Text                       (Text)
-import qualified Data.Text.IO                    as T
-import qualified Ide.Plugin.Config               as Plugin
-import           Ide.Plugin.Tactic.FeatureSet    (FeatureSet, allFeatures)
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import qualified Ide.Plugin.Config as Plugin
+import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
 import           Ide.Plugin.Tactic.TestTypes
 import           Language.LSP.Test
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens         hiding (actions, applyEdit,
-                                                  capabilities, executeCommand,
-                                                  id, line, message, name,
-                                                  rename, title)
-import           System.Directory                (doesFileExist)
+import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
+import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hspec
 
@@ -73,9 +71,80 @@ spec = do
       [ (not, DestructLambdaCase, "")
       ]
 
+  let goldenTest = mkGoldenTest allFeatures
+
+  -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/destruct all/"'
+  describe "destruct all" $ do
+    let destructAllTest = mkGoldenTest allFeatures DestructAll ""
+    describe "provider" $ do
+      mkTest
+        "Requires args on lhs of ="
+        "DestructAllProvider.hs" 3 21
+        [ (not, DestructAll, "")
+        ]
+      mkTest
+        "Can't be a non-top-hole"
+        "DestructAllProvider.hs" 8 19
+        [ (not, DestructAll, "")
+        , (id, Destruct, "a")
+        , (id, Destruct, "b")
+        ]
+      mkTest
+        "Provides a destruct all otherwise"
+        "DestructAllProvider.hs" 12 22
+        [ (id, DestructAll, "")
+        ]
+
+    describe "golden" $ do
+      destructAllTest "DestructAllAnd.hs"  2 11
+      destructAllTest "DestructAllMany.hs" 4 23
+
+
+  -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/use constructor/"'
+  describe "use constructor" $ do
+    let useTest = mkGoldenTest allFeatures UseDataCon
+    describe "provider" $ do
+      mkTest
+        "Suggests all data cons for Either"
+        "ConProviders.hs" 5 6
+        [ (id, UseDataCon, "Left")
+        , (id, UseDataCon, "Right")
+        , (not, UseDataCon, ":")
+        , (not, UseDataCon, "[]")
+        , (not, UseDataCon, "C1")
+        ]
+      mkTest
+        "Suggests no data cons for big types"
+        "ConProviders.hs" 11 17 $ do
+          c <- [1 :: Int .. 10]
+          pure $ (not, UseDataCon, T.pack $ show c)
+      mkTest
+        "Suggests only matching data cons for GADT"
+        "ConProviders.hs" 20 12
+        [ (id, UseDataCon, "IntGADT")
+        , (id, UseDataCon, "VarGADT")
+        , (not, UseDataCon, "BoolGADT")
+        ]
+
+    describe "golden" $ do
+      useTest "(,)"   "UseConPair.hs"  2 8
+      useTest "Left"  "UseConLeft.hs"  2 8
+      useTest "Right" "UseConRight.hs" 2 8
+
+  -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/refine/"'
+  describe "refine" $ do
+    let refineTest = mkGoldenTest allFeatures Refine ""
+    describe "golden" $ do
+      refineTest "RefineIntro.hs"  2 8
+      refineTest "RefineCon.hs"    2 8
+      refineTest "RefineReader.hs" 4 8
+      refineTest "RefineGADT.hs"   8 8
+
   describe "golden tests" $ do
-    let goldenTest = mkGoldenTest allFeatures
-        autoTest = mkGoldenTest allFeatures Auto ""
+    let autoTest = mkGoldenTest allFeatures Auto ""
 
     goldenTest Intros "" "GoldenIntros.hs" 2 8
     autoTest "GoldenEitherAuto.hs"        2 11
@@ -109,6 +178,7 @@ spec = do
     autoTest "GoldenArbitrary.hs" 25 13
     autoTest "FmapBoth.hs"        2 12
     autoTest "RecordCon.hs"       7  8
+    autoTest "NewtypeRecord.hs"   6  8
     autoTest "FmapJoin.hs"        2 14
     autoTest "Fgmap.hs"           2 9
     autoTest "FmapJoinInLet.hs"   4 19
@@ -150,6 +220,7 @@ mkTest
     -> SpecWith (Arg Bool)
 mkTest name fp line col ts = it name $ do
   runSession testCommand fullCaps tacticPath $ do
+    setFeatureSet allFeatures
     doc <- openDoc fp "haskell"
     _ <- waitForDiagnostics
     actions <- getCodeActions doc $ pointRange line col

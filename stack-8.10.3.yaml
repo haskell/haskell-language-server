@@ -25,6 +25,8 @@ extra-deps:
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
+  - ghc-lib-8.10.4.20210206
+  - ghc-lib-parser-8.10.4.20210206
   - heapsize-0.3.0
   - hie-bios-0.7.4
   - implicit-hie-cradle-0.3.0.2

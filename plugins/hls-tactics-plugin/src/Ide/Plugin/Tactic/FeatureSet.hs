@@ -21,7 +21,10 @@ import qualified Data.Text  as T
 ------------------------------------------------------------------------------
 -- | All the available features. A 'FeatureSet' describes the ones currently
 -- available to the user.
-data Feature = CantHaveAnEmptyDataType
+data Feature
+  = FeatureDestructAll
+  | FeatureUseDataCon
+  | FeatureRefineHole
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 

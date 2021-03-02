@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name:          hls-hlint-plugin
-version:       1.0.0.0
+version:       1.0.0.1
 synopsis:      Hlint integration plugin with Haskell Language Server
 description:   Please see Haskell Language Server Readme (https://github.com/haskell/haskell-language-server#readme)
 license:       Apache-2.0
@@ -53,13 +53,13 @@ library
     , transformers
     , unordered-containers
 
-  if ((!flag(ghc-lib) && impl(ghc >=8.10.1)) && impl(ghc <8.11.0))
+  if (!flag(ghc-lib) && impl(ghc >=8.10.1) && impl(ghc <9.0.0))
     build-depends: ghc ^>= 8.10
 
   else
     build-depends:
       , ghc
-      , ghc-lib            ^>= 8.10.2.20200916
+      , ghc-lib            ^>= 8.10.4.20210206
       , ghc-lib-parser-ex  ^>= 8.10
 
     cpp-options:   -DHLINT_ON_GHC_LIB
