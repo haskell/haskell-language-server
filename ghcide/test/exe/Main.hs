@@ -3157,7 +3157,13 @@ addSigLensesTests :: TestTree
 addSigLensesTests = let
   missing = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures -Wunused-matches #-}"
   notMissing = "{-# OPTIONS_GHC -Wunused-matches #-}"
-  moduleH = "{-# LANGUAGE PatternSynonyms #-}\nmodule Sigs where\nimport qualified Data.Complex as C"
+  moduleH = T.unlines
+    [
+    "{-# LANGUAGE PatternSynonyms,TypeApplications,DataKinds,RankNTypes,ScopedTypeVariables,TypeOperators #-}"
+    , "module Sigs where"
+    , "import qualified Data.Complex as C"
+    , "import Data.Data (Proxy (..), type (:~:) (..), mkCharType)"
+    ]
   other = T.unlines ["f :: Integer -> Integer", "f x = 3"]
   before  withMissing def
     = T.unlines $ (if withMissing then (missing :) else (notMissing :)) [moduleH, def, other]
@@ -3183,8 +3189,13 @@ addSigLensesTests = let
       , sigSession enableWarnings "a `haha` b = a b"        "haha :: (t1 -> t2) -> t1 -> t2"
       , sigSession enableWarnings "pattern Some a = Just a" "pattern Some :: a -> Maybe a"
       , sigSession enableWarnings "qualifiedSigTest= C.realPart" "qualifiedSigTest :: C.Complex a -> a"
-      , sigSession enableWarnings "head = 233" "head :: Integer"
-      , sigSession enableWarnings "a *.* b = a b" "(*.*) :: (t1 -> t2) -> t1 -> t2"
+      , sigSession enableWarnings "head = 233"              "head :: Integer"
+      , sigSession enableWarnings "rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")"
+         "rank2Test :: (forall a. a -> a) -> (Int, [Char])"
+      , sigSession enableWarnings "symbolKindTest = Proxy @\"qwq\""   "symbolKindTest :: Proxy \"qwq\""
+      , sigSession enableWarnings "promotedKindTest = Proxy @Nothing" "promotedKindTest :: Proxy 'Nothing"
+      , sigSession enableWarnings "typeOperatorTest = Refl"           "typeOperatorTest :: a :~: a"
+      , sigSession enableWarnings "notInScopeTest = mkCharType"       "notInScopeTest :: String -> Data.Data.DataType"
       ]
       | (title, enableWarnings) <-
         [("with warnings enabled", True)

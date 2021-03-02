@@ -10,6 +10,7 @@ import           ConLike                             (ConLike (PatSynCon))
 import           Control.Applicative                 ((<|>))
 import           Control.Monad.IO.Class
 import           Data.Aeson.Types                    (Value (..), toJSON)
+import           Data.Char                           (isAlpha)
 import           Data.Generics                       (mkQ, something)
 import qualified Data.HashMap.Strict                 as Map
 import           Data.List                           (find)
@@ -108,7 +109,7 @@ suggestSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = Range 
         <|> ((False,) <$> (find (\(x, _) -> x == name) localScope >>= snd)),
     tyMsg <- showSDocForUser unsafeGlobalDynFlags (mkPrintUnqualified unsafeGlobalDynFlags tcg_rdr_env) $ pprSigmaType ty,
     signature <- T.pack $ (if isPatSyn then "pattern " else "") <> printName name <> " :: " <> tyMsg,
-    startCharacter <- if "local binding" `T.isInfixOf` _message then _character _start else 0,
+    startCharacter <- if "Polymorphic local" `T.isPrefixOf` T.dropWhile (not . isAlpha) _message then _character _start else 0,
     startOfLine <- Position (_line _start) startCharacter,
     beforeLine <- Range startOfLine startOfLine,
     title <- if isQuickFix then "add signature: " <> signature else signature,
