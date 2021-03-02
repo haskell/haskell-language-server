@@ -3405,7 +3405,7 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
-  testSessionWithExtraFiles "plugin" "simple plugin" $ \dir -> do
+  testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
       "cradle: {cabal: [{path: '.', component: 'lib:plugin'}]}"
@@ -3419,7 +3419,7 @@ pluginSimpleTests =
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
   ignoreInWindowsForGHC88And810 $
-  testSessionWithExtraFiles "plugin" "parsedResultAction plugin" $ \dir -> do
+  testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
 
