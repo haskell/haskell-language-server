@@ -272,3 +272,16 @@ requireConcreteHole m = do
     0 -> m
     _ -> throwError TooPolymorphic
 
+
+------------------------------------------------------------------------------
+-- | The 'try' that comes in refinery 0.3 causes unnecessary backtracking and
+-- balloons the search space. This thing just tries it, but doesn't backtrack
+-- if it fails.
+--
+-- TODO(sandy): Remove this when we upgrade to 0.4
+try'
+    :: Functor m
+    => TacticT jdg ext err s m ()
+    -> TacticT jdg ext err s m ()
+try' t = commit t $ pure ()
+
