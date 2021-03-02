@@ -15,7 +15,7 @@ module Development.IDE.Core.FileStore(
     makeVFSHandle,
     makeLSPVFSHandle,
     isFileOfInterestRule
-    ) where
+    ,modifyFileStore) where
 
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM                       (atomically)
@@ -63,6 +63,9 @@ import qualified Development.IDE.Types.Logger                 as L
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
+import           Language.LSP.Types                           (FileChangeType (FcChanged),
+                                                               FileEvent (FileEvent),
+                                                               uriToFilePath)
 import           Language.LSP.VFS
 
 makeVFSHandle :: IO VFSHandle
@@ -93,24 +96,39 @@ isFileOfInterestRule = defineEarlyCutoff $ \IsFileOfInterest f -> do
     let res = maybe NotFOI IsFOI $ f `HM.lookup` filesOfInterest
     return (Just $ BS.pack $ show $ hash res, ([], Just res))
 
-getModificationTimeRule :: VFSHandle -> Rules ()
-getModificationTimeRule vfs =
+getModificationTimeRule :: VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
+getModificationTimeRule vfs isWatched =
     defineEarlyCutoff $ \(GetModificationTime_ missingFileDiags) file -> do
         let file' = fromNormalizedFilePath file
         let wrap time@(l,s) = (Just $ BS.pack $ show time, ([], Just $ ModificationTime l s))
-        alwaysRerun
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
         case mbVirtual of
-            Just (virtualFileVersion -> ver) ->
+            Just (virtualFileVersion -> ver) -> do
+                alwaysRerun
                 pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
-            Nothing -> liftIO $ fmap wrap (getModTime file')
-              `catch` \(e :: IOException) -> do
-                let err | isDoesNotExistError e = "File does not exist: " ++ file'
-                        | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
-                    diag = ideErrorText file (T.pack err)
-                if isDoesNotExistError e && not missingFileDiags
-                    then return (Nothing, ([], Nothing))
-                    else return (Nothing, ([diag], Nothing))
+            Nothing -> do
+                isWF <- isWatched file
+                unless isWF alwaysRerun
+                liftIO $ fmap wrap (getModTime file')
+                    `catch` \(e :: IOException) -> do
+                        let err | isDoesNotExistError e = "File does not exist: " ++ file'
+                                | otherwise = "IO error while reading " ++ file' ++ ", " ++ displayException e
+                            diag = ideErrorText file (T.pack err)
+                        if isDoesNotExistError e && not missingFileDiags
+                            then return (Nothing, ([], Nothing))
+                            else return (Nothing, ([diag], Nothing))
+
+-- | Reset the GetModificationTime state of watched files
+modifyFileStore :: IdeState -> [FileEvent] -> IO ()
+modifyFileStore state changes = mask $ \_ ->
+    forM_ changes $ \(FileEvent uri c) ->
+        case c of
+            FcChanged
+              | Just f <- uriToFilePath uri
+              -> do
+                  deleteValue state (GetModificationTime_ True) (toNormalizedFilePath' f)
+                  deleteValue state (GetModificationTime_ False) (toNormalizedFilePath' f)
+            _ -> pure ()
 
 -- Dir.getModificationTime is surprisingly slow since it performs
 -- a ton of conversions. Since we do not actually care about
@@ -188,10 +206,10 @@ getFileContents f = do
             pure $ internalTimeToUTCTime large small
     return (modTime, txt)
 
-fileStoreRules :: VFSHandle -> Rules ()
-fileStoreRules vfs = do
+fileStoreRules :: VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
+fileStoreRules vfs isWatched = do
     addIdeGlobal vfs
-    getModificationTimeRule vfs
+    getModificationTimeRule vfs isWatched
     getFileContentsRule vfs
     isFileOfInterestRule
 
