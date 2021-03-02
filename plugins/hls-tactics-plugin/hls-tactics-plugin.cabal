@@ -42,6 +42,7 @@ library
     Ide.Plugin.Tactic.Naming
     Ide.Plugin.Tactic.Range
     Ide.Plugin.Tactic.Simplify
+    Ide.Plugin.Tactic.Subst
     Ide.Plugin.Tactic.SYB
     Ide.Plugin.Tactic.Tactics
     Ide.Plugin.Tactic.Types
