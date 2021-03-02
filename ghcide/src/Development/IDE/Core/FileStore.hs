@@ -15,7 +15,9 @@ module Development.IDE.Core.FileStore(
     makeVFSHandle,
     makeLSPVFSHandle,
     isFileOfInterestRule
-    ,resetFileStore) where
+    ,resetFileStore
+    ,resetInterfaceStore
+    ) where
 
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM                       (atomically)
@@ -67,6 +69,7 @@ import           Language.LSP.Types                           (FileChangeType (F
                                                                FileEvent (FileEvent),
                                                                uriToFilePath, toNormalizedFilePath)
 import           Language.LSP.VFS
+import           System.FilePath
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
@@ -111,7 +114,7 @@ getModificationTimeRule vfs isWatched =
                 pure (Just $ BS.pack $ show ver, ([], Just $ VFSVersion ver))
             Nothing -> do
                 isWF <- isWatched file
-                unless isWF alwaysRerun
+                unless (isWF || isInterface file) alwaysRerun
                 liftIO $ fmap wrap (getModTime file')
                     `catch` \(e :: IOException) -> do
                         let err | isDoesNotExistError e = "File does not exist: " ++ file'
@@ -120,6 +123,19 @@ getModificationTimeRule vfs isWatched =
                         if isDoesNotExistError e && not missingFileDiags
                             then return (Nothing, ([], Nothing))
                             else return (Nothing, ([diag], Nothing))
+
+-- | Interface files cannot be watched, since they live outside the workspace.
+--   But interface files are private, in that only HLS writes them.
+--   So we implement watching ourselves, and bypass the need for alwaysRerun.
+isInterface :: NormalizedFilePath -> Bool
+isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hie"]
+
+-- | Reset the GetModificationTime state of interface files
+resetInterfaceStore :: ShakeExtras -> FilePath -> IO ()
+resetInterfaceStore state f = do
+    forM_ [toNormalizedFilePath' (replaceExtension f ext) | ext <- ["hi","hie"]] $ \f ->
+        forM_ [True,False] $ \gmt ->
+            deleteValue state (GetModificationTime_ gmt) f
 
 -- | Reset the GetModificationTime state of watched files
 resetFileStore :: IdeState -> [FileEvent] -> IO ()
@@ -134,8 +150,8 @@ resetFileStore ideState changes = mask $ \_ ->
                   OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
                   fois <- readVar foisVar
                   unless (HM.member (toNormalizedFilePath f) fois) $ do
-                    deleteValue ideState (GetModificationTime_ True) (toNormalizedFilePath' f)
-                    deleteValue ideState (GetModificationTime_ False) (toNormalizedFilePath' f)
+                    deleteValue (shakeExtras ideState) (GetModificationTime_ True) (toNormalizedFilePath' f)
+                    deleteValue (shakeExtras ideState) (GetModificationTime_ False) (toNormalizedFilePath' f)
             _ -> pure ()
 
 -- Dir.getModificationTime is surprisingly slow since it performs
