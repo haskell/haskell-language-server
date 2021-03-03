@@ -286,6 +286,8 @@ executable ghcide
     other-modules:
         Arguments
         Paths_ghcide
+    autogen-modules:
+        Paths_ghcide
 
     default-extensions:
         BangPatterns
