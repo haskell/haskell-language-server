@@ -12,6 +12,7 @@ on:
       - 'install/**'
       - 'nix/**'
       - 'test/**'
+      - 'ghcide/test/**'
 
 jobs:
   bench-init:
