@@ -83,7 +83,7 @@ setHandlersNotifications = mconcat
         -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
         -- what we do with them
         let msg = Text.pack $ show fileEvents
-        logDebug (ideLogger ide) $ "Files created or deleted: " <> msg
+        logDebug (ideLogger ide) $ "Watched file events: " <> msg
         modifyFileExists ide fileEvents
         modifyFileStore ide fileEvents
         setSomethingModified ide
