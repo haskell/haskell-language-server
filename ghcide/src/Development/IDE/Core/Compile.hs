@@ -113,7 +113,10 @@ import           TcEnv                             (tcLookup)
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM            hiding (orElse)
 import           Data.Aeson                        (toJSON)
+import           Data.Binary
+import           Data.Binary.Put
 import           Data.Bits                         (shiftR)
+import qualified Data.ByteString.Lazy              as LBS
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
@@ -759,34 +762,16 @@ getModSummaryFromImports env fp modTime contents = do
         -- Compute a fingerprint from the contents of `ModSummary`,
         -- eliding the timestamps, the preprocessed source and other non relevant fields
         computeFingerprint opts ModSummary{..} = do
-            let moduleUniques =
-                    [ b
-                    | m <- moduleName ms_mod
-                         : map (unLoc . snd) (ms_srcimps ++ ms_textual_imps)
-                    , b <- toBytes $ uniq $ moduleNameFS m
-                    ] ++
-                    [ b
-                    | (Just p, _) <- ms_srcimps ++ ms_textual_imps
-                    , b <- toBytes $ uniq p
-                    ]
-            fingerPrintImports <- withArrayLen moduleUniques $ \len p ->
-                    fingerprintData p len
+            let moduleUniques = runPut $ do
+                  put $ uniq $ moduleNameFS $ moduleName ms_mod
+                  forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
+                    put $ uniq $ moduleNameFS $ unLoc m
+                    whenJust mb_p $ put . uniq
+            fingerPrintImports <- fingerprintFromByteString $ LBS.toStrict moduleUniques
             return $ fingerprintFingerprints $
                     [ fingerprintString fp
                     , fingerPrintImports
                     ] ++ map fingerprintString opts
-
-        toBytes :: Int -> [Word8]
-        toBytes w64 =
-            [ fromIntegral (w64 `shiftR` 56)
-            , fromIntegral (w64 `shiftR` 48)
-            , fromIntegral (w64 `shiftR` 40)
-            , fromIntegral (w64 `shiftR` 32)
-            , fromIntegral (w64 `shiftR` 24)
-            , fromIntegral (w64 `shiftR` 16)
-            , fromIntegral (w64 `shiftR` 8)
-            , fromIntegral w64
-            ]
 
 
 -- | Parse only the module header
