@@ -235,9 +235,9 @@ mkHiFileResultNoCompile session tcm = do
   details <- makeSimpleDetails hsc_env_tmp tcGblEnv
   sf <- finalSafeMode (ms_hspp_opts ms) tcGblEnv
 #if MIN_GHC_API_VERSION(8,10,0)
-  iface <- mkIfaceTc session sf details tcGblEnv
+  iface <- mkIfaceTc hsc_env_tmp sf details tcGblEnv
 #else
-  (iface, _) <- mkIfaceTc session Nothing sf details tcGblEnv
+  (iface, _) <- mkIfaceTc hsc_env_tmp Nothing sf details tcGblEnv
 #endif
   let mod_info = HomeModInfo iface details Nothing
   pure $! HiFileResult ms mod_info
@@ -885,7 +885,8 @@ loadInterface
   -> (Maybe LinkableType -> m ([FileDiagnostic], Maybe HiFileResult)) -- ^ Action to regenerate an interface
   -> m ([FileDiagnostic], Maybe HiFileResult)
 loadInterface session ms sourceMod linkableNeeded regen = do
-    res <- liftIO $ checkOldIface session ms sourceMod Nothing
+    let sessionWithMsDynFlags = session{hsc_dflags = ms_hspp_opts ms}
+    res <- liftIO $ checkOldIface sessionWithMsDynFlags ms sourceMod Nothing
     case res of
           (UpToDate, Just iface)
             -- If the module used TH splices when it was last
@@ -914,7 +915,7 @@ loadInterface session ms sourceMod linkableNeeded regen = do
                    Just (LM obj_time _ _) -> obj_time > ms_hs_date ms
              if objUpToDate
              then do
-               hmi <- liftIO $ mkDetailsFromIface session iface linkable
+               hmi <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface linkable
                return ([], Just $ HiFileResult ms hmi)
              else regen linkableNeeded
           (_reason, _) -> regen linkableNeeded
