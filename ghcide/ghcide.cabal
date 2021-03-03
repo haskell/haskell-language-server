@@ -57,7 +57,7 @@ library
         Glob,
         haddock-library >= 1.8,
         hashable,
-        hie-compat ^>= 1.0.0.0,
+        hie-compat ^>= 0.1.0.0,
         hls-plugin-api ^>= 1.0.0.0,
         lens,
         hiedb == 0.3.0.1,
