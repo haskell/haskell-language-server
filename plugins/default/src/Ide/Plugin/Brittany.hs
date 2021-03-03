@@ -38,7 +38,7 @@ provider ide typ contents nfp opts = liftIO $ do
     let (range, selectedContents) = case typ of
           FormatText    -> (fullRange contents, contents)
           FormatRange r -> (normalize r, extractRange r contents)
-    (modsum, _) <- runAction "brittany" ide $ use_ GetModSummary nfp
+    modsum <- fmap msrModSummary $ runAction "brittany" ide $ use_ GetModSummaryWithoutTimestamps nfp
     let dflags = ms_hspp_opts modsum
     let withRuntimeLibdir = bracket_ (setEnv key $ topDir dflags) (unsetEnv key)
           where key = "GHC_EXACTPRINT_GHC_LIBDIR"

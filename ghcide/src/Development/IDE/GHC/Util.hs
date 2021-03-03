@@ -19,6 +19,7 @@ module Development.IDE.GHC.Util(
     moduleImportPath,
     cgGutsToCoreModule,
     fingerprintToBS,
+    fingerprintFromByteString,
     fingerprintFromStringBuffer,
     -- * General utilities
     readFileUtf8,
@@ -200,6 +201,11 @@ fingerprintFromStringBuffer :: StringBuffer -> IO Fingerprint
 fingerprintFromStringBuffer (StringBuffer buf len cur) =
     withForeignPtr buf $ \ptr -> fingerprintData (ptr `plusPtr` cur) len
 
+fingerprintFromByteString :: ByteString -> IO Fingerprint
+fingerprintFromByteString bs = do
+    let (fptr, offset, len) = BS.toForeignPtr bs
+    withForeignPtr fptr $ \ptr ->
+        fingerprintData (ptr `plusPtr` offset) len
 
 -- | A slightly modified version of 'hDuplicateTo' from GHC.
 --   Importantly, it avoids the bug listed in https://gitlab.haskell.org/ghc/ghc/merge_requests/2318.

@@ -113,11 +113,17 @@ import           TcEnv                             (tcLookup)
 import           Control.Concurrent.Extra
 import           Control.Concurrent.STM            hiding (orElse)
 import           Data.Aeson                        (toJSON)
+import           Data.Binary
+import           Data.Binary.Put
+import           Data.Bits                         (shiftR)
+import qualified Data.ByteString.Lazy              as LBS
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique
+import           Data.Word
+import           Foreign.Marshal.Array             (withArrayLen)
 import           GHC.Fingerprint
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
@@ -691,9 +697,9 @@ getModSummaryFromImports
   -> FilePath
   -> UTCTime
   -> Maybe SB.StringBuffer
-  -> ExceptT [FileDiagnostic] IO (ModSummary,[LImportDecl GhcPs])
+  -> ExceptT [FileDiagnostic] IO ModSummaryResult
 getModSummaryFromImports env fp modTime contents = do
-    (contents, dflags) <- preprocessor env fp contents
+    (contents, opts, dflags) <- preprocessor env fp contents
 
     -- The warns will hopefully be reported when we actually parse the module
     (_warns, L main_loc hsmod) <- parseHeader dflags fp contents
@@ -720,7 +726,7 @@ getModSummaryFromImports env fp modTime contents = do
         srcImports = map convImport src_idecls
         textualImports = map convImport (implicit_imports ++ ordinary_imps)
 
-        allImps = implicit_imports ++ imps
+        msrImports = implicit_imports ++ imps
 
     -- Force bits that might keep the string buffer and DynFlags alive unnecessarily
     liftIO $ evaluate $ rnf srcImports
@@ -730,7 +736,7 @@ getModSummaryFromImports env fp modTime contents = do
 
     let modl = mkModule (thisPackage dflags) mod
         sourceType = if "-boot" `isSuffixOf` takeExtension fp then HsBootFile else HsSrcFile
-        summary =
+        msrModSummary =
             ModSummary
                 { ms_mod          = modl
 #if MIN_GHC_API_VERSION(8,8,0)
@@ -749,7 +755,24 @@ getModSummaryFromImports env fp modTime contents = do
                 , ms_srcimps      = srcImports
                 , ms_textual_imps = textualImports
                 }
-    return (summary, allImps)
+
+    msrFingerprint <- liftIO $ computeFingerprint opts msrModSummary
+    return ModSummaryResult{..}
+    where
+        -- Compute a fingerprint from the contents of `ModSummary`,
+        -- eliding the timestamps, the preprocessed source and other non relevant fields
+        computeFingerprint opts ModSummary{..} = do
+            let moduleUniques = runPut $ do
+                  put $ uniq $ moduleNameFS $ moduleName ms_mod
+                  forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
+                    put $ uniq $ moduleNameFS $ unLoc m
+                    whenJust mb_p $ put . uniq
+            fingerPrintImports <- fingerprintFromByteString $ LBS.toStrict moduleUniques
+            return $ fingerprintFingerprints $
+                    [ fingerprintString fp
+                    , fingerPrintImports
+                    ] ++ map fingerprintString opts
+
 
 -- | Parse only the module header
 parseHeader

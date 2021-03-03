@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ViewPatterns      #-}
 module Ide.Plugin.StylishHaskell
   (
     descriptor
@@ -33,7 +32,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 -- If the provider fails an error is returned that can be displayed to the user.
 provider :: FormattingHandler IdeState
 provider ide typ contents fp _opts = do
-  (ms_hspp_opts -> dyn, _) <- liftIO $ runAction "stylish-haskell" ide $ use_ GetModSummary fp
+  dyn <- fmap (ms_hspp_opts . msrModSummary) $ liftIO $ runAction "stylish-haskell" ide $ use_ GetModSummary fp
   let file = fromNormalizedFilePath fp
   config <- liftIO $ loadConfigFrom file
   mergedConfig <- liftIO $ getMergedConfig dyn config
