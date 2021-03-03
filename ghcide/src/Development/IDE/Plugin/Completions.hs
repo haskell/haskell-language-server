@@ -67,14 +67,14 @@ produceCompletions = do
         sess <- fmap fst <$> useWithStale GhcSessionDeps file
 
         case (ms, sess) of
-            (Just (ms,imps), Just sess) -> do
+            (Just ModSummaryResult{..}, Just sess) -> do
               let env = hscEnv sess
               -- We do this to be able to provide completions of items that are not restricted to the explicit list
-              (global, inScope) <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> imps) `concurrently` tcRnImportDecls env imps
+              (global, inScope) <- liftIO $ tcRnImportDecls env (dropListFromImportDecl <$> msrImports) `concurrently` tcRnImportDecls env msrImports
               case (global, inScope) of
                   ((_, Just globalEnv), (_, Just inScopeEnv)) -> do
                       let uri = fromNormalizedUri $ normalizedFilePathToUri file
-                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod ms) globalEnv inScopeEnv imps
+                      cdata <- liftIO $ cacheDataProducer uri sess (ms_mod msrModSummary) globalEnv inScopeEnv msrImports
                       return ([], Just cdata)
                   (_diag, _) ->
                       return ([], Nothing)
@@ -172,17 +172,17 @@ extendImportHandler' ideState ExtendImport {..}
   | Just fp <- uriToFilePath doc,
     nfp <- toNormalizedFilePath' fp =
     do
-      (ms, ps, imps) <- MaybeT $ liftIO $
+      (ModSummaryResult {..}, ps) <- MaybeT $ liftIO $
         runAction "extend import" ideState $
           runMaybeT $ do
             -- We want accurate edits, so do not use stale data here
-            (ms, imps) <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
+            msr <- MaybeT $ use GetModSummaryWithoutTimestamps nfp
             ps <- MaybeT $ use GetAnnotatedParsedSource nfp
-            return (ms, ps, imps)
-      let df = ms_hspp_opts ms
+            return (msr, ps)
+      let df = ms_hspp_opts msrModSummary
           wantedModule = mkModuleName (T.unpack importName)
           wantedQual = mkModuleName . T.unpack <$> importQual
-      imp <- liftMaybe $ find (isWantedModule wantedModule wantedQual) imps
+      imp <- liftMaybe $ find (isWantedModule wantedModule wantedQual) msrImports
       fmap (nfp,) $ liftEither $
         rewriteToWEdit df doc (annsA ps) $
           extendImport (T.unpack <$> thingParent) (T.unpack newThing) imp

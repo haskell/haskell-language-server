@@ -43,8 +43,9 @@ import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.TestTypes          (TacticCommand,
-                                                       cfg_feature_set, emptyConfig, Config)
+import           Ide.Plugin.Tactic.TestTypes          (Config, TacticCommand,
+                                                       cfg_feature_set,
+                                                       emptyConfig)
 import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Server                  (MonadLsp)
 import           Language.LSP.Types
@@ -104,8 +105,8 @@ getIdeDynflags
 getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  ((modsum,_), _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
-  pure $ ms_hspp_opts modsum
+  (msr, _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
+  pure $ ms_hspp_opts $ msrModSummary msr
 
 
 ------------------------------------------------------------------------------
