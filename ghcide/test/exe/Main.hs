@@ -4608,6 +4608,11 @@ bootTests = testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
   liftIO $ runInDir dir $ do
     cDoc <- createDoc cPath "haskell" cSource
     _ <- getHover cDoc $ Position 4 3
+    ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+      FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
+        A.Success fp' <- pure $ fromJSON fp
+        if equalFilePath fp' cPath then pure () else Nothing
+      _ -> Nothing
     closeDoc cDoc
 
   cdoc <- createDoc cPath "haskell" cSource
