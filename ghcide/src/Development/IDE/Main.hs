@@ -26,6 +26,7 @@ import           Development.IDE.Core.Service       (initialise, runAction)
 import           Development.IDE.Core.Shake         (IdeState (shakeExtras),
                                                      ShakeExtras (state), uses)
 import           Development.IDE.Core.Tracing       (measureMemory)
+import           Development.IDE.Core.IdeConfiguration (registerIdeConfiguration, IdeConfiguration(..))
 import           Development.IDE.LSP.LanguageServer (runLanguageServer)
 import           Development.IDE.Plugin             (Plugin (pluginHandlers, pluginRules))
 import           Development.IDE.Plugin.HLS         (asGhcIdePlugin)
@@ -61,6 +62,7 @@ import           System.IO                          (hPutStrLn, hSetEncoding,
                                                      stderr, stdout, utf8)
 import           System.Time.Extra                  (offsetTime, showDuration)
 import           Text.Printf                        (printf)
+import           Data.Hashable                      (hashed)
 
 data Arguments = Arguments
     { argsOTMemoryProfiling :: Bool
@@ -170,6 +172,7 @@ defaultMain Arguments{..} = do
                         , optCheckProject = pure False
                         }
             ide <- initialise argsDefaultHlsConfig rules Nothing argsLogger debouncer options vfs hiedb hieChan
+            registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
 
             putStrLn "\nStep 4/4: Type checking the files"
             setFilesOfInterest ide $ HashMap.fromList $ map ((,OnDisk) . toNormalizedFilePath') files
