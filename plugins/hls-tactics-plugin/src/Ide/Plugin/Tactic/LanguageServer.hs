@@ -214,7 +214,7 @@ buildTopLevelHypothesis
     :: OccName  -- ^ Function name
     -> [PatCompat GhcTc]
     -> State Int (Hypothesis CType)
-buildTopLevelHypothesis name (fmap fromPatCompatTc -> ps) = do
+buildTopLevelHypothesis name ps = do
   fmap mconcat $
     for (zip [0..] ps) $ \(ix, p) ->
       buildPatHy (TopLevelArgPrv name ix $ length ps) p
@@ -236,10 +236,10 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     ViewPat _ _ p -> buildPatHy prov p
     -- Desugar lists into cons
     ListPat _ [] -> pure mempty
-    ListPat x@(ListPatTc ty _) (fmap fromPatCompatTc -> (p : ps)) ->
+    ListPat x@(ListPatTc ty _) (p : ps) ->
       mkDerivedConHypothesis prov consDataCon [ty]
-        [ (0, toPatCompatTc p)
-        , (1, ListPat x $ fmap toPatCompatTc ps)
+        [ (0, p)
+        , (1, ListPat x ps)
         ]
     -- Desugar tuples into an explicit constructor
     TuplePat tys pats boxity ->
@@ -257,7 +257,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
         RecCon r ->
           mkDerivedRecordHypothesis prov dc args r
 #if __GLASGOW_HASKELL__ >= 808
-    SigPat  _ p _ -> buildPatHy prov p
+    SigPat  _ p _ -> buildPatHy prov $ toPatCompatTc p
 #endif
 #if __GLASGOW_HASKELL__ == 808
     XPat   p      -> buildPatHy prov $ unLoc p
@@ -279,7 +279,7 @@ mkDerivedRecordHypothesis prov dc args (HsRecFields (fmap unLoc -> fs) _)
     let field_lookup = M.fromList $ zip (fmap (occNameFS . fst) rec_fields) [0..]
     mkDerivedConHypothesis prov dc args $ fs <&> \(HsRecField (L _ rec_occ) p _) ->
       ( field_lookup M.! (occNameFS $ occName $ unLoc $ rdrNameFieldOcc rec_occ)
-      , p
+      , fromPatCompatTc p
       )
 mkDerivedRecordHypothesis _ _ _ _ =
   error "impossible! using record pattern on something that isn't a record"
