@@ -239,7 +239,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     ListPat x@(ListPatTc ty _) (p : ps) ->
       mkDerivedConHypothesis prov consDataCon [ty]
         [ (0, p)
-        , (1, ListPat x ps)
+        , (1, toPatCompatTc $ ListPat x ps)
         ]
     -- Desugar tuples into an explicit constructor
     TuplePat tys pats boxity ->
@@ -279,7 +279,7 @@ mkDerivedRecordHypothesis prov dc args (HsRecFields (fmap unLoc -> fs) _)
     let field_lookup = M.fromList $ zip (fmap (occNameFS . fst) rec_fields) [0..]
     mkDerivedConHypothesis prov dc args $ fs <&> \(HsRecField (L _ rec_occ) p _) ->
       ( field_lookup M.! (occNameFS $ occName $ unLoc $ rdrNameFieldOcc rec_occ)
-      , fromPatCompatTc p
+      , p
       )
 mkDerivedRecordHypothesis _ _ _ _ =
   error "impossible! using record pattern on something that isn't a record"
@@ -305,7 +305,7 @@ mkDerivedConHypothesis
     -> [Type]                    -- ^ Applied type variables
     -> [(Int, PatCompat GhcTc)]  -- ^ Patterns, and their order in the data con
     -> State Int (Hypothesis CType)
-mkDerivedConHypothesis prov dc args (fmap (second fromPatCompatTc) -> ps) = do
+mkDerivedConHypothesis prov dc args ps = do
   var <- mkFakeVar
   hy' <- fmap mconcat $
     for ps $ \(ix, p) -> do
