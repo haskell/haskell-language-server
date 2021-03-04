@@ -7,8 +7,6 @@
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
-      graft,
-      graftExpr,
       graftDecls,
       graftDeclsWithM,
       annotate,
@@ -215,17 +213,7 @@ needsParensSpace _               = mempty
 {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with the
  given @Located ast@. The node at that position must already be a @Located
  ast@, or this is a no-op.
-
- You want to use 'graftExpr' instead of this function when @ast ~ 'HsExpr'@.
 -}
-graft ::
-    forall ast a.
-    (Data a, ASTElement ast) =>
-    SrcSpan ->
-    Located ast ->
-    Graft (Either String) a
-graft dst = graft' True dst . maybeParensAST
-
 graft' ::
     forall ast a.
     (Data a, ASTElement ast) =>
@@ -234,10 +222,6 @@ graft' ::
     -- the answer is yes, or the function call won't get its argument. Yikes!
     --
     -- More often the answer is yes, so when in doubt, use that.
-    --
-    -- For a version of this function that does the right thing for
-    -- expressions without needing to tweak this parameter, look at
-    -- 'graftExpr'.
     Bool ->
     SrcSpan ->
     Located ast ->
@@ -419,10 +403,22 @@ everywhereM' f = go
 class (Data ast, Outputable ast) => ASTElement ast where
     parseAST :: Parser (Located ast)
     maybeParensAST :: Located ast -> Located ast
+    {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with
+        the given @Located ast@. The node at that position must already be
+        a @Located ast@, or this is a no-op.
+    -}
+    graft ::
+        forall a.
+        (Data a) =>
+        SrcSpan ->
+        Located ast ->
+        Graft (Either String) a
+    graft dst = graft' True dst . maybeParensAST
 
 instance p ~ GhcPs => ASTElement (HsExpr p) where
     parseAST = parseExpr
     maybeParensAST = parenthesize
+    graft = graftExpr
 
 instance p ~ GhcPs => ASTElement (Pat p) where
 #if __GLASGOW_HASKELL__ == 808

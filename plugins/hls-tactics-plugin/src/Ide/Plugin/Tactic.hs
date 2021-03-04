@@ -170,7 +170,7 @@ graftHole span rtr
       $ unLoc
       $ rtr_extract rtr
 graftHole span rtr
-  = graftExpr span
+  = graft span
   $ rtr_extract rtr
 
 
