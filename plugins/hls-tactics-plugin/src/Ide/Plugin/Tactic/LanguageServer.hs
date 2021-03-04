@@ -257,7 +257,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
         RecCon r ->
           mkDerivedRecordHypothesis prov dc args r
 #if __GLASGOW_HASKELL__ >= 808
-    SigPat  _ p _ -> buildPatHy prov $ toPatCompatTc p
+    SigPat  _ p _ -> buildPatHy prov p
 #endif
 #if __GLASGOW_HASKELL__ == 808
     XPat   p      -> buildPatHy prov $ unLoc p
