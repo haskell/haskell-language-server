@@ -3154,54 +3154,60 @@ removeExportTests = testGroup "remove export actions"
     template = exportTemplate Nothing
 
 addSigLensesTests :: TestTree
-addSigLensesTests = let
-  missing = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures -Wunused-matches #-}"
-  notMissing = "{-# OPTIONS_GHC -Wunused-matches #-}"
-  moduleH = T.unlines
-    [
-    "{-# LANGUAGE PatternSynonyms,TypeApplications,DataKinds,RankNTypes,ScopedTypeVariables,TypeOperators #-}"
-    , "module Sigs where"
-    , "import qualified Data.Complex as C"
-    , "import Data.Data (Proxy (..), type (:~:) (..), mkCharType)"
-    ]
-  other = T.unlines ["f :: Integer -> Integer", "f x = 3"]
-  before  withMissing def
-    = T.unlines $ (if withMissing then (missing :) else (notMissing :)) [moduleH, def, other]
-  after'  withMissing def sig
-    = T.unlines $ (if withMissing then (missing :) else (notMissing :)) [moduleH, sig, def, other]
-
-  sigSession withMissing def sig = testSession (T.unpack def) $ do
-    let originalCode = before withMissing def
-    let expectedCode = after' withMissing def sig
-    doc <- createDoc "Sigs.hs" "haskell" originalCode
-    [CodeLens {_command = Just c}] <- getCodeLenses doc
-    executeCommand c
-    modifiedCode <- skipManyTill anyMessage (getDocumentEdit doc)
-    liftIO $ expectedCode @=? modifiedCode
-  in
-  testGroup "add signature"
-    [ testGroup title
-      [ sigSession enableWarnings "abc = True"              "abc :: Bool"
-      , sigSession enableWarnings "foo a b = a + b"         "foo :: Num a => a -> a -> a"
-      , sigSession enableWarnings "bar a b = show $ a + b"  "bar :: (Show a, Num a) => a -> a -> String"
-      , sigSession enableWarnings "(!!!) a b = a > b"       "(!!!) :: Ord a => a -> a -> Bool"
-      , sigSession enableWarnings "a >>>> b = a + b"        "(>>>>) :: Num a => a -> a -> a"
-      , sigSession enableWarnings "a `haha` b = a b"        "haha :: (t1 -> t2) -> t1 -> t2"
-      , sigSession enableWarnings "pattern Some a = Just a" "pattern Some :: a -> Maybe a"
-      , sigSession enableWarnings "qualifiedSigTest= C.realPart" "qualifiedSigTest :: C.Complex a -> a"
-      , sigSession enableWarnings "head = 233"              "head :: Integer"
-      , sigSession enableWarnings "rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")"
-         "rank2Test :: (forall a. a -> a) -> (Int, [Char])"
-      , sigSession enableWarnings "symbolKindTest = Proxy @\"qwq\""   "symbolKindTest :: Proxy \"qwq\""
-      , sigSession enableWarnings "promotedKindTest = Proxy @Nothing" "promotedKindTest :: Proxy 'Nothing"
-      , sigSession enableWarnings "typeOperatorTest = Refl"           "typeOperatorTest :: a :~: a"
-      , sigSession enableWarnings "notInScopeTest = mkCharType"       "notInScopeTest :: String -> Data.Data.DataType"
-      ]
-      | (title, enableWarnings) <-
-        [("with warnings enabled", True)
-        ,("with warnings disabled", False)
+addSigLensesTests =
+  let pragmas = "{-# OPTIONS_GHC -Wmissing-signatures -Wmissing-pattern-synonym-signatures #-}"
+      moduleH exported =
+        T.unlines
+          [ "{-# LANGUAGE PatternSynonyms,TypeApplications,DataKinds,RankNTypes,ScopedTypeVariables,TypeOperators #-}"
+          , "module Sigs(" <> exported <> ") where"
+          , "import qualified Data.Complex as C"
+          , "import Data.Data (Proxy (..), type (:~:) (..), mkCharType)"
+          ]
+      before enableGHCWarnings exported (def, _) others =
+        T.unlines $ [pragmas | enableGHCWarnings] <> [moduleH exported, def] <> others
+      after' enableGHCWarnings exported (def, sig) others =
+        T.unlines $ [pragmas | enableGHCWarnings] <> [moduleH exported] <> maybe [] pure sig <> [def] <> others
+      createConfig mode = A.object ["haskell" A..= A.object ["plugin" A..= A.object ["ghcide-type-lenses" A..= A.object ["config" A..= A.object ["mode" A..= A.String mode]]]]]
+      sigSession testName enableGHCWarnings mode exported def others = testSession testName $ do
+        let originalCode = before enableGHCWarnings exported def others
+        let expectedCode = after' enableGHCWarnings exported def others
+        sendNotification SWorkspaceDidChangeConfiguration $ DidChangeConfigurationParams $ createConfig mode
+        doc <- createDoc "Sigs.hs" "haskell" originalCode
+        waitForProgressDone
+        codeLenses <- getCodeLenses doc
+        if not $ null $ snd def
+          then do
+            liftIO $ length codeLenses == 1 @? "Expected 1 code lens, but got: " <> show codeLenses
+            executeCommand $ fromJust $ head codeLenses ^. L.command
+            modifiedCode <- skipManyTill anyMessage (getDocumentEdit doc)
+            liftIO $ expectedCode @=? modifiedCode
+          else liftIO $ null codeLenses @? "Expected no code lens, but got: " <> show codeLenses
+      cases =
+        [ ("abc = True", "abc :: Bool")
+        , ("foo a b = a + b", "foo :: Num a => a -> a -> a")
+        , ("bar a b = show $ a + b", "bar :: (Show a, Num a) => a -> a -> String")
+        , ("(!!!) a b = a > b", "(!!!) :: Ord a => a -> a -> Bool")
+        , ("a >>>> b = a + b", "(>>>>) :: Num a => a -> a -> a")
+        , ("a `haha` b = a b", "haha :: (t1 -> t2) -> t1 -> t2")
+        , ("pattern Some a = Just a", "pattern Some :: a -> Maybe a")
+        , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
+        , ("head = 233", "head :: Integer")
+        , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, [Char])")
+        , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
+        , ("promotedKindTest = Proxy @Nothing", "promotedKindTest :: Proxy 'Nothing")
+        , ("typeOperatorTest = Refl", "typeOperatorTest :: a :~: a")
+        , ("notInScopeTest = mkCharType", "notInScopeTest :: String -> Data.Data.DataType")
         ]
-    ]
+   in testGroup
+        "add signature"
+        [ testGroup "signatures are correct" [sigSession (T.unpack def) False "Always" "" (def, Just sig) [] | (def, sig) <- cases]
+        , sigSession "exported mode works" False "Exported" "xyz" ("xyz = True", Just "xyz :: Bool") (fst <$> take 3 cases)
+        , testGroup
+            "diagnostics mode works"
+            [ sigSession "with GHC warnings" True "Diagnostics" "" (second Just $ head cases) []
+            , sigSession "without GHC warnings" False "Diagnostics" "" (second (const Nothing) $ head cases) []
+            ]
+        ]
 
 linkToLocation :: [LocationLink] -> [Location]
 linkToLocation = map (\LocationLink{_targetUri,_targetRange} -> Location _targetUri _targetRange)

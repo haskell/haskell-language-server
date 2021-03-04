@@ -128,7 +128,7 @@ codeLensProvider ideState pId CodeLensParams {_textDocument = TextDocumentIdenti
       case mode of
         Always ->
           pure (catMaybes $ generateLensForGlobal <$> gblSigs')
-            <> generateLensFromDiags (suggestLocalSignature False tmr bindings)
+            <> generateLensFromDiags (suggestLocalSignature False tmr bindings) -- we still need diagnostics for local bindings
         Exported -> pure $ catMaybes $ generateLensForGlobal <$> filter gbExported gblSigs'
         Diagnostics -> generateLensFromDiags $ suggestSignature False gblSigs tmr bindings
     Nothing -> pure []
