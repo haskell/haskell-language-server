@@ -65,9 +65,9 @@ import Parser (parseIdentifier)
 import Data.Traversable (for)
 import Data.Foldable (Foldable(fold))
 import Data.Bool (bool)
+import Data.Monoid (All(All))
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
-import Data.Monoid (All(All))
 #endif
 #if __GLASGOW_HASKELL__ > 808
 import Bag (listToBag)
