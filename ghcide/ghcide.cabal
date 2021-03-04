@@ -55,7 +55,7 @@ library
         fingertree,
         ghc-exactprint,
         Glob,
-        haddock-library >= 1.8,
+        haddock-library >= 1.8 && < 1.10,
         hashable,
         hie-compat ^>= 0.1.0.0,
         hls-plugin-api ^>= 1.0.0.0,
