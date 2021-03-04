@@ -99,7 +99,7 @@ codeLensProvider ::
   CodeLensParams ->
   LSP.LspM Config (Either ResponseError (List CodeLens))
 codeLensProvider ideState pId CodeLensParams {_textDocument = TextDocumentIdentifier uri} = do
-  (fromMaybe Enabled . join -> mode) <- fmap (parseCustomConfig . plcConfig) <$> getPluginConfig pId
+  (fromMaybe Always . join -> mode) <- fmap (parseCustomConfig . plcConfig) <$> getPluginConfig pId
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
@@ -116,27 +116,21 @@ codeLensProvider ideState pId CodeLensParams {_textDocument = TextDocumentIdenti
             let wedit = toWorkSpaceEdit [tedit]
             pure $ generateLens pId range (T.pack gbRendered) wedit
           gblSigs' = maybe [] (\(GlobalBindingTypeSigsResult x) -> x) gblSigs
-
-      case mode of
-        Enabled ->
-          pure (catMaybes $ generateLensForGlobal <$> gblSigs')
-            <> sequence
+          generateLensFromDiags f =
+            sequence
               [ pure $ generateLens pId _range title edit
                 | (dFile, _, dDiag@Diagnostic {_range = _range}) <- diag ++ hDiag,
                   dFile == filePath,
-                  (title, tedit) <- suggestLocalSignature False tmr bindings dDiag,
+                  (title, tedit) <- f dDiag,
                   let edit = toWorkSpaceEdit tedit
               ]
+
+      case mode of
+        Always ->
+          pure (catMaybes $ generateLensForGlobal <$> gblSigs')
+            <> generateLensFromDiags (suggestLocalSignature False tmr bindings)
         Exported -> pure $ catMaybes $ generateLensForGlobal <$> filter gbExported gblSigs'
-        Diagnostics -> do
-          sequence
-            [ pure $ generateLens pId _range title edit
-              | (dFile, _, dDiag@Diagnostic {_range = _range}) <- diag ++ hDiag,
-                dFile == filePath,
-                (title, tedit) <- suggestSignature False gblSigs tmr bindings dDiag,
-                let edit = toWorkSpaceEdit tedit
-            ]
-        Disabled -> pure []
+        Diagnostics -> generateLensFromDiags $ suggestSignature False gblSigs tmr bindings
     Nothing -> pure []
 
 generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> CodeLens
@@ -200,8 +194,14 @@ gblBindingTypeSigToEdit GlobalBindingTypeSig {..}
     Just $ TextEdit beforeLine $ T.pack gbRendered <> "\n"
   | otherwise = Nothing
 
-data Mode = Enabled | Exported | Diagnostics | Disabled
-  deriving (Generic, Eq, Ord, Show, Read, NFData)
+data Mode
+  = -- | always displays type lenses of global bindings, no matter what GHC flags are set
+    Always
+  | -- | similar to 'Always', but only displays for exported global bindings
+    Exported
+  | -- |  follows error messages produced by GHC
+    Diagnostics
+  deriving (Eq, Ord, Show, Read, Enum)
 
 --------------------------------------------------------------------------------
 
