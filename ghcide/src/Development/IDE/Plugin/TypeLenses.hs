@@ -15,6 +15,7 @@ where
 import           Avail                               (availsToNameSet)
 import           Control.DeepSeq                     (rwhnf)
 import           Control.Monad                       (join)
+import           Control.Monad.Extra                 (whenMaybe)
 import           Control.Monad.IO.Class              (MonadIO (liftIO))
 import qualified Data.Aeson                          as A
 import           Data.Aeson.Types                    (Value (..), toJSON)
@@ -251,7 +252,7 @@ gblBindingType (Just hsc) (Just gblEnv) = do
       rdrEnv = tcg_rdr_env gblEnv
       showDoc = showDocRdrEnv dflags rdrEnv
       hasSig :: (Monad m) => Name -> m a -> m (Maybe a)
-      hasSig name f = if name `elemNameSet` sigs then Just <$> f else pure Nothing
+      hasSig name f = whenMaybe (name `elemNameSet` sigs) f
       bindToSig id = do
         let name = idName id
         hasSig name $ do
