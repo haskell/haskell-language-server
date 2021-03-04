@@ -44,6 +44,7 @@ import           Development.IDE.Import.FindImports           (ArtifactsLocation
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
 import           Development.IDE.Types.Options                (IdeGhcSession)
+import           Fingerprint
 import           GHC.Serialized                               (Serialized)
 import           Language.LSP.Types                           (NormalizedFilePath)
 import           TcRnMonad                                    (TcGblEnv)
@@ -316,13 +317,24 @@ instance Binary   IsFileOfInterestResult
 
 type instance RuleResult IsFileOfInterest = IsFileOfInterestResult
 
+data ModSummaryResult = ModSummaryResult
+  { msrModSummary  :: !ModSummary
+  , msrImports     :: [LImportDecl GhcPs]
+  , msrFingerprint :: !Fingerprint
+  }
+
+instance Show ModSummaryResult where
+    show _ = "<ModSummaryResult>"
+instance NFData ModSummaryResult where
+    rnf ModSummaryResult{..} =
+        rnf msrModSummary `seq` rnf msrImports `seq` rnf msrFingerprint
+
 -- | Generate a ModSummary that has enough information to be used to get .hi and .hie files.
 -- without needing to parse the entire source
-type instance RuleResult GetModSummary = (ModSummary,[LImportDecl GhcPs])
+type instance RuleResult GetModSummary = ModSummaryResult
 
--- | Generate a ModSummary with the timestamps elided,
---   for more successful early cutoff
-type instance RuleResult GetModSummaryWithoutTimestamps = (ModSummary,[LImportDecl GhcPs])
+-- | Generate a ModSummary with the timestamps and preprocessed content elided, for more successful early cutoff
+type instance RuleResult GetModSummaryWithoutTimestamps = ModSummaryResult
 
 data GetParsedModule = GetParsedModule
     deriving (Eq, Show, Typeable, Generic)

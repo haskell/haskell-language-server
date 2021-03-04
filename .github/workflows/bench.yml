@@ -1,6 +1,19 @@
 name: Benchmark
 
-on: [pull_request]
+on:
+  pull_request:
+    branches:
+      - '**'
+    paths-ignore:
+      - '**/docs/**'
+      - '**.md'
+      - '**/LICENSE'
+      - '.circleci/**'
+      - 'install/**'
+      - 'nix/**'
+      - 'test/**'
+      - 'ghcide/test/**'
+
 jobs:
   bench-init:
     runs-on: ${{ matrix.os }}

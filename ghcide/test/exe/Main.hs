@@ -3418,7 +3418,7 @@ checkFileCompiles fp diag =
 pluginSimpleTests :: TestTree
 pluginSimpleTests =
   ignoreInWindowsForGHC88And810 $
-  testSessionWithExtraFiles "plugin" "simple plugin" $ \dir -> do
+  testSessionWithExtraFiles "plugin-knownnat" "simple plugin" $ \dir -> do
     _ <- openDoc (dir </> "KnownNat.hs") "haskell"
     liftIO $ writeFile (dir</>"hie.yaml")
       "cradle: {cabal: [{path: '.', component: 'lib:plugin'}]}"
@@ -3432,7 +3432,7 @@ pluginSimpleTests =
 pluginParsedResultTests :: TestTree
 pluginParsedResultTests =
   ignoreInWindowsForGHC88And810 $
-  testSessionWithExtraFiles "plugin" "parsedResultAction plugin" $ \dir -> do
+  testSessionWithExtraFiles "plugin-recorddot" "parsedResultAction plugin" $ \dir -> do
     _ <- openDoc (dir</> "RecordDot.hs") "haskell"
     expectNoMoreDiagnostics 2
 
@@ -4621,6 +4621,11 @@ bootTests = testCase "boot-def-test" $ runWithExtraFiles "boot" $ \dir -> do
   liftIO $ runInDir dir $ do
     cDoc <- createDoc cPath "haskell" cSource
     _ <- getHover cDoc $ Position 4 3
+    ~() <- skipManyTill anyMessage $ satisfyMaybe $ \case
+      FromServerMess (SCustomMethod "ghcide/reference/ready") (NotMess NotificationMessage{_params = fp}) -> do
+        A.Success fp' <- pure $ fromJSON fp
+        if equalFilePath fp' cPath then pure () else Nothing
+      _ -> Nothing
     closeDoc cDoc
 
   cdoc <- createDoc cPath "haskell" cSource

@@ -4,7 +4,18 @@ defaults:
   run:
     shell: bash
 
-on: [pull_request]
+on:
+  pull_request:
+    branches:
+      - '**'
+    paths-ignore:
+      - '**/docs/**'
+      - '**.md'
+      - '**/LICENSE'
+      - '.circleci/**'
+      - 'install/**'
+      - 'nix/**'
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -119,3 +130,8 @@ jobs:
         # all functional test cases simultaneously which causes way too many hls
         # instances to be spun up for the poor github actions runner to handle
         run: cabal test wrapper-test --test-options="-j1" || cabal test wrapper-test --test-options="-j1" || cabal test wrapper-test --test-options="-j1"
+
+      - name: Test hls-tactics-plugin test suite
+        if: ${{ matrix.test }}
+        run: LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="-j1"
+
