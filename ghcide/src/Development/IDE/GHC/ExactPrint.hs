@@ -180,7 +180,11 @@ transformM dflags ccs uri f a = runExceptT $
         pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 
--- | Returns whether or not this node requires its immediate children to have a
+-- | Returns whether or not this node requires its immediate children to have
+-- be parenthesized and have a leading space.
+--
+-- A more natural type for this function would be to return @(Bool, Bool)@, but
+-- we use 'All' instead for its monoid instance.
 needsParensSpace ::
     HsExpr GhcPs ->
     -- | (Needs parens, needs space)
