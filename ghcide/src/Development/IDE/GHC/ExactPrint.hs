@@ -8,6 +8,7 @@
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
       graft,
+      graftExpr,
       graftWithoutParentheses,
       graftDecls,
       graftDeclsWithM,
@@ -65,6 +66,8 @@ import Parser (parseIdentifier)
 import Data.Traversable (for)
 import Data.Foldable (Foldable(fold))
 import Data.Bool (bool)
+import GhcPlugins (PprPrec)
+import Data.Maybe (catMaybes)
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
 #endif
@@ -178,6 +181,29 @@ transformM dflags ccs uri f a = runExceptT $
         let res = printA a'
         pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
+
+needsParens :: HsExpr GhcPs -> Maybe PprPrec
+needsParens HsLam{}         = Nothing
+needsParens HsLamCase{}     = Nothing
+needsParens HsApp{}         = Just appPrec
+needsParens HsAppType{}     = Just appPrec
+needsParens OpApp{}         = Just appPrec
+needsParens HsPar{}         = Nothing
+needsParens SectionL{}      = Nothing
+needsParens SectionR{}      = Nothing
+needsParens ExplicitTuple{} = Nothing
+needsParens ExplicitSum{}   = Nothing
+needsParens HsCase{}        = Nothing
+needsParens HsIf{}          = Nothing
+needsParens HsMultiIf{}     = Nothing
+needsParens HsLet{}         = Nothing
+needsParens HsDo{}          = Nothing
+needsParens ExplicitList{}  = Nothing
+needsParens RecordCon{}     = Nothing
+needsParens RecordUpd{}     = Just appPrec
+needsParens _               = Just appPrec
+
+
 ------------------------------------------------------------------------------
 
 {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with the
@@ -202,6 +228,39 @@ graftWithoutParentheses ::
     Graft (Either String) a
 graftWithoutParentheses dst val = Graft $ \dflags a -> do
     (anns, val') <- annotate dflags val
+    modifyAnnsT $ mappend anns
+    pure $
+        everywhere'
+            ( mkT $
+                \case
+                    (L src _ :: Located ast) | src == dst -> val'
+                    l -> l
+            )
+            a
+
+-- | Like 'graft', but specialized to 'LHsExpr', and intelligently inserts
+-- parentheses if they're necessary.
+graftExpr ::
+    forall a.
+    (Data a) =>
+    SrcSpan ->
+    LHsExpr GhcPs ->
+    Graft (Either String) a
+graftExpr dst val = Graft $ \dflags a -> do
+    -- Traverse the tree, looking for our replacement node. But keep track of
+    -- the context (parent HsExpr constructor) we're in while we do it. This
+    -- lets us determine wehther or not we need parentheses.
+    let do_i_need_parens =
+          everythingWithContext (Nothing :: Maybe PprPrec) (<>)
+            ( mkQ ([], ) $ \x s -> case x of
+                (L src _ :: LHsExpr GhcPs) | src == dst ->
+                  ([s], s)
+                L _ x' -> ([], needsParens x')
+            ) a
+
+    let needs_parens = not $ null $ catMaybes do_i_need_parens
+
+    (anns, val') <- annotate2 dflags needs_parens $ bool id maybeParensAST needs_parens val
     modifyAnnsT $ mappend anns
     pure $
         everywhere'
@@ -400,6 +459,16 @@ annotate dflags ast = do
     let rendered = render dflags ast
     (anns, expr') <- lift $ mapLeft show $ parseAST dflags uniq rendered
     let anns' = setPrecedingLines expr' 0 1 anns
+    pure (anns', expr')
+
+-- | Given an 'LHSExpr', compute its exactprint annotations.
+--   Note that this function will throw away any existing annotations (and format)
+annotate2 :: ASTElement ast => DynFlags -> Bool -> Located ast -> TransformT (Either String) (Anns, Located ast)
+annotate2 dflags needs_space ast = do
+    uniq <- show <$> uniqueSrcSpanT
+    let rendered = render dflags ast
+    (anns, expr') <- lift $ mapLeft show $ parseAST dflags uniq rendered
+    let anns' = setPrecedingLines expr' 0 (bool 0 1 needs_space) anns
     pure (anns', expr')
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
