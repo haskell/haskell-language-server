@@ -1,20 +1,33 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE TypeFamilies   #-}
+
 -- | An HLS plugin to provide code lenses for type signatures
 module Development.IDE.Plugin.TypeLenses
   ( descriptor,
     suggestSignature,
     typeLensCommandId,
+    GlobalBindingTypeSig (..),
+    GetGlobalBindingTypeSigs (..),
+    GlobalBindingTypeSigsResult (..),
   )
 where
 
-import           ConLike                             (ConLike (PatSynCon))
-import           Control.Applicative                 ((<|>))
-import           Control.Monad.IO.Class
+import           Avail                               (availsToNameSet)
+import           Control.DeepSeq                     (rwhnf)
+import           Control.Monad                       (join)
+import           Control.Monad.IO.Class              (MonadIO (liftIO))
+import qualified Data.Aeson                          as A
 import           Data.Aeson.Types                    (Value (..), toJSON)
-import           Data.Char                           (isAlpha)
-import           Data.Generics                       (mkQ, something)
+import qualified Data.Aeson.Types                    as A
 import qualified Data.HashMap.Strict                 as Map
 import           Data.List                           (find)
+import           Data.Maybe                          (catMaybes, fromJust,
+                                                      fromMaybe)
 import qualified Data.Text                           as T
+import           Development.IDE                     (GhcSession (..),
+                                                      HscEnvEq (hscEnv),
+                                                      RuleResult, Rules, define,
+                                                      srcSpanToRange)
 import           Development.IDE.Core.Compile        (TcModuleResult (..))
 import           Development.IDE.Core.RuleTypes      (GetBindings (GetBindings),
                                                       TypeCheck (TypeCheck))
@@ -29,9 +42,20 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
                                                       Range (Range, _end, _start),
                                                       toNormalizedFilePath',
                                                       uriToFilePath')
-import           HscTypes                            (lookupTypeEnv,
-                                                      mkPrintUnqualified)
-import           Ide.PluginUtils                     (mkLspCommand)
+import           Development.Shake.Classes
+import           GHC.Generics                        (Generic)
+import           GhcPlugins                          (GlobalRdrEnv,
+                                                      HscEnv (hsc_dflags), SDoc,
+                                                      elemNameSet, getSrcSpan,
+                                                      idName, lookupTypeEnv,
+                                                      mkRealSrcLoc,
+                                                      realSrcLocSpan,
+                                                      tidyOpenType)
+import           HscTypes                            (mkPrintUnqualified)
+import           Ide.Plugin.Config                   (Config,
+                                                      PluginConfig (plcConfig))
+import           Ide.PluginUtils                     (getPluginConfig,
+                                                      mkLspCommand)
 import           Ide.Types                           (CommandFunction,
                                                       CommandId (CommandId),
                                                       PluginCommand (PluginCommand),
@@ -50,9 +74,12 @@ import           Language.LSP.Types                  (ApplyWorkspaceEditParams (
                                                       TextEdit (TextEdit),
                                                       WorkspaceEdit (WorkspaceEdit))
 import           Outputable                          (showSDocForUser)
-import           TcRnTypes                           (TcGblEnv (TcGblEnv, tcg_rdr_env, tcg_rn_decls, tcg_type_env))
+import           PatSyn                              (patSynName)
+import           TcEnv                               (tcInitTidyEnv)
+import           TcRnMonad                           (initTcWithGbl)
+import           TcRnTypes                           (TcGblEnv (..))
 import           TcType                              (pprSigmaType)
-import           Text.Regex.TDFA                     ((=~))
+import           Text.Regex.TDFA                     ((=~), (=~~))
 
 typeLensCommandId :: T.Text
 typeLensCommandId = "typesignature.add"
@@ -61,55 +88,99 @@ descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
   (defaultPluginDescriptor plId)
     { pluginHandlers = mkPluginHandler STextDocumentCodeLens codeLensProvider,
-      pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler]
+      pluginCommands = [PluginCommand (CommandId typeLensCommandId) "adds a signature" commandHandler],
+      pluginRules = rules
     }
 
 codeLensProvider ::
   IdeState ->
   PluginId ->
   CodeLensParams ->
-  LSP.LspM c (Either ResponseError (List CodeLens))
+  LSP.LspM Config (Either ResponseError (List CodeLens))
 codeLensProvider ideState pId CodeLensParams {_textDocument = TextDocumentIdentifier uri} = do
+  (fromMaybe Enabled . join -> mode) <- fmap (parseCustomConfig . plcConfig) <$> getPluginConfig pId
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
-      bindings <- runAction "bindings.GetBindings" ideState (use GetBindings filePath)
+      bindings <- runAction "codeLens.GetBindings" ideState (use GetBindings filePath)
+      gblSigs <- runAction "codeLens.GetGlobalBindingTypeSigs" ideState (use GetGlobalBindingTypeSigs filePath)
+
       diag <- getDiagnostics ideState
       hDiag <- getHiddenDiagnostics ideState
-      sequence
-        [ generateLens pId _range title edit
-          | (dFile, _, dDiag@Diagnostic {_range = _range}) <- diag ++ hDiag,
-            dFile == filePath,
-            (title, tedit) <- suggestSignature False tmr bindings dDiag,
-            let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
-        ]
+
+      let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+          generateLensForGlobal sig@GlobalBindingTypeSig {..} = do
+            range <- srcSpanToRange $ gbSrcSpan sig
+            tedit <- gblBindingTypeSigToEdit sig
+            let wedit = toWorkSpaceEdit [tedit]
+            pure $ generateLens pId range (T.pack gbRendered) wedit
+          gblSigs' = maybe [] (\(GlobalBindingTypeSigsResult x) -> x) gblSigs
+
+      case mode of
+        Enabled ->
+          pure (catMaybes $ generateLensForGlobal <$> gblSigs')
+            <> sequence
+              [ pure $ generateLens pId _range title edit
+                | (dFile, _, dDiag@Diagnostic {_range = _range}) <- diag ++ hDiag,
+                  dFile == filePath,
+                  (title, tedit) <- suggestLocalSignature False tmr bindings dDiag,
+                  let edit = toWorkSpaceEdit tedit
+              ]
+        Exported -> pure $ catMaybes $ generateLensForGlobal <$> filter gbExported gblSigs'
+        Diagnostics -> do
+          sequence
+            [ pure $ generateLens pId _range title edit
+              | (dFile, _, dDiag@Diagnostic {_range = _range}) <- diag ++ hDiag,
+                dFile == filePath,
+                (title, tedit) <- suggestSignature False gblSigs tmr bindings dDiag,
+                let edit = toWorkSpaceEdit tedit
+            ]
+        Disabled -> pure []
     Nothing -> pure []
 
-generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> IO CodeLens
-generateLens pId _range title edit = do
+generateLens :: PluginId -> Range -> T.Text -> WorkspaceEdit -> CodeLens
+generateLens pId _range title edit =
   let cId = mkLspCommand pId (CommandId typeLensCommandId) title (Just [toJSON edit])
-  return $ CodeLens _range (Just cId) Nothing
+   in CodeLens _range (Just cId) Nothing
 
 commandHandler :: CommandFunction IdeState WorkspaceEdit
 commandHandler _ideState wedit = do
   _ <- LSP.sendRequest SWorkspaceApplyEdit (ApplyWorkspaceEditParams Nothing wedit) (\_ -> pure ())
   return $ Right Null
 
-suggestSignature :: Bool -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = Range {..}}
+--------------------------------------------------------------------------------
+
+suggestSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestSignature isQuickFix mGblSigs mTmr mBindings diag =
+  suggestGlobalSignature isQuickFix mGblSigs diag <> suggestLocalSignature isQuickFix mTmr mBindings diag
+
+suggestGlobalSignature :: Bool -> Maybe GlobalBindingTypeSigsResult -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestGlobalSignature isQuickFix mGblSigs Diagnostic {_message, _range}
   | _message
-      =~ ("(Top-level binding|Polymorphic local binding|Pattern synonym) with no type signature" :: T.Text),
+      =~ ("(Top-level binding|Pattern synonym) with no type signature" :: T.Text),
+    Just (GlobalBindingTypeSigsResult sigs) <- mGblSigs,
+    Just sig <- find (\x -> sameThing (gbSrcSpan x) _range) sigs,
+    signature <- T.pack $ gbRendered sig,
+    title <- if isQuickFix then "add signature: " <> signature else signature,
+    Just action <- gblBindingTypeSigToEdit sig =
+    [(title, [action])]
+  | otherwise = []
+
+suggestLocalSignature :: Bool -> Maybe TcModuleResult -> Maybe Bindings -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestLocalSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = _range@Range {..}}
+  | Just (_ :: T.Text, _ :: T.Text, _ :: T.Text, [identifier]) <-
+      (T.unwords . T.words $ _message)
+        =~~ ("Polymorphic local binding with no type signature: (.*) ::" :: T.Text),
     Just bindings <- mBindings,
-    Just TcModuleResult {tmrTypechecked = TcGblEnv {tcg_type_env, tcg_rn_decls, tcg_rdr_env}} <- mTmr,
     localScope <- getFuzzyScope bindings _start _end,
-    Just group <- tcg_rn_decls,
-    Just name <- getFirstIdAtLine (succ $ _line _start) group,
-    Just (isPatSyn, ty) <-
-      (lookupTypeEnv tcg_type_env name >>= \x -> (isTyThingPatSyn x,) <$> safeTyThingType x)
-        <|> ((False,) <$> (find (\(x, _) -> x == name) localScope >>= snd)),
+    -- we can't use srcspan to lookup scoped bindings, because the error message reported by GHC includes the entire binding, instead of simply the name
+    Just (name, ty) <- find (\(x, _) -> printName x == T.unpack identifier) localScope >>= \(name, mTy) -> (name,) <$> mTy,
+    Just TcModuleResult {tmrTypechecked = TcGblEnv {tcg_rdr_env, tcg_sigs}} <- mTmr,
+    -- not a top-level thing, to avoid duplication
+    not $ name `elemNameSet` tcg_sigs,
     tyMsg <- showSDocForUser unsafeGlobalDynFlags (mkPrintUnqualified unsafeGlobalDynFlags tcg_rdr_env) $ pprSigmaType ty,
-    signature <- T.pack $ (if isPatSyn then "pattern " else "") <> printName name <> " :: " <> tyMsg,
-    startCharacter <- if "Polymorphic local" `T.isPrefixOf` T.dropWhile (not . isAlpha) _message then _character _start else 0,
+    signature <- T.pack $ printName name <> " :: " <> tyMsg,
+    startCharacter <- _character _start,
     startOfLine <- Position (_line _start) startCharacter,
     beforeLine <- Range startOfLine startOfLine,
     title <- if isQuickFix then "add signature: " <> signature else signature,
@@ -117,16 +188,82 @@ suggestSignature isQuickFix mTmr mBindings Diagnostic {_message, _range = Range 
     [(title, [action])]
   | otherwise = []
 
-isTyThingPatSyn :: TyThing -> Bool
-isTyThingPatSyn (AConLike (PatSynCon _)) = True
-isTyThingPatSyn _                        = False
+sameThing :: SrcSpan -> Range -> Bool
+sameThing s1 s2 = (_start <$> srcSpanToRange s1) == (_start <$> Just s2)
 
-getFirstIdAtLine :: Int -> HsGroup GhcRn -> Maybe Name
-getFirstIdAtLine line = something (mkQ Nothing f)
-  where
-    f :: Located Name -> Maybe Name
-    f (L l name)
-      | RealSrcSpan s <- l,
-        srcSpanStartLine s == line =
-        Just name
-      | otherwise = Nothing
+gblBindingTypeSigToEdit :: GlobalBindingTypeSig -> Maybe TextEdit
+gblBindingTypeSigToEdit GlobalBindingTypeSig {..}
+  | Just Range {..} <- srcSpanToRange $ getSrcSpan gbName,
+    startOfLine <- Position (_line _start) 0,
+    beforeLine <- Range startOfLine startOfLine =
+    Just $ TextEdit beforeLine $ T.pack gbRendered <> "\n"
+  | otherwise = Nothing
+
+data Mode = Enabled | Exported | Diagnostics | Disabled
+  deriving (Generic, Eq, Ord, Show, Read, NFData)
+
+--------------------------------------------------------------------------------
+
+showDocRdrEnv :: DynFlags -> GlobalRdrEnv -> SDoc -> String
+showDocRdrEnv dflags rdrEnv = showSDocForUser dflags (mkPrintUnqualified dflags rdrEnv)
+
+data GetGlobalBindingTypeSigs = GetGlobalBindingTypeSigs
+  deriving (Generic, Show, Eq, Ord, Hashable, NFData, Binary)
+
+data GlobalBindingTypeSig = GlobalBindingTypeSig
+  { gbName     :: Name,
+    gbRendered :: String,
+    gbExported :: Bool
+  }
+
+gbSrcSpan :: GlobalBindingTypeSig -> SrcSpan
+gbSrcSpan GlobalBindingTypeSig {gbName} = getSrcSpan gbName
+
+newtype GlobalBindingTypeSigsResult = GlobalBindingTypeSigsResult [GlobalBindingTypeSig]
+
+instance Show GlobalBindingTypeSigsResult where
+  show _ = "<GetTypeResult>"
+
+instance NFData GlobalBindingTypeSigsResult where
+  rnf = rwhnf
+
+type instance RuleResult GetGlobalBindingTypeSigs = GlobalBindingTypeSigsResult
+
+rules :: Rules ()
+rules = do
+  define $ \GetGlobalBindingTypeSigs nfp -> do
+    tmr <- use TypeCheck nfp
+    -- we need session here for tidying types
+    hsc <- use GhcSession nfp
+    result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
+    pure ([], result)
+
+parseCustomConfig :: A.Object -> Maybe Mode
+parseCustomConfig = A.parseMaybe (\o -> read <$> o A..: "mode")
+
+gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
+gblBindingType (Just hsc) (Just gblEnv) = do
+  let exports = availsToNameSet $ tcg_exports gblEnv
+      sigs = tcg_sigs gblEnv
+      binds = collectHsBindsBinders $ tcg_binds gblEnv
+      patSyns = tcg_patsyns gblEnv
+      dflags = hsc_dflags hsc
+      rdrEnv = tcg_rdr_env gblEnv
+      showDoc = showDocRdrEnv dflags rdrEnv
+      hasSig :: (Monad m) => Name -> m a -> m (Maybe a)
+      hasSig name f = if name `elemNameSet` sigs then Just <$> f else pure Nothing
+      bindToSig id = do
+        let name = idName id
+        hasSig name $ do
+          env <- tcInitTidyEnv
+          let (_, ty) = tidyOpenType env (idType id)
+          pure $ GlobalBindingTypeSig name (printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
+      patToSig p = do
+        let name = patSynName p
+            -- we don't use pprPatSynType, since it always prints forall
+            ty = fromJust $ lookupTypeEnv (tcg_type_env gblEnv) name >>= safeTyThingType
+        hasSig name $ pure $ GlobalBindingTypeSig name ("pattern " <> printName name <> " :: " <> showDoc (pprSigmaType ty)) (name `elemNameSet` exports)
+  (_, maybe [] catMaybes -> bindings) <- initTcWithGbl hsc gblEnv (realSrcLocSpan $ mkRealSrcLoc "<dummy>" 1 1) $ mapM bindToSig binds
+  patterns <- catMaybes <$> mapM patToSig patSyns
+  pure . Just . GlobalBindingTypeSigsResult $ bindings <> patterns
+gblBindingType _ _ = pure Nothing
