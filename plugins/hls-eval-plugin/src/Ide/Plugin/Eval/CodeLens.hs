@@ -68,7 +68,8 @@ import Development.IDE
       prettyPrint,
       use_, useNoFile_, uses_,
       GhcSessionIO(..), GetDependencies(..), GetModIface(..),
-      HiFileResult (hirHomeMod, hirModSummary)
+      HiFileResult (hirHomeMod, hirModSummary),
+      ModSummaryResult(..)
     )
 import Development.IDE.Core.Rules (TransitiveDependencies(transitiveModuleDeps))
 import Development.IDE.Core.Compile (setupFinderCache, loadModulesHome)
@@ -289,7 +290,7 @@ runEvalCmd st EvalParams{..} =
 
             session <- runGetSession st nfp
 
-            (ms, _) <-
+            ms <- fmap msrModSummary $
                 liftIO $
                     runAction "runEvalCmd.getModSummary" st $
                         use_ GetModSummary nfp

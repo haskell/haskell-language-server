@@ -143,9 +143,7 @@ import           Data.Hashable
 import           Data.IORef
 import qualified Data.Rope.UTF16                              as Rope
 import           Data.Time                                    (UTCTime (..))
-import           FastString                                   (FastString (uniq))
 import           GHC.IO.Encoding
-import qualified HeaderInfo                                   as Hdr
 import           Module
 import           TcRnMonad                                    (tcg_dependent_files)
 
@@ -311,7 +309,7 @@ priorityFilesOfInterest = Priority (-2)
 -- GHC wiki about: https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
 getParsedModuleRule :: Rules ()
 getParsedModuleRule = defineEarlyCutoff $ \GetParsedModule file -> do
-    (ms, _) <- use_ GetModSummary file
+    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
     opt <- getIdeOptions
@@ -376,7 +374,7 @@ mergeParseErrorsHaddock normal haddock = normal ++
 -- So it is suitable for use cases where you need a perfect edit.
 getParsedModuleWithCommentsRule :: Rules ()
 getParsedModuleWithCommentsRule = defineEarlyCutoff $ \GetParsedModuleWithComments file -> do
-    (ms, _) <- use_ GetModSummary file
+    ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     opt <- getIdeOptions
 
@@ -397,7 +395,7 @@ getParsedModuleDefinition packageState opt file ms = do
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
     define $ \GetLocatedImports file -> do
-        (ms,_) <- use_ GetModSummaryWithoutTimestamps file
+        ModSummaryResult{msrModSummary = ms} <- use_ GetModSummaryWithoutTimestamps file
         targets <- useNoFile_ GetKnownTargets
         let imports = [(False, imp) | imp <- ms_textual_imps ms] ++ [(True, imp) | imp <- ms_srcimps ms]
         env_eq <- use_ GhcSession file
@@ -442,7 +440,7 @@ rawDependencyInformation fs = do
     return (rdi { rawBootMap = bm })
   where
     goPlural ff = do
-        mss <- lift $ (fmap.fmap) fst <$> uses GetModSummaryWithoutTimestamps ff
+        mss <- lift $ (fmap.fmap) msrModSummary <$> uses GetModSummaryWithoutTimestamps ff
         zipWithM go ff mss
 
     go :: NormalizedFilePath -- ^ Current module being processed
@@ -563,7 +561,7 @@ reportImportCyclesRule =
             where rng = fromMaybe noRange $ srcSpanToRange (getLoc imp)
                   fp = toNormalizedFilePath' $ fromMaybe noFilePath $ srcSpanToFilename (getLoc imp)
           getModuleName file = do
-           ms <- fst <$> use_ GetModSummaryWithoutTimestamps file
+           ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
            pure (moduleNameString . moduleName . ms_mod $ ms)
           showCycle mods  = T.intercalate ", " (map T.pack mods)
 
@@ -769,7 +767,7 @@ ghcSessionDepsDefinition :: NormalizedFilePath -> Action (IdeResult HscEnvEq)
 ghcSessionDepsDefinition file = do
         env <- use_ GhcSession file
         let hsc = hscEnv env
-        (ms,_) <- use_ GetModSummaryWithoutTimestamps file
+        ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps file
         deps <- use_ GetDependencies file
         let tdeps = transitiveModuleDeps deps
             uses_th_qq =
@@ -793,7 +791,7 @@ ghcSessionDepsDefinition file = do
 -- This rule also ensures that the `.hie` and `.o` (if needed) files are written out.
 getModIfaceFromDiskRule :: Rules ()
 getModIfaceFromDiskRule = defineEarlyCutoff $ \GetModIfaceFromDisk f -> do
-  (ms,_) <- use_ GetModSummary f
+  ms <- msrModSummary <$> use_ GetModSummary f
   (diags_session, mb_session) <- ghcSessionDepsDefinition f
   case mb_session of
     Nothing -> return (Nothing, (diags_session, Nothing))
@@ -850,7 +848,7 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ \GetModIfaceFromDiskAndInd
 
 isHiFileStableRule :: Rules ()
 isHiFileStableRule = defineEarlyCutoff $ \IsHiFileStable f -> do
-    (ms,_) <- use_ GetModSummaryWithoutTimestamps f
+    ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
                 $ ml_hi_file $ ms_location ms
     mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
@@ -873,47 +871,30 @@ getModSummaryRule :: Rules ()
 getModSummaryRule = do
     defineEarlyCutoff $ \GetModSummary f -> do
         session <- hscEnv <$> use_ GhcSession f
-        let dflags = hsc_dflags session
         (modTime, mFileContent) <- getFileContents f
         let fp = fromNormalizedFilePath f
         modS <- liftIO $ runExceptT $
                 getModSummaryFromImports session fp modTime (textToStringBuffer <$> mFileContent)
         case modS of
-            Right res@(ms,_) -> do
-                let fingerPrint = hash (computeFingerprint f (fromJust $ ms_hspp_buf ms) dflags ms, hashUTC modTime)
-                return ( Just (BS.pack $ show fingerPrint) , ([], Just res))
+            Right res -> do
+                bufFingerPrint <- liftIO $
+                    fingerprintFromStringBuffer $ fromJust $ ms_hspp_buf $ msrModSummary res
+                let fingerPrint = fingerprintFingerprints
+                        [ msrFingerprint res, bufFingerPrint ]
+                return ( Just (fingerprintToBS fingerPrint) , ([], Just res))
             Left diags -> return (Nothing, (diags, Nothing))
 
     defineEarlyCutoff $ \GetModSummaryWithoutTimestamps f -> do
         ms <- use GetModSummary f
         case ms of
-            Just res@(msWithTimestamps,_) -> do
-                let ms = msWithTimestamps {
+            Just res@ModSummaryResult{..} -> do
+                let ms = msrModSummary {
                     ms_hs_date = error "use GetModSummary instead of GetModSummaryWithoutTimestamps",
                     ms_hspp_buf = error "use GetModSummary instead of GetModSummaryWithoutTimestamps"
                     }
-                dflags <- hsc_dflags . hscEnv <$> use_ GhcSession f
-                let fp = BS.pack $ show $ hash (computeFingerprint f (fromJust $ ms_hspp_buf msWithTimestamps) dflags ms)
-                return (Just fp, ([], Just res))
+                    fp = fingerprintToBS msrFingerprint
+                return (Just fp, ([], Just res{msrModSummary = ms}))
             Nothing -> return (Nothing, ([], Nothing))
-    where
-        -- Compute a fingerprint from the contents of `ModSummary`,
-        -- eliding the timestamps and other non relevant fields.
-        computeFingerprint f sb dflags ModSummary{..} =
-            let fingerPrint =
-                    ( moduleNameString (moduleName ms_mod)
-                    , ms_hspp_file
-                    , map unLoc opts
-                    , ml_hs_file ms_location
-                    , fingerPrintImports ms_srcimps
-                    , fingerPrintImports ms_textual_imps
-                    )
-                fingerPrintImports = map (fmap uniq *** (moduleNameString . unLoc))
-                opts = Hdr.getOptions dflags sb (fromNormalizedFilePath f)
-            in fingerPrint
-
-        hashUTC UTCTime{..} = (fromEnum utctDay, fromEnum utctDayTime)
-
 
 generateCore :: RunSimplifier -> NormalizedFilePath -> Action (IdeResult ModGuts)
 generateCore runSimplifier file = do
@@ -1074,9 +1055,10 @@ needsCompilationRule = defineEarlyCutoff $ \NeedsCompilation file -> do
         -- that we just threw away, and thus have to recompile all dependencies once
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
-        (ms,_) <- fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
-        (modsums,needsComps) <- par (map (fmap (fst . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
-                                    (uses NeedsCompilation revdeps)
+        ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
+        (modsums,needsComps) <-
+            par (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
+                (uses NeedsCompilation revdeps)
         pure $ computeLinkableType ms modsums (map join needsComps)
 
   pure (Just $ BS.pack $ show $ hash res, ([], Just res))

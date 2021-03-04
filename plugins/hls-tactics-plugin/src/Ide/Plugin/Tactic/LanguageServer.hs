@@ -105,8 +105,8 @@ getIdeDynflags
 getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  ((modsum,_), _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
-  pure $ ms_hspp_opts modsum
+  (msr, _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
+  pure $ ms_hspp_opts $ msrModSummary msr
 
 
 ------------------------------------------------------------------------------

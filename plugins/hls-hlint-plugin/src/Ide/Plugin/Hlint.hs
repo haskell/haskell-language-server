@@ -234,8 +234,8 @@ getExtensions pflags nfp = do
     return hlintExts
   where getFlags :: Action DynFlags
         getFlags = do
-          (modsum, _) <- use_ GetModSummary nfp
-          return $ ms_hspp_opts modsum
+          modsum <- use_ GetModSummary nfp
+          return $ ms_hspp_opts $ msrModSummary modsum
 #endif
 
 -- ---------------------------------------------------------------------
@@ -378,8 +378,8 @@ applyHint ide nfp mhint =
     let fp = fromNormalizedFilePath nfp
     (_, mbOldContent) <- liftIO $ runAction' $ getFileContents nfp
     oldContent <- maybe (liftIO $ T.readFile fp) return mbOldContent
-    (modsum, _) <- liftIO $ runAction' $ use_ GetModSummary nfp
-    let dflags = ms_hspp_opts modsum
+    modsum <- liftIO $ runAction' $ use_ GetModSummary nfp
+    let dflags = ms_hspp_opts $ msrModSummary modsum
     -- Setting a environment variable with the libdir used by ghc-exactprint.
     -- It is a workaround for an error caused by the use of a hadcoded at compile time libdir
     -- in ghc-exactprint that makes dependent executables non portables.

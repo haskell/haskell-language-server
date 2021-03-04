@@ -2,14 +2,14 @@
 
 module Ide.Plugin.Tactic.KnownStrategies where
 
-import           Control.Monad.Error.Class
-import           Ide.Plugin.Tactic.Context                    (getCurrentDefinitions)
-import           Ide.Plugin.Tactic.KnownStrategies.QuickCheck (deriveArbitrary)
-import           Ide.Plugin.Tactic.Machinery                  (tracing)
-import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.Types
-import           OccName                                      (mkVarOcc)
-import           Refinery.Tactic
+import Control.Monad.Error.Class
+import Ide.Plugin.Tactic.Context (getCurrentDefinitions)
+import Ide.Plugin.Tactic.KnownStrategies.QuickCheck (deriveArbitrary)
+import Ide.Plugin.Tactic.Machinery (tracing)
+import Ide.Plugin.Tactic.Tactics
+import Ide.Plugin.Tactic.Types
+import OccName (mkVarOcc)
+import Refinery.Tactic
 
 
 knownStrategies :: TacticsM ()
