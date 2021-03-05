@@ -64,7 +64,7 @@ tacticKind Destruct               = "caseSplit"
 tacticKind Homomorphism           = "homomorphicCaseSplit"
 tacticKind DestructLambdaCase     = "lambdaCase"
 tacticKind HomomorphismLambdaCase = "homomorphicLambdaCase"
-tacticKind DestructAll            = "destructFuncArgs"
+tacticKind DestructAll            = "splitFuncArgs"
 tacticKind UseDataCon             = "useConstructor"
 tacticKind Refine                 = "refine"
 
