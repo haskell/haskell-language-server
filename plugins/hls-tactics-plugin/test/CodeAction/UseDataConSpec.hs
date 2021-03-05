@@ -16,6 +16,7 @@ import           Utils
 spec :: Spec
 spec = do
   let useTest = goldenTest UseDataCon
+
   describe "provider" $ do
     mkTest
       "Suggests all data cons for Either"
@@ -40,7 +41,7 @@ spec = do
       ]
 
   describe "golden" $ do
-    useTest "(,)"   "UseConPair.hs"  2 8
-    useTest "Left"  "UseConLeft.hs"  2 8
-    useTest "Right" "UseConRight.hs" 2 8
+    useTest "(,)"   2 8 "UseConPair.hs"
+    useTest "Left"  2 8 "UseConLeft.hs"
+    useTest "Right" 2 8 "UseConRight.hs"
 

@@ -15,9 +15,10 @@ import Utils
 spec :: Spec
 spec = do
   let refineTest = goldenTest Refine ""
+
   describe "golden" $ do
-    refineTest "RefineIntro.hs"  2 8
-    refineTest "RefineCon.hs"    2 8
-    refineTest "RefineReader.hs" 4 8
-    refineTest "RefineGADT.hs"   8 8
+    refineTest 2 8 "RefineIntro.hs"
+    refineTest 2 8 "RefineCon.hs"
+    refineTest 4 8 "RefineReader.hs"
+    refineTest 8 8 "RefineGADT.hs"
 

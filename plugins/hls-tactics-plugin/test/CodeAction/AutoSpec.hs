@@ -14,7 +14,7 @@ import Utils
 
 spec :: Spec
 spec = do
-  let autoTest line col fp = goldenTest Auto "" fp line col
+  let autoTest = goldenTest Auto ""
 
   describe "golden tests" $ do
     autoTest 11  8 "AutoSplitGADT.hs"
@@ -48,6 +48,7 @@ spec = do
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen.hs"
+
     failing "not enough auto gas" $
       autoTest 5 18 "GoldenFish.hs"
 

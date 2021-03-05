@@ -14,17 +14,16 @@ import Utils
 
 spec :: Spec
 spec = do
+  let destructTest = goldenTest Destruct
+
   describe "golden" $ do
-    goldenTest Destruct "gadt"
-             "GoldenGADTDestruct.hs"      7 17
-    goldenTest Destruct "gadt"
-             "GoldenGADTDestructCoercion.hs" 8 17
-    goldenTest Destruct "a"
-      "SplitPattern.hs"  7 25
+    destructTest "gadt" 7 17 "GoldenGADTDestruct.hs"
+    destructTest "gadt" 8 17 "GoldenGADTDestructCoercion.hs"
+    destructTest "a"    7 25 "SplitPattern.hs"
 
   describe "layout" $ do
-    goldenTest Destruct "b" "LayoutBind.hs" 4 3
-    goldenTest Destruct "b" "LayoutDollarApp.hs" 2 15
-    goldenTest Destruct "b" "LayoutOpApp.hs" 2 18
-    goldenTest Destruct "b" "LayoutLam.hs" 2 14
+    destructTest "b" 4  3 "LayoutBind.hs"
+    destructTest "b" 2 15 "LayoutDollarApp.hs"
+    destructTest "b" 2 18 "LayoutOpApp.hs"
+    destructTest "b" 2 14 "LayoutLam.hs"
 

@@ -14,6 +14,8 @@ import Utils
 
 spec :: Spec
 spec = do
+  let introsTest = goldenTest Intros ""
+
   describe "golden" $ do
-    goldenTest Intros "" "GoldenIntros.hs" 2 8
+    introsTest 2 8 "GoldenIntros.hs"
 

@@ -95,11 +95,11 @@ mkGoldenTest
     :: FeatureSet
     -> TacticCommand
     -> Text
+    -> Int
+    -> Int
     -> FilePath
-    -> Int
-    -> Int
     -> SpecWith ()
-mkGoldenTest features tc occ input line col =
+mkGoldenTest features tc occ line col input =
   it (input <> " (golden)") $ do
     runSession testCommand fullCaps tacticPath $ do
       setFeatureSet features
@@ -118,7 +118,7 @@ mkGoldenTest features tc occ input line col =
       expected <- liftIO $ T.readFile expected_name
       liftIO $ edited `shouldBe` expected
 
-goldenTest :: TacticCommand -> Text -> FilePath -> Int -> Int -> SpecWith ()
+goldenTest :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
 goldenTest = mkGoldenTest allFeatures
 
 
