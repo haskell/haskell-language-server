@@ -454,9 +454,15 @@ data AgdaMatch = AgdaMatch
 
 
 data UserFacingMessage
-  = TacticErrors [TacticError]
+  = TacticErrors
   | TimedOut
   | NothingToDo
   | InfrastructureError Text
   deriving Eq
+
+instance Show UserFacingMessage where
+  show TacticErrors            = "Wingman couldn't find a solution"
+  show TimedOut                = "Wingman timed out while trying to find a solution"
+  show NothingToDo             = "Nothing to do"
+  show (InfrastructureError t) = "Internal error: " <> T.unpack t
 

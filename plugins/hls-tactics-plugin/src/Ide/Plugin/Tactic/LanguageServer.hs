@@ -346,6 +346,17 @@ isRhsHole rss tcs = everything (||) (mkQ False $ \case
   ) tcs
 
 
-showLspMessage :: MonadLsp cfg m => MessageType -> T.Text -> m ()
-showLspMessage level t = sendNotification SWindowShowMessage $ ShowMessageParams level t
+ufmSeverity :: UserFacingMessage -> MessageType
+ufmSeverity TacticErrors            = MtError
+ufmSeverity TimedOut                = MtInfo
+ufmSeverity NothingToDo             = MtInfo
+ufmSeverity (InfrastructureError _) = MtError
+
+
+mkShowMessageParams :: UserFacingMessage -> ShowMessageParams
+mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show ufm
+
+
+showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
+showLspMessage = sendNotification SWindowShowMessage
 

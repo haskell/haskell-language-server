@@ -86,24 +86,8 @@ showUserFacingMessage
     => UserFacingMessage
     -> m (Either ResponseError a)
 showUserFacingMessage ufm = do
-  let msg = ufmMessage ufm
-      sev = ufmSeverity ufm
-  showLspMessage sev msg
-  pure $ Left $ mkErr InternalError msg
-
-
-ufmMessage :: UserFacingMessage -> T.Text
-ufmMessage (TacticErrors _)        = "Wingman couldn't find a solution"
-ufmMessage TimedOut                = "Wingman timed out while trying to find a solution"
-ufmMessage NothingToDo             = "Nothing to do"
-ufmMessage (InfrastructureError t) = "Internal error: " <> t
-
-
-ufmSeverity :: UserFacingMessage -> MessageType
-ufmSeverity (TacticErrors _)        = MtError
-ufmSeverity TimedOut                = MtInfo
-ufmSeverity NothingToDo             = MtInfo
-ufmSeverity (InfrastructureError _) = MtError
+  showLspMessage $ mkShowMessageParams ufm
+  pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
@@ -118,7 +102,7 @@ tacticCmd tac state (TacticParams uri range var_name)
 
         timingOut 2e8 $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
-            Left errs -> Left $ TacticErrors errs
+            Left _ -> Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
