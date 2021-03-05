@@ -47,7 +47,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.TestTypes (TacticCommand, cfg_feature_set, emptyConfig, Config)
 import           Ide.Plugin.Tactic.Types
-import           Language.LSP.Server (MonadLsp)
+import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
@@ -342,4 +342,8 @@ isRhsHole rss tcs = everything (||) (mkQ False $ \case
   TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
   _                                        -> False
   ) tcs
+
+
+showLspMessage :: MonadLsp cfg m => MessageType -> T.Text -> m ()
+showLspMessage level t = sendNotification SWindowShowMessage $ ShowMessageParams level t
 

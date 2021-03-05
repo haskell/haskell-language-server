@@ -45,6 +45,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
+import Data.Text (Text)
 
 
 ------------------------------------------------------------------------------
@@ -390,4 +391,12 @@ data AgdaMatch = AgdaMatch
   , amBody :: HsExpr GhcPs
   }
   deriving (Show)
+
+
+data UserFacingMessage
+  = TacticErrors [TacticError]
+  | TimedOut
+  | NothingToDo
+  | InfrastructureError Text
+  deriving Eq
 
