@@ -31,7 +31,6 @@ import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils
 import           Ide.Types
@@ -53,6 +52,40 @@ commandTactic HomomorphismLambdaCase = const homoLambdaCase
 commandTactic DestructAll            = const destructAll
 commandTactic UseDataCon             = userSplit
 commandTactic Refine                 = const refine
+
+
+------------------------------------------------------------------------------
+-- | The LSP kind
+tacticKind :: TacticCommand -> T.Text
+tacticKind Auto                   = "fillHole"
+tacticKind Intros                 = "introduceLambda"
+tacticKind Destruct               = "caseSplit"
+tacticKind Homomorphism           = "homomorphicCaseSplit"
+tacticKind DestructLambdaCase     = "lambdaCase"
+tacticKind HomomorphismLambdaCase = "homomorphicLambdaCase"
+tacticKind DestructAll            = "splitFuncArgs"
+tacticKind UseDataCon             = "useConstructor"
+tacticKind Refine                 = "refine"
+
+
+------------------------------------------------------------------------------
+-- | Whether or not this code action is preferred -- ostensibly refers to
+-- whether or not we can bind it to a key in vs code?
+tacticPreferred :: TacticCommand -> Bool
+tacticPreferred Auto                   = True
+tacticPreferred Intros                 = True
+tacticPreferred Destruct               = True
+tacticPreferred Homomorphism           = False
+tacticPreferred DestructLambdaCase     = False
+tacticPreferred HomomorphismLambdaCase = False
+tacticPreferred DestructAll            = True
+tacticPreferred UseDataCon             = True
+tacticPreferred Refine                 = True
+
+
+mkTacticKind :: TacticCommand -> CodeActionKind
+mkTacticKind =
+  CodeActionUnknown . mappend "refactor.wingman." . tacticKind
 
 
 ------------------------------------------------------------------------------
@@ -226,7 +259,13 @@ provide tc name _ _ plId uri range _ = do
   pure
     $ pure
     $ InR
-    $ CodeAction title (Just CodeActionQuickFix) Nothing Nothing Nothing Nothing
+    $ CodeAction
+        title
+        (Just $ mkTacticKind tc)
+        Nothing
+        (Just $ tacticPreferred tc)
+        Nothing
+        Nothing
     $ Just cmd
 
 

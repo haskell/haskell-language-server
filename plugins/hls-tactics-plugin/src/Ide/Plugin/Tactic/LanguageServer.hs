@@ -45,7 +45,6 @@ import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.TestTypes (TacticCommand, cfg_feature_set, emptyConfig, Config)
 import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
@@ -172,6 +171,9 @@ getSpanAndTypeAtHole amapping range hf = do
         let info = nodeInfo ast'
         ty <- listToMaybe $ nodeType info
         guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
+        -- Ensure we're actually looking at a hole here
+        guard $ all (either (const False) $ isHole . occName)
+          $ M.keysSet $ nodeIdentifiers info
         pure (nodeSpan ast', ty)
 
 
