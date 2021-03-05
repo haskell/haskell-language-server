@@ -31,7 +31,7 @@ import qualified Data.Text                             as Text
 import           Control.Monad.IO.Class
 import           Development.IDE.Core.FileExists       (modifyFileExists,
                                                         watchedGlobs)
-import           Development.IDE.Core.FileStore        (modifyFileStore,
+import           Development.IDE.Core.FileStore        (resetFileStore,
                                                         setFileModified,
                                                         setSomethingModified,
                                                         typecheckParents)
@@ -85,7 +85,7 @@ setHandlersNotifications = mconcat
         let msg = Text.pack $ show fileEvents
         logDebug (ideLogger ide) $ "Watched file events: " <> msg
         modifyFileExists ide fileEvents
-        modifyFileStore ide fileEvents
+        resetFileStore ide fileEvents
         setSomethingModified ide
 
   , notificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
