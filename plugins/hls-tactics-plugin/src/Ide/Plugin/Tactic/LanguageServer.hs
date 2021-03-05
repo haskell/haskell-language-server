@@ -172,6 +172,9 @@ getSpanAndTypeAtHole amapping range hf = do
         let info = nodeInfo ast'
         ty <- listToMaybe $ nodeType info
         guard $ ("HsUnboundVar","HsExpr") `S.member` nodeAnnotations info
+        -- Ensure we're actually looking at a hole here
+        guard $ all (either (const False) $ isHole . occName)
+          $ M.keysSet $ nodeIdentifiers info
         pure (nodeSpan ast', ty)
 
 
