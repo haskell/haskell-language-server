@@ -7,8 +7,6 @@
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
-      graft,
-      graftWithoutParentheses,
       graftDecls,
       graftDeclsWithM,
       annotate,
@@ -65,6 +63,7 @@ import Parser (parseIdentifier)
 import Data.Traversable (for)
 import Data.Foldable (Foldable(fold))
 import Data.Bool (bool)
+import Data.Monoid (All(All))
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
 #endif
@@ -178,30 +177,57 @@ transformM dflags ccs uri f a = runExceptT $
         let res = printA a'
         pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
+
+-- | Returns whether or not this node requires its immediate children to have
+-- be parenthesized and have a leading space.
+--
+-- A more natural type for this function would be to return @(Bool, Bool)@, but
+-- we use 'All' instead for its monoid instance.
+needsParensSpace ::
+    HsExpr GhcPs ->
+    -- | (Needs parens, needs space)
+    (All, All)
+needsParensSpace HsLam{}         = (All False, All False)
+needsParensSpace HsLamCase{}     = (All False, All False)
+needsParensSpace HsApp{}         = mempty
+needsParensSpace HsAppType{}     = mempty
+needsParensSpace OpApp{}         = mempty
+needsParensSpace HsPar{}         = (All False, All False)
+needsParensSpace SectionL{}      = (All False, All False)
+needsParensSpace SectionR{}      = (All False, All False)
+needsParensSpace ExplicitTuple{} = (All False, All False)
+needsParensSpace ExplicitSum{}   = (All False, All False)
+needsParensSpace HsCase{}        = (All False, All False)
+needsParensSpace HsIf{}          = (All False, All False)
+needsParensSpace HsMultiIf{}     = (All False, All False)
+needsParensSpace HsLet{}         = (All False, All False)
+needsParensSpace HsDo{}          = (All False, All False)
+needsParensSpace ExplicitList{}  = (All False, All False)
+needsParensSpace RecordCon{}     = (All False, All False)
+needsParensSpace RecordUpd{}     = mempty
+needsParensSpace _               = mempty
+
+
 ------------------------------------------------------------------------------
 
 {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with the
- given 'LHSExpr'. The node at that position must already be a 'LHsExpr', or
- this is a no-op.
+ given @Located ast@. The node at that position must already be a @Located
+ ast@, or this is a no-op.
 -}
-graft ::
+graft' ::
     forall ast a.
     (Data a, ASTElement ast) =>
+    -- | Do we need to insert a space before this grafting? In do blocks, the
+    -- answer is no, or we will break layout. But in function applications,
+    -- the answer is yes, or the function call won't get its argument. Yikes!
+    --
+    -- More often the answer is yes, so when in doubt, use that.
+    Bool ->
     SrcSpan ->
     Located ast ->
     Graft (Either String) a
-graft dst = graftWithoutParentheses dst . maybeParensAST
-
--- | Like 'graft', but trusts that you have correctly inserted the parentheses
--- yourself. If you haven't, the resulting AST will not be valid!
-graftWithoutParentheses ::
-    forall ast a.
-    (Data a, ASTElement ast) =>
-    SrcSpan ->
-    Located ast ->
-    Graft (Either String) a
-graftWithoutParentheses dst val = Graft $ \dflags a -> do
-    (anns, val') <- annotate dflags val
+graft' needs_space dst val = Graft $ \dflags a -> do
+    (anns, val') <- annotate dflags needs_space val
     modifyAnnsT $ mappend anns
     pure $
         everywhere'
@@ -211,6 +237,31 @@ graftWithoutParentheses dst val = Graft $ \dflags a -> do
                     l -> l
             )
             a
+
+-- | Like 'graft', but specialized to 'LHsExpr', and intelligently inserts
+-- parentheses if they're necessary.
+graftExpr ::
+    forall a.
+    (Data a) =>
+    SrcSpan ->
+    LHsExpr GhcPs ->
+    Graft (Either String) a
+graftExpr dst val = Graft $ \dflags a -> do
+    -- Traverse the tree, looking for our replacement node. But keep track of
+    -- the context (parent HsExpr constructor) we're in while we do it. This
+    -- lets us determine wehther or not we need parentheses.
+    let (All needs_parens, All needs_space) =
+          everythingWithContext (All True, All True) (<>)
+            ( mkQ (mempty, ) $ \x s -> case x of
+                (L src _ :: LHsExpr GhcPs) | src == dst ->
+                  (s, s)
+                L _ x' -> (mempty, needsParensSpace x')
+            ) a
+
+    runGraft
+      (graft' needs_space dst $ bool id maybeParensAST needs_parens val)
+      dflags
+      a
 
 
 ------------------------------------------------------------------------------
@@ -232,7 +283,7 @@ graftWithM dst trans = Graft $ \dflags a -> do
                             Just val' -> do
                                 (anns, val'') <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags $ maybeParensAST val'
+                                        annotate dflags True $ maybeParensAST val'
                                 modifyAnnsT $ mappend anns
                                 pure val''
                             Nothing -> pure val
@@ -257,7 +308,7 @@ graftWithSmallestM dst trans = Graft $ \dflags a -> do
                             Just val' -> do
                                 (anns, val'') <-
                                     hoistTransform (either Fail.fail pure) $
-                                        annotate dflags $ maybeParensAST val'
+                                        annotate dflags True $ maybeParensAST val'
                                 modifyAnnsT $ mappend anns
                                 pure val''
                             Nothing -> pure val
@@ -352,10 +403,22 @@ everywhereM' f = go
 class (Data ast, Outputable ast) => ASTElement ast where
     parseAST :: Parser (Located ast)
     maybeParensAST :: Located ast -> Located ast
+    {- | Construct a 'Graft', replacing the node at the given 'SrcSpan' with
+        the given @Located ast@. The node at that position must already be
+        a @Located ast@, or this is a no-op.
+    -}
+    graft ::
+        forall a.
+        (Data a) =>
+        SrcSpan ->
+        Located ast ->
+        Graft (Either String) a
+    graft dst = graft' True dst . maybeParensAST
 
 instance p ~ GhcPs => ASTElement (HsExpr p) where
     parseAST = parseExpr
     maybeParensAST = parenthesize
+    graft = graftExpr
 
 instance p ~ GhcPs => ASTElement (Pat p) where
 #if __GLASGOW_HASKELL__ == 808
@@ -394,12 +457,12 @@ fixAnns ParsedModule {..} =
 
 -- | Given an 'LHSExpr', compute its exactprint annotations.
 --   Note that this function will throw away any existing annotations (and format)
-annotate :: ASTElement ast => DynFlags -> Located ast -> TransformT (Either String) (Anns, Located ast)
-annotate dflags ast = do
+annotate :: ASTElement ast => DynFlags -> Bool -> Located ast -> TransformT (Either String) (Anns, Located ast)
+annotate dflags needs_space ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
     (anns, expr') <- lift $ mapLeft show $ parseAST dflags uniq rendered
-    let anns' = setPrecedingLines expr' 0 1 anns
+    let anns' = setPrecedingLines expr' 0 (bool 0 1 needs_space) anns
     pure (anns', expr')
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.

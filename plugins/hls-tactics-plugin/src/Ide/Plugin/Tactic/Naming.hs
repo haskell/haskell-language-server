@@ -15,6 +15,7 @@ import           TcType
 import           TyCon
 import           Type
 import           TysWiredIn                 (listTyCon, pairTyCon, unitTyCon)
+import Ide.Plugin.Tactic.Types
 
 
 ------------------------------------------------------------------------------
@@ -95,3 +96,4 @@ mkManyGoodNames in_scope args =
 -- | Which names are in scope?
 getInScope :: Map OccName a -> [OccName]
 getInScope = M.keys
+

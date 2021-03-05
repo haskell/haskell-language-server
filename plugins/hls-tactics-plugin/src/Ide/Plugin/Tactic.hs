@@ -170,9 +170,7 @@ graftHole span rtr
       $ unLoc
       $ rtr_extract rtr
 graftHole span rtr
-  = graftWithoutParentheses span
-    -- Parenthesize the extract iff we're not in a top level hole
-  $ bool maybeParensAST id (_jIsTopHole $ rtr_jdg rtr)
+  = graft span
   $ rtr_extract rtr
 
 
