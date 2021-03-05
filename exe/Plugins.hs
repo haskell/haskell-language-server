@@ -53,6 +53,10 @@ import           Ide.Plugin.Pragmas                as Pragmas
 import           Ide.Plugin.Splice                 as Splice
 #endif
 
+#if typeSynonyms
+import           Ide.Plugin.TypeSynonyms           as TypeSynonyms
+#endif
+
 -- formatters
 
 #if floskell
@@ -134,6 +138,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #endif
 #if splice
       Splice.descriptor "splice" :
+#endif
+#if splice
+      TypeSynonyms.descriptor "typeSynonyms" :
 #endif
       []
     examplePlugins =

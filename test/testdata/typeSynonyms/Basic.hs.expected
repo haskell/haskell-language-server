@@ -1,0 +1,6 @@
+module Basic where
+
+type MInt = Maybe Int
+
+mi :: MInt
+mi = Just 5
