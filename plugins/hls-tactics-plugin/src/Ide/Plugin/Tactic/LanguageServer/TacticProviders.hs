@@ -86,7 +86,7 @@ tacticPreferred Refine                 = True
 
 mkTacticKind :: TacticCommand -> CodeActionKind
 mkTacticKind =
-  CodeActionUnknown . mappend "refactor.inline.wingman." . tacticKind
+  CodeActionUnknown . mappend "refactor.wingman." . tacticKind
 
 
 ------------------------------------------------------------------------------
