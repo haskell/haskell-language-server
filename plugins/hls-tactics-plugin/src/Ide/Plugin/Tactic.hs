@@ -40,7 +40,6 @@ import           Ide.Plugin.Tactic.LanguageServer
 import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.Types
 import           Language.LSP.Server

@@ -168,8 +168,7 @@ typecheckModule (IdeDefer defer) hsc keep_lbls pm = do
 
         modSummary' <- initPlugins hsc modSummary
         (warnings, tcm) <- withWarnings "typecheck" $ \tweak ->
-            tcRnModule hsc keep_lbls $ enableTopLevelWarnings
-                                     $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
+            tcRnModule hsc keep_lbls $ demoteIfDefer pm{pm_mod_summary = tweak modSummary'}
         let errorPipeline = unDefer . hideDiag dflags . tagDiag
             diags = map errorPipeline warnings
             deferedError = any fst diags
@@ -389,14 +388,6 @@ demoteTypeErrorsToWarnings =
                    . (`gopt_set` Opt_DeferTypeErrors)
                    . (`gopt_set` Opt_DeferTypedHoles)
                    . (`gopt_set` Opt_DeferOutOfScopeVariables)
-
-enableTopLevelWarnings :: ParsedModule -> ParsedModule
-enableTopLevelWarnings =
-  (update_pm_mod_summary . update_hspp_opts)
-  ((`wopt_set` Opt_WarnMissingPatternSynonymSignatures) .
-   (`wopt_set` Opt_WarnMissingSignatures))
-  -- the line below would show also warnings for let bindings without signature
-  -- ((`wopt_set` Opt_WarnMissingSignatures) . (`wopt_set` Opt_WarnMissingLocalSignatures)))
 
 update_hspp_opts :: (DynFlags -> DynFlags) -> ModSummary -> ModSummary
 update_hspp_opts up ms = ms{ms_hspp_opts = up $ ms_hspp_opts ms}
