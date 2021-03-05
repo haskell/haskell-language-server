@@ -74,6 +74,15 @@ spec = do
   let goldenTest = mkGoldenTest allFeatures
 
   -- test via:
+  -- stack test hls-tactics-plugin --test-arguments '--match "Golden/layout/"'
+  describe "layout" $ do
+    let test = mkGoldenTest allFeatures
+    test Destruct "b" "LayoutBind.hs" 4 3
+    test Destruct "b" "LayoutDollarApp.hs" 2 15
+    test Destruct "b" "LayoutOpApp.hs" 2 18
+    test Destruct "b" "LayoutLam.hs" 2 14
+
+  -- test via:
   -- stack test hls-tactics-plugin --test-arguments '--match "Golden/destruct all/"'
   describe "destruct all" $ do
     let destructAllTest = mkGoldenTest allFeatures DestructAll ""
