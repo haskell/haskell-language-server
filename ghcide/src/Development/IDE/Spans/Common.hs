@@ -25,7 +25,6 @@ import qualified Data.Text                    as T
 import           GHC.Generics
 
 import           ConLike
-import           DataCon
 import           DynFlags
 import           GHC
 import           NameEnv
@@ -66,9 +65,9 @@ safeTyThingType (ATyCon tycon)    = Just (tyConKind tycon)
 safeTyThingType _                 = Nothing
 
 safeTyThingId :: TyThing -> Maybe Id
-safeTyThingId (AnId i)                    = Just i
-safeTyThingId (AConLike (RealDataCon dc)) = Just $ dataConWrapId dc
-safeTyThingId _                           = Nothing
+safeTyThingId (AnId i)           = Just i
+safeTyThingId (AConLike conLike) = conLikeWrapId_maybe conLike
+safeTyThingId _                  = Nothing
 
 -- Possible documentation for an element in the code
 data SpanDoc
