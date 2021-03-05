@@ -101,8 +101,15 @@ test-suite tests
   main-is: Main.hs
   other-modules:
     AutoTupleSpec
-    GoldenSpec
+    CodeAction.AutoSpec
+    CodeAction.DestructAllSpec
+    CodeAction.RefineSpec
+    CodeAction.DestructSpec
+    CodeAction.IntrosSpec
+    CodeAction.UseDataConSpec
+    ProviderSpec
     UnificationSpec
+    Utils
   hs-source-dirs:
       test
   ghc-options: -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
