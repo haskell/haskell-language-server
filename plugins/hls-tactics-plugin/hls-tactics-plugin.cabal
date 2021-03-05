@@ -44,7 +44,6 @@ library
     Ide.Plugin.Tactic.Simplify
     Ide.Plugin.Tactic.Tactics
     Ide.Plugin.Tactic.Types
-    Ide.Plugin.Tactic.TestTypes
 
   ghc-options:
     -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
@@ -101,8 +100,15 @@ test-suite tests
   main-is: Main.hs
   other-modules:
     AutoTupleSpec
-    GoldenSpec
+    CodeAction.AutoSpec
+    CodeAction.DestructAllSpec
+    CodeAction.RefineSpec
+    CodeAction.DestructSpec
+    CodeAction.IntrosSpec
+    CodeAction.UseDataConSpec
+    ProviderSpec
     UnificationSpec
+    Utils
   hs-source-dirs:
       test
   ghc-options: -Wall -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
