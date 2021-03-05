@@ -7,7 +7,7 @@
 
 module CodeAction.AutoSpec where
 
-import Ide.Plugin.Tactic.TestTypes
+import Ide.Plugin.Tactic.Types
 import Test.Hspec
 import Utils
 

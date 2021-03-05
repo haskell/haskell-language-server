@@ -31,7 +31,6 @@ import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.TestTypes
 import           Ide.Plugin.Tactic.Types
 import           Ide.PluginUtils
 import           Ide.Types

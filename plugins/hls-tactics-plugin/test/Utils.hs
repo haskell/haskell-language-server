@@ -20,7 +20,7 @@ import           Data.Text (Text)
 import qualified Data.Text.IO as T
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
-import           Ide.Plugin.Tactic.TestTypes
+import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Test
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)

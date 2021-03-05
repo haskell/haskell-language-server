@@ -8,7 +8,7 @@
 module CodeAction.UseDataConSpec where
 
 import qualified Data.Text as T
-import           Ide.Plugin.Tactic.TestTypes
+import           Ide.Plugin.Tactic.Types
 import           Test.Hspec
 import           Utils
 
