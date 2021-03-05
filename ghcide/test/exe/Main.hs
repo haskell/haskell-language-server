@@ -3200,12 +3200,12 @@ addSigLensesTests =
         ]
    in testGroup
         "add signature"
-        [ testGroup "signatures are correct" [sigSession (T.unpack def) False "Always" "" (def, Just sig) [] | (def, sig) <- cases]
-        , sigSession "exported mode works" False "Exported" "xyz" ("xyz = True", Just "xyz :: Bool") (fst <$> take 3 cases)
+        [ testGroup "signatures are correct" [sigSession (T.unpack def) False "always" "" (def, Just sig) [] | (def, sig) <- cases]
+        , sigSession "exported mode works" False "exported" "xyz" ("xyz = True", Just "xyz :: Bool") (fst <$> take 3 cases)
         , testGroup
             "diagnostics mode works"
-            [ sigSession "with GHC warnings" True "Diagnostics" "" (second Just $ head cases) []
-            , sigSession "without GHC warnings" False "Diagnostics" "" (second (const Nothing) $ head cases) []
+            [ sigSession "with GHC warnings" True "diagnostics" "" (second Just $ head cases) []
+            , sigSession "without GHC warnings" False "diagnostics" "" (second (const Nothing) $ head cases) []
             ]
         ]
 
