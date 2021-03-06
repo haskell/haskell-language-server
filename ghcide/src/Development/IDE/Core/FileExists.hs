@@ -88,17 +88,27 @@ getFileExistsMapUntracked = do
   liftIO $ readVar v
 
 -- | Modify the global store of file exists.
-modifyFileExists :: IdeState -> [(NormalizedFilePath, Bool)] -> IO ()
+modifyFileExists :: IdeState -> [FileEvent] -> IO ()
 modifyFileExists state changes = do
   FileExistsMapVar var <- getIdeGlobalState state
-  changesMap           <- evaluate $ HashMap.fromList changes
+  changesMap           <- evaluate $ HashMap.fromList $
+    [ (toNormalizedFilePath' f, newState)
+    | FileEvent uri change <- changes
+    , Just f <- [uriToFilePath uri]
+    , Just newState <- [fromChange change]
+    ]
   -- Masked to ensure that the previous values are flushed together with the map update
   mask $ \_ -> do
     -- update the map
     modifyVar_ var $ evaluate . HashMap.union changesMap
     -- See Note [Invalidating file existence results]
     -- flush previous values
-    mapM_ (deleteValue state GetFileExists . fst) changes
+    mapM_ (deleteValue state GetFileExists) (HashMap.keys changesMap)
+
+fromChange :: FileChangeType -> Maybe Bool
+fromChange FcCreated = Just True
+fromChange FcDeleted = Just True
+fromChange FcChanged = Nothing
 
 -------------------------------------------------------------------------------------
 
@@ -145,7 +155,10 @@ This is fine so long as we're watching the files we check most often, i.e. sourc
 
 -- | The list of file globs that we ask the client to watch.
 watchedGlobs :: IdeOptions -> [String]
-watchedGlobs opts = [ "**/*." ++ extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext, ext ++ "-boot"]]
+watchedGlobs opts = [ "**/*." ++ ext | ext <- allExtensions opts]
+
+allExtensions :: IdeOptions -> [String]
+allExtensions opts = [extIncBoot | ext <- optExtensions opts, extIncBoot <- [ext, ext ++ "-boot"]]
 
 -- | Installs the 'getFileExists' rules.
 --   Provides a fast implementation if client supports dynamic watched files.
@@ -170,19 +183,26 @@ fileExistsRules lspEnv vfs = do
   extras <- getShakeExtrasRules
   opts <- liftIO $ getIdeOptionsIO extras
   let globs = watchedGlobs opts
+      patterns = fmap Glob.compile globs
+      fpMatches fp = any (`Glob.match`fp) patterns
+      isWatched = if supportsWatchedFiles
+        then \f -> do
+            isWF <- isWorkspaceFile f
+            return $ isWF && fpMatches (fromNormalizedFilePath f)
+        else const $ pure False
 
   if supportsWatchedFiles
-    then fileExistsRulesFast globs vfs
+    then fileExistsRulesFast isWatched vfs
     else fileExistsRulesSlow vfs
 
+  fileStoreRules vfs isWatched
+
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
-fileExistsRulesFast :: [String] -> VFSHandle -> Rules ()
-fileExistsRulesFast globs vfs =
-    let patterns = fmap Glob.compile globs
-        fpMatches fp = any (\p -> Glob.match p fp) patterns
-    in defineEarlyCutoff $ \GetFileExists file -> do
-        isWf <- isWorkspaceFile file
-        if isWf && fpMatches (fromNormalizedFilePath file)
+fileExistsRulesFast :: (NormalizedFilePath -> Action Bool) -> VFSHandle -> Rules ()
+fileExistsRulesFast isWatched vfs =
+    defineEarlyCutoff $ \GetFileExists file -> do
+        isWF <- isWatched file
+        if isWF
             then fileExistsFast vfs file
             else fileExistsSlow vfs file
 

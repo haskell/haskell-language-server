@@ -9,7 +9,8 @@
 module Development.IDE.Core.OfInterest(
     ofInterestRules,
     getFilesOfInterest, setFilesOfInterest, modifyFilesOfInterest,
-    kick, FileOfInterestStatus(..)
+    kick, FileOfInterestStatus(..),
+    OfInterestVar(..)
     ) where
 
 import           Control.Concurrent.Extra

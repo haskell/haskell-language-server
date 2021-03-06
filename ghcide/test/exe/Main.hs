@@ -1559,14 +1559,14 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
-    , test True 
+    , test True
       ["qualified Data.Text as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , test True 
+    , test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , test True 
+    , test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       , "qualified Data.Functor as T"
@@ -5149,8 +5149,11 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
   createDirectoryIfMissing True $ projDir ++ "/Data"
 
+  shakeProfiling <- getEnv "SHAKE_PROFILING"
   let cmd = unwords $
-       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir] ++ extraOptions
+       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir
+       ] ++ ["--shake-profiling=" <> dir | Just dir <- [shakeProfiling]
+       ] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False

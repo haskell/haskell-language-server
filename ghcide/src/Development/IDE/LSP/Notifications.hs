@@ -24,16 +24,15 @@ import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
 
 import           Control.Monad.Extra
-import           Data.Foldable                         as F
 import qualified Data.HashMap.Strict                   as M
 import qualified Data.HashSet                          as S
-import           Data.Maybe
 import qualified Data.Text                             as Text
 
 import           Control.Monad.IO.Class
 import           Development.IDE.Core.FileExists       (modifyFileExists,
                                                         watchedGlobs)
-import           Development.IDE.Core.FileStore        (setFileModified,
+import           Development.IDE.Core.FileStore        (resetFileStore,
+                                                        setFileModified,
                                                         setSomethingModified,
                                                         typecheckParents)
 import           Development.IDE.Core.OfInterest
@@ -80,19 +79,13 @@ setHandlersNotifications = mconcat
               logDebug (ideLogger ide) $ "Closed text document: " <> getUri _uri
 
   , notificationHandler LSP.SWorkspaceDidChangeWatchedFiles $
-      \ide (DidChangeWatchedFilesParams fileEvents) -> liftIO $ do
+      \ide (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do
         -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
         -- what we do with them
-        let events =
-                mapMaybe
-                    (\(FileEvent uri ev) ->
-                        (, ev /= FcDeleted) . toNormalizedFilePath'
-                        <$> LSP.uriToFilePath uri
-                    )
-                    ( F.toList fileEvents )
-        let msg = Text.pack $ show events
-        logDebug (ideLogger ide) $ "Files created or deleted: " <> msg
-        modifyFileExists ide events
+        let msg = Text.pack $ show fileEvents
+        logDebug (ideLogger ide) $ "Watched file events: " <> msg
+        modifyFileExists ide fileEvents
+        resetFileStore ide fileEvents
         setSomethingModified ide
 
   , notificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
@@ -133,7 +126,7 @@ setHandlersNotifications = mconcat
           regOptions =
             DidChangeWatchedFilesRegistrationOptions { _watchers = List watchers }
           -- See Note [File existence cache and LSP file watchers] for why this exists, and the choice of watch kind
-          watchKind = WatchKind { _watchCreate = True, _watchChange = False, _watchDelete = True}
+          watchKind = WatchKind { _watchCreate = True, _watchChange = True, _watchDelete = True}
           -- See Note [Which files should we watch?] for an explanation of why the pattern is the way that it is
           -- The patterns will be something like "**/.hs", i.e. "any number of directory segments,
           -- followed by a file with an extension 'hs'.
