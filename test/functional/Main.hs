@@ -20,6 +20,7 @@ import           Progress
 import           Reference
 import           Rename
 import           Splice
+import           Retrie
 import           Symbol
 import           Test.Tasty
 import           Test.Tasty.Ingredients.Rerun
@@ -57,5 +58,6 @@ main =
             , Symbol.tests
             , TypeDefinition.tests
             , Splice.tests
+            , Retrie.tests
             , HaddockComments.tests
             ]

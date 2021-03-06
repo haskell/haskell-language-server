@@ -459,6 +459,7 @@ test-suite func-test
     Symbol
     TypeDefinition
     Splice
+    Retrie
     HaddockComments
     Ide.Plugin.Splice.Types
     Ide.Plugin.Eval.Types
