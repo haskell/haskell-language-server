@@ -52,6 +52,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         clientSupportsProgress,
                                                         defaultIdeOptions)
 import           Development.IDE.Types.Shake           (Key (Key))
+import           Development.IDE.Main.HeapStats        (withHeapStats)
 import           Development.Shake                     (action)
 import           HIE.Bios.Cradle                       (findCradle)
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
@@ -115,7 +116,7 @@ stderrLogger = do
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
 
 defaultMain :: Arguments -> IO ()
-defaultMain Arguments{..} = do
+defaultMain Arguments{..} = withHeapStats argsLogger $ do
     pid <- T.pack . show <$> getProcessID
     logger <- argsLogger
     hSetBuffering stderr LineBuffering
