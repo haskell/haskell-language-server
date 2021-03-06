@@ -19,10 +19,12 @@ library
   hs-source-dirs:   src
   build-depends:    base           >=4.12 && <5
                   , lsp
+                  , text
                   , lsp-types
                   , hls-plugin-api ^>= 1.0.0.0
                   , ghc
                   , ghcide         ^>= 1.0.0.0
+                  , template-haskell
 
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators
