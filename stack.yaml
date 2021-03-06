@@ -14,7 +14,6 @@ packages:
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
-  - ./plugins/hls-type-synonyms-plugin
 
 ghc-options:
   "$everything": -haddock

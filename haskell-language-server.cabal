@@ -153,11 +153,6 @@ flag splice
   default:     True
   manual:      False
 
-flag typeSynonyms
-  description: Enable type synonyms plugin
-  default:     True
-  manual:      False
-
 -- formatters
 
 flag floskell
@@ -243,11 +238,6 @@ common splice
     build-depends: hls-splice-plugin ^>= 1.0.0.0
     cpp-options: -Dsplice
 
-common typeSynonyms
-  if flag(splice) || flag(all-plugins)
-    build-depends: hls-type-synonyms-plugin ^>= 1.0.0.0
-    cpp-options: -DtypeSynonyms
-
 -- formatters
 
 common floskell
@@ -300,7 +290,6 @@ executable haskell-language-server
                     , moduleName
                     , pragmas
                     , splice
-                    , typeSynonyms
                     , floskell
                     , fourmolu
                     , ormolu
@@ -470,7 +459,6 @@ test-suite func-test
     Symbol
     TypeDefinition
     Splice
-    TypeSynonyms
     HaddockComments
     Ide.Plugin.Splice.Types
     Ide.Plugin.Eval.Types
