@@ -45,6 +45,7 @@ spec = do
     autoTest  2 14 "FmapJoin.hs"
     autoTest  2  9 "Fgmap.hs"
     autoTest  4 19 "FmapJoinInLet.hs"
+    autoTest  9 12 "AutoEndo.hs"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen.hs"
