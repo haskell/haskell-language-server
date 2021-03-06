@@ -4,7 +4,6 @@
 {-# OPTIONS_GHC -Wno-deferred-type-errors #-}
 module TypeSynonyms where
 
-import           Control.Applicative.Combinators
 import           Control.Monad.IO.Class
 import           Data.List                       (find)
 import           Data.Text                       (Text)
@@ -31,7 +30,7 @@ goldenTest input line col =
             case find ((Just "Replace with type synonym" ==) . codeActionTitle) actions of
                 Just (InR action) -> do
                     executeCodeAction action
-                    _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
+                    -- _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
                     edited <- documentContents doc
                     let expected_name = spliceTestPath </> input <.> "expected"
                     expected <- liftIO $ T.readFile expected_name
