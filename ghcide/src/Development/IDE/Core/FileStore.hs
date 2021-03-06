@@ -102,6 +102,9 @@ getModificationTimeRule vfs isWatched =
         let file' = fromNormalizedFilePath file
         let wrap time@(l,s) = (Just $ BS.pack $ show time, ([], Just $ ModificationTime l s))
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
+        -- we use 'getVirtualFile' to discriminate FOIs so make that
+        -- dependency explicit by using the IsFileOfInterest rule
+        _ <- use_ IsFileOfInterest file
         case mbVirtual of
             Just (virtualFileVersion -> ver) -> do
                 alwaysRerun
