@@ -13,19 +13,17 @@ where
 import           Control.Concurrent.Extra
 import           Control.Exception
 import           Control.Monad.Extra
-import           Data.Binary
 import qualified Data.ByteString                       as BS
 import           Data.HashMap.Strict                   (HashMap)
 import qualified Data.HashMap.Strict                   as HashMap
 import           Data.Maybe
 import           Development.IDE.Core.FileStore
 import           Development.IDE.Core.IdeConfiguration
+import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Types.Location
 import           Development.IDE.Types.Options
 import           Development.Shake
-import           Development.Shake.Classes
-import           GHC.Generics
 import           Language.LSP.Server                   hiding (getVirtualFile)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
@@ -111,15 +109,6 @@ fromChange FcDeleted = Just True
 fromChange FcChanged = Nothing
 
 -------------------------------------------------------------------------------------
-
-type instance RuleResult GetFileExists = Bool
-
-data GetFileExists = GetFileExists
-    deriving (Eq, Show, Typeable, Generic)
-
-instance NFData   GetFileExists
-instance Hashable GetFileExists
-instance Binary   GetFileExists
 
 -- | Returns True if the file exists
 --   Note that a file is not considered to exist unless it is saved to disk.

@@ -939,8 +939,8 @@ defineEarlyCutoff'
     -> Action (RunResult (A (RuleResult k)))
 defineEarlyCutoff' doDiagnostics key file old mode action = do
     extras@ShakeExtras{state, inProgress} <- getShakeExtras
-    -- don't do progress for GetFileExists, as there are lots of non-nodes for just that one key
-    (if show key == "GetFileExists" then id else withProgressVar inProgress file) $ do
+    options <- getIdeOptions
+    (if optSkipProgress options key then id else withProgressVar inProgress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
                 v <- liftIO $ getValues state key file
