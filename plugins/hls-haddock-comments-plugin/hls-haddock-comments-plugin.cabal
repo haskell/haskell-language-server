@@ -23,7 +23,7 @@ library
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide                ^>= 1.0.0.0
+    , ghcide                ^>= 1.1.0.0
     , lsp-types
     , hls-plugin-api        ^>= 1.0.0.0
     , text

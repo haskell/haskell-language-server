@@ -20,7 +20,7 @@ library
                ,    filepath
                ,    ghc
                ,    ghc-boot-th
-               ,    ghcide           ^>= 1.0.0.0
+               ,    ghcide           ^>= 1.1.0.0
                ,    lsp-types
                ,    hls-plugin-api   ^>= 1.0.0.0
                ,    lens
@@ -55,7 +55,7 @@ test-suite tests
     , bytestring
     , data-default
     , deepseq
-    , ghcide                ^>= 1.0.0.0
+    , ghcide                ^>= 1.1.0.0
     , hls-brittany-plugin
     , hspec-expectations
     , megaparsec
