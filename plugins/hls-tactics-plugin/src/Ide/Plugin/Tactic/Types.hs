@@ -35,7 +35,8 @@ import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Maybe (fromMaybe)
 import           Data.Semigroup
 import           Data.Set (Set)
-import qualified Data.Text                    as T
+import qualified Data.Text as T
+import           Data.Text (Text)
 import           Data.Tree
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
@@ -44,7 +45,6 @@ import           GHC.Generics
 import           GHC.SourceGen (var)
 import           Ide.Plugin.Tactic.Debug
 import           Ide.Plugin.Tactic.FeatureSet
-import           Ide.Plugin.Tactic.FeatureSet (FeatureSet)
 import           OccName
 import           Refinery.Tactic
 import           System.IO.Unsafe (unsafePerformIO)
@@ -451,4 +451,18 @@ data AgdaMatch = AgdaMatch
   , amBody :: HsExpr GhcPs
   }
   deriving (Show)
+
+
+data UserFacingMessage
+  = TacticErrors
+  | TimedOut
+  | NothingToDo
+  | InfrastructureError Text
+  deriving Eq
+
+instance Show UserFacingMessage where
+  show TacticErrors            = "Wingman couldn't find a solution"
+  show TimedOut                = "Wingman timed out while trying to find a solution"
+  show NothingToDo             = "Nothing to do"
+  show (InfrastructureError t) = "Internal error: " <> T.unpack t
 
