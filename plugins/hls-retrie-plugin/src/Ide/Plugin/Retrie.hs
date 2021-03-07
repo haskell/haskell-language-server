@@ -117,14 +117,26 @@ retrieCommand :: PluginCommand IdeState
 retrieCommand =
   PluginCommand (coerce retrieCommandName) "run the refactoring" runRetrieCmd
 
+data Restriction
+    = NoRestriction
+    | OriginatingFile
+    | RangeInOriginatingFile Range
+  deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
+restrictToOriginatingFile :: Restriction -> Bool
+restrictToOriginatingFile OriginatingFile            = True
+restrictToOriginatingFile (RangeInOriginatingFile _) = True
+restrictToOriginatingFile NoRestriction              = False
+
 -- | Parameters for the runRetrie PluginCommand.
 data RunRetrieParams = RunRetrieParams
-  { description               :: T.Text,
-    rewrites                  :: [RewriteSpec],
-    originatingFile           :: Uri,
-    restrictToOriginatingFile :: Bool
+  { description     :: T.Text,
+    rewrites        :: [RewriteSpec],
+    originatingFile :: Uri,
+    restriction     :: Restriction
   }
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
+
 runRetrieCmd ::
   IdeState ->
   RunRetrieParams ->
@@ -243,20 +255,22 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L l' rdrName}
   | pos `isInsideSrcSpan` l' =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
-        unfoldRewrite restrictToOriginatingFile =
+        unfoldRewrite restriction =
             let rewrites = [Unfold (qualify ms_mod pprName)]
-                description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+                description = "Unfold " <> pprNameText <> describeRestriction restriction
             in (description, CodeActionRefactorInline, RunRetrieParams {..})
-        foldRewrite restrictToOriginatingFile =
+        foldRewrite restriction =
           let rewrites = [Fold (qualify ms_mod pprName)]
-              description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+              description = "Fold " <> pprNameText <> describeRestriction restriction
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
-     in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
+     in [unfoldRewrite NoRestriction, unfoldRewrite OriginatingFile, foldRewrite NoRestriction, foldRewrite OriginatingFile]
 suggestBindRewrites _ _ _ _ = []
 
-describeRestriction :: IsString p => Bool -> p
-describeRestriction restrictToOriginatingFile =
-        if restrictToOriginatingFile then " in current file" else ""
+describeRestriction :: IsString p => Restriction -> p
+describeRestriction NoRestriction              = ""
+describeRestriction OriginatingFile            = " in current file"
+-- TODO: Find a better description for this action
+describeRestriction (RangeInOriginatingFile r) = " at site"
 
 suggestTypeRewrites ::
   (Outputable (IdP pass)) =>
@@ -267,15 +281,15 @@ suggestTypeRewrites ::
 suggestTypeRewrites originatingFile ms_mod SynDecl {tcdLName = L _ rdrName} =
     let pprName = prettyPrint rdrName
         pprNameText = T.pack pprName
-        unfoldRewrite restrictToOriginatingFile =
+        unfoldRewrite restriction =
             let rewrites = [TypeForward (qualify ms_mod pprName)]
-                description = "Unfold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+                description = "Unfold " <> pprNameText <> describeRestriction restriction
            in (description, CodeActionRefactorInline, RunRetrieParams {..})
-        foldRewrite restrictToOriginatingFile =
+        foldRewrite restriction =
           let rewrites = [TypeBackward (qualify ms_mod pprName)]
-              description = "Fold " <> pprNameText <> describeRestriction restrictToOriginatingFile
+              description = "Fold " <> pprNameText <> describeRestriction restriction
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
-     in [unfoldRewrite False, unfoldRewrite True, foldRewrite False, foldRewrite True]
+     in [unfoldRewrite NoRestriction, unfoldRewrite OriginatingFile, foldRewrite NoRestriction, foldRewrite OriginatingFile]
 suggestTypeRewrites _ _ _ = []
 
 suggestRuleRewrites ::
@@ -286,10 +300,10 @@ suggestRuleRewrites ::
   [(T.Text, CodeActionKind, RunRetrieParams)]
 suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
     concat
-        [ [ forwardRewrite   ruleName True
-          , forwardRewrite   ruleName False
-          , backwardsRewrite ruleName True
-          , backwardsRewrite ruleName False
+        [ [ forwardRewrite   ruleName OriginatingFile
+          , forwardRewrite   ruleName NoRestriction
+          , backwardsRewrite ruleName OriginatingFile
+          , backwardsRewrite ruleName NoRestriction
           ]
         | L l r  <- rds_rules,
           pos `isInsideSrcSpan` l,
@@ -301,19 +315,19 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
           let ruleName = unpackFS rn
       ]
   where
-    forwardRewrite ruleName restrictToOriginatingFile =
+    forwardRewrite ruleName restriction =
         let rewrites = [RuleForward (qualify ms_mod ruleName)]
             description = "Apply rule " <> T.pack ruleName <> " forward" <>
-                            describeRestriction restrictToOriginatingFile
+                            describeRestriction restriction
 
         in ( description,
             CodeActionRefactor,
             RunRetrieParams {..}
             )
-    backwardsRewrite ruleName restrictToOriginatingFile =
+    backwardsRewrite ruleName restriction =
           let rewrites = [RuleBackward (qualify ms_mod ruleName)]
               description = "Apply rule " <> T.pack ruleName <> " backwards" <>
-                              describeRestriction restrictToOriginatingFile
+                              describeRestriction restriction
            in ( description,
                 CodeActionRefactor,
                 RunRetrieParams {..}
