@@ -1095,7 +1095,7 @@ writeHiFileAction hsc hiFile = do
     extras <- getShakeExtras
     let targetPath = ml_hi_file $ ms_location $ hirModSummary hiFile
     liftIO $ do
-        resetInterfaceStore extras targetPath
+        resetInterfaceStore extras $ toNormalizedFilePath' targetPath
         writeHiFile hsc hiFile
 
 -- | A rule that wires per-file rules together

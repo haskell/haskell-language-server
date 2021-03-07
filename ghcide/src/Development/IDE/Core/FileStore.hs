@@ -128,14 +128,13 @@ getModificationTimeRule vfs isWatched =
 --   But interface files are private, in that only HLS writes them.
 --   So we implement watching ourselves, and bypass the need for alwaysRerun.
 isInterface :: NormalizedFilePath -> Bool
-isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hie"]
+isInterface f = takeExtension (fromNormalizedFilePath f) `elem` [".hi", ".hi-boot"]
 
 -- | Reset the GetModificationTime state of interface files
-resetInterfaceStore :: ShakeExtras -> FilePath -> IO ()
+resetInterfaceStore :: ShakeExtras -> NormalizedFilePath -> IO ()
 resetInterfaceStore state f = do
-    forM_ [toNormalizedFilePath' (replaceExtension f ext) | ext <- ["hi","hie"]] $ \f ->
-        forM_ [True,False] $ \gmt ->
-            deleteValue state (GetModificationTime_ gmt) f
+    deleteValue state (GetModificationTime_ True) f
+    deleteValue state (GetModificationTime_ False) f
 
 -- | Reset the GetModificationTime state of watched files
 resetFileStore :: IdeState -> [FileEvent] -> IO ()
