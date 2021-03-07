@@ -123,6 +123,13 @@ data Restriction
     | RangeInOriginatingFile Range
   deriving (Eq, Show, Generic, FromJSON, ToJSON)
 
+rangeInRestriction :: Restriction -> Range -> Bool
+rangeInRestriction (RangeInOriginatingFile (Range sRestrict eRestrict)) (Range sEdit eEdit) =
+    sRestrict <= sEdit && sEdit <= eRestrict &&
+    sRestrict <= eEdit && eEdit <= eRestrict
+rangeInRestriction _ _ = True
+
+
 restrictToOriginatingFile :: Restriction -> Bool
 restrictToOriginatingFile OriginatingFile            = True
 restrictToOriginatingFile (RangeInOriginatingFile _) = True
@@ -157,7 +164,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
                 (hscEnv session)
                 (map Right rewrites <> map Left importRewrites)
                 nfp
-                restrictToOriginatingFile
+                restriction
         unless (null errors) $
             lift $ sendNotification SWindowShowMessage $
                     ShowMessageParams MtWarning $
@@ -361,9 +368,9 @@ callRetrie ::
   HscEnv ->
   [Either ImportSpec RewriteSpec] ->
   NormalizedFilePath ->
-  Bool ->
+  Restriction ->
   IO ([CallRetrieError], WorkspaceEdit)
-callRetrie state session rewrites origin restrictToOriginatingFile = do
+callRetrie state session rewrites origin restriction = do
   knownFiles <- toKnownFiles . unhashed <$> readVar (knownTargetsVar $ shakeExtras state)
   let reuseParsedModule f = do
         pm <-
@@ -414,7 +421,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
       retrieOptions = (defaultOptions target)
         {Retrie.verbosity = Loud
         ,Retrie.targetFiles = map fromNormalizedFilePath $
-            if restrictToOriginatingFile
+            if restrictToOriginatingFile restriction
                 then [origin]
                 else Set.toList knownFiles
         }
@@ -441,10 +448,11 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
       lift $ runRetrie fixityEnv retrie cpp
     return $ asTextEdits change
 
-  let (errors :: [CallRetrieError], replacements) = partitionEithers results
+  let (errors :: [CallRetrieError], allReplacements) = partitionEithers results
+      restrictedReplacements = fmap (filter (rangeInRestriction restriction . (\TextEdit{_range}->_range) . snd)) allReplacements
       editParams :: WorkspaceEdit
       editParams =
-        WorkspaceEdit (Just $ asEditMap replacements) Nothing
+        WorkspaceEdit (Just $ asEditMap restrictedReplacements) Nothing
 
   return (errors, editParams)
   where
