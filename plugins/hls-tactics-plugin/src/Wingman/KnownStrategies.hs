@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Wingman.KnownStrategies where
 
 import Control.Monad.Error.Class

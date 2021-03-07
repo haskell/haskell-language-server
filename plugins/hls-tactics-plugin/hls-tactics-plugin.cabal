@@ -80,6 +80,7 @@ library
   default-language: Haskell2010
   default-extensions:
     DataKinds,
+    DeriveAnyClass,
     DeriveFunctor,
     DeriveGeneric,
     DeriveDataTypeable,
@@ -93,6 +94,8 @@ library
     GeneralizedNewtypeDeriving,
     LambdaCase,
     MultiParamTypeClasses,
+    NumDecimals,
+    OverloadedLabels,
     PatternSynonyms,
     ScopedTypeVariables,
     TypeApplications,

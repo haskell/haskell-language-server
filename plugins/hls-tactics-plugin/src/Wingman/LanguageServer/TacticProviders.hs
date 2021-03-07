@@ -1,9 +1,4 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE ViewPatterns       #-}
-{-# OPTIONS_GHC -Wall           #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Wingman.LanguageServer.TacticProviders
   ( commandProvider

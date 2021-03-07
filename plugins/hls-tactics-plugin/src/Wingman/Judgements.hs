@@ -1,6 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns     #-}
-
 module Wingman.Judgements where
 
 import           Control.Arrow

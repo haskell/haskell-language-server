@@ -1,5 +1,3 @@
-{-# LANGUAGE ViewPatterns #-}
-
 module Wingman.Naming where
 
 import           Control.Monad.State.Strict

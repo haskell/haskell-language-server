@@ -1,5 +1,3 @@
-{-# LANGUAGE ViewPatterns #-}
-
 module Wingman.CodeGen.Utils where
 
 import           Data.List

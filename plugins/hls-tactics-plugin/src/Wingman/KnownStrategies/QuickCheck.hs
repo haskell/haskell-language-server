@@ -1,29 +1,26 @@
-{-# LANGUAGE ViewPatterns #-}
-
 module Wingman.KnownStrategies.QuickCheck where
 
-import           Control.Monad.Except         (MonadError (throwError))
-import           Data.Bool                    (bool)
-import           Data.Generics                (everything, mkQ)
-import           Data.List                    (partition)
-import           DataCon                      (DataCon, dataConName)
-import           Development.IDE.GHC.Compat   (GhcPs, HsExpr, noLoc)
-import           GHC.Exts                     (IsString (fromString))
-import           GHC.List                     (foldl')
-import           GHC.SourceGen                (int)
-import           GHC.SourceGen.Binds          (match, valBind)
-import           GHC.SourceGen.Expr           (case', lambda, let')
-import           GHC.SourceGen.Overloaded     (App ((@@)), HasList (list))
-import           GHC.SourceGen.Pat            (conP)
-import           Wingman.CodeGen
-import           Wingman.Judgements (jGoal)
-import           Wingman.Machinery  (tracePrim)
-import           Wingman.Types
-import           OccName                      (HasOccName (occName), mkVarOcc,
-                                               occNameString)
-import           Refinery.Tactic              (goal, rule)
-import           TyCon                        (TyCon, tyConDataCons, tyConName)
-import           Type                         (splitTyConApp_maybe)
+import Control.Monad.Except (MonadError (throwError))
+import Data.Bool (bool)
+import Data.Generics (everything, mkQ)
+import Data.List (partition)
+import DataCon (DataCon, dataConName)
+import Development.IDE.GHC.Compat (GhcPs, HsExpr, noLoc)
+import GHC.Exts (IsString (fromString))
+import GHC.List (foldl')
+import GHC.SourceGen (int)
+import GHC.SourceGen.Binds (match, valBind)
+import GHC.SourceGen.Expr (case', lambda, let')
+import GHC.SourceGen.Overloaded (App ((@@)), HasList (list))
+import GHC.SourceGen.Pat (conP)
+import OccName (HasOccName (occName), mkVarOcc, occNameString)
+import Refinery.Tactic (goal, rule)
+import TyCon (TyCon, tyConDataCons, tyConName)
+import Type (splitTyConApp_maybe)
+import Wingman.CodeGen
+import Wingman.Judgements (jGoal)
+import Wingman.Machinery (tracePrim)
+import Wingman.Types
 
 
 ------------------------------------------------------------------------------
