@@ -20,6 +20,7 @@ import           Data.Text (Text)
 import qualified Data.Text.IO as T
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
+import           Ide.Plugin.Tactic.LanguageServer (mkShowMessageParams)
 import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Test
 import           Language.LSP.Types
@@ -117,6 +118,29 @@ mkGoldenTest features tc occ line col input =
         T.writeFile expected_name edited
       expected <- liftIO $ T.readFile expected_name
       liftIO $ edited `shouldBe` expected
+
+mkShowMessageTest
+    :: FeatureSet
+    -> TacticCommand
+    -> Text
+    -> Int
+    -> Int
+    -> FilePath
+    -> UserFacingMessage
+    -> SpecWith ()
+mkShowMessageTest features tc occ line col input ufm =
+  it (input <> " (golden)") $ do
+    runSession testCommand fullCaps tacticPath $ do
+      setFeatureSet features
+      doc <- openDoc input "haskell"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc $ pointRange line col
+      Just (InR CodeAction {_command = Just c})
+        <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
+      executeCommand c
+      NotificationMessage _ _ err <- skipManyTill anyMessage (message SWindowShowMessage)
+      liftIO $ err `shouldBe` mkShowMessageParams ufm
+
 
 goldenTest :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
 goldenTest = mkGoldenTest allFeatures

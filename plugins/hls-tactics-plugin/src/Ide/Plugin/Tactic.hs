@@ -19,8 +19,7 @@ import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor (Bifunctor (bimap))
-import           Data.Bool (bool)
+import           Data.Bifunctor (first)
 import           Data.Data (Data)
 import           Data.Foldable (for_)
 import           Data.Generics.Aliases (mkQ)
@@ -32,9 +31,7 @@ import           Data.Traversable
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
-import           Development.Shake.Classes
 import           Ide.Plugin.Tactic.CaseSplit
-import           Ide.Plugin.Tactic.FeatureSet (Feature (..), hasFeature)
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.LanguageServer
 import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
@@ -84,41 +81,54 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
 codeActionProvider _ _ _ = pure $ Right $ List []
 
 
+showUserFacingMessage
+    :: MonadLsp cfg m
+    => UserFacingMessage
+    -> m (Either ResponseError a)
+showUserFacingMessage ufm = do
+  showLspMessage $ mkShowMessageParams ufm
+  pure $ Left $ mkErr InternalError $ T.pack $ show ufm
+
+
 tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
 tacticCmd tac state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       features <- getFeatureSet $ shakeExtras state
       ccs <- getClientCapabilities
-      res <- liftIO $ fromMaybeT (Right Nothing) $ do
+      res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
         let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
         pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
 
         timingOut 2e8 $ join $
-          bimap (mkErr InvalidRequest . T.pack . show)
-                (mkWorkspaceEdits span dflags ccs uri pm)
-            $ runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name
+          case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
+            Left _ -> Left TacticErrors
+            Right rtr ->
+              case rtr_extract rtr of
+                L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
+                  Left NothingToDo
+                _ -> pure $ mkWorkspaceEdits span dflags ccs uri pm rtr
 
       case res of
-        Left err -> pure $ Left err
-        Right medit -> do
-          forM_ medit $ \edit ->
-            sendRequest
-              SWorkspaceApplyEdit
-              (ApplyWorkspaceEditParams Nothing edit)
-              (const $ pure ())
+        Nothing -> do
+          showUserFacingMessage TimedOut
+        Just (Left ufm) -> do
+          showUserFacingMessage ufm
+        Just (Right edit) -> do
+          sendRequest
+            SWorkspaceApplyEdit
+            (ApplyWorkspaceEditParams Nothing edit)
+            (const $ pure ())
           pure $ Right Null
 tacticCmd _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
 
 
 timingOut
-    :: Int                     -- ^ Time in microseconds
-    -> Either ResponseError a  -- ^ Computation to run
-    -> MaybeT IO (Either ResponseError a)
-timingOut t m = do
-  x <- lift $ timeout t $ evaluate m
-  pure $ joinNote (mkErr InvalidRequest "timed out") x
+    :: Int  -- ^ Time in microseconds
+    -> a    -- ^ Computation to run
+    -> MaybeT IO a
+timingOut t m = MaybeT $ timeout t $ evaluate m
 
 
 mkErr :: ErrorCode -> T.Text -> ResponseError
@@ -140,15 +150,13 @@ mkWorkspaceEdits
     -> Uri
     -> Annotated ParsedSource
     -> RunTacticResults
-    -> Either ResponseError (Maybe WorkspaceEdit)
+    -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits span dflags ccs uri pm rtr = do
   for_ (rtr_other_solns rtr) $ traceMX "other solution"
   traceMX "solution" $ rtr_extract rtr
   let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags ccs uri g pm
-   in case response of
-        Right res -> Right $ Just res
-        Left err  -> Left $ mkErr InternalError $ T.pack err
+   in first (InfrastructureError . T.pack) response
 
 
 ------------------------------------------------------------------------------
