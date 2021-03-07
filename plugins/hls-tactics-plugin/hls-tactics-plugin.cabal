@@ -46,8 +46,7 @@ library
     Wingman.Types
 
   ghc-options:
-    -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
-    -Wall
+    -Wall -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
   if flag(pedantic)
     ghc-options: -Werror
 

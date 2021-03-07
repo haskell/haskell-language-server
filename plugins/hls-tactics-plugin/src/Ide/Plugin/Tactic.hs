@@ -109,7 +109,7 @@ tacticCmd tac state (TacticParams uri range var_name)
         Just (Left ufm) -> do
           showUserFacingMessage ufm
         Just (Right edit) -> do
-          sendRequest
+          _ <- sendRequest
             SWorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing edit)
             (const $ pure ())
@@ -127,11 +127,6 @@ timingOut t m = MaybeT $ timeout t $ evaluate m
 
 mkErr :: ErrorCode -> T.Text -> ResponseError
 mkErr code err = ResponseError code err Nothing
-
-
-joinNote :: e -> Maybe (Either e a) -> Either e a
-joinNote e Nothing  = Left e
-joinNote _ (Just a) = a
 
 
 ------------------------------------------------------------------------------

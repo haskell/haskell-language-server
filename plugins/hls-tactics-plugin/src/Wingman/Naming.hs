@@ -13,7 +13,6 @@ import           TcType
 import           TyCon
 import           Type
 import           TysWiredIn (listTyCon, pairTyCon, unitTyCon)
-import           Wingman.Types
 
 
 ------------------------------------------------------------------------------

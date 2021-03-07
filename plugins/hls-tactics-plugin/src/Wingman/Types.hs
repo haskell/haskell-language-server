@@ -278,7 +278,7 @@ type Judgement = Judgement' CType
 
 
 newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
-    deriving (Functor, Applicative, Monad, MonadReader Context)
+    deriving newtype (Functor, Applicative, Monad, MonadReader Context)
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.

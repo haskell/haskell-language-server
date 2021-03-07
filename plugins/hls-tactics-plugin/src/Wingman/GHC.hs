@@ -3,7 +3,6 @@
 
 module Wingman.GHC where
 
-import           Control.Arrow
 import           Control.Monad.State
 import           Data.Function (on)
 import           Data.Functor ((<&>))
