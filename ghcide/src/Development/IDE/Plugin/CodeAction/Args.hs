@@ -2,7 +2,9 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE TemplateHaskell           #-}
 
-module Development.IDE.Plugin.CodeAction.Args where
+module Development.IDE.Plugin.CodeAction.Args (
+  module Development.IDE.Plugin.CodeAction.Args,
+) where
 
 import           Control.Lens                                 (alaf)
 import           Data.Bifunctor                               (second)
@@ -72,14 +74,14 @@ instance ToCodeAction r => ToCodeAction (ParsedSource -> r) where
 
 instance ToCodeAction [(T.Text, [TextEdit |? Rewrite])] where
   toCodeAction CodeActionArgs{..} r = second (concatMap go) <$> r
-    where
-      go (InL te) = [te]
-      go (InR rw)
-        | Just df <- caaDf,
-          Just ps <- caaAnnSource,
-          Right x <- rewriteToEdit df (annsA ps) rw
-         = x
-        | otherwise = []
+   where
+    go (InL te) = [te]
+    go (InR rw)
+      | Just df <- caaDf
+        , Just ps <- caaAnnSource
+        , Right x <- rewriteToEdit df (annsA ps) rw =
+        x
+      | otherwise = []
 
 -- generates instances of 'ToCodeAction',
 -- where the pattern is @instance ToCodeAction r => ToCodeAction (field -> r)@, for each field of 'CodeActionArgs'.
