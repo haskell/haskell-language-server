@@ -420,11 +420,11 @@ setValues state key file val diags = modifyVar_ state $ \vals -> do
 -- | Delete the value stored for a given ide build key
 deleteValue
   :: (Typeable k, Hashable k, Eq k, Show k)
-  => IdeState
+  => ShakeExtras
   -> k
   -> NormalizedFilePath
   -> IO ()
-deleteValue IdeState{shakeExtras = ShakeExtras{state}} key file = modifyVar_ state $ \vals ->
+deleteValue ShakeExtras{state} key file = modifyVar_ state $ \vals ->
     evaluate $ HMap.delete (file, Key key) vals
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
