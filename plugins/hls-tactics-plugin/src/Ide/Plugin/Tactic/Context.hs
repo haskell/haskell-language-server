@@ -6,7 +6,6 @@ module Ide.Plugin.Tactic.Context where
 import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
-import           Data.List
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
@@ -14,8 +13,6 @@ import           Ide.Plugin.Tactic.FeatureSet (FeatureSet)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcRnTypes
-import           TcType (substTy, tcSplitSigmaTy)
-import           Unify (tcUnifyTy)
 
 
 mkContext :: FeatureSet -> [(OccName, CType)] -> TcGblEnv -> Context
@@ -44,18 +41,6 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
       ]
 
 
-------------------------------------------------------------------------------
--- | Given the name of a function that exists in 'ctxDefiningFuncs', get its
--- theta type.
-definedThetaType :: Context -> OccName -> Maybe CType
-definedThetaType ctx name = do
-  (_, CType mono) <- find ((== name) . fst) $ ctxDefiningFuncs ctx
-  (_, CType poly) <- find ((== name) . fst) $ ctxModuleFuncs ctx
-  let (_, _, poly') = tcSplitSigmaTy poly
-  subst <- tcUnifyTy poly' mono
-  pure $ CType $ substTy subst $ snd $ splitForAllTys poly
-
-
 splitId :: Id -> (OccName, CType)
 splitId = occName &&& CType . idType
 
@@ -71,5 +56,3 @@ getFunBindId _ = []
 getCurrentDefinitions :: MonadReader Context m => m [(OccName, CType)]
 getCurrentDefinitions = asks ctxDefiningFuncs
 
-getModuleHypothesis :: MonadReader Context m => m [(OccName, CType)]
-getModuleHypothesis = asks ctxModuleFuncs
