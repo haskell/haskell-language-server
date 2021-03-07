@@ -1,6 +1,8 @@
 {-# LANGUAGE ViewPatterns #-}
 
-module Ide.Plugin.Tactic.Judgements.Theta where
+module Ide.Plugin.Tactic.Judgements.Theta
+  ( getMethodHypothesisAtHole
+  ) where
 
 import Data.Maybe (fromMaybe)
 import Development.IDE.GHC.Compat
@@ -10,18 +12,20 @@ import Ide.Plugin.Tactic.Machinery
 import Ide.Plugin.Tactic.Types
 
 
-getMethodHypothesisAtHole :: Data a => SrcSpan -> a -> Hypothesis CType
+------------------------------------------------------------------------------
+-- | Create a 'Hypothesis' containing 'ClassMethodPrv' provenance. For every
+-- dictionary that is in scope at the given 'SrcSpan', find every method and
+-- superclass method available.
+getMethodHypothesisAtHole :: SrcSpan -> LHsBinds GhcTc -> Hypothesis CType
 getMethodHypothesisAtHole dst
   = Hypothesis
   . fromMaybe []
   . foldMap methodHypothesis
-  . getEvidenceAtHole dst
+  . (everything (<>) $ mkQ mempty $ evbinds dst)
 
 
-getEvidenceAtHole :: Data a => SrcSpan -> a -> [PredType]
-getEvidenceAtHole dst a = everything (<>) (mkQ mempty $ evbinds dst) a
-
-
+------------------------------------------------------------------------------
+-- | Extract the types of the evidence bindings in scope.
 evbinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
 evbinds dst (L src (AbsBinds _ _ h _ _ _ _))
   | dst `isSubspanOf` src = fmap idType h
