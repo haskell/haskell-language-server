@@ -167,10 +167,7 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
       func = hi_name hi
   ty' <- freshTyvars ty
   let (_, _, args, ret) = tacticsSplitFunTy ty'
-  -- TODO(sandy): Bug here! Prevents us from doing mono-map like things
-  -- Don't require new holes for locally bound vars; only respect linearity
-  -- see https://github.com/haskell/haskell-language-server/issues/1447
-  requireNewHoles $ rule $ \jdg -> do
+  rule $ \jdg -> do
     unify g (CType ret)
     ext
         <- fmap unzipTrace
