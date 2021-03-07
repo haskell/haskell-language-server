@@ -3,11 +3,10 @@
 
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE RankNTypes            #-}
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
+
 module Development.IDE.Plugin.CodeAction
     ( descriptor
 
@@ -20,7 +19,6 @@ import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
 import           Control.Concurrent.Extra                          (readVar)
-import           Control.Lens                                      (alaf)
 import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
@@ -34,7 +32,6 @@ import           Data.List.NonEmpty                                (NonEmpty ((:
 import qualified Data.List.NonEmpty                                as NE
 import qualified Data.Map                                          as M
 import           Data.Maybe
-import           Data.Monoid                                       (Ap (..))
 import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
@@ -47,13 +44,12 @@ import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (prettyPrint,
                                                                     printRdrName)
+import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.TypeLenses                 (GetGlobalBindingTypeSigs (GetGlobalBindingTypeSigs),
-                                                                    GlobalBindingTypeSigsResult,
                                                                     suggestSignature)
 import           Development.IDE.Spans.Common
-import           Development.IDE.Spans.LocalBindings               (Bindings)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
@@ -117,7 +113,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
         [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
+        | x <- xs, (title, tedit) <- suggestAction $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
       actions' = caRemoveRedundantImports parsedModule text diag xs uri
@@ -129,55 +125,29 @@ mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title diags edit =
   InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) Nothing Nothing (Just edit) Nothing
 
-rewrite ::
-    Maybe DynFlags ->
-    Maybe (Annotated ParsedSource) ->
-    (DynFlags -> ParsedSource -> [(T.Text, [Rewrite])]) ->
-    [(T.Text, [TextEdit])]
-rewrite (Just df) (Just ps) f
-    | Right edit <- (traverse . traverse)
-        (alaf Ap foldMap (rewriteToEdit df (annsA ps)))
-        (f df $ astA ps) = edit
-rewrite _ _ _ = []
-
-suggestAction
-  :: ExportsMap
-  -> IdeOptions
-  -> Maybe ParsedModule
-  -> Maybe T.Text
-  -> Maybe DynFlags
-  -> Maybe (Annotated ParsedSource)
-  -> Maybe TcModuleResult
-  -> Maybe HieAstResult
-  -> Maybe Bindings
-  -> Maybe GlobalBindingTypeSigsResult
-  -> Diagnostic
-  -> [(T.Text, [TextEdit])]
-suggestAction packageExports ideOptions parsedModule text df annSource tcM har bindings gblSigs diag =
-    concat
+suggestAction :: CodeActionArgs -> [(T.Text, [TextEdit])]
+suggestAction caa =
+    concat $ unwrap caa <$>
    -- Order these suggestions by priority
-    [ suggestSignature True gblSigs tcM bindings diag
-    , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
-    , rewrite df annSource $ \df ps ->
-        suggestImportDisambiguation df text ps diag
-    , rewrite df annSource $ \_ ps -> suggestNewOrExtendImportForClassMethod packageExports ps diag
-    , suggestFillTypeWildcard diag
-    , suggestFixConstructorImport text diag
-    , suggestModuleTypo diag
-    , suggestReplaceIdentifier text diag
-    , removeRedundantConstraints text diag
-    , suggestAddTypeAnnotationToSatisfyContraints text diag
-    , rewrite df annSource $ \df ps -> suggestConstraint df ps diag
-    , rewrite df annSource $ \_ ps -> suggestImplicitParameter ps diag
-    , rewrite df annSource $ \_ ps -> suggestHideShadow ps tcM har diag
-    ] ++ concat
-    [  suggestNewDefinition ideOptions pm text diag
-    ++ suggestNewImport packageExports pm diag
-    ++ suggestDeleteUnusedBinding pm text diag
-    ++ suggestExportUnusedTopBinding text pm diag
-    | Just pm <- [parsedModule]
-    ] ++
-    suggestFillHole diag                   -- Lowest priority
+    [ wrap $ suggestSignature True
+    , wrap suggestExtendImport
+    , wrap suggestImportDisambiguation
+    , wrap suggestNewOrExtendImportForClassMethod
+    , wrap suggestFillTypeWildcard
+    , wrap suggestFixConstructorImport
+    , wrap suggestModuleTypo
+    , wrap suggestReplaceIdentifier
+    , wrap removeRedundantConstraints
+    , wrap suggestAddTypeAnnotationToSatisfyContraints
+    , wrap suggestConstraint
+    , wrap suggestImplicitParameter
+    , wrap suggestHideShadow
+    , wrap suggestNewDefinition
+    , wrap suggestNewImport
+    , wrap suggestDeleteUnusedBinding
+    , wrap suggestExportUnusedTopBinding
+    , wrap suggestFillHole -- Lowest priority
+    ]
 
 findSigOfDecl :: (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDecl pred decls =
