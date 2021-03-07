@@ -7,7 +7,7 @@
 {-# LANGUAGE ViewPatterns        #-}
 {-# OPTIONS_GHC -Wall            #-}
 
-module Ide.Plugin.Tactic.LanguageServer where
+module Wingman.LanguageServer where
 
 import           ConLike
 import           Control.Arrow
@@ -40,18 +40,18 @@ import qualified FastString
 import           GhcPlugins (mkAppTys, tupleDataCon, consDataCon)
 import           Ide.Plugin.Config (PluginConfig (plcConfig))
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.Plugin.Tactic.Context
-import           Ide.Plugin.Tactic.FeatureSet
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
 import           TcRnTypes (tcg_binds)
+import           Wingman.Context
+import           Wingman.FeatureSet
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Range
+import           Wingman.Types
 
 
 tacticDesc :: T.Text -> T.Text

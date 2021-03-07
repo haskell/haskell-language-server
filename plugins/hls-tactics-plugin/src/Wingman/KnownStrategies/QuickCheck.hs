@@ -1,6 +1,6 @@
 {-# LANGUAGE ViewPatterns #-}
 
-module Ide.Plugin.Tactic.KnownStrategies.QuickCheck where
+module Wingman.KnownStrategies.QuickCheck where
 
 import           Control.Monad.Except         (MonadError (throwError))
 import           Data.Bool                    (bool)
@@ -15,10 +15,10 @@ import           GHC.SourceGen.Binds          (match, valBind)
 import           GHC.SourceGen.Expr           (case', lambda, let')
 import           GHC.SourceGen.Overloaded     (App ((@@)), HasList (list))
 import           GHC.SourceGen.Pat            (conP)
-import           Ide.Plugin.Tactic.CodeGen
-import           Ide.Plugin.Tactic.Judgements (jGoal)
-import           Ide.Plugin.Tactic.Machinery  (tracePrim)
-import           Ide.Plugin.Tactic.Types
+import           Wingman.CodeGen
+import           Wingman.Judgements (jGoal)
+import           Wingman.Machinery  (tracePrim)
+import           Wingman.Types
 import           OccName                      (HasOccName (occName), mkVarOcc,
                                                occNameString)
 import           Refinery.Tactic              (goal, rule)

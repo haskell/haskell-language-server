@@ -7,11 +7,12 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Ide.Plugin.Tactic.GHC where
+module Wingman.GHC where
 
 import           Control.Arrow
 import           Control.Monad.State
 import           Data.Function (on)
+import           Data.Functor ((<&>))
 import           Data.List (isPrefixOf)
 import qualified Data.Map as M
 import           Data.Maybe (isJust)
@@ -22,7 +23,6 @@ import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.SourceGen (case', lambda, match)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
-import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcType
 import           TyCoRep
@@ -30,7 +30,7 @@ import           Type
 import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unique
 import           Var
-import Data.Functor ((<&>))
+import           Wingman.Types
 
 
 tcTyVar_maybe :: Type -> Maybe Var

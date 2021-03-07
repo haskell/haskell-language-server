@@ -7,10 +7,10 @@
 
 module CodeAction.RefineSpec where
 
-import Ide.Plugin.Tactic.Types
+import Wingman.Types
 import Test.Hspec
 import Utils
-import Ide.Plugin.Tactic.FeatureSet (allFeatures)
+import Wingman.FeatureSet (allFeatures)
 
 
 spec :: Spec

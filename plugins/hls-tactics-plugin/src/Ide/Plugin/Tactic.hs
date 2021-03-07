@@ -31,13 +31,6 @@ import           Data.Traversable
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
-import           Ide.Plugin.Tactic.CaseSplit
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.LanguageServer
-import           Ide.Plugin.Tactic.LanguageServer.TacticProviders
-import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.Types
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -45,6 +38,13 @@ import           Language.LSP.Types.Capabilities
 import           OccName
 import           Prelude hiding (span)
 import           System.Timeout
+import           Wingman.CaseSplit
+import           Wingman.GHC
+import           Wingman.LanguageServer
+import           Wingman.LanguageServer.TacticProviders
+import           Wingman.Range
+import           Wingman.Tactics
+import           Wingman.Types
 
 
 descriptor :: PluginId -> PluginDescriptor IdeState

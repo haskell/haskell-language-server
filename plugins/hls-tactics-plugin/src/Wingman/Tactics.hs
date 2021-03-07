@@ -6,8 +6,8 @@
 {-# LANGUAGE ViewPatterns          #-}
 
 {-# LANGUAGE TypeApplications #-}
-module Ide.Plugin.Tactic.Tactics
-  ( module Ide.Plugin.Tactic.Tactics
+module Wingman.Tactics
+  ( module Wingman.Tactics
   , runTactic
   ) where
 
@@ -29,18 +29,18 @@ import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
-import           Ide.Plugin.Tactic.CodeGen
-import           Ide.Plugin.Tactic.Context
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Naming
-import           Ide.Plugin.Tactic.Types
 import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import           Wingman.CodeGen
+import           Wingman.Context
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Machinery
+import           Wingman.Naming
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------

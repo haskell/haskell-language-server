@@ -25,25 +25,25 @@ library
   hs-source-dirs:   src
   exposed-modules:
     Ide.Plugin.Tactic
-    Ide.Plugin.Tactic.Auto
-    Ide.Plugin.Tactic.CaseSplit
-    Ide.Plugin.Tactic.CodeGen
-    Ide.Plugin.Tactic.CodeGen.Utils
-    Ide.Plugin.Tactic.Context
-    Ide.Plugin.Tactic.Debug
-    Ide.Plugin.Tactic.FeatureSet
-    Ide.Plugin.Tactic.GHC
-    Ide.Plugin.Tactic.Judgements
-    Ide.Plugin.Tactic.KnownStrategies
-    Ide.Plugin.Tactic.KnownStrategies.QuickCheck
-    Ide.Plugin.Tactic.LanguageServer
-    Ide.Plugin.Tactic.LanguageServer.TacticProviders
-    Ide.Plugin.Tactic.Machinery
-    Ide.Plugin.Tactic.Naming
-    Ide.Plugin.Tactic.Range
-    Ide.Plugin.Tactic.Simplify
-    Ide.Plugin.Tactic.Tactics
-    Ide.Plugin.Tactic.Types
+    Wingman.Auto
+    Wingman.CaseSplit
+    Wingman.CodeGen
+    Wingman.CodeGen.Utils
+    Wingman.Context
+    Wingman.Debug
+    Wingman.FeatureSet
+    Wingman.GHC
+    Wingman.Judgements
+    Wingman.KnownStrategies
+    Wingman.KnownStrategies.QuickCheck
+    Wingman.LanguageServer
+    Wingman.LanguageServer.TacticProviders
+    Wingman.Machinery
+    Wingman.Naming
+    Wingman.Range
+    Wingman.Simplify
+    Wingman.Tactics
+    Wingman.Types
 
   ghc-options:
     -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors

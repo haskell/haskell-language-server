@@ -1,24 +1,24 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase       #-}
 
-module Ide.Plugin.Tactic.Context where
+module Wingman.Context where
 
 import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.List
-import           Data.Maybe                   (mapMaybe)
-import           Data.Set                     (Set)
-import qualified Data.Set                     as S
+import           Data.Maybe (mapMaybe)
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.Tactic.FeatureSet (FeatureSet)
-import           Ide.Plugin.Tactic.GHC        (tacticsThetaTy)
-import           Ide.Plugin.Tactic.Machinery  (methodHypothesis)
-import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcRnTypes
-import           TcType                       (substTy, tcSplitSigmaTy)
-import           Unify                        (tcUnifyTy)
+import           TcType (substTy, tcSplitSigmaTy)
+import           Unify (tcUnifyTy)
+import           Wingman.FeatureSet (FeatureSet)
+import           Wingman.GHC (tacticsThetaTy)
+import           Wingman.Machinery (methodHypothesis)
+import           Wingman.Types
 
 
 mkContext :: FeatureSet -> [(OccName, CType)] -> TcGblEnv -> Context

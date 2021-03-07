@@ -10,9 +10,9 @@ import           Data.Maybe                  (mapMaybe)
 import qualified Data.Set                    as S
 import           Data.Traversable
 import           Data.Tuple                  (swap)
-import           Ide.Plugin.Tactic.Debug
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Types
+import           Wingman.Debug
+import           Wingman.Machinery
+import           Wingman.Types
 import           TcType                      (substTy, tcGetTyVar_maybe)
 import           Test.Hspec
 import           Test.QuickCheck

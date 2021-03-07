@@ -3,23 +3,23 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE ViewPatterns        #-}
 
-module Ide.Plugin.Tactic.CaseSplit
+module Wingman.CaseSplit
   ( mkFirstAgda
   , iterateSplit
   , splitToDecl
   ) where
 
-import           Data.Bool                  (bool)
+import           Data.Bool (bool)
 import           Data.Data
 import           Data.Generics
-import           Data.Set                   (Set)
-import qualified Data.Set                   as S
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           GHC.Exts                   (IsString (fromString))
-import           GHC.SourceGen              (funBinds, match, wildP)
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Types
+import           GHC.Exts (IsString (fromString))
+import           GHC.SourceGen (funBinds, match, wildP)
 import           OccName
+import           Wingman.GHC
+import           Wingman.Types
 
 
 

@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Ide.Plugin.Tactic.Machinery where
+module Wingman.Machinery where
 
 import           Class (Class (classTyVars))
 import           Control.Lens ((<>~))
@@ -31,9 +31,6 @@ import           Data.Ord (Down (..), comparing)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Simplify (simplify)
-import           Ide.Plugin.Tactic.Types
 import           OccName (HasOccName (occName))
 import           Refinery.ProofState
 import           Refinery.Tactic
@@ -41,6 +38,9 @@ import           Refinery.Tactic.Internal
 import           TcType
 import           Type
 import           Unify
+import           Wingman.Judgements
+import           Wingman.Simplify (simplify)
+import           Wingman.Types
 
 
 substCTy :: TCvSubst -> CType -> CType
