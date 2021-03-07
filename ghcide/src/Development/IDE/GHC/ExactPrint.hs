@@ -67,11 +67,6 @@ import Data.Monoid (All(All))
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
 #endif
-#if __GLASGOW_HASKELL__ > 808
-import Bag (listToBag)
-import ErrUtils (mkErrMsg)
-import Outputable (text, neverQualify)
-#endif
 
 
 ------------------------------------------------------------------------------
