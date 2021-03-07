@@ -7,18 +7,15 @@ import           Bag
 import           Control.Arrow
 import           Control.Monad.Reader
 import           Data.List
-import           Data.Maybe                   (mapMaybe)
-import           Data.Set                     (Set)
-import qualified Data.Set                     as S
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Ide.Plugin.Tactic.FeatureSet (FeatureSet)
-import           Ide.Plugin.Tactic.GHC        (tacticsThetaTy)
-import           Ide.Plugin.Tactic.Machinery  (methodHypothesis)
 import           Ide.Plugin.Tactic.Types
 import           OccName
 import           TcRnTypes
-import           TcType                       (substTy, tcSplitSigmaTy)
-import           Unify                        (tcUnifyTy)
+import           TcType (substTy, tcSplitSigmaTy)
+import           Unify (tcUnifyTy)
 
 
 mkContext :: FeatureSet -> [(OccName, CType)] -> TcGblEnv -> Context
@@ -31,23 +28,6 @@ mkContext features locals tcg = Context
                    $ tcg_binds tcg
   , ctxFeatureSet = features
   }
-
-
-------------------------------------------------------------------------------
--- | Find all of the class methods that exist from the givens in the context.
-contextMethodHypothesis :: Context -> Hypothesis CType
-contextMethodHypothesis ctx
-  = Hypothesis
-  . excludeForbiddenMethods
-  . join
-  . concatMap
-      ( mapMaybe methodHypothesis
-      . tacticsThetaTy
-      . unCType
-      )
-  . mapMaybe (definedThetaType ctx)
-  . fmap fst
-  $ ctxDefiningFuncs ctx
 
 
 ------------------------------------------------------------------------------
