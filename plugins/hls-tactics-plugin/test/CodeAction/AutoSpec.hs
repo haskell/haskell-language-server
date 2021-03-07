@@ -10,13 +10,14 @@ module CodeAction.AutoSpec where
 import Ide.Plugin.Tactic.Types
 import Test.Hspec
 import Utils
+import Ide.Plugin.Tactic.FeatureSet (allFeatures)
 
 
 spec :: Spec
 spec = do
   let autoTest = goldenTest Auto ""
 
-  describe "golden tests" $ do
+  describe "golden" $ do
     autoTest 11  8 "AutoSplitGADT.hs"
     autoTest  2 11 "GoldenEitherAuto.hs"
     autoTest  4 12 "GoldenJoinCont.hs"
@@ -45,6 +46,7 @@ spec = do
     autoTest  2 14 "FmapJoin.hs"
     autoTest  2  9 "Fgmap.hs"
     autoTest  4 19 "FmapJoinInLet.hs"
+    autoTest  9 12 "AutoEndo.hs"
     autoTest 12 10 "AutoThetaFix.hs"
 
     failing "flaky in CI" $
@@ -52,4 +54,8 @@ spec = do
 
     failing "not enough auto gas" $
       autoTest 5 18 "GoldenFish.hs"
+
+
+  describe "messages" $ do
+    mkShowMessageTest allFeatures Auto "" 2 8 "MessageForallA.hs" TacticErrors
 

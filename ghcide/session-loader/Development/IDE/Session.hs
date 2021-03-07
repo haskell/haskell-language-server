@@ -395,8 +395,8 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
            logInfo logger $ T.pack ("Consulting the cradle for " <> show lfp)
 
-           when (isNothing hieYaml) $ mRunLspT lspEnv $
-             sendNotification SWindowShowMessage $ notifyUserImplicitCradle lfp
+           when (isNothing hieYaml) $
+             logWarning logger $ implicitCradleWarning lfp
 
            cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
 
@@ -820,8 +820,8 @@ getCacheDirsDefault prefix opts = do
 cacheDir :: String
 cacheDir = "ghcide"
 
-notifyUserImplicitCradle:: FilePath -> ShowMessageParams
-notifyUserImplicitCradle fp =ShowMessageParams MtWarning $
+implicitCradleWarning :: FilePath -> T.Text
+implicitCradleWarning fp =
   "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
   <> T.pack fp <>
   ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n"<>

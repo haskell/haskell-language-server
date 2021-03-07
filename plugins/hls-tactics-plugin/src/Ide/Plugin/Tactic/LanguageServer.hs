@@ -47,7 +47,7 @@ import           Ide.Plugin.Tactic.Judgements
 import           Ide.Plugin.Tactic.Judgements.Theta (getMethodHypothesisAtHole)
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Types
-import           Language.LSP.Server (MonadLsp)
+import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
@@ -345,4 +345,19 @@ isRhsHole rss tcs = everything (||) (mkQ False $ \case
   TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
   _                                        -> False
   ) tcs
+
+
+ufmSeverity :: UserFacingMessage -> MessageType
+ufmSeverity TacticErrors            = MtError
+ufmSeverity TimedOut                = MtInfo
+ufmSeverity NothingToDo             = MtInfo
+ufmSeverity (InfrastructureError _) = MtError
+
+
+mkShowMessageParams :: UserFacingMessage -> ShowMessageParams
+mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show ufm
+
+
+showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
+showLspMessage = sendNotification SWindowShowMessage
 
