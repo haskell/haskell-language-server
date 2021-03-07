@@ -200,7 +200,11 @@ cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \Notifica
   liftIO $ cancelRequest (SomeLspId _id)
 
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
-exitHandler exit = LSP.notificationHandler SExit (const $ liftIO exit)
+exitHandler exit = LSP.notificationHandler SExit $ const $ do
+    (_, ide) <- ask
+    -- flush out the Shake session to record a Shake profile if applicable
+    liftIO $ restartShakeSession (shakeExtras ide) []
+    liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
 modifyOptions x = x{ LSP.textDocumentSync   = Just $ tweakTDS origTDS
