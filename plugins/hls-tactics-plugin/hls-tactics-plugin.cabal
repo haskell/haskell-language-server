@@ -34,6 +34,7 @@ library
     Ide.Plugin.Tactic.FeatureSet
     Ide.Plugin.Tactic.GHC
     Ide.Plugin.Tactic.Judgements
+    Ide.Plugin.Tactic.Judgements.Theta
     Ide.Plugin.Tactic.KnownStrategies
     Ide.Plugin.Tactic.KnownStrategies.QuickCheck
     Ide.Plugin.Tactic.LanguageServer

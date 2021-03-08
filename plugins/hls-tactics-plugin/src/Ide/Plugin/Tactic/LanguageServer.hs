@@ -44,6 +44,7 @@ import           Ide.Plugin.Tactic.Context
 import           Ide.Plugin.Tactic.FeatureSet
 import           Ide.Plugin.Tactic.GHC
 import           Ide.Plugin.Tactic.Judgements
+import           Ide.Plugin.Tactic.Judgements.Theta (getMethodHypothesisAtHole)
 import           Ide.Plugin.Tactic.Range
 import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Server (MonadLsp, sendNotification)
@@ -139,7 +140,7 @@ mkJudgementAndContext
     -> TcModuleResult
     -> (Judgement, Context)
 mkJudgementAndContext features g binds rss tcmod = do
-      let tcg  = tmrTypechecked tcmod
+      let tcg = tmrTypechecked tcmod
           tcs = tcg_binds tcg
           ctx = mkContext features
                   (mapMaybe (sequenceA . (occName *** coerce))
@@ -148,7 +149,7 @@ mkJudgementAndContext features g binds rss tcmod = do
           top_provs = getRhsPosVals rss tcs
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
-          cls_hy = contextMethodHypothesis ctx
+          cls_hy = getMethodHypothesisAtHole (RealSrcSpan rss) tcs
        in ( mkFirstJudgement
               (local_hy <> cls_hy)
               (isRhsHole rss tcs)
