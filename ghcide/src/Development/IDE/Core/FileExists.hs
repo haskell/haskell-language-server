@@ -200,7 +200,7 @@ fileExistsRules lspEnv vfs = do
 -- Requires an lsp client that provides WatchedFiles notifications, but assumes that this has already been checked.
 fileExistsRulesFast :: (NormalizedFilePath -> Action Bool) -> VFSHandle -> Rules ()
 fileExistsRulesFast isWatched vfs =
-    defineEarlyCutoff $ \GetFileExists file -> do
+    defineEarlyCutoff $ RuleNoDiagnostics $ \GetFileExists file -> do
         isWF <- isWatched file
         if isWF
             then fileExistsFast vfs file
@@ -222,7 +222,7 @@ For the VFS lookup, however, we won't get prompted to flush the result, so inste
 we use 'alwaysRerun'.
 -}
 
-fileExistsFast :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([a], Maybe Bool))
+fileExistsFast :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsFast vfs file = do
     -- Could in principle use 'alwaysRerun' here, but it's too slwo, See Note [Invalidating file existence results]
     mp <- getFileExistsMapUntracked
@@ -233,21 +233,21 @@ fileExistsFast vfs file = do
       -- We don't know about it: use the slow route.
       -- Note that we do *not* call 'fileExistsSlow', as that would trigger 'alwaysRerun'.
       Nothing    -> liftIO $ getFileExistsVFS vfs file
-    pure (summarizeExists exist, ([], Just exist))
+    pure (summarizeExists exist, Just exist)
 
 summarizeExists :: Bool -> Maybe BS.ByteString
 summarizeExists x = Just $ if x then BS.singleton 1 else BS.empty
 
 fileExistsRulesSlow :: VFSHandle -> Rules ()
 fileExistsRulesSlow vfs =
-  defineEarlyCutoff $ \GetFileExists file -> fileExistsSlow vfs file
+  defineEarlyCutoff $ RuleNoDiagnostics $ \GetFileExists file -> fileExistsSlow vfs file
 
-fileExistsSlow :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, ([a], Maybe Bool))
+fileExistsSlow :: VFSHandle -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe Bool)
 fileExistsSlow vfs file = do
     -- See Note [Invalidating file existence results]
     alwaysRerun
     exist <- liftIO $ getFileExistsVFS vfs file
-    pure (summarizeExists exist, ([], Just exist))
+    pure (summarizeExists exist, Just exist)
 
 getFileExistsVFS :: VFSHandle -> NormalizedFilePath -> IO Bool
 getFileExistsVFS vfs file = do

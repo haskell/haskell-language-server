@@ -56,10 +56,10 @@ instance Binary   GetFilesOfInterest
 ofInterestRules :: Rules ()
 ofInterestRules = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
-    defineEarlyCutoff $ \GetFilesOfInterest _file -> assert (null $ fromNormalizedFilePath _file) $ do
+    defineEarlyCutoff $ RuleNoDiagnostics $ \GetFilesOfInterest _file -> assert (null $ fromNormalizedFilePath _file) $ do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
-        pure (Just $ BS.fromString $ show filesOfInterest, ([], Just filesOfInterest))
+        pure (Just $ BS.fromString $ show filesOfInterest, Just filesOfInterest)
 
 
 -- | Get the files that are open in the IDE.

@@ -38,7 +38,10 @@ module Development.IDE.Core.Shake(
     useWithStale, usesWithStale,
     useWithStale_, usesWithStale_,
     BadDependency(..),
-    define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks,
+    RuleBody(..),
+    define, defineNoDiagnostics,
+    defineEarlyCutoff,
+    defineOnDisk, needOnDisk, needOnDisks,
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
@@ -796,7 +799,12 @@ garbageCollect keep = do
 define
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
-define op = defineEarlyCutoff $ \k v -> (Nothing,) <$> op k v
+define op = defineEarlyCutoff $ Rule $ \k v -> (Nothing,) <$> op k v
+
+defineNoDiagnostics
+    :: IdeRule k v
+    => (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
+defineNoDiagnostics op = defineEarlyCutoff $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
 use :: IdeRule k v
@@ -905,12 +913,31 @@ usesWithStale key files = do
     -- whether the rule succeeded or not.
     mapM (lastValue key) files
 
+data RuleBody k v
+  = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
+  | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+
+
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
     :: IdeRule k v
-    => (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
+    => RuleBody k v
     -> Rules ()
-defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+defineEarlyCutoff (Rule op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+    defineEarlyCutoff' True key file old mode $ op key file
+defineEarlyCutoff (RuleNoDiagnostics op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+    defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
+
+defineEarlyCutoff'
+    :: IdeRule k v
+    => Bool  -- ^ update diagnostics
+    -> k
+    -> NormalizedFilePath
+    -> Maybe BS.ByteString
+    -> RunMode
+    -> Action (Maybe BS.ByteString, IdeResult v)
+    -> Action (RunResult (A (RuleResult k)))
+defineEarlyCutoff' doDiagnostics key file old mode action = do
     extras@ShakeExtras{state, inProgress} <- getShakeExtras
     -- don't do progress for GetFileExists, as there are lots of non-nodes for just that one key
     (if show key == "GetFileExists" then id else withProgressVar inProgress file) $ do
@@ -921,7 +948,8 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                     -- No changes in the dependencies and we have
                     -- an existing result.
                     Just (v, diags) -> do
-                        updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
+                        when doDiagnostics $
+                            updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ -> return Nothing
@@ -929,7 +957,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
             Just res -> return res
             Nothing -> do
                 (bs, (diags, res)) <- actionCatch
-                    (do v <- op key file; liftIO $ evaluate $ force v) $
+                    (do v <- action; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
                 modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
                 (bs, res) <- case res of
@@ -946,7 +974,8 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
                 liftIO $ setValues state key file res (Vector.fromList diags)
-                updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+                when doDiagnostics $
+                    updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> a == b
                         (ShakeStale a, Just (ShakeStale b))   -> a == b
@@ -957,13 +986,14 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
-  where
-    withProgressVar :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
-    withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
-        -- This functions are deliberately eta-expanded to avoid space leaks.
-        -- Do not remove the eta-expansion without profiling a session with at
-        -- least 1000 modifications.
-        where f shift = modifyVar_ var $ \x -> evaluate $ HMap.insertWith (\_ x -> shift x) file (shift 0) x
+    where
+
+        withProgressVar :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
+        withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
+            -- This functions are deliberately eta-expanded to avoid space leaks.
+            -- Do not remove the eta-expansion without profiling a session with at
+            -- least 1000 modifications.
+            where f shift = modifyVar_ var $ \x -> evaluate $ HMap.insertWith (\_ x -> shift x) file (shift 0) x
 
 isSuccess :: RunResult (A v) -> Bool
 isSuccess (RunResult _ _ (A Failed{})) = False
