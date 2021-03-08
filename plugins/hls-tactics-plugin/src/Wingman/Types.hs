@@ -114,6 +114,12 @@ instance Show CType where
 instance Show OccName where
   show  = unsafeRender
 
+instance Show Name where
+  show  = unsafeRender
+
+instance Show Type where
+  show  = unsafeRender
+
 instance Show Var where
   show  = unsafeRender
 
@@ -130,6 +136,9 @@ instance Show (HsExpr GhcPs) where
   show  = unsafeRender
 
 instance Show (Pat GhcPs) where
+  show  = unsafeRender
+
+instance Show (LHsSigType GhcPs) where
   show  = unsafeRender
 
 

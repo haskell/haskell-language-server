@@ -44,6 +44,7 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
+import           Wingman.Judgements.Theta (getMethodHypothesisAtHole)
 import           Wingman.Range
 import           Wingman.Types
 
@@ -133,7 +134,7 @@ mkJudgementAndContext
     -> TcModuleResult
     -> (Judgement, Context)
 mkJudgementAndContext features g binds rss tcmod = do
-      let tcg  = tmrTypechecked tcmod
+      let tcg = tmrTypechecked tcmod
           tcs = tcg_binds tcg
           ctx = mkContext features
                   (mapMaybe (sequenceA . (occName *** coerce))
@@ -142,7 +143,7 @@ mkJudgementAndContext features g binds rss tcmod = do
           top_provs = getRhsPosVals rss tcs
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
-          cls_hy = contextMethodHypothesis ctx
+          cls_hy = getMethodHypothesisAtHole (RealSrcSpan rss) tcs
        in ( mkFirstJudgement
               (local_hy <> cls_hy)
               (isRhsHole rss tcs)

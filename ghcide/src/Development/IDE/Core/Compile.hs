@@ -115,15 +115,12 @@ import           Control.Concurrent.STM            hiding (orElse)
 import           Data.Aeson                        (toJSON)
 import           Data.Binary
 import           Data.Binary.Put
-import           Data.Bits                         (shiftR)
 import qualified Data.ByteString.Lazy              as LBS
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique
-import           Data.Word
-import           Foreign.Marshal.Array             (withArrayLen)
 import           GHC.Fingerprint
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP

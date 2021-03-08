@@ -96,9 +96,7 @@ idePlugins = pluginDescToIdePlugins allPlugins
       , Ormolu.descriptor   "ormolu"
       , StylishHaskell.descriptor "stylish-haskell"
       , Retrie.descriptor "retrie"
-#if AGPL
       , Brittany.descriptor    "brittany"
-#endif
       , Eval.descriptor "eval"
       ]
 ```
