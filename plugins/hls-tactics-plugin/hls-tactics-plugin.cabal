@@ -34,6 +34,7 @@ library
     Ide.Plugin.Tactic.FeatureSet
     Ide.Plugin.Tactic.GHC
     Ide.Plugin.Tactic.Judgements
+    Ide.Plugin.Tactic.Judgements.Theta
     Ide.Plugin.Tactic.KnownStrategies
     Ide.Plugin.Tactic.KnownStrategies.QuickCheck
     Ide.Plugin.Tactic.LanguageServer
@@ -63,7 +64,7 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen
-    , ghcide         ^>= 1.0.0.0
+    , ghcide         ^>= 1.1.0.0
     , lsp
     , hls-plugin-api ^>= 1.0.0.0
     , lens

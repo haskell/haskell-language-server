@@ -71,7 +71,7 @@ import           Ide.Plugin.Ormolu                 as Ormolu
 import           Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
-#if AGPL && brittany
+#if brittany
 import           Ide.Plugin.Brittany               as Brittany
 #endif
 

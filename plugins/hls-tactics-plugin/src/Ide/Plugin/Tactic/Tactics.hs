@@ -68,6 +68,8 @@ assume name = rule $ \jdg -> do
 
 
 recursion :: TacticsM ()
+-- TODO(sandy): This tactic doesn't fire for the @AutoThetaFix@ golden test,
+-- presumably due to running afoul of 'requireConcreteHole'. Look into this!
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do

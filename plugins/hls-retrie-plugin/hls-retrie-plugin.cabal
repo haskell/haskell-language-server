@@ -25,7 +25,7 @@ library
                ,    lsp-types
                ,    hls-plugin-api       ^>= 1.0.0.0
                ,    ghc
-               ,    ghcide               ^>= 1.0.0.0
+               ,    ghcide               ^>= 1.1.0.0
                ,    hashable
                ,    retrie               >=0.1.1.0
                ,    safe-exceptions
