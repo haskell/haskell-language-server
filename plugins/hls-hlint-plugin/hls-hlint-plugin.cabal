@@ -39,7 +39,7 @@ library
     , extra
     , filepath
     , ghc-exactprint           >=0.6.3.4
-    , ghcide                   ^>= 1.0.0.0
+    , ghcide                   ^>= 1.1.0.0
     , hashable
     , lsp
     , hlint                    >=3.2

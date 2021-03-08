@@ -23,7 +23,7 @@ library
                ,    lsp
                ,    hls-plugin-api ^>= 1.0.0.0
                ,    ghc
-               ,    ghcide         ^>= 1.0.0.0
+               ,    ghcide         ^>= 1.1.0.0
                ,    shake
                ,    text
                ,    unordered-containers

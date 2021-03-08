@@ -24,7 +24,7 @@ library
                   , hls-plugin-api ^>= 1.0.0.0
                   , ghc
                   , ghc-exactprint
-                  , ghcide         ^>= 1.0.0.0
+                  , ghcide         ^>= 1.1.0.0
                   , lens
                   , shake
                   , text

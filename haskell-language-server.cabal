@@ -20,11 +20,6 @@ extra-source-files:
   ChangeLog.md
   include/ghc-api-version.h
 
-flag agpl
-  description: Enable AGPL dependencies
-  default:     True
-  manual:      True
-
 flag pedantic
   description: Enable -Werror
   default:     False
@@ -33,10 +28,6 @@ flag pedantic
 source-repository head
   type:     git
   location: https://github.com/haskell/haskell-language-server
-
-common agpl
-  if flag(agpl)
-    cpp-options: -DAGPL
 
 common common-deps
   build-depends:
@@ -47,7 +38,7 @@ common common-deps
     , text
 
 library
-  import:           agpl, common-deps
+  import:           common-deps
   exposed-modules:
     Ide.Arguments
     Ide.Main
@@ -64,7 +55,7 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>= 1.0.0.0
+    , ghcide                ^>= 1.1.0.0
     , gitrev
     , lsp
     , hie-bios
@@ -269,15 +260,11 @@ common stylishHaskell
     cpp-options: -DstylishHaskell
 
 common brittany
-  if (flag(brittany) || flag(all-formatters)) && flag(agpl)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.Brittany
-    build-depends: brittany                 >= 0.13.1.0
-    cpp-options: -Dbrittany
+  if (flag(brittany) || flag(all-formatters))
+    build-depends: hls-brittany-plugin ^>= 1.0.0.0
 
 executable haskell-language-server
-  import:             agpl
-                    , common-deps
+  import:             common-deps
                     -- plugins
                     , example-plugins
                     , class
@@ -349,7 +336,7 @@ executable haskell-language-server
   default-extensions: DataKinds, TypeOperators
 
 executable haskell-language-server-wrapper
-  import:           agpl, common-deps
+  import:           common-deps
   main-is:          Wrapper.hs
   hs-source-dirs:   exe
   other-modules:    Paths_haskell_language_server
@@ -382,7 +369,7 @@ executable haskell-language-server-wrapper
 -- We removed it due to issues with stack when loading the project using a stack based hie.yaml
 -- See https://github.com/haskell/haskell-language-server/issues/114
 common hls-test-utils
-  import:           agpl, common-deps
+  import:           common-deps
   hs-source-dirs:   test/utils
   other-modules:    Test.Hls.Util
   build-depends:
@@ -414,7 +401,7 @@ common hls-test-utils
   default-language: Haskell2010
 
 test-suite func-test
-  import:             agpl, common-deps, hls-test-utils
+  import:             common-deps, hls-test-utils
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
   build-tool-depends:
@@ -471,7 +458,7 @@ test-suite func-test
     ghc-options: -Werror -Wredundant-constraints
 
 test-suite wrapper-test
-  import:             agpl, hls-test-utils
+  import:             hls-test-utils
   type:               exitcode-stdio-1.0
   build-tool-depends:
     haskell-language-server:haskell-language-server-wrapper -any
