@@ -103,7 +103,7 @@ modifyFileExists state changes = do
     modifyVar_ var $ evaluate . HashMap.union changesMap
     -- See Note [Invalidating file existence results]
     -- flush previous values
-    mapM_ (deleteValue state GetFileExists) (HashMap.keys changesMap)
+    mapM_ (deleteValue (shakeExtras state) GetFileExists) (HashMap.keys changesMap)
 
 fromChange :: FileChangeType -> Maybe Bool
 fromChange FcCreated = Just True
