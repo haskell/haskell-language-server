@@ -3,10 +3,10 @@
 module AutoTupleSpec where
 
 import           Data.Either                  (isRight)
-import           Ide.Plugin.Tactic.Judgements (mkFirstJudgement)
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Tactics    (auto')
-import           Ide.Plugin.Tactic.Types
+import           Wingman.Judgements (mkFirstJudgement)
+import           Wingman.Machinery
+import           Wingman.Tactics    (auto')
+import           Wingman.Types
 import           OccName                      (mkVarOcc)
 import           Test.Hspec
 import           Test.QuickCheck

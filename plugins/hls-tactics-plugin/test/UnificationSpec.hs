@@ -10,14 +10,14 @@ import           Data.Maybe (mapMaybe)
 import qualified Data.Set as S
 import           Data.Traversable
 import           Data.Tuple (swap)
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Types
 import           TcType (substTy, tcGetTyVar_maybe)
 import           Test.Hspec
 import           Test.QuickCheck
 import           Type (mkTyVarTy)
 import           TysPrim (alphaTyVars)
 import           TysWiredIn (mkBoxedTupleTy)
+import           Wingman.Machinery
+import           Wingman.Types
 
 
 spec :: Spec

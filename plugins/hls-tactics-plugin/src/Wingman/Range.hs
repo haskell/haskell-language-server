@@ -1,7 +1,7 @@
-module Ide.Plugin.Tactic.Range where
+module Wingman.Range where
 
 import           Development.IDE.Types.Location
-import qualified FastString                     as FS
+import qualified FastString as FS
 import           SrcLoc
 
 ------------------------------------------------------------------------------

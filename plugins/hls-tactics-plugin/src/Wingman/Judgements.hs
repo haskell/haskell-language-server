@@ -1,7 +1,4 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns     #-}
-
-module Ide.Plugin.Tactic.Judgements where
+module Wingman.Judgements where
 
 import           Control.Arrow
 import           Control.Lens                        hiding (Context)
@@ -16,10 +13,10 @@ import           Data.Set                            (Set)
 import qualified Data.Set                            as S
 import           DataCon                             (DataCon)
 import           Development.IDE.Spans.LocalBindings
-import           Ide.Plugin.Tactic.Types
 import           OccName
 import           SrcLoc
 import           Type
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -211,12 +208,13 @@ jAncestryMap jdg =
 
 
 provAncestryOf :: Provenance -> Set OccName
-provAncestryOf (TopLevelArgPrv o i i3) = S.singleton o
-provAncestryOf (PatternMatchPrv (PatVal mo so ud i)) = maybe mempty S.singleton mo <> so
-provAncestryOf (ClassMethodPrv uc) = mempty
+provAncestryOf (TopLevelArgPrv o _ _) = S.singleton o
+provAncestryOf (PatternMatchPrv (PatVal mo so _ _)) =
+  maybe mempty S.singleton mo <> so
+provAncestryOf (ClassMethodPrv _) = mempty
 provAncestryOf UserPrv = mempty
 provAncestryOf RecursivePrv = mempty
-provAncestryOf (DisallowedPrv d p2) = provAncestryOf p2
+provAncestryOf (DisallowedPrv _ p2) = provAncestryOf p2
 
 
 ------------------------------------------------------------------------------

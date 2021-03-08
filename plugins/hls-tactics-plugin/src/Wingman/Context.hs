@@ -1,16 +1,13 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase       #-}
-
-module Ide.Plugin.Tactic.Context where
+module Wingman.Context where
 
 import Bag
 import Control.Arrow
 import Control.Monad.Reader
 import Development.IDE.GHC.Compat
-import Ide.Plugin.Tactic.FeatureSet (FeatureSet)
-import Ide.Plugin.Tactic.Types
 import OccName
 import TcRnTypes
+import Wingman.FeatureSet (FeatureSet)
+import Wingman.Types
 
 
 mkContext :: FeatureSet -> [(OccName, CType)] -> TcGblEnv -> Context

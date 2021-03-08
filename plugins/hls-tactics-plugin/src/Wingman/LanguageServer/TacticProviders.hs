@@ -1,11 +1,6 @@
-{-# LANGUAGE DeriveAnyClass     #-}
-{-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE ViewPatterns       #-}
-{-# OPTIONS_GHC -Wall           #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Ide.Plugin.Tactic.LanguageServer.TacticProviders
+module Wingman.LanguageServer.TacticProviders
   ( commandProvider
   , commandTactic
   , tcCommandId
@@ -26,12 +21,12 @@ import           DataCon (dataConName)
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
-import           Ide.Plugin.Tactic.Auto
-import           Ide.Plugin.Tactic.FeatureSet
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.Types
+import           Wingman.Auto
+import           Wingman.FeatureSet
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Tactics
+import           Wingman.Types
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types

@@ -1,21 +1,11 @@
-{-# LANGUAGE DeriveFoldable             #-}
-{-# LANGUAGE DeriveFunctor              #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DeriveTraversable          #-}
-{-# LANGUAGE DerivingVia                #-}
-{-# LANGUAGE FlexibleContexts           #-}
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
-{-# OPTIONS_GHC -fno-warn-orphans       #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Ide.Plugin.Tactic.Types
-  ( module Ide.Plugin.Tactic.Types
-  , module Ide.Plugin.Tactic.Debug
+module Wingman.Types
+  ( module Wingman.Types
+  , module Wingman.Debug
   , OccName
   , Name
   , Type
@@ -35,22 +25,22 @@ import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Maybe (fromMaybe)
 import           Data.Semigroup
 import           Data.Set (Set)
-import qualified Data.Text as T
 import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Tree
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           GHC.SourceGen (var)
-import           Ide.Plugin.Tactic.Debug
-import           Ide.Plugin.Tactic.FeatureSet
 import           OccName
 import           Refinery.Tactic
 import           System.IO.Unsafe (unsafePerformIO)
 import           Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
 import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
 import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
+import           Wingman.Debug
+import           Wingman.FeatureSet
 
 
 ------------------------------------------------------------------------------
@@ -297,7 +287,7 @@ type Judgement = Judgement' CType
 
 
 newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
-    deriving (Functor, Applicative, Monad, MonadReader Context)
+    deriving newtype (Functor, Applicative, Monad, MonadReader Context)
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
@@ -445,7 +435,7 @@ rose a rs = Rose $ Node a $ coerce rs
 
 
 ------------------------------------------------------------------------------
--- | The results of 'Ide.Plugin.Tactic.Machinery.runTactic'
+-- | The results of 'Wingman.Machinery.runTactic'
 data RunTacticResults = RunTacticResults
   { rtr_trace       :: Trace
   , rtr_extract     :: LHsExpr GhcPs
