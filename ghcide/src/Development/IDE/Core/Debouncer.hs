@@ -44,13 +44,14 @@ asyncRegisterEvent d 0 k fire = do
         whenJust (Map.lookup k m) cancel
         pure $ Map.delete k m
     fire
-asyncRegisterEvent d delay k fire = modifyVar_ d $ \m -> mask_ $ do
-    whenJust (Map.lookup k m) cancel
+asyncRegisterEvent d delay k fire = do
     a <- asyncWithUnmask $ \unmask -> unmask $ do
         sleep delay
         fire
         modifyVar_ d (pure . Map.delete k)
-    pure $ Map.insert k a m
+    modifyVar_ d $ \m -> mask_ $ do
+        whenJust (Map.lookup k m) cancel
+        pure $ Map.insert k a m
 
 -- | Debouncer used in the DAML CLI compiler that emits events immediately.
 noopDebouncer :: Debouncer k
