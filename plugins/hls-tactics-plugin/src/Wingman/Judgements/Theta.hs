@@ -1,6 +1,6 @@
 {-# LANGUAGE ViewPatterns #-}
 
-module Ide.Plugin.Tactic.Judgements.Theta
+module Wingman.Judgements.Theta
   ( getMethodHypothesisAtHole
   ) where
 
@@ -10,8 +10,8 @@ import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Generics.SYB
 import           GhcPlugins (EvVar, mkVarOcc)
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Types
+import           Wingman.Machinery
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------

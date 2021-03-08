@@ -2,7 +2,7 @@
 {-# LANGUAGE CPP              #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Ide.Plugin.Tactic.Debug
+module Wingman.Debug
   ( unsafeRender
   , unsafeRender'
   , traceM

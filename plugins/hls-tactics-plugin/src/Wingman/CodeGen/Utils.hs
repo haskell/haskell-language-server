@@ -1,6 +1,4 @@
-{-# LANGUAGE ViewPatterns #-}
-
-module Ide.Plugin.Tactic.CodeGen.Utils where
+module Wingman.CodeGen.Utils where
 
 import           Data.List
 import           DataCon
@@ -8,7 +6,7 @@ import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen              (RdrNameStr, recordConE)
 import           GHC.SourceGen.Overloaded
-import           Ide.Plugin.Tactic.GHC      (getRecordFields)
+import           Wingman.GHC      (getRecordFields)
 import           Name
 
 
