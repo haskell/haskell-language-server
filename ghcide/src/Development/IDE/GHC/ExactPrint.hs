@@ -68,7 +68,6 @@ import Data.Monoid (All(All), Any(Any))
 import Data.Functor.Compose (Compose(Compose))
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
-import Debug.Trace (traceM)
 #endif
 
 
@@ -106,7 +105,6 @@ useAnnotatedSource herald state nfp =
 newtype Graft m a = Graft
     { runGraft :: DynFlags -> a -> TransformT m a
     }
-
 
 hoistGraft :: (forall x. m x -> n x) -> Graft m a -> Graft n a
 hoistGraft h (Graft f) = Graft (fmap (hoistTransform h) . f)
@@ -323,10 +321,7 @@ genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
 -- function. The result doesn't perform any searching, so should be driven via
 -- 'everywhereM' or friends.
 mkBindListT :: forall b m. (Typeable b, Data b, Monad m) => (b -> m [b]) -> GenericM m
-mkBindListT f = mkM $ \case
-  (xs :: [b]) -> do
-    traceM $ "found something! " <> gshow xs
-    fmap join $ traverse f xs
+mkBindListT f = mkM $ fmap join . traverse f
 
 
 graftDecls ::
