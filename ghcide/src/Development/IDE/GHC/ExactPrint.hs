@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP                #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DerivingVia        #-}
 {-# LANGUAGE GADTs              #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE RankNTypes         #-}
@@ -10,10 +11,11 @@ module Development.IDE.GHC.ExactPrint
       graftDecls,
       graftDeclsWithM,
       annotate,
+      annotateDecl,
       hoistGraft,
       graftWithM,
-      graftWithSmallestM,
-      graftSmallestDecls,
+      genericGraftWithSmallestM,
+      genericGraftWithLargestM,
       graftSmallestDeclsWithM,
       transform,
       transformM,
@@ -27,6 +29,7 @@ module Development.IDE.GHC.ExactPrint
       TransformT,
       Anns,
       Annotate,
+      mkBindListT,
     )
 where
 
@@ -63,9 +66,11 @@ import Parser (parseIdentifier)
 import Data.Traversable (for)
 import Data.Foldable (Foldable(fold))
 import Data.Bool (bool)
-import Data.Monoid (All(All))
+import Data.Monoid (All(All), Any(Any))
+import Data.Functor.Compose (Compose(Compose))
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
+import Debug.Trace (traceM)
 #endif
 
 
@@ -103,6 +108,7 @@ useAnnotatedSource herald state nfp =
 newtype Graft m a = Graft
     { runGraft :: DynFlags -> a -> TransformT m a
     }
+
 
 hoistGraft :: (forall x. m x -> n x) -> Graft m a -> Graft n a
 hoistGraft h (Graft f) = Graft (fmap (hoistTransform h) . f)
@@ -286,30 +292,44 @@ graftWithM dst trans = Graft $ \dflags a -> do
         )
         a
 
-graftWithSmallestM ::
-    forall ast m a.
-    (Fail.MonadFail m, Data a, ASTElement ast) =>
+genericIsSubspan :: forall ast. Typeable ast => Proxy (Located ast) -> SrcSpan -> GenericQ (Maybe Bool)
+genericIsSubspan _ dst = mkQ Nothing $ \case
+  (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
+
+-- | Run the given transformation only on the smallest node in the tree that
+-- contains the 'SrcSpan'.
+genericGraftWithSmallestM ::
+    forall m a ast.
+    (Monad m, Data a, Typeable ast) =>
+    Proxy (Located ast) ->
     SrcSpan ->
-    (Located ast -> TransformT m (Maybe (Located ast))) ->
+    (DynFlags -> GenericM (TransformT m)) ->
     Graft m a
-graftWithSmallestM dst trans = Graft $ \dflags a -> do
-    everywhereM'
-        ( mkM $
-            \case
-                val@(L src _ :: Located ast)
-                    | dst `isSubspanOf` src -> do
-                        mval <- trans val
-                        case mval of
-                            Just val' -> do
-                                (anns, val'') <-
-                                    hoistTransform (either Fail.fail pure) $
-                                        annotate dflags True $ maybeParensAST val'
-                                modifyAnnsT $ mappend anns
-                                pure val''
-                            Nothing -> pure val
-                l -> pure l
-        )
-        a
+genericGraftWithSmallestM proxy dst trans = Graft $ \dflags ->
+    smallestM (genericIsSubspan proxy dst) (trans dflags)
+
+-- | Run the given transformation only on the largest node in the tree that
+-- contains the 'SrcSpan'.
+genericGraftWithLargestM ::
+    forall m a ast.
+    (Monad m, Data a, Typeable ast) =>
+    Proxy (Located ast) ->
+    SrcSpan ->
+    (DynFlags -> GenericM (TransformT m)) ->
+    Graft m a
+genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
+    largestM (genericIsSubspan proxy dst) (trans dflags)
+
+
+-- | Lift a function that replaces a value with several values into a generic
+-- function. The result doesn't perform any searching, so should be driven via
+-- 'everywhereM' or friends.
+mkBindListT :: forall b m. (Typeable b, Data b, Monad m) => (b -> m [b]) -> GenericM m
+mkBindListT f = mkM $ \case
+  (xs :: [b]) -> do
+    traceM $ "found something! " <> gshow xs
+    fmap join $ traverse f xs
+
 
 graftDecls ::
     forall a.
@@ -319,29 +339,10 @@ graftDecls ::
     Graft (Either String) a
 graftDecls dst decs0 = Graft $ \dflags a -> do
     decs <- forM decs0 $ \decl -> do
-        (anns, decl') <- annotateDecl dflags decl
-        modifyAnnsT $ mappend anns
-        pure decl'
+        annotateDecl dflags decl
     let go [] = DL.empty
         go (L src e : rest)
             | src == dst = DL.fromList decs <> DL.fromList rest
-            | otherwise = DL.singleton (L src e) <> go rest
-    modifyDeclsT (pure . DL.toList . go) a
-
-graftSmallestDecls ::
-    forall a.
-    (HasDecls a) =>
-    SrcSpan ->
-    [LHsDecl GhcPs] ->
-    Graft (Either String) a
-graftSmallestDecls dst decs0 = Graft $ \dflags a -> do
-    decs <- forM decs0 $ \decl -> do
-        (anns, decl') <- annotateDecl dflags decl
-        modifyAnnsT $ mappend anns
-        pure decl'
-    let go [] = DL.empty
-        go (L src e : rest)
-            | dst `isSubspanOf` src = DL.fromList decs <> DL.fromList rest
             | otherwise = DL.singleton (L src e) <> go rest
     modifyDeclsT (pure . DL.toList . go) a
 
@@ -356,11 +357,8 @@ graftSmallestDeclsWithM dst toDecls = Graft $ \dflags a -> do
         go (e@(L src _) : rest)
             | dst `isSubspanOf` src = toDecls e >>= \case
                 Just decs0 -> do
-                    decs <- forM decs0 $ \decl -> do
-                        (anns, decl') <-
-                            annotateDecl dflags decl
-                        modifyAnnsT $ mappend anns
-                        pure decl'
+                    decs <- forM decs0 $ \decl ->
+                        annotateDecl dflags decl
                     pure $ DL.fromList decs <> DL.fromList rest
                 Nothing -> (DL.singleton e <>) <$> go rest
             | otherwise = (DL.singleton e <>) <$> go rest
@@ -377,12 +375,9 @@ graftDeclsWithM dst toDecls = Graft $ \dflags a -> do
         go (e@(L src _) : rest)
             | src == dst = toDecls e >>= \case
                 Just decs0 -> do
-                    decs <- forM decs0 $ \decl -> do
-                        (anns, decl') <-
-                            hoistTransform (either Fail.fail pure) $
-                            annotateDecl dflags decl
-                        modifyAnnsT $ mappend anns
-                        pure decl'
+                    decs <- forM decs0 $ \decl ->
+                        hoistTransform (either Fail.fail pure) $
+                          annotateDecl dflags decl
                     pure $ DL.fromList decs <> DL.fromList rest
                 Nothing -> (DL.singleton e <>) <$> go rest
             | otherwise = (DL.singleton e <>) <$> go rest
@@ -461,7 +456,7 @@ annotate dflags needs_space ast = do
     pure (anns', expr')
 
 -- | Given an 'LHsDecl', compute its exactprint annotations.
-annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (Anns, LHsDecl GhcPs)
+annotateDecl :: DynFlags -> LHsDecl GhcPs -> TransformT (Either String) (LHsDecl GhcPs)
 -- The 'parseDecl' function fails to parse 'FunBind' 'ValD's which contain
 -- multiple matches. To work around this, we split the single
 -- 'FunBind'-of-multiple-'Match'es into multiple 'FunBind's-of-one-'Match',
@@ -485,13 +480,15 @@ annotateDecl dflags
     let expr' = L src $ set_matches alts'
         anns'' = setPrecedingLines expr' 1 0 $ fold anns'
 
-    pure (anns'', expr')
+    modifyAnnsT $ mappend anns''
+    pure expr'
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
     (anns, expr') <- lift $ mapLeft show $ parseDecl dflags uniq rendered
     let anns' = setPrecedingLines expr' 1 0 anns
-    pure (anns', expr')
+    modifyAnnsT $ mappend anns'
+    pure expr'
 
 ------------------------------------------------------------------------------
 
@@ -504,3 +501,63 @@ render dflags = showSDoc dflags . ppr
 -- | Put parentheses around an expression if required.
 parenthesize :: LHsExpr GhcPs -> LHsExpr GhcPs
 parenthesize = parenthesizeHsExpr appPrec
+
+
+------------------------------------------------------------------------------
+-- Custom SYB machinery
+------------------------------------------------------------------------------
+
+-- | Generic monadic transformations that return side-channel data.
+type GenericMQ r m = forall a. Data a => a -> m (r, a)
+
+------------------------------------------------------------------------------
+-- | Apply the given 'GenericM' at all every node whose children fail the
+-- 'GenericQ', but which passes the query itself.
+smallestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
+smallestM q f = fmap snd . go
+  where
+    go :: GenericMQ Any m
+    go x = do
+      case q x of
+        Nothing -> gmapMQ go x
+        Just True -> do
+          it@(r, x') <- gmapMQ go x
+          case r of
+            Any True -> pure it
+            Any False -> fmap (Any True,) $ f x'
+        Just False -> pure (mempty, x)
+
+------------------------------------------------------------------------------
+-- | Apply the given 'GenericM' at every node that passes the 'GenericQ', but
+-- don't descend into children if the query matches.
+largestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
+largestM q f = go
+  where
+    go :: GenericM m
+    go x = do
+      case q x of
+        Just True -> f x
+        Just False -> pure x
+        Nothing -> gmapM go x
+
+newtype MonadicQuery r m a = MonadicQuery
+  { runMonadicQuery :: m (r, a)
+  }
+  deriving stock (Functor)
+  deriving Applicative via Compose m ((,) r)
+
+
+------------------------------------------------------------------------------
+-- | Like 'gmapM', but also returns side-channel data.
+gmapMQ ::
+    forall f r a. (Monoid r, Data a, Applicative f) =>
+    (forall d. Data d => d -> f (r, d)) ->
+    a ->
+    f (r, a)
+gmapMQ f = runMonadicQuery . gfoldl k pure
+  where
+    k :: Data d => MonadicQuery r f (d -> b) -> d -> MonadicQuery r f b
+    k c x = c <*> MonadicQuery (f x)
+
+
+
