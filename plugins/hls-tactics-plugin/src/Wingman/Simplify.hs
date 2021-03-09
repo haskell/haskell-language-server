@@ -1,22 +1,17 @@
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Ide.Plugin.Tactic.Simplify
+module Wingman.Simplify
   ( simplify
   ) where
 
-import           Data.Generics                   (GenericT, everywhere, mkT)
-import           Data.List.Extra                 (unsnoc)
-import           Data.Monoid                     (Endo (..))
-import           Development.IDE.GHC.Compat
-import           GHC.SourceGen                   (var)
-import           GHC.SourceGen.Expr              (lambda)
-import           Ide.Plugin.Tactic.CodeGen.Utils
-import           Ide.Plugin.Tactic.GHC           (containsHsVar,
-                                                  fromPatCompatPs)
+import Data.Generics (GenericT, everywhere, mkT)
+import Data.List.Extra (unsnoc)
+import Data.Monoid (Endo (..))
+import Development.IDE.GHC.Compat
+import GHC.SourceGen (var)
+import GHC.SourceGen.Expr (lambda)
+import Wingman.CodeGen.Utils
+import Wingman.GHC (containsHsVar, fromPatCompatPs)
 
 
 ------------------------------------------------------------------------------

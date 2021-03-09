@@ -7,10 +7,10 @@
 
 module CodeAction.AutoSpec where
 
-import Ide.Plugin.Tactic.Types
+import Wingman.Types
 import Test.Hspec
 import Utils
-import Ide.Plugin.Tactic.FeatureSet (allFeatures)
+import Wingman.FeatureSet (allFeatures)
 
 
 spec :: Spec
@@ -47,6 +47,7 @@ spec = do
     autoTest  2  9 "Fgmap.hs"
     autoTest  4 19 "FmapJoinInLet.hs"
     autoTest  9 12 "AutoEndo.hs"
+    autoTest 12 10 "AutoThetaFix.hs"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen.hs"

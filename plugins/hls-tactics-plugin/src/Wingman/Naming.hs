@@ -1,21 +1,18 @@
-{-# LANGUAGE ViewPatterns #-}
-
-module Ide.Plugin.Tactic.Naming where
+module Wingman.Naming where
 
 import           Control.Monad.State.Strict
-import           Data.Bool                  (bool)
+import           Data.Bool (bool)
 import           Data.Char
-import           Data.Map                   (Map)
-import qualified Data.Map                   as M
-import           Data.Set                   (Set)
-import qualified Data.Set                   as S
+import           Data.Map (Map)
+import qualified Data.Map as M
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Data.Traversable
 import           Name
 import           TcType
 import           TyCon
 import           Type
-import           TysWiredIn                 (listTyCon, pairTyCon, unitTyCon)
-import Ide.Plugin.Tactic.Types
+import           TysWiredIn (listTyCon, pairTyCon, unitTyCon)
 
 
 ------------------------------------------------------------------------------

@@ -1,13 +1,5 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedLabels      #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE ViewPatterns          #-}
-
-{-# LANGUAGE TypeApplications #-}
-module Ide.Plugin.Tactic.Tactics
-  ( module Ide.Plugin.Tactic.Tactics
+module Wingman.Tactics
+  ( module Wingman.Tactics
   , runTactic
   ) where
 
@@ -29,18 +21,18 @@ import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
-import           Ide.Plugin.Tactic.CodeGen
-import           Ide.Plugin.Tactic.Context
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Naming
-import           Ide.Plugin.Tactic.Types
 import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import           Wingman.CodeGen
+import           Wingman.Context
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Machinery
+import           Wingman.Naming
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -68,6 +60,8 @@ assume name = rule $ \jdg -> do
 
 
 recursion :: TacticsM ()
+-- TODO(sandy): This tactic doesn't fire for the @AutoThetaFix@ golden test,
+-- presumably due to running afoul of 'requireConcreteHole'. Look into this!
 recursion = requireConcreteHole $ tracing "recursion" $ do
   defs <- getCurrentDefinitions
   attemptOn (const defs) $ \(name, ty) -> markRecursion $ do
@@ -246,7 +240,7 @@ splitDataCon dc =
   requireConcreteHole $ tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
     let g = jGoal jdg
     case splitTyConApp_maybe $ unCType g of
-      Just (tc, apps) -> do
+      Just (_, apps) -> do
         buildDataCon (unwhitelistingSplit jdg) dc apps
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
@@ -279,11 +273,12 @@ userSplit occ = do
   -- code action, send it as a string, and then look it up again. Can we push
   -- this over LSP somehow instead?
   case splitTyConApp_maybe $ unCType g of
-    Just (tc, apps) -> do
+    Just (tc, _) -> do
       case find (sloppyEqOccName occ . occName . dataConName)
              $ tyConDataCons tc of
         Just dc -> splitDataCon dc
         Nothing -> throwError $ NotInScope occ
+    Nothing -> throwError $ NotInScope occ
 
 
 ------------------------------------------------------------------------------

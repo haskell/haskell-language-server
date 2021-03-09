@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PatternSynonyms   #-}
 
-module Ide.Plugin.Tactic.FeatureSet
+module Wingman.FeatureSet
   ( Feature (..)
   , FeatureSet
   , hasFeature

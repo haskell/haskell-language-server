@@ -14,9 +14,12 @@ module Development.IDE.Core.FileStore(
     VFSHandle,
     makeVFSHandle,
     makeLSPVFSHandle,
-    isFileOfInterestRule
-    ,resetFileStore
-    ,resetInterfaceStore
+    isFileOfInterestRule,
+    resetFileStore,
+    resetInterfaceStore,
+    getModificationTimeImpl,
+    addIdeGlobal,
+    getFileContentsImpl
     ) where
 
 import           Control.Concurrent.Extra
@@ -33,7 +36,8 @@ import           Data.Maybe
 import qualified Data.Rope.UTF16                              as Rope
 import qualified Data.Text                                    as T
 import           Data.Time
-import           Development.IDE.Core.OfInterest              (getFilesOfInterest, OfInterestVar(..))
+import           Development.IDE.Core.OfInterest              (OfInterestVar (..),
+                                                               getFilesOfInterest)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Orphans                  ()
@@ -67,7 +71,9 @@ import           Language.LSP.Server                          hiding
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types                           (FileChangeType (FcChanged),
                                                                FileEvent (FileEvent),
-                                                               uriToFilePath, toNormalizedFilePath)
+                                                               NormalizedFilePath (NormalizedFilePath),
+                                                               toNormalizedFilePath,
+                                                               uriToFilePath)
 import           Language.LSP.VFS
 import           System.FilePath
 
@@ -94,14 +100,22 @@ makeLSPVFSHandle lspEnv = VFSHandle
 
 
 isFileOfInterestRule :: Rules ()
-isFileOfInterestRule = defineEarlyCutoff $ \IsFileOfInterest f -> do
+isFileOfInterestRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsFileOfInterest f -> do
     filesOfInterest <- getFilesOfInterest
     let res = maybe NotFOI IsFOI $ f `HM.lookup` filesOfInterest
-    return (Just $ BS.pack $ show $ hash res, ([], Just res))
+    return (Just $ BS.pack $ show $ hash res, Just res)
 
 getModificationTimeRule :: VFSHandle -> (NormalizedFilePath -> Action Bool) -> Rules ()
-getModificationTimeRule vfs isWatched =
-    defineEarlyCutoff $ \(GetModificationTime_ missingFileDiags) file -> do
+getModificationTimeRule vfs isWatched = defineEarlyCutoff $ Rule $ \(GetModificationTime_ missingFileDiags) file ->
+    getModificationTimeImpl vfs isWatched missingFileDiags file
+
+getModificationTimeImpl :: VFSHandle
+    -> (NormalizedFilePath -> Action Bool)
+    -> Bool
+    -> NormalizedFilePath
+    -> Action
+        (Maybe BS.ByteString, ([FileDiagnostic], Maybe FileVersion))
+getModificationTimeImpl vfs isWatched missingFileDiags file = do
         let file' = fromNormalizedFilePath file
         let wrap time@(l,s) = (Just $ BS.pack $ show time, ([], Just $ ModificationTime l s))
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
@@ -196,16 +210,21 @@ internalTimeToUTCTime large small =
 #endif
 
 getFileContentsRule :: VFSHandle -> Rules ()
-getFileContentsRule vfs =
-    define $ \GetFileContents file -> do
-        -- need to depend on modification time to introduce a dependency with Cutoff
-        time <- use_ GetModificationTime file
-        res <- liftIO $ ideTryIOException file $ do
-            mbVirtual <- getVirtualFile vfs $ filePathToUri' file
-            pure $ Rope.toText . _text <$> mbVirtual
-        case res of
-            Left err       -> return ([err], Nothing)
-            Right contents -> return ([], Just (time, contents))
+getFileContentsRule vfs = define $ \GetFileContents file -> getFileContentsImpl vfs file
+
+getFileContentsImpl
+    :: VFSHandle
+    -> NormalizedFilePath
+    -> Action ([FileDiagnostic], Maybe (FileVersion, Maybe T.Text))
+getFileContentsImpl vfs file = do
+    -- need to depend on modification time to introduce a dependency with Cutoff
+    time <- use_ GetModificationTime file
+    res <- liftIO $ ideTryIOException file $ do
+        mbVirtual <- getVirtualFile vfs $ filePathToUri' file
+        pure $ Rope.toText . _text <$> mbVirtual
+    case res of
+        Left err       -> return ([err], Nothing)
+        Right contents -> return ([], Just (time, contents))
 
 ideTryIOException :: NormalizedFilePath -> IO a -> IO (Either FileDiagnostic a)
 ideTryIOException fp act =

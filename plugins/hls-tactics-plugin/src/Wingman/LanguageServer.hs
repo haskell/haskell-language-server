@@ -1,13 +1,7 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns        #-}
-{-# OPTIONS_GHC -Wall            #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE OverloadedStrings #-}
 
-module Ide.Plugin.Tactic.LanguageServer where
+module Wingman.LanguageServer where
 
 import           ConLike
 import           Control.Arrow
@@ -40,18 +34,19 @@ import qualified FastString
 import           GhcPlugins (mkAppTys, tupleDataCon, consDataCon)
 import           Ide.Plugin.Config (PluginConfig (plcConfig))
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.Plugin.Tactic.Context
-import           Ide.Plugin.Tactic.FeatureSet
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Range
-import           Ide.Plugin.Tactic.Types
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
 import           TcRnTypes (tcg_binds)
+import           Wingman.Context
+import           Wingman.FeatureSet
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Judgements.Theta (getMethodHypothesisAtHole)
+import           Wingman.Range
+import           Wingman.Types
 
 
 tacticDesc :: T.Text -> T.Text
@@ -139,7 +134,7 @@ mkJudgementAndContext
     -> TcModuleResult
     -> (Judgement, Context)
 mkJudgementAndContext features g binds rss tcmod = do
-      let tcg  = tmrTypechecked tcmod
+      let tcg = tmrTypechecked tcmod
           tcs = tcg_binds tcg
           ctx = mkContext features
                   (mapMaybe (sequenceA . (occName *** coerce))
@@ -148,7 +143,7 @@ mkJudgementAndContext features g binds rss tcmod = do
           top_provs = getRhsPosVals rss tcs
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
-          cls_hy = contextMethodHypothesis ctx
+          cls_hy = getMethodHypothesisAtHole (RealSrcSpan rss) tcs
        in ( mkFirstJudgement
               (local_hy <> cls_hy)
               (isRhsHole rss tcs)
