@@ -1,10 +1,8 @@
-{-# LANGUAGE CPP                #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DerivingVia        #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE TypeFamilies       #-}
+{-# LANGUAGE CPP          #-}
+{-# LANGUAGE DerivingVia  #-}
+{-# LANGUAGE GADTs        #-}
+{-# LANGUAGE RankNTypes   #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
