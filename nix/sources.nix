@@ -6,25 +6,33 @@ let
   # The fetchers. fetch_<type> fetches specs of type <type>.
   #
 
-  fetch_file = pkgs: spec:
-    if spec.builtin or true then
-      builtins_fetchurl { inherit (spec) url sha256; }
-    else
-      pkgs.fetchurl { inherit (spec) url sha256; };
+  fetch_file = pkgs: name: spec:
+    let
+      name' = sanitizeName name + "-src";
+    in
+      if spec.builtin or true then
+        builtins_fetchurl { inherit (spec) url sha256; name = name'; }
+      else
+        pkgs.fetchurl { inherit (spec) url sha256; name = name'; };
 
   fetch_tarball = pkgs: name: spec:
     let
-      ok = str: ! builtins.isNull (builtins.match "[a-zA-Z0-9+-._?=]" str);
-      # sanitize the name, though nix will still fail if name starts with period
-      name' = stringAsChars (x: if ! ok x then "-" else x) "${name}-src";
+      name' = sanitizeName name + "-src";
     in
       if spec.builtin or true then
         builtins_fetchTarball { name = name'; inherit (spec) url sha256; }
       else
         pkgs.fetchzip { name = name'; inherit (spec) url sha256; };
 
-  fetch_git = spec:
-    builtins.fetchGit { url = spec.repo; inherit (spec) rev ref; };
+  fetch_git = name: spec:
+    let
+      ref =
+        if spec ? ref then spec.ref else
+          if spec ? branch then "refs/heads/${spec.branch}" else
+            if spec ? tag then "refs/tags/${spec.tag}" else
+              abort "In git source '${name}': Please specify `ref`, `tag` or `branch`!";
+    in
+      builtins.fetchGit { url = spec.repo; inherit (spec) rev; inherit ref; };
 
   fetch_local = spec: spec.path;
 
@@ -40,11 +48,21 @@ let
   # Various helpers
   #
 
+  # https://github.com/NixOS/nixpkgs/pull/83241/files#diff-c6f540a4f3bfa4b0e8b6bafd4cd54e8bR695
+  sanitizeName = name:
+    (
+      concatMapStrings (s: if builtins.isList s then "-" else s)
+        (
+          builtins.split "[^[:alnum:]+._?=-]+"
+            ((x: builtins.elemAt (builtins.match "\\.*(.*)" x) 0) name)
+        )
+    );
+
   # The set of packages used when specs are fetched using non-builtins.
-  mkPkgs = sources:
+  mkPkgs = sources: system:
     let
       sourcesNixpkgs =
-        import (builtins_fetchTarball { inherit (sources.nixpkgs) url sha256; }) {};
+        import (builtins_fetchTarball { inherit (sources.nixpkgs) url sha256; }) { inherit system; };
       hasNixpkgsPath = builtins.any (x: x.prefix == "nixpkgs") builtins.nixPath;
       hasThisAsNixpkgsPath = <nixpkgs> == ./.;
     in
@@ -64,9 +82,9 @@ let
 
     if ! builtins.hasAttr "type" spec then
       abort "ERROR: niv spec ${name} does not have a 'type' attribute"
-    else if spec.type == "file" then fetch_file pkgs spec
+    else if spec.type == "file" then fetch_file pkgs name spec
     else if spec.type == "tarball" then fetch_tarball pkgs name spec
-    else if spec.type == "git" then fetch_git spec
+    else if spec.type == "git" then fetch_git name spec
     else if spec.type == "local" then fetch_local spec
     else if spec.type == "builtin-tarball" then fetch_builtin-tarball name
     else if spec.type == "builtin-url" then fetch_builtin-url name
@@ -80,7 +98,10 @@ let
       saneName = stringAsChars (c: if isNull (builtins.match "[a-zA-Z0-9]" c) then "_" else c) name;
       ersatz = builtins.getEnv "NIV_OVERRIDE_${saneName}";
     in
-      if ersatz == "" then drv else ersatz;
+      if ersatz == "" then drv else
+        # this turns the string into an actual Nix path (for both absolute and
+        # relative paths)
+        if builtins.substring 0 1 ersatz == "/" then /. + ersatz else /. + builtins.getEnv "PWD" + "/${ersatz}";
 
   # Ports of functions for older nix versions
 
@@ -98,25 +119,29 @@ let
 
   # https://github.com/NixOS/nixpkgs/blob/0258808f5744ca980b9a1f24fe0b1e6f0fecee9c/lib/strings.nix#L269
   stringAsChars = f: s: concatStrings (map f (stringToCharacters s));
+  concatMapStrings = f: list: concatStrings (map f list);
   concatStrings = builtins.concatStringsSep "";
 
+  # https://github.com/NixOS/nixpkgs/blob/8a9f58a375c401b96da862d969f66429def1d118/lib/attrsets.nix#L331
+  optionalAttrs = cond: as: if cond then as else {};
+
   # fetchTarball version that is compatible between all the versions of Nix
-  builtins_fetchTarball = { url, name, sha256 }@attrs:
+  builtins_fetchTarball = { url, name ? null, sha256 }@attrs:
     let
       inherit (builtins) lessThan nixVersion fetchTarball;
     in
       if lessThan nixVersion "1.12" then
-        fetchTarball { inherit name url; }
+        fetchTarball ({ inherit url; } // (optionalAttrs (!isNull name) { inherit name; }))
       else
         fetchTarball attrs;
 
   # fetchurl version that is compatible between all the versions of Nix
-  builtins_fetchurl = { url, sha256 }@attrs:
+  builtins_fetchurl = { url, name ? null, sha256 }@attrs:
     let
       inherit (builtins) lessThan nixVersion fetchurl;
     in
       if lessThan nixVersion "1.12" then
-        fetchurl { inherit url; }
+        fetchurl ({ inherit url; } // (optionalAttrs (!isNull name) { inherit name; }))
       else
         fetchurl attrs;
 
@@ -135,7 +160,8 @@ let
   mkConfig =
     { sourcesFile ? if builtins.pathExists ./sources.json then ./sources.json else null
     , sources ? if isNull sourcesFile then {} else builtins.fromJSON (builtins.readFile sourcesFile)
-    , pkgs ? mkPkgs sources
+    , system ? builtins.currentSystem
+    , pkgs ? mkPkgs sources system
     }: rec {
       # The sources, i.e. the attribute set of spec name to spec
       inherit sources;
