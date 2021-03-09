@@ -135,8 +135,13 @@ defaultIdeOptions session = IdeOptions
 
 defaultSkipProgress :: Typeable a => a -> Bool
 defaultSkipProgress key = case () of
+    -- don't do progress for GetFileContents as it's cheap
     _ | Just GetFileContents <- cast key        -> True
+    -- don't do progress for GetFileExists, as there are lots of redundant nodes
+    -- (normally there is one node per file, but this is not the case for GetFileExists)
     _ | Just GetFileExists <- cast key          -> True
+    -- don't do progress for GetModificationTime as there are lot of redundant nodes
+    -- (for the interface files)
     _ | Just GetModificationTime_{} <- cast key -> True
     _                                           -> False
 
