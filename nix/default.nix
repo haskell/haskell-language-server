@@ -2,17 +2,26 @@
 let
   nix-pre-commit-hooks = (import (builtins.fetchTarball "https://github.com/cachix/pre-commit-hooks.nix/tarball/master/" + "/nix/") { sources = sources; }).packages;
   overlay = _self: pkgs:
-    let sharedOverrides = {
-        overrides = _self: super: {
-            mkDerivation = args: super.mkDerivation (args //
-                {
-                    # skip running tests for Hackage packages
-                    doCheck = args.pname == "ghcide" || args.pname == "haskell-language-server";
-                    # relax upper bounds
-                    jailbreak = args.pname != "jailbreak-cabal";
-                });
+    let
+        sharedOverrides = {
+          overrides = with pkgs.haskell.lib;
+            _self: super: {
+              svg-builder = doJailbreak super.svg-builder;
+              statestack = doJailbreak super.statestack;
+              active = doJailbreak super.active;
+              monoid-extras = doJailbreak super.monoid-extras;
+              size-based = doJailbreak super.size-based;
+              force-layout = doJailbreak super.force-layout;
+              dual-tree = doJailbreak super.dual-tree;
+              diagrams-core = doJailbreak super.diagrams-core;
+              diagrams-lib = doJailbreak super.diagrams-lib;
+              # https://github.com/wz1000/HieDb/pull/27
+              hiedb = dontCheck super.hiedb;
+              diagrams-postscript = doJailbreak super.diagrams-postscript;
+              diagrams-svg = doJailbreak super.diagrams-svg;
+              diagrams-contrib = doJailbreak super.diagrams-contrib;
             };
-            };
+        };
         gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
         extended = haskellPackages:
           haskellPackages.extend (pkgs.haskell.lib.packageSourceOverrides {
