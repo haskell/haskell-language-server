@@ -5,21 +5,23 @@ let
     let
         sharedOverrides = {
           overrides = with pkgs.haskell.lib;
+          let f = drv: dontCheck (doJailbreak drv);
+          in
             _self: super: {
-              svg-builder = doJailbreak super.svg-builder;
-              statestack = doJailbreak super.statestack;
-              active = doJailbreak super.active;
-              monoid-extras = doJailbreak super.monoid-extras;
-              size-based = doJailbreak super.size-based;
-              force-layout = doJailbreak super.force-layout;
-              dual-tree = doJailbreak super.dual-tree;
-              diagrams-core = doJailbreak super.diagrams-core;
-              diagrams-lib = doJailbreak super.diagrams-lib;
+              svg-builder = f super.svg-builder;
+              statestack = f super.statestack;
+              active = f super.active;
+              monoid-extras = f super.monoid-extras;
+              size-based = f super.size-based;
+              force-layout = f super.force-layout;
+              dual-tree = f super.dual-tree;
+              diagrams-core = f super.diagrams-core;
+              diagrams-lib = f super.diagrams-lib;
               # https://github.com/wz1000/HieDb/pull/27
               hiedb = dontCheck super.hiedb;
-              diagrams-postscript = doJailbreak super.diagrams-postscript;
-              diagrams-svg = doJailbreak super.diagrams-svg;
-              diagrams-contrib = doJailbreak super.diagrams-contrib;
+              diagrams-postscript = f super.diagrams-postscript;
+              diagrams-svg = f super.diagrams-svg;
+              diagrams-contrib = f super.diagrams-contrib;
             };
         };
         gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
