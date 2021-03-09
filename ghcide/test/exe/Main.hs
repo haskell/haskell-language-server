@@ -3993,6 +3993,12 @@ nonLocalCompletionTests =
             ["module A where", "import Data.Maybe ()", "Nothing"]
             (Position 2 4)
             "Nothing"
+        , completionCommandTest
+            "type operator parent"
+            ["module A where", "import Data.Type.Equality ()", "f = Ref"]
+            (Position 2 8)
+            "Refl"
+            ["module A where", "import Data.Type.Equality ((:~:) (Refl))", "f = Ref"]
         ]
       , testGroup "Record completion"
         [ completionCommandTest
