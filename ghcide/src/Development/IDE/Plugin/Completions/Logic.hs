@@ -349,8 +349,8 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
         docs <- getDocumentationTryGhc packageState curMod n
         let (mbParent, originName) = case par of
                             NoParent -> (Nothing, nameOccName n)
-                            ParentIs n' -> (Just $ showNameWithoutUniques n', nameOccName n)
-                            FldParent n' lbl -> (Just $ showNameWithoutUniques n', maybe (nameOccName n) mkVarOccFS lbl)
+                            ParentIs n' -> (Just . T.pack $ printName n', nameOccName n)
+                            FldParent n' lbl -> (Just . T.pack $ printName n', maybe (nameOccName n) mkVarOccFS lbl)
         tys <- catchSrcErrors (hsc_dflags packageState) "completion" $ do
                 name' <- lookupName packageState m n
                 return ( name' >>= safeTyThingType
@@ -360,7 +360,7 @@ cacheDataProducer uri env curMod globalEnv inScopeEnv limports = do
 
         let recordCompls = case record_ty of
                 Just (ctxStr, flds) | not (null flds) ->
-                    [mkRecordSnippetCompItem uri mbParent  ctxStr flds (ppr mn) docs imp']
+                    [mkRecordSnippetCompItem uri mbParent ctxStr flds (ppr mn) docs imp']
                 _ -> []
 
         return $ mkNameCompItem uri mbParent originName mn ty Nothing docs imp'
