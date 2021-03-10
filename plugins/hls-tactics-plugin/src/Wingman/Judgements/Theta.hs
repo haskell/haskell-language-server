@@ -9,7 +9,8 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Generics.SYB
-import           GhcPlugins (EvVar, mkVarOcc)
+import           GhcPlugins (mkVarOcc)
+import           TcEvidence
 import           Wingman.Machinery
 import           Wingman.Types
 
@@ -24,7 +25,7 @@ getMethodHypothesisAtHole dst
   . excludeForbiddenMethods
   . fromMaybe []
   . foldMap methodHypothesis
-  . (everything (<>) $ mkQ mempty $ evbinds dst)
+  . (everything (<>) $ mkQ mempty (absbinds dst) `extQ` wrapperbinds dst)
 
 
 ------------------------------------------------------------------------------
@@ -45,9 +46,25 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
 
 
 ------------------------------------------------------------------------------
--- | Extract the types of the evidence bindings in scope.
-evbinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
-evbinds dst (L src (AbsBinds _ _ h _ _ _ _))
+-- | Extract evidence from 'AbsBinds' in scope.
+absbinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
+absbinds dst (L src (AbsBinds _ _ h _ _ _ _))
   | dst `isSubspanOf` src = fmap idType h
-evbinds _ _ = []
+absbinds _ _ = []
+
+
+------------------------------------------------------------------------------
+-- | Extract evidence from 'HsWrapper's in scope
+wrapperbinds ::  SrcSpan -> LHsExpr GhcTc -> [PredType]
+wrapperbinds dst (L src (HsWrap _ h _))
+  | dst `isSubspanOf` src = wrapper h
+wrapperbinds _ _ = []
+
+
+------------------------------------------------------------------------------
+-- | Extract the types of the evidence bindings in scope.
+wrapper ::  HsWrapper -> [PredType]
+wrapper (WpCompose h h2) = wrapper h <> wrapper h2
+wrapper (WpEvLam v) = [idType v]
+wrapper _ = []
 
