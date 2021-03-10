@@ -545,11 +545,9 @@ smallestM q f = fmap snd . go
 
 ------------------------------------------------------------------------------
 -- | Apply the given 'GenericM' at every node that passes the 'GenericQ', but
--- don't descend into children if the query matches.
---
--- The query must be a monotonic function when it returns 'Just'. That is, if
--- @s@ is a subtree of @t@, @q t@ should return @Just True@ if @q s@ does. It
--- is the True-to-false edge of the query that triggers the transformation.
+-- don't descend into children if the query matches. Because this traversal is
+-- root-first, this policy will find the largest subtrees for which the query
+-- holds true.
 --
 -- Why is the query a @Maybe Bool@? The GHC AST intersperses 'Located' nodes
 -- with data nodes, so for any given node we can only definitely return an
