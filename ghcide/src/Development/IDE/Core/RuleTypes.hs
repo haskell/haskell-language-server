@@ -36,10 +36,12 @@ import           HscTypes                                     (HomeModInfo,
                                                                hm_iface,
                                                                hm_linkable)
 
+import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
-import qualified Data.ByteString.Char8                        as BS
+import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Int                                     (Int64)
 import           Data.Text                                    (Text)
+import           Data.Time
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
@@ -168,11 +170,11 @@ hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> hirLinkableFp
 mkHiFileResult :: ModSummary -> HomeModInfo -> HiFileResult
 mkHiFileResult hirModSummary hirHomeMod = HiFileResult{..}
   where
-    hirIfaceFp =
-      fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
+    hirIfaceFp = fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
     hirLinkableFp = case hm_linkable hirHomeMod of
       Nothing -> ""
-      Just l  -> BS.pack $ show $ linkableTime l
+      Just LM{linkableTime}  -> LBS.toStrict $
+        B.encode (fromEnum $ utctDay linkableTime, fromEnum $ utctDayTime linkableTime)
 
 hirModIface :: HiFileResult -> ModIface
 hirModIface = hm_iface . hirHomeMod
