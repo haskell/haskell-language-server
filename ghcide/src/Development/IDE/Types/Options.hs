@@ -2,6 +2,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- | Options
+{-# LANGUAGE RankNTypes #-}
 module Development.IDE.Types.Options
   ( IdeOptions(..)
   , IdePreprocessedSource(..)
@@ -17,26 +18,16 @@ module Development.IDE.Types.Options
   , OptHaddockParse(..)
   ,optShakeFiles) where
 
-import           Control.DeepSeq                   (NFData (..))
 import qualified Data.Text                         as T
+import           Data.Typeable
+import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Types.Diagnostics
-import           Development.IDE.Types.HscEnvEq    (HscEnvEq)
 import           Development.Shake
 import           GHC                               hiding (parseModule,
                                                     typecheckModule)
 import           GhcPlugins                        as GHC hiding (fst3, (<>))
 import           Ide.Plugin.Config
 import qualified Language.LSP.Types.Capabilities   as LSP
-
-data IdeGhcSession = IdeGhcSession
-  { loadSessionFun :: FilePath -> IO (IdeResult HscEnvEq, [FilePath])
-  -- ^ Returns the Ghc session and the cradle dependencies
-  , sessionVersion :: !Int
-  -- ^ Used as Shake key, versions must be unique and not reused
-  }
-
-instance Show IdeGhcSession where show _ = "IdeGhcSession"
-instance NFData IdeGhcSession where rnf !_ = ()
 
 data IdeOptions = IdeOptions
   { optPreprocessor       :: GHC.ParsedSource -> IdePreprocessedSource
@@ -85,6 +76,8 @@ data IdeOptions = IdeOptions
     -- ^ Will be called right after setting up a new cradle,
     --   allowing to customize the Ghc options used
   , optShakeOptions       :: ShakeOptions
+  , optSkipProgress       :: forall a. Typeable a => a -> Bool
+      -- ^ Predicate to select which rule keys to exclude from progress reporting.
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
@@ -137,7 +130,20 @@ defaultIdeOptions session = IdeOptions
     ,optCheckParents = pure CheckOnSaveAndClose
     ,optHaddockParse = HaddockParse
     ,optCustomDynFlags = id
+    ,optSkipProgress = defaultSkipProgress
     }
+
+defaultSkipProgress :: Typeable a => a -> Bool
+defaultSkipProgress key = case () of
+    -- don't do progress for GetFileContents as it's cheap
+    _ | Just GetFileContents <- cast key        -> True
+    -- don't do progress for GetFileExists, as there are lots of redundant nodes
+    -- (normally there is one node per file, but this is not the case for GetFileExists)
+    _ | Just GetFileExists <- cast key          -> True
+    -- don't do progress for GetModificationTime as there are lot of redundant nodes
+    -- (for the interface files)
+    _ | Just GetModificationTime_{} <- cast key -> True
+    _                                           -> False
 
 
 -- | The set of options used to locate files belonging to external packages.

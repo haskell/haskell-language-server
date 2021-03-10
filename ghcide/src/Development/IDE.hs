@@ -12,7 +12,8 @@ import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (.
                                                              isWorkspaceFile)
 import           Development.IDE.Core.OfInterest       as X (getFilesOfInterest)
 import           Development.IDE.Core.RuleTypes        as X
-import           Development.IDE.Core.Rules            as X (getAtPoint,
+import           Development.IDE.Core.Rules            as X (IsHiFileStable (..),
+                                                             getAtPoint,
                                                              getClientConfigAction,
                                                              getDefinition,
                                                              getParsedModule,
@@ -21,10 +22,12 @@ import           Development.IDE.Core.Service          as X (runAction)
 import           Development.IDE.Core.Shake            as X (FastResult (..),
                                                              IdeAction (..),
                                                              IdeRule, IdeState,
+                                                             RuleBody (..),
                                                              ShakeExtras,
                                                              actionLogger,
                                                              define,
                                                              defineEarlyCutoff,
+                                                             defineNoDiagnostics,
                                                              getClientConfig,
                                                              getPluginConfig,
                                                              ideLogger,

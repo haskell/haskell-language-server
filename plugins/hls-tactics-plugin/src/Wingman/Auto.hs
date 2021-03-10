@@ -1,13 +1,13 @@
-module Ide.Plugin.Tactic.Auto where
+module Wingman.Auto where
 
-import           Control.Monad.State               (gets)
-import           Ide.Plugin.Tactic.Context
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.KnownStrategies
-import           Ide.Plugin.Tactic.Machinery       (tracing)
-import           Ide.Plugin.Tactic.Tactics
-import           Ide.Plugin.Tactic.Types
+import           Control.Monad.State (gets)
 import           Refinery.Tactic
+import           Wingman.Context
+import           Wingman.Judgements
+import           Wingman.KnownStrategies
+import           Wingman.Machinery (tracing)
+import           Wingman.Tactics
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------

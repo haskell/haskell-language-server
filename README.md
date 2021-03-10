@@ -301,7 +301,7 @@ For example, `haskell-language-server` allows you to choose the formatting provi
 This option obviously would not make sense for language servers for other languages, or even for other Haskell language servers (which need not even support formatting).
 
 Here is a list of the additional settings currently supported by `haskell-language-server`, along with their setting key (you may not need to know this) and default:
-- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with AGPL)
+- Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin)
 - Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import
 - Maximum number of problems to report (`haskell.maxNumberOfProblems`, default 100): the maximum number of problems the server will send to the client
 - Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused)
@@ -648,7 +648,7 @@ This issue should be fixed in Stack versions >= 2.5.
 #### Problems with dynamic linking
 
 As haskell-language-server prebuilt binaries are statically linked, they don't play well with projects using dynamic linking.
-An usual symptom is the presence of errors containing `unknown symbol` and it is typical in arch linux, where a dynamically linked version of ghc is used. 
+An usual symptom is the presence of errors containing `unknown symbol` and it is typical in arch linux, where a dynamically linked version of ghc is used.
 
 The workaround is to use a version of haskell-language-server compiled from source with `-dynamic` enabled`. See more details [here](https://github.com/haskell/haskell-language-server/issues/1160#issuecomment-756566273).
 

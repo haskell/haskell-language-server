@@ -94,7 +94,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
     Main.defaultMain def
       { Main.argFiles = if argLSP then Nothing else Just []
       , Main.argsHlsPlugins = idePlugins
-      , Main.argsLogger = hlsLogger
+      , Main.argsLogger = pure hlsLogger
       , Main.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader
         in defOptions

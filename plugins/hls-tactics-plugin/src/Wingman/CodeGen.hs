@@ -3,9 +3,9 @@
 {-# LANGUAGE TupleSections    #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Ide.Plugin.Tactic.CodeGen
-  ( module Ide.Plugin.Tactic.CodeGen
-  , module Ide.Plugin.Tactic.CodeGen.Utils
+module Wingman.CodeGen
+  ( module Wingman.CodeGen
+  , module Wingman.CodeGen.Utils
   ) where
 
 
@@ -22,13 +22,13 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
-import           Ide.Plugin.Tactic.CodeGen.Utils
-import           Ide.Plugin.Tactic.GHC
-import           Ide.Plugin.Tactic.Judgements
-import           Ide.Plugin.Tactic.Machinery
-import           Ide.Plugin.Tactic.Naming
-import           Ide.Plugin.Tactic.Types
 import           Type hiding (Var)
+import           Wingman.CodeGen.Utils
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Machinery
+import           Wingman.Naming
+import           Wingman.Types
 
 
 destructMatches

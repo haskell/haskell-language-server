@@ -49,7 +49,7 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                ^>= 1.0.0.0
+    , ghcide                ^>= 1.1.0.0
     , hashable
     , lsp
     , lsp-types

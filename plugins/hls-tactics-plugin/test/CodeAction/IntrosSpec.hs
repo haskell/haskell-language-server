@@ -7,7 +7,7 @@
 
 module CodeAction.IntrosSpec where
 
-import Ide.Plugin.Tactic.Types
+import Wingman.Types
 import Test.Hspec
 import Utils
 
