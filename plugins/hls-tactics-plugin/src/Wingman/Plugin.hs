@@ -14,7 +14,6 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Bifunctor (first)
 import           Data.Foldable (for_)
-import           Data.Generics.Schemes (everywhereM)
 import           Data.Maybe
 import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
@@ -155,8 +154,9 @@ graftHole
 graftHole span rtr
   | _jIsTopHole (rtr_jdg rtr)
       = genericGraftWithSmallestM (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span $ \dflags ->
-        everywhereM
-          $ mkBindListT $ graftDecl dflags span $ \name pats ->
+        everywhereM'
+          $ mkBindListT $ \ix ->
+            graftDecl dflags span ix $ \name pats ->
             splitToDecl (occName name)
           $ iterateSplit
           $ mkFirstAgda (fmap unXPat pats)
@@ -173,18 +173,27 @@ graftHole span rtr
 graftDecl
     :: DynFlags
     -> SrcSpan
+    -> Int
     -> (RdrName -> [Pat GhcPs] -> LHsDecl GhcPs)
     -> LMatch GhcPs (LHsExpr GhcPs)
     -> TransformT (Either String) [LMatch GhcPs (LHsExpr GhcPs)]
-graftDecl dflags dst make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _))
+graftDecl dflags dst ix make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _))
   | dst `isSubspanOf` src = do
       L _ dec <- annotateDecl dflags $ make_decl name pats
       case dec of
-        ValD _ (FunBind { fun_matches = MG { mg_alts = L _ alts@(_:_)}
+        ValD _ (FunBind { fun_matches = MG { mg_alts = L _ alts@(first_match : _)}
                   }) -> do
+          -- For whatever reason, ExactPrint annotates newlines to the ends of
+          -- case matches and type signatures, but only allows us to insert
+          -- them at the beginning of those things. Thus, we need want to
+          -- insert a preceeding newline (done in 'annotateDecl') on all
+          -- matches, except for the first one --- since it gets its newline
+          -- from the line above.
+          when (ix == 0) $
+            setPrecedingLinesT first_match 0 0
           pure alts
         _ -> lift $ Left "annotateDecl didn't produce a funbind"
-graftDecl _ _ _ x = pure $ pure x
+graftDecl _ _ _ _ x = pure $ pure x
 
 
 fromMaybeT :: Functor m => a -> MaybeT m a -> m a

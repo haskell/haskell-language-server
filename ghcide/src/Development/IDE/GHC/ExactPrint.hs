@@ -28,6 +28,8 @@ module Development.IDE.GHC.ExactPrint
       Anns,
       Annotate,
       mkBindListT,
+      setPrecedingLinesT,
+      everywhereM',
     )
 where
 
@@ -333,8 +335,10 @@ genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
 -- | Lift a function that replaces a value with several values into a generic
 -- function. The result doesn't perform any searching, so should be driven via
 -- 'everywhereM' or friends.
-mkBindListT :: forall b m. (Typeable b, Data b, Monad m) => (b -> m [b]) -> GenericM m
-mkBindListT f = mkM $ fmap join . traverse f
+--
+-- The 'Int' argument is the index in the list being bound.
+mkBindListT :: forall b m. (Typeable b, Data b, Monad m) => (Int -> b -> m [b]) -> GenericM m
+mkBindListT f = mkM $ fmap join . traverse (uncurry f) . zip [0..]
 
 
 graftDecls ::
