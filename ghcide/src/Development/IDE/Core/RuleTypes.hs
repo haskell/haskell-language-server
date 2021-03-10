@@ -173,8 +173,8 @@ mkHiFileResult hirModSummary hirHomeMod = HiFileResult{..}
     hirIfaceFp = fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
     hirLinkableFp = case hm_linkable hirHomeMod of
       Nothing -> ""
-      Just LM{linkableTime}  -> LBS.toStrict $
-        B.encode (fromEnum $ utctDay linkableTime, fromEnum $ utctDayTime linkableTime)
+      Just (linkableTime -> l)  -> LBS.toStrict $
+        B.encode (fromEnum $ utctDay l, fromEnum $ utctDayTime l)
 
 hirModIface :: HiFileResult -> ModIface
 hirModIface = hm_iface . hirHomeMod
