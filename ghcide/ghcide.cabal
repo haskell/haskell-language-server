@@ -190,6 +190,7 @@ library
         Development.IDE.GHC.Warnings
         Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
+        Development.IDE.Plugin.CodeAction.Args
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
