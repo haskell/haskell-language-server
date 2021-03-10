@@ -156,8 +156,8 @@ graftHole span rtr
   | _jIsTopHole (rtr_jdg rtr)
       = genericGraftWithSmallestM (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span $ \dflags ->
         everywhereM
-          $ mkBindListT $ graftDecl dflags span $ \pats ->
-            splitToDecl (fst $ last $ ctxDefiningFuncs $ rtr_ctx rtr)
+          $ mkBindListT $ graftDecl dflags span $ \name pats ->
+            splitToDecl (occName name)
           $ iterateSplit
           $ mkFirstAgda (fmap unXPat pats)
           $ unLoc
@@ -173,12 +173,12 @@ graftHole span rtr
 graftDecl
     :: DynFlags
     -> SrcSpan
-    -> ([Pat GhcPs] -> LHsDecl GhcPs)
+    -> (RdrName -> [Pat GhcPs] -> LHsDecl GhcPs)
     -> LMatch GhcPs (LHsExpr GhcPs)
     -> TransformT (Either String) [LMatch GhcPs (LHsExpr GhcPs)]
-graftDecl dflags dst make_decl (L src (AMatch _ pats _))
+graftDecl dflags dst make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _))
   | dst `isSubspanOf` src = do
-      L _ dec <- annotateDecl dflags $ make_decl pats
+      L _ dec <- annotateDecl dflags $ make_decl name pats
       case dec of
         ValD _ (FunBind { fun_matches = MG { mg_alts = L _ alts@(_:_)}
                   }) -> do

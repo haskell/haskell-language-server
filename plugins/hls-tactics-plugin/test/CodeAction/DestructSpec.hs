@@ -28,4 +28,6 @@ spec = do
     destructTest "b"  2 14 "LayoutLam.hs"
     destructTest "x" 11 15 "LayoutSplitWhere.hs"
     destructTest "x"  3 12 "LayoutSplitClass.hs"
+    destructTest "b"  3  9 "LayoutSplitGuard.hs"
+    destructTest "b"  4 13 "LayoutSplitLet.hs"
 

@@ -552,5 +552,3 @@ gmapMQ f = runMonadicQuery . gfoldl k pure
     k :: Data d => MonadicQuery r f (d -> b) -> d -> MonadicQuery r f b
     k c x = c <*> MonadicQuery (f x)
 
-
-
