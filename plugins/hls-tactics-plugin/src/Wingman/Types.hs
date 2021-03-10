@@ -141,6 +141,9 @@ instance Show (Pat GhcPs) where
 instance Show (LHsSigType GhcPs) where
   show  = unsafeRender
 
+instance Show TyCon where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 -- | The state that should be shared between subgoals. Extracts move towards

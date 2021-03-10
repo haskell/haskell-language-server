@@ -205,6 +205,10 @@ tryUnifyUnivarsButNotSkolems skolems goal inst =
     _               -> Nothing
 
 
+updateSubst :: TCvSubst -> TacticState -> TacticState
+updateSubst subst s = s { ts_unifier = unionTCvSubst subst (ts_unifier s) }
+
+
 
 ------------------------------------------------------------------------------
 -- | Attempt to unify two types.
@@ -215,7 +219,7 @@ unify goal inst = do
   skolems <- gets ts_skolems
   case tryUnifyUnivarsButNotSkolems skolems goal inst of
     Just subst ->
-      modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
+      modify $ updateSubst subst
     Nothing -> throwError (UnificationError inst goal)
 
 

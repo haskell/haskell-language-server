@@ -1,32 +1,63 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Wingman.Judgements.Theta
-  ( getMethodHypothesisAtHole
+  ( Evidence
+  , getEvidenceAtHole
+  , evidenceToSubst
+  , evidenceToHypothesis
   ) where
 
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Generics.SYB
-import           GhcPlugins (mkVarOcc)
+import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, eqTyCon)
 import           TcEvidence
+import           TcType (tcTyConAppTyCon_maybe)
 import           Wingman.Machinery
 import           Wingman.Types
 
 
+data Evidence
+  = EqualityOfTypes Type Type
+  | HasInstance PredType
+
+
+mkEvidence :: PredType -> Maybe Evidence
+mkEvidence (getEqualityTheta -> Just (a, b))
+  = Just $ EqualityOfTypes a b
+mkEvidence inst@(tcTyConAppTyCon_maybe -> Just (isClassTyCon -> True))
+  = Just $ HasInstance inst
+mkEvidence _ = Nothing
+
+
+getEvidenceAtHole :: SrcSpan -> LHsBinds GhcTc -> [Evidence]
+getEvidenceAtHole dst
+  = mapMaybe mkEvidence
+  . (everything (<>) $ mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
+
+
+evidenceToSubst :: Evidence -> TacticState -> TacticState
+evidenceToSubst (EqualityOfTypes a b) ts =
+  case tryUnifyUnivarsButNotSkolems (ts_skolems ts) (CType a) (CType b) of
+    Just subst -> updateSubst subst ts
+    Nothing -> ts
+evidenceToSubst HasInstance{} ts = ts
+
+
+evidenceToHypothesis :: Evidence -> Hypothesis CType
+evidenceToHypothesis EqualityOfTypes{} = mempty
+evidenceToHypothesis (HasInstance t) =
+  Hypothesis . excludeForbiddenMethods . fromMaybe [] $ methodHypothesis t
+
+
 ------------------------------------------------------------------------------
--- | Create a 'Hypothesis' containing 'ClassMethodPrv' provenance. For every
--- dictionary that is in scope at the given 'SrcSpan', find every method and
--- superclass method available.
-getMethodHypothesisAtHole :: SrcSpan -> LHsBinds GhcTc -> Hypothesis CType
-getMethodHypothesisAtHole dst
-  = Hypothesis
-  . excludeForbiddenMethods
-  . fromMaybe []
-  . foldMap methodHypothesis
-  . (everything (<>) $
-      mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
+-- | Given @a ~ b@, returns @Just (a, b)@, otherwise @Nothing@.
+getEqualityTheta :: PredType -> Maybe (Type, Type)
+getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
+  | tc == eqTyCon  = Just (a, b)
+getEqualityTheta _ = Nothing
 
 
 ------------------------------------------------------------------------------

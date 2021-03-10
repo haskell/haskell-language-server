@@ -50,6 +50,7 @@ destructMatches f scrut t jdg = do
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
         _ -> fmap unzipTrace $ for dcs $ \dc -> do
+          traceMX "dc theta" $ dataConInstArgTys dc apps
           let args = dataConInstOrigArgTys' dc apps
           names <- mkManyGoodNames (hyNamesInScope hy) args
           let hy' = patternHypothesis scrut dc jdg
