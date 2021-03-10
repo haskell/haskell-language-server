@@ -475,19 +475,16 @@ annotateDecl dflags
     let set_matches matches =
           ValD ext fb { fun_matches = mg { mg_alts = L alt_src matches }}
 
-    (anns', alts') <- fmap unzip $ for (zip [0..] alts) $ \(ix :: Int, alt) -> do
+    (anns', alts') <- fmap unzip $ for alts $ \alt -> do
       uniq <- show <$> uniqueSrcSpanT
       let rendered = render dflags $ set_matches [alt]
       lift (mapLeft show $ parseDecl dflags uniq rendered) >>= \case
         (ann, L _ (ValD _ FunBind { fun_matches = MG { mg_alts = L _ [alt']}}))
-           -> pure (bool id (setPrecedingLines alt' 1 0) (ix /= 0) ann, alt')
+           -> pure (setPrecedingLines alt' 1 0 ann, alt')
         _ ->  lift $ Left "annotateDecl: didn't parse a single FunBind match"
 
-    let expr' = L src $ set_matches alts'
-        anns'' = setPrecedingLines expr' 1 0 $ fold anns'
-
-    modifyAnnsT $ mappend anns''
-    pure expr'
+    modifyAnnsT $ mappend $ fold anns'
+    pure $ L src $ set_matches alts'
 annotateDecl dflags ast = do
     uniq <- show <$> uniqueSrcSpanT
     let rendered = render dflags ast
