@@ -15,7 +15,8 @@ import           Data.Maybe                            (catMaybes, fromMaybe,
 import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
 import           Development.IDE                       (Action, Rules)
-import           Development.IDE.Core.Debouncer        (newAsyncDebouncer)
+import           Development.IDE.Core.Debouncer        (Debouncer,
+                                                        newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (makeVFSHandle)
 import           Development.IDE.Core.IdeConfiguration (IdeConfiguration (..),
                                                         registerIdeConfiguration)
@@ -43,7 +44,8 @@ import           Development.IDE.Session               (SessionLoadingOptions,
                                                         loadSessionWithOptions,
                                                         runWithDb,
                                                         setInitialDynFlags)
-import           Development.IDE.Types.Location        (toNormalizedFilePath')
+import           Development.IDE.Types.Location        (NormalizedUri,
+                                                        toNormalizedFilePath')
 import           Development.IDE.Types.Logger          (Logger (Logger))
 import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         IdeOptions (optCheckParents, optCheckProject, optReportProgress),
@@ -86,6 +88,7 @@ data Arguments = Arguments
     , argsLspOptions :: LSP.Options
     , argsDefaultHlsConfig :: Config
     , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
+    , argsDebouncer :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
     }
 
 instance Default Arguments where
@@ -101,6 +104,7 @@ instance Default Arguments where
         , argsLspOptions = def {LSP.completionTriggerCharacters = Just "."}
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
+        , argsDebouncer = newAsyncDebouncer
         }
 
 -- | Cheap stderr logger that relies on LineBuffering
@@ -122,6 +126,8 @@ defaultMain Arguments{..} = do
         options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
         argsOnConfigChange _ide = pure . getConfigFromNotification argsDefaultHlsConfig
         rules = argsRules >> pluginRules plugins
+
+    debouncer <- argsDebouncer
 
     case argFiles of
         Nothing -> do
@@ -148,7 +154,6 @@ defaultMain Arguments{..} = do
                             { optReportProgress = clientSupportsProgress caps
                             }
                     caps = LSP.resClientCapabilities env
-                debouncer <- newAsyncDebouncer
                 initialise
                     argsDefaultHlsConfig
                     rules
@@ -184,7 +189,6 @@ defaultMain Arguments{..} = do
             when (n > 0) $ putStrLn $ "  (" ++ intercalate ", " (catMaybes ucradles) ++ ")"
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
-            debouncer <- newAsyncDebouncer
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
             let options = (argsIdeOptions Nothing sessionLoader)
                         { optCheckParents = pure NeverCheck
