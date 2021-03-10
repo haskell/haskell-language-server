@@ -393,7 +393,7 @@ getParsedModuleDefinition
     :: HscEnv
     -> IdeOptions
     -> NormalizedFilePath
-    -> ModSummary -> IO (([FileDiagnostic], Maybe ParsedModule))
+    -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
 getParsedModuleDefinition packageState opt file ms = do
     let fp = fromNormalizedFilePath file
     (diag, res) <- parseModule opt packageState fp ms
