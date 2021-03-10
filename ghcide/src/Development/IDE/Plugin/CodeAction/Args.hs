@@ -45,6 +45,9 @@ instance ToTextEdit Rewrite where
 instance ToTextEdit a => ToTextEdit [a] where
   toTextEdit caa = foldMap (toTextEdit caa)
 
+instance ToTextEdit a => ToTextEdit (Maybe a) where
+  toTextEdit caa = maybe [] (toTextEdit caa)
+
 instance (ToTextEdit a, ToTextEdit b) => ToTextEdit (Either a b) where
   toTextEdit caa = either (toTextEdit caa) (toTextEdit caa)
 
