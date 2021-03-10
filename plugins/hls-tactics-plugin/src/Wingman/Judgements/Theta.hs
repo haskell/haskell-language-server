@@ -38,6 +38,9 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
     forbiddenMethods = S.map mkVarOcc $ S.fromList
       [ -- monadfail
         "fail"
+        -- show
+      , "showsPrec"
+      , "showList"
       ]
 
 
