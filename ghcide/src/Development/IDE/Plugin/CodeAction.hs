@@ -127,8 +127,7 @@ mkCA title diags edit =
 
 suggestAction :: CodeActionArgs -> [(T.Text, [TextEdit])]
 suggestAction caa =
-    concat $ unwrap caa <$>
-   -- Order these suggestions by priority
+  concat   -- Order these suggestions by priority
     [ wrap $ suggestSignature True
     , wrap suggestExtendImport
     , wrap suggestImportDisambiguation
@@ -148,6 +147,9 @@ suggestAction caa =
     , wrap suggestExportUnusedTopBinding
     , wrap suggestFillHole -- Lowest priority
     ]
+    where
+      wrap :: ToCodeAction a => a -> [(T.Text, [TextEdit])]
+      wrap = toCodeAction caa
 
 findSigOfDecl :: (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDecl pred decls =

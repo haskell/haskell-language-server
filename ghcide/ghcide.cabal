@@ -101,8 +101,7 @@ library
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.7.1 && < 0.8.0,
         implicit-hie-cradle >= 0.3.0.2 && < 0.4,
-        base16-bytestring >=0.1.1 && <0.2,
-        template-haskell
+        base16-bytestring >=0.1.1 && <0.2
     if os(windows)
       build-depends:
         Win32
@@ -192,7 +191,6 @@ library
         Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
         Development.IDE.Plugin.CodeAction.Args
-        Development.IDE.Plugin.CodeAction.Args.TH
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
