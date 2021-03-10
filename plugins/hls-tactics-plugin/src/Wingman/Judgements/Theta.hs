@@ -13,7 +13,7 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Generics.SYB
-import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, eqTyCon)
+import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, eqTyCon, getTyVar_maybe)
 import           TcEvidence
 import           TcType (tcTyConAppTyCon_maybe)
 import           TysPrim (eqPrimTyCon)
@@ -43,7 +43,14 @@ getEvidenceAtHole dst
 
 evidenceToSubst :: Evidence -> TacticState -> TacticState
 evidenceToSubst (EqualityOfTypes a b) ts =
-  case tryUnifyUnivarsButNotSkolems (ts_skolems ts) (CType a) (CType b) of
+  let tyvars = S.fromList $ mapMaybe getTyVar_maybe [a, b]
+      -- If we can unify our skolems, at least one is no longer a skolem.
+      -- Removing them from this set ensures we can get a subtitution between
+      -- the two. But it's okay to leave them in 'ts_skolems' in general, since
+      -- they won't exist after running this substitution.
+      skolems = ts_skolems ts S.\\ tyvars
+   in
+  case tryUnifyUnivarsButNotSkolems skolems (CType a) (CType b) of
     Just subst -> updateSubst subst ts
     Nothing -> ts
 evidenceToSubst HasInstance{} ts = ts

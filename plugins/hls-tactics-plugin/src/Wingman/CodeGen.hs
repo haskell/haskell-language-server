@@ -60,11 +60,13 @@ destructMatches f scrut t jdg = do
               method_hy = foldMap evidenceToHypothesis ev
               args = dataConInstOrigArgTys' dc apps
           modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
+          subst <- gets ts_unifier
           names <- mkManyGoodNames (hyNamesInScope hy) args
           let hy' = patternHypothesis scrut dc jdg
                   $ zip names
                   $ coerce args
-              j = introduce hy'
+              j = fmap (CType . substTyAddInScope subst . unCType)
+                $ introduce hy'
                 $ introduce method_hy
                 $ withNewGoal g jdg
           ext <- f dc j
