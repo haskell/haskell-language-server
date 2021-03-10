@@ -183,7 +183,7 @@ graftDecl dflags dst make_decl (L src (AMatch (FunRhs (L _ name) _ _) pats _))
         ValD _ (FunBind { fun_matches = MG { mg_alts = L _ alts@(_:_)}
                   }) -> do
           pure alts
-        _ -> undefined
+        _ -> lift $ Left "annotateDecl didn't produce a funbind"
 graftDecl _ _ _ x = pure $ pure x
 
 
