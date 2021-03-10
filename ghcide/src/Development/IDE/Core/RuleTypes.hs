@@ -156,13 +156,21 @@ data HiFileResult = HiFileResult
     -- a reference to a typechecked module
     , hirHomeMod    :: !HomeModInfo
     -- ^ Includes the Linkable iff we need object files
+    , hirIfaceFp    :: ByteString
+    -- ^ Fingerprint for the ModIface
+    , hirLinkableFp :: ByteString
+    -- ^ Fingerprint for the Linkable
     }
 
 hiFileFingerPrint :: HiFileResult -> ByteString
-hiFileFingerPrint hfr = ifaceBS <> linkableBS
+hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> hirLinkableFp
+
+mkHiFileResult :: ModSummary -> HomeModInfo -> HiFileResult
+mkHiFileResult hirModSummary hirHomeMod = HiFileResult{..}
   where
-    ifaceBS = fingerprintToBS . getModuleHash . hirModIface $ hfr -- will always be two bytes
-    linkableBS = case hm_linkable $ hirHomeMod hfr of
+    hirIfaceFp =
+      fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
+    hirLinkableFp = case hm_linkable hirHomeMod of
       Nothing -> ""
       Just l  -> BS.pack $ show $ linkableTime l
 
