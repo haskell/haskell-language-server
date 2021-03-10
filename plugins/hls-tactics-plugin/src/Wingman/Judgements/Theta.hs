@@ -21,12 +21,18 @@ import           Wingman.Machinery
 import           Wingman.Types
 
 
+------------------------------------------------------------------------------
+-- | Something we've learned about the type environment.
 data Evidence
+    -- | The two types are equal, via a @a ~ b@ relationship
   = EqualityOfTypes Type Type
+    -- | We have an instance in scope
   | HasInstance PredType
   deriving (Show)
 
 
+------------------------------------------------------------------------------
+-- | Given a 'PredType', pull an 'Evidence' out of it.
 mkEvidence :: PredType -> Maybe Evidence
 mkEvidence (getEqualityTheta -> Just (a, b))
   = Just $ EqualityOfTypes a b
@@ -35,12 +41,17 @@ mkEvidence inst@(tcTyConAppTyCon_maybe -> Just (isClassTyCon -> True))
 mkEvidence _ = Nothing
 
 
+------------------------------------------------------------------------------
+-- | Compute all the 'Evidence' implicitly bound at the given 'SrcSpan'.
 getEvidenceAtHole :: SrcSpan -> LHsBinds GhcTc -> [Evidence]
 getEvidenceAtHole dst
   = mapMaybe mkEvidence
-  . (everything (<>) $ mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
+  . (everything (<>) $
+        mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
 
 
+------------------------------------------------------------------------------
+-- | Update our knowledge of which types are equal.
 evidenceToSubst :: Evidence -> TacticState -> TacticState
 evidenceToSubst (EqualityOfTypes a b) ts =
   let tyvars = S.fromList $ mapMaybe getTyVar_maybe [a, b]
@@ -56,6 +67,8 @@ evidenceToSubst (EqualityOfTypes a b) ts =
 evidenceToSubst HasInstance{} ts = ts
 
 
+------------------------------------------------------------------------------
+-- | Get all of the methods that are in scope from this piece of 'Evidence'.
 evidenceToHypothesis :: Evidence -> Hypothesis CType
 evidenceToHypothesis EqualityOfTypes{} = mempty
 evidenceToHypothesis (HasInstance t) =
@@ -63,7 +76,7 @@ evidenceToHypothesis (HasInstance t) =
 
 
 ------------------------------------------------------------------------------
--- | Given @a ~ b@, returns @Just (a, b)@, otherwise @Nothing@.
+-- | Given @a ~ b@ or @a ~# b@, returns @Just (a, b)@, otherwise @Nothing@.
 getEqualityTheta :: PredType -> Maybe (Type, Type)
 getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
   | tc == eqTyCon = Just (a, b)
@@ -105,17 +118,20 @@ wrapperBinds dst (L src (HsWrap _ h _))
 wrapperBinds _ _ = []
 
 
+------------------------------------------------------------------------------
+-- | Extract evidence from the 'ConPatOut's bound in this 'Match'.
 matchBinds :: SrcSpan -> LMatch GhcTc (LHsExpr GhcTc) -> [PredType]
 matchBinds dst (L src (Match _ _ pats _))
   | dst `isSubspanOf` src = everything (<>) (mkQ mempty patBinds) pats
 matchBinds _ _ = []
 
+
+------------------------------------------------------------------------------
+-- | Extract evidence from a 'ConPatOut'.
 patBinds ::  Pat GhcTc -> [PredType]
 patBinds (ConPatOut { pat_dicts = dicts })
   = fmap idType dicts
 patBinds _ = []
-
-
 
 
 ------------------------------------------------------------------------------
