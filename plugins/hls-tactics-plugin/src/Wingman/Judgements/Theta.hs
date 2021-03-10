@@ -25,7 +25,8 @@ getMethodHypothesisAtHole dst
   . excludeForbiddenMethods
   . fromMaybe []
   . foldMap methodHypothesis
-  . (everything (<>) $ mkQ mempty (absbinds dst) `extQ` wrapperbinds dst)
+  . (everything (<>) $
+      mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
 
 
 ------------------------------------------------------------------------------
@@ -47,18 +48,31 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
 
 ------------------------------------------------------------------------------
 -- | Extract evidence from 'AbsBinds' in scope.
-absbinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
-absbinds dst (L src (AbsBinds _ _ h _ _ _ _))
+absBinds ::  SrcSpan -> LHsBindLR GhcTc GhcTc -> [PredType]
+absBinds dst (L src (AbsBinds _ _ h _ _ _ _))
   | dst `isSubspanOf` src = fmap idType h
-absbinds _ _ = []
+absBinds _ _ = []
 
 
 ------------------------------------------------------------------------------
 -- | Extract evidence from 'HsWrapper's in scope
-wrapperbinds ::  SrcSpan -> LHsExpr GhcTc -> [PredType]
-wrapperbinds dst (L src (HsWrap _ h _))
+wrapperBinds ::  SrcSpan -> LHsExpr GhcTc -> [PredType]
+wrapperBinds dst (L src (HsWrap _ h _))
   | dst `isSubspanOf` src = wrapper h
-wrapperbinds _ _ = []
+wrapperBinds _ _ = []
+
+
+matchBinds :: SrcSpan -> LMatch GhcTc (LHsExpr GhcTc) -> [PredType]
+matchBinds dst (L src (Match _ _ pats _))
+  | dst `isSubspanOf` src = everything (<>) (mkQ mempty patBinds) pats
+matchBinds _ _ = []
+
+patBinds ::  Pat GhcTc -> [PredType]
+patBinds (ConPatOut { pat_dicts = dicts })
+  = fmap idType dicts
+patBinds _ = []
+
+
 
 
 ------------------------------------------------------------------------------
