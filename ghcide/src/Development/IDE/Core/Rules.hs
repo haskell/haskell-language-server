@@ -72,7 +72,7 @@ import           Control.Monad.Trans.Maybe
 import           Data.Aeson                                   (Result (Success),
                                                                toJSON)
 import           Data.Binary                                  hiding (get, put)
-import qualified Data.ByteString.Char8                        as BS
+import qualified Data.ByteString                              as BS
 import           Data.Foldable
 import           Data.IntMap.Strict                           (IntMap)
 import qualified Data.IntMap.Strict                           as IntMap
@@ -150,6 +150,8 @@ import           TcRnMonad                                    (tcg_dependent_fil
 import qualified Data.Aeson.Types                             as A
 import qualified HieDb
 import           Ide.Plugin.Config
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Binary as B
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -308,7 +310,9 @@ priorityFilesOfInterest = Priority (-2)
 -- and https://github.com/mpickering/ghcide/pull/22#issuecomment-625070490
 -- GHC wiki about: https://gitlab.haskell.org/ghc/ghc/-/wikis/api-annotations
 getParsedModuleRule :: Rules ()
-getParsedModuleRule = defineEarlyCutoff $ Rule $ \GetParsedModule file -> do
+getParsedModuleRule =
+  -- this rule does not have early cutoff since all its dependencies already have it
+  define $ \GetParsedModule file -> do
     ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     let hsc = hscEnv sess
@@ -318,7 +322,7 @@ getParsedModuleRule = defineEarlyCutoff $ Rule $ \GetParsedModule file -> do
         mainParse = getParsedModuleDefinition hsc opt file ms
 
     -- Parse again (if necessary) to capture Haddock parse errors
-    res@(_, (_,pmod)) <- if gopt Opt_Haddock dflags
+    res@(_,pmod) <- if gopt Opt_Haddock dflags
         then
             liftIO mainParse
         else do
@@ -330,7 +334,7 @@ getParsedModuleRule = defineEarlyCutoff $ Rule $ \GetParsedModule file -> do
             -- If we can parse Haddocks, might as well use them
             --
             -- HLINT INTEGRATION: might need to save the other parsed module too
-            ((fp,(diags,res)),(fph,(diagsh,resh))) <- liftIO $ concurrently mainParse haddockParse
+            ((diags,res),(diagsh,resh)) <- liftIO $ concurrently mainParse haddockParse
 
             -- Merge haddock and regular diagnostics so we can always report haddock
             -- parse errors
@@ -338,12 +342,12 @@ getParsedModuleRule = defineEarlyCutoff $ Rule $ \GetParsedModule file -> do
             case resh of
               Just _
                 | HaddockParse <- optHaddockParse opt
-                -> pure (fph, (diagsM, resh))
+                -> pure (diagsM, resh)
               -- If we fail to parse haddocks, report the haddock diagnostics as well and
               -- return the non-haddock parse.
               -- This seems to be the correct behaviour because the Haddock flag is added
               -- by us and not the user, so our IDE shouldn't stop working because of it.
-              _ -> pure (fp, (diagsM, res))
+              _ -> pure (diagsM, res)
     -- Add dependencies on included files
     _ <- uses GetModificationTime $ map toNormalizedFilePath' (maybe [] pm_extra_src_files pmod)
     pure res
@@ -372,26 +376,30 @@ mergeParseErrorsHaddock normal haddock = normal ++
 -- | This rule provides a ParsedModule preserving all annotations,
 -- including keywords, punctuation and comments.
 -- So it is suitable for use cases where you need a perfect edit.
--- FIXME this rule should probably not produce diagnostics
 getParsedModuleWithCommentsRule :: Rules ()
-getParsedModuleWithCommentsRule = defineEarlyCutoff $ Rule $ \GetParsedModuleWithComments file -> do
+getParsedModuleWithCommentsRule =
+  -- The parse diagnostics are owned by the GetParsedModule rule
+  -- For this reason, this rule does not produce any diagnostics
+  defineNoDiagnostics $ \GetParsedModuleWithComments file -> do
     ModSummaryResult{msrModSummary = ms} <- use_ GetModSummary file
     sess <- use_ GhcSession file
     opt <- getIdeOptions
 
     let ms' = withoutOption Opt_Haddock $ withOption Opt_KeepRawTokenStream ms
 
-    liftIO $ getParsedModuleDefinition (hscEnv sess) opt file ms'
+    liftIO $ snd <$> getParsedModuleDefinition (hscEnv sess) opt file ms'
 
-getParsedModuleDefinition :: HscEnv -> IdeOptions -> NormalizedFilePath -> ModSummary -> IO (Maybe BS.ByteString, ([FileDiagnostic], Maybe ParsedModule))
+getParsedModuleDefinition
+    :: HscEnv
+    -> IdeOptions
+    -> NormalizedFilePath
+    -> ModSummary -> IO ([FileDiagnostic], Maybe ParsedModule)
 getParsedModuleDefinition packageState opt file ms = do
     let fp = fromNormalizedFilePath file
     (diag, res) <- parseModule opt packageState fp ms
     case res of
-        Nothing -> pure (Nothing, (diag, Nothing))
-        Just modu -> do
-            mbFingerprint <- traverse (fmap fingerprintToBS . fingerprintFromStringBuffer) (ms_hspp_buf ms)
-            pure (mbFingerprint, (diag, Just modu))
+        Nothing -> pure (diag, Nothing)
+        Just modu -> pure (diag, Just modu)
 
 getLocatedImportsRule :: Rules ()
 getLocatedImportsRule =
@@ -686,7 +694,7 @@ knownFilesRule :: Rules ()
 knownFilesRule = defineEarlyCutOffNoFile $ \GetKnownTargets -> do
   alwaysRerun
   fs <- knownTargets
-  pure (BS.pack (show $ hash fs), unhashed fs)
+  pure (LBS.toStrict $ B.encode $ hash fs, unhashed fs)
 
 getModuleGraphRule :: Rules ()
 getModuleGraphRule = defineNoFile $ \GetModuleGraph -> do
@@ -737,8 +745,8 @@ loadGhcSession = do
         opts <- getIdeOptions
         res <- optGhcSession opts
 
-        let fingerprint = hash (sessionVersion res)
-        return (BS.pack (show fingerprint), res)
+        let fingerprint = LBS.toStrict $ B.encode $ hash (sessionVersion res)
+        return (fingerprint, res)
 
     defineEarlyCutoff $ Rule $ \GhcSession file -> do
         IdeGhcSession{loadSessionFun} <- useNoFile_ GhcSessionIO
@@ -759,7 +767,7 @@ loadGhcSession = do
                 Just {} -> ""
                 -- Hash the HscEnvEq returned so cutoff if it didn't change
                 -- from last time
-                Nothing -> BS.pack (show (hash (snd val)))
+                Nothing -> LBS.toStrict $ B.encode (hash (snd val))
         return (Just cutoffHash, val)
 
     define $ \GhcSessionDeps file -> ghcSessionDepsDefinition file
@@ -815,7 +823,9 @@ getModIfaceFromDiskRule = defineEarlyCutoff $ Rule $ \GetModIfaceFromDisk f -> d
 -- disk since we are careful to write out the `.hie` file before writing the
 -- `.hi` file
 getModIfaceFromDiskAndIndexRule :: Rules ()
-getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ RuleNoDiagnostics $ \GetModIfaceFromDiskAndIndex f -> do
+getModIfaceFromDiskAndIndexRule =
+  -- doesn't need early cutoff since all its dependencies already have it
+  defineNoDiagnostics $ \GetModIfaceFromDiskAndIndex f -> do
   x <- use_ GetModIfaceFromDisk f
   se@ShakeExtras{hiedb} <- getShakeExtras
 
@@ -844,8 +854,7 @@ getModIfaceFromDiskAndIndexRule = defineEarlyCutoff $ RuleNoDiagnostics $ \GetMo
           L.logDebug (logger se) $ "Re-indexing hie file for" <> T.pack (fromNormalizedFilePath f)
           indexHieFile se ms f hash hf
 
-  let fp = hiFileFingerPrint x
-  return (Just fp, Just x)
+  return (Just x)
 
 isHiFileStableRule :: Rules ()
 isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -> do
@@ -866,7 +875,11 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
                     pure $ if all (== SourceUnmodifiedAndStable) deps
                            then SourceUnmodifiedAndStable
                            else SourceUnmodified
-    return (Just (BS.pack $ show sourceModified), Just sourceModified)
+    return (Just (summarize sourceModified), Just sourceModified)
+  where
+      summarize SourceModified = BS.singleton 1
+      summarize SourceUnmodified = BS.singleton 2
+      summarize SourceUnmodifiedAndStable = BS.singleton 3
 
 getModSummaryRule :: Rules ()
 getModSummaryRule = do
@@ -942,7 +955,7 @@ getModIfaceWithoutLinkableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \GetMod
   mhfr <- use GetModIface f
   let mhfr' = fmap (\x -> x{ hirHomeMod = (hirHomeMod x){ hm_linkable = Just (error msg) } }) mhfr
       msg = "tried to look at linkable for GetModIfaceWithoutLinkable for " ++ show f
-  pure (fingerprintToBS . getModuleHash . hirModIface <$> mhfr', mhfr')
+  pure (hirIfaceFp <$> mhfr', mhfr')
 
 -- | Also generates and indexes the `.hie` file, along with the `.o` file if needed
 -- Invariant maintained is that if the `.hi` file was successfully written, then the
@@ -953,12 +966,12 @@ regenerateHiFile sess f ms compNeeded = do
     opt <- getIdeOptions
 
     -- Embed haddocks in the interface file
-    (_, (diags, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
+    (diags, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f (withOptHaddock ms)
     (diags, mb_pm) <- case mb_pm of
         Just _ -> return (diags, mb_pm)
         Nothing -> do
             -- if parsing fails, try parsing again with Haddock turned off
-            (_, (diagsNoHaddock, mb_pm)) <- liftIO $ getParsedModuleDefinition hsc opt f ms
+            (diagsNoHaddock, mb_pm) <- liftIO $ getParsedModuleDefinition hsc opt f ms
             return (mergeParseErrorsHaddock diagsNoHaddock diags, mb_pm)
     case mb_pm of
         Nothing -> return (diags, Nothing)
@@ -1021,7 +1034,7 @@ getClientSettingsRule :: Rules ()
 getClientSettingsRule = defineEarlyCutOffNoFile $ \GetClientSettings -> do
   alwaysRerun
   settings <- clientSettings <$> getIdeConfiguration
-  return (BS.pack . show . hash $ settings, settings)
+  return (LBS.toStrict $ B.encode $ hash settings, settings)
 
 -- | Returns the client configurarion stored in the IdeState.
 -- You can use this function to access it from shake Rules
@@ -1062,7 +1075,7 @@ needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation
                 (uses NeedsCompilation revdeps)
         pure $ computeLinkableType ms modsums (map join needsComps)
 
-  pure (Just $ BS.pack $ show $ hash res, Just res)
+  pure (Just $ LBS.toStrict $ B.encode $ hash res, Just res)
   where
     uses_th_qq (ms_hspp_opts -> dflags) =
       xopt LangExt.TemplateHaskell dflags || xopt LangExt.QuasiQuotes dflags
