@@ -19,7 +19,9 @@ import           Test.Tasty.HUnit
 
 tests :: TestTree
 tests = testGroup "retrie"
-    [ goldenTest "FoldLocalTypeSynonym.hs" (containsWords "Fold in file") 2 0 ]
+    [ goldenTest "FoldLocalTypeSynonym.hs" (containsWords "Fold in file") 2 0
+    , goldenTest "FoldLocalTypeSynonymAtUse.hs" (containsWords "Use type synonym") 4 8
+    ]
 
 goldenTest :: FilePath -> (Text -> Bool) -> Int -> Int -> TestTree
 goldenTest input actionPred line col =

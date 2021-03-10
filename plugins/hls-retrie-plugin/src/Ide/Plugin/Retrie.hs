@@ -53,16 +53,21 @@ import           Development.IDE.Core.Shake           (ShakeExtras (knownTargets
 import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        HsBindLR (FunBind),
                                                        HsGroup (..),
+                                                       HsImplicitBndrs (HsIB),
                                                        HsValBindsLR (..),
-                                                       HscEnv, IdP, LRuleDecls,
+                                                       HsWildCardBndrs (HsWC),
+                                                       HscEnv, IdP, LHsType,
+                                                       LRuleDecls, LSig,
                                                        ModSummary (ModSummary, ms_hspp_buf, ms_mod),
                                                        NHsValBindsLR (..),
                                                        ParsedModule (..),
                                                        RuleDecl (HsRule),
                                                        RuleDecls (HsRules),
+                                                       Sig (TypeSig),
                                                        SrcSpan (..),
                                                        TyClDecl (SynDecl),
                                                        TyClGroup (..), fun_id,
+                                                       isTypeSynonymTyCon,
                                                        mi_fixities,
                                                        moduleNameString,
                                                        parseModule, rds_rules,
@@ -70,12 +75,14 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
 import           GHC.Generics                         (Generic)
 import           GhcPlugins                           (Outputable,
                                                        SourceText (NoSourceText),
+                                                       TyCon (tyConName),
                                                        hm_iface, isQual,
                                                        isQual_maybe,
                                                        nameModule_maybe,
                                                        nameRdrName, occNameFS,
                                                        occNameString,
-                                                       rdrNameOcc, unpackFS)
+                                                       rdrNameOcc,
+                                                       typeEnvTyCons, unpackFS)
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Server                  (LspM,
@@ -102,6 +109,7 @@ import           Retrie.SYB                           (listify)
 import           Retrie.Util                          (Verbosity (Loud))
 import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
+import           TcRnTypes
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -156,7 +164,7 @@ runRetrieCmd state RunRetrieParams{originatingFile = uri, ..} =
             runAction "Retrie.GhcSessionDeps" state $
                 useWithStale GhcSessionDeps
                 nfp
-        (ms, binds, _, _, _) <- MaybeT $ liftIO $ runAction "Retrie.getBinds" state $ getBinds nfp
+        (ms, binds, _, _, _, _) <- MaybeT $ liftIO $ runAction "Retrie.getBinds" state $ getBinds nfp
         let importRewrites = concatMap (extractImports ms binds) rewrites
         (errors, edits) <- liftIO $
             callRetrie
@@ -204,8 +212,10 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
       nuri = toNormalizedUri uri
   nfp <- handleMaybe "uri" $ uriToNormalizedFilePath nuri
 
-  (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
+  (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds, signatures)
     <- handleMaybeM "typecheck" $ liftIO $ runAction "retrie" state $ getBinds nfp
+
+  typeSynonymNames <- liftIO $ runAction "retrie" state $ getTypeSynonymNames nfp
 
   pos <- handleMaybe "pos" $ _start <$> fromCurrentRange posMapping range
   let rewrites =
@@ -216,8 +226,8 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
                  L l g <- group_tyclds,
                  pos `isInsideSrcSpan` l,
                  r <- suggestTypeRewrites uri ms_mod g
-
              ]
+          ++ concatMap (suggestSignatureRewrites uri pos ms_mod typeSynonymNames) signatures
 
   commands <- lift $
     forM rewrites $ \(title, kind, params) -> liftIO $ do
@@ -226,7 +236,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
 
   return $ J.List [InR c | c <- commands]
 
-getBinds :: NormalizedFilePath -> Action (Maybe (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn]))
+getBinds :: NormalizedFilePath -> Action (Maybe (ModSummary, [HsBindLR GhcRn GhcRn], PositionMapping, [LRuleDecls GhcRn], [TyClGroup GhcRn], [LSig GhcRn]))
 getBinds nfp = runMaybeT $ do
   (tm, posMapping) <- MaybeT $ useWithStale TypeCheck nfp
   -- we use the typechecked source instead of the parsed source
@@ -236,7 +246,7 @@ getBinds nfp = runMaybeT $ do
       ( HsGroup
           { hs_valds =
               XValBindsLR
-                (NValBinds binds _sigs :: NHsValBindsLR GHC.GhcRn),
+                (NValBinds binds sigs :: NHsValBindsLR GHC.GhcRn),
             hs_ruleds,
             hs_tyclds
           },
@@ -250,7 +260,18 @@ getBinds nfp = runMaybeT $ do
           | (_, bagBinds) <- binds,
             L _ decl <- GHC.bagToList bagBinds
         ]
-  return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds)
+
+  return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds, sigs)
+
+getTypeSynonymNames :: NormalizedFilePath -> Action [GHC.Name]
+getTypeSynonymNames nfp = do
+  tcModuleResult <- use_ TypeCheck nfp
+  let TcGblEnv {tcg_type_env} = tmrTypechecked tcModuleResult
+  return
+    [ tyConName tyCon
+      | tyCon <- typeEnvTyCons tcg_type_env,
+        isTypeSynonymTyCon tyCon
+    ]
 
 suggestBindRewrites ::
   Uri ->
@@ -341,6 +362,23 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
               )
 
 suggestRuleRewrites _ _ _ _ = []
+
+suggestSignatureRewrites
+    :: Uri
+    -> Position
+    -> GHC.Module
+    -> [GHC.Name]
+    -> LSig GhcRn
+    -> [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestSignatureRewrites originatingFile pos ms_mod tySynsInScope (L (RealSrcSpan l) sig)
+  | pos `isInsideSrcSpan` RealSrcSpan l = do
+    rdrName <- tySynsInScope
+    let pprName = prettyPrint rdrName
+    let rewrites = [TypeBackward (qualify ms_mod pprName)]
+    let description = "Use " <> T.pack pprName <> " type synonym"
+    let restriction = RangeInOriginatingFile (realSrcSpanToRange l)
+    return (description, CodeActionRefactor, RunRetrieParams{..})
+  | otherwise = []
 
 qualify :: GHC.Module -> String -> String
 qualify ms_mod x = prettyPrint ms_mod <> "." <> x
