@@ -288,7 +288,18 @@ graftWithM dst trans = Graft $ \dflags a -> do
         )
         a
 
-genericIsSubspan :: forall ast. Typeable ast => Proxy (Located ast) -> SrcSpan -> GenericQ (Maybe Bool)
+-- | A generic query intended to be used for calling 'smallestM' and
+-- 'largestM'. If the current node is a 'Located', returns whether or not the
+-- given 'SrcSpan' is a subspan. For all other nodes, returns 'Nothing', which
+-- indicates uncertainty. The search strategy in 'smallestM' et al. will
+-- continue searching uncertain nodes.
+genericIsSubspan ::
+    forall ast.
+    Typeable ast =>
+    -- | The type of nodes we'd like to consider.
+    Proxy (Located ast) ->
+    SrcSpan ->
+    GenericQ (Maybe Bool)
 genericIsSubspan _ dst = mkQ Nothing $ \case
   (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
 
@@ -297,6 +308,7 @@ genericIsSubspan _ dst = mkQ Nothing $ \case
 genericGraftWithSmallestM ::
     forall m a ast.
     (Monad m, Data a, Typeable ast) =>
+    -- | The type of nodes we'd like to consider when finding the smallest.
     Proxy (Located ast) ->
     SrcSpan ->
     (DynFlags -> GenericM (TransformT m)) ->
@@ -309,6 +321,7 @@ genericGraftWithSmallestM proxy dst trans = Graft $ \dflags ->
 genericGraftWithLargestM ::
     forall m a ast.
     (Monad m, Data a, Typeable ast) =>
+    -- | The type of nodes we'd like to consider when finding the largest.
     Proxy (Located ast) ->
     SrcSpan ->
     (DynFlags -> GenericM (TransformT m)) ->
@@ -506,6 +519,11 @@ type GenericMQ r m = forall a. Data a => a -> m (r, a)
 ------------------------------------------------------------------------------
 -- | Apply the given 'GenericM' at all every node whose children fail the
 -- 'GenericQ', but which passes the query itself.
+--
+-- Why is the query a @Maybe Bool@? The GHC AST intersperses 'Located' nodes
+-- with data nodes, so for any given node we can only definitely return an
+-- answer if it's a 'Located'. See 'genericIsSubspan' for how this parameter is
+-- used.
 smallestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
 smallestM q f = fmap snd . go
   where
@@ -523,6 +541,11 @@ smallestM q f = fmap snd . go
 ------------------------------------------------------------------------------
 -- | Apply the given 'GenericM' at every node that passes the 'GenericQ', but
 -- don't descend into children if the query matches.
+--
+-- Why is the query a @Maybe Bool@? The GHC AST intersperses 'Located' nodes
+-- with data nodes, so for any given node we can only definitely return an
+-- answer if it's a 'Located'. See 'genericIsSubspan' for how this parameter is
+-- used.
 largestM :: forall m. Monad m => GenericQ (Maybe Bool) -> GenericM m -> GenericM m
 largestM q f = go
   where
