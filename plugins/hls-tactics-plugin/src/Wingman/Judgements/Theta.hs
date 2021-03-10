@@ -16,6 +16,7 @@ import           Generics.SYB
 import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, eqTyCon)
 import           TcEvidence
 import           TcType (tcTyConAppTyCon_maybe)
+import           TysPrim (eqPrimTyCon)
 import           Wingman.Machinery
 import           Wingman.Types
 
@@ -23,6 +24,7 @@ import           Wingman.Types
 data Evidence
   = EqualityOfTypes Type Type
   | HasInstance PredType
+  deriving (Show)
 
 
 mkEvidence :: PredType -> Maybe Evidence
@@ -57,7 +59,9 @@ evidenceToHypothesis (HasInstance t) =
 -- | Given @a ~ b@, returns @Just (a, b)@, otherwise @Nothing@.
 getEqualityTheta :: PredType -> Maybe (Type, Type)
 getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
-  | tc == eqTyCon  = Just (a, b)
+  | tc == eqTyCon = Just (a, b)
+getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k1, _k2, a, b]))
+  | tc == eqPrimTyCon = Just (a, b)
 getEqualityTheta _ = Nothing
 
 
