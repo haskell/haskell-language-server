@@ -112,8 +112,8 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
       exportsMap = localExports <> pkgExports
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
-        [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
+        [ mkCA title kind isPreferred [x] edit
+        | x <- xs, (title, kind, isPreferred, tedit) <- suggestAction $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
       actions' = caRemoveRedundantImports parsedModule text diag xs uri
@@ -121,11 +121,11 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
                <> caRemoveInvalidExports parsedModule text diag xs uri
     pure $ Right $ List actions'
 
-mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
-mkCA title diags edit =
-  InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) Nothing Nothing (Just edit) Nothing
+mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
+mkCA title kind isPreferred diags edit =
+  InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing
 
-suggestAction :: CodeActionArgs -> [(T.Text, [TextEdit])]
+suggestAction :: CodeActionArgs -> GhcideCodeActions
 suggestAction caa =
   concat   -- Order these suggestions by priority
     [ wrap $ suggestSignature True
@@ -148,7 +148,7 @@ suggestAction caa =
     , wrap suggestFillHole -- Lowest priority
     ]
     where
-      wrap :: ToCodeAction a => a -> [(T.Text, [TextEdit])]
+      wrap :: ToCodeAction a => a -> GhcideCodeActions
       wrap = toCodeAction caa
 
 findSigOfDecl :: (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
@@ -276,7 +276,7 @@ caRemoveRedundantImports m contents digs ctxDigs uri
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = mkCA title [diagnostic] WorkspaceEdit{..} where
+    removeSingle title tedit diagnostic = mkCA title (Just CodeActionQuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _documentChanges = Nothing
     removeAll tedit = InR $ CodeAction{..} where

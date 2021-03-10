@@ -6,7 +6,6 @@ module Development.IDE.Plugin.CodeAction.Args
 where
 
 import           Control.Lens                                 (alaf)
-import           Data.Bifunctor                               (second)
 import           Data.Monoid                                  (Ap (..))
 import qualified Data.Text                                    as T
 import           Development.IDE                              (Diagnostic,
@@ -21,22 +20,46 @@ import           Development.IDE.Plugin.TypeLenses            (GlobalBindingType
 import           Development.IDE.Spans.LocalBindings          (Bindings)
 import           Development.IDE.Types.Exports                (ExportsMap)
 import           Development.IDE.Types.Options                (IdeOptions)
-import           Language.LSP.Types                           (TextEdit)
+import           Language.LSP.Types                           (CodeActionKind (CodeActionQuickFix),
+                                                               TextEdit)
 import           Retrie                                       (Annotated (astA))
 import           Retrie.ExactPrint                            (annsA)
 
+-- | A compact representation of 'Language.LSP.Types.CodeAction's
+type GhcideCodeActions = [(T.Text, Maybe CodeActionKind, Maybe Bool, [TextEdit])]
+
+class ToTextEdit a where
+  toTextEdit :: CodeActionArgs -> a -> [TextEdit]
+
+instance ToTextEdit TextEdit where
+  toTextEdit _ = pure
+
+instance ToTextEdit Rewrite where
+  toTextEdit CodeActionArgs {..} rw
+    | Just df <- caaDf,
+      Just ps <- caaAnnSource,
+      Right x <- rewriteToEdit df (annsA ps) rw =
+      x
+    | otherwise = []
+
+instance ToTextEdit a => ToTextEdit [a] where
+  toTextEdit caa = foldMap (toTextEdit caa)
+
+instance (ToTextEdit a, ToTextEdit b) => ToTextEdit (Either a b) where
+  toTextEdit caa = either (toTextEdit caa) (toTextEdit caa)
+
 data CodeActionArgs = CodeActionArgs
-  { caaExportsMap   :: ExportsMap
-  , caaIdeOptions   :: IdeOptions
-  , caaParsedModule :: Maybe ParsedModule
-  , caaContents     :: Maybe T.Text
-  , caaDf           :: Maybe DynFlags
-  , caaAnnSource    :: Maybe (Annotated ParsedSource)
-  , caaTmr          :: Maybe TcModuleResult
-  , caaHar          :: Maybe HieAstResult
-  , caaBindings     :: Maybe Bindings
-  , caaGblSigs      :: Maybe GlobalBindingTypeSigsResult
-  , caaDiagnostics  :: Diagnostic
+  { caaExportsMap   :: ExportsMap,
+    caaIdeOptions   :: IdeOptions,
+    caaParsedModule :: Maybe ParsedModule,
+    caaContents     :: Maybe T.Text,
+    caaDf           :: Maybe DynFlags,
+    caaAnnSource    :: Maybe (Annotated ParsedSource),
+    caaTmr          :: Maybe TcModuleResult,
+    caaHar          :: Maybe HieAstResult,
+    caaBindings     :: Maybe Bindings,
+    caaGblSigs      :: Maybe GlobalBindingTypeSigsResult,
+    caaDiagnostics  :: Diagnostic
   }
 
 rewrite ::
@@ -71,26 +94,19 @@ rewrite _ _ _ = []
 -- instance ToCodeAction r => ToCodeAction (a -> r)
 -- @@
 class ToCodeAction a where
-  toCodeAction :: CodeActionArgs -> a -> [(T.Text, [TextEdit])]
+  toCodeAction :: CodeActionArgs -> a -> GhcideCodeActions
 
--------------------------------------------------------------------------------------------------
--- Acceptable return types:
-instance ToCodeAction [(T.Text, [TextEdit])] where
-  toCodeAction _ = id
+instance ToTextEdit a => ToCodeAction [(T.Text, a)] where
+  toCodeAction caa xs = [(title, Just CodeActionQuickFix, Nothing, toTextEdit caa te) | (title, te) <- xs]
 
-instance ToCodeAction [(T.Text, [Rewrite])] where
-  toCodeAction CodeActionArgs {..} = rewrite caaDf caaAnnSource
+instance ToTextEdit a => ToCodeAction [(T.Text, CodeActionKind, a)] where
+  toCodeAction caa xs = [(title, Just kind, Nothing, toTextEdit caa te) | (title, kind, te) <- xs]
 
-instance ToCodeAction [(T.Text, [Either TextEdit Rewrite])] where
-  toCodeAction CodeActionArgs {..} r = second (concatMap go) <$> r
-    where
-      go (Left te) = [te]
-      go (Right rw)
-        | Just df <- caaDf,
-          Just ps <- caaAnnSource,
-          Right x <- rewriteToEdit df (annsA ps) rw =
-          x
-        | otherwise = []
+instance ToTextEdit a => ToCodeAction [(T.Text, Bool, a)] where
+  toCodeAction caa xs = [(title, Nothing, Just isPreferred, toTextEdit caa te) | (title, isPreferred, te) <- xs]
+
+instance ToTextEdit a => ToCodeAction [(T.Text, CodeActionKind, Bool, a)] where
+  toCodeAction caa xs = [(title, Just kind, Just isPreferred, toTextEdit caa te) | (title, kind, isPreferred, te) <- xs]
 
 -------------------------------------------------------------------------------------------------
 
