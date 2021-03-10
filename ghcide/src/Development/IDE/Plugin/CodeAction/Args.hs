@@ -99,17 +99,23 @@ rewrite _ _ _ = []
 class ToCodeAction a where
   toCodeAction :: CodeActionArgs -> a -> GhcideCodeActions
 
-instance ToTextEdit a => ToCodeAction [(T.Text, a)] where
-  toCodeAction caa xs = [(title, Just CodeActionQuickFix, Nothing, toTextEdit caa te) | (title, te) <- xs]
+instance ToCodeAction a => ToCodeAction [a] where
+  toCodeAction caa = foldMap (toCodeAction caa)
 
-instance ToTextEdit a => ToCodeAction [(T.Text, CodeActionKind, a)] where
-  toCodeAction caa xs = [(title, Just kind, Nothing, toTextEdit caa te) | (title, kind, te) <- xs]
+instance ToCodeAction a => ToCodeAction (Maybe a) where
+  toCodeAction caa = maybe [] (toCodeAction caa)
 
-instance ToTextEdit a => ToCodeAction [(T.Text, Bool, a)] where
-  toCodeAction caa xs = [(title, Nothing, Just isPreferred, toTextEdit caa te) | (title, isPreferred, te) <- xs]
+instance ToTextEdit a => ToCodeAction (T.Text, a) where
+  toCodeAction caa (title, te) = [(title, Just CodeActionQuickFix, Nothing, toTextEdit caa te)]
 
-instance ToTextEdit a => ToCodeAction [(T.Text, CodeActionKind, Bool, a)] where
-  toCodeAction caa xs = [(title, Just kind, Just isPreferred, toTextEdit caa te) | (title, kind, isPreferred, te) <- xs]
+instance ToTextEdit a => ToCodeAction (T.Text, CodeActionKind, a) where
+  toCodeAction caa (title, kind, te) = [(title, Just kind, Nothing, toTextEdit caa te)]
+
+instance ToTextEdit a => ToCodeAction (T.Text, Bool, a) where
+  toCodeAction caa (title, isPreferred, te) = [(title, Nothing, Just isPreferred, toTextEdit caa te)]
+
+instance ToTextEdit a => ToCodeAction (T.Text, CodeActionKind, Bool, a) where
+  toCodeAction caa (title, kind, isPreferred, te) = [(title, Just kind, Just isPreferred, toTextEdit caa te)]
 
 -------------------------------------------------------------------------------------------------
 
