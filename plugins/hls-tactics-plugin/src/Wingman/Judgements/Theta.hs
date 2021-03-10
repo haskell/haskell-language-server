@@ -3,6 +3,7 @@
 module Wingman.Judgements.Theta
   ( Evidence
   , getEvidenceAtHole
+  , mkEvidence
   , evidenceToSubst
   , evidenceToHypothesis
   ) where
