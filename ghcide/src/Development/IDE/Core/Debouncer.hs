@@ -45,12 +45,12 @@ asyncRegisterEvent d 0 k fire = do
         (cancel, !m') <- evaluate $ Map.alterF (\prev -> (traverse_ cancel prev, Nothing)) k m
         return (m', cancel)
     fire
-asyncRegisterEvent d delay k fire = do
+asyncRegisterEvent d delay k fire = mask_ $ do
     a <- asyncWithUnmask $ \unmask -> unmask $ do
         sleep delay
         fire
         modifyVar_ d (evaluate . Map.delete k)
-    join $ modifyVar d $ \m -> mask_ $ do
+    join $ modifyVar d $ \m -> do
         (cancel, !m') <- evaluate $ Map.alterF (\prev -> (traverse_ cancel prev, Just a)) k m
         return (m', cancel)
 
