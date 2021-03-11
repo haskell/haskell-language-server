@@ -8,9 +8,9 @@ import           Data.List
 import           ErrUtils
 import           GhcPlugins                        as GHC hiding (Var, (<>))
 
-import           Control.Concurrent.Strict
 import qualified Data.Text                         as T
 
+import           Data.IORef.Extra
 import           Development.IDE.GHC.Error
 import           Development.IDE.Types.Diagnostics
 import           Language.LSP.Types                (type (|?) (..))
@@ -27,13 +27,13 @@ import           Language.LSP.Types                (type (|?) (..))
 --   The given argument lets you refresh a ModSummary log_action
 withWarnings :: T.Text -> ((ModSummary -> ModSummary) -> IO a) -> IO ([(WarnReason, FileDiagnostic)], a)
 withWarnings diagSource action = do
-  warnings <- newVar []
+  warnings <- newIORef []
   let newAction :: DynFlags -> WarnReason -> Severity -> SrcSpan -> PprStyle -> SDoc -> IO ()
       newAction dynFlags wr _ loc style msg = do
         let wr_d = map ((wr,) . third3 (attachReason wr)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc (queryQual style) msg
-        modifyVar_ warnings $ return . (wr_d:)
+        atomicModifyIORef_ warnings (wr_d:)
   res <- action $ \x -> x{ms_hspp_opts = (ms_hspp_opts x){log_action = newAction}}
-  warns <- readVar warnings
+  warns <- readIORef warnings
   return (reverse $ concat warns, res)
 
 attachReason :: WarnReason -> Diagnostic -> Diagnostic

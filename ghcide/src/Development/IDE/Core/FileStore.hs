@@ -24,7 +24,6 @@ module Development.IDE.Core.FileStore(
 
 import           Control.Concurrent.STM                       (atomically)
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
-import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
 import qualified Data.ByteString                              as BS
@@ -67,6 +66,7 @@ import qualified Development.IDE.Types.Logger                 as L
 
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
+import           Data.IORef.Extra
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -79,13 +79,13 @@ import           System.FilePath
 
 makeVFSHandle :: IO VFSHandle
 makeVFSHandle = do
-    vfsVar <- newVar (1, Map.empty)
+    vfsVar <- newIORef (1, Map.empty)
     pure VFSHandle
         { getVirtualFile = \uri -> do
-              (_nextVersion, vfs) <- readVar vfsVar
+              (_nextVersion, vfs) <- readIORef vfsVar
               pure $ Map.lookup uri vfs
         , setVirtualFileContents = Just $ \uri content ->
-              void $ modifyVar' vfsVar $ \(nextVersion, vfs) -> (nextVersion + 1, ) $
+              atomicModifyIORef_ vfsVar $ \(nextVersion, vfs) -> (nextVersion + 1, ) $
                   case content of
                     Nothing -> Map.delete uri vfs
                     -- The second version number is only used in persistFileVFS which we do not use so we set it to 0.
@@ -169,7 +169,7 @@ resetFileStore ideState changes = mask $ \_ ->
                   -- we record FOIs document versions in all the stored values
                   -- so NEVER reset FOIs to avoid losing their versions
                   OfInterestVar foisVar <- getIdeGlobalExtras (shakeExtras ideState)
-                  fois <- readVar foisVar
+                  fois <- readIORef foisVar
                   unless (HM.member (toNormalizedFilePath f) fois) $ do
                     deleteValue (shakeExtras ideState) (GetModificationTime_ True) (toNormalizedFilePath' f)
                     deleteValue (shakeExtras ideState) (GetModificationTime_ False) (toNormalizedFilePath' f)

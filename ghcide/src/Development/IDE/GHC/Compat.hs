@@ -72,7 +72,7 @@ import DynFlags hiding (ExposePackage)
 import Fingerprint (Fingerprint)
 import qualified Module
 import Packages
-import Data.IORef
+import Data.IORef.Extra
 import HscTypes
 import NameCache
 import qualified Data.ByteString as BS

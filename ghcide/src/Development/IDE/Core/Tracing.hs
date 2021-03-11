@@ -10,8 +10,7 @@ module Development.IDE.Core.Tracing
 where
 
 import           Control.Concurrent.Async       (Async, async)
-import           Control.Concurrent.Extra       (Var, modifyVar_, newVar,
-                                                 readVar, threadDelay)
+import           Control.Concurrent.Extra
 import           Control.Exception              (evaluate)
 import           Control.Exception.Safe         (SomeException, catch)
 import           Control.Monad                  (forM_, forever, unless, void,
@@ -22,8 +21,6 @@ import           Control.Seq                    (r0, seqList, seqTuple2, using)
 import           Data.ByteString                (ByteString)
 import           Data.Dynamic                   (Dynamic)
 import qualified Data.HashMap.Strict            as HMap
-import           Data.IORef                     (modifyIORef', newIORef,
-                                                 readIORef, writeIORef)
 import           Data.String                    (IsString (fromString))
 import           Data.Text.Encoding             (encodeUtf8)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
@@ -49,6 +46,7 @@ import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
 import           System.IO.Unsafe               (unsafePerformIO)
+import Data.IORef.Extra
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
@@ -112,7 +110,7 @@ otTracedProvider (PluginId pluginName) provider act = do
     setTag sp "plugin" (encodeUtf8 pluginName)
     runInIO act
 
-startTelemetry :: Bool -> Logger -> Var Values -> IO ()
+startTelemetry :: Bool -> Logger -> IORef Values -> IO ()
 startTelemetry allTheTime logger stateRef = do
     instrumentFor <- getInstrumentCached
     mapCountInstrument <- mkValueObserver "values map count"
@@ -132,14 +130,14 @@ startTelemetry allTheTime logger stateRef = do
 
 performMeasurement ::
   Logger ->
-  Var Values ->
+  IORef Values ->
   (Maybe Key -> IO OurValueObserver) ->
   Instrument 'Asynchronous a m' ->
   IO ()
 performMeasurement logger stateRef instrumentFor mapCountInstrument = do
-    withSpan_ "Measure length" $ readVar stateRef >>= observe mapCountInstrument . length
+    withSpan_ "Measure length" $ readIORef stateRef >>= observe mapCountInstrument . length
 
-    values <- readVar stateRef
+    values <- readIORef stateRef
     let keys = Key GhcSession
              : Key GhcSessionDeps
              : [ k | (_,k) <- HMap.keys values
@@ -158,15 +156,15 @@ type OurValueObserver = Int -> IO ()
 
 getInstrumentCached :: IO (Maybe Key -> IO OurValueObserver)
 getInstrumentCached = do
-    instrumentMap <- newVar HMap.empty
+    instrumentMap <- newIORef HMap.empty
     mapBytesInstrument <- mkValueObserver "value map size_bytes"
 
     let instrumentFor k = do
-          mb_inst <- HMap.lookup k <$> readVar instrumentMap
+          mb_inst <- HMap.lookup k <$> readIORef instrumentMap
           case mb_inst of
             Nothing -> do
                 instrument <- mkValueObserver (fromString (show k ++ " size_bytes"))
-                modifyVar_ instrumentMap (return . HMap.insert k instrument)
+                atomicModifyIORef_ instrumentMap (HMap.insert k instrument)
                 return $ observe instrument
             Just v -> return $ observe v
     return $ maybe (return $ observe mapBytesInstrument) instrumentFor
@@ -180,10 +178,10 @@ measureMemory
     :: Logger
     -> [[Key]]     -- ^ Grouping of keys for the sharing-aware analysis
     -> (Maybe Key -> IO OurValueObserver)
-    -> Var Values
+    -> IORef Values
     -> IO ()
 measureMemory logger groups instrumentFor stateRef = withSpan_ "Measure Memory" $ do
-    values <- readVar stateRef
+    values <- readIORef stateRef
     valuesSizeRef <- newIORef $ Just 0
     let !groupsOfGroupedValues = groupValues values
     logDebug logger "STARTING MEMORY PROFILING"

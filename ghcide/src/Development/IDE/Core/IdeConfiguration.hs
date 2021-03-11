@@ -12,7 +12,6 @@ module Development.IDE.Core.IdeConfiguration
   )
 where
 
-import           Control.Concurrent.Strict
 import           Control.Monad
 import           Data.Aeson.Types               (Value)
 import           Data.HashSet                   (HashSet, singleton)
@@ -23,6 +22,7 @@ import           Development.IDE.Types.Location
 import           Development.Shake
 import           Language.LSP.Types
 import           System.FilePath                (isRelative)
+import Data.IORef.Extra
 
 -- | Lsp client relevant configuration details
 data IdeConfiguration = IdeConfiguration
@@ -31,17 +31,17 @@ data IdeConfiguration = IdeConfiguration
   }
   deriving (Show)
 
-newtype IdeConfigurationVar = IdeConfigurationVar {unIdeConfigurationRef :: Var IdeConfiguration}
+newtype IdeConfigurationVar = IdeConfigurationVar {unIdeConfigurationRef :: IORef IdeConfiguration}
 
 instance IsIdeGlobal IdeConfigurationVar
 
 registerIdeConfiguration :: ShakeExtras -> IdeConfiguration -> IO ()
 registerIdeConfiguration extras =
-  addIdeGlobalExtras extras . IdeConfigurationVar <=< newVar
+  addIdeGlobalExtras extras . IdeConfigurationVar <=< newIORef
 
 getIdeConfiguration :: Action IdeConfiguration
 getIdeConfiguration =
-  getIdeGlobalAction >>= liftIO . readVar . unIdeConfigurationRef
+  getIdeGlobalAction >>= liftIO . readIORef . unIdeConfigurationRef
 
 parseConfiguration :: InitializeParams -> IdeConfiguration
 parseConfiguration InitializeParams {..} =
@@ -73,7 +73,7 @@ modifyIdeConfiguration
   :: IdeState -> (IdeConfiguration -> IdeConfiguration) -> IO ()
 modifyIdeConfiguration ide f = do
   IdeConfigurationVar var <- getIdeGlobalState ide
-  void $ modifyVar' var f
+  atomicModifyIORef_ var f
 
 isWorkspaceFile :: NormalizedFilePath -> Action Bool
 isWorkspaceFile file =

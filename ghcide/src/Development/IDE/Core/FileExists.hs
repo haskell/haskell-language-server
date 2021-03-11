@@ -10,7 +10,6 @@ module Development.IDE.Core.FileExists
   )
 where
 
-import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
 import qualified Data.ByteString                       as BS
@@ -29,6 +28,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified System.Directory                      as Dir
 import qualified System.FilePath.Glob                  as Glob
+import Data.IORef.Extra
 
 {- Note [File existence cache and LSP file watchers]
 Some LSP servers provide the ability to register file watches with the client, which will then notify
@@ -75,7 +75,7 @@ fast path by a check that the path also matches our watching patterns.
 type FileExistsMap = (HashMap NormalizedFilePath Bool)
 
 -- | A wrapper around a mutable 'FileExistsState'
-newtype FileExistsMapVar = FileExistsMapVar (Var FileExistsMap)
+newtype FileExistsMapVar = FileExistsMapVar (IORef FileExistsMap)
 
 instance IsIdeGlobal FileExistsMapVar
 
@@ -83,7 +83,7 @@ instance IsIdeGlobal FileExistsMapVar
 getFileExistsMapUntracked :: Action FileExistsMap
 getFileExistsMapUntracked = do
   FileExistsMapVar v <- getIdeGlobalAction
-  liftIO $ readVar v
+  liftIO $ readIORef v
 
 -- | Modify the global store of file exists.
 modifyFileExists :: IdeState -> [FileEvent] -> IO ()
@@ -98,7 +98,7 @@ modifyFileExists state changes = do
   -- Masked to ensure that the previous values are flushed together with the map update
   mask $ \_ -> do
     -- update the map
-    void $ modifyVar' var $ HashMap.union changesMap
+    atomicModifyIORef_ var $ HashMap.union changesMap
     -- See Note [Invalidating file existence results]
     -- flush previous values
     mapM_ (deleteValue (shakeExtras state) GetFileExists) (HashMap.keys changesMap)
@@ -167,7 +167,7 @@ fileExistsRules lspEnv vfs = do
   -- Create the global always, although it should only be used if we have fast rules.
   -- But there's a chance someone will send unexpected notifications anyway,
   -- e.g. https://github.com/haskell/ghcide/issues/599
-  addIdeGlobal . FileExistsMapVar =<< liftIO (newVar [])
+  addIdeGlobal . FileExistsMapVar =<< liftIO (newIORef [])
 
   extras <- getShakeExtrasRules
   opts <- liftIO $ getIdeOptionsIO extras

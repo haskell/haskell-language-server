@@ -1,6 +1,5 @@
 module Development.IDE.Main (Arguments(..), defaultMain) where
-import           Control.Concurrent.Extra              (newLock, readVar,
-                                                        withLock)
+import           Control.Concurrent.Extra              (newLock, withLock)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -8,6 +7,7 @@ import           Control.Monad.Extra                   (concatMapM, unless,
 import           Data.Default                          (Default (def))
 import qualified Data.HashMap.Strict                   as HashMap
 import           Data.Hashable                         (hashed)
+import           Data.IORef.Extra
 import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, fromMaybe,
@@ -211,7 +211,7 @@ defaultMain Arguments{..} = do
 
             when argsOTMemoryProfiling $ do
                 let valuesRef = state $ shakeExtras ide
-                values <- readVar valuesRef
+                values <- readIORef valuesRef
                 let consoleObserver Nothing = return $ \size -> printf "Total: %.2fMB\n" (fromIntegral @Int @Double size / 1e6)
                     consoleObserver (Just k) = return $ \size -> printf "  - %s: %.2fKB\n" (show k) (fromIntegral @Int @Double size / 1e3)
 

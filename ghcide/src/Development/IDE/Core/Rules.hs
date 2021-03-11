@@ -133,7 +133,6 @@ import qualified Development.IDE.Spans.AtPoint                as AtPoint
 import           Development.IDE.Types.HscEnvEq
 import           Development.Shake.Classes                    hiding (get, put)
 
-import           Control.Concurrent.Strict
 import           Control.Monad.State
 import           Data.ByteString.Encoding                     as T
 import           Data.Coerce
@@ -152,6 +151,7 @@ import qualified HieDb
 import           Ide.Plugin.Config
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Binary as B
+import Data.IORef.Extra
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -731,7 +731,7 @@ typeCheckRuleDefinition hsc pm = do
 currentLinkables :: Action [Linkable]
 currentLinkables = do
     compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-    hm <- liftIO $ readVar compiledLinkables
+    hm <- liftIO $ readIORef compiledLinkables
     pure $ map go $ moduleEnvToList hm
   where
     go (mod, time) = LM time mod []
@@ -947,7 +947,7 @@ getModIfaceRule = defineEarlyCutoff $ Rule $ \GetModIface f -> do
   -- Record the linkable so we know not to unload it
   whenJust (hm_linkable . hirHomeMod =<< mhmi) $ \(LM time mod _) -> do
       compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-      liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
+      liftIO $ atomicModifyIORef_ compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
 
 getModIfaceWithoutLinkableRule :: Rules ()
@@ -1101,7 +1101,7 @@ needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation
 #endif
 
 -- | Tracks which linkables are current, so we don't need to unload them
-newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: Var (ModuleEnv UTCTime) }
+newtype CompiledLinkables = CompiledLinkables { getCompiledLinkables :: IORef (ModuleEnv UTCTime) }
 instance IsIdeGlobal CompiledLinkables
 
 writeHiFileAction :: HscEnv -> HiFileResult -> Action [FileDiagnostic]
@@ -1115,7 +1115,7 @@ writeHiFileAction hsc hiFile = do
 -- | A rule that wires per-file rules together
 mainRule :: Rules ()
 mainRule = do
-    linkables <- liftIO $ newVar emptyModuleEnv
+    linkables <- liftIO $ newIORef emptyModuleEnv
     addIdeGlobal $ CompiledLinkables linkables
     getParsedModuleRule
     getParsedModuleWithCommentsRule

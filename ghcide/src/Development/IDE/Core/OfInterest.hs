@@ -13,7 +13,6 @@ module Development.IDE.Core.OfInterest(
     OfInterestVar(..)
     ) where
 
-import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Monad
@@ -29,8 +28,10 @@ import           GHC.Generics
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import qualified Data.ByteString.Lazy                         as LBS
+import           Data.IORef.Extra
 import           Data.List.Extra                              (nubOrd)
 import           Data.Maybe                                   (catMaybes)
+import           Data.Tuple.Extra                             (dupe)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Shake
 import           Development.IDE.Import.DependencyInformation
@@ -39,7 +40,7 @@ import           Development.IDE.Types.Location
 import           Development.IDE.Types.Logger
 import           Development.IDE.Types.Options
 
-newtype OfInterestVar = OfInterestVar (Var (HashMap NormalizedFilePath FileOfInterestStatus))
+newtype OfInterestVar = OfInterestVar (IORef (HashMap NormalizedFilePath FileOfInterestStatus))
 instance IsIdeGlobal OfInterestVar
 
 type instance RuleResult GetFilesOfInterest = HashMap NormalizedFilePath FileOfInterestStatus
@@ -54,7 +55,7 @@ instance Binary   GetFilesOfInterest
 -- | The rule that initialises the files of interest state.
 ofInterestRules :: Rules ()
 ofInterestRules = do
-    addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
+    addIdeGlobal . OfInterestVar =<< liftIO (newIORef HashMap.empty)
     defineEarlyCutoff $ RuleNoDiagnostics $ \GetFilesOfInterest _file -> assert (null $ fromNormalizedFilePath _file) $ do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
@@ -76,7 +77,7 @@ setFilesOfInterest state files = modifyFilesOfInterest state (const files)
 getFilesOfInterestUntracked :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
 getFilesOfInterestUntracked = do
     OfInterestVar var <- getIdeGlobalAction
-    liftIO $ readVar var
+    liftIO $ readIORef var
 
 -- | Modify the files-of-interest - not usually necessary or advisable.
 --   The LSP client will keep this information up to date.
@@ -86,7 +87,7 @@ modifyFilesOfInterest
   -> IO ()
 modifyFilesOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
-    files <- modifyVar' var f
+    files <- atomicModifyIORef' var (dupe . f)
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ HashMap.toList files)
 
 -- | Typecheck all the files of interest.
@@ -113,7 +114,7 @@ kick = do
     let mguts = catMaybes results
         !exportsMap' = createExportsMapMg mguts
         !exportsMap'' = maybe mempty createExportsMap ifaces
-    void $ liftIO $ modifyVar' exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
+    liftIO $ atomicModifyIORef_ exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted
 

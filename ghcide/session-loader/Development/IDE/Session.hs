@@ -20,7 +20,7 @@ module Development.IDE.Session
 -- building with ghc-lib we need to make this Haskell agnostic, so no hie-bios!
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Strict
+import           Control.Concurrent.Extra
 import           Control.Exception.Safe
 import           Control.Monad
 import           Control.Monad.Extra
@@ -83,6 +83,7 @@ import           Packages
 
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
+import           Data.IORef.Extra
 import           Database.SQLite.Simple
 import           HIE.Bios.Cradle                      (yamlConfig)
 import           HieDb.Create
@@ -213,7 +214,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
   version <- newVar 0
   let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
   let invalidateShakeCache = do
-        void $ modifyVar' version succ
+        void $ modifyVar_ version (evaluate . succ)
   -- This caches the mapping from Mod.hs -> hie.yaml
   cradleLoc <- liftIO $ memoIO $ \v -> do
       res <- findCradle v
@@ -246,12 +247,8 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
-          modifyVarIO' knownTargetsVar $ traverseHashed $ \known -> do
-            let known' = HM.unionWith (<>) known $ HM.fromList knownTargets
-            when (known /= known') $
-                logDebug logger $ "Known files updated: " <>
-                    T.pack(show $ (HM.map . map) fromNormalizedFilePath known')
-            pure known'
+          atomicModifyIORef_ knownTargetsVar $ mapHashed $ \known -> do
+            HM.unionWith (<>) known $ HM.fromList knownTargets
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
@@ -364,9 +361,9 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 
           let all_targets = cs ++ cached_targets
 
-          void $ modifyVar' fileToFlags $
+          void $ modifyVar_ fileToFlags $ evaluate .
               Map.insert hieYaml (HM.fromList (concatMap toFlagsMap all_targets))
-          void $ modifyVar' filesMap $
+          void $ modifyVar_ filesMap $ evaluate .
               flip HM.union (HM.fromList (zip (map fst $ concatMap toFlagsMap all_targets) (repeat hieYaml)))
 
           void $ extendKnownTargets all_targets
@@ -386,7 +383,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                     -- update exports map
                     extras <- getShakeExtras
                     let !exportsMap' = createExportsMap $ mapMaybe (fmap hirModIface) modIfaces
-                    liftIO $ modifyVar_ (exportsMap extras) $ evaluate . (exportsMap' <>)
+                    liftIO $ atomicModifyIORef_ (exportsMap extras) $ (exportsMap' <>)
 
           return (second Map.keys res)
 
@@ -427,9 +424,9 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                dep_info <- getDependencyInfo (maybeToList hieYaml)
                let ncfp = toNormalizedFilePath' cfp
                let res = (map (renderCradleError ncfp) err, Nothing)
-               void $ modifyVar' fileToFlags $
+               void $ modifyVar_ fileToFlags $ evaluate .
                     Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
-               void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
+               void $ modifyVar_ filesMap $ evaluate . HM.insert ncfp hieYaml
                return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]

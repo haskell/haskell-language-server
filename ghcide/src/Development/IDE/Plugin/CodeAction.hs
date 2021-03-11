@@ -18,7 +18,6 @@ import           Bag                                               (isEmptyBag)
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
-import           Control.Concurrent.Extra                          (readVar)
 import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
@@ -27,6 +26,7 @@ import           Data.Function
 import           Data.Functor
 import qualified Data.HashMap.Strict                               as Map
 import qualified Data.HashSet                                      as Set
+import           Data.IORef.Extra
 import           Data.List.Extra
 import           Data.List.NonEmpty                                (NonEmpty ((:|)))
 import qualified Data.List.NonEmpty                                as NE
@@ -107,7 +107,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
             <*> use GetGlobalBindingTypeSigs `traverse` mbFile
     -- This is quite expensive 0.6-0.7s on GHC
     pkgExports   <- maybe mempty envPackageExports env
-    localExports <- readVar (exportsMap $ shakeExtras state)
+    localExports <- readIORef (exportsMap $ shakeExtras state)
     let
       exportsMap = localExports <> pkgExports
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
