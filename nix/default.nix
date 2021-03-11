@@ -4,27 +4,19 @@ let
   overlay = _self: pkgs:
     let
         sharedOverrides = {
-          overrides = with pkgs.haskell.lib;
-            _self: super: {
-              svg-builder = doJailbreak super.svg-builder;
-              statestack = doJailbreak super.statestack;
-              active = doJailbreak super.active;
-              monoid-extras = doJailbreak super.monoid-extras;
-              size-based = doJailbreak super.size-based;
-              force-layout = doJailbreak super.force-layout;
-              dual-tree = doJailbreak super.dual-tree;
-              diagrams-core = doJailbreak super.diagrams-core;
-              diagrams-lib = doJailbreak super.diagrams-lib;
-              # https://github.com/wz1000/HieDb/pull/27
-              hiedb = dontCheck super.hiedb;
-              diagrams-postscript = doJailbreak super.diagrams-postscript;
-              diagrams-svg = doJailbreak super.diagrams-svg;
-              diagrams-contrib = doJailbreak super.diagrams-contrib;
-            };
+          overrides = _self: super: {
+            mkDerivation = args:
+              let
+                imBroken = with builtins;
+                  if hasAttr args.pname super then
+                    super.${args.pname}.meta.broken
+                  else
+                    false;
+              in super.mkDerivation (args // { jailbreak = imBroken; });
+            hiedb = pkgs.haskell.lib.dontCheck super.hiedb;
+          };
         };
-        gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
-        extended = haskellPackages:
-          haskellPackages.extend (pkgs.haskell.lib.packageSourceOverrides {
+        ourSources = {
             haskell-language-server = gitignoreSource ../.;
             ghcide = gitignoreSource ../ghcide;
             shake-bench = gitignoreSource ../shake-bench;
@@ -39,10 +31,14 @@ let
             hls-retrie-plugin = gitignoreSource ../plugins/hls-retrie-plugin;
             hls-splice-plugin = gitignoreSource ../plugins/hls-splice-plugin;
             hls-tactics-plugin = gitignoreSource ../plugins/hls-tactics-plugin;
-          });
+        };
+        gitignoreSource = (import sources.gitignore { inherit (pkgs) lib; }).gitignoreSource;
+        extended = haskellPackages:
+          haskellPackages.extend (pkgs.haskell.lib.packageSourceOverrides ourSources);
         in
         {
         inherit gitignoreSource;
+        inherit ourSources;
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)
