@@ -14,10 +14,11 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Generics.SYB hiding (tyConName)
+import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe)
 #if __GLASGOW_HASKELL__ > 806
-import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, eqTyCon, getTyVar_maybe)
+import           GhcPlugins (eqTyCon)
 #else
-import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, nameRdrName, tyConName)
+import           GhcPlugins (nameRdrName, tyConName)
 import           PrelNames (eqTyCon_RDR)
 #endif
 import           TcEvidence
@@ -84,13 +85,13 @@ evidenceToHypothesis (HasInstance t) =
 ------------------------------------------------------------------------------
 -- | Given @a ~ b@ or @a ~# b@, returns @Just (a, b)@, otherwise @Nothing@.
 getEqualityTheta :: PredType -> Maybe (Type, Type)
+getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
 #if __GLASGOW_HASKELL__ > 806
-getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
-  | tc == eqTyCon = Just (a, b)
+  | tc == eqTyCon
 #else
-getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
-  | nameRdrName (tyConName tc) == eqTyCon_RDR = Just (a, b)
+  | nameRdrName (tyConName tc) == eqTyCon_RDR
 #endif
+  = Just (a, b)
 getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k1, _k2, a, b]))
   | tc == eqPrimTyCon = Just (a, b)
 getEqualityTheta _ = Nothing
