@@ -12,12 +12,8 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
   -- * Utilities
   appendConstraint,
   extendImport,
-  hideImplicitPreludeSymbol,
   hideSymbol,
   liftParseAST,
-  newImport,
-  newUnqualImport,
-  newImportAll,
 ) where
 
 import           Control.Applicative
@@ -39,20 +35,14 @@ import           Development.IDE.GHC.ExactPrint        (ASTElement (parseAST),
 import           Development.IDE.Spans.Common
 import           FieldLabel                            (flLabel)
 import           GHC.Exts                              (IsList (fromList))
-import           GhcPlugins                            (mkRealSrcLoc,
-                                                        realSrcSpanStart,
-                                                        sigPrec)
+import           GhcPlugins                            (sigPrec)
 import           Language.Haskell.GHC.ExactPrint
 import           Language.Haskell.GHC.ExactPrint.Types (DeltaPos (DP),
                                                         KeywordId (G), mkAnnKey)
 import           Language.LSP.Types
 import           OccName
-import           Outputable                            (ppr, showSDoc,
-                                                        showSDocUnsafe)
-import           Retrie.GHC                            (mkRealSrcSpan,
-                                                        rdrNameOcc,
-                                                        realSrcSpanEnd,
-                                                        unpackFS)
+import           Outputable                            (ppr, showSDocUnsafe)
+import           Retrie.GHC                            (rdrNameOcc, unpackFS)
 
 ------------------------------------------------------------------------------
 
@@ -432,69 +422,3 @@ deleteFromImport (T.pack -> symbol) (L l idecl) llies@(L lieLoc lies) _ = do
             (filter ((/= symbol) . unqualIEWrapName . unLoc) cons)
             (filter ((/= symbol) . T.pack . unpackFS . flLabel . unLoc) flds)
   killLie v = Just v
-
--- | Insert a import declaration with at most one symbol
-
--- newImport "A" (Just "Bar(Cons)") Nothing False --> import A (Bar(Cons))
--- newImport "A" (Just "foo") Nothing True --> import A hiding (foo)
--- newImport "A" Nothing (Just "Q") False --> import qualified A as Q
---
--- Wrong combinations will result in parse error
--- Returns Nothing if there is no imports and declarations
-newImport ::
-  -- | module name
-  String ->
-  -- | the symbol
-  Maybe String ->
-  -- | whether to be qualified
-  Maybe String ->
-  -- | the symbol is to be imported or hidden
-  Bool ->
-  ParsedSource ->
-  Maybe Rewrite
-newImport modName mSymbol mQual hiding (L _ HsModule{..}) = do
-  -- TODO (berberman): if the previous line is module name and there is no other imports,
-  -- 'AnnWhere' will be crowded out to the next line, which is a bug
-  let predLine old =
-        mkRealSrcLoc
-          (srcLocFile old)
-          (srcLocLine old - 1)
-          (srcLocCol old)
-      existingImpSpan = (fmap (realSrcSpanEnd,) . realSpan . getLoc) =<< lastMaybe hsmodImports
-      existingDeclSpan = (fmap (predLine . realSrcSpanStart,) . realSpan . getLoc) =<< headMaybe hsmodDecls
-  (f, s) <- existingImpSpan <|> existingDeclSpan
-  let beg = f s
-      indentation = srcSpanStartCol s
-      ran = RealSrcSpan $ mkRealSrcSpan beg beg
-  pure $
-    Rewrite ran $ \df -> do
-      let symImp
-            | Just symbol <- mSymbol
-              , symOcc <- mkVarOcc symbol =
-              "(" <> showSDoc df (parenSymOcc symOcc $ ppr symOcc) <> ")"
-            | otherwise = ""
-          impStmt =
-            "import "
-              <> maybe "" (const "qualified ") mQual
-              <> modName
-              <> (if hiding then " hiding " else " ")
-              <> symImp
-              <> maybe "" (" as " <>) mQual
-      -- Re-labeling is needed to reflect annotations correctly
-      L _ idecl0 <- liftParseAST @(ImportDecl GhcPs) df impStmt
-      let idecl = L ran idecl0
-      addSimpleAnnT
-        idecl
-        (DP (1, indentation - 1))
-        [(G AnnImport, DP (1, indentation - 1))]
-      pure idecl
-
-newUnqualImport :: String -> String -> Bool -> ParsedSource -> Maybe Rewrite
-newUnqualImport modName symbol = newImport modName (Just symbol) Nothing
-
-newImportAll :: String -> ParsedSource -> Maybe Rewrite
-newImportAll modName = newImport modName Nothing Nothing False
-
--- | Insert "import Prelude hiding (symbol)"
-hideImplicitPreludeSymbol :: String -> ParsedSource -> Maybe Rewrite
-hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True

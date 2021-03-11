@@ -71,7 +71,8 @@ import           Outputable                                        (Outputable,
 import           RdrName                                           (GlobalRdrElt (..),
                                                                     lookupGlobalRdrEnv)
 import           Safe                                              (atMay)
-import           SrcLoc                                            (realSrcSpanStart)
+import           SrcLoc                                            (realSrcSpanEnd,
+                                                                    realSrcSpanStart)
 import           TcRnTypes                                         (ImportAvails (..),
                                                                     TcGblEnv (..))
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -179,8 +180,8 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
 --  imported from ‘Data.ByteString’ at B.hs:6:1-22
 --  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
 --  imported from ‘Data.Text’ at B.hs:7:1-16
-suggestHideShadow :: ParsedSource -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Rewrite])]
-suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_message, _range}
+suggestHideShadow :: ParsedSource -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestHideShadow ps@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_message, _range}
   | Just [identifier, modName, s] <-
       matchRegexUnifySpaces
         _message
@@ -205,8 +206,8 @@ suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_messag
         mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
         title <- "Hide " <> identifier <> " from " <> modName =
         if modName == "Prelude" && null mDecl
-          then [(title, maybeToList $ hideImplicitPreludeSymbol (T.unpack identifier) pm)]
-          else maybeToList $ (title,) . pure . hideSymbol (T.unpack identifier) <$> mDecl
+          then maybeToList $ (\(_, te) -> (title, [Left te])) <$> newImportToEdit (hideImplicitPreludeSymbol identifier) ps
+          else maybeToList $ (title,) . pure . pure . hideSymbol (T.unpack identifier) <$> mDecl
       | otherwise = []
 
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
@@ -808,7 +809,7 @@ suggestImportDisambiguation ::
     Maybe T.Text ->
     ParsedSource ->
     Diagnostic ->
-    [(T.Text, [Rewrite])]
+    [(T.Text, [Either TextEdit Rewrite])]
 suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
@@ -897,23 +898,23 @@ disambiguateSymbol ::
     Diagnostic ->
     T.Text ->
     HidingMode ->
-    [Rewrite]
+    [Either TextEdit Rewrite]
 disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
     (HideOthers hiddens0) ->
-        [ hideSymbol symbol idecl
+        [ Right $ hideSymbol symbol idecl
         | ExistingImp idecls <- hiddens0
         , idecl <- NE.toList idecls
         ]
             ++ mconcat
                 [ if null imps
-                    then maybeToList $ hideImplicitPreludeSymbol symbol pm
-                    else hideSymbol symbol <$> imps
+                    then maybeToList $ Left . snd <$> newImportToEdit (hideImplicitPreludeSymbol $ T.pack symbol) pm
+                    else Right . hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
     (ToQualified parensed qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-         in [ if parensed
+         in Right <$> [ if parensed
                 then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @(HsExpr GhcPs) df $
                     prettyPrint $
@@ -1136,7 +1137,7 @@ removeRedundantConstraints mContents Diagnostic{..}
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, [Rewrite])]
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message}
   | Just [methodName, className] <-
       matchRegexUnifySpaces
@@ -1155,22 +1156,24 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message
           -- extend
           Just decl ->
             [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
-                [uncurry extendImport (unImportStyle style) decl]
+                [Right $ uncurry extendImport (unImportStyle style) decl]
               )
               | style <- importStyle
             ]
           -- new
-          _ ->
-            [ ( "Import " <> moduleNameText <> " with " <> rendered,
-                maybeToList $ newUnqualImport (T.unpack moduleNameText) (T.unpack rendered) False ps
-              )
+          _
+            | Just (range, indent) <- newImportInsertRange ps
+            ->
+             (\(unNewImport -> x) -> (x, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
+            [ newUnqualImport moduleNameText rendered False
               | style <- importStyle,
                 let rendered = renderImportStyle style
             ]
-              <> maybeToList (("Import " <> moduleNameText,) <$> fmap pure (newImportAll (T.unpack moduleNameText) ps))
+              <> [newImportAll moduleNameText]
+            | otherwise -> []
 
-suggestNewImport :: ExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, TextEdit)]
-suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
+suggestNewImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, TextEdit)]
+suggestNewImport packageExportsMap ps@(L _ HsModule {..}) Diagnostic{_message}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
@@ -1179,23 +1182,16 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
         >>= (findImportDeclByModuleName hsmodImports . T.unpack)
         >>= ideclAs . unLoc
         <&> T.pack . moduleNameString . unLoc
-  , Just insertLine <- case hsmodImports of
-        [] -> case srcSpanStart $ getLoc (head hsmodDecls) of
-          RealSrcLoc s -> Just $ srcLocLine s - 1
-          _            -> Nothing
-        _ -> case srcSpanEnd $ getLoc (last hsmodImports) of
-          RealSrcLoc s -> Just $ srcLocLine s
-          _            -> Nothing
-  , insertPos <- Position insertLine 0
+  , Just (range, indent) <- newImportInsertRange ps
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = [(imp, TextEdit (Range insertPos insertPos) (imp <> "\n"))
-    | imp <- sort $ constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
+  = [(imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
+    | (unNewImport -> imp) <- constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
     ]
 suggestNewImport _ _ _ = []
 
 constructNewImportSuggestions
-  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [T.Text]
+  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [NewImport]
 constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrd
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
@@ -1205,17 +1201,73 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
   , suggestion <- renderNewImport identInfo
   ]
  where
-  renderNewImport :: IdentInfo -> [T.Text]
+  renderNewImport :: IdentInfo -> [NewImport]
   renderNewImport identInfo
     | Just q <- qual
-    , asQ <- if q == m then "" else " as " <> q
-    = ["import qualified " <> m <> asQ]
+    = [newQualImport m q]
     | otherwise
-    = ["import " <> m <> " (" <> renderImportStyle importStyle <> ")"
+    = [newUnqualImport m (renderImportStyle importStyle) False
       | importStyle <- NE.toList $ importStyles identInfo] ++
-      ["import " <> m ]
+      [newImportAll m]
     where
         m = moduleNameText identInfo
+
+newtype NewImport = NewImport {unNewImport :: T.Text}
+  deriving (Show, Eq, Ord)
+
+newImportToEdit :: NewImport -> ParsedSource -> Maybe (T.Text, TextEdit)
+newImportToEdit (unNewImport -> imp) ps
+  | Just (range, indent) <- newImportInsertRange ps
+  = Just (imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
+  | otherwise = Nothing
+
+newImportInsertRange :: ParsedSource -> Maybe (Range, Int)
+newImportInsertRange (L _ HsModule {..})
+  |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
+      [] -> case getLoc (head hsmodDecls) of
+        RealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
+              in Just ((srcLocLine (realSrcSpanStart s) - 1, col), col)
+        _            -> Nothing
+      _ -> case  getLoc (last hsmodImports) of
+        RealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
+            in Just ((srcLocLine $ realSrcSpanEnd s,col), col)
+        _            -> Nothing
+    = Just (Range insertPos insertPos, col)
+  | otherwise = Nothing
+
+-- | Construct an import declaration with at most one symbol
+newImport
+  :: T.Text -- ^ module name
+  -> Maybe T.Text -- ^  the symbol
+  -> Maybe T.Text -- ^ qualified name
+  -> Bool -- ^ the symbol is to be imported or hidden
+  -> NewImport
+newImport modName mSymbol mQual hiding = NewImport impStmt
+  where
+     symImp
+            | Just symbol <- mSymbol
+              , symOcc <- mkVarOcc $ T.unpack symbol =
+              " (" <> T.pack (prettyPrint (parenSymOcc symOcc $ ppr symOcc)) <> ")"
+            | otherwise = ""
+     impStmt =
+       "import "
+         <> maybe "" (const "qualified ") mQual
+         <> modName
+         <> (if hiding then " hiding" else "")
+         <> symImp
+         <> maybe "" (\qual -> if modName == qual then "" else " as " <> qual) mQual
+
+newQualImport :: T.Text -> T.Text -> NewImport
+newQualImport modName qual = newImport modName Nothing (Just qual) False
+
+newUnqualImport :: T.Text -> T.Text -> Bool -> NewImport
+newUnqualImport modName symbol = newImport modName (Just symbol) Nothing
+
+newImportAll :: T.Text -> NewImport
+newImportAll modName = newImport modName Nothing Nothing False
+
+hideImplicitPreludeSymbol :: T.Text -> NewImport
+hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
 canUseIdent NotInScopeDataConstructor{} = isDatacon
