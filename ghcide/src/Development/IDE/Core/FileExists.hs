@@ -10,7 +10,7 @@ module Development.IDE.Core.FileExists
   )
 where
 
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
 import qualified Data.ByteString                       as BS
@@ -98,7 +98,7 @@ modifyFileExists state changes = do
   -- Masked to ensure that the previous values are flushed together with the map update
   mask $ \_ -> do
     -- update the map
-    modifyVar_ var $ evaluate . HashMap.union changesMap
+    void $ modifyVar' var $ HashMap.union changesMap
     -- See Note [Invalidating file existence results]
     -- flush previous values
     mapM_ (deleteValue (shakeExtras state) GetFileExists) (HashMap.keys changesMap)
