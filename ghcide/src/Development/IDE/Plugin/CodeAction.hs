@@ -43,7 +43,8 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (prettyPrint,
-                                                                    printRdrName)
+                                                                    printRdrName,
+                                                                    unsafePrintSDoc)
 import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
@@ -1247,7 +1248,7 @@ newImport modName mSymbol mQual hiding = NewImport impStmt
      symImp
             | Just symbol <- mSymbol
               , symOcc <- mkVarOcc $ T.unpack symbol =
-              " (" <> T.pack (prettyPrint (parenSymOcc symOcc $ ppr symOcc)) <> ")"
+              " (" <> T.pack (unsafePrintSDoc (parenSymOcc symOcc $ ppr symOcc)) <> ")"
             | otherwise = ""
      impStmt =
        "import "
