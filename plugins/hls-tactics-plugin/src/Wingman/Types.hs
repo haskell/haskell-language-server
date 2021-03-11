@@ -135,6 +135,9 @@ instance Show Class where
 instance Show (HsExpr GhcPs) where
   show  = unsafeRender
 
+instance Show (HsDecl GhcPs) where
+  show  = unsafeRender
+
 instance Show (Pat GhcPs) where
   show  = unsafeRender
 

@@ -176,6 +176,14 @@ allOccNames = everything (<>) $ mkQ mempty $ \case
     a -> S.singleton a
 
 
+------------------------------------------------------------------------------
+-- | Unpack the relevant parts of a 'Match'
+pattern AMatch :: HsMatchContext (NameOrRdrName (IdP GhcPs)) -> [Pat GhcPs] -> HsExpr GhcPs -> Match GhcPs (LHsExpr GhcPs)
+pattern AMatch ctx pats body <-
+  Match { m_ctxt = ctx
+        , m_pats = fmap fromPatCompatPs -> pats
+        , m_grhss = UnguardedRHSs body
+        }
 
 
 ------------------------------------------------------------------------------
@@ -183,10 +191,7 @@ allOccNames = everything (<>) $ mkQ mempty $ \case
 pattern Lambda :: [Pat GhcPs] -> HsExpr GhcPs -> HsExpr GhcPs
 pattern Lambda pats body <-
   HsLam _
-    (MG {mg_alts = L _ [L _
-      (Match { m_pats = fmap fromPatCompatPs -> pats
-             , m_grhss = UnguardedRHSs body
-             })]})
+    (MG {mg_alts = L _ [L _ (AMatch _ pats body) ]})
   where
     -- If there are no patterns to bind, just stick in the body
     Lambda [] body   = body
