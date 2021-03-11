@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP          #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Wingman.Judgements.Theta
@@ -12,8 +13,13 @@ import           Data.Maybe (fromMaybe, mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           Generics.SYB
+import           Generics.SYB hiding (tyConName)
+#if __GLASGOW_HASKELL__ > 806
 import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, eqTyCon, getTyVar_maybe)
+#else
+import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, nameRdrName, tyConName)
+import           PrelNames (eqTyCon_RDR)
+#endif
 import           TcEvidence
 import           TcType (tcTyConAppTyCon_maybe)
 import           TysPrim (eqPrimTyCon)
@@ -78,8 +84,13 @@ evidenceToHypothesis (HasInstance t) =
 ------------------------------------------------------------------------------
 -- | Given @a ~ b@ or @a ~# b@, returns @Just (a, b)@, otherwise @Nothing@.
 getEqualityTheta :: PredType -> Maybe (Type, Type)
+#if __GLASGOW_HASKELL__ > 806
 getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
   | tc == eqTyCon = Just (a, b)
+#else
+getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k, a, b]))
+  | nameRdrName (tyConName tc) == eqTyCon_RDR = Just (a, b)
+#endif
 getEqualityTheta (splitTyConApp_maybe -> Just (tc, [_k1, _k2, a, b]))
   | tc == eqPrimTyCon = Just (a, b)
 getEqualityTheta _ = Nothing
