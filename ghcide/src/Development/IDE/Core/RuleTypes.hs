@@ -36,10 +36,12 @@ import           HscTypes                                     (HomeModInfo,
                                                                hm_iface,
                                                                hm_linkable)
 
+import qualified Data.Binary                                  as B
 import           Data.ByteString                              (ByteString)
-import qualified Data.ByteString.Char8                        as BS
+import qualified Data.ByteString.Lazy                         as LBS
 import           Data.Int                                     (Int64)
 import           Data.Text                                    (Text)
+import           Data.Time
 import           Development.IDE.Import.FindImports           (ArtifactsLocation)
 import           Development.IDE.Spans.Common
 import           Development.IDE.Spans.LocalBindings
@@ -156,15 +158,23 @@ data HiFileResult = HiFileResult
     -- a reference to a typechecked module
     , hirHomeMod    :: !HomeModInfo
     -- ^ Includes the Linkable iff we need object files
+    , hirIfaceFp    :: ByteString
+    -- ^ Fingerprint for the ModIface
+    , hirLinkableFp :: ByteString
+    -- ^ Fingerprint for the Linkable
     }
 
 hiFileFingerPrint :: HiFileResult -> ByteString
-hiFileFingerPrint hfr = ifaceBS <> linkableBS
+hiFileFingerPrint HiFileResult{..} = hirIfaceFp <> hirLinkableFp
+
+mkHiFileResult :: ModSummary -> HomeModInfo -> HiFileResult
+mkHiFileResult hirModSummary hirHomeMod = HiFileResult{..}
   where
-    ifaceBS = fingerprintToBS . getModuleHash . hirModIface $ hfr -- will always be two bytes
-    linkableBS = case hm_linkable $ hirHomeMod hfr of
+    hirIfaceFp = fingerprintToBS . getModuleHash . hm_iface $ hirHomeMod -- will always be two bytes
+    hirLinkableFp = case hm_linkable hirHomeMod of
       Nothing -> ""
-      Just l  -> BS.pack $ show $ linkableTime l
+      Just (linkableTime -> l)  -> LBS.toStrict $
+        B.encode (fromEnum $ utctDay l, fromEnum $ utctDayTime l)
 
 hirModIface :: HiFileResult -> ModIface
 hirModIface = hm_iface . hirHomeMod
