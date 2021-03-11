@@ -17,6 +17,7 @@ import           Data.Generics (everything, gcount, mkQ)
 import           Data.Generics.Product (field')
 import           Data.List (sortBy)
 import qualified Data.Map as M
+import           Data.Maybe (mapMaybe)
 import           Data.Monoid (getSum)
 import           Data.Ord (Down (..), comparing)
 import           Data.Set (Set)
@@ -79,7 +80,7 @@ runTactic ctx jdg t =
       (_, fmap assoc23 -> solns) -> do
         let sorted =
               flip sortBy solns $ comparing $ \(ext, (_, holes)) ->
-                Down $ scoreSolution ext holes
+                Down $ scoreSolution ext jdg holes
         case sorted of
           ((syn, _) : _) ->
             Right $
@@ -142,6 +143,7 @@ mappingExtract f (TacticT m)
 -- to produce the right test results.
 scoreSolution
     :: Synthesized (LHsExpr GhcPs)
+    -> Judgement
     -> [Judgement]
     -> ( Penalize Int  -- number of holes
        , Reward Bool   -- all bindings used
@@ -151,18 +153,23 @@ scoreSolution
        , Penalize Int  -- number of recursive calls
        , Penalize Int  -- size of extract
        )
-scoreSolution ext holes
+scoreSolution ext goal holes
   = ( Penalize $ length holes
     , Reward   $ S.null $ intro_vals S.\\ used_vals
     , Penalize $ S.size unused_top_vals
     , Penalize $ S.size intro_vals
-    , Reward   $ S.size used_vals
+    , Reward   $ S.size used_vals + length used_user_vals
     , Penalize $ getSum $ syn_recursion_count ext
     , Penalize $ solutionSize $ syn_val ext
     )
   where
+    initial_scope = hyByName $ jEntireHypothesis goal
     intro_vals = M.keysSet $ hyByName $ syn_scoped ext
     used_vals = S.intersection intro_vals $ syn_used_vals ext
+    used_user_vals = filter (isUserProv . hi_provenance)
+                   $ mapMaybe (flip M.lookup initial_scope)
+                   $ S.toList
+                   $ syn_used_vals ext
     top_vals = S.fromList
              . fmap hi_name
              . filter (isTopLevel . hi_provenance)
@@ -198,6 +205,10 @@ tryUnifyUnivarsButNotSkolems skolems goal inst =
     _               -> Nothing
 
 
+updateSubst :: TCvSubst -> TacticState -> TacticState
+updateSubst subst s = s { ts_unifier = unionTCvSubst subst (ts_unifier s) }
+
+
 
 ------------------------------------------------------------------------------
 -- | Attempt to unify two types.
@@ -208,7 +219,7 @@ unify goal inst = do
   skolems <- gets ts_skolems
   case tryUnifyUnivarsButNotSkolems skolems goal inst of
     Just subst ->
-      modify (\s -> s { ts_unifier = unionTCvSubst subst (ts_unifier s) })
+      modify $ updateSubst subst
     Nothing -> throwError (UnificationError inst goal)
 
 

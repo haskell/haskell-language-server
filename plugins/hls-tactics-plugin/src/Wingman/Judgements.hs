@@ -370,6 +370,13 @@ isTopLevel _                = False
 
 
 ------------------------------------------------------------------------------
+-- | Was this term defined by the user?
+isUserProv :: Provenance -> Bool
+isUserProv UserPrv{} = True
+isUserProv _         = False
+
+
+------------------------------------------------------------------------------
 -- | Is this a local function argument, pattern match or user val?
 isLocalHypothesis :: Provenance -> Bool
 isLocalHypothesis UserPrv{}         = True

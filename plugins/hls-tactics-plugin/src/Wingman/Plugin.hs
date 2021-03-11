@@ -31,6 +31,7 @@ import           Wingman.CaseSplit
 import           Wingman.GHC
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.TacticProviders
+import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
@@ -136,7 +137,9 @@ mkWorkspaceEdits
     -> RunTacticResults
     -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits span dflags ccs uri pm rtr = do
-  for_ (rtr_other_solns rtr) $ traceMX "other solution"
+  for_ (rtr_other_solns rtr) $ \soln -> do
+    traceMX "other solution" soln
+    traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
   traceMX "solution" $ rtr_extract rtr
   let g = graftHole (RealSrcSpan span) rtr
       response = transform dflags ccs uri g pm
