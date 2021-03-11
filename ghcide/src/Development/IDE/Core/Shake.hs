@@ -1100,15 +1100,16 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
-             mask_ $ modifyVar_ publishedDiagnostics $ \published -> do
+             join $ mask_ $ modifyVar publishedDiagnostics $ \published -> do
                  let lastPublish = HMap.lookupDefault [] uri published
-                 when (lastPublish /= newDiags) $ case lspEnv of
-                   Nothing -> -- Print an LSP event.
-                     logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
-                   Just env -> LSP.runLspT env $
-                     LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                       LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
-                 pure $! HMap.insert uri newDiags published
+                     !published' = HMap.insert uri newDiags published
+                     action = when (lastPublish /= newDiags) $ case lspEnv of
+                        Nothing -> -- Print an LSP event.
+                            logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
+                        Just env -> LSP.runLspT env $
+                            LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
+                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
+                 return (published', action)
 
 newtype Priority = Priority Double
 
