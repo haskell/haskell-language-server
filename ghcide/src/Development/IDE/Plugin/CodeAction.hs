@@ -1186,7 +1186,7 @@ suggestNewImport packageExportsMap ps@(L _ HsModule {..}) Diagnostic{_message}
   , Just (range, indent) <- newImportInsertRange ps
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = [(imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
+  = sortOn fst [(imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
     | (unNewImport -> imp) <- constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
     ]
 suggestNewImport _ _ _ = []
