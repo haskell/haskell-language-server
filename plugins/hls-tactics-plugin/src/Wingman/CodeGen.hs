@@ -11,8 +11,11 @@ module Wingman.CodeGen
 
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
+import           Control.Monad.State
 import           Data.Generics.Labels ()
 import           Data.List
+import           Data.Maybe (mapMaybe)
+import           Data.Monoid (Endo(..))
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
@@ -26,6 +29,7 @@ import           Type hiding (Var)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
 import           Wingman.Judgements
+import           Wingman.Judgements.Theta
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
@@ -50,12 +54,20 @@ destructMatches f scrut t jdg = do
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
         _ -> fmap unzipTrace $ for dcs $ \dc -> do
-          let args = dataConInstOrigArgTys' dc apps
+          let ev = mapMaybe mkEvidence $ dataConInstArgTys dc apps
+              -- We explicitly do not need to add the method hypothesis to
+              -- #syn_scoped
+              method_hy = foldMap evidenceToHypothesis ev
+              args = dataConInstOrigArgTys' dc apps
+          modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
+          subst <- gets ts_unifier
           names <- mkManyGoodNames (hyNamesInScope hy) args
           let hy' = patternHypothesis scrut dc jdg
                   $ zip names
                   $ coerce args
-              j = introduce hy'
+              j = fmap (CType . substTyAddInScope subst . unCType)
+                $ introduce hy'
+                $ introduce method_hy
                 $ withNewGoal g jdg
           ext <- f dc j
           pure $ ext

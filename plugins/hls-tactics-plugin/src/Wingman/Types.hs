@@ -61,15 +61,17 @@ data TacticCommand
 
 -- | Generate a title for the command.
 tacticTitle :: TacticCommand -> T.Text -> T.Text
-tacticTitle Auto _                   = "Attempt to fill hole"
-tacticTitle Intros _                 = "Introduce lambda"
-tacticTitle Destruct var             = "Case split on " <> var
-tacticTitle Homomorphism var         = "Homomorphic case split on " <> var
-tacticTitle DestructLambdaCase _     = "Lambda case split"
-tacticTitle HomomorphismLambdaCase _ = "Homomorphic lambda case split"
-tacticTitle DestructAll _            = "Split all function arguments"
-tacticTitle UseDataCon dcon          = "Use constructor " <> dcon
-tacticTitle Refine _                 = "Refine hole"
+tacticTitle = (mappend "Wingman: " .) . go
+  where
+    go Auto _                   = "Attempt to fill hole"
+    go Intros _                 = "Introduce lambda"
+    go Destruct var             = "Case split on " <> var
+    go Homomorphism var         = "Homomorphic case split on " <> var
+    go DestructLambdaCase _     = "Lambda case split"
+    go HomomorphismLambdaCase _ = "Homomorphic lambda case split"
+    go DestructAll _            = "Split all function arguments"
+    go UseDataCon dcon          = "Use constructor " <> dcon
+    go Refine _                 = "Refine hole"
 
 
 ------------------------------------------------------------------------------
@@ -142,6 +144,9 @@ instance Show (Pat GhcPs) where
   show  = unsafeRender
 
 instance Show (LHsSigType GhcPs) where
+  show  = unsafeRender
+
+instance Show TyCon where
   show  = unsafeRender
 
 

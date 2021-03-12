@@ -31,7 +31,7 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins (mkAppTys, tupleDataCon, consDataCon)
+import           GhcPlugins (mkAppTys, tupleDataCon, consDataCon, substTyAddInScope)
 import           Ide.Plugin.Config (PluginConfig (plcConfig))
 import qualified Ide.Plugin.Config as Plugin
 import           Language.LSP.Server (MonadLsp, sendNotification)
@@ -44,7 +44,7 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Judgements.Theta (getMethodHypothesisAtHole)
+import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
 
@@ -143,8 +143,10 @@ mkJudgementAndContext features g binds rss tcmod = do
           top_provs = getRhsPosVals rss tcs
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
-          cls_hy = getMethodHypothesisAtHole (RealSrcSpan rss) tcs
-       in ( mkFirstJudgement
+          evidence = getEvidenceAtHole (RealSrcSpan rss) tcs
+          cls_hy = foldMap evidenceToHypothesis evidence
+          subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+       in ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
               (local_hy <> cls_hy)
               (isRhsHole rss tcs)
               g
