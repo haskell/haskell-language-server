@@ -35,6 +35,7 @@ import           Data.Maybe
 import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
+import           Data.Tuple.Extra                                  (fst3)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
@@ -740,7 +741,7 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
-suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
+suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
@@ -759,6 +760,7 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             Just decl <- findImportDeclByRange decls range,
             Just ident <- lookupExportMap binding mod
           = [ ( "Add " <> renderImportStyle importStyle <> " to the import list of " <> mod
+              , quickFixImportKind' "extend" importStyle
               , uncurry extendImport (unImportStyle importStyle) decl
               )
             | importStyle <- NE.toList $ importStyles ident
@@ -1138,7 +1140,7 @@ removeRedundantConstraints mContents Diagnostic{..}
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message}
   | Just [methodName, className] <-
       matchRegexUnifySpaces
@@ -1157,6 +1159,7 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message
           -- extend
           Just decl ->
             [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
+                quickFixImportKind' "extend" style,
                 [Right $ uncurry extendImport (unImportStyle style) decl]
               )
               | style <- importStyle
@@ -1165,15 +1168,15 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message
           _
             | Just (range, indent) <- newImportInsertRange ps
             ->
-             (\(unNewImport -> x) -> (x, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
-            [ newUnqualImport moduleNameText rendered False
+             (\(kind, unNewImport -> x) -> (x, kind, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
+            [ (quickFixImportKind' "new" style, newUnqualImport moduleNameText rendered False)
               | style <- importStyle,
                 let rendered = renderImportStyle style
             ]
-              <> [newImportAll moduleNameText]
+              <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
             | otherwise -> []
 
-suggestNewImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, TextEdit)]
+suggestNewImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
 suggestNewImport packageExportsMap ps@(L _ HsModule {..}) Diagnostic{_message}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
@@ -1186,14 +1189,14 @@ suggestNewImport packageExportsMap ps@(L _ HsModule {..}) Diagnostic{_message}
   , Just (range, indent) <- newImportInsertRange ps
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = sortOn fst [(imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
-    | (unNewImport -> imp) <- constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
+  = sortOn fst3 [(imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))
+    | (kind, unNewImport -> imp) <- constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
     ]
 suggestNewImport _ _ _ = []
 
 constructNewImportSuggestions
-  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [NewImport]
-constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrd
+  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [(CodeActionKind, NewImport)]
+constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdOn snd
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
   , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
@@ -1202,14 +1205,14 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
   , suggestion <- renderNewImport identInfo
   ]
  where
-  renderNewImport :: IdentInfo -> [NewImport]
+  renderNewImport :: IdentInfo -> [(CodeActionKind, NewImport)]
   renderNewImport identInfo
     | Just q <- qual
-    = [newQualImport m q]
+    = [(quickFixImportKind "new.qualified", newQualImport m q)]
     | otherwise
-    = [newUnqualImport m (renderImportStyle importStyle) False
+    = [(quickFixImportKind' "new" importStyle, newUnqualImport m (renderImportStyle importStyle) False)
       | importStyle <- NE.toList $ importStyles identInfo] ++
-      [newImportAll m]
+      [(quickFixImportKind "new.all", newImportAll m)]
     where
         m = moduleNameText identInfo
 
@@ -1554,3 +1557,10 @@ renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
 unImportStyle :: ImportStyle -> (Maybe String, String)
 unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
+
+quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
+quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".identifier.top"
+quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".identifier.parent"
+
+quickFixImportKind :: T.Text -> CodeActionKind
+quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x

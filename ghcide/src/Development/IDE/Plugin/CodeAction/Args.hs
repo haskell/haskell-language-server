@@ -116,7 +116,7 @@ instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, a) where
   toCodeAction caa (title, kind, te) = [(title, Just kind, Nothing, toTextEdit caa te)]
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionPreferred, a) where
-  toCodeAction caa (title, isPreferred, te) = [(title, Nothing, Just isPreferred, toTextEdit caa te)]
+  toCodeAction caa (title, isPreferred, te) = [(title, Just CodeActionQuickFix, Just isPreferred, toTextEdit caa te)]
 
 instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, CodeActionPreferred, a) where
   toCodeAction caa (title, kind, isPreferred, te) = [(title, Just kind, Just isPreferred, toTextEdit caa te)]
