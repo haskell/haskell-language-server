@@ -22,9 +22,9 @@ module Development.IDE.Core.FileStore(
     getFileContentsImpl
     ) where
 
-import           Control.Concurrent.Extra
 import           Control.Concurrent.STM                       (atomically)
 import           Control.Concurrent.STM.TQueue                (writeTQueue)
+import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad.Extra
 import qualified Data.ByteString                              as BS
@@ -85,7 +85,7 @@ makeVFSHandle = do
               (_nextVersion, vfs) <- readVar vfsVar
               pure $ Map.lookup uri vfs
         , setVirtualFileContents = Just $ \uri content ->
-              modifyVar_ vfsVar $ \(nextVersion, vfs) -> pure $ (nextVersion + 1, ) $
+              void $ modifyVar' vfsVar $ \(nextVersion, vfs) -> (nextVersion + 1, ) $
                   case content of
                     Nothing -> Map.delete uri vfs
                     -- The second version number is only used in persistFileVFS which we do not use so we set it to 0.

@@ -12,7 +12,7 @@ module Development.IDE.Types.HscEnvEq
 
 
 import           Control.Concurrent.Async      (Async, async, waitCatch)
-import           Control.Concurrent.Extra      (modifyVar, newVar)
+import           Control.Concurrent.Strict     (modifyVar, newVar)
 import           Control.DeepSeq               (force)
 import           Control.Exception             (evaluate, mask, throwIO)
 import           Control.Monad.Extra           (eitherM, join, mapMaybeM)
