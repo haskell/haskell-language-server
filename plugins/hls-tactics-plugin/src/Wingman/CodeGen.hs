@@ -187,5 +187,5 @@ buildDataCon jdg dc tyapps = do
                   ) $ zip args [0..]
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
-    & #syn_val   %~ mkCon dc
+    & #syn_val   %~ mkCon dc tyapps
 

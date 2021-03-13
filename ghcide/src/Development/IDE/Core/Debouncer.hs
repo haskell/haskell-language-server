@@ -9,7 +9,7 @@ module Development.IDE.Core.Debouncer
     ) where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import           Control.Exception
 import           Control.Monad            (join)
 import           Data.Foldable            (traverse_)

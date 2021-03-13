@@ -1,19 +1,23 @@
 module Wingman.CodeGen.Utils where
 
-import           Data.List
-import           DataCon
-import           Development.IDE.GHC.Compat
-import           GHC.Exts
-import           GHC.SourceGen              (RdrNameStr, recordConE)
-import           GHC.SourceGen.Overloaded
-import           Wingman.GHC      (getRecordFields)
-import           Name
+import Data.List
+import DataCon
+import Development.IDE.GHC.Compat
+import GHC.Exts
+import GHC.SourceGen (RdrNameStr, recordConE, string)
+import GHC.SourceGen.Overloaded
+import GhcPlugins (nilDataCon, charTy, eqType)
+import Name
+import Wingman.GHC (getRecordFields)
 
 
 ------------------------------------------------------------------------------
 -- | Make a data constructor with the given arguments.
-mkCon :: DataCon -> [LHsExpr GhcPs] -> LHsExpr GhcPs
-mkCon dcon (fmap unLoc -> args)
+mkCon :: DataCon -> [Type] -> [LHsExpr GhcPs] -> LHsExpr GhcPs
+mkCon dcon apps (fmap unLoc -> args)
+  | dcon == nilDataCon
+  , [ty] <- apps
+  , ty `eqType` charTy = noLoc $ string ""
   | isTupleDataCon dcon =
       noLoc $ tuple args
   | dataConIsInfix dcon

@@ -133,7 +133,7 @@ import qualified Development.IDE.Spans.AtPoint                as AtPoint
 import           Development.IDE.Types.HscEnvEq
 import           Development.Shake.Classes                    hiding (get, put)
 
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import           Control.Monad.State
 import           Data.ByteString.Encoding                     as T
 import           Data.Coerce
@@ -947,7 +947,7 @@ getModIfaceRule = defineEarlyCutoff $ Rule $ \GetModIface f -> do
   -- Record the linkable so we know not to unload it
   whenJust (hm_linkable . hirHomeMod =<< mhmi) $ \(LM time mod _) -> do
       compiledLinkables <- getCompiledLinkables <$> getIdeGlobalAction
-      liftIO $ modifyVar_ compiledLinkables $ \old -> pure $ extendModuleEnv old mod time
+      liftIO $ void $ modifyVar' compiledLinkables $ \old -> extendModuleEnv old mod time
   pure res
 
 getModIfaceWithoutLinkableRule :: Rules ()

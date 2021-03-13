@@ -12,7 +12,7 @@ module Development.IDE.Core.IdeConfiguration
   )
 where
 
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import           Control.Monad
 import           Data.Aeson.Types               (Value)
 import           Data.HashSet                   (HashSet, singleton)
@@ -73,7 +73,7 @@ modifyIdeConfiguration
   :: IdeState -> (IdeConfiguration -> IdeConfiguration) -> IO ()
 modifyIdeConfiguration ide f = do
   IdeConfigurationVar var <- getIdeGlobalState ide
-  modifyVar_ var (pure . f)
+  void $ modifyVar' var f
 
 isWorkspaceFile :: NormalizedFilePath -> Action Bool
 isWorkspaceFile file =

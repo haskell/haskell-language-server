@@ -13,7 +13,7 @@ module Development.IDE.Core.OfInterest(
     OfInterestVar(..)
     ) where
 
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Monad
@@ -22,7 +22,6 @@ import           Data.HashMap.Strict                          (HashMap)
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.Hashable
 import qualified Data.Text                                    as T
-import           Data.Tuple.Extra
 import           Data.Typeable
 import           Development.Shake
 import           GHC.Generics
@@ -87,7 +86,7 @@ modifyFilesOfInterest
   -> IO ()
 modifyFilesOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
-    files <- modifyVar var $ pure . dupe . f
+    files <- modifyVar' var f
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ HashMap.toList files)
 
 -- | Typecheck all the files of interest.
@@ -114,7 +113,7 @@ kick = do
     let mguts = catMaybes results
         !exportsMap' = createExportsMapMg mguts
         !exportsMap'' = maybe mempty createExportsMap ifaces
-    liftIO $ modifyVar_ exportsMap $ evaluate . (exportsMap'' <>) . (exportsMap' <>)
+    void $ liftIO $ modifyVar' exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted
 
