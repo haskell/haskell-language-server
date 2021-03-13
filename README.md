@@ -65,14 +65,17 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
 
   - For cabal:
       - Add to your global config file (e.g. `~/.cabal/config`):
-        ```
+
+        ```cabal
         program-default-options
           ghc-options: -haddock
         ```
+
       - Or, for a single project, run `cabal configure --ghc-options=-haddock`
 
   - For stack, add to global `$STACK_ROOT\config.yaml`, or project's `stack.yaml`:
-    ```
+
+    ```cabal
     ghc-options:
       "$everything": -haddock
     ```
@@ -131,6 +134,7 @@ then it means you have the command in PATH.
 #### Linux-specific pre-requirements
 
 On Linux you will need install a couple of extra libraries:
+
 - [Unicode (ICU)](http://site.icu-project.org/)
 - [NCURSES](https://www.gnu.org/software/ncurses/)
 - [Zlib](https://zlib.net/)
@@ -260,7 +264,7 @@ Direct installation from Hackage, while possible via `cabal install haskell-lang
 Said command builds the `haskell-language-server` binary and installs it in the default Cabal binaries folder,
 but the binary will only work with projects that use the same GHC version that built it.
 
-The package can be found here on Hackage: https://hackage.haskell.org/package/haskell-language-server
+The package can be found here on Hackage: <https://hackage.haskell.org/package/haskell-language-server>
 
 ## Configuring `haskell-language-server`
 
@@ -301,9 +305,9 @@ For example, `haskell-language-server` allows you to choose the formatting provi
 This option obviously would not make sense for language servers for other languages, or even for other Haskell language servers (which need not even support formatting).
 
 Here is a list of the additional settings currently supported by `haskell-language-server`, along with their setting key (you may not need to know this) and default:
+
 - Formatting provider (`haskell.formattingProvider`, default `ormolu`): what formatter to use; one of `floskell`, `ormolu`, `fourmolu`, `stylish-haskell`, or `brittany` (if compiled with the brittany plugin)
 - Format on imports (`haskell.formatOnImportOn`, default true): whether to format after adding an import
-- Maximum number of problems to report (`haskell.maxNumberOfProblems`, default 100): the maximum number of problems the server will send to the client
 - Diagnostics on change (`haskell.diagnosticsOnChange`, default true): (currently unused)
 - Completion snippets (`haskell.completionSnippetsOn`, default true): whether to support completion snippets
 - Liquid Haskell (`haskell.liquidOn`, default false): whether to enable Liquid Haskell support (currently unused until the Liquid Haskell support is functional again)
@@ -631,9 +635,11 @@ tracked in https://github.com/haskell/haskell-language-server/issues/176 and ori
 As a workaround, you need to ensure the preprocessor is available in the path (install globally with Stack or Cabal, provide in `shell.nix`, etc.).
 
 Example with `tasty-discover`:
+
 ```haskell
 {-# OPTIONS_GHC -F -pgmF tasty-discover #-}
 ```
+
 This returns an error in HLS if 'tasty-discover' is not in the path: `could not execute: tasty-discover`.
 
 ## Troubleshooting
@@ -642,7 +648,7 @@ This returns an error in HLS if 'tasty-discover' is not in the path: `could not 
 
 #### Difficulties with Stack and `Paths_` modules
 
-These are known to be somewhat buggy at the moment: https://github.com/haskell/haskell-language-server/issues/478.
+These are known to be somewhat buggy at the moment: <https://github.com/haskell/haskell-language-server/issues/478>.
 This issue should be fixed in Stack versions >= 2.5.
 
 #### Problems with dynamic linking
@@ -737,12 +743,15 @@ $ cabal build
 If you are looking for a Nix expression to create haskell-language-server binaries, see https://github.com/haskell/haskell-language-server/issues/122
 
 #### Introduction tutorial
+
 Pepeiborra [wrote an tutorial](https://github.com/pepeiborra/hls-tutorial) on writing a plugin in HLS.
 
 #### Test your hacked HLS in your editor
+
 If you want to test HLS while hacking on it, follow the steps below.
 
 To do once:
+
 - Open some codebase on which you want to test your hacked HLS in your favorite editor
 - Configure this editor to use your custom HLS executable
   - With Cabal:
@@ -751,6 +760,7 @@ To do once:
   - With Stack: `$(stack path --dist-dir)/build/haskell-language-server/haskell-language-server`
 
 To do every time you changed code and want to test it:
+
 - Build HLS
   - With Cabal: `cabal build exe:haskell-language-server`
   - With Stack: `stack build haskell-language-server:exe:haskell-language-server`
