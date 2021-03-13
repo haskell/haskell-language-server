@@ -7,13 +7,9 @@ let
           overrides = _self: super: {
             mkDerivation = args:
               let
-                imBroken = with builtins;
-                  if hasAttr args.pname super then
-                    super.${args.pname}.meta.broken
-                  else
-                    false;
-              in super.mkDerivation (args // { jailbreak = imBroken; });
-            hiedb = pkgs.haskell.lib.dontCheck super.hiedb;
+                broken = args.broken or false;
+                check = args.doCheck or true;
+              in super.mkDerivation (args // { jailbreak = broken; doCheck = if broken then false else check; });
           };
         };
         ourSources = {
