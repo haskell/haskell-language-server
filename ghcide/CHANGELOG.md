@@ -1,4 +1,27 @@
-### 0.7.5 (2021-02-??)
+### 1.1.0 (2021-03-09)
+* Add an option to control progress reporting (#1513) - Pepe Iborra
+* Fix missing parens of auto extending imports (#1526) - Potato Hatsue
+* Avoid redundant work in diagnostics pass (#1514) - Pepe Iborra
+* Avoid always rerunning GetModificationTime for interface files too (#1506) - Pepe Iborra
+* Demote implicit cradle warn to logging (#1511) - Javier Neira
+* Drive GetModificationTime using watched file events (#1487) - Pepe Iborra
+* Make type lenses plugin configurable (#1491) - Potato Hatsue
+* Context-aware ExactPrint grafting for HsExpr (#1489) - Sandy Maguire
+* Register IDE configuration when called via the command line (#1495) - wz1000
+* Faster ModSummary fingerprints (#1485) - Pepe Iborra
+* Make sure to give the correct DynFlags to the recompilation checker (#1459) - Pepe Iborra
+* Customize the unitId used for the fake internal component (#1435) - Pepe Iborra
+* Extract the qualified name from already imported module (#1445) - Potato Hatsue
+* Add code action for importing class methods (#1428) - Potato Hatsue
+* Reformat all files (#1439) - Junyoung/Clare Jang
+* Minor performance optimizations (#1432) - Pepe Iborra
+
+### 1.0.0 (2021-03-04)
+* Fix the handling of default HLS config again (#1419) - Pepe Iborra
+* Hlint hints. (#1227) - Peter Wicks Stringfield
+* Use object code for TH+UnboxedTuples/Sums (#1382) - wz1000
+* Add a pre commit hook for code formatting (#1384) - Junyoung/Clare Jang
+### 0.7.5 (2021-02-17)
 * Tone down some logInfos to logDebug (#1385) - Pepe Iborra
 * Show window message when auto extending import lists (#1371) - Potato Hatsue
 * Catch GHC errors in listing module names (#1367) - Potato Hatsue
