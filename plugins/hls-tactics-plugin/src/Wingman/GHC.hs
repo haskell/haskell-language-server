@@ -3,6 +3,7 @@
 
 module Wingman.GHC where
 
+import           ConLike
 import           Control.Monad.State
 import           Data.Function (on)
 import           Data.Functor ((<&>))
@@ -24,7 +25,6 @@ import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unique
 import           Var
 import           Wingman.Types
-import ConLike
 
 
 tcTyVar_maybe :: Type -> Maybe Var

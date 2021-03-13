@@ -9,7 +9,6 @@ module Wingman.CodeGen
   ) where
 
 
-import PatSyn
 import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
@@ -27,6 +26,7 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
+import           PatSyn
 import           Type hiding (Var)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
