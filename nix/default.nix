@@ -5,11 +5,21 @@ let
     let
         sharedOverrides = {
           overrides = _self: super: {
+            # we override mkDerivation here to apply the following
+            # tweak to each haskell package:
+            #   if the package is broken, then we disable its check and relax the cabal bounds;
+            #   otherwise, we leave it unchanged.
+            # hopefully, this could fix packages marked as broken by nix due to check failures
+            # or the build failure because of tight cabal bounds
             mkDerivation = args:
               let
                 broken = args.broken or false;
                 check = args.doCheck or true;
-              in super.mkDerivation (args // { jailbreak = broken; doCheck = if broken then false else check; });
+                jailbreak = args.jailbreak or false;
+              in super.mkDerivation (args // {
+                jailbreak = if broken then true else jailbreak;
+                doCheck = if broken then false else check; 
+              });
           };
         };
         ourSources = {
