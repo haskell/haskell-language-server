@@ -3,6 +3,7 @@ module Wingman.Tactics
   , runTactic
   ) where
 
+import           ConLike (ConLike(RealDataCon))
 import           Control.Applicative (Alternative(empty))
 import           Control.Lens ((&), (%~), (<>~))
 import           Control.Monad (unless)
@@ -231,18 +232,26 @@ requireNewHoles m = do
 
 
 ------------------------------------------------------------------------------
--- | Attempt to instantiate the given data constructor to solve the goal.
+-- | Attempt to instantiate the given ConLike to solve the goal.
 --
--- INVARIANT: Assumes the give datacon is appropriate to construct the type
+-- INVARIANT: Assumes the given ConLike is appropriate to construct the type
 -- with.
-splitDataCon :: DataCon -> TacticsM ()
-splitDataCon dc =
+splitConLike :: ConLike -> TacticsM ()
+splitConLike dc =
   requireConcreteHole $ tracing ("splitDataCon:" <> show dc) $ rule $ \jdg -> do
     let g = jGoal jdg
     case splitTyConApp_maybe $ unCType g of
       Just (_, apps) -> do
         buildDataCon (unwhitelistingSplit jdg) dc apps
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
+
+------------------------------------------------------------------------------
+-- | Attempt to instantiate the given data constructor to solve the goal.
+--
+-- INVARIANT: Assumes the given datacon is appropriate to construct the type
+-- with.
+splitDataCon :: DataCon -> TacticsM ()
+splitDataCon = splitConLike . RealDataCon
 
 
 ------------------------------------------------------------------------------

@@ -24,6 +24,7 @@ import           TysWiredIn (charTyCon, doubleTyCon, floatTyCon, intTyCon)
 import           Unique
 import           Var
 import           Wingman.Types
+import ConLike
 
 
 tcTyVar_maybe :: Type -> Maybe Var
@@ -106,12 +107,12 @@ freshTyvars t = do
 ------------------------------------------------------------------------------
 -- | Given a datacon, extract its record fields' names and types. Returns
 -- nothing if the datacon is not a record.
-getRecordFields :: DataCon -> Maybe [(OccName, CType)]
+getRecordFields :: ConLike -> Maybe [(OccName, CType)]
 getRecordFields dc =
-  case dataConFieldLabels dc of
+  case conLikeFieldLabels dc of
     [] -> Nothing
     lbls -> for lbls $ \lbl -> do
-      (_, ty) <- dataConFieldType_maybe dc $ flLabel lbl
+      let ty = conLikeFieldType dc $ flLabel lbl
       pure (mkVarOccFS $ flLabel lbl, CType ty)
 
 
