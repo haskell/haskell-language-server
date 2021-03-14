@@ -275,8 +275,6 @@ importTests = testGroup "import suggestions" [
         importControlMonad <- liftIO $ inspectCodeAction actionsOrCommands ["import Control.Monad"]
         liftIO $ do
             expectCodeAction actionsOrCommands ["import Control.Monad (when)"]
-            forM_ actns $ \a -> do
-                a ^. L.kind @?= Just CodeActionQuickFix
             length actns >= 10 @? "There are some actions"
 
         executeCodeAction importControlMonad
