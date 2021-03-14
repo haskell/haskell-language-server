@@ -9,6 +9,7 @@ module Wingman.CodeGen
   ) where
 
 
+import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
 import           Control.Monad.State
@@ -25,6 +26,7 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
+import           PatSyn
 import           Type hiding (Var)
 import           Wingman.CodeGen.Utils
 import           Wingman.GHC
@@ -36,7 +38,7 @@ import           Wingman.Types
 
 
 destructMatches
-    :: (DataCon -> Judgement -> Rule)
+    :: (ConLike -> Judgement -> Rule)
        -- ^ How to construct each match
     -> Maybe OccName
        -- ^ Scrutinee
@@ -54,47 +56,49 @@ destructMatches f scrut t jdg = do
       case dcs of
         [] -> throwError $ GoalMismatch "destruct" g
         _ -> fmap unzipTrace $ for dcs $ \dc -> do
-          let ev = mapMaybe mkEvidence $ dataConInstArgTys dc apps
+          let con = RealDataCon dc
+              ev = mapMaybe mkEvidence $ dataConInstArgTys dc apps
               -- We explicitly do not need to add the method hypothesis to
               -- #syn_scoped
               method_hy = foldMap evidenceToHypothesis ev
-              args = dataConInstOrigArgTys' dc apps
+              args = conLikeInstOrigArgTys' con apps
           modify $ appEndo $ foldMap (Endo . evidenceToSubst) ev
           subst <- gets ts_unifier
           names <- mkManyGoodNames (hyNamesInScope hy) args
-          let hy' = patternHypothesis scrut dc jdg
+          let hy' = patternHypothesis scrut con jdg
                   $ zip names
                   $ coerce args
               j = fmap (CType . substTyAddInScope subst . unCType)
                 $ introduce hy'
                 $ introduce method_hy
                 $ withNewGoal g jdg
-          ext <- f dc j
+          ext <- f con j
           pure $ ext
             & #syn_trace %~ rose ("match " <> show dc <> " {" <> intercalate ", " (fmap show names) <> "}")
                           . pure
             & #syn_scoped <>~ hy'
-            & #syn_val     %~ match [mkDestructPat dc names] . unLoc
+            & #syn_val     %~ match [mkDestructPat con names] . unLoc
 
 
 ------------------------------------------------------------------------------
 -- | Produces a pattern for a data con and the names of its fields.
-mkDestructPat :: DataCon -> [OccName] -> Pat GhcPs
-mkDestructPat dcon names
-  | isTupleDataCon dcon =
+mkDestructPat :: ConLike -> [OccName] -> Pat GhcPs
+mkDestructPat con names
+  | RealDataCon dcon <- con
+  , isTupleDataCon dcon =
       tuple pat_args
   | otherwise =
-      infixifyPatIfNecessary dcon $
+      infixifyPatIfNecessary con $
         conP
-          (coerceName $ dataConName dcon)
+          (coerceName $ conLikeName con)
           pat_args
   where
     pat_args = fmap bvar' names
 
 
-infixifyPatIfNecessary :: DataCon -> Pat GhcPs -> Pat GhcPs
+infixifyPatIfNecessary :: ConLike -> Pat GhcPs -> Pat GhcPs
 infixifyPatIfNecessary dcon x
-  | dataConIsInfix dcon =
+  | conLikeIsInfix dcon =
       case x of
         ConPatIn op (PrefixCon [lhs, rhs]) ->
           ConPatIn op $ InfixCon lhs rhs
@@ -113,8 +117,8 @@ unzipTrace = sequenceA
 --
 -- NOTE: The behaviour depends on GHC's 'dataConInstOrigArgTys'.
 --       We need some tweaks if the compiler changes the implementation.
-dataConInstOrigArgTys'
-  :: DataCon
+conLikeInstOrigArgTys'
+  :: ConLike
       -- ^ 'DataCon'structor
   -> [Type]
       -- ^ /Universally/ quantified type arguments to a result type.
@@ -123,21 +127,30 @@ dataConInstOrigArgTys'
       --   For example, for @MkMyGADT :: b -> MyGADT a c@, we
       --   must pass @[a, c]@ as this argument but not @b@, as @b@ is an existential.
   -> [Type]
-      -- ^ Types of arguments to the DataCon with returned type is instantiated with the second argument.
-dataConInstOrigArgTys' con uniTys =
-  let exvars = dataConExTys con
-   in dataConInstOrigArgTys con $
+      -- ^ Types of arguments to the ConLike with returned type is instantiated with the second argument.
+conLikeInstOrigArgTys' con uniTys =
+  let exvars = conLikeExTys con
+   in conLikeInstOrigArgTys con $
         uniTys ++ fmap mkTyVarTy exvars
       -- Rationale: At least in GHC <= 8.10, 'dataConInstOrigArgTys'
       -- unifies the second argument with DataCon's universals followed by existentials.
       -- If the definition of 'dataConInstOrigArgTys' changes,
       -- this place must be changed accordingly.
 
+
+conLikeExTys :: ConLike -> [TyCoVar]
+conLikeExTys (RealDataCon d) = dataConExTys d
+conLikeExTys (PatSynCon p) = patSynExTys p
+
+patSynExTys :: PatSyn -> [TyCoVar]
+patSynExTys ps = patSynExTyVars ps
+
+
 ------------------------------------------------------------------------------
 -- | Combinator for performing case splitting, and running sub-rules on the
 -- resulting matches.
 
-destruct' :: (DataCon -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
+destruct' :: (ConLike -> Judgement -> Rule) -> HyInfo CType -> Judgement -> Rule
 destruct' f hi jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let term = hi_name hi
@@ -156,7 +169,7 @@ destruct' f hi jdg = do
 ------------------------------------------------------------------------------
 -- | Combinator for performign case splitting, and running sub-rules on the
 -- resulting matches.
-destructLambdaCase' :: (DataCon -> Judgement -> Rule) -> Judgement -> Rule
+destructLambdaCase' :: (ConLike -> Judgement -> Rule) -> Judgement -> Rule
 destructLambdaCase' f jdg = do
   when (isDestructBlacklisted jdg) $ throwError NoApplicableTactic
   let g  = jGoal jdg
@@ -171,11 +184,11 @@ destructLambdaCase' f jdg = do
 -- | Construct a data con with subgoals for each field.
 buildDataCon
     :: Judgement
-    -> DataCon            -- ^ The data con to build
+    -> ConLike            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
 buildDataCon jdg dc tyapps = do
-  let args = dataConInstOrigArgTys' dc tyapps
+  let args = conLikeInstOrigArgTys' dc tyapps
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->

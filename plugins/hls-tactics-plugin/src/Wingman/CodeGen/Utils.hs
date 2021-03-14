@@ -1,5 +1,6 @@
 module Wingman.CodeGen.Utils where
 
+import ConLike (ConLike(RealDataCon), conLikeName)
 import Data.List
 import DataCon
 import Development.IDE.GHC.Compat
@@ -13,25 +14,32 @@ import Wingman.GHC (getRecordFields)
 
 ------------------------------------------------------------------------------
 -- | Make a data constructor with the given arguments.
-mkCon :: DataCon -> [Type] -> [LHsExpr GhcPs] -> LHsExpr GhcPs
-mkCon dcon apps (fmap unLoc -> args)
-  | dcon == nilDataCon
+mkCon :: ConLike -> [Type] -> [LHsExpr GhcPs] -> LHsExpr GhcPs
+mkCon con apps (fmap unLoc -> args)
+  | RealDataCon dcon <- con
+  , dcon == nilDataCon
   , [ty] <- apps
   , ty `eqType` charTy = noLoc $ string ""
-  | isTupleDataCon dcon =
+
+  | RealDataCon dcon <- con
+  , isTupleDataCon dcon =
       noLoc $ tuple args
-  | dataConIsInfix dcon
+
+  | RealDataCon dcon <- con
+  , dataConIsInfix dcon
   , (lhs : rhs : args') <- args =
-      noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
-  | Just fields <- getRecordFields dcon
+      noLoc $ foldl' (@@) (op lhs (coerceName con_name) rhs) args'
+
+  | Just fields <- getRecordFields con
   , length fields >= 2 =  --  record notation is unnatural on single field ctors
-      noLoc $ recordConE (coerceName dcon_name) $ do
+      noLoc $ recordConE (coerceName con_name) $ do
         (arg, (field, _)) <- zip args fields
         pure (coerceName field, arg)
+
   | otherwise =
-      noLoc $ foldl' (@@) (bvar' $ occName dcon_name) args
+      noLoc $ foldl' (@@) (bvar' $ occName con_name) args
   where
-    dcon_name = dataConName dcon
+    con_name = conLikeName con
 
 
 coerceName :: HasOccName a => a -> RdrNameStr

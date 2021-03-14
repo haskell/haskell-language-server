@@ -33,4 +33,5 @@ spec = do
     destructTest "a"  4  7 "LayoutSplitIn.hs"
     destructTest "a"  4 31 "LayoutSplitViewPat.hs"
     destructTest "a"  7 17 "LayoutSplitPattern.hs"
+    destructTest "a"  8 26 "LayoutSplitPatSyn.hs"
 
