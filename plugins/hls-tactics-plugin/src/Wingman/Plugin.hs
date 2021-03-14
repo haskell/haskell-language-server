@@ -60,13 +60,14 @@ codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri)
         (_, jdg, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
         actions <- lift $
           -- This foldMap is over the function monoid.
-          foldMap commandProvider [minBound .. maxBound]
-            dflags
-            cfg
-            plId
-            uri
-            range
-            jdg
+          foldMap commandProvider [minBound .. maxBound] $ TacticProviderData
+            { tpd_dflags = dflags
+            , tpd_config = cfg
+            , tpd_plid   = plId
+            , tpd_uri    = uri
+            , tpd_range  = range
+            , tpd_jdg    = jdg
+            }
         pure $ Right $ List actions
 codeActionProvider _ _ _ = pure $ Right $ List []
 
