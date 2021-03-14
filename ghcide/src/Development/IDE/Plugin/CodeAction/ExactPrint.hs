@@ -11,6 +11,7 @@ module Development.IDE.Plugin.CodeAction.ExactPrint (
 
   -- * Utilities
   appendConstraint,
+  removeConstraint,
   extendImport,
   hideSymbol,
   liftParseAST,
@@ -117,6 +118,19 @@ fixParens openDP closeDP ctxt@(L _ elems) = do
   dropHsParTy :: LHsType pass -> LHsType pass
   dropHsParTy (L _ (HsParTy _ ty)) = ty
   dropHsParTy other                = other
+
+removeConstraint ::
+  -- | Predicate: Which contect to drop.
+  (LHsType GhcPs -> Bool) ->
+  LHsType GhcPs ->
+  Rewrite
+removeConstraint pred = go
+  where
+    go (L l it@HsQualTy{hst_ctxt = L l' ctxt}) = Rewrite l $ \_ -> do
+      return $ L l $ it{hst_ctxt = L l' $ filter (not . pred) ctxt}
+    go (L _ (HsParTy _ ty)) = go ty
+    go (L _ HsForAllTy{hst_body}) = go hst_body
+    go (L l other) = Rewrite l $ \_ -> return $ L l other
 
 -- | Append a constraint at the end of a type context.
 --   If no context is present, a new one will be created.
