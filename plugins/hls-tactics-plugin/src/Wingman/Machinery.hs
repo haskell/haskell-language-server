@@ -166,7 +166,7 @@ scoreSolution ext goal holes
     initial_scope = hyByName $ jEntireHypothesis goal
     intro_vals = M.keysSet $ hyByName $ syn_scoped ext
     used_vals = S.intersection intro_vals $ syn_used_vals ext
-    used_user_vals = filter (isUserProv . hi_provenance)
+    used_user_vals = filter (isLocalHypothesis . hi_provenance)
                    $ mapMaybe (flip M.lookup initial_scope)
                    $ S.toList
                    $ syn_used_vals ext

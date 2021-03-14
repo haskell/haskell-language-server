@@ -14,6 +14,7 @@ module Wingman.Types
   , Range
   ) where
 
+import           ConLike (ConLike)
 import           Control.Lens hiding (Context, (.=))
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -149,6 +150,9 @@ instance Show (LHsSigType GhcPs) where
 instance Show TyCon where
   show  = unsafeRender
 
+instance Show ConLike where
+  show  = unsafeRender
+
 
 ------------------------------------------------------------------------------
 -- | The state that should be shared between subgoals. Extracts move towards
@@ -237,7 +241,7 @@ data PatVal = PatVal
   , pv_ancestry  :: Set OccName
     -- ^ The set of values which had to be destructed to discover this term.
     -- Always contains the scrutinee.
-  , pv_datacon   :: Uniquely DataCon
+  , pv_datacon   :: Uniquely ConLike
     -- ^ The datacon which introduced this term.
   , pv_position  :: Int
     -- ^ The position of this binding in the datacon's arguments.

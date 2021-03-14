@@ -1,17 +1,17 @@
 module Wingman.Judgements where
 
+import           ConLike (ConLike)
 import           Control.Arrow
-import           Control.Lens                        hiding (Context)
+import           Control.Lens hiding (Context)
 import           Data.Bool
 import           Data.Char
 import           Data.Coerce
-import           Data.Generics.Product               (field)
-import           Data.Map                            (Map)
-import qualified Data.Map                            as M
+import           Data.Generics.Product (field)
+import           Data.Map (Map)
+import qualified Data.Map as M
 import           Data.Maybe
-import           Data.Set                            (Set)
-import qualified Data.Set                            as S
-import           DataCon                             (DataCon)
+import           Data.Set (Set)
+import qualified Data.Set as S
 import           Development.IDE.Spans.LocalBindings
 import           OccName
 import           SrcLoc
@@ -163,7 +163,7 @@ findPositionVal jdg defn pos = listToMaybe $ do
 ------------------------------------------------------------------------------
 -- | Helper function for determining the ancestry list for
 -- 'filterSameTypeFromOtherPositions'.
-findDconPositionVals :: Judgement' a -> DataCon -> Int -> [OccName]
+findDconPositionVals :: Judgement' a -> ConLike -> Int -> [OccName]
 findDconPositionVals jdg dcon pos = do
   (name, hi) <- M.toList $ hyByName $ jHypothesis jdg
   case hi_provenance hi of
@@ -178,7 +178,7 @@ findDconPositionVals jdg dcon pos = do
 -- given position for the datacon. Used to ensure recursive functions like
 -- 'fmap' preserve the relative ordering of their arguments by eliminating any
 -- other term which might match.
-filterSameTypeFromOtherPositions :: DataCon -> Int -> Judgement -> Judgement
+filterSameTypeFromOtherPositions :: ConLike -> Int -> Judgement -> Judgement
 filterSameTypeFromOtherPositions dcon pos jdg =
   let hy = hyByName
          . jHypothesis
@@ -230,7 +230,7 @@ extremelyStupid__definingFunction =
 
 patternHypothesis
     :: Maybe OccName
-    -> DataCon
+    -> ConLike
     -> Judgement' a
     -> [(OccName, a)]
     -> Hypothesis a
@@ -367,13 +367,6 @@ mkFirstJudgement hy top goal = Judgement
 isTopLevel :: Provenance -> Bool
 isTopLevel TopLevelArgPrv{} = True
 isTopLevel _                = False
-
-
-------------------------------------------------------------------------------
--- | Was this term defined by the user?
-isUserProv :: Provenance -> Bool
-isUserProv UserPrv{} = True
-isUserProv _         = False
 
 
 ------------------------------------------------------------------------------
