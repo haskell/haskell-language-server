@@ -1,5 +1,6 @@
 module Wingman.KnownStrategies.QuickCheck where
 
+import ConLike (ConLike(RealDataCon))
 import Control.Monad.Except (MonadError (throwError))
 import Data.Bool (bool)
 import Data.Generics (everything, mkQ)
@@ -76,7 +77,7 @@ data Generator = Generator
 mkGenerator :: TyCon -> [Type] -> DataCon -> Generator
 mkGenerator tc apps dc = do
   let dc_expr   = var' $ occName $ dataConName dc
-      args = dataConInstOrigArgTys' dc apps
+      args = conLikeInstOrigArgTys' (RealDataCon dc) apps
       num_recursive_calls = sum $ fmap (bool 0 1 . doesTypeContain tc) args
       mkArbitrary = mkArbitraryCall tc num_recursive_calls
   Generator num_recursive_calls $ case args of

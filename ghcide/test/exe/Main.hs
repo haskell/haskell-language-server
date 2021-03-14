@@ -1434,38 +1434,17 @@ suggesImportClassMethodTests =
     [ testGroup
         "new"
         [ testSession "via parent" $
-            template
-              [ "module A where",
-                ""
-              ]
-              (Range (Position 5 2) (Position 5 8))
-              "Import Data.Semigroup with Semigroup(stimes)"
-              [ "module A where",
-                "",
-                "import Data.Semigroup (Semigroup(stimes))"
-              ],
+            template'
+            "import Data.Semigroup (Semigroup(stimes))"
+            (Range (Position 5 2) (Position 5 8)),
           testSession "top level" $
-            template
-              [ "module A where",
-                ""
-              ]
-              (Range (Position 5 2) (Position 5 8))
-              "Import Data.Semigroup with stimes"
-              [ "module A where",
-                "",
-                "import Data.Semigroup (stimes)"
-              ],
+            template'
+              "import Data.Semigroup (stimes)"
+              (Range (Position 5 2) (Position 5 8)),
           testSession "all" $
-            template
-              [ "module A where",
-                ""
-              ]
+            template'
+              "import Data.Semigroup"
               (Range (Position 5 2) (Position 5 8))
-              "Import Data.Semigroup"
-              [ "module A where",
-                "",
-                "import Data.Semigroup"
-              ]
         ],
       testGroup
         "extend"
@@ -1513,6 +1492,7 @@ suggesImportClassMethodTests =
       executeCodeAction $ fromJust $ find (\CodeAction {_title} -> _title == executeTitle) actions'
       content <- documentContents doc
       liftIO $ T.unlines (expectedContent <> decls) @=? content
+    template' executeTitle range = let c = ["module A where", ""] in template c range executeTitle $ c <> [executeTitle]
 
 suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"

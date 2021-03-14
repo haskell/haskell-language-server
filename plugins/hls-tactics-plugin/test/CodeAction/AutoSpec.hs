@@ -48,6 +48,7 @@ spec = do
     autoTest  4 19 "FmapJoinInLet.hs"
     autoTest  9 12 "AutoEndo.hs"
     autoTest  2 16 "AutoEmptyString.hs"
+    autoTest  7 35 "AutoPatSynUse.hs"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen.hs"
