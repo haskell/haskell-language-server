@@ -1559,8 +1559,8 @@ unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
 
 quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
-quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".identifier.top"
-quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".identifier.parent"
+quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".thing.topLevel"
+quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".thing.withParent"
 
 quickFixImportKind :: T.Text -> CodeActionKind
 quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x
