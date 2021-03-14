@@ -2574,6 +2574,7 @@ addImplicitParamsConstraintTests =
           "fCaller :: " <> mkContext contextCaller <> "()",
           "fCaller = fBase"
         ]
+
 removeRedundantConstraintsTests :: TestTree
 removeRedundantConstraintsTests = let
   header =
@@ -2581,6 +2582,13 @@ removeRedundantConstraintsTests = let
     , "module Testing where"
     , ""
     ]
+
+  headerExt :: [T.Text] -> [T.Text]
+  headerExt exts =
+    redunt : extTxt ++ ["module Testing where"]
+    where
+      redunt = "{-# OPTIONS_GHC -Wredundant-constraints #-}"
+      extTxt = map (\ext -> "{-# LANGUAGE " <> ext <> " #-}") exts
 
   redundantConstraintsCode :: Maybe T.Text -> T.Text
   redundantConstraintsCode mConstraint =
@@ -2604,6 +2612,25 @@ removeRedundantConstraintsTests = let
     , "foo x = x == 1"
     ]
 
+  redundantConstraintsForall :: Maybe T.Text -> T.Text
+  redundantConstraintsForall mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ headerExt ["RankNTypes"] <>
+        [ "foo :: forall a. " <> constraint <> "a -> a"
+        , "foo = id"
+        ]
+
+  typeSignatureNested :: Maybe T.Text -> T.Text
+  typeSignatureNested mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: " <> constraint <> "a -> ()"
+        , "    g _ = ()"
+        ]
+
   typeSignatureMultipleLines :: T.Text
   typeSignatureMultipleLines = T.unlines $ header <>
     [ "foo :: (Num a, Eq a, Monoid a)"
@@ -2615,7 +2642,7 @@ removeRedundantConstraintsTests = let
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
+    actionsOrCommands <- getAllCodeActions doc
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2641,6 +2668,14 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (redundantMixedConstraintsCode $ Just "Monoid a, Show a")
     (redundantMixedConstraintsCode Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `g`"
+    (typeSignatureNested $ Just "Eq a")
+    (typeSignatureNested Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (redundantConstraintsForall $ Just "Eq a")
+    (redundantConstraintsForall Nothing)
   , checkPeculiarFormatting
     "should do nothing when constraints contain an arbitrary number of spaces"
     typeSignatureSpaces
