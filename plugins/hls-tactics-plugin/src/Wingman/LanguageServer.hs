@@ -31,7 +31,7 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins (mkAppTys, tupleDataCon, consDataCon, substTyAddInScope)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
 import           Ide.Plugin.Config (PluginConfig (plcConfig))
 import qualified Ide.Plugin.Config as Plugin
 import           Language.LSP.Server (MonadLsp, sendNotification)
@@ -236,7 +236,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     -- Desugar lists into cons
     ListPat _ [] -> pure mempty
     ListPat x@(ListPatTc ty _) (p : ps) ->
-      mkDerivedConHypothesis prov consDataCon [ty]
+      mkDerivedConHypothesis prov (RealDataCon consDataCon) [ty]
         [ (0, p)
         , (1, toPatCompatTc $ ListPat x ps)
         ]
@@ -244,17 +244,17 @@ buildPatHy prov (fromPatCompatTc -> p0) =
     TuplePat tys pats boxity ->
       mkDerivedConHypothesis
         prov
-        (tupleDataCon boxity $ length pats)
+        (RealDataCon $ tupleDataCon boxity $ length pats)
         tys
           $ zip [0.. ] pats
-    ConPatOut (L _ (RealDataCon dc)) args _ _ _ f _ ->
+    ConPatOut (L _ con) args _ _ _ f _ ->
       case f of
         PrefixCon l_pgt ->
-          mkDerivedConHypothesis prov dc args $ zip [0..] l_pgt
+          mkDerivedConHypothesis prov con args $ zip [0..] l_pgt
         InfixCon pgt pgt5 ->
-          mkDerivedConHypothesis prov dc args $ zip [0..] [pgt, pgt5]
+          mkDerivedConHypothesis prov con args $ zip [0..] [pgt, pgt5]
         RecCon r ->
-          mkDerivedRecordHypothesis prov dc args r
+          mkDerivedRecordHypothesis prov con args r
 #if __GLASGOW_HASKELL__ >= 808
     SigPat  _ p _ -> buildPatHy prov p
 #endif
@@ -268,7 +268,7 @@ buildPatHy prov (fromPatCompatTc -> p0) =
 -- | Like 'mkDerivedConHypothesis', but for record patterns.
 mkDerivedRecordHypothesis
     :: Provenance
-    -> DataCon  -- ^ Destructing constructor
+    -> ConLike  -- ^ Destructing constructor
     -> [Type]   -- ^ Applied type variables
     -> HsRecFields GhcTc (PatCompat GhcTc)
     -> State Int (Hypothesis CType)
@@ -300,7 +300,7 @@ mkFakeVar = do
 -- build a sub-hypothesis for the pattern match.
 mkDerivedConHypothesis
     :: Provenance
-    -> DataCon                   -- ^ Destructing constructor
+    -> ConLike                   -- ^ Destructing constructor
     -> [Type]                    -- ^ Applied type variables
     -> [(Int, PatCompat GhcTc)]  -- ^ Patterns, and their order in the data con
     -> State Int (Hypothesis CType)
@@ -324,7 +324,7 @@ mkDerivedConHypothesis prov dc args ps = do
     -- way to get the real one. It's probably OK though, since we're generating
     -- this term with a disallowed provenance, and it doesn't actually exist
     -- anyway.
-    $ mkAppTys (dataConUserType dc) args
+    $ conLikeResTy dc args
 
 
 ------------------------------------------------------------------------------
