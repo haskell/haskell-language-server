@@ -21,7 +21,7 @@ pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlug
         (PluginHandlers (DMap.toList -> handlers)) = pluginHandlers
         customConfigToDedicatedConfig (CustomConfig p) = toVSCodeExtensionSchema (withIdPrefix "config.") p
         (PluginId pId) = pluginId
-        genericConfig = mconcat $ handlersToGenericConfig <$> handlers
+        genericConfig = withIdPrefix "globalOn" A..= methodEntry "plugin" : mconcat (handlersToGenericConfig <$> handlers)
         dedicatedConfig = customConfigToDedicatedConfig pluginCustomConfig
         handlersToGenericConfig (IdeMethod m DSum.:=> _) = case m of
           STextDocumentCodeAction -> [withIdPrefix "codeActionsOn" A..= methodEntry "code actions"]
