@@ -27,6 +27,8 @@ library
   exposed-modules:
     Ide.Logger
     Ide.Plugin.Config
+    Ide.Plugin.ConfigUtils
+    Ide.Plugin.Properties
     Ide.PluginUtils
     Ide.Types
 

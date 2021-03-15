@@ -69,6 +69,7 @@ library
     , safe-exceptions
     , sqlite-simple
     , unordered-containers
+    , aeson-pretty
 
   ghc-options:      -Wall -Wredundant-constraints -Wno-name-shadowing -Wno-unticked-promoted-constructors
 

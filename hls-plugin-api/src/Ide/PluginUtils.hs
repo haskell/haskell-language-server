@@ -1,5 +1,9 @@
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeFamilies        #-}
 module Ide.PluginUtils
   ( WithDeletions(..),
     getProcessID,
@@ -19,7 +23,11 @@ module Ide.PluginUtils
     mkLspCommand,
     mkLspCmdId,
     getPid,
-  allLspCmdIds,allLspCmdIds',installSigUsr1Handler, subRange)
+    allLspCmdIds,
+    allLspCmdIds',
+    installSigUsr1Handler,
+    subRange,
+    usePropertyLsp)
 where
 
 
@@ -34,6 +42,7 @@ import           Language.LSP.Types.Capabilities
 
 import qualified Data.Map.Strict                 as Map
 import           Ide.Plugin.Config
+import           Ide.Plugin.Properties
 import           Language.LSP.Server
 
 -- ---------------------------------------------------------------------
@@ -158,6 +167,19 @@ getPluginConfig :: MonadLsp Config m => PluginId -> m (Maybe PluginConfig)
 getPluginConfig plugin = do
     config <- getClientConfig
     return $ flip configForPlugin plugin <$> config
+
+-- ---------------------------------------------------------------------
+
+-- | Returns the value of a property defined by the current plugin.
+usePropertyLsp ::
+  forall s k t r m.
+  (HasProperty s k t r, MonadLsp Config m) =>
+  PluginId ->
+  Properties r ->
+  m (ToHsType t)
+usePropertyLsp pId p = do
+  config <- getPluginConfig pId
+  return $ useProperty @s p $ plcConfig <$> config
 
 -- ---------------------------------------------------------------------
 

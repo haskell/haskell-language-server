@@ -41,6 +41,7 @@ import           Data.Text.Encoding              (encodeUtf8)
 import           Development.Shake               hiding (command)
 import           GHC.Generics
 import           Ide.Plugin.Config
+import           Ide.Plugin.Properties
 import           Language.LSP.Server             (LspM, getVirtualFile)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
@@ -58,11 +59,21 @@ newtype IdePlugins ideState = IdePlugins
 -- ---------------------------------------------------------------------
 
 data PluginDescriptor ideState =
-  PluginDescriptor { pluginId       :: !PluginId
-                   , pluginRules    :: !(Rules ())
-                   , pluginCommands :: ![PluginCommand ideState]
-                   , pluginHandlers :: PluginHandlers ideState
+  PluginDescriptor { pluginId           :: !PluginId
+                   , pluginRules        :: !(Rules ())
+                   , pluginCommands     :: ![PluginCommand ideState]
+                   , pluginHandlers     :: PluginHandlers ideState
+                   , pluginCustomConfig :: CustomConfig
                    }
+
+-- | An existential wrapper of 'Properties', used only for documenting and generating config templates
+data CustomConfig = forall r. CustomConfig (Properties r)
+
+emptyCustomConfig :: CustomConfig
+emptyCustomConfig = CustomConfig emptyProperties
+
+mkCustomConfig :: Properties r -> CustomConfig
+mkCustomConfig = CustomConfig
 
 -- | Methods that can be handled by plugins.
 -- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
@@ -221,6 +232,7 @@ defaultPluginDescriptor plId =
     mempty
     mempty
     mempty
+    emptyCustomConfig
 
 newtype CommandId = CommandId T.Text
   deriving (Show, Read, Eq, Ord)
