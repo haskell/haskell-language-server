@@ -2631,6 +2631,36 @@ removeRedundantConstraintsTests = let
         , "    g _ = ()"
         ]
 
+  typeSignatureNested' :: Maybe T.Text -> T.Text
+  typeSignatureNested' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f ="
+        , "  let"
+        , "    g :: Int -> ()"
+        , "    g = h"
+        , "      where"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "  in g"
+        ]
+
+  typeSignatureNested'' :: Maybe T.Text -> T.Text
+  typeSignatureNested'' mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> ()"
+        , "f = g"
+        , "  where"
+        , "    g :: Int -> ()"
+        , "    g = "
+        , "      let"
+        , "        h :: " <> constraint <> "a -> ()"
+        , "        h _ = ()"
+        , "      in h"
+        ]
+
   typeSignatureMultipleLines :: T.Text
   typeSignatureMultipleLines = T.unlines $ header <>
     [ "foo :: (Num a, Eq a, Monoid a)"
@@ -2672,6 +2702,14 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraint `Eq a` from the context of the type signature for `g`"
     (typeSignatureNested $ Just "Eq a")
     (typeSignatureNested Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested' $ Just "Eq a")
+    (typeSignatureNested' Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `h`"
+    (typeSignatureNested'' $ Just "Eq a")
+    (typeSignatureNested'' Nothing)
   , check
     "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
     (redundantConstraintsForall $ Just "Eq a")

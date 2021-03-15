@@ -14,7 +14,8 @@ module Development.IDE.Plugin.CodeAction
     , matchRegExMultipleImports
     ) where
 
-import           Bag                                               (isEmptyBag)
+import           Bag                                               (bagToList,
+                                                                    isEmptyBag)
 import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
@@ -161,27 +162,51 @@ findSigOfDecl pred decls =
         any (pred . unLoc) idsSig
     ]
 
-findSigOfDecl' :: Range -> [LHsDecl p] -> Either String (Sig p)
-findSigOfDecl' range decls = do
+findSigOfDeclRanged :: Range -> [LHsDecl p] -> Either String (Sig p)
+findSigOfDeclRanged range decls = do
   dec <- findDeclContainingLocE (_start range) decls
   case dec of
-     L _ (SigD _ sig@TypeSig ) -> Right sig
+     L _ (SigD _ sig@TypeSig {}) -> Right sig
      L _ (ValD _ (bind :: HsBind p)) -> findSigOfBind range bind
-     _ -> Left "Other"
+     _ -> Left "findSigOfDeclRanged"
 
 findSigOfBind :: Range -> HsBind p -> Either String (Sig p)
 findSigOfBind range bind =
     case bind of
       FunBind {} -> findSigOfLMatch (unLoc $ mg_alts (fun_matches bind))
-      _ -> Left "Other findSigOfBind"
+      _ -> Left "findSigOfBind"
   where
-    findSigOfLMatch :: [LMatch p (LHsExpr idR)] -> Either String (Sig p)
+    findSigOfLMatch :: [LMatch p (LHsExpr p)] -> Either String (Sig p)
     findSigOfLMatch ls = do
       match <- findDeclContainingLocE (_start range) ls
-      case unLoc (grhssLocalBinds (m_grhss (unLoc match))) of
-        HsValBinds _ (ValBinds _ _ lsigs) ->
-          unLoc <$> findDeclContainingLocE (_start range) lsigs
-        _ -> Left "Other findSigOfLMatch"
+      findSigOfGRHSs (m_grhss (unLoc match))
+
+    findSigOfGRHSs :: GRHSs p (LHsExpr p) -> Either String (Sig p)
+    findSigOfGRHSs grhs = do
+        if _start range `isInsideSrcSpan` (getLoc $ grhssLocalBinds grhs)
+        then findSigOfBinds range (unLoc (grhssLocalBinds grhs)) -- where clause
+        else do
+          grhs <- findDeclContainingLocE (_start range) (grhssGRHSs grhs)
+          case unLoc grhs of
+            GRHS _ _ bd -> findSigOfExpr (unLoc bd)
+            _ -> Left "findSigOfGRHSs"
+
+    findSigOfExpr :: HsExpr p -> Either String (Sig p)
+    findSigOfExpr = go
+      where
+        go (HsLet _ binds _) = findSigOfBinds range (unLoc binds)
+        go _ = Left "findSigOfExpr"
+
+findSigOfBinds :: Range -> HsLocalBinds p -> Either String (Sig p)
+findSigOfBinds range = go
+  where
+    go (HsValBinds _ (ValBinds _ binds lsigs)) =
+        case unLoc <$> findDeclContainingLocE (_start range) lsigs of
+          Right sig' -> Right sig'
+          Left _ -> do
+            lHsBindLR <- findDeclContainingLocE (_start range) (bagToList binds)
+            findSigOfBind range (unLoc lHsBindLR)
+    go _ = Left "findSigOfBinds"
 
 findDeclContainingLocE :: Position -> [Located a] -> Either String (Located a)
 findDeclContainingLocE loc ls =
@@ -1096,7 +1121,7 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
   | "Redundant constraint" `T.isInfixOf` _message
   , Just typeSignatureName <- findTypeSignatureName _message
   , Right (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
-    <- findSigOfDecl' _range hsmodDecls
+    <- findSigOfDeclRanged _range hsmodDecls
   , Just redundantConstraintList <- findRedundantConstraints _message
   , rewrite <- removeConstraint (pred df redundantConstraintList) sig
       = [(actionTitle redundantConstraintList typeSignatureName, rewrite)]
