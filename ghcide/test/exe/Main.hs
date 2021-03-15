@@ -2606,11 +2606,13 @@ removeRedundantConstraintsTests = let
         , "foo x = x == 1"
         ]
 
-  typeSignatureSpaces :: T.Text
-  typeSignatureSpaces = T.unlines $ header <>
-    [ "foo ::  (Num a, Eq a, Monoid a)  => a -> Bool"
-    , "foo x = x == 1"
-    ]
+  typeSignatureSpaces :: Maybe T.Text -> T.Text
+  typeSignatureSpaces mConstraint =
+    let constraint = maybe "(Num a, Eq a)" (\c -> "(Num a, Eq a, " <> c <> ")") mConstraint
+      in T.unlines $ header <>
+        [ "foo ::  " <> constraint <> " => a -> Bool"
+        , "foo x = x == 1"
+        ]
 
   redundantConstraintsForall :: Maybe T.Text -> T.Text
   redundantConstraintsForall mConstraint =
@@ -2714,9 +2716,10 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
     (redundantConstraintsForall $ Just "Eq a")
     (redundantConstraintsForall Nothing)
-  , checkPeculiarFormatting
-    "should do nothing when constraints contain an arbitrary number of spaces"
-    typeSignatureSpaces
+  , check
+    "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
+    (typeSignatureSpaces $ Just "Monoid a, Show a")
+    (typeSignatureSpaces Nothing)
   , checkPeculiarFormatting
     "should do nothing when constraints contain line feeds"
     typeSignatureMultipleLines
