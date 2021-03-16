@@ -7,17 +7,17 @@ module Wingman.Plugin
   , TacticCommand (..)
   ) where
 
-import           Control.Exception (evaluate)
+import           Control.Exception                      (evaluate)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor (first)
-import           Data.Foldable (for_)
+import           Data.Bifunctor                         (first)
+import           Data.Foldable                          (for_)
 import           Data.Maybe
-import           Data.Proxy (Proxy(..))
-import qualified Data.Text as T
-import           Development.IDE.Core.Shake (IdeState (..))
+import           Data.Proxy                             (Proxy (..))
+import qualified Data.Text                              as T
+import           Development.IDE.Core.Shake             (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Ide.Types
@@ -25,13 +25,13 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import           OccName
-import           Prelude hiding (span)
+import           Prelude                                hiding (span)
 import           System.Timeout
 import           Wingman.CaseSplit
 import           Wingman.GHC
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.TacticProviders
-import           Wingman.Machinery (scoreSolution)
+import           Wingman.Machinery                      (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
@@ -44,18 +44,18 @@ descriptor plId = (defaultPluginDescriptor plId)
             PluginCommand
               (tcCommandId tc)
               (tacticDesc $ tcCommandName tc)
-              (tacticCmd $ commandTactic tc))
+              (tacticCmd (commandTactic tc) plId))
               [minBound .. maxBound]
     , pluginHandlers =
         mkPluginHandler STextDocumentCodeAction codeActionProvider
+    , pluginCustomConfig =
+        mkCustomConfig properties
     }
-
-
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      cfg <- getTacticConfig $ shakeExtras state
+      cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
         (_, jdg, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
         actions <- lift $
@@ -81,10 +81,10 @@ showUserFacingMessage ufm = do
   pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
-tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
-tacticCmd tac state (TacticParams uri range var_name)
+tacticCmd :: (OccName -> TacticsM ()) -> PluginId -> CommandFunction IdeState TacticParams
+tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet $ shakeExtras state
+      features <- getFeatureSet pId
       ccs <- getClientCapabilities
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
@@ -111,7 +111,7 @@ tacticCmd tac state (TacticParams uri range var_name)
             (ApplyWorkspaceEditParams Nothing edit)
             (const $ pure ())
           pure $ Right Null
-tacticCmd _ _ _ =
+tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
 
 

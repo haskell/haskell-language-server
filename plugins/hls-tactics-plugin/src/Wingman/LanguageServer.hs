@@ -6,40 +6,46 @@ module Wingman.LanguageServer where
 import           ConLike
 import           Control.Arrow
 import           Control.Monad
-import           Control.Monad.State (State, get, put, evalState)
+import           Control.Monad.State                  (State, evalState, get,
+                                                       put)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson (Value (Object), fromJSON)
-import           Data.Aeson.Types (Result (Error, Success))
 import           Data.Coerce
-import           Data.Functor ((<&>))
-import           Data.Generics.Aliases (mkQ)
-import           Data.Generics.Schemes (everything)
-import qualified Data.Map as M
+import           Data.Functor                         ((<&>))
+import           Data.Generics.Aliases                (mkQ)
+import           Data.Generics.Schemes                (everything)
+import qualified Data.Map                             as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set  as S
-import qualified Data.Text as T
+import qualified Data.Set                             as S
+import qualified Data.Text                            as T
 import           Data.Traversable
-import           Development.IDE (ShakeExtras, getPluginConfig)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), useWithStale)
+import           Development.IDE.Core.Service         (runAction)
+import           Development.IDE.Core.Shake           (IdeState (..),
+                                                       useWithStale)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error (realSrcSpanToRange)
-import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (Action, RuleResult)
-import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
+import           Development.IDE.GHC.Error            (realSrcSpanToRange)
+import           Development.IDE.Spans.LocalBindings  (Bindings,
+                                                       getDefiningBindings)
+import           Development.Shake                    (Action, RuleResult)
+import           Development.Shake.Classes            (Binary, Hashable, NFData,
+                                                       Typeable)
 import qualified FastString
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
-import           Ide.Plugin.Config (PluginConfig (plcConfig))
-import qualified Ide.Plugin.Config as Plugin
-import           Language.LSP.Server (MonadLsp, sendNotification)
+import           GhcPlugins                           (consDataCon,
+                                                       substTyAddInScope,
+                                                       tupleDataCon)
+import qualified Ide.Plugin.Config                    as Plugin
+import           Ide.Plugin.Properties
+import           Ide.PluginUtils                      (usePropertyLsp)
+import           Ide.Types                            (PluginId)
+import           Language.LSP.Server                  (MonadLsp,
+                                                       sendNotification)
 import           Language.LSP.Types
 import           OccName
-import           Prelude hiding (span)
-import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds)
+import           Prelude                              hiding (span)
+import           SrcLoc                               (containsSpan)
+import           TcRnTypes                            (tcg_binds)
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
@@ -77,18 +83,27 @@ runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 
 ------------------------------------------------------------------------------
--- | Get the the plugin config
-getTacticConfig :: MonadLsp Plugin.Config m => ShakeExtras -> m Config
-getTacticConfig extras = do
-  pcfg <- getPluginConfig extras "tactics"
-  pure $ case fromJSON $ Object $ plcConfig pcfg of
-    Success cfg -> cfg
-    Error _     -> emptyConfig
 
+properties :: Properties
+  '[PropertyKey "max_use_ctor_actions" 'TNumber,
+    PropertyKey "features" 'TString]
+properties = emptyProperties
+  & defineStringProperty @"features"
+    "Features set used by wingman (tactic) plugin" ""
+  & defineNumberProperty @"max_use_ctor_actions"
+    "Maximum number of `Use constructor <x>` code actions that can appear" 5
+
+
+-- | Get the the plugin config
+getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
+getTacticConfig pId =
+  Config
+    <$> (parseFeatureSet <$> usePropertyLsp @"features" pId properties)
+    <*> usePropertyLsp @"max_use_ctor_actions" pId properties
 
 ------------------------------------------------------------------------------
 -- | Get the current feature set from the plugin config.
-getFeatureSet :: MonadLsp Plugin.Config m => ShakeExtras -> m FeatureSet
+getFeatureSet :: MonadLsp Plugin.Config m => PluginId -> m FeatureSet
 getFeatureSet  = fmap cfg_feature_set . getTacticConfig
 
 
