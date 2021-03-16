@@ -8,26 +8,30 @@
 module Utils where
 
 import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Lens hiding (failing, (<.>))
-import           Control.Monad (unless)
+import           Control.Lens                    hiding (failing, (.=), (<.>))
+import           Control.Monad                   (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default (Default (def))
+import           Data.Default                    (Default (def))
 import           Data.Foldable
-import qualified Data.Map as M
+import qualified Data.Map                        as M
 import           Data.Maybe
-import           Data.Text (Text)
-import qualified Data.Text.IO as T
-import qualified Ide.Plugin.Config as Plugin
-import           Wingman.FeatureSet (FeatureSet, allFeatures)
-import           Wingman.LanguageServer (mkShowMessageParams)
-import           Wingman.Types
+import           Data.Text                       (Text)
+import qualified Data.Text.IO                    as T
+import qualified Ide.Plugin.Config               as Plugin
 import           Language.LSP.Test
 import           Language.LSP.Types
-import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
-import           System.Directory (doesFileExist)
+import           Language.LSP.Types.Lens         hiding (actions, applyEdit,
+                                                  capabilities, executeCommand,
+                                                  id, line, message, name,
+                                                  rename, title)
+import           System.Directory                (doesFileExist)
 import           System.FilePath
 import           Test.Hspec
+import           Wingman.FeatureSet              (FeatureSet, allFeatures,
+                                                  prettyFeatureSet)
+import           Wingman.LanguageServer          (mkShowMessageParams)
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -83,8 +87,7 @@ setFeatureSet features = do
       config =
         def_config
           { Plugin.plugins = M.fromList [("tactics",
-              def { Plugin.plcConfig = unObject $ toJSON $
-                emptyConfig { cfg_feature_set = features }}
+              def { Plugin.plcConfig = unObject $ object ["features" .= prettyFeatureSet features] }
           )] <> Plugin.plugins def_config }
 
   sendNotification SWorkspaceDidChangeConfiguration $
