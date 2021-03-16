@@ -108,7 +108,7 @@ intros = rule $ \jdg -> do
 destructAuto :: HyInfo CType -> TacticsM ()
 destructAuto hi = requireConcreteHole $ tracing "destruct(auto)" $ do
   jdg <- goal
-  let subtactic = rule $ destruct' (const subgoal) hi
+  let subtactic = destructOrHomoAuto hi
   case isPatternMatch $ hi_provenance hi of
     True ->
       pruning subtactic $ \jdgs ->
@@ -122,6 +122,26 @@ destructAuto hi = requireConcreteHole $ tracing "destruct(auto)" $ do
 
 
 ------------------------------------------------------------------------------
+-- | When running auto, in order to prune the auto search tree, we try
+-- a homomorphic destruct whenever possible. If that produces any results, we
+-- can probably just prune the other side.
+destructOrHomoAuto :: HyInfo CType -> TacticsM ()
+destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
+  jdg <- goal
+  let g  = unCType $ jGoal jdg
+      ty = unCType $ hi_type hi
+
+  let do_destruct = rule $ destruct' (const subgoal) hi
+
+  case (splitTyConApp_maybe g, splitTyConApp_maybe ty) of
+    (Just (gtc, apps), Just (tytc, _)) | gtc == tytc ->
+      commit
+        (rule $ destruct' (\dc jdg -> buildDataCon False jdg dc apps) hi)
+        do_destruct
+    _ -> do_destruct
+
+
+------------------------------------------------------------------------------
 -- | Case split, and leave holes in the matches.
 destruct :: HyInfo CType -> TacticsM ()
 destruct hi = requireConcreteHole $ tracing "destruct(user)" $
@@ -132,7 +152,7 @@ destruct hi = requireConcreteHole $ tracing "destruct(user)" $
 -- | Case split, using the same data constructor in the matches.
 homo :: HyInfo CType -> TacticsM ()
 homo = requireConcreteHole . tracing "homo" . rule . destruct' (\dc jdg ->
-  buildDataCon jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
+  buildDataCon False jdg dc $ snd $ splitAppTys $ unCType $ jGoal jdg)
 
 
 ------------------------------------------------------------------------------
@@ -147,7 +167,7 @@ homoLambdaCase :: TacticsM ()
 homoLambdaCase =
   tracing "homoLambdaCase" $
     rule $ destructLambdaCase' $ \dc jdg ->
-      buildDataCon jdg dc
+      buildDataCon False jdg dc
         . snd
         . splitAppTys
         . unCType
@@ -242,7 +262,7 @@ splitConLike dc =
     let g = jGoal jdg
     case splitTyConApp_maybe $ unCType g of
       Just (_, apps) -> do
-        buildDataCon (unwhitelistingSplit jdg) dc apps
+        buildDataCon True (unwhitelistingSplit jdg) dc apps
       Nothing -> throwError $ GoalMismatch "splitDataCon" g
 
 ------------------------------------------------------------------------------

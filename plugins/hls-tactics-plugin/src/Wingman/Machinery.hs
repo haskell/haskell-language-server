@@ -87,7 +87,7 @@ runTactic ctx jdg t =
               RunTacticResults
                 { rtr_trace = syn_trace syn
                 , rtr_extract = simplify $ syn_val syn
-                , rtr_other_solns = reverse . fmap fst $ take 5 sorted
+                , rtr_other_solns = reverse . fmap fst $ sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
                 }
@@ -272,7 +272,7 @@ requireConcreteHole m = do
   let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
   case S.size $ vars S.\\ skolems of
     0 -> m
-    _ -> throwError TooPolymorphic
+    _ -> throwError $ traceIdX "too polymorphic" TooPolymorphic
 
 
 ------------------------------------------------------------------------------
