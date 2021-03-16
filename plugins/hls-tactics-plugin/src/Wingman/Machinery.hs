@@ -272,7 +272,7 @@ requireConcreteHole m = do
   let vars = S.fromList $ tyCoVarsOfTypeWellScoped $ unCType $ jGoal jdg
   case S.size $ vars S.\\ skolems of
     0 -> m
-    _ -> throwError $ traceIdX "too polymorphic" TooPolymorphic
+    _ -> throwError TooPolymorphic
 
 
 ------------------------------------------------------------------------------
