@@ -131,14 +131,13 @@ destructOrHomoAuto hi = tracing "destructOrHomoAuto" $ do
   let g  = unCType $ jGoal jdg
       ty = unCType $ hi_type hi
 
-  let do_destruct = rule $ destruct' (const subgoal) hi
-
-  case (splitTyConApp_maybe g, splitTyConApp_maybe ty) of
-    (Just (gtc, apps), Just (tytc, _)) | gtc == tytc ->
-      commit
-        (rule $ destruct' (\dc jdg -> buildDataCon False jdg dc apps) hi)
-        do_destruct
-    _ -> do_destruct
+  attemptWhen
+      (rule $ destruct' (\dc jdg ->
+        buildDataCon False jdg dc $ snd $ splitAppTys g) hi)
+      (rule $ destruct' (const subgoal) hi)
+    $ case (splitTyConApp_maybe g, splitTyConApp_maybe ty) of
+        (Just (gtc, _), Just (tytc, _)) -> gtc == tytc
+        _ -> False
 
 
 ------------------------------------------------------------------------------

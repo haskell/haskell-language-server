@@ -224,6 +224,16 @@ unify goal inst = do
 
 
 ------------------------------------------------------------------------------
+-- | Prefer the first tactic to the second, if the bool is true. Otherwise, just run the second tactic.
+--
+-- This is useful when you have a clever pruning solution that isn't always
+-- applicable.
+attemptWhen :: TacticsM a -> TacticsM a -> Bool -> TacticsM a
+attemptWhen _  t2 False = t2
+attemptWhen t1 t2 True  = commit t1 t2
+
+
+------------------------------------------------------------------------------
 -- | Get the class methods of a 'PredType', correctly dealing with
 -- instantiation of quantified class types.
 methodHypothesis :: PredType -> Maybe [HyInfo CType]
