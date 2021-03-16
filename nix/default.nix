@@ -18,7 +18,7 @@ let
                 jailbreak = args.jailbreak or false;
               in super.mkDerivation (args // {
                 jailbreak = if broken then true else jailbreak;
-                doCheck = if broken then false else check; 
+                doCheck = if broken then false else check;
               });
           };
         };
@@ -45,6 +45,18 @@ let
         {
         inherit gitignoreSource;
         inherit ourSources;
+
+        # tracy-0.7.6 is broken on macOS
+        tracy = pkgs.tracy.overrideAttrs (_old: rec {
+          version = "0.7.5";
+          src = pkgs.fetchFromGitHub {
+            owner = "wolfpld";
+            repo = "tracy";
+            rev = "v${version}";
+            sha256 = "0qfb30k6a8vi8vn65vv927wd9nynwwvc9crbmi7a55kp20hzg06r";
+          };
+        });
+
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {
                 # relax upper bounds on ghc 8.10.x versions (and skip running tests)
