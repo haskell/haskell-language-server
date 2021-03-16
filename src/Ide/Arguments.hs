@@ -30,6 +30,7 @@ data Arguments
   | DbCmd Options Command
   | LspMode LspArguments
   | VSCodeExtensionSchemaMode
+  | DefaultConfigurationMode
 
 data LspArguments = LspArguments
     {argLSP                 :: Bool
@@ -60,7 +61,8 @@ getArguments exeName = execParser opts
       <|> probeToolsParser exeName
       <|> hsubparser (command "hiedb" (info (DbCmd <$> optParser "" True <*> cmdParser <**> helper) hieInfo))
       <|> LspMode <$> arguments
-      <|> vsCodeExtensionConfigModeParser)
+      <|> vsCodeExtensionSchemaModeParser
+      <|> defaultConfigurationModeParser)
       <**> helper)
       ( fullDesc
      <> progDesc "Used as a test bed to check your IDE Client will work"
@@ -79,10 +81,15 @@ probeToolsParser exeName =
   flag' ProbeToolsMode
     (long "probe-tools" <> help ("Show " ++ exeName  ++ " version and other tools of interest"))
 
-vsCodeExtensionConfigModeParser :: Parser Arguments
-vsCodeExtensionConfigModeParser =
+vsCodeExtensionSchemaModeParser :: Parser Arguments
+vsCodeExtensionSchemaModeParser =
   flag' VSCodeExtensionSchemaMode
     (long "vscode-extension-schema" <> help "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
+
+defaultConfigurationModeParser :: Parser Arguments
+defaultConfigurationModeParser =
+  flag' DefaultConfigurationMode
+    (long "generate-default-config" <> help "Print config supported by the server with default values")
 
 arguments :: Parser LspArguments
 arguments = LspArguments

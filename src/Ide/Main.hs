@@ -24,7 +24,8 @@ import           Development.Shake             (ShakeOptions (shakeThreads))
 import           HieDb.Run
 import           Ide.Arguments
 import           Ide.Logger
-import           Ide.Plugin.ConfigUtils        (pluginsToVSCodeExtensionSchema)
+import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
+                                                pluginsToVSCodeExtensionSchema)
 import           Ide.Types                     (IdePlugins, ipMap)
 import           Ide.Version
 import qualified Language.LSP.Server           as LSP
@@ -69,6 +70,9 @@ defaultMain args idePlugins = do
 
         VSCodeExtensionSchemaMode -> do
           LBS.putStrLn $ A.encodePretty $ pluginsToVSCodeExtensionSchema idePlugins
+
+        DefaultConfigurationMode -> do
+          LBS.putStrLn $ A.encodePretty $ pluginsToDefaultConfig idePlugins
 
 -- ---------------------------------------------------------------------
 

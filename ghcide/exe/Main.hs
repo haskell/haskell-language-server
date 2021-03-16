@@ -32,7 +32,8 @@ import           Development.IDE.Types.Options
 import           Development.Shake                 (ShakeOptions (shakeThreads))
 import           HieDb.Run                         (Options (..), runCommand)
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
-import           Ide.Plugin.ConfigUtils            (pluginsToVSCodeExtensionSchema)
+import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
+                                                    pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
@@ -64,10 +65,13 @@ main = do
 
     let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
 
-    when argsVSCodeExtensionConfig $ do
+    when argsVSCodeExtensionSchema $ do
       LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
       exitSuccess
 
+    when argsDefaultConfig $ do
+      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
+      exitSuccess
 
     whenJust argsCwd IO.setCurrentDirectory
 

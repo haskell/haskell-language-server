@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE TypeOperators        #-}
 {-# LANGUAGE UndecidableInstances #-}
--- See the note on 'find'
+-- See Note [Constraints]
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Ide.Plugin.Properties
@@ -150,11 +150,13 @@ find ::
   (SPropertyKey k, MetaData t)
 find (Properties p) = case p Map.! symbolVal (Proxy @s) of
   (SomePropertyKeyWithMetaData x) ->
-    -- it's safe to use unsafeCoerce here:
-    --   since each property name is unique that the redefinition will be prevented by predication on the type level list,
+    -- Note [Constraints]
+    -- It's safe to use unsafeCoerce here:
+    --   Since each property name is unique that the redefinition will be prevented by predication on the type level list,
     --   the value we get from the name-indexed map must be exactly the singleton and metadata corresponding to the type.
-    -- we drop this information at type level (that's why constraints will be considered as redundant by GHC),
-    -- but encode it using semantically identical 'Map' at term level,
+    -- We drop this information at type level: some of the above type families return '() :: Constraint',
+    -- so GHC will consider them as redundant.
+    -- But we encode it using semantically identical 'Map' at term level,
     -- which avoids inducting on the list by defining a new type class.
     unsafeCoerce x
 
@@ -266,9 +268,9 @@ defineEnumProperty description enums defaultValue = insert SEnum $ EnumMetaData 
 
 -- ---------------------------------------------------------------------
 
-toDefaultJSON :: Properties r -> A.Value
+toDefaultJSON :: Properties r -> [A.Pair]
 toDefaultJSON (Properties p) =
-  A.object ["config" A..= A.object [toEntry k v | (k, v) <- Map.toList p]]
+  [toEntry k v | (k, v) <- Map.toList p]
   where
     toEntry :: String -> SomePropertyKeyWithMetaData -> A.Pair
     toEntry s (SomePropertyKeyWithMetaData k) = case k of
