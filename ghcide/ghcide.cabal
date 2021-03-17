@@ -11,8 +11,8 @@ copyright:          Digital Asset and Ghcide contributors 2018-2020
 synopsis:           The core of an IDE
 description:
     A library for building Haskell IDE's on top of the GHC API.
-homepage:           https://github.com/haskell/ghcide#readme
-bug-reports:        https://github.com/haskell/ghcide/issues
+homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
 tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
 extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
                     test/data/hover/*.hs
@@ -25,7 +25,7 @@ extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
 
 source-repository head
     type:     git
-    location: https://github.com/haskell/ghcide.git
+    location: https://github.com/haskell/haskell-language-server.git
 
 flag ghc-patched-unboxed-bytecode
     description: The GHC version we link against supports unboxed sums and tuples in bytecode
