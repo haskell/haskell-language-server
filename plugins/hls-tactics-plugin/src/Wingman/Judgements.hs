@@ -16,6 +16,7 @@ import           Development.IDE.Spans.LocalBindings
 import           OccName
 import           SrcLoc
 import           Type
+import           Wingman.GHC (algebraicTyCon)
 import           Wingman.Types
 
 
@@ -149,7 +150,10 @@ findPositionVal :: Judgement' a -> OccName -> Int -> Maybe OccName
 findPositionVal jdg defn pos = listToMaybe $ do
   -- It's important to inspect the entire hypothesis here, as we need to trace
   -- ancstry through potentially disallowed terms in the hypothesis.
-  (name, hi) <- M.toList $ M.map (overProvenance expandDisallowed) $ hyByName $ jEntireHypothesis jdg
+  (name, hi) <- M.toList
+              $ M.map (overProvenance expandDisallowed)
+              $ hyByName
+              $ jEntireHypothesis jdg
   case hi_provenance hi of
     TopLevelArgPrv defn' pos' _
       | defn == defn'
@@ -238,12 +242,13 @@ patternHypothesis scrutinee dc jdg
   = introduceHypothesis $ \_ pos ->
       PatternMatchPrv $
         PatVal
-            scrutinee
-            (maybe mempty
-                  (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
-                  scrutinee)
-            (Uniquely dc)
-            pos
+          scrutinee
+          (maybe
+              mempty
+              (\scrut -> S.singleton scrut <> getAncestry jdg scrut)
+              scrutinee)
+          (Uniquely dc)
+          pos
 
 
 ------------------------------------------------------------------------------
@@ -283,6 +288,21 @@ jLocalHypothesis
   . filter (isLocalHypothesis . hi_provenance)
   . unHypothesis
   . jHypothesis
+
+
+------------------------------------------------------------------------------
+-- | Given a judgment, return the hypotheses that are acceptable to destruct.
+--
+-- We use the ordering of the hypothesis for this purpose. Since new bindings
+-- are always inserted at the beginning, we can impose a canonical ordering on
+-- which order to try destructs by what order they are introduced --- stopping
+-- at the first one we've already destructed.
+jAcceptableDestructTargets :: Judgement' CType -> [HyInfo CType]
+jAcceptableDestructTargets
+  = filter (isJust . algebraicTyCon . unCType . hi_type)
+  . takeWhile (not . isAlreadyDestructed . hi_provenance)
+  . unHypothesis
+  . jEntireHypothesis
 
 
 ------------------------------------------------------------------------------
@@ -390,6 +410,12 @@ isPatternMatch _                 = False
 isDisallowed :: Provenance -> Bool
 isDisallowed DisallowedPrv{} = True
 isDisallowed _               = False
+
+------------------------------------------------------------------------------
+-- | Has this term already been disallowed?
+isAlreadyDestructed :: Provenance -> Bool
+isAlreadyDestructed (DisallowedPrv AlreadyDestructed _) = True
+isAlreadyDestructed _ = False
 
 
 ------------------------------------------------------------------------------
