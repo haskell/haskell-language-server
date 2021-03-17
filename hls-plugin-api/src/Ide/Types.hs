@@ -210,6 +210,21 @@ instance PluginNotification TextDocumentDidChange where
 instance PluginNotification TextDocumentDidSave where
     pluginEnabledNotification _ _ _ = True
 
+instance PluginNotification TextDocumentDidClose where
+    pluginEnabledNotification _ _ _ = True
+
+instance PluginNotification WorkspaceDidChangeWatchedFiles where
+    pluginEnabledNotification _ _ _ = True
+
+instance PluginNotification WorkspaceDidChangeWorkspaceFolders where
+    pluginEnabledNotification _ _ _ = True
+
+instance PluginNotification WorkspaceDidChangeConfiguration where
+    pluginEnabledNotification _ _ _ = True
+
+instance PluginNotification Initialized where
+    pluginEnabledNotification _ _ _ = True
+
 -- ---------------------------------------------------------------------
 
 -- | Methods which have a PluginMethod instance
