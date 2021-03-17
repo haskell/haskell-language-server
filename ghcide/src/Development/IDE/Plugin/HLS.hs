@@ -212,7 +212,7 @@ newtype IdeHandler (m :: J.Method FromClient Request)
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeNotificationHandler (m :: J.Method FromClient Notification)
-  = IdeNotificationHandler [(PluginId, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty ()))]
+  = IdeNotificationHandler [(PluginId, IdeState -> MessageParams m -> LSP.LspM Config ())]
 -- type NotificationHandler (m :: Method FromClient Notification) = MessageParams m -> IO ()`
 
 -- | Combine the 'PluginHandlers' for all plugins
