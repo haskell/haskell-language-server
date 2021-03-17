@@ -10,7 +10,7 @@ import qualified Data.List.NonEmpty             as NE
 import           Data.String                    (IsString)
 import qualified Data.Text                      as T
 import           Development.IDE.Types.Location (Position (..), Range (..))
-import           GHC                            (compileExpr)
+import           GHC                            (InteractiveImport (IIDecl), compileExpr)
 import           GHC.LanguageExtensions.Type    (Extension (..))
 import           GhcMonad                       (Ghc, GhcMonad, liftIO)
 import           Ide.Plugin.Eval.Types          (Language (Plain), Loc,
@@ -18,7 +18,7 @@ import           Ide.Plugin.Eval.Types          (Language (Plain), Loc,
                                                  Section (sectionLanguage),
                                                  Test (..), Txt, locate,
                                                  locate0)
-import           InteractiveEval                (runDecls)
+import           InteractiveEval                (getContext, parseImportDecl, runDecls, setContext)
 import           Language.LSP.Types.Lens        (line, start)
 import           Unsafe.Coerce                  (unsafeCoerce)
 
@@ -95,12 +95,15 @@ evalExtensions =
 
 -- |GHC declarations required for expression evaluation
 evalSetup :: Ghc ()
-evalSetup =
+evalSetup = do
+    preludeAsP <- parseImportDecl "import qualified Prelude as P"
+    context <- getContext
+    setContext (IIDecl preludeAsP : context)
     mapM_
         runDecls
-        [ "class Print f where asPrint :: f -> IO String"
-        , "instance Show a => Print (IO a) where asPrint io = io >>= return . show"
-        , "instance Show a => Print a where asPrint a = return (show a)"
+        [ "class Print f where asPrint :: f -> P.IO P.String"
+        , "instance P.Show a => Print (P.IO a) where asPrint io = io P.>>= P.return P.. P.show"
+        , "instance P.Show a => Print a where asPrint a = P.return (P.show a)"
         ]
 
 {- |GHC declarations required to execute test properties
