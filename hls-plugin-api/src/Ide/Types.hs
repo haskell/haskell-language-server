@@ -302,7 +302,7 @@ mkPluginNotificationHandler
 mkPluginNotificationHandler m f
     = PluginNotificationHandlers $ DMap.singleton (IdeNotification m) (PluginNotificationHandler f')
   where
-    f' pid ide params = pure <$> f ide pid params
+    f' pid ide = f ide pid
 
 defaultPluginDescriptor :: PluginId -> PluginDescriptor ideState
 defaultPluginDescriptor plId =
