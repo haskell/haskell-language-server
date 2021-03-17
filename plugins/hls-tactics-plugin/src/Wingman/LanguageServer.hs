@@ -6,46 +6,39 @@ module Wingman.LanguageServer where
 import           ConLike
 import           Control.Arrow
 import           Control.Monad
-import           Control.Monad.State                  (State, evalState, get,
-                                                       put)
+import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce
-import           Data.Functor                         ((<&>))
-import           Data.Generics.Aliases                (mkQ)
-import           Data.Generics.Schemes                (everything)
-import qualified Data.Map                             as M
+import           Data.Functor ((<&>))
+import           Data.Generics.Aliases (mkQ)
+import           Data.Generics.Schemes (everything)
+import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set                             as S
-import qualified Data.Text                            as T
+import qualified Data.Set  as S
+import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
-import           Development.IDE.Core.Service         (runAction)
-import           Development.IDE.Core.Shake           (IdeState (..),
-                                                       useWithStale)
+import           Development.IDE.Core.Service (runAction)
+import           Development.IDE.Core.Shake (IdeState (..), useWithStale)
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error            (realSrcSpanToRange)
-import           Development.IDE.Spans.LocalBindings  (Bindings,
-                                                       getDefiningBindings)
-import           Development.Shake                    (Action, RuleResult)
-import           Development.Shake.Classes            (Binary, Hashable, NFData,
-                                                       Typeable)
+import           Development.IDE.GHC.Error (realSrcSpanToRange)
+import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
+import           Development.Shake (Action, RuleResult)
+import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins                           (consDataCon,
-                                                       substTyAddInScope,
-                                                       tupleDataCon)
-import qualified Ide.Plugin.Config                    as Plugin
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
+import           Ide.Types (PluginId)
+import qualified Ide.Plugin.Config as Plugin
+import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils                      (usePropertyLsp)
-import           Ide.Types                            (PluginId)
-import           Language.LSP.Server                  (MonadLsp,
-                                                       sendNotification)
+import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
-import           Prelude                              hiding (span)
-import           SrcLoc                               (containsSpan)
-import           TcRnTypes                            (tcg_binds)
+import           Prelude hiding (span)
+import           SrcLoc (containsSpan)
+import           TcRnTypes (tcg_binds)
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC

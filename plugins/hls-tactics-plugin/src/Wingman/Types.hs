@@ -14,34 +14,30 @@ module Wingman.Types
   , Range
   ) where
 
-import           ConLike                        (ConLike)
-import           Control.Lens                   hiding (Context, (.=))
+import           ConLike (ConLike)
+import           Control.Lens hiding (Context)
 import           Control.Monad.Reader
 import           Control.Monad.State
-
 import           Data.Coerce
 import           Data.Function
-import           Data.Generics.Product          (field)
-import           Data.List.NonEmpty             (NonEmpty (..))
+import           Data.Generics.Product (field)
+import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Semigroup
-import           Data.Set                       (Set)
-import           Data.Text                      (Text)
-import qualified Data.Text                      as T
+import           Data.Set (Set)
+import           Data.Text (Text)
+import qualified Data.Text as T
 import           Data.Tree
-import           Development.IDE.GHC.Compat     hiding (Node)
-import           Development.IDE.GHC.Orphans    ()
+import           Development.IDE.GHC.Compat hiding (Node)
+import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.Types.Location
 import           GHC.Generics
-import           GHC.SourceGen                  (var)
+import           GHC.SourceGen (var)
 import           OccName
 import           Refinery.Tactic
-import           System.IO.Unsafe               (unsafePerformIO)
-import           Type                           (TCvSubst, Var, emptyTCvSubst,
-                                                 eqType, nonDetCmpType)
-import           UniqSupply                     (UniqSupply, mkSplitUniqSupply,
-                                                 takeUniqFromSupply)
-import           Unique                         (Uniquable, Unique, getUnique,
-                                                 nonDetCmpUnique)
+import           System.IO.Unsafe (unsafePerformIO)
+import           Type (TCvSubst, Var, eqType, nonDetCmpType, emptyTCvSubst)
+import           UniqSupply (takeUniqFromSupply, mkSplitUniqSupply, UniqSupply)
+import           Unique (nonDetCmpUnique, Uniquable, getUnique, Unique)
 import           Wingman.Debug
 import           Wingman.FeatureSet
 
@@ -141,9 +137,9 @@ instance Show ConLike where
 -- | The state that should be shared between subgoals. Extracts move towards
 -- the root, judgments move towards the leaves, and the state moves *sideways*.
 data TacticState = TacticState
-    { ts_skolems    :: !(Set TyVar)
+    { ts_skolems         :: !(Set TyVar)
       -- ^ The known skolems.
-    , ts_unifier    :: !TCvSubst
+    , ts_unifier         :: !TCvSubst
     , ts_unique_gen :: !UniqSupply
     } deriving stock (Show, Generic)
 
@@ -358,17 +354,17 @@ type Trace = Rose String
 -- information we'd like to pass from leaves of the tactics search upwards.
 -- This includes the actual AST we've generated (in 'syn_val').
 data Synthesized a = Synthesized
-  { syn_trace           :: Trace
+  { syn_trace  :: Trace
     -- ^ A tree describing which tactics were used produce the 'syn_val'.
     -- Mainly for debugging when you get the wrong answer, to see the other
     -- things it tried.
-  , syn_scoped          :: Hypothesis CType
+  , syn_scoped :: Hypothesis CType
     -- ^ All of the bindings created to produce the 'syn_val'.
-  , syn_used_vals       :: Set OccName
+  , syn_used_vals :: Set OccName
     -- ^ The values used when synthesizing the 'syn_val'.
   , syn_recursion_count :: Sum Int
     -- ^ The number of recursive calls
-  , syn_val             :: a
+  , syn_val    :: a
   }
   deriving (Eq, Show, Functor, Foldable, Traversable, Generic)
 

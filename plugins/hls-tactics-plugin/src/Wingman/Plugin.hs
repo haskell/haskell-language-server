@@ -7,17 +7,17 @@ module Wingman.Plugin
   , TacticCommand (..)
   ) where
 
-import           Control.Exception                      (evaluate)
+import           Control.Exception (evaluate)
 import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor                         (first)
-import           Data.Foldable                          (for_)
+import           Data.Bifunctor (first)
+import           Data.Foldable (for_)
 import           Data.Maybe
-import           Data.Proxy                             (Proxy (..))
-import qualified Data.Text                              as T
-import           Development.IDE.Core.Shake             (IdeState (..))
+import           Data.Proxy (Proxy(..))
+import qualified Data.Text as T
+import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Ide.Types
@@ -25,13 +25,13 @@ import           Language.LSP.Server
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import           OccName
-import           Prelude                                hiding (span)
+import           Prelude hiding (span)
 import           System.Timeout
 import           Wingman.CaseSplit
 import           Wingman.GHC
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.TacticProviders
-import           Wingman.Machinery                      (scoreSolution)
+import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
