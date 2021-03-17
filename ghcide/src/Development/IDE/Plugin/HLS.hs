@@ -38,7 +38,8 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
 import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
-import           UnliftIO.Async               (forConcurrently)
+import           UnliftIO.Async               (forConcurrently,
+                                               mapConcurrently_)
 import           UnliftIO.Exception           (catchAny)
 
 -- ---------------------------------------------------------------------
@@ -185,7 +186,8 @@ extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
           -- Just fs -> void $ runConcurrentlyNotification (show m) fs ide params
           Just fs -> do
               liftIO $ logInfo (ideLogger ide) $ "extensibleNotificationPlugins number of plugins:" <> T.pack (show (length fs))
-              mapM_ (\(_pid,f) -> f ide params) fs
+              -- run notification handlers in parallel
+              mapConcurrently_ (\(_pid,f) -> f ide params) fs
 
 -- ---------------------------------------------------------------------
 
@@ -211,7 +213,7 @@ newtype IdeHandler (m :: J.Method FromClient Request)
 
 -- | Combine the 'PluginHandler' for all plugins
 newtype IdeNotificationHandler (m :: J.Method FromClient Notification)
-  = IdeNotificationHandler [(PluginId,(IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty ())))]
+  = IdeNotificationHandler [(PluginId, IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty ()))]
 -- type NotificationHandler (m :: Method FromClient Notification) = MessageParams m -> IO ()`
 
 -- | Combine the 'PluginHandlers' for all plugins
