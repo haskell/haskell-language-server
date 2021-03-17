@@ -100,7 +100,6 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
     let ideHandlers = mconcat
           [ setIdeHandlers
           , userHandlers
-          , setHandlersNotifications -- absolutely critical, join them with user notifications
           ]
 
     -- Send everything over a channel, since you need to wait until after initialise before
