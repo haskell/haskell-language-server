@@ -246,7 +246,7 @@ newtype PluginHandler a (m :: Method FromClient Request)
   = PluginHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))
 
 newtype PluginNotificationHandler a (m :: Method FromClient Notification)
-  = PluginNotificationHandler (PluginId -> a -> MessageParams m -> LspM Config (NonEmpty ()))
+  = PluginNotificationHandler (PluginId -> a -> MessageParams m -> LspM Config ())
 -- newtype PluginNotificationHandler a (m :: Method FromClient Notification)
 --   = PluginNotificationHandler (PluginNotificationMethodHandler a m)`
 
