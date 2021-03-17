@@ -62,7 +62,10 @@ withNewGoal t = field @"_jGoal" .~ t
 
 
 introduce :: Hypothesis a -> Judgement' a -> Judgement' a
-introduce hy = field @"_jHypothesis" <>~ hy
+-- NOTE(sandy): It's important that we put the new hypothesis terms first,
+-- since 'jAcceptableDestructTargets' will never destruct a pattern that occurs
+-- after a previously-destructed term.
+introduce hy = field @"_jHypothesis" %~ mappend hy
 
 
 ------------------------------------------------------------------------------
