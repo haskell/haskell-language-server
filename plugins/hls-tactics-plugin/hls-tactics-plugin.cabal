@@ -67,7 +67,7 @@ library
     , ghc-source-gen
     , ghcide         ^>= 1.1.0.0
     , lsp
-    , hls-plugin-api ^>= 1.0.0.0
+    , hls-plugin-api >= 1.0 && < 1.2
     , lens
     , mtl
     , refinery       ^>=0.3
