@@ -358,9 +358,7 @@ overFunctions =
 
 overAlgebraicTerms :: (HyInfo CType -> TacticsM ()) -> TacticsM ()
 overAlgebraicTerms =
-  attemptOn $ filter (isJust . algebraicTyCon . unCType . hi_type)
-            . unHypothesis
-            . jHypothesis
+  attemptOn jAcceptableDestructTargets
 
 
 allNames :: Judgement -> Set OccName
