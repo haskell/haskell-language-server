@@ -86,7 +86,7 @@ setFeatureSet features = do
       def_config = def :: Plugin.Config
       config =
         def_config
-          { Plugin.plugins = M.fromList [("tactics",
+          { Plugin.plugins = M.fromList [("tactic",
               def { Plugin.plcConfig = unObject $ object ["features" .= prettyFeatureSet features] }
           )] <> Plugin.plugins def_config }
 
