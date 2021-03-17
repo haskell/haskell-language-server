@@ -13,6 +13,7 @@ import           ConLike
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
 import           Control.Monad.State
+import           Data.Bool (bool)
 import           Data.Generics.Labels ()
 import           Data.List
 import           Data.Maybe (mapMaybe)
@@ -183,18 +184,19 @@ destructLambdaCase' f jdg = do
 ------------------------------------------------------------------------------
 -- | Construct a data con with subgoals for each field.
 buildDataCon
-    :: Judgement
+    :: Bool       -- Should we blacklist destruct?
+    -> Judgement
     -> ConLike            -- ^ The data con to build
     -> [Type]             -- ^ Type arguments for the data con
     -> RuleM (Synthesized (LHsExpr GhcPs))
-buildDataCon jdg dc tyapps = do
+buildDataCon should_blacklist jdg dc tyapps = do
   let args = conLikeInstOrigArgTys' dc tyapps
   ext
       <- fmap unzipTrace
        $ traverse ( \(arg, n) ->
                     newSubgoal
                   . filterSameTypeFromOtherPositions dc n
-                  . blacklistingDestruct
+                  . bool id blacklistingDestruct should_blacklist
                   . flip withNewGoal jdg
                   $ CType arg
                   ) $ zip args [0..]
