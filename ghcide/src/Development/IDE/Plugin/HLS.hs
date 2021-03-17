@@ -1,9 +1,8 @@
-{-# LANGUAGE GADTs     #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE KindSignatures    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds         #-}
 
 module Development.IDE.Plugin.HLS
     (
@@ -12,6 +11,7 @@ module Development.IDE.Plugin.HLS
 
 import           Control.Exception            (SomeException)
 import           Control.Monad
+import           Control.Monad.IO.Class
 import qualified Data.Aeson                   as J
 import           Data.Bifunctor
 import           Data.Dependent.Map           (DMap)
@@ -28,6 +28,7 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
+import           Development.IDE.Types.Logger
 import           Development.Shake            (Rules)
 import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
@@ -48,8 +49,8 @@ asGhcIdePlugin :: Config -> IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin defaultConfig mp =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
-    mkPlugin (extensiblePlugins defaultConfig)  HLS.pluginHandlers
-    mkPlugin extensibleNotificationPlugins HLS.pluginNotificationHandlers
+    mkPlugin (extensiblePlugins defaultConfig) HLS.pluginHandlers <>
+    mkPlugin (extensibleNotificationPlugins defaultConfig) HLS.pluginNotificationHandlers
     where
         ls = Map.toList (ipMap mp)
 
@@ -161,8 +162,8 @@ extensiblePlugins defaultConfig xs = Plugin mempty handlers
                 pure $ Right $ combineResponses m config caps params xs
 -- ---------------------------------------------------------------------
 
-extensibleNotificationPlugins :: [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
-extensibleNotificationPlugins xs = Plugin mempty handlers
+extensibleNotificationPlugins :: Config -> [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
+extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
   where
     IdeNotificationHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginNotificationHandlers IdeState) -> IdeNotificationHandlers
@@ -173,7 +174,7 @@ extensibleNotificationPlugins xs = Plugin mempty handlers
       (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
       pure $ notificationHandler m $ \ide params -> do
         liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins handler entered"
-        config <- getClientConfig
+        config <- fromMaybe defaultConfig <$> Ide.PluginUtils.getClientConfig
         let fs = filter (\(pid,_) -> pluginEnabledNotification m pid config) fs'
         case nonEmpty fs of
           Nothing -> do
