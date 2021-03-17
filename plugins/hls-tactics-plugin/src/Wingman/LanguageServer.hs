@@ -82,7 +82,7 @@ properties :: Properties
     PropertyKey "features" 'TString]
 properties = emptyProperties
   & defineStringProperty @"features"
-    "Features set used by wingman (tactic) plugin" ""
+    "Feature set used by Wingman" ""
   & defineNumberProperty @"max_use_ctor_actions"
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
 
@@ -364,4 +364,3 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
 showLspMessage = sendNotification SWindowShowMessage
-
