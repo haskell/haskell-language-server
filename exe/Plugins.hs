@@ -100,7 +100,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       Fourmolu.descriptor "fourmolu" :
 #endif
 #if tactic
-      Tactic.descriptor "tactic" :
+      Tactic.descriptor "tactics" :
 #endif
 #if ormolu
       Ormolu.descriptor   "ormolu" :
