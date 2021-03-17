@@ -87,7 +87,7 @@ runTactic ctx jdg t =
               RunTacticResults
                 { rtr_trace = syn_trace syn
                 , rtr_extract = simplify $ syn_val syn
-                , rtr_other_solns = reverse . fmap fst $ take 5 sorted
+                , rtr_other_solns = reverse . fmap fst $ sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
                 }
@@ -221,6 +221,16 @@ unify goal inst = do
     Just subst ->
       modify $ updateSubst subst
     Nothing -> throwError (UnificationError inst goal)
+
+
+------------------------------------------------------------------------------
+-- | Prefer the first tactic to the second, if the bool is true. Otherwise, just run the second tactic.
+--
+-- This is useful when you have a clever pruning solution that isn't always
+-- applicable.
+attemptWhen :: TacticsM a -> TacticsM a -> Bool -> TacticsM a
+attemptWhen _  t2 False = t2
+attemptWhen t1 t2 True  = commit t1 t2
 
 
 ------------------------------------------------------------------------------
