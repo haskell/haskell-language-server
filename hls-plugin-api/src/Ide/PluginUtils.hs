@@ -1,9 +1,6 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 module Ide.PluginUtils
   ( WithDeletions(..),
     getProcessID,
@@ -172,14 +169,14 @@ getPluginConfig plugin = do
 
 -- | Returns the value of a property defined by the current plugin.
 usePropertyLsp ::
-  forall s k t r m.
   (HasProperty s k t r, MonadLsp Config m) =>
+  KeyNameProxy s ->
   PluginId ->
   Properties r ->
   m (ToHsType t)
-usePropertyLsp pId p = do
+usePropertyLsp kn pId p = do
   config <- getPluginConfig pId
-  return $ useProperty @s p $ plcConfig <$> config
+  return $ useProperty kn p $ plcConfig <$> config
 
 -- ---------------------------------------------------------------------
 

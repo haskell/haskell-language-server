@@ -78,12 +78,13 @@ runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 ------------------------------------------------------------------------------
 
 properties :: Properties
-  '[PropertyKey "max_use_ctor_actions" 'TNumber,
-    PropertyKey "features" 'TString]
+  '[ 'PropertyKey
+       "max_use_ctor_actions" 'TNumber,
+     'PropertyKey "features" 'TString]
 properties = emptyProperties
-  & defineStringProperty @"features"
+  & defineStringProperty #features
     "Feature set used by Wingman" ""
-  & defineNumberProperty @"max_use_ctor_actions"
+  & defineNumberProperty #max_use_ctor_actions
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
 
 
@@ -91,8 +92,8 @@ properties = emptyProperties
 getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
 getTacticConfig pId =
   Config
-    <$> (parseFeatureSet <$> usePropertyLsp @"features" pId properties)
-    <*> usePropertyLsp @"max_use_ctor_actions" pId properties
+    <$> (parseFeatureSet <$> usePropertyLsp #features pId properties)
+    <*> usePropertyLsp #max_use_ctor_actions pId properties
 
 ------------------------------------------------------------------------------
 -- | Get the current feature set from the plugin config.

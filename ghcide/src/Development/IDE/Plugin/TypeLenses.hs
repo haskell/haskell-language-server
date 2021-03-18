@@ -1,5 +1,6 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE TypeFamilies   #-}
+{-# LANGUAGE DeriveAnyClass   #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE TypeFamilies     #-}
 
 -- | An HLS plugin to provide code lenses for type signatures
 module Development.IDE.Plugin.TypeLenses (
@@ -90,9 +91,9 @@ descriptor plId =
     , pluginCustomConfig = mkCustomConfig properties
     }
 
-properties :: Properties '[PropertyKey "mode" 'TEnum]
+properties :: Properties '[ 'PropertyKey "mode" 'TEnum]
 properties = emptyProperties
-  & defineEnumProperty @"mode" "Control how type lenses are shown"
+  & defineEnumProperty #mode "Control how type lenses are shown"
     [ ("always", "Always displays type lenses of global bindings")
     , ("exported", "Only display type lenses of exported global bindings")
     , ("diagnostics", "Follows error messages produced by GHC about missing signatures")
@@ -104,7 +105,7 @@ codeLensProvider ::
   CodeLensParams ->
   LSP.LspM Config (Either ResponseError (List CodeLens))
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
-  mode <- readMode <$> usePropertyLsp @"mode" pId properties
+  mode <- readMode <$> usePropertyLsp #mode pId properties
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
@@ -249,6 +250,7 @@ readMode = \case
   "always"      -> Always
   "exported"    -> Exported
   "diagnostics" -> Diagnostics
+  -- actually it never happens because of 'usePropertyLsp'
   _             -> error "failed to parse type lenses mode"
 
 gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
