@@ -261,6 +261,10 @@ instance Uniquable a => Ord (Uniquely a) where
   compare = nonDetCmpUnique `on` getUnique . getViaUnique
 
 
+-- NOTE(sandy): The usage of list here is mostly for convenience, but if it's
+-- ever changed, make sure to correspondingly update
+-- 'jAcceptableDestructTargets' so that it correctly identifies newly
+-- introduced terms.
 newtype Hypothesis a = Hypothesis
   { unHypothesis :: [HyInfo a]
   }
