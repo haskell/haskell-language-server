@@ -155,6 +155,8 @@ tests =
                 $ testCase "Literate Haskell Bird Style" $ goldenTest "TLHS.lhs"
             -- , testCase "Literate Haskell LaTeX Style" $ goldenTest "TLHSLateX.lhs"
             ]
+        , testCase "Works with NoImplicitPrelude"
+            $ goldenTest "TNoImplicitPrelude.hs"
         ]
 
 goldenTest :: FilePath -> IO ()
