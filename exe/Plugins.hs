@@ -89,7 +89,6 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
                    then basePlugins ++ examplePlugins
                    else basePlugins
     basePlugins =
-      GhcIde.descriptors ++
 #if pragmas
       Pragmas.descriptor  "pragmas" :
 #endif
@@ -135,7 +134,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if splice
       Splice.descriptor "splice" :
 #endif
-      []
+    -- The ghcide descriptors should come last so that the notification handlers
+    -- (which restart the Shake build) run after everything else
+      GhcIde.descriptors
     examplePlugins =
       [Example.descriptor  "eg"
       ,Example2.descriptor "eg2"

@@ -37,8 +37,7 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types           as J
 import           Text.Regex.TDFA.Text         ()
 import           UnliftIO                     (MonadUnliftIO)
-import           UnliftIO.Async               (forConcurrently,
-                                               mapConcurrently_)
+import           UnliftIO.Async               (forConcurrently)
 import           UnliftIO.Exception           (catchAny)
 
 -- ---------------------------------------------------------------------
@@ -179,13 +178,11 @@ extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
           Nothing -> do
               liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins no enabled plugins"
               pure ()
-          -- We run the notifications in order, so the built-in ghcide
-          -- processing (which restarts the shake process) comes last
-          -- Just fs -> void $ runConcurrentlyNotification (show m) fs ide params
           Just fs -> do
-              liftIO $ logInfo (ideLogger ide) $ "extensibleNotificationPlugins number of plugins:" <> T.pack (show (length fs))
-              -- run notification handlers in parallel
-              mapConcurrently_ (\(_pid,f) -> f ide params) fs
+            -- We run the notifications in order, so the core ghcide provider
+            -- (which restarts the shake process) hopefully comes last
+              -- TODO tracing
+              mapM_ (\(_pid,f) -> f ide params) fs
 
 -- ---------------------------------------------------------------------
 
