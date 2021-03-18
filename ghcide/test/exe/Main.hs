@@ -4304,7 +4304,7 @@ outlineTests = testGroup
                                             (Just $ List cc)
   classSymbol name loc cc = DocumentSymbol name
                                            (Just "class")
-                                           SkClass
+                                           SkInterface
                                            Nothing
                                            loc
                                            loc
