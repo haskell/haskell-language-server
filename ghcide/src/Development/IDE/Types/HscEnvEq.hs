@@ -18,6 +18,8 @@ import           Control.Exception             (evaluate, mask, throwIO)
 import           Control.Monad.Extra           (eitherM, join, mapMaybeM)
 import           Control.Monad.IO.Class
 import           Data.Either                   (fromRight)
+import           Data.Set                      (Set)
+import qualified Data.Set                      as Set
 import           Data.Unique
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error     (catchSrcErrors)
@@ -48,7 +50,7 @@ data HscEnvEq = HscEnvEq
                -- ^ In memory components for this HscEnv
                -- This is only used at the moment for the import dirs in
                -- the DynFlags
-    , envImportPaths        :: Maybe [String]
+    , envImportPaths        :: Maybe (Set FilePath)
         -- ^ If Just, import dirs originally configured in this env
         --   If Nothing, the env import dirs are unaltered
     , envPackageExports     :: IO ExportsMap
@@ -69,9 +71,9 @@ newHscEnvEq cradlePath hscEnv0 deps = do
     importPathsCanon <-
       mapM canonicalizePath $ relativeToCradle <$> importPaths (hsc_dflags hscEnv0)
 
-    newHscEnvEqWithImportPaths (Just importPathsCanon) hscEnv deps
+    newHscEnvEqWithImportPaths (Just $ Set.fromList importPathsCanon) hscEnv deps
 
-newHscEnvEqWithImportPaths :: Maybe [String] -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
+newHscEnvEqWithImportPaths :: Maybe (Set FilePath) -> HscEnv -> [(InstalledUnitId, DynFlags)] -> IO HscEnvEq
 newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
 
     let dflags = hsc_dflags hscEnv
@@ -121,7 +123,7 @@ newHscEnvEqPreserveImportPaths = newHscEnvEqWithImportPaths Nothing
 hscEnvWithImportPaths :: HscEnvEq -> HscEnv
 hscEnvWithImportPaths HscEnvEq{..}
     | Just imps <- envImportPaths
-    = hscEnv{hsc_dflags = (hsc_dflags hscEnv){importPaths = imps}}
+    = hscEnv{hsc_dflags = (hsc_dflags hscEnv){importPaths = Set.toList imps}}
     | otherwise
     = hscEnv
 
