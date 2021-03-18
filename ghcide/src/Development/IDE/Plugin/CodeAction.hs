@@ -195,6 +195,11 @@ findSigOfBind range bind =
     findSigOfExpr = go
       where
         go (HsLet _ binds _) = findSigOfBinds range (unLoc binds)
+        go (HsDo _ _ stmts) = do
+          stmtlr <- unLoc <$> findDeclContainingLocE (_start range) (unLoc stmts)
+          case stmtlr of
+            LetStmt _ lhsLocalBindsLR -> findSigOfBinds range $ unLoc lhsLocalBindsLR
+            _ -> Left "HsDo"
         go _ = Left "findSigOfExpr"
 
 findSigOfBinds :: Range -> HsLocalBinds p -> Either String (Sig p)

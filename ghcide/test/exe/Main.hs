@@ -2622,6 +2622,17 @@ removeRedundantConstraintsTests = let
         , "foo = id"
         ]
 
+  typeSignatureDo :: Maybe T.Text -> T.Text
+  typeSignatureDo mConstraint =
+    let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
+      in T.unlines $ header <>
+        [ "f :: Int -> IO ()"
+        , "f n = do"
+        , "  let foo :: " <> constraint <> "a -> IO ()"
+        , "      foo _ = return ()"
+        , "  r n"
+        ]
+
   typeSignatureNested :: Maybe T.Text -> T.Text
   typeSignatureNested mConstraint =
     let constraint = maybe "" (\c -> "" <> c <> " => ") mConstraint
@@ -2716,6 +2727,10 @@ removeRedundantConstraintsTests = let
     "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
     (redundantConstraintsForall $ Just "Eq a")
     (redundantConstraintsForall Nothing)
+  , check
+    "Remove redundant constraint `Eq a` from the context of the type signature for `foo`"
+    (typeSignatureDo $ Just "Eq a")
+    (typeSignatureDo Nothing)
   , check
     "Remove redundant constraints `(Monoid a, Show a)` from the context of the type signature for `foo`"
     (typeSignatureSpaces $ Just "Monoid a, Show a")
