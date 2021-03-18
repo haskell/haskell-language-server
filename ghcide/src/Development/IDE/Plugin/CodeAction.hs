@@ -1123,11 +1123,11 @@ removeRedundantConstraints df (L _ HsModule {hsmodDecls}) Diagnostic{..}
   , Right (TypeSig _ _ HsWC{hswc_body = HsIB {hsib_body = sig}})
     <- findSigOfDeclRanged _range hsmodDecls
   , Just redundantConstraintList <- findRedundantConstraints _message
-  , rewrite <- removeConstraint (pred df redundantConstraintList) sig
+  , rewrite <- removeConstraint (toRemove df redundantConstraintList) sig
       = [(actionTitle redundantConstraintList typeSignatureName, rewrite)]
   | otherwise = []
     where
-      pred df list a = showSDoc df (ppr a) `elem` (T.unpack <$> list)
+      toRemove df list a = showSDoc df (ppr a) `elem` (T.unpack <$> list)
 
       parseConstraints :: T.Text -> [T.Text]
       parseConstraints t = t

@@ -120,14 +120,17 @@ fixParens openDP closeDP ctxt@(L _ elems) = do
   dropHsParTy other                = other
 
 removeConstraint ::
-  -- | Predicate: Which contect to drop.
+  -- | Predicate: Which context to drop.
   (LHsType GhcPs -> Bool) ->
   LHsType GhcPs ->
   Rewrite
-removeConstraint pred = go
+removeConstraint toRemove = go
   where
-    go (L l it@HsQualTy{hst_ctxt = L l' ctxt}) = Rewrite l $ \_ -> do
-      return $ L l $ it{hst_ctxt = L l' $ filter (not . pred) ctxt}
+    go (L l it@HsQualTy{hst_ctxt = L l' ctxt, hst_body}) = Rewrite l $ \_ -> do
+      let ctxt' = L l' $ filter (not . toRemove) ctxt
+      when ((toRemove <$> headMaybe ctxt) == Just True) $
+        setEntryDPT hst_body (DP (0, 0))
+      return $ L l $ it{hst_ctxt = ctxt'}
     go (L _ (HsParTy _ ty)) = go ty
     go (L _ HsForAllTy{hst_body}) = go hst_body
     go (L l other) = Rewrite l $ \_ -> return $ L l other
