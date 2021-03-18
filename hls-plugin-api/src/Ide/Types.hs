@@ -247,20 +247,9 @@ newtype PluginHandler a (m :: Method FromClient Request)
 
 newtype PluginNotificationHandler a (m :: Method FromClient Notification)
   = PluginNotificationHandler (PluginId -> a -> MessageParams m -> LspM Config ())
--- newtype PluginNotificationHandler a (m :: Method FromClient Notification)
---   = PluginNotificationHandler (PluginNotificationMethodHandler a m)`
-
-{-
-From Zubin
-alanz_: I would say `newtype PluginNotificationHandler a (m :: Method FromClient Notification) = PluginNotificationHandler (PluginNotificationMethodHandler a m)`
-16:28 and `newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap SMethod (PluginNotificationHandler a))
-
--}
 
 newtype PluginHandlers a             = PluginHandlers             (DMap IdeMethod       (PluginHandler a))
 newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap IdeNotification (PluginNotificationHandler a))
--- newtype PluginNotificationHandlers a = PluginNotificationHandlers (DMap SMethod (PluginNotificationHandler a))
-
 instance Semigroup (PluginHandlers a) where
   (PluginHandlers a) <> (PluginHandlers b) = PluginHandlers $ DMap.unionWithKey go a b
     where
