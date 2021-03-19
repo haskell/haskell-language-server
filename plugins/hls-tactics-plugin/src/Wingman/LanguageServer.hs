@@ -78,13 +78,12 @@ runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 ------------------------------------------------------------------------------
 
 properties :: Properties
-  '[ 'PropertyKey
-       "max_use_ctor_actions" 'TNumber,
+  '[ 'PropertyKey "max_use_ctor_actions" 'TInteger,
      'PropertyKey "features" 'TString]
 properties = emptyProperties
   & defineStringProperty #features
     "Feature set used by Wingman" ""
-  & defineNumberProperty #max_use_ctor_actions
+  & defineIntegerProperty #max_use_ctor_actions
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
 
 

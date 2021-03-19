@@ -28,6 +28,7 @@ module Ide.Plugin.Properties
     HasProperty,
     emptyProperties,
     defineNumberProperty,
+    defineIntegerProperty,
     defineStringProperty,
     defineBooleanProperty,
     defineObjectProperty,
@@ -55,6 +56,7 @@ import           Unsafe.Coerce        (unsafeCoerce)
 -- | Types properties may have
 data PropertyType
   = TNumber
+  | TInteger
   | TString
   | TBoolean
   | TObject
@@ -62,7 +64,8 @@ data PropertyType
   | TEnum
 
 type family ToHsType (t :: PropertyType) where
-  ToHsType 'TNumber = Int
+  ToHsType 'TNumber = Double -- in js, there are no distinct types for integers and floating-point values
+  ToHsType 'TInteger = Int   -- so here we use Double for Number, Int for Integer
   ToHsType 'TString = T.Text
   ToHsType 'TBoolean = Bool
   ToHsType 'TObject = A.Object
@@ -94,6 +97,7 @@ data PropertyKey = PropertyKey Symbol PropertyType
 -- | Singleton type of 'PropertyKey'
 data SPropertyKey (k :: PropertyKey) where
   SNumber :: SPropertyKey ('PropertyKey s 'TNumber)
+  SInteger :: SPropertyKey ('PropertyKey s 'TInteger)
   SString :: SPropertyKey ('PropertyKey s 'TString)
   SBoolean :: SPropertyKey ('PropertyKey s 'TBoolean)
   SObject :: SPropertyKey ('PropertyKey s 'TObject)
@@ -106,7 +110,8 @@ data SomePropertyKeyWithMetaData
     (k ~ 'PropertyKey s t) =>
     SomePropertyKeyWithMetaData (SPropertyKey k) (MetaData t)
 
--- | 'Properties' defines a set of properties which used in dedicated configuration of a plugin.
+-- | 'Properties' is a partial implementation of json schema, without supporting union types and validation.
+-- In hls, it defines a set of properties which used in dedicated configuration of a plugin.
 -- A property is an immediate child of the json object in each plugin's "config" section.
 -- It was designed to be compatible with vscode's settings UI.
 -- Use 'emptyProperties' and 'useProperty' to create and consume 'Properties'.
@@ -202,7 +207,7 @@ usePropertyEither ::
   Properties r ->
   A.Object ->
   Either String (ToHsType t)
-usePropertyEither k p = parseProperty k (find k p)
+usePropertyEither kn p = parseProperty kn (find k p)
 
 -- | Like 'usePropertyEither' but returns 'defaultValue' on parse error
 useProperty ::
@@ -211,12 +216,12 @@ useProperty ::
   Properties r ->
   Maybe A.Object ->
   ToHsType t
-useProperty k p =
+useProperty kn p =
   maybe
     (defaultValue metadata)
-    (fromRight (defaultValue metadata) . usePropertyEither k p)
+    (fromRight (defaultValue metadata) . usePropertyEither kn p)
   where
-    (_, metadata) = find k p
+    (_, metadata) = find kn p
 
 parseProperty ::
   (k ~ 'PropertyKey s t, KnownSymbol s) =>
@@ -224,8 +229,9 @@ parseProperty ::
   (SPropertyKey k, MetaData t) ->
   A.Object ->
   Either String (ToHsType t)
-parseProperty k km x = case km of
+parseProperty kn k x = case k of
   (SNumber, _) -> parseEither
+  (SInteger, _) -> parseEither
   (SString, _) -> parseEither
   (SBoolean, _) -> parseEither
   (SObject, _) -> parseEither
@@ -245,7 +251,7 @@ parseProperty k km x = case km of
       )
       x
   where
-    keyName = T.pack $ symbolVal k
+    keyName = T.pack $ symbolVal kn
     parseEither :: forall a. A.FromJSON a => Either String a
     parseEither = A.parseEither (A..: keyName) x
 
@@ -258,11 +264,24 @@ defineNumberProperty ::
   -- | description
   T.Text ->
   -- | default value
-  Int ->
+  Double ->
   Properties r ->
   Properties ('PropertyKey s 'TNumber : r)
 defineNumberProperty kn description defaultValue =
   insert kn SNumber MetaData {..}
+
+-- | Defines an integer property
+defineIntegerProperty ::
+  (KnownSymbol s, NotElem s r) =>
+  KeyNameProxy s ->
+  -- | description
+  T.Text ->
+  -- | default value
+  Int ->
+  Properties r ->
+  Properties ('PropertyKey s 'TInteger : r)
+defineIntegerProperty kn description defaultValue =
+  insert kn SInteger MetaData {..}
 
 -- | Defines a string property
 defineStringProperty ::
@@ -341,6 +360,8 @@ toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
     toEntry (T.pack -> s) = \case
       (SomePropertyKeyWithMetaData SNumber MetaData {..}) ->
         s A..= defaultValue
+      (SomePropertyKeyWithMetaData SInteger MetaData {..}) ->
+        s A..= defaultValue
       (SomePropertyKeyWithMetaData SString MetaData {..}) ->
         s A..= defaultValue
       (SomePropertyKeyWithMetaData SBoolean MetaData {..}) ->
@@ -362,6 +383,13 @@ toVSCodeExtensionSchema prefix (Properties p) =
       (SomePropertyKeyWithMetaData SNumber MetaData {..}) ->
         A.object
           [ "type" A..= A.String "number",
+            "markdownDescription" A..= description,
+            "default" A..= defaultValue,
+            "scope" A..= A.String "resource"
+          ]
+      (SomePropertyKeyWithMetaData SInteger MetaData {..}) ->
+        A.object
+          [ "type" A..= A.String "integer",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
