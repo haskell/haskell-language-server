@@ -181,8 +181,7 @@ extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
           Just fs -> do
             -- We run the notifications in order, so the core ghcide provider
             -- (which restarts the shake process) hopefully comes last
-              -- TODO tracing
-              mapM_ (\(_pid,f) -> f ide params) fs
+              mapM_ (\(pid,f) -> otTracedProvider pid (fromString $ show m) $ f ide params) fs
 
 -- ---------------------------------------------------------------------
 
