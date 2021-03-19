@@ -11,7 +11,7 @@ import           Ide.PluginUtils
 main :: IO ()
 main = defaultMain def
   { argsHlsPlugins = pluginDescToIdePlugins $
-    [ T.descriptor "tactic"
+    [ T.descriptor "tactics"
     ] <>
     Ghcide.descriptors
   }

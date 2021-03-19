@@ -9,11 +9,14 @@ import           Arguments                         (Arguments' (..),
                                                     IdeCmd (..), getArguments)
 import           Control.Concurrent.Extra          (newLock, withLock)
 import           Control.Monad.Extra               (unless, when, whenJust)
+import qualified Data.Aeson.Encode.Pretty          as A
 import           Data.Default                      (Default (def))
 import           Data.List.Extra                   (upper)
 import           Data.Maybe                        (fromMaybe)
 import qualified Data.Text                         as T
 import qualified Data.Text.IO                      as T
+import           Data.Text.Lazy.Encoding           (decodeUtf8)
+import qualified Data.Text.Lazy.IO                 as LT
 import           Data.Version                      (showVersion)
 import           Development.GitRev                (gitHash)
 import           Development.IDE                   (Logger (Logger),
@@ -29,6 +32,8 @@ import           Development.IDE.Types.Options
 import           Development.Shake                 (ShakeOptions (shakeThreads))
 import           HieDb.Run                         (Options (..), runCommand)
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
+import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
+                                                    pluginsToVSCodeExtensionSchema)
 import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
@@ -57,6 +62,16 @@ main = do
 
     if argsVersion then ghcideVersion >>= putStrLn >> exitSuccess
     else hPutStrLn stderr {- see WARNING above -} =<< ghcideVersion
+
+    let hlsPlugins = pluginDescToIdePlugins GhcIde.descriptors
+
+    when argsVSCodeExtensionSchema $ do
+      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToVSCodeExtensionSchema hlsPlugins
+      exitSuccess
+
+    when argsDefaultConfig $ do
+      LT.putStrLn $ decodeUtf8 $ A.encodePretty $ pluginsToDefaultConfig hlsPlugins
+      exitSuccess
 
     whenJust argsCwd IO.setCurrentDirectory
 

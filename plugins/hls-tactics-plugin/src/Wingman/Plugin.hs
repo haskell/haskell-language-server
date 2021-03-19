@@ -44,18 +44,18 @@ descriptor plId = (defaultPluginDescriptor plId)
             PluginCommand
               (tcCommandId tc)
               (tacticDesc $ tcCommandName tc)
-              (tacticCmd $ commandTactic tc))
+              (tacticCmd (commandTactic tc) plId))
               [minBound .. maxBound]
     , pluginHandlers =
         mkPluginHandler STextDocumentCodeAction codeActionProvider
+    , pluginCustomConfig =
+        mkCustomConfig properties
     }
-
-
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      cfg <- getTacticConfig $ shakeExtras state
+      cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
         (_, jdg, _, dflags) <- judgementForHole state nfp range $ cfg_feature_set cfg
         actions <- lift $
@@ -81,10 +81,10 @@ showUserFacingMessage ufm = do
   pure $ Left $ mkErr InternalError $ T.pack $ show ufm
 
 
-tacticCmd :: (OccName -> TacticsM ()) -> CommandFunction IdeState TacticParams
-tacticCmd tac state (TacticParams uri range var_name)
+tacticCmd :: (OccName -> TacticsM ()) -> PluginId -> CommandFunction IdeState TacticParams
+tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-      features <- getFeatureSet $ shakeExtras state
+      features <- getFeatureSet pId
       ccs <- getClientCapabilities
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
@@ -111,7 +111,7 @@ tacticCmd tac state (TacticParams uri range var_name)
             (ApplyWorkspaceEditParams Nothing edit)
             (const $ pure ())
           pure $ Right Null
-tacticCmd _ _ _ =
+tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
 
 

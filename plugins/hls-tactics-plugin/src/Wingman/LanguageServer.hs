@@ -8,8 +8,6 @@ import           Control.Arrow
 import           Control.Monad
 import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
-import           Data.Aeson (Value (Object), fromJSON)
-import           Data.Aeson.Types (Result (Error, Success))
 import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
@@ -20,7 +18,6 @@ import           Data.Monoid
 import qualified Data.Set  as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (ShakeExtras, getPluginConfig)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
@@ -32,8 +29,10 @@ import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
-import           Ide.Plugin.Config (PluginConfig (plcConfig))
+import           Ide.Types (PluginId)
 import qualified Ide.Plugin.Config as Plugin
+import           Ide.PluginUtils (usePropertyLsp)
+import           Ide.Plugin.Properties
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
@@ -77,18 +76,27 @@ runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 
 ------------------------------------------------------------------------------
--- | Get the the plugin config
-getTacticConfig :: MonadLsp Plugin.Config m => ShakeExtras -> m Config
-getTacticConfig extras = do
-  pcfg <- getPluginConfig extras "tactics"
-  pure $ case fromJSON $ Object $ plcConfig pcfg of
-    Success cfg -> cfg
-    Error _     -> emptyConfig
 
+properties :: Properties
+  '[ 'PropertyKey "max_use_ctor_actions" 'TInteger,
+     'PropertyKey "features" 'TString]
+properties = emptyProperties
+  & defineStringProperty #features
+    "Feature set used by Wingman" ""
+  & defineIntegerProperty #max_use_ctor_actions
+    "Maximum number of `Use constructor <x>` code actions that can appear" 5
+
+
+-- | Get the the plugin config
+getTacticConfig :: MonadLsp Plugin.Config m => PluginId -> m Config
+getTacticConfig pId =
+  Config
+    <$> (parseFeatureSet <$> usePropertyLsp #features pId properties)
+    <*> usePropertyLsp #max_use_ctor_actions pId properties
 
 ------------------------------------------------------------------------------
 -- | Get the current feature set from the plugin config.
-getFeatureSet :: MonadLsp Plugin.Config m => ShakeExtras -> m FeatureSet
+getFeatureSet :: MonadLsp Plugin.Config m => PluginId -> m FeatureSet
 getFeatureSet  = fmap cfg_feature_set . getTacticConfig
 
 
@@ -356,4 +364,3 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
 showLspMessage = sendNotification SWindowShowMessage
-
