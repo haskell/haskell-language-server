@@ -4163,7 +4163,7 @@ outlineTests = testGroup
     let source = T.unlines ["{-# language TypeFamilies #-}", "type family A"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "A" "type family" SkClass (R 1 0 1 13)]
+    liftIO $ symbols @?= Left [docSymbolD "A" "type family" SkFunction (R 1 0 1 13)]
   , testSessionWait "type family instance " $ do
     let source = T.unlines
           [ "{-# language TypeFamilies #-}"
@@ -4173,14 +4173,14 @@ outlineTests = testGroup
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Left
-      [ docSymbolD "A a"   "type family" SkClass     (R 1 0 1 15)
+      [ docSymbolD "A a"   "type family" SkFunction     (R 1 0 1 15)
       , docSymbol "A ()" SkInterface (R 2 0 2 23)
       ]
   , testSessionWait "data family" $ do
     let source = T.unlines ["{-# language TypeFamilies #-}", "data family A"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "A" "data family" SkClass (R 1 0 1 11)]
+    liftIO $ symbols @?= Left [docSymbolD "A" "data family" SkFunction (R 1 0 1 11)]
   , testSessionWait "data family instance " $ do
     let source = T.unlines
           [ "{-# language TypeFamilies #-}"
@@ -4190,7 +4190,7 @@ outlineTests = testGroup
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Left
-      [ docSymbolD "A a"   "data family" SkClass     (R 1 0 1 11)
+      [ docSymbolD "A a"   "data family" SkFunction     (R 1 0 1 11)
       , docSymbol "A ()" SkInterface (R 2 0 2 25)
       ]
   , testSessionWait "constant" $ do

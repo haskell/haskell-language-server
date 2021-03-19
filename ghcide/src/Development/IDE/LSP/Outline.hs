@@ -69,7 +69,7 @@ documentSymbolForDecl (L (RealSrcSpan l) (TyClD _ FamDecl { tcdFam = FamilyDecl 
                        t  -> " " <> t
                      )
     , _detail = Just $ pprText fdInfo
-    , _kind   = SkClass
+    , _kind   = SkFunction
     }
 documentSymbolForDecl (L (RealSrcSpan l) (TyClD _ ClassDecl { tcdLName = L _ name, tcdSigs, tcdTyVars }))
   = Just (defDocumentSymbol l :: DocumentSymbol)
