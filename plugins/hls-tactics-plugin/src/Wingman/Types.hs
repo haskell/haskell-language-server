@@ -15,15 +15,13 @@ module Wingman.Types
   ) where
 
 import           ConLike (ConLike)
-import           Control.Lens hiding (Context, (.=))
+import           Control.Lens hiding (Context)
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.Aeson
 import           Data.Coerce
 import           Data.Function
 import           Data.Generics.Product (field)
 import           Data.List.NonEmpty (NonEmpty (..))
-import           Data.Maybe (fromMaybe)
 import           Data.Semigroup
 import           Data.Set (Set)
 import           Data.Text (Text)
@@ -81,25 +79,6 @@ data Config = Config
   { cfg_feature_set          :: FeatureSet
   , cfg_max_use_ctor_actions :: Int
   }
-
-emptyConfig :: Config
-emptyConfig = Config defaultFeatures 5
-
-
-instance ToJSON Config where
-  toJSON Config{..} = object
-    [ "features" .= prettyFeatureSet cfg_feature_set
-    , "max_use_ctor_actions" .= cfg_max_use_ctor_actions
-    ]
-
-instance FromJSON Config where
-  parseJSON = withObject "Config" $ \obj -> do
-    cfg_feature_set          <-
-      parseFeatureSet . fromMaybe "" <$> obj .:? "features"
-    cfg_max_use_ctor_actions <-
-      fromMaybe 5 <$> obj .:? "max_use_ctor_actions"
-    pure $ Config{..}
-
 
 ------------------------------------------------------------------------------
 -- | A wrapper around 'Type' which supports equality and ordering.

@@ -11,16 +11,18 @@ type Arguments = Arguments' IdeCmd
 data IdeCmd = Typecheck [FilePath] | DbCmd Options Command | LSP
 
 data Arguments' a = Arguments
-    {argLSP                :: Bool
-    ,argsCwd               :: Maybe FilePath
-    ,argsVersion           :: Bool
-    ,argsShakeProfiling    :: Maybe FilePath
-    ,argsOTMemoryProfiling :: Bool
-    ,argsTesting           :: Bool
-    ,argsDisableKick       :: Bool
-    ,argsThreads           :: Int
-    ,argsVerbose           :: Bool
-    ,argFilesOrCmd         :: a
+    {argLSP                    :: Bool
+    ,argsCwd                   :: Maybe FilePath
+    ,argsVersion               :: Bool
+    ,argsVSCodeExtensionSchema :: Bool
+    ,argsDefaultConfig         :: Bool
+    ,argsShakeProfiling        :: Maybe FilePath
+    ,argsOTMemoryProfiling     :: Bool
+    ,argsTesting               :: Bool
+    ,argsDisableKick           :: Bool
+    ,argsThreads               :: Int
+    ,argsVerbose               :: Bool
+    ,argFilesOrCmd             :: a
     }
 
 getArguments :: IO Arguments
@@ -35,6 +37,8 @@ arguments = Arguments
       <$> switch (long "lsp" <> help "Start talking to an LSP client")
       <*> optional (strOption $ long "cwd" <> metavar "DIR" <> help "Change to this directory")
       <*> switch (long "version" <> help "Show ghcide and GHC versions")
+      <*> switch (long "vscode-extension-schema" <> help "Print generic config schema for plugins (used in the package.json of haskell vscode extension)")
+      <*> switch (long "generate-default-config" <> help "Print config supported by the server with default values")
       <*> optional (strOption $ long "shake-profiling" <> metavar "DIR" <> help "Dump profiling reports to this directory")
       <*> switch (long "ot-memory-profiling" <> help "Record OpenTelemetry info to the eventlog. Needs the -l RTS flag to have an effect")
       <*> switch (long "test" <> help "Enable additional lsp messages used by the testsuite")

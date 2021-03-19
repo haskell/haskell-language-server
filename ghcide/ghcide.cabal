@@ -284,7 +284,8 @@ executable ghcide
         optparse-applicative,
         shake,
         text,
-        unordered-containers
+        unordered-containers,
+        aeson-pretty
     other-modules:
         Arguments
         Paths_ghcide
