@@ -207,7 +207,7 @@ usePropertyEither ::
   Properties r ->
   A.Object ->
   Either String (ToHsType t)
-usePropertyEither kn p = parseProperty kn (find k p)
+usePropertyEither kn p = parseProperty kn (find kn p)
 
 -- | Like 'usePropertyEither' but returns 'defaultValue' on parse error
 useProperty ::
