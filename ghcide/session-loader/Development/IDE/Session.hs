@@ -83,6 +83,7 @@ import           Packages
 
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
+import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           HIE.Bios.Cradle                      (yamlConfig)
 import           HieDb.Create
@@ -247,10 +248,10 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
           modifyVarIO' knownTargetsVar $ traverseHashed $ \known -> do
-            let known' = HM.unionWith (<>) known $ HM.fromList knownTargets
+            let known' = HM.unionWith (<>) known $ HM.fromList $ map (second Set.fromList) knownTargets
             when (known /= known') $
                 logDebug logger $ "Known files updated: " <>
-                    T.pack(show $ (HM.map . map) fromNormalizedFilePath known')
+                    T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath known')
             pure known'
 
     -- Create a new HscEnv from a hieYaml root and a set of options
