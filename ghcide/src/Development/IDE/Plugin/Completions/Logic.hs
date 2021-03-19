@@ -145,7 +145,7 @@ occNameToComKind ty oc
   | isTcOcc   oc = case ty of
                      Just t
                        | "Constraint" `T.isSuffixOf` t
-                       -> CiClass
+                       -> CiInterface
                      _ -> CiStruct
   | isDataOcc oc = CiConstructor
   | otherwise    = CiVariable
@@ -406,7 +406,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
-                mkComp tcdLName CiClass Nothing :
+                mkComp tcdLName CiInterface Nothing :
                 [ mkComp id CiFunction (Just $ ppr typ)
                 | L _ (TypeSig _ ids typ) <- tcdSigs
                 , id <- ids]
@@ -428,7 +428,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         ]
 
     mkComp n ctyp ty =
-        CI ctyp pn (Right thisModName) ty pn Nothing doc (ctyp `elem` [CiStruct, CiClass]) Nothing
+        CI ctyp pn (Right thisModName) ty pn Nothing doc (ctyp `elem` [CiStruct, CiInterface]) Nothing
       where
         pn = ppr n
         doc = SpanDocText (getDocumentation [pm] n) (SpanDocUris Nothing Nothing)
