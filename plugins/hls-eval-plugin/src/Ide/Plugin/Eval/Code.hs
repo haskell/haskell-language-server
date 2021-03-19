@@ -91,6 +91,7 @@ evalExtensions =
     , FlexibleInstances
     , IncoherentInstances
     , TupleSections
+    , ExtendedDefaultRules
     ]
 
 -- |GHC declarations required for expression evaluation
