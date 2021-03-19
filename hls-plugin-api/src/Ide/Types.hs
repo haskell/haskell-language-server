@@ -194,39 +194,6 @@ instance PluginMethod TextDocumentRangeFormatting where
 
 -- ---------------------------------------------------------------------
 
--- | Notifications that can be handled by plugins.
--- 'ExtraParams' captures any extra data the IDE passes to the handlers for this method
-class HasTracing (MessageParams m) => PluginNotification m where
-
-  -- | Parse the configuration to check if this plugin is enabled
-  pluginEnabledNotification :: SMethod m -> PluginId -> Config -> Bool
-
-instance PluginNotification TextDocumentDidOpen where
-    pluginEnabledNotification _ _ _ = True
-
-instance PluginNotification TextDocumentDidChange where
-    pluginEnabledNotification _ _ _ = True
-
-instance PluginNotification TextDocumentDidSave where
-    pluginEnabledNotification _ _ _ = True
-
-instance PluginNotification TextDocumentDidClose where
-    pluginEnabledNotification _ _ _ = True
-
-instance PluginNotification WorkspaceDidChangeWatchedFiles where
-    pluginEnabledNotification _ _ _ = True
-
-instance PluginNotification WorkspaceDidChangeWorkspaceFolders where
-    pluginEnabledNotification _ _ _ = True
-
-instance PluginNotification WorkspaceDidChangeConfiguration where
-    pluginEnabledNotification _ _ _ = True
-
-instance PluginNotification Initialized where
-    pluginEnabledNotification _ _ _ = True
-
--- ---------------------------------------------------------------------
-
 -- | Methods which have a PluginMethod instance
 data IdeMethod (m :: Method FromClient Request) = PluginMethod m => IdeMethod (SMethod m)
 instance GEq IdeMethod where
@@ -235,7 +202,7 @@ instance GCompare IdeMethod where
   gcompare (IdeMethod a) (IdeMethod b) = gcompare a b
 
 -- | Methods which have a PluginMethod instance
-data IdeNotification (m :: Method FromClient Notification) = PluginNotification m => IdeNotification (SMethod m)
+data IdeNotification (m :: Method FromClient Notification) = HasTracing (MessageParams m) => IdeNotification (SMethod m)
 instance GEq IdeNotification where
   geq (IdeNotification a) (IdeNotification b) = geq a b
 instance GCompare IdeNotification where
@@ -284,7 +251,7 @@ mkPluginHandler m f = PluginHandlers $ DMap.singleton (IdeMethod m) (PluginHandl
 
 -- | Make a handler for plugins with no extra data
 mkPluginNotificationHandler
-  :: (PluginNotification m)
+  :: HasTracing (MessageParams m)
   => SClientMethod (m :: Method FromClient Notification)
   -> PluginNotificationMethodHandler ideState m
   -> PluginNotificationHandlers ideState

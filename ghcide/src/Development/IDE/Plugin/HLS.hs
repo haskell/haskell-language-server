@@ -173,7 +173,7 @@ extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
       (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
       pure $ notificationHandler m $ \ide params -> do
         config <- fromMaybe defaultConfig <$> Ide.PluginUtils.getClientConfig
-        let fs = filter (\(pid,_) -> pluginEnabledNotification m pid config) fs'
+        let fs = filter (\(pid,_) -> plcGlobalOn $ configForPlugin config pid) fs'
         case nonEmpty fs of
           Nothing -> do
               liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins no enabled plugins"
