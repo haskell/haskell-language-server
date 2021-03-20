@@ -41,7 +41,6 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.HoverDefinition
-import           Development.IDE.LSP.Notifications
 import           Development.IDE.Types.Logger
 
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
@@ -100,7 +99,6 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
     let ideHandlers = mconcat
           [ setIdeHandlers
           , userHandlers
-          , setHandlersNotifications -- absolutely critical, join them with user notifications
           ]
 
     -- Send everything over a channel, since you need to wait until after initialise before

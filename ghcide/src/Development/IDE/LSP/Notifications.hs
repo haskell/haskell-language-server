@@ -7,7 +7,8 @@
 {-# LANGUAGE RankNTypes            #-}
 
 module Development.IDE.LSP.Notifications
-    ( setHandlersNotifications
+    ( whenUriFile
+    , descriptor
     ) where
 
 import qualified Language.LSP.Server                   as LSP
@@ -37,15 +38,15 @@ import           Development.IDE.Core.FileStore        (resetFileStore,
                                                         typecheckParents)
 import           Development.IDE.Core.OfInterest
 import           Ide.Plugin.Config                     (CheckParents (CheckOnClose))
-
+import           Ide.Types
 
 whenUriFile :: Uri -> (NormalizedFilePath -> IO ()) -> IO ()
 whenUriFile uri act = whenJust (LSP.uriToFilePath uri) $ act . toNormalizedFilePath'
 
-setHandlersNotifications :: LSP.Handlers (ServerM c)
-setHandlersNotifications = mconcat
-  [ notificationHandler LSP.STextDocumentDidOpen $
-      \ide (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
+descriptor :: PluginId -> PluginDescriptor IdeState
+descriptor plId = (defaultPluginDescriptor plId) { pluginNotificationHandlers = mconcat
+  [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $
+      \ide _ (DidOpenTextDocumentParams TextDocumentItem{_uri,_version}) -> liftIO $ do
       updatePositionMapping ide (VersionedTextDocumentIdentifier _uri (Just _version)) (List [])
       whenUriFile _uri $ \file -> do
           -- We don't know if the file actually exists, or if the contents match those on disk
@@ -54,23 +55,23 @@ setHandlersNotifications = mconcat
           setFileModified ide False file
           logDebug (ideLogger ide) $ "Opened text document: " <> getUri _uri
 
-  , notificationHandler LSP.STextDocumentDidChange $
-      \ide (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
+  , mkPluginNotificationHandler LSP.STextDocumentDidChange $
+      \ide _ (DidChangeTextDocumentParams identifier@VersionedTextDocumentIdentifier{_uri} changes) -> liftIO $ do
         updatePositionMapping ide identifier changes
         whenUriFile _uri $ \file -> do
           modifyFilesOfInterest ide (M.insert file Modified{firstOpen=False})
           setFileModified ide False file
         logDebug (ideLogger ide) $ "Modified text document: " <> getUri _uri
 
-  , notificationHandler LSP.STextDocumentDidSave $
-      \ide (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
+  , mkPluginNotificationHandler LSP.STextDocumentDidSave $
+      \ide _ (DidSaveTextDocumentParams TextDocumentIdentifier{_uri} _) -> liftIO $ do
         whenUriFile _uri $ \file -> do
             modifyFilesOfInterest ide (M.insert file OnDisk)
             setFileModified ide True file
         logDebug (ideLogger ide) $ "Saved text document: " <> getUri _uri
 
-  , notificationHandler LSP.STextDocumentDidClose $
-        \ide (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
+  , mkPluginNotificationHandler LSP.STextDocumentDidClose $
+        \ide _ (DidCloseTextDocumentParams TextDocumentIdentifier{_uri}) -> liftIO $ do
           whenUriFile _uri $ \file -> do
               modifyFilesOfInterest ide (M.delete file)
               -- Refresh all the files that depended on this
@@ -78,8 +79,8 @@ setHandlersNotifications = mconcat
               when (checkParents >= CheckOnClose) $ typecheckParents ide file
               logDebug (ideLogger ide) $ "Closed text document: " <> getUri _uri
 
-  , notificationHandler LSP.SWorkspaceDidChangeWatchedFiles $
-      \ide (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do
+  , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWatchedFiles $
+      \ide _ (DidChangeWatchedFilesParams (List fileEvents)) -> liftIO $ do
         -- See Note [File existence cache and LSP file watchers] which explains why we get these notifications and
         -- what we do with them
         let msg = Text.pack $ show fileEvents
@@ -88,22 +89,22 @@ setHandlersNotifications = mconcat
         resetFileStore ide fileEvents
         setSomethingModified ide
 
-  , notificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
-      \ide (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
+  , mkPluginNotificationHandler LSP.SWorkspaceDidChangeWorkspaceFolders $
+      \ide _ (DidChangeWorkspaceFoldersParams events) -> liftIO $ do
         let add       = S.union
             substract = flip S.difference
         modifyWorkspaceFolders ide
           $ add       (foldMap (S.singleton . parseWorkspaceFolder) (_added   events))
           . substract (foldMap (S.singleton . parseWorkspaceFolder) (_removed events))
 
-  , notificationHandler LSP.SWorkspaceDidChangeConfiguration $
-      \ide (DidChangeConfigurationParams cfg) -> liftIO $ do
+  , mkPluginNotificationHandler LSP.SWorkspaceDidChangeConfiguration $
+      \ide _ (DidChangeConfigurationParams cfg) -> liftIO $ do
         let msg = Text.pack $ show cfg
         logDebug (ideLogger ide) $ "Configuration changed: " <> msg
         modifyClientSettings ide (const $ Just cfg)
         setSomethingModified ide
 
-  , notificationHandler LSP.SInitialized $ \ide _ -> do
+  , mkPluginNotificationHandler LSP.SInitialized $ \ide _ _ -> do
       clientCapabilities <- LSP.getClientCapabilities
       let watchSupported = case () of
             _ | LSP.ClientCapabilities{_workspace} <- clientCapabilities
@@ -138,3 +139,4 @@ setHandlersNotifications = mconcat
         void $ LSP.sendRequest SClientRegisterCapability regParams (const $ pure ()) -- TODO handle response
       else liftIO $ logDebug (ideLogger ide) "Warning: Client does not support watched files. Falling back to OS polling"
   ]
+    }
