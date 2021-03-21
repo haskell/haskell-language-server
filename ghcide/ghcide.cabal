@@ -262,7 +262,7 @@ executable ghcide
                 -- disable idle GC
                 -- increase nursery size
                 -- Enable collection of heap statistics
-                "-with-rtsopts="-I0 -A128M -T"
+                "-with-rtsopts=-I0 -A128M -T"
     main-is: Main.hs
     build-depends:
         hiedb,
