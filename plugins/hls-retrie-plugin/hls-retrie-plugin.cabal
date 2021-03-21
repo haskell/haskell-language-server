@@ -23,7 +23,7 @@ library
                ,    extra
                ,    lsp
                ,    lsp-types
-               ,    hls-plugin-api       ^>= 1.0
+               ,    hls-plugin-api       >= 1.0 && < 1.2
                ,    ghc
                ,    ghcide               ^>= 1.1
                ,    hashable

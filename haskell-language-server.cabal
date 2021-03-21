@@ -60,7 +60,7 @@ library
     , lsp
     , hie-bios
     , hiedb
-    , hls-plugin-api        ^>= 1.0.0.0
+    , hls-plugin-api        >= 1.0 && < 1.2
     , hslogger
     , optparse-applicative
     , optparse-simple
@@ -381,7 +381,7 @@ common hls-test-utils
     , data-default
     , lsp
     , hie-bios
-    , hls-plugin-api        ^>= 1.0.0.0
+    , hls-plugin-api        >= 1.0 && < 1.2
     , hslogger
     , hspec
     , hspec-core

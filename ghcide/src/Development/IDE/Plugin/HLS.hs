@@ -1,5 +1,7 @@
-{-# LANGUAGE GADTs     #-}
-{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds         #-}
 
 module Development.IDE.Plugin.HLS
     (
@@ -8,6 +10,7 @@ module Development.IDE.Plugin.HLS
 
 import           Control.Exception            (SomeException)
 import           Control.Monad
+import           Control.Monad.IO.Class
 import qualified Data.Aeson                   as J
 import           Data.Bifunctor
 import           Data.Dependent.Map           (DMap)
@@ -24,6 +27,7 @@ import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.Server
 import           Development.IDE.Plugin
+import           Development.IDE.Types.Logger
 import           Development.Shake            (Rules)
 import           Ide.Plugin.Config
 import           Ide.PluginUtils              (getClientConfig)
@@ -44,7 +48,8 @@ asGhcIdePlugin :: Config -> IdePlugins IdeState -> Plugin Config
 asGhcIdePlugin defaultConfig mp =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
-    mkPlugin (extensiblePlugins defaultConfig)  HLS.pluginHandlers
+    mkPlugin (extensiblePlugins defaultConfig) HLS.pluginHandlers <>
+    mkPlugin (extensibleNotificationPlugins defaultConfig) HLS.pluginNotificationHandlers
     where
         ls = Map.toList (ipMap mp)
 
@@ -154,6 +159,31 @@ extensiblePlugins defaultConfig xs = Plugin mempty handlers
               Just xs -> do
                 caps <- LSP.getClientCapabilities
                 pure $ Right $ combineResponses m config caps params xs
+-- ---------------------------------------------------------------------
+
+extensibleNotificationPlugins :: Config -> [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
+extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
+  where
+    IdeNotificationHandlers handlers' = foldMap bakePluginId xs
+    bakePluginId :: (PluginId, PluginNotificationHandlers IdeState) -> IdeNotificationHandlers
+    bakePluginId (pid,PluginNotificationHandlers hs) = IdeNotificationHandlers $ DMap.map
+      (\(PluginNotificationHandler f) -> IdeNotificationHandler [(pid,f pid)])
+      hs
+    handlers = mconcat $ do
+      (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
+      pure $ notificationHandler m $ \ide params -> do
+        config <- fromMaybe defaultConfig <$> Ide.PluginUtils.getClientConfig
+        let fs = filter (\(pid,_) -> plcGlobalOn $ configForPlugin config pid) fs'
+        case nonEmpty fs of
+          Nothing -> do
+              liftIO $ logInfo (ideLogger ide) "extensibleNotificationPlugins no enabled plugins"
+              pure ()
+          Just fs -> do
+            -- We run the notifications in order, so the core ghcide provider
+            -- (which restarts the shake process) hopefully comes last
+              mapM_ (\(pid,f) -> otTracedProvider pid (fromString $ show m) $ f ide params) fs
+
+-- ---------------------------------------------------------------------
 
 runConcurrently
   :: MonadUnliftIO m
@@ -175,12 +205,25 @@ combineErrors xs  = ResponseError InternalError (T.pack (show xs)) Nothing
 newtype IdeHandler (m :: J.Method FromClient Request)
   = IdeHandler [(PluginId,IdeState -> MessageParams m -> LSP.LspM Config (NonEmpty (Either ResponseError (ResponseResult m))))]
 
+-- | Combine the 'PluginHandler' for all plugins
+newtype IdeNotificationHandler (m :: J.Method FromClient Notification)
+  = IdeNotificationHandler [(PluginId, IdeState -> MessageParams m -> LSP.LspM Config ())]
+-- type NotificationHandler (m :: Method FromClient Notification) = MessageParams m -> IO ()`
+
 -- | Combine the 'PluginHandlers' for all plugins
-newtype IdeHandlers = IdeHandlers (DMap IdeMethod IdeHandler)
+newtype IdeHandlers             = IdeHandlers             (DMap IdeMethod       IdeHandler)
+newtype IdeNotificationHandlers = IdeNotificationHandlers (DMap IdeNotification IdeNotificationHandler)
 
 instance Semigroup IdeHandlers where
   (IdeHandlers a) <> (IdeHandlers b) = IdeHandlers $ DMap.unionWithKey go a b
     where
-      go _ (IdeHandler a) (IdeHandler b) = IdeHandler (a ++ b)
+      go _ (IdeHandler a) (IdeHandler b) = IdeHandler (a <> b)
 instance Monoid IdeHandlers where
   mempty = IdeHandlers mempty
+
+instance Semigroup IdeNotificationHandlers where
+  (IdeNotificationHandlers a) <> (IdeNotificationHandlers b) = IdeNotificationHandlers $ DMap.unionWithKey go a b
+    where
+      go _ (IdeNotificationHandler a) (IdeNotificationHandler b) = IdeNotificationHandler (a <> b)
+instance Monoid IdeNotificationHandlers where
+  mempty = IdeNotificationHandlers mempty

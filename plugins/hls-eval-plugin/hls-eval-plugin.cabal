@@ -53,7 +53,7 @@ library
     , hashable
     , lsp
     , lsp-types
-    , hls-plugin-api        ^>= 1.0.0.0
+    , hls-plugin-api        >= 1.0 && < 1.2
     , lens
     , megaparsec            >=9.0
     , mtl
