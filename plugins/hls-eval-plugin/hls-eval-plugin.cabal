@@ -1,19 +1,29 @@
-cabal-version:      2.2
+cabal-version:      2.4
 name:               hls-eval-plugin
 version:            1.0.0.0
 synopsis:           Eval plugin for Haskell Language Server
-description:        Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
 category:           Development
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
 license:            Apache-2.0
 license-file:       LICENSE
-author:             https://github.com/haskell/haskell-language-server/contributors
-maintainer:         https://github.com/haskell/haskell-language-server/contributors
+author:
+  https://github.com/haskell/haskell-language-server/contributors
+
+maintainer:
+  https://github.com/haskell/haskell-language-server/contributors
 
 build-type:         Simple
 extra-source-files:
   LICENSE
   README.md
+  test/testdata/*.yaml
+  test/testdata/*.hs
+  test/testdata/*.expected
+  test/testdata/*.lhs
+  test/testdata/*.cabal
 
 flag pedantic
   description: Enable -Werror
@@ -25,15 +35,17 @@ source-repository head
   location: https://github.com/haskell/haskell-language-server
 
 library
-  exposed-modules:  Ide.Plugin.Eval
-  hs-source-dirs:   src
+  exposed-modules:
+    Ide.Plugin.Eval
+    Ide.Plugin.Eval.Types
+
+  hs-source-dirs:     src
   other-modules:
     Ide.Plugin.Eval.Code
     Ide.Plugin.Eval.CodeLens
     Ide.Plugin.Eval.GHC
     Ide.Plugin.Eval.Parse.Comments
     Ide.Plugin.Eval.Parse.Option
-    Ide.Plugin.Eval.Types
     Ide.Plugin.Eval.Util
 
   build-depends:
@@ -49,12 +61,12 @@ library
     , ghc
     , ghc-boot-th
     , ghc-paths
-    , ghcide                ^>= 1.1.0.0
+    , ghcide                ^>=1.1.0.0
     , hashable
+    , hls-plugin-api        >=1.0     && <1.2
+    , lens
     , lsp
     , lsp-types
-    , hls-plugin-api        >= 1.0 && < 1.2
-    , lens
     , megaparsec            >=9.0
     , mtl
     , parser-combinators
@@ -66,13 +78,50 @@ library
     , text
     , time
     , transformers
-    , unordered-containers
     , unliftio
+    , unordered-containers
 
-  ghc-options:      -Wall -Wno-name-shadowing -Wno-unticked-promoted-constructors
+  ghc-options:
+    -Wall -Wno-name-shadowing -Wno-unticked-promoted-constructors
 
   if flag(pedantic)
     ghc-options: -Werror
 
+  default-language:   Haskell2010
+  default-extensions:
+    DataKinds
+    TypeOperators
+
+executable test-server
   default-language: Haskell2010
-  default-extensions: DataKinds, TypeOperators
+  build-depends:
+    , base
+    , data-default
+    , ghcide
+    , hls-eval-plugin
+    , hls-plugin-api
+
+  main-is:          Server.hs
+  hs-source-dirs:   test
+  ghc-options:      -threaded
+
+test-suite tests
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  build-tool-depends: hls-eval-plugin:test-server -any
+  hs-source-dirs:     test
+  main-is:            Main.hs
+  ghc-options: -Wunused-packages
+
+  build-depends:
+    , aeson
+    , base
+    , directory
+    , extra
+    , filepath
+    , hls-eval-plugin
+    , hls-test-utils
+    , lens
+    , lsp-test
+    , lsp-types
+    , text

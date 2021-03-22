@@ -7,19 +7,12 @@ module Class
   )
 where
 
-import           Control.Applicative.Combinators
-import           Control.Lens                    hiding ((<.>))
-import           Control.Monad.IO.Class          (MonadIO (liftIO))
-import qualified Data.ByteString.Lazy            as BS
-import qualified Data.Text.Encoding              as T
-import           Language.LSP.Test
-import           Language.LSP.Types              hiding (_command, _title)
-import qualified Language.LSP.Types.Lens         as J
+import           Control.Lens            hiding ((<.>))
+import qualified Data.ByteString.Lazy    as BS
+import qualified Data.Text.Encoding      as T
+import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.Golden
-import           Test.Tasty.HUnit
+import           Test.Hls
 
 tests :: TestTree
 tests = testGroup
@@ -65,18 +58,15 @@ classPath = "test" </> "testdata" </> "class"
 
 glodenTest :: String -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 glodenTest name fp deco execute
-  = goldenVsStringDiff name goldenGitDiff (classPath </> fpWithDeco <.> "expected" <.> "hs")
+  = goldenGitDiff name (classPath </> fpWithDeco <.> "expected" <.> "hs")
     $ runSession hlsCommand fullCaps classPath
     $ do
       doc <- openDoc (fp <.> "hs") "haskell"
       _ <- waitForDiagnosticsFromSource doc "typecheck"
       actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
       execute actions
-      BS.fromStrict . T.encodeUtf8 <$> (skipManyTill anyMessage $ getDocumentEdit doc)
+      BS.fromStrict . T.encodeUtf8 <$> skipManyTill anyMessage (getDocumentEdit doc)
   where
     fpWithDeco
       | deco == "" = fp
       | otherwise  = fp <.> deco
-
-goldenGitDiff :: FilePath -> FilePath -> [String]
-goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]

@@ -141,3 +141,10 @@ jobs:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         run: cabal test hls-brittany-plugin || cabal test hls-brittany-plugin --test-options="-j1"
+
+      - name: Test eval plugin
+        if: ${{ matrix.test }}
+        env:
+          HLS_TEST_EXE: hls
+          HLS_WRAPPER_TEST_EXE: hls-wrapper
+        run: cabal test hls-eval-plugin || cabal test hls-eval-plugin --test-options="-j1"
