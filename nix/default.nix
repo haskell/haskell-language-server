@@ -29,6 +29,7 @@ let
             hie-compat = gitignoreSource ../hie-compat;
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
             hls-brittany-plugin = gitignoreSource ../plugins/hls-brittany-plugin;
+            hls-stylish-haskell-plugin = gitignoreSource ../plugins/hls-stylish-haskell-plugin;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
             hls-haddock-comments-plugin = gitignoreSource ../plugins/hls-haddock-comments-plugin;
             hls-eval-plugin = gitignoreSource ../plugins/hls-eval-plugin;
