@@ -141,3 +141,10 @@ jobs:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
         run: cabal test hls-brittany-plugin || cabal test hls-brittany-plugin --test-options="-j1"
+
+      - name: Test stylish-haskell plugin
+        if: ${{ matrix.test }}
+        env:
+          HLS_TEST_EXE: hls
+          HLS_WRAPPER_TEST_EXE: hls-wrapper
+        run: cabal test hls-stylish-haskell-plugin || cabal test hls-stylish-haskell-plugin --test-options="-j1"
