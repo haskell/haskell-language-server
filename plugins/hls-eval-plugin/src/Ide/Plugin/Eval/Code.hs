@@ -102,11 +102,11 @@ evalSetup = do
 myExecStmt :: String -> ExecOptions -> Ghc (Either String (Maybe String))
 myExecStmt stmt opts = do
     (temp, purge) <- liftIO newTempFile
-    evalPrint <- head <$> runDecls ("evalPrint x = P.writeFile \"" <> temp <> "\" (P.show x)")
+    evalPrint <- head <$> runDecls ("evalPrint x = P.writeFile "<> show temp <> " (P.show x)")
     modifySession $ \hsc -> hsc {hsc_IC = setInteractivePrintName (hsc_IC hsc) evalPrint}
     result <- execStmt stmt opts >>= \case
               ExecComplete (Left err) _ -> pure $ Left $ show err
-              ExecComplete (Right _) _ -> liftIO $ Right . (\x -> if null x then Nothing else Just x ) <$> readFile' temp
+              ExecComplete (Right _) _ -> liftIO $ Right . (\x -> if null x then Nothing else Just x) <$> readFile' temp
               ExecBreak{} -> pure $ Right $ Just "breakpoints are not supported"
     liftIO purge
     pure result
