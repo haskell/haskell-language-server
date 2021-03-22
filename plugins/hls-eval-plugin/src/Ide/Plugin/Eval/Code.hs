@@ -24,7 +24,7 @@ import           Ide.Plugin.Eval.Types          (Language (Plain), Loc,
 import           InteractiveEval                (getContext, parseImportDecl,
                                                  runDecls, setContext)
 import           Language.LSP.Types.Lens        (line, start)
-import           System.IO.Extra                (newTempFile)
+import           System.IO.Extra                (newTempFile, readFile')
 
 -- | Return the ranges of the expression and result parts of the given test
 testRanges :: Test -> (Range, Range)
@@ -106,7 +106,7 @@ myExecStmt stmt opts = do
     modifySession $ \hsc -> hsc {hsc_IC = setInteractivePrintName (hsc_IC hsc) evalPrint}
     result <- execStmt stmt opts >>= \case
               ExecComplete (Left err) _ -> pure $ Left $ show err
-              ExecComplete (Right _) _ -> liftIO $ Right . (\x -> if null x then Nothing else Just x ) <$> readFile temp
+              ExecComplete (Right _) _ -> liftIO $ Right . (\x -> if null x then Nothing else Just x ) <$> readFile' temp
               ExecBreak{} -> pure $ Right $ Just "breakpoints are not supported"
     liftIO purge
     pure result

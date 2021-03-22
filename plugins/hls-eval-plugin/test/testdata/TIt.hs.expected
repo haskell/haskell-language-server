@@ -4,3 +4,8 @@ module TIt where
 -- >>> it
 -- "test"
 -- "test"
+
+-- >>> pure "test2"
+-- >>> it
+-- "test2"
+-- "test2"
