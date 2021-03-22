@@ -28,10 +28,6 @@ extra-source-files:
   test/testdata/**/*.hs
   test/testdata/**/*.expected
   test/testdata/**/*.error
-  -- eval plugin test data is used in the test suite
-  plugins/hls-eval-plugin/test/testdata/*.yaml
-  plugins/hls-eval-plugin/test/testdata/*.hs
-  plugins/hls-eval-plugin/test/testdata/*.hs.expected
 
 flag pedantic
   description: Enable -Werror
