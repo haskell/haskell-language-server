@@ -7,7 +7,7 @@ import           Control.Monad.IO.Class
 import           Data.Aeson
 import qualified Data.ByteString.Lazy    as BS
 import qualified Data.Text.Encoding      as T
-import qualified Data.Text.IO as T
+import qualified Data.Text.IO            as T
 import           Language.LSP.Test
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens as LSP
@@ -25,7 +25,6 @@ tests = testGroup "format document" [
         BS.fromStrict . T.encodeUtf8 <$> documentContents doc
     , rangeTests
     , providerTests
-    , stylishHaskellTests
     , ormoluTests
     , fourmoluTests
     ]
@@ -88,19 +87,6 @@ providerTests = testGroup "formatting provider" [
        documentContents doc >>= liftIO . (@?= formattedFloskell)
     ]
 
-stylishHaskellTests :: TestTree
-stylishHaskellTests = testGroup "stylish-haskell" [
-  goldenGitDiff "formats a document" "test/testdata/format/StylishHaskell.formatted_document.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
-      doc <- openDoc "StylishHaskell.hs" "haskell"
-      formatDoc doc (FormattingOptions 2 True Nothing Nothing Nothing)
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  , goldenGitDiff "formats a range" "test/testdata/format/StylishHaskell.formatted_range.hs" $ runSession hlsCommand fullCaps "test/testdata/format" $ do
-      sendNotification SWorkspaceDidChangeConfiguration (DidChangeConfigurationParams (formatLspConfig "stylish-haskell"))
-      doc <- openDoc "StylishHaskell.hs" "haskell"
-      formatRange doc (FormattingOptions 2 True Nothing Nothing Nothing) (Range (Position 0 0) (Position 2 21))
-      BS.fromStrict . T.encodeUtf8 <$> documentContents doc
-  ]
 
 ormoluTests :: TestTree
 ormoluTests = testGroup "ormolu"
