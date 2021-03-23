@@ -50,7 +50,6 @@ import           Data.Kind            (Constraint, Type)
 import qualified Data.Map.Strict      as Map
 import           Data.Proxy (Proxy (..))
 import qualified Data.Text            as T
-import           Data.Vector          (Vector)
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
 import           Unsafe.Coerce        (unsafeCoerce)
@@ -71,7 +70,7 @@ type family ToHsType (t :: PropertyType) where
   ToHsType 'TString = T.Text
   ToHsType 'TBoolean = Bool
   ToHsType ('TObject a) = a
-  ToHsType ('TArray a) = Vector a
+  ToHsType ('TArray a) = [a]
   ToHsType ('TEnum a) = a
 
 -- ---------------------------------------------------------------------
@@ -331,7 +330,7 @@ defineArrayProperty ::
   -- | description
   T.Text ->
   -- | default value
-  Vector a ->
+  [a] ->
   Properties r ->
   Properties ('PropertyKey s ('TArray a) : r)
 defineArrayProperty kn description defaultValue =
