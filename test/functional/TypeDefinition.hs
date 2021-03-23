@@ -1,13 +1,8 @@
 module TypeDefinition (tests) where
 
-import           Control.Monad.IO.Class
-import           Data.Tuple.Extra       (first3)
-import           Language.LSP.Test
-import           Language.LSP.Types
-import           System.FilePath        ((</>))
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import           Data.Tuple.Extra (first3)
+import           System.FilePath  ((</>))
+import           Test.Hls
 
 tests :: TestTree
 tests = testGroup "type definitions" [

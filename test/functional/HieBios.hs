@@ -4,13 +4,10 @@ module HieBios (tests) where
 import           Control.Lens            ((^.))
 import           Control.Monad.IO.Class
 import qualified Data.Text               as T
-import           Language.LSP.Test
-import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath         ((</>))
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import           Test.Hls
+
 
 tests :: TestTree
 tests = testGroup "hie-bios" [

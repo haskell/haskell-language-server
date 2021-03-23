@@ -4,60 +4,52 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Eval (
-    tests,
+module Main (
+    main,
 ) where
 
-import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Lens                    (_Just, preview, view)
-import           Control.Monad                   (when)
-import           Control.Monad.IO.Class          (MonadIO (liftIO))
-import           Data.Aeson                      (fromJSON)
-import           Data.Aeson.Types                (Result (Success))
-import           Data.List.Extra                 (nubOrdOn)
-import qualified Data.Text                       as T
-import qualified Data.Text.IO                    as T
-import           Ide.Plugin.Eval.Types           (EvalParams (..))
-import           Language.LSP.Test
-import           Language.LSP.Types
-import           Language.LSP.Types.Lens         (command, range, title)
-import           System.Directory                (doesFileExist)
-import           System.FilePath                 ((<.>), (</>))
-import           Test.Hls.Util                   (EnvSpec (GhcVer, HostOS),
-                                                  GhcVersion (GHC84, GHC86),
-                                                  OS (Windows), hlsCommand,
-                                                  knownBrokenForGhcVersions,
-                                                  knownBrokenInEnv)
-import           Test.Tasty                      (TestTree, testGroup)
-import           Test.Tasty.ExpectedFailure      (expectFailBecause)
-import           Test.Tasty.HUnit                (testCase, (@?=))
+import           Control.Lens            (_Just, preview, view)
+import           Control.Monad           (when)
+import           Data.Aeson              (fromJSON)
+import           Data.Aeson.Types        (Result (Success))
+import           Data.List.Extra         (nubOrdOn)
+import qualified Data.Text               as T
+import qualified Data.Text.IO            as T
+import           Ide.Plugin.Eval.Types   (EvalParams (..))
+import           Language.LSP.Types.Lens (command, range, title)
+import           System.Directory        (doesFileExist)
+import           System.FilePath         ((<.>), (</>))
+import           Test.Hls
+
+main :: IO ()
+main = defaultTestRunner tests
 
 tests :: TestTree
 tests =
     testGroup
         "eval"
         [ testCase "Produces Evaluate code lenses" $
-            runSession hlsCommand fullCaps evalPath $ do
+            runSession testCommand fullCaps evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Evaluate..."]
         , testCase "Produces Refresh code lenses" $
-            runSession hlsCommand fullCaps evalPath $ do
+            runSession testCommand fullCaps evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Refresh..."]
         , testCase "Code lenses have ranges" $
-            runSession hlsCommand fullCaps evalPath $ do
+            runSession testCommand fullCaps evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
         , testCase "Multi-line expressions have a multi-line range" $ do
-            runSession hlsCommand fullCaps evalPath $ do
+            runSession testCommand fullCaps evalPath $ do
                 doc <- openDoc "T3.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (view range) lenses @?= [Range (Position 3 0) (Position 5 0)]
         , testCase "Executed expressions range covers only the expression" $ do
-            runSession hlsCommand fullCaps evalPath $ do
+            runSession testCommand fullCaps evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
@@ -140,7 +132,7 @@ tests =
             "Can handle eval inside nested comment properly"
             $ goldenTest "TNested.hs"
         , testCase "Test on last line insert results correctly" $ do
-            runSession hlsCommand fullCaps evalPath $
+            runSession testCommand fullCaps evalPath $
                 liftIO $ do
                     let mdl = "TLastLine.hs"
                     -- Write the test file, to make sure that it has no final line return
@@ -168,7 +160,7 @@ goldenTest = goldenTestBy isEvalTest
  Compare results with the contents of corresponding '.expected' file (and creates it, if missing)
 -}
 goldenTestBy :: (CodeLens -> Bool) -> FilePath -> IO ()
-goldenTestBy fltr input = runSession hlsCommand fullCaps evalPath $ do
+goldenTestBy fltr input = runSession testCommand fullCaps evalPath $ do
     doc <- openDoc input "haskell"
 
     -- Execute lenses backwards, to avoid affecting their position in the source file
@@ -221,4 +213,4 @@ replaceUnicodeQuotes :: T.Text -> T.Text
 replaceUnicodeQuotes = T.replace "‘" "'" . T.replace "’" "'"
 
 evalPath :: FilePath
-evalPath = "plugins/hls-eval-plugin/test/testdata"
+evalPath = "test/testdata"

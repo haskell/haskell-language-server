@@ -1,24 +1,15 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DuplicateRecordFields #-}
- 
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+
 module ModuleName
   ( tests
   )
 where
 
-import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Monad.IO.Class          (MonadIO (liftIO))
-import qualified Data.Text.IO                    as T
-import           Language.LSP.Test       (anyMessage, documentContents,
-                                                  executeCommand, fullCaps,
-                                                  getCodeLenses, message,
-                                                  openDoc, runSession)
-import           Language.LSP.Types
-import           System.FilePath                 ((<.>), (</>))
-import           Test.Hls.Util                   (hlsCommand)
-import           Test.Tasty                      (TestTree, testGroup)
-import           Test.Tasty.HUnit                (testCase, (@?=))
+import qualified Data.Text.IO    as T
+import           System.FilePath ((<.>), (</>))
+import           Test.Hls
 
 tests :: TestTree
 tests = testGroup

@@ -53,6 +53,7 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions)
 import           Development.IDE.Types.Shake           (Key (Key))
 import           Development.Shake                     (action)
+import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           HIE.Bios.Cradle                       (findCradle)
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
                                                         Config,
@@ -116,6 +117,7 @@ stderrLogger = do
 
 defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
+    setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
     logger <- argsLogger
     hSetBuffering stderr LineBuffering
