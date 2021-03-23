@@ -7,25 +7,17 @@
 
 module Progress (tests) where
 
-import           Control.Applicative.Combinators
 import           Control.Lens                    hiding ((.=))
-import           Control.Monad.IO.Class
 import           Data.Aeson                      (Value, decode, encode, object,
                                                   toJSON, (.=))
-import           Data.Default
 import           Data.List                       (delete)
 import           Data.Maybe                      (fromJust)
 import           Data.Text                       (Text, pack)
 import           Ide.Plugin.Config
-import           Language.LSP.Test
-import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens         as L
 import           System.FilePath                 ((</>))
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure      (ignoreTestBecause)
-import           Test.Tasty.HUnit
+import           Test.Hls
 
 tests :: TestTree
 tests =
