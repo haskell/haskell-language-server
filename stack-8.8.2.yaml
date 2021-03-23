@@ -15,6 +15,7 @@ packages:
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
   - ./plugins/hls-brittany-plugin
+  - ./plugins/hls-stylish-haskell-plugin
 
 ghc-options:
   "$everything": -haddock
@@ -36,7 +37,7 @@ extra-deps:
   - ghc-lib-parser-8.10.4.20210206
   - ghc-lib-parser-ex-8.10.0.17
   - ghc-trace-events-0.1.2.1
-  - haddock-library-1.8.0
+  - haddock-library-1.10.0
   - haskell-src-exts-1.21.1
   - heapsize-0.3.0
   - hie-bios-0.7.4
