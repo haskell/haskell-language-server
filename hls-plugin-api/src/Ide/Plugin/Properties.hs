@@ -46,8 +46,9 @@ import qualified Data.Aeson           as A
 import qualified Data.Aeson.Types     as A
 import           Data.Either          (fromRight)
 import           Data.Function        ((&))
-import           Data.Kind            (Constraint)
+import           Data.Kind            (Constraint, Type)
 import qualified Data.Map.Strict      as Map
+import           Data.Proxy (Proxy (..))
 import qualified Data.Text            as T
 import           GHC.OverloadedLabels (IsLabel (..))
 import           GHC.TypeLits
@@ -59,18 +60,18 @@ data PropertyType
   | TInteger
   | TString
   | TBoolean
-  | TObject
-  | TArray
-  | TEnum
+  | TObject Type
+  | TArray Type
+  | TEnum Type
 
 type family ToHsType (t :: PropertyType) where
   ToHsType 'TNumber = Double -- in js, there are no distinct types for integers and floating-point values
   ToHsType 'TInteger = Int   -- so here we use Double for Number, Int for Integer
   ToHsType 'TString = T.Text
   ToHsType 'TBoolean = Bool
-  ToHsType 'TObject = A.Object
-  ToHsType 'TArray = A.Array
-  ToHsType 'TEnum = T.Text -- supports only text enum now
+  ToHsType ('TObject a) = a
+  ToHsType ('TArray a) = [a]
+  ToHsType ('TEnum a) = a
 
 -- ---------------------------------------------------------------------
 
@@ -100,9 +101,9 @@ data SPropertyKey (k :: PropertyKey) where
   SInteger :: SPropertyKey ('PropertyKey s 'TInteger)
   SString :: SPropertyKey ('PropertyKey s 'TString)
   SBoolean :: SPropertyKey ('PropertyKey s 'TBoolean)
-  SObject :: SPropertyKey ('PropertyKey s 'TObject)
-  SArray :: SPropertyKey ('PropertyKey s 'TArray)
-  SEnum :: SPropertyKey ('PropertyKey s 'TEnum)
+  SObject :: (A.ToJSON a, A.FromJSON a) => Proxy a -> SPropertyKey ('PropertyKey s ('TObject a))
+  SArray :: (A.ToJSON a, A.FromJSON a) => Proxy a -> SPropertyKey ('PropertyKey s ('TArray a))
+  SEnum :: (A.ToJSON a, A.FromJSON a, Eq a, Show a) => Proxy a -> SPropertyKey ('PropertyKey s ('TEnum a))
 
 -- | Existential wrapper of 'SPropertyKey', with an extra 'MetaData'
 data SomePropertyKeyWithMetaData
@@ -126,7 +127,7 @@ instance (KnownSymbol s', s ~ s') => IsLabel s (KeyNameProxy s') where
 -- ---------------------------------------------------------------------
 
 type family IsTEnum (t :: PropertyType) :: Bool where
-  IsTEnum 'TEnum = 'True
+  IsTEnum ('TEnum _) = 'True
   IsTEnum _ = 'False
 
 type family FindByKeyName (s :: Symbol) (r :: [PropertyKey]) :: PropertyType where
@@ -234,9 +235,9 @@ parseProperty kn k x = case k of
   (SInteger, _) -> parseEither
   (SString, _) -> parseEither
   (SBoolean, _) -> parseEither
-  (SObject, _) -> parseEither
-  (SArray, _) -> parseEither
-  (SEnum, EnumMetaData {..}) ->
+  (SObject _, _) -> parseEither
+  (SArray _, _) -> parseEither
+  (SEnum _, EnumMetaData {..}) ->
     A.parseEither
       ( \o -> do
           txt <- o A..: keyName
@@ -245,7 +246,7 @@ parseProperty kn k x = case k of
             else
               fail $
                 "invalid enum member: "
-                  <> T.unpack txt
+                  <> show txt
                   <> ". Expected one of "
                   <> show enumValues
       )
@@ -311,44 +312,43 @@ defineBooleanProperty kn description defaultValue =
 
 -- | Defines an object property
 defineObjectProperty ::
-  forall s r.
-  (KnownSymbol s, NotElem s r) =>
+  (KnownSymbol s, NotElem s r, A.ToJSON a, A.FromJSON a) =>
   KeyNameProxy s ->
   -- | description
   T.Text ->
   -- | default value
-  A.Object ->
+  a ->
   Properties r ->
-  Properties ('PropertyKey s 'TObject : r)
+  Properties ('PropertyKey s ('TObject a) : r)
 defineObjectProperty kn description defaultValue =
-  insert kn SObject MetaData {..}
+  insert kn (SObject Proxy) MetaData {..}
 
 -- | Defines an array property
 defineArrayProperty ::
-  (KnownSymbol s, NotElem s r) =>
+  (KnownSymbol s, NotElem s r, A.ToJSON a, A.FromJSON a) =>
   KeyNameProxy s ->
   -- | description
   T.Text ->
   -- | default value
-  A.Array ->
+  [a] ->
   Properties r ->
-  Properties ('PropertyKey s 'TArray : r)
+  Properties ('PropertyKey s ('TArray a) : r)
 defineArrayProperty kn description defaultValue =
-  insert kn SArray MetaData {..}
+  insert kn (SArray Proxy) MetaData {..}
 
 -- | Defines an enum property
 defineEnumProperty ::
-  (KnownSymbol s, NotElem s r) =>
+  (KnownSymbol s, NotElem s r, A.ToJSON a, A.FromJSON a, Eq a, Show a) =>
   KeyNameProxy s ->
   -- | description
   T.Text ->
   -- | valid enum members with each of description
-  [(T.Text, T.Text)] ->
-  T.Text ->
+  [(a, T.Text)] ->
+  a ->
   Properties r ->
-  Properties ('PropertyKey s 'TEnum : r)
+  Properties ('PropertyKey s ('TEnum a) : r)
 defineEnumProperty kn description enums defaultValue =
-  insert kn SEnum $ EnumMetaData defaultValue description (fst <$> enums) (snd <$> enums)
+  insert kn (SEnum Proxy) $ EnumMetaData defaultValue description (fst <$> enums) (snd <$> enums)
 
 -- ---------------------------------------------------------------------
 
@@ -366,11 +366,11 @@ toDefaultJSON (Properties p) = [toEntry s v | (s, v) <- Map.toList p]
         s A..= defaultValue
       (SomePropertyKeyWithMetaData SBoolean MetaData {..}) ->
         s A..= defaultValue
-      (SomePropertyKeyWithMetaData SObject MetaData {..}) ->
+      (SomePropertyKeyWithMetaData (SObject _) MetaData {..}) ->
         s A..= defaultValue
-      (SomePropertyKeyWithMetaData SArray MetaData {..}) ->
+      (SomePropertyKeyWithMetaData (SArray _) MetaData {..}) ->
         s A..= defaultValue
-      (SomePropertyKeyWithMetaData SEnum EnumMetaData {..}) ->
+      (SomePropertyKeyWithMetaData (SEnum _) EnumMetaData {..}) ->
         s A..= defaultValue
 
 -- | Converts a properties definition into kv pairs as vscode schema
@@ -408,21 +408,21 @@ toVSCodeExtensionSchema prefix (Properties p) =
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
-      (SomePropertyKeyWithMetaData SObject MetaData {..}) ->
+      (SomePropertyKeyWithMetaData (SObject _) MetaData {..}) ->
         A.object
           [ "type" A..= A.String "object",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
-      (SomePropertyKeyWithMetaData SArray MetaData {..}) ->
+      (SomePropertyKeyWithMetaData (SArray _) MetaData {..}) ->
         A.object
           [ "type" A..= A.String "array",
             "markdownDescription" A..= description,
             "default" A..= defaultValue,
             "scope" A..= A.String "resource"
           ]
-      (SomePropertyKeyWithMetaData SEnum EnumMetaData {..}) ->
+      (SomePropertyKeyWithMetaData (SEnum _) EnumMetaData {..}) ->
         A.object
           [ "type" A..= A.String "string",
             "description" A..= description,
