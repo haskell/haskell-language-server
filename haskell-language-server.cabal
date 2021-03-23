@@ -1,4 +1,4 @@
-cabal-version:      2.2
+cabal-version:      2.4
 category:           Development
 name:               haskell-language-server
 version:            1.0.0.0
@@ -19,6 +19,15 @@ extra-source-files:
   README.md
   ChangeLog.md
   include/ghc-api-version.h
+  test/testdata/**/*.project
+  test/testdata/**/*.cabal
+  test/testdata/**/*.yaml
+  -- this one is not matched by the previous glob
+  test/testdata/hlint/ignore/.hlint.yaml
+  test/testdata/**/*.h
+  test/testdata/**/*.hs
+  test/testdata/**/*.expected
+  test/testdata/**/*.error
 
 flag pedantic
   description: Enable -Werror
