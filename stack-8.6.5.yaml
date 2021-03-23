@@ -91,8 +91,6 @@ extra-deps:
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
   - resourcet-1.2.3
-  # To avoid issue #1372
-  - with-utf8-1.0.2.2
 
 configure-options:
   ghcide:

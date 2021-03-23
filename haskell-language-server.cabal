@@ -327,7 +327,6 @@ executable haskell-language-server
     , temporary
     , transformers
     , unordered-containers
-    , with-utf8
 
   include-dirs:     include
   default-language: Haskell2010
