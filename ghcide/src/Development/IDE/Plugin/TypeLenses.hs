@@ -91,7 +91,7 @@ descriptor plId =
     , pluginCustomConfig = mkCustomConfig properties
     }
 
-properties :: Properties '[ 'PropertyKey "mode" 'TEnum]
+properties :: Properties '[ 'PropertyKey "mode" ('TEnum T.Text)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
     [ ("always", "Always displays type lenses of global bindings")
