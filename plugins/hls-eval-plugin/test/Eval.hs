@@ -157,6 +157,8 @@ tests =
             ]
         , testCase "Works with NoImplicitPrelude"
             $ goldenTest "TNoImplicitPrelude.hs"
+        , testCase "Variable 'it' works"
+            $ goldenTest "TIt.hs"
         ]
 
 goldenTest :: FilePath -> IO ()

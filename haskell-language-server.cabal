@@ -255,10 +255,7 @@ common ormolu
 
 common stylishHaskell
   if flag(stylishHaskell) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.StylishHaskell
-    build-depends: stylish-haskell          ^>=0.12
-    cpp-options: -DstylishHaskell
+    build-depends: hls-stylish-haskell-plugin ^>= 1.0.0.0
 
 common brittany
   if (flag(brittany) || flag(all-formatters))
