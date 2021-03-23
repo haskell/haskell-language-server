@@ -11,19 +11,13 @@ module HaddockComments
   )
 where
 
-import           Control.Monad.IO.Class (liftIO)
-import qualified Data.ByteString.Lazy   as LBS
-import           Data.Foldable          (find)
-import           Data.Maybe             (mapMaybe)
-import           Data.Text              (Text)
-import           Data.Text.Encoding     (encodeUtf8)
-import           Language.LSP.Test
-import           Language.LSP.Types
-import           System.FilePath        ((<.>), (</>))
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.Golden
-import           Test.Tasty.HUnit
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Foldable        (find)
+import           Data.Maybe           (mapMaybe)
+import           Data.Text            (Text)
+import           Data.Text.Encoding   (encodeUtf8)
+import           System.FilePath      ((<.>), (</>))
+import           Test.Hls
 
 tests :: TestTree
 tests =
@@ -40,7 +34,7 @@ tests =
     ]
 
 goldenTest :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
-goldenTest fp (toTitle -> expectedTitle) l c = goldenVsStringDiff (fp <> " (golden)") goldenGitDiff goldenFilePath $
+goldenTest fp (toTitle -> expectedTitle) l c = goldenGitDiff (fp <> " (golden)") goldenFilePath $
   runSession hlsCommand fullCaps haddockCommentsPath $ do
     doc <- openDoc hsFilePath "haskell"
     _ <- waitForDiagnostics
@@ -75,5 +69,3 @@ caTitle _                         = Nothing
 haddockCommentsPath :: String
 haddockCommentsPath = "test" </> "testdata" </> "haddockComments"
 
-goldenGitDiff :: FilePath -> FilePath -> [String]
-goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]

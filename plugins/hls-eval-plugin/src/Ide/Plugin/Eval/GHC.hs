@@ -5,7 +5,6 @@
 
 -- |GHC API utilities
 module Ide.Plugin.Eval.GHC (
-    isExpr,
     addExtension,
     addImport,
     hasPackage,
@@ -41,33 +40,6 @@ import           StringBuffer                (stringToStringBuffer)
 >>> libdir
 "/Users/titto/.ghcup/ghc/8.8.4/lib/ghc-8.8.4"
 -}
-
-{- | Returns true if string is an expression
-
->>> isExprTst e df = return (isExpr df e)
->>> run $ isExprTst "3"
-True
-
->>> run $ isExprTst "(x+y)"
-True
-
->>> run $ isExprTst "import Data.Maybe"
-False
-
->>> run $ isExprTst "three=3"
-False
--}
-isExpr :: DynFlags -> String -> Bool
-isExpr df stmt = case parseThing Parser.parseExpression df stmt of
-    Lexer.POk _ _   -> True
-    Lexer.PFailed{} -> False
-
-parseThing :: Lexer.P thing -> DynFlags -> String -> Lexer.ParseResult thing
-parseThing parser dflags stmt = do
-    let buf = stringToStringBuffer stmt
-        loc = mkRealSrcLoc (fsLit "<interactive>") 1 1
-
-    Lexer.unP parser (Lexer.mkPState dflags buf loc)
 
 {- | True if specified package is present in DynFlags
 

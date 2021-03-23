@@ -14,8 +14,10 @@ module Development.IDE.Plugin.TypeLenses (
 
 import           Avail                               (availsToNameSet)
 import           Control.DeepSeq                     (rwhnf)
+import           Control.Monad                       (mzero)
 import           Control.Monad.Extra                 (whenMaybe)
 import           Control.Monad.IO.Class              (MonadIO (liftIO))
+import qualified Data.Aeson.Types                    as A
 import           Data.Aeson.Types                    (Value (..), toJSON)
 import qualified Data.HashMap.Strict                 as Map
 import           Data.List                           (find)
@@ -91,13 +93,13 @@ descriptor plId =
     , pluginCustomConfig = mkCustomConfig properties
     }
 
-properties :: Properties '[ 'PropertyKey "mode" 'TEnum]
+properties :: Properties '[ 'PropertyKey "mode" ('TEnum Mode)]
 properties = emptyProperties
   & defineEnumProperty #mode "Control how type lenses are shown"
-    [ ("always", "Always displays type lenses of global bindings")
-    , ("exported", "Only display type lenses of exported global bindings")
-    , ("diagnostics", "Follows error messages produced by GHC about missing signatures")
-    ] "always"
+    [ (Always, "Always displays type lenses of global bindings")
+    , (Exported, "Only display type lenses of exported global bindings")
+    , (Diagnostics, "Follows error messages produced by GHC about missing signatures")
+    ] Always
 
 codeLensProvider ::
   IdeState ->
@@ -105,7 +107,7 @@ codeLensProvider ::
   CodeLensParams ->
   LSP.LspM Config (Either ResponseError (List CodeLens))
 codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentifier uri} = do
-  mode <- readMode <$> usePropertyLsp #mode pId properties
+  mode <- usePropertyLsp #mode pId properties
   fmap (Right . List) $ case uriToFilePath' uri of
     Just (toNormalizedFilePath' -> filePath) -> liftIO $ do
       tmr <- runAction "codeLens.TypeCheck" ideState (use TypeCheck filePath)
@@ -209,6 +211,18 @@ data Mode
     Diagnostics
   deriving (Eq, Ord, Show, Read, Enum)
 
+instance A.ToJSON Mode where
+  toJSON Always = "always"
+  toJSON Exported = "exported"
+  toJSON Diagnostics = "diagnostics"
+
+instance A.FromJSON Mode where
+  parseJSON = A.withText "Mode" $ \case
+    "always"      -> pure Always
+    "exported"    -> pure Exported
+    "diagnostics" -> pure Diagnostics
+    _             -> mzero
+
 --------------------------------------------------------------------------------
 
 showDocRdrEnv :: DynFlags -> GlobalRdrEnv -> SDoc -> String
@@ -244,14 +258,6 @@ rules = do
     hsc <- use GhcSession nfp
     result <- liftIO $ gblBindingType (hscEnv <$> hsc) (tmrTypechecked <$> tmr)
     pure ([], result)
-
-readMode :: T.Text -> Mode
-readMode = \case
-  "always"      -> Always
-  "exported"    -> Exported
-  "diagnostics" -> Diagnostics
-  -- actually it never happens because of 'usePropertyLsp'
-  _             -> error "failed to parse type lenses mode"
 
 gblBindingType :: Maybe HscEnv -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
 gblBindingType (Just hsc) (Just gblEnv) = do

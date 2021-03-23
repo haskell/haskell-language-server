@@ -4,8 +4,10 @@ packages:
          ./shake-bench
          ./ghcide
          ./hls-plugin-api
+         ./hls-test-utils
          ./plugins/hls-tactics-plugin
          ./plugins/hls-brittany-plugin
+         ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin

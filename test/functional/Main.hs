@@ -7,7 +7,6 @@ import           Config
 import           Deferred
 import           Definition
 import           Diagnostic
-import           Eval
 import           Format
 import           FunctionalBadProject
 import           FunctionalCodeAction
@@ -21,19 +20,11 @@ import           Reference
 import           Rename
 import           Splice
 import           Symbol
-import           Test.Tasty
-import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.Runners           (consoleTestReporter,
-                                               listingTests)
-import           Test.Tasty.Runners.AntXML
+import           Test.Hls
 import           TypeDefinition
 
 main :: IO ()
-main =
-    -- ingredient: xml runner writes json file of test results (https://github.com/ocharles/tasty-ant-xml/blob/master/Test/Tasty/Runners/AntXML.hs)
-    --             rerunningTests allow rerun of failed tests (https://github.com/ocharles/tasty-rerun/blob/master/src/Test/Tasty/Ingredients/Rerun.hs)
-    defaultMainWithIngredients
-        [antXMLRunner, rerunningTests [listingTests, consoleTestReporter]]
+main = defaultTestRunner
         $ testGroup
             "haskell-language-server"
             [ Class.tests
@@ -43,7 +34,6 @@ main =
             , Deferred.tests
             , Definition.tests
             , Diagnostic.tests
-            , Eval.tests
             , Format.tests
             , FunctionalBadProject.tests
             , FunctionalCodeAction.tests

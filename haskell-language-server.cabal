@@ -264,10 +264,7 @@ common ormolu
 
 common stylishHaskell
   if flag(stylishHaskell) || flag(all-formatters)
-    hs-source-dirs: plugins/default/src
-    other-modules: Ide.Plugin.StylishHaskell
-    build-depends: stylish-haskell          ^>=0.12
-    cpp-options: -DstylishHaskell
+    build-depends: hls-stylish-haskell-plugin ^>= 1.0.0.0
 
 common brittany
   if (flag(brittany) || flag(all-formatters))
@@ -339,7 +336,6 @@ executable haskell-language-server
     , temporary
     , transformers
     , unordered-containers
-    , with-utf8
 
   include-dirs:     include
   default-language: Haskell2010
@@ -375,43 +371,9 @@ executable haskell-language-server-wrapper
 
   default-language: Haskell2010
 
--- This common stanza simulates a previous private lib
--- We removed it due to issues with stack when loading the project using a stack based hie.yaml
--- See https://github.com/haskell/haskell-language-server/issues/114
-common hls-test-utils
-  import:           common-deps
-  hs-source-dirs:   test/utils
-  other-modules:    Test.Hls.Util
-  build-depends:
-    , aeson
-    , blaze-markup
-    , containers
-    , data-default
-    , lsp
-    , hie-bios
-    , hls-plugin-api        >= 1.0 && < 1.2
-    , hslogger
-    , hspec
-    , hspec-core
-    , lens
-    , lsp-test              == 0.13.0.0
-    , stm
-    , tasty-expected-failure
-    , tasty-hunit
-    , temporary
-    , transformers
-    , unordered-containers
-    , yaml
-
-  ghc-options:      -Wall -Wredundant-constraints
-
-  if flag(pedantic)
-    ghc-options: -Werror
-
-  default-language: Haskell2010
 
 test-suite func-test
-  import:             common-deps, hls-test-utils
+  import:             common-deps
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
   build-tool-depends:
@@ -423,15 +385,16 @@ test-suite func-test
     , data-default
     , hspec-expectations
     , lens
-    , tasty
-    , tasty-ant-xml           >=1.1.6
-    , tasty-golden
-    , tasty-rerun
-    , megaparsec
-    , deepseq
     , ghcide
+    , hls-test-utils
+    , lsp-types
+    , aeson
+    , hls-plugin-api        >= 1.0 && < 1.2
+    , lsp-test              == 0.13.0.0
+    , containers
+    , unordered-containers
 
-  hs-source-dirs:     test/functional plugins/hls-eval-plugin/test plugins/hls-splice-plugin/src plugins/hls-eval-plugin/src
+  hs-source-dirs:     test/functional plugins/hls-splice-plugin/src
 
   main-is:            Main.hs
   other-modules:
@@ -442,7 +405,6 @@ test-suite func-test
     Deferred
     Definition
     Diagnostic
-    Eval
     Format
     FunctionalBadProject
     FunctionalCodeAction
@@ -458,7 +420,6 @@ test-suite func-test
     Splice
     HaddockComments
     Ide.Plugin.Splice.Types
-    Ide.Plugin.Eval.Types
 
   default-extensions: OverloadedStrings
   ghc-options:
@@ -468,7 +429,6 @@ test-suite func-test
     ghc-options: -Werror -Wredundant-constraints
 
 test-suite wrapper-test
-  import:             hls-test-utils
   type:               exitcode-stdio-1.0
   build-tool-depends:
     haskell-language-server:haskell-language-server-wrapper -any
@@ -478,9 +438,8 @@ test-suite wrapper-test
     , base
     , directory
     , process
-    , tasty
-    , tasty-ant-xml  >=1.1.6
-    , tasty-rerun
+    , hls-test-utils
+    , extra
 
   hs-source-dirs:     test/wrapper
   main-is:            Main.hs

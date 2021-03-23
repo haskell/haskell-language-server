@@ -52,20 +52,8 @@ test-suite tests
   hs-source-dirs: test
   main-is: Main.hs
   build-depends:
-    , aeson
     , base
     , bytestring
-    , data-default
-    , deepseq
-    , ghcide                ^>= 1.1.0.0
     , hls-brittany-plugin
-    , hspec-expectations
-    , megaparsec
-    , lens
-    , lsp-test
-    , tasty
-    , tasty-ant-xml           >=1.1.6
-    , tasty-hunit
-    , tasty-golden
-    , tasty-rerun
     , text
+    , hls-test-utils
