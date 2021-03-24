@@ -10,7 +10,6 @@ import           Format
 import           FunctionalBadProject
 import           FunctionalCodeAction
 import           FunctionalLiquid
-import           HaddockComments
 import           HieBios
 import           Highlight
 import           ModuleName
@@ -43,5 +42,4 @@ main = defaultTestRunner
             , Rename.tests
             , Symbol.tests
             , TypeDefinition.tests
-            , HaddockComments.tests
             ]
