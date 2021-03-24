@@ -15,7 +15,7 @@ homepage:           https://github.com/haskell/haskell-language-server
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
 extra-source-files:
   LICENSE
-  test/testdata/**/*.hs
+  test/testdata/*.hs
 
 library
   exposed-modules:    Ide.Plugin.HaddockComments

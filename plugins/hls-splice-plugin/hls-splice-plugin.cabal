@@ -1,4 +1,4 @@
-cabal-version:      2.2
+cabal-version:      2.4
 name:               hls-splice-plugin
 version:            1.0.0.0
 synopsis:
@@ -20,6 +20,7 @@ build-type:         Simple
 extra-source-files:
   LICENSE
   test/testdata/*.expected
+  test/testdata/*.error
   test/testdata/*.hs
   test/testdata/*.yaml
 

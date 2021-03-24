@@ -1,4 +1,4 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name:          hls-test-utils
 version:       1.0.0.0
 synopsis:      Utilities used in the tests of Haskell Language Server

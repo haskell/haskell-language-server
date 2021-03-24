@@ -18,7 +18,7 @@ category:           Development
 build-type:         Simple
 extra-source-files:
   LICENSE
-  test/testdata/**/*.hs
+  test/testdata/*.hs
 
 library
   exposed-modules:    Ide.Plugin.Class
