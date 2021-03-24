@@ -1,9 +1,11 @@
-{-# LANGUAGE DeriveFunctor               #-}
-{-# LANGUAGE DerivingStrategies          #-}
-{-# LANGUAGE GADTs                       #-}
-{-# LANGUAGE KindSignatures              #-}
-{-# LANGUAGE OverloadedStrings           #-}
-{-# LANGUAGE TupleSections               #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DerivingStrategies   #-}
+{-# LANGUAGE GADTs                #-}
+{-# LANGUAGE KindSignatures       #-}
+{-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE TupleSections        #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
 
 module Rewrite where
@@ -12,6 +14,12 @@ import Control.Monad.State.Strict
 import GHC.Exts
 import Control.Applicative
 import Data.List (find)
+import Test.QuickCheck hiding (Result)
+import Test.QuickCheck.Checkers
+import Data.Functor.Identity
+import Test.QuickCheck.Classes
+import GHC.Generics (Generic)
+
 
 data ProofState ext err s m a where
   Subgoal
@@ -50,6 +58,42 @@ data ProofState ext err s m a where
   Axiom
     :: ext
     -> ProofState ext err s m a
+
+instance CoArbitrary Term where
+  coarbitrary (Var l_c) = variant @Int 0 . coarbitrary l_c
+  coarbitrary (Hole i) = variant @Int 1 . coarbitrary i
+  coarbitrary (Lam l_c t) = variant @Int 2 . coarbitrary (l_c, t)
+  coarbitrary (Pair t t2) = variant @Int 3 . coarbitrary (t, t2)
+
+instance Arbitrary Term where
+  arbitrary
+    = let terminal = [Var <$> arbitrary, Hole <$> arbitrary]
+      in
+        sized
+          $ (\ n
+               -> case n <= 1 of
+                    True -> oneof terminal
+                    False
+                      -> oneof
+                           $ ([(Lam <$> arbitrary) <*> scale (subtract 1) arbitrary,
+                               (Pair <$> scale (flip div 2) arbitrary)
+                                 <*> scale (flip div 2) arbitrary]
+                                <> terminal))
+
+instance Show (ProofState ext err s m a) where
+  show (Subgoal a fextpexterrsma) = "Subgoal a fextpexterrsma"
+  show (Effect mpexterrsma) = "Effect mpexterrsma"
+  show (Stateful fsp_spexterrsma) = "Stateful fsp_spexterrsma"
+  show (Alt pexterrsma pexterrsma2) = "Alt pexterrsma pexterrsma2"
+  show (Interleave pexterrsma pexterrsma2) = "Interleave pexterrsma pexterrsma2"
+  show (Commit pexterrsmx pexterrsmx2 fxpexterrsma) = "Commit pexterrsmx pexterrsmx2 fxpexterrsma"
+  show Empty = "Empty"
+  show (Handle pexterrsmx ferrpexterrsmx fxpexterrsma) = "Handle pexterrsmx ferrpexterrsmx fxpexterrsma"
+  show (Throw err) = "Throw err"
+  show (Axiom ext) = "Axiom ext"
+
+instance Monoid jdg => Show (TacticT jdg ext err s m a) where
+  show (TacticT t) = show $ runStateT t mempty
 
 
 instance Functor m => Functor (ProofState ext err s m) where
@@ -129,7 +173,7 @@ applyCont k (Axiom ext)
 
 newtype TacticT jdg ext err s m a = TacticT
   { unTacticT :: StateT jdg (ProofState ext err s m) a
-  } deriving newtype (Functor, Applicative, Monad, Alternative)
+  } deriving newtype (Functor, Applicative, Monad, Alternative, MonadPlus)
 
 
 data Rule jdg ext err s m a where
@@ -231,21 +275,24 @@ kill s bind success failure throw (Stateful m) =
    in kill s' bind success failure throw t
 kill s bind success failure throw (Alt t1 t2) =
   kill s bind success (kill s bind success failure throw t2)
-    (const $ kill s bind success failure throw t2) t1
+    (\err -> kill s bind success (throw err) throw t2) t1
 kill s bind success failure throw (Interleave t1 t2) =
   kill s bind success (kill s bind success failure throw t2)
-    (const $ kill s bind success failure throw t2) t1
+    (\err -> kill s bind success (throw err) throw t2) t1
 kill s bind success failure throw (Commit t1 t2 k)
   = kill s
       (kill s bind success failure throw . k)
       success
-      (kill s (kill s bind success failure throw . k) success failure throw t2)
-      throw
+              (kill s (kill s bind success failure throw . k) success failure     throw t2)
+      (\err -> kill s (kill s bind success failure throw . k) success (throw err) throw t2)
       t1
 kill _ _ _ failure _ Empty = failure
 kill s bind success failure throw (Handle t h k)
-  = kill s (kill s bind success failure throw . k) success failure
-           (\err -> kill s (kill s bind success failure throw . k) success failure throw $ h err) t
+  = kill s
+      (kill s bind success failure throw . k)
+      success
+      failure
+      (\err -> kill s (kill s bind success failure throw . k) success failure throw $ h err) t
 kill _ _ _ _ throw (Throw err) = throw err
 kill _ _ success _ _ (Axiom ext) = success ext
 
@@ -255,7 +302,12 @@ data Result jdg err ext
   | ErrorResult err
   | Extract ext
   | NoResult
-  deriving Show
+  deriving stock (Show, Generic)
+
+instance (EqProp jdg, EqProp err, EqProp ext) => EqProp (Result jdg err ext)
+instance EqProp Term
+instance EqProp Judgement
+instance EqProp Type
 
 proof :: Monad m => s -> ProofState ext err s m jdg -> m (Result jdg err ext)
 proof s = kill s (pure . HoleResult) (pure . Extract) (pure NoResult) (pure . ErrorResult)
@@ -274,7 +326,7 @@ data Term
   | Hole Int
   | Lam String Term
   | Pair Term Term
-  deriving (Show, Eq)
+  deriving stock (Show, Eq, Generic)
 
 
 -- The type part of simply typed lambda calculus
@@ -282,7 +334,7 @@ data Type
   = TVar String
   | Type :-> Type
   | TPair Type Type
-  deriving (Show, Eq)
+  deriving stock (Show, Eq, Generic)
 
 infixr 4 :->
 
@@ -292,9 +344,128 @@ instance IsString Type where
 
 -- A judgement is just a context, along with a goal
 data Judgement = [(String, Type)] :- Type
-  deriving (Show, Eq)
+  deriving stock (Show, Eq, Generic)
+
+
+commit :: Functor m => TacticT jdg ext err s m a -> TacticT jdg ext err s m a -> TacticT jdg ext err s m a
+commit (TacticT t1) (TacticT t2) = TacticT $ StateT $ \jdg ->
+  Commit (runStateT t1 jdg) (runStateT t2 jdg) pure
+
+auto :: Functor m => TacticT Judgement Term String s m ()
+auto = do
+  commit pair assumption
+  auto
 
 
 testJdg :: Judgement
-testJdg = [("a1", "a"), ("bee", "b"), ("c", "c")] :- TPair "a" (TPair "b" "c")
+testJdg = [("a1", "a"), ("bee", "b")] :- TPair "a" (TPair "b" "c")
+
+instance Semigroup Judgement where
+  (<>) = error "no semigroup"
+
+instance Monoid Judgement where
+  mempty = [] :- TVar ""
+
+
+instance ( Arbitrary err
+         , CoArbitrary err
+         , Arbitrary ext
+         , CoArbitrary ext
+         , Arbitrary a
+         , CoArbitrary s
+         , Arbitrary s
+         , Arbitrary (m (ProofState ext err s m a))
+         , Arbitrary (m (ProofState ext err s m Int))
+         ) => Arbitrary (ProofState ext err s m a) where
+  arbitrary =
+    let terminal = [pure Empty, Throw <$> arbitrary, Axiom <$> arbitrary]
+     in sized $ \n -> case n <= 1 of
+          True  -> oneof terminal
+          False -> oneof $
+            [ Subgoal <$> arbitrary <*> scale (subtract 1) arbitrary
+            , Effect <$> scale (subtract 1) arbitrary
+            , Stateful <$> scale (subtract 1) arbitrary
+            , Alt <$> scale (flip div 2) arbitrary
+                  <*> scale (flip div 2) arbitrary
+            , Interleave <$> scale (flip div 2) arbitrary
+                         <*> scale (flip div 2) arbitrary
+            , Commit <$> scale (flip div 3) (arbitrary @(ProofState ext err s m Int))
+                     <*> scale (flip div 3) arbitrary
+                     <*> scale (flip div 3) arbitrary
+            , Handle <$> scale (flip div 3) (arbitrary @(ProofState ext err s m Int))
+                     <*> scale (flip div 3) arbitrary
+                     <*> scale (flip div 3) arbitrary
+            ] <> terminal
+
+instance ( Arbitrary err
+         , CoArbitrary err
+         , Arbitrary ext
+         , CoArbitrary ext
+         , Arbitrary a
+         , CoArbitrary s
+         , Arbitrary s
+         , Arbitrary (m (ProofState ext err s m a))
+         , Arbitrary (m (ProofState ext err s m Int))
+         , Functor m
+         ) => Arbitrary (TacticT jdg ext err s m a) where
+  arbitrary = TacticT . lift <$> arbitrary
+
+instance ( Arbitrary s
+         , Monad m
+         , EqProp (m (Result a err ext))
+         ) => EqProp (ProofState ext err s m a) where
+  a =-= b = property $ do
+    s <- arbitrary @s
+    pure $ proof @m s a =-= proof s b
+
+instance ( Arbitrary s
+         , Monad m
+         , Arbitrary jdg
+         , EqProp (m (Result jdg err ext))
+         ) => EqProp (TacticT jdg ext err s m ()) where
+  a =-= b = property $ do
+    s <- arbitrary @s
+    jdg <- arbitrary @jdg
+    pure $ runTactic @m s jdg a =-= runTactic s jdg b
+
+instance Arbitrary Type where
+  arbitrary
+    = let terminal = [TVar <$> arbitrary]
+      in
+        sized
+          $ (\ n
+               -> case n <= 1 of
+                    True -> oneof terminal
+                    False
+                      -> oneof
+                           $ ([((:->) <$> scale (flip div 2) arbitrary)
+                                 <*> scale (flip div 2) arbitrary,
+                               (TPair <$> scale (flip div 2) arbitrary)
+                                 <*> scale (flip div 2) arbitrary]
+                                <> terminal))
+
+instance Arbitrary Judgement where
+  arbitrary = (:-) <$> arbitrary <*> arbitrary
+
+type ProofStateTest = ProofState Term String Int Identity
+type TacticTest = TacticT Judgement Term String Int Identity
+
+main :: IO ()
+main = do
+    -- quickBatch $ functor     (undefined :: ProofStateTest (Int, Int, Int))
+    -- quickBatch $ applicative (undefined :: ProofStateTest (Int, Int, Int))
+    -- quickBatch $ alternative (undefined :: ProofStateTest Int)
+    -- quickBatch $ monad       (undefined :: ProofStateTest (Int, Int, Int))
+    -- quickBatch $ monadPlus   (undefined :: ProofStateTest (Int, Int))
+
+    -- quickBatch $ functor     (undefined :: TacticTest ((), (), ()))
+    -- quickBatch $ applicative (undefined :: TacticTest ((), (), ()))
+    -- quickBatch $ alternative (undefined :: TacticTest ())
+    -- quickBatch $ monad       (undefined :: TacticTest ((), (), ()))
+    -- quickBatch $ monadPlus   (undefined :: TacticTest ((), ()))
+
+    quickCheck $ property $ \(t :: TacticTest ()) (m :: TacticTest ()) err ->
+      ((commit (pure ()) t >> m >> throw err) :: TacticTest ())
+        =-= (m >> throw err)
+
 

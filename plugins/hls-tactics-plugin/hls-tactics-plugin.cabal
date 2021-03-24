@@ -77,6 +77,8 @@ library
     , text
     , transformers
     , deepseq
+    , QuickCheck
+    , checkers
 
   default-language: Haskell2010
   default-extensions:
