@@ -416,7 +416,6 @@ test-suite func-test
     Rename
     Symbol
     TypeDefinition
-    HaddockComments
     Test.Hls.Command
 
   default-extensions: OverloadedStrings
