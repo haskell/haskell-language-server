@@ -276,7 +276,7 @@ kill
     -> (a -> m r)
     -> (ext -> m r)
     -> m r
-    -> (err -> m r)
+    -> (s -> err -> m r)
     -> ProofState ext err s m a
     -> m r
 kill _ bind _ _ _ (Subgoal a k) =
@@ -287,17 +287,18 @@ kill s bind success failure throw (Stateful m) =
   let (s', t) = m s
    in kill s' bind success failure throw t
 kill s bind success failure throw (Alt t1 t2) =
-  kill s bind success (kill s bind success failure throw t2)
-    (\err -> kill s bind success (throw err) throw t2) t1
+  kill s bind success
+    (kill s bind success failure throw t2)
+    (\s' err -> kill s bind success (throw s' err) throw t2) t1
 kill s bind success failure throw (Interleave t1 t2) =
   kill s bind success (kill s bind success failure throw t2)
-    (\err -> kill s bind success (throw err) throw t2) t1
+    (\s' err -> kill s bind success (throw s' err) throw t2) t1
 kill s bind success failure throw (Commit t1 t2 k)
   = kill s
       (kill s bind success failure throw . k)
       success
-              (kill s (kill s bind success failure throw . k) success failure     throw t2)
-      (\err -> kill s (kill s bind success failure throw . k) success (throw err) throw t2)
+                 (kill s (kill s bind success failure throw . k) success failure        throw t2)
+      (\s' err -> kill s (kill s bind success failure throw . k) success (throw s' err) throw t2)
       t1
 kill _ _ _ failure _ Empty = failure
 kill s bind success failure throw (Handle t h k)
@@ -305,8 +306,8 @@ kill s bind success failure throw (Handle t h k)
       (kill s bind success failure throw . k)
       success
       failure
-      (\err -> kill s (kill s bind success failure throw . k) success failure throw $ h err) t
-kill _ _ _ _ throw (Throw err) = throw err
+      (\s' err -> kill s' (kill s' bind success failure throw . k) success failure throw $ h err) t
+kill s _ _ _ throw (Throw err) = throw s err
 kill _ _ success _ _ (Axiom ext) = success ext
 
 
@@ -323,7 +324,12 @@ instance EqProp Judgement
 instance EqProp Type
 
 proof :: Monad m => s -> ProofState ext err s m jdg -> m (Result jdg err ext)
-proof s = kill s (pure . HoleResult) (pure . Extract) (pure NoResult) (pure . ErrorResult)
+proof s =
+  kill s
+    (pure . HoleResult)
+    (pure . Extract)
+    (pure NoResult)
+    (const $ pure . ErrorResult)
 
 
 runTactic :: Monad m => s -> jdg -> TacticT jdg ext err s m a -> m (Result jdg err ext)
@@ -540,14 +546,29 @@ main = do
         =-= t
 
     quickCheck $ property $ \(t :: TT) ->
-      (catch t throw)
+      catch t throw
         =-= t
+
+    quickCheck $ property $ \s e ->
+      catch (put s >> throw e) (const $ get >>= mkResult)
+        =-= mkResult s
+
+    quickCheck $ property $ \(t :: TT) s ->
+      ((put s >> empty) `commit` t)
+        =-= t
+
+    quickCheck $ property $ \e f ->
+      (catch (throw e <|> pure ()) f)
+        =-= (pure () :: TT)
 
     -- -- should fail! this is the broken commit test
     -- quickCheck $ property $ \(t1 :: TI) t2 (t3 :: Int -> TT) ->
     --   ((commit t1 t2) >>= t3)
     --     =-= ((t1 >>= t3) `commit` (t2 >>= t3))
 
+
+mkResult :: Show a => a -> TT
+mkResult = rule . pure . Var . show
 
 catch
     :: Functor m
@@ -596,4 +617,7 @@ monadState _ =
   )
 
 
+test =
+  runIdentity $ runTactic 0 testJdg $ catch (put 5 >> throw "")
+    (const $ get >>= \x -> rule $ pure $ Var $ show x)
 
