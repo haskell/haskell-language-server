@@ -8,6 +8,7 @@
 
 {-# OPTIONS_GHC -fno-warn-unused-matches #-}
 
+{-# LANGUAGE StandaloneDeriving #-}
 module Rewrite where
 
 import Control.Monad.State.Strict
@@ -19,6 +20,7 @@ import Test.QuickCheck.Checkers
 import Data.Functor.Identity
 import Test.QuickCheck.Classes
 import GHC.Generics (Generic)
+import Data.Tuple (swap)
 
 
 data ProofState ext err s m a where
@@ -135,6 +137,9 @@ instance Functor m => Monad (ProofState ext err s m) where
   (>>=) (Throw err) _ = Throw err
   (>>=) (Axiom ext) _ = Axiom ext
 
+instance Functor m => MonadState s (ProofState ext err s m) where
+  state s = Stateful $ fmap (fmap pure . swap) s
+
 instance Functor m => Alternative (ProofState ext err s m) where
   empty = Empty
   (<|>) = Alt
@@ -175,6 +180,9 @@ newtype TacticT jdg ext err s m a = TacticT
   { unTacticT :: StateT jdg (ProofState ext err s m) a
   } deriving newtype (Functor, Applicative, Monad, Alternative, MonadPlus)
 
+instance Functor m => MonadState s (TacticT jdg ext err s m) where
+  state s = TacticT $ lift $ Stateful $ fmap (fmap pure . swap) s
+
 
 data Rule jdg ext err s m a where
   Pure
@@ -191,6 +199,11 @@ data Rule jdg ext err s m a where
     :: (s -> (s, Rule jdg ext err s m a))
     -> Rule jdg ext err s m a
   deriving stock (Functor)
+
+deriving instance (Show a, Show jdg, Show (m (Rule jdg ext err s m a))) => Show (Rule jdg ext err s m a)
+
+instance Functor m => MonadState s (Rule jdg ext err s m) where
+  state s =  StatefulR $ fmap (fmap pure . swap) s
 
 
 instance Functor m => Applicative (Rule jdg ext err s m) where
@@ -313,7 +326,7 @@ proof :: Monad m => s -> ProofState ext err s m jdg -> m (Result jdg err ext)
 proof s = kill s (pure . HoleResult) (pure . Extract) (pure NoResult) (pure . ErrorResult)
 
 
-runTactic :: Monad m => s -> jdg -> TacticT jdg ext err s m () -> m (Result jdg err ext)
+runTactic :: Monad m => s -> jdg -> TacticT jdg ext err s m a -> m (Result jdg err ext)
 runTactic s jdg (TacticT m) = proof s $ execStateT m jdg
 
 
@@ -410,6 +423,27 @@ instance ( Arbitrary err
          ) => Arbitrary (TacticT jdg ext err s m a) where
   arbitrary = TacticT . lift <$> arbitrary
 
+instance  ( Arbitrary a
+          , Arbitrary jdg
+          , CoArbitrary s
+          , Arbitrary s
+          , Arbitrary (m (Rule jdg ext err s m a))
+          , CoArbitrary ext
+          ) => Arbitrary (Rule jdg ext err s m a) where
+  arbitrary
+    = let terminal = [Pure <$> arbitrary]
+      in
+        sized
+          $ (\ n
+               -> case n <= 1 of
+                    True -> oneof terminal
+                    False
+                      -> oneof
+                           $ ([(SubgoalR <$> arbitrary) <*> scale (subtract 1) arbitrary,
+                               EffectR <$> scale (subtract 1) arbitrary,
+                               StatefulR <$> scale (subtract 1) arbitrary]
+                                <> terminal))
+
 instance ( Arbitrary s
          , Monad m
          , EqProp (m (Result a err ext))
@@ -419,10 +453,17 @@ instance ( Arbitrary s
     pure $ proof @m s a =-= proof s b
 
 instance ( Arbitrary s
+         , Arbitrary jdg
+         , Monad m
+         , EqProp (m (Result jdg err ext))
+         ) => EqProp (Rule jdg ext err s m ext) where
+  a =-= b = rule a =-= rule b
+
+instance ( Arbitrary s
          , Monad m
          , Arbitrary jdg
          , EqProp (m (Result jdg err ext))
-         ) => EqProp (TacticT jdg ext err s m ()) where
+         ) => EqProp (TacticT jdg ext err s m a) where
   a =-= b = property $ do
     s <- arbitrary @s
     jdg <- arbitrary @jdg
@@ -445,10 +486,11 @@ instance Arbitrary Type where
                                 <> terminal))
 
 instance Arbitrary Judgement where
-  arbitrary = (:-) <$> arbitrary <*> arbitrary
+  arbitrary = (:-) <$> scale (flip div 3) arbitrary <*> scale (flip div 2) arbitrary
 
 type ProofStateTest = ProofState Term String Int Identity
 type TacticTest = TacticT Judgement Term String Int Identity
+type RuleTest = Rule Judgement Term String Int Identity
 
 main :: IO ()
 main = do
@@ -457,15 +499,87 @@ main = do
     -- quickBatch $ alternative (undefined :: ProofStateTest Int)
     -- quickBatch $ monad       (undefined :: ProofStateTest (Int, Int, Int))
     -- quickBatch $ monadPlus   (undefined :: ProofStateTest (Int, Int))
+    -- quickBatch $ monadState  (undefined :: ProofStateTest (Int, Int))
+
+    -- quickBatch $ functor     (undefined :: RuleTest (Term, Term, Term))
+    -- quickBatch $ applicative (undefined :: RuleTest (Term, Term, Term))
+    -- quickBatch $ monad       (undefined :: RuleTest (Term, Term, Term))
+    -- -- quickBatch $ monadState  (undefined :: RuleTest (Term, Term))
 
     -- quickBatch $ functor     (undefined :: TacticTest ((), (), ()))
     -- quickBatch $ applicative (undefined :: TacticTest ((), (), ()))
     -- quickBatch $ alternative (undefined :: TacticTest ())
     -- quickBatch $ monad       (undefined :: TacticTest ((), (), ()))
     -- quickBatch $ monadPlus   (undefined :: TacticTest ((), ()))
+    -- quickBatch $ monadState  (undefined :: TacticTest ((), ()))
 
-    quickCheck $ property $ \(t :: TacticTest ()) (m :: TacticTest ()) err ->
-      ((commit (pure ()) t >> m >> throw err) :: TacticTest ())
+    quickCheck $ property $ \(t :: TT) (m :: TT) err ->
+      ((commit (pure ()) t >> m >> throw err) :: TT)
         =-= (m >> throw err)
+
+    quickCheck $ property $ \(t1 :: TI) t2 (t3 :: Int -> TT) ->
+      ((t1 <|> t2) >>= t3)
+        =-= ((t1 >>= t3) <|> (t2 >>= t3))
+
+    quickCheck $ property $ \err f ->
+      (catch (throw err) f :: TT)
+        =-= (f err)
+
+    quickCheck $ property $ \err f ->
+      (catch (catch (throw err) throw) f :: TT)
+        =-= (f err)
+
+    -- -- should fail! this is the broken commit test
+    -- quickCheck $ property $ \(t1 :: TI) t2 (t3 :: Int -> TT) ->
+    --   ((commit t1 t2) >>= t3)
+    --     =-= ((t1 >>= t3) `commit` (t2 >>= t3))
+
+
+catch
+    :: Functor m
+    => TacticT jdg ext err s m a
+    -> (err -> TacticT jdg ext err s m a)
+    -> TacticT jdg ext err s m a
+catch (TacticT t) h = TacticT $ StateT $ \jdg ->
+  Handle
+    (runStateT t jdg)
+    (flip runStateT jdg . unTacticT . h)
+    pure
+
+
+type TI = TacticTest Int
+type TT = TacticTest ()
+
+monadState
+    :: forall m s a b
+     . ( MonadState s m
+       , EqProp (m s)
+       , EqProp (m ())
+       , Show s
+       , Arbitrary s
+       )
+    => m (a, b)
+    -> TestBatch
+monadState _ =
+  ( "MonadState laws"
+  , [ ("get >> get", (get >> get) =-= get @s @m)
+    , ("get >>= put", (get @s @m >>= put) =-= pure ())
+    , ("put >> put", property $ do
+        s1 <- arbitrary
+        s2 <- arbitrary
+        pure $
+          counterexample (show s1) $
+          counterexample (show s2) $
+            (put @_ @m s1 >> put s2) =-= put s2
+      )
+    , ("put >> get", property $ do
+        s <- arbitrary
+        pure $
+          counterexample (show s) $
+            (put s >> get) =-= (put s >> pure @m s)
+      )
+    ]
+  )
+
 
 
