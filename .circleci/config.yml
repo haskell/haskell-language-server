@@ -38,7 +38,7 @@ defaults: &defaults
 
     - run:
         name: Build Testsuite without running it
-        command: stack --stack-yaml=${STACK_FILE}  build --test --no-run-tests
+        command: stack -j 1 --stack-yaml=${STACK_FILE} build --test --no-run-tests
         no_output_timeout: 30m
 
     - store_artifacts:
