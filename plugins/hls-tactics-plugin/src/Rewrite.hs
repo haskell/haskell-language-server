@@ -21,6 +21,7 @@ import Data.Functor.Identity
 import Test.QuickCheck.Classes ()
 import GHC.Generics (Generic)
 import Data.Tuple (swap)
+import Data.Data (Typeable, eqT, (:~:) (Refl))
 
 
 data ProofState ext err s m a where
@@ -450,9 +451,19 @@ instance ( Arbitrary err
          , Arbitrary s
          , Arbitrary (m (ProofState ext err s m a))
          , Arbitrary (m (ProofState ext err s m Int))
+         , Typeable a
          , Functor m
+         , Arbitrary jdg
+         , Arbitrary (m (Rule jdg ext err s m ext))
          ) => Arbitrary (TacticT jdg ext err s m a) where
-  arbitrary = TacticT . lift <$> arbitrary
+  arbitrary = oneof
+    [ arb
+    , case eqT @a @() of
+        Just Refl -> fmap rule arbitrary
+        Nothing -> arb
+    ]
+    where
+      arb = TacticT . lift <$> arbitrary
 
 instance  ( Arbitrary a
           , Arbitrary jdg
@@ -466,17 +477,17 @@ instance  ( Arbitrary a
       in sized $ \n -> case n <= 1 of
            True  -> oneof terminal
            False -> oneof $
-             [ SubgoalR <$> arbitrary <*> scale (subtract 1) arbitrary
-             , EffectR <$> scale (subtract 1) arbitrary
-             , StatefulR <$> scale (subtract 1) arbitrary
-             ] <> terminal
+            [ SubgoalR <$> arbitrary <*> scale (subtract 1) arbitrary
+            , EffectR <$> scale (subtract 1) arbitrary
+            , StatefulR <$> scale (subtract 1) arbitrary
+            ] <> terminal
 
 instance ( Arbitrary s
          , Monad m
          , EqProp (m (Result a err ext))
          ) => EqProp (ProofState ext err s m a) where
-           a =-= b = property $ do
-             s <- arbitrary @s
+  a =-= b = property $ do
+    s <- arbitrary @s
     pure $ proof @m s a =-= proof s b
 
 instance ( Arbitrary s
@@ -484,39 +495,39 @@ instance ( Arbitrary s
          , Monad m
          , EqProp (m (Result jdg err ext))
          ) => EqProp (Rule jdg ext err s m ext) where
-           a =-= b = rule a =-= rule b
+  a =-= b = rule a =-= rule b
 
 instance ( Arbitrary s
-  , Monad m
-  , Arbitrary jdg
-  , EqProp (m (Result jdg err ext))
+         , Monad m
+         , Arbitrary jdg
+         , EqProp (m (Result jdg err ext))
          ) => EqProp (TacticT jdg ext err s m a) where
-           a =-= b = property $ do
-             s <- arbitrary @s
+  a =-= b = property $ do
+    s <- arbitrary @s
     jdg <- arbitrary @jdg
     pure $ runTactic @m s jdg a =-= runTactic s jdg b
 
 instance {-# OVERLAPPING #-}
          ( Arbitrary s
-           , Monad m
-           , Monoid err
-           , EqProp (m (Either err Term))
+         , Monad m
+         , Monoid err
+         , EqProp (m (Either err Term))
          ) => EqProp (TacticT Judgement Term err s m a) where
-           a =-= b = property $ do
-             s <- arbitrary @s
+  a =-= b = property $ do
+    s <- arbitrary @s
     jdg <- arbitrary @Judgement
     pure $ runTactic2 @m s jdg a =-= runTactic2 s jdg b
 
 instance Arbitrary Type where
   arbitrary
     = let terminal = [TVar <$> arbitrary]
-       in sized $ \ n ->
-         case n <= 1 of
-           True  -> oneof terminal
+      in sized $ \ n ->
+        case n <= 1 of
+          True  -> oneof terminal
           False -> oneof $
             [ (:->) <$> scale (flip div 2) arbitrary
                     <*> scale (flip div 2) arbitrary
-              , TPair <$> scale (flip div 2) arbitrary
+            , TPair <$> scale (flip div 2) arbitrary
                     <*> scale (flip div 2) arbitrary
             ] <> terminal
 
@@ -529,7 +540,7 @@ type RuleTest = Rule Judgement Term String Int Identity
 
 main :: IO ()
 main = do
-  -- quickBatch $ functor     (undefined :: ProofStateTest (Int, Int, Int))
+    -- quickBatch $ functor     (undefined :: ProofStateTest (Int, Int, Int))
     -- quickBatch $ applicative (undefined :: ProofStateTest (Int, Int, Int))
     -- quickBatch $ alternative (undefined :: ProofStateTest Int)
     -- quickBatch $ monad       (undefined :: ProofStateTest (Int, Int, Int))
@@ -548,7 +559,7 @@ main = do
 --     quickBatch $ monadPlus   (undefined :: TacticTest ((), ()))
 --     quickBatch $ monadState  (undefined :: TacticTest ((), ()))
 
-    quickCheck $ property $ \(t :: TT (m :: TT) err ->
+    quickCheck $ property $ \(t :: TT) (m :: TT) err ->
       ((commit (pure ()) t >> m >> throw err) :: TT)
         =-= (m >> throw err)
 
