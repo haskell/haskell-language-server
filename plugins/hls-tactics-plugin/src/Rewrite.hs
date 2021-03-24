@@ -18,7 +18,7 @@ import Data.List (find)
 import Test.QuickCheck hiding (Result)
 import Test.QuickCheck.Checkers
 import Data.Functor.Identity
-import Test.QuickCheck.Classes
+import Test.QuickCheck.Classes ()
 import GHC.Generics (Generic)
 import Data.Tuple (swap)
 
@@ -82,19 +82,19 @@ instance Arbitrary Term where
                                  <*> scale (flip div 2) arbitrary]
                                 <> terminal))
 
-instance Show (ProofState ext err s m a) where
-  show (Subgoal a fextpexterrsma) = "Subgoal a fextpexterrsma"
-  show (Effect mpexterrsma) = "Effect mpexterrsma"
-  show (Stateful fsp_spexterrsma) = "Stateful fsp_spexterrsma"
-  show (Alt pexterrsma pexterrsma2) = "Alt pexterrsma pexterrsma2"
-  show (Interleave pexterrsma pexterrsma2) = "Interleave pexterrsma pexterrsma2"
-  show (Commit pexterrsmx pexterrsmx2 fxpexterrsma) = "Commit pexterrsmx pexterrsmx2 fxpexterrsma"
+instance (Show ext, Show err, Show a) => Show (ProofState ext err s m a) where
+  show (Subgoal a fextpexterrsma) = "(Subgoal " <> show a <> " " <> show fextpexterrsma <> ")"
+  show (Effect mpexterrsma) = "(Effect mpexterrsma)"
+  show (Stateful fsp_spexterrsma) = "(Stateful fsp_spexterrsma)"
+  show (Alt pexterrsma pexterrsma2) = "(Alt " <> show pexterrsma <> " " <> show pexterrsma2 <> ")"
+  show (Interleave pexterrsma pexterrsma2) = "(Interleave " <> show pexterrsma <> " " <> show pexterrsma2 <> ")"
+  show (Commit pexterrsmx pexterrsmx2 fxpexterrsma) = "(Commit pexterrsmx pexterrsmx2 fxpexterrsma)"
   show Empty = "Empty"
-  show (Handle pexterrsmx ferrpexterrsmx fxpexterrsma) = "Handle pexterrsmx ferrpexterrsmx fxpexterrsma"
-  show (Throw err) = "Throw err"
-  show (Axiom ext) = "Axiom ext"
+  show (Handle pexterrsmx ferrpexterrsmx fxpexterrsma) = "(Handle pexterrsmx ferrpexterrsmx fxpexterrsma)"
+  show (Throw err) = "(Throw " <> show err <> ")"
+  show (Axiom ext) = "(Axiom " <> show ext <> ")"
 
-instance Monoid jdg => Show (TacticT jdg ext err s m a) where
+instance (Show ext, Show err, Show jdg, Monoid jdg, Show a) => Show (TacticT jdg ext err s m a) where
   show (TacticT t) = show $ runStateT t mempty
 
 
@@ -472,18 +472,15 @@ instance ( Arbitrary s
 instance Arbitrary Type where
   arbitrary
     = let terminal = [TVar <$> arbitrary]
-      in
-        sized
-          $ (\ n
-               -> case n <= 1 of
-                    True -> oneof terminal
-                    False
-                      -> oneof
-                           $ ([((:->) <$> scale (flip div 2) arbitrary)
-                                 <*> scale (flip div 2) arbitrary,
-                               (TPair <$> scale (flip div 2) arbitrary)
-                                 <*> scale (flip div 2) arbitrary]
-                                <> terminal))
+      in sized $ \ n ->
+        case n <= 1 of
+          True  -> oneof terminal
+          False -> oneof $
+            [ (:->) <$> scale (flip div 2) arbitrary
+                    <*> scale (flip div 2) arbitrary
+            , TPair <$> scale (flip div 2) arbitrary
+                    <*> scale (flip div 2) arbitrary
+            ] <> terminal
 
 instance Arbitrary Judgement where
   arbitrary = (:-) <$> scale (flip div 3) arbitrary <*> scale (flip div 2) arbitrary
@@ -506,12 +503,12 @@ main = do
     -- quickBatch $ monad       (undefined :: RuleTest (Term, Term, Term))
     -- -- quickBatch $ monadState  (undefined :: RuleTest (Term, Term))
 
-    -- quickBatch $ functor     (undefined :: TacticTest ((), (), ()))
-    -- quickBatch $ applicative (undefined :: TacticTest ((), (), ()))
-    -- quickBatch $ alternative (undefined :: TacticTest ())
-    -- quickBatch $ monad       (undefined :: TacticTest ((), (), ()))
-    -- quickBatch $ monadPlus   (undefined :: TacticTest ((), ()))
-    -- quickBatch $ monadState  (undefined :: TacticTest ((), ()))
+--     quickBatch $ functor     (undefined :: TacticTest ((), (), ()))
+--     quickBatch $ applicative (undefined :: TacticTest ((), (), ()))
+--     quickBatch $ alternative (undefined :: TacticTest ())
+--     quickBatch $ monad       (undefined :: TacticTest ((), (), ()))
+--     quickBatch $ monadPlus   (undefined :: TacticTest ((), ()))
+--     quickBatch $ monadState  (undefined :: TacticTest ((), ()))
 
     quickCheck $ property $ \(t :: TT) (m :: TT) err ->
       ((commit (pure ()) t >> m >> throw err) :: TT)
@@ -521,13 +518,30 @@ main = do
       ((t1 <|> t2) >>= t3)
         =-= ((t1 >>= t3) <|> (t2 >>= t3))
 
-    quickCheck $ property $ \err f ->
-      (catch (throw err) f :: TT)
-        =-= (f err)
+    quickCheck $ property $ \(t1 :: TT) t2 s ->
+      (put s >> (t1 <|> t2))
+        =-= ((put s >> t1) <|> (put s >> t2))
+
+    quickCheck $ property $ \(t :: TT) s ->
+      ((put s >> empty) <|> t)
+        =-= t
+
+    -- -- fails, m1 could be lift, then you do an action twice in the second case
+    -- quickCheck $ property $ \(t1 :: TI) t2 (t3 :: TT) ->
+    --   (t1 >> (t2 <|> t3))
+    --     =-= ((t1 >> t2) <|> (t1 >> t3))
 
     quickCheck $ property $ \err f ->
-      (catch (catch (throw err) throw) f :: TT)
-        =-= (f err)
+      (catch (throw err) f :: TT)
+        =-= f err
+
+    quickCheck $ property $ \(t :: TT) ->
+      catch t throw
+        =-= t
+
+    quickCheck $ property $ \(t :: TT) ->
+      (catch t throw)
+        =-= t
 
     -- -- should fail! this is the broken commit test
     -- quickCheck $ property $ \(t1 :: TI) t2 (t3 :: Int -> TT) ->
