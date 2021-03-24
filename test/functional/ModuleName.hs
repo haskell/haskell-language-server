@@ -7,9 +7,10 @@ module ModuleName
   )
 where
 
-import qualified Data.Text.IO    as T
-import           System.FilePath ((<.>), (</>))
+import qualified Data.Text.IO     as T
+import           System.FilePath  ((<.>), (</>))
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup

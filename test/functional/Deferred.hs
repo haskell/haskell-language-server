@@ -9,6 +9,7 @@ import           Control.Lens            hiding (List)
 import           Language.LSP.Types.Lens hiding (id, message)
 -- import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
+import           Test.Hls.Command
 
 
 tests :: TestTree

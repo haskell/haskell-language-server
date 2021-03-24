@@ -18,6 +18,7 @@ import           Data.Text            (Text)
 import           Data.Text.Encoding   (encodeUtf8)
 import           System.FilePath      ((<.>), (</>))
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests =

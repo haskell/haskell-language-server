@@ -18,6 +18,7 @@ import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens         as L
 import           System.FilePath                 ((</>))
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests =

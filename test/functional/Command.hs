@@ -7,6 +7,7 @@ import qualified Data.Text               as T
 import           Language.LSP.Types      as LSP
 import           Language.LSP.Types.Lens as LSP
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "commands" [

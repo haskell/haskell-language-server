@@ -394,7 +394,7 @@ test-suite func-test
     , containers
     , unordered-containers
 
-  hs-source-dirs:     test/functional plugins/hls-splice-plugin/src
+  hs-source-dirs:     test/functional test/utils
 
   main-is:            Main.hs
   other-modules:
@@ -416,9 +416,8 @@ test-suite func-test
     Rename
     Symbol
     TypeDefinition
-    Splice
     HaddockComments
-    Ide.Plugin.Splice.Types
+    Test.Hls.Command
 
   default-extensions: OverloadedStrings
   ghc-options:
