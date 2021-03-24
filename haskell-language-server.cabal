@@ -27,7 +27,6 @@ extra-source-files:
   test/testdata/**/*.h
   test/testdata/**/*.hs
   test/testdata/**/*.expected
-  test/testdata/**/*.error
 
 flag pedantic
   description: Enable -Werror
