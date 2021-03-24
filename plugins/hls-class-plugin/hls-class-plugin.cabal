@@ -1,10 +1,13 @@
-cabal-version:      2.2
+cabal-version:      2.4
 name:               hls-class-plugin
 version:            1.0.0.0
-synopsis:           Class/instance management plugin for Haskell Language Server
+synopsis:
+  Class/instance management plugin for Haskell Language Server
+
 description:
-    Class/instance management plugin for Haskell Language Server.
-    For usage, please see README of HLS on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+  Class/instance management plugin for Haskell Language Server.
+  For usage, please see README of HLS on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Junyoung Clare Jang
@@ -13,24 +16,60 @@ homepage:           https://github.com/haskell/haskell-language-server#readme
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
 category:           Development
 build-type:         Simple
+extra-source-files:
+  LICENSE
+  test/testdata/**/*.hs
 
 library
-  exposed-modules:  Ide.Plugin.Class
-  hs-source-dirs:   src
-  build-depends:    aeson
-                  , base           >=4.12 && <5
-                  , containers
-                  , lsp
-                  , hls-plugin-api >= 1.0 && < 1.2
-                  , ghc
-                  , ghc-exactprint
-                  , ghcide         ^>= 1.1.0.0
-                  , lens
-                  , shake
-                  , text
-                  , transformers
-                  , unordered-containers
+  exposed-modules:    Ide.Plugin.Class
+  hs-source-dirs:     src
+  build-depends:
+    , aeson
+    , base                  >=4.12    && <5
+    , containers
+    , ghc
+    , ghc-exactprint
+    , ghcide                ^>=1.1.0.0
+    , hls-plugin-api        >=1.0     && <1.2
+    , lens
+    , lsp
+    , shake
+    , text
+    , transformers
+    , unordered-containers
 
+  default-language:   Haskell2010
+  default-extensions:
+    DataKinds
+    TypeOperators
+
+  ghc-options:        -Wno-unticked-promoted-constructors
+
+executable test-server
   default-language: Haskell2010
-  default-extensions: DataKinds, TypeOperators
-  ghc-options: -Wno-unticked-promoted-constructors
+  build-depends:
+    , base
+    , data-default
+    , ghcide
+    , hls-class-plugin
+    , hls-plugin-api
+
+  main-is:          Server.hs
+  hs-source-dirs:   test
+  ghc-options:      -threaded
+
+test-suite tests
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  build-tool-depends: hls-class-plugin:test-server -any
+  hs-source-dirs:     test
+  main-is:            Main.hs
+  build-depends:
+    , base
+    , bytestring
+    , filepath
+    , hls-test-utils
+    , lens
+    , lsp-test
+    , lsp-types
+    , text
