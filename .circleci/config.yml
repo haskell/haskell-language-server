@@ -53,14 +53,6 @@ defaults: &defaults
           - ~/build/ghcide/.stack-work
 
     - run:
-        name: Setup stack eval hie.html
-        command: cp plugins/hls-eval-plugin/test/testdata/hie-stack.yaml plugins/hls-eval-plugin/test/testdata/hie.yaml
-
-    - run:
-        name: Setup stack eval stack.html
-        command: grep '^resolver:\|^compiler:' stack-build.txt > plugins/hls-eval-plugin/test/testdata/stack.yaml
-
-    - run:
         name: Build including tests
         command: stack --stack-yaml=${STACK_FILE} test --no-run-tests
         no_output_timeout: 120m
