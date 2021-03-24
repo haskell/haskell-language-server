@@ -596,6 +596,10 @@ main = do
       catch (put s >> throw e) (const $ get >>= mkResult)
         =-= mkResult s
 
+    quickCheck $ property $ \s ->
+      (put s >> (rule $ get >>= pure . Var . show))
+        =-= mkResult s
+
     quickCheck $ property $ \(t :: TT) s ->
       ((put s >> empty) `commit` t)
         =-= t
