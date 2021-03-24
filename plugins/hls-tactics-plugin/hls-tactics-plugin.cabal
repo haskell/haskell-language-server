@@ -79,6 +79,8 @@ library
     , deepseq
     , QuickCheck
     , checkers
+    , hspec
+    , recover-rtti
 
   default-language: Haskell2010
   default-extensions:
