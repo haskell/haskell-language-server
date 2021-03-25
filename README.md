@@ -20,13 +20,14 @@ Integration point for [ghcide](https://github.com/haskell/ghcide) and [haskell-i
 them all. Read the [project's
 background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-them-all.html).
 
-- [Haskell Language Server (HLS)](#haskell-language-server)
+- [haskell-language-server](#haskell-language-server)
   - [Features](#features)
   - [Installation](#installation)
     - [Prerequisites](#prerequisites)
     - [ghcup](#ghcup)
     - [Visual Studio Code](#visual-studio-code)
     - [Pre-built binaries](#pre-built-binaries)
+    - [Arch Linux](#arch-linux)
     - [Installation from source](#installation-from-source)
       - [Common pre-requirements](#common-pre-requirements)
       - [Linux-specific pre-requirements](#linux-specific-pre-requirements)
@@ -36,24 +37,45 @@ background](https://neilmitchell.blogspot.com/2020/01/one-haskell-ide-to-rule-th
         - [Install via cabal](#install-via-cabal)
         - [Install specific GHC Version](#install-specific-ghc-version)
     - [Installation from Hackage](#installation-from-hackage)
-  - [Configuring haskell-language-server](#configuring-haskell-language-server)
+  - [Configuring `haskell-language-server`](#configuring-haskell-language-server)
+    - [Generic server options](#generic-server-options)
+    - [Generic editor options](#generic-editor-options)
+    - [Language-specific server options](#language-specific-server-options)
+    - [Client options](#client-options)
   - [Configuring your project build](#configuring-your-project-build)
   - [Configuring your editor](#configuring-your-editor)
-    - [VS Code](#using-haskell-language-server-with-vs-code)
-    - [Sublime Text](#using-haskell-language-server-with-sublime-text)
-    - [Vim or Neovim](#using-haskell-language-server-with-vim-or-neovim)
-    - [Atom](#using-haskell-language-server-with-atom)
-    - [Emacs](#using-haskell-language-server-with-emacs)
-    - [Kakoune](#using-haskell-language-server-with-kakoune)
+    - [VS Code](#vs-code)
+    - [Sublime Text](#sublime-text)
+    - [Vim or Neovim](#vim-or-neovim)
+      - [Coc](#coc)
+      - [LanguageClient-neovim](#languageclient-neovim)
+        - [vim-plug](#vim-plug)
+        - [Clone the LanguageClient-neovim repo](#clone-the-languageclient-neovim-repo)
+        - [Configuration and sample `~/.vimrc` sections](#configuration-and-sample-vimrc-sections)
+    - [Atom](#atom)
+    - [Emacs](#emacs)
+      - [doom-emacs](#doom-emacs)
+      - [Spacemacs](#spacemacs)
+    - [Kakoune](#kakoune)
   - [Known limitations](#known-limitations)
     - [Preprocessor](#preprocessor)
   - [Troubleshooting](#troubleshooting)
+    - [Common issues](#common-issues)
+      - [Difficulties with Stack and `Paths_` modules](#difficulties-with-stack-and-paths_-modules)
+      - [Problems with dynamic linking](#problems-with-dynamic-linking)
+    - [Troubleshooting the server](#troubleshooting-the-server)
+      - [Diagnostic mode](#diagnostic-mode)
+      - [Examining the log](#examining-the-log)
+    - [Troubleshooting the client](#troubleshooting-the-client)
   - [Contributing](#contributing)
+    - [Style guidelines](#style-guidelines)
     - [Building haskell-language-server](#building-haskell-language-server)
       - [Using Cabal](#using-cabal)
       - [Using Stack](#using-stack)
-      - [Introduction tutorial](#instructions-tutorial)
+      - [Using Nix](#using-nix)
+      - [Introduction tutorial](#introduction-tutorial)
       - [Test your hacked HLS in your editor](#test-your-hacked-hls-in-your-editor)
+    - [Adding support for a new editor](#adding-support-for-a-new-editor)
 
 ## Features
 
@@ -115,6 +137,18 @@ If you are using Visual Studio Code, the [Haskell extension](https://marketplace
 
 There are pre-built binaries available from the [releases page](https://github.com/haskell/haskell-language-server/releases) for Linux, Windows and macOS.
 To install, download the `haskell-language-server-wrapper` executable for your platform as well as any `haskell-language-server` executables for the GHC versions you plan on working with, and either put them on your PATH or point your client to them.
+
+### Arch Linux
+
+If you are using Arch Linux with **dynamically linked** Haskell packages from `pacman`,
+you can install the latest pre-compiled version of `haskell-language-server` from [[community]](https://archlinux.org/packages/community/x86_64/haskell-language-server/):
+
+```
+sudo pacman -S haskell-language-server
+```
+
+In this case, `haskell-language-server` is compiled against the GHC distributed to Arch Linux, so you will need maintain a system wide Haskell development environment, and install GHC from `pacman` as well.
+See [ArchWiki](https://wiki.archlinux.org/index.php/Haskell) for the details of Haskell infrastructure on Arch Linux.
 
 ### Installation from source
 
@@ -437,7 +471,7 @@ Most editors provide a Haskell-specific extension that provides support for laun
 Editors typically assume that you have already installed `haskell-language-server` (see above) and that the installation script put the `haskell-language-server` and `haskell-language-server-wrapper` binaries in your `PATH` (usually `~/.local/bin` or `~/.cabal/bin` on Linux and macOS, `%APPDATA%\local\bin` or `%APPDATA%\cabal\bin` on Windows).
 The exception is VS Code, which can automatically install the binaries if they are not installed already.
 
-### Using Haskell Language Server with VS Code
+### VS Code
 
 Install from
 [the VSCode marketplace](https://marketplace.visualstudio.com/items?itemName=haskell.haskell), or manually from the repository [vscode-haskell](https://github.com/haskell/vscode-haskell).
@@ -445,7 +479,7 @@ The `haskell-language-server` and `haskell-language-server-wrapper` binaries wil
 
 Configuration is done via the "Haskell" section of "Settings".
 
-### Using Haskell Language Server with Sublime Text
+### Sublime Text
 
 - Install [LSP](https://packagecontrol.io/packages/LSP) using [Package Control](https://packagecontrol.io/)
 - From Sublime Text, go to Preferences and search for LSP Settings
@@ -471,7 +505,7 @@ You should have these features available:
 2. LSP: Show Diagnostics will show a list of hints and errors
 3. LSP: Format Document will prettify the file
 
-### Using Haskell Language Server with Vim or Neovim
+### Vim or Neovim
 
 You can use [Coc](https://github.com/neoclide/coc.nvim), [LanguageClient-neovim](https://github.com/autozimu/LanguageClient-neovim)
 or any other Vim Language server protocol client.
@@ -560,7 +594,7 @@ let g:LanguageClient_rootMarkers = ['*.cabal', 'stack.yaml']
 Further configuration can be done by pointing the [`g:LanguageClient_settingsPath`](https://github.com/autozimu/LanguageClient-neovim/blob/0e5c9546bfddbaa2b01e5056389c25aefc8bf989/doc/LanguageClient.txt#L221)
 variable to the file in which you want to keep your LSP settings.
 
-### Using Haskell Language Server with Atom
+### Atom
 
 Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui) and [haskell](https://atom.io/packages/haskell),
 
@@ -568,7 +602,7 @@ Install the two Atom packages [atom-ide-ui](https://atom.io/packages/atom-ide-ui
 $ apm install language-haskell atom-ide-ui haskell
 ```
 
-### Using haskell-language-server with Emacs
+### Emacs
 
 Emacs support is provided by a combination of the following packages:
 
@@ -584,7 +618,7 @@ various parts of the Emacs integration.
 In particular, `lsp-haskell` provides customization options for the `haskell-language-server`-specific parts,
 such as the path to the server executable.
 
-#### Using haskell-language-server with [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
+#### [doom-emacs](https://github.com/hlissner/doom-emacs/tree/develop/modules/lang/haskell#module-flags)
 
 Manual installation of packages is not required.
 Enable the lsp module and the haskell lang module with lsp flag in `.doom.d/init.el`:
@@ -599,7 +633,7 @@ lsp
 
 then do `$HOME/.emacs.d/bin/doom sync`
 
-#### Using haskell-language-server with [Spacemacs](https://github.com/syl20bnr/spacemacs)
+#### [Spacemacs](https://github.com/syl20bnr/spacemacs)
 
 Manual installation of packages is not required.
 Enable the `haskell` layer and the `lsp` layer in your Spacemacs config file:
@@ -613,7 +647,7 @@ dotspacemacs-configuration-layers
   )
 ```
 
-### Using haskell-language-server with [Kakoune](https://github.com/mawww/kakoune)
+### [Kakoune](https://github.com/mawww/kakoune)
 
 1. Grab a copy of [kak-lsp](https://github.com/ul/kak-lsp), and follow the setup instructions.
 2. Point your `kak-lsp.toml` to `haskell-language-server-wrapper`.
