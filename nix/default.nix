@@ -80,7 +80,7 @@ in (import sources.nixpkgs
       # default_stages = ["manual" "push"];
       hooks = {
         stylish-haskell.enable = true;
-        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" ];
+        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" "^plugins/hls-tactics-plugin/.*$" ];
       };
     };
   }
