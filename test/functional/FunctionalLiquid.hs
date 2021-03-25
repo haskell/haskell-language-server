@@ -7,6 +7,8 @@ import           Data.Aeson
 import           Ide.Plugin.Config
 import           Language.LSP.Types.Lens as LSP hiding (contents)
 import           Test.Hls
+import           Test.Hls.Command
+
 -- ---------------------------------------------------------------------
 
 tests :: TestTree

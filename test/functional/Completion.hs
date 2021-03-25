@@ -8,6 +8,7 @@ import qualified Data.Text               as T
 import           Ide.Plugin.Config       (maxCompletions)
 import           Language.LSP.Types.Lens hiding (applyEdit)
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "completions" [

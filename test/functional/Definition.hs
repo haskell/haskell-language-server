@@ -4,6 +4,7 @@ import           Control.Lens
 import           Language.LSP.Types.Lens
 import           System.Directory
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "definitions" [

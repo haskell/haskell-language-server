@@ -2,6 +2,7 @@
 module Rename (tests) where
 
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "rename" [
