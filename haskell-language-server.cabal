@@ -264,10 +264,12 @@ common ormolu
 common stylishHaskell
   if flag(stylishHaskell) || flag(all-formatters)
     build-depends: hls-stylish-haskell-plugin ^>= 1.0.0.0
+    cpp-options: -DstylishHaskell
 
 common brittany
-  if (flag(brittany) || flag(all-formatters))
+  if flag(brittany) || flag(all-formatters)
     build-depends: hls-brittany-plugin ^>= 1.0.0.0
+    cpp-options: -Dbrittany
 
 executable haskell-language-server
   import:             common-deps
