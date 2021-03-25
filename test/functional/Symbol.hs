@@ -7,6 +7,7 @@ import           Language.LSP.Test               as Test
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.Types.Lens         as L
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "document symbols" [

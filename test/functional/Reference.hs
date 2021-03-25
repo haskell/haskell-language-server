@@ -5,6 +5,7 @@ import           Data.Coerce
 import           Data.List
 import           Language.LSP.Types.Lens
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "references" [

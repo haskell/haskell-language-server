@@ -53,6 +53,5 @@ test-suite tests
   build-depends:
     , base
     , bytestring
-    , hls-stylish-haskell-plugin
     , hls-test-utils
     , text

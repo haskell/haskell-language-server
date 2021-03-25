@@ -15,9 +15,6 @@ module Test.Hls.Util
     , ghcVersion, GhcVersion(..)
     , hostOS, OS(..)
     , matchesCurrentEnv, EnvSpec(..)
-    , hlsCommand
-    , hlsCommandExamplePlugin
-    , hlsCommandVomit
     , ignoreForGhcVersions
     , ignoreInEnv
     , inspectCodeAction
@@ -26,7 +23,6 @@ module Test.Hls.Util
     , knownBrokenOnWindows
     , knownBrokenForGhcVersions
     , knownBrokenInEnv
-    , logFilePath
     , setupBuildToolFiles
     , SymbolLocation
     , waitForDiagnosticsFrom
@@ -57,7 +53,6 @@ import           System.Environment
 import           System.Time.Extra (Seconds, sleep)
 import           System.FilePath
 import           System.IO.Temp
-import           System.IO.Unsafe
 import           Test.Hspec.Runner
 import           Test.Hspec.Core.Formatters hiding (Seconds)
 import           Test.Tasty (TestTree)
@@ -163,26 +158,6 @@ ignoreForGhcVersions :: [GhcVersion] -> String -> TestTree -> TestTree
 ignoreForGhcVersions vers reason
     | ghcVersion `elem` vers =  ignoreTestBecause reason
     | otherwise = id
-
-logFilePath :: String
-logFilePath = "hls-" ++ show ghcVersion ++ ".log"
-
--- | The command to execute the version of hls for the current compiler.
---
--- Both @stack test@ and @cabal new-test@ setup the environment so @hls@ is
--- on PATH. Cabal seems to respond to @build-tool-depends@ specifically while
--- stack just puts all project executables on PATH.
-hlsCommand :: String
-{-# NOINLINE hlsCommand #-}
-hlsCommand = unsafePerformIO $ do
-  testExe <- fromMaybe "haskell-language-server" <$> lookupEnv "HLS_TEST_EXE"
-  pure $ testExe ++ " --lsp -d -j2 -l test-logs/" ++ logFilePath
-
-hlsCommandVomit :: String
-hlsCommandVomit = hlsCommand ++ " --vomit"
-
-hlsCommandExamplePlugin :: String
-hlsCommandExamplePlugin = hlsCommand ++ " --example"
 
 -- ---------------------------------------------------------------------
 

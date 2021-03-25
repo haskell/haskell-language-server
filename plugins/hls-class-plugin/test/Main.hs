@@ -2,8 +2,8 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
-module Class
-  ( tests
+module Main
+  ( main
   )
 where
 
@@ -14,11 +14,14 @@ import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
 import           Test.Hls
 
+main :: IO ()
+main = defaultTestRunner tests
+
 tests :: TestTree
 tests = testGroup
   "class"
   [ testCase "Produces addMinimalMethodPlaceholders code actions for one instance" $ do
-      runSession hlsCommand fullCaps classPath $ do
+      runSession testCommand fullCaps classPath $ do
         doc <- openDoc "T1.hs" "haskell"
         _ <- waitForDiagnosticsFromSource doc "typecheck"
         caResults <- getAllCodeActions doc
@@ -26,7 +29,6 @@ tests = testGroup
           @?=
           [ Just "Add placeholders for '=='"
           , Just "Add placeholders for '/='"
-          , Just "Disable \"missing-methods\" warnings"
           ]
   , glodenTest "Creates a placeholder for '=='" "T1" "eq"
     $ \(eqAction:_) -> do
@@ -54,12 +56,12 @@ _CACodeAction = prism' InR $ \case
   _          -> Nothing
 
 classPath :: FilePath
-classPath = "test" </> "testdata" </> "class"
+classPath = "test" </> "testdata"
 
 glodenTest :: String -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 glodenTest name fp deco execute
   = goldenGitDiff name (classPath </> fpWithDeco <.> "expected" <.> "hs")
-    $ runSession hlsCommand fullCaps classPath
+    $ runSession testCommand fullCaps classPath
     $ do
       doc <- openDoc (fp <.> "hs") "haskell"
       _ <- waitForDiagnosticsFromSource doc "typecheck"

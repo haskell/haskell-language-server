@@ -12,6 +12,7 @@ import           Language.LSP.Test
 import           Language.LSP.Types
 import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "format document" [

@@ -22,6 +22,7 @@ import           Test.Hspec.Expectations
 
 import           System.FilePath                 ((</>))
 import           System.IO.Extra                 (withTempDir)
+import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
