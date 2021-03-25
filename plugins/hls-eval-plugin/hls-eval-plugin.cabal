@@ -111,7 +111,6 @@ test-suite tests
   build-tool-depends: hls-eval-plugin:test-server -any
   hs-source-dirs:     test
   main-is:            Main.hs
-  ghc-options: -Wunused-packages
 
   build-depends:
     , aeson

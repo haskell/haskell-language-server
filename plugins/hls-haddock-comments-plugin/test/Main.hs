@@ -6,8 +6,8 @@
 {-# LANGUAGE TypeOperators            #-}
 {-# LANGUAGE ViewPatterns             #-}
 
-module HaddockComments
-  ( tests,
+module Main
+  ( main,
   )
 where
 
@@ -18,6 +18,9 @@ import           Data.Text            (Text)
 import           Data.Text.Encoding   (encodeUtf8)
 import           System.FilePath      ((<.>), (</>))
 import           Test.Hls
+
+main :: IO ()
+main = defaultTestRunner tests
 
 tests :: TestTree
 tests =
@@ -35,9 +38,8 @@ tests =
 
 goldenTest :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 goldenTest fp (toTitle -> expectedTitle) l c = goldenGitDiff (fp <> " (golden)") goldenFilePath $
-  runSession hlsCommand fullCaps haddockCommentsPath $ do
+  runSession testCommand fullCaps haddockCommentsPath $ do
     doc <- openDoc hsFilePath "haskell"
-    _ <- waitForDiagnostics
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
     case find ((== Just expectedTitle) . caTitle) actions of
       Just (InR x) -> do
@@ -50,9 +52,8 @@ goldenTest fp (toTitle -> expectedTitle) l c = goldenGitDiff (fp <> " (golden)")
 
 expectedNothing :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 expectedNothing fp (toTitle -> expectedTitle) l c = testCase fp $
-  runSession hlsCommand fullCaps haddockCommentsPath $ do
+  runSession testCommand fullCaps haddockCommentsPath $ do
     doc <- openDoc (fp <.> "hs") "haskell"
-    _ <- waitForDiagnostics
     titles <- mapMaybe caTitle <$> getCodeActions doc (Range (Position l c) (Position l $ succ c))
     liftIO $ expectedTitle `notElem` titles @? "Unexpected CodeAction"
 
@@ -67,5 +68,5 @@ caTitle (InR CodeAction {_title}) = Just _title
 caTitle _                         = Nothing
 
 haddockCommentsPath :: String
-haddockCommentsPath = "test" </> "testdata" </> "haddockComments"
+haddockCommentsPath = "test" </> "testdata"
 

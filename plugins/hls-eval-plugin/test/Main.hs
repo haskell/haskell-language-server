@@ -213,4 +213,4 @@ replaceUnicodeQuotes :: T.Text -> T.Text
 replaceUnicodeQuotes = T.replace "‘" "'" . T.replace "’" "'"
 
 evalPath :: FilePath
-evalPath = "test/testdata"
+evalPath = "test" </> "testdata"
