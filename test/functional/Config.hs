@@ -12,6 +12,7 @@ import           Language.LSP.Test       as Test
 import qualified Language.LSP.Types.Lens as L
 import           System.FilePath         ((</>))
 import           Test.Hls
+import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 

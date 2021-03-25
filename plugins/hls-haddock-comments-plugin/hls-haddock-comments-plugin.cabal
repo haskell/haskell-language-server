@@ -1,33 +1,67 @@
-cabal-version: 2.2
-name:          hls-haddock-comments-plugin
-version:       1.0.0.0
-synopsis:      Haddock comments plugin for Haskell Language Server
+cabal-version:      2.4
+name:               hls-haddock-comments-plugin
+version:            1.0.0.0
+synopsis:           Haddock comments plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server>
 
-license:       Apache-2.0
-license-file:  LICENSE
-author:        Potato Hatsue
-maintainer:    berberman@yandex.com
-category:      Development
-build-type:    Simple
-homepage:      https://github.com/haskell/haskell-language-server
-bug-reports:   https://github.com/haskell/haskell-language-server/issues
+license:            Apache-2.0
+license-file:       LICENSE
+author:             Potato Hatsue
+maintainer:         berberman@yandex.com
+category:           Development
+build-type:         Simple
+homepage:           https://github.com/haskell/haskell-language-server
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
+extra-source-files:
+  LICENSE
+  test/testdata/*.hs
 
 library
-  exposed-modules:  Ide.Plugin.HaddockComments
-  hs-source-dirs:   src
-  ghc-options:      -Wall -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
+  exposed-modules:    Ide.Plugin.HaddockComments
+  hs-source-dirs:     src
+  ghc-options:
+    -Wall -Wno-name-shadowing -Wredundant-constraints
+    -Wno-unticked-promoted-constructors
+
   build-depends:
-    , base                  >=4.12 && <5
+    , base                  >=4.12    && <5
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide                ^>= 1.1.0.0
+    , ghcide                ^>=1.1.0.0
+    , hls-plugin-api        >=1.0     && <1.2
     , lsp-types
-    , hls-plugin-api        >= 1.0 && < 1.2
     , text
     , unordered-containers
 
+  default-language:   Haskell2010
+  default-extensions:
+    DataKinds
+    TypeOperators
+
+executable test-server
   default-language: Haskell2010
-  default-extensions: DataKinds, TypeOperators
+  build-depends:
+    , base
+    , data-default
+    , ghcide
+    , hls-haddock-comments-plugin
+    , hls-plugin-api
+
+  main-is:          Server.hs
+  hs-source-dirs:   test
+  ghc-options:      -threaded
+
+test-suite tests
+  type:               exitcode-stdio-1.0
+  default-language:   Haskell2010
+  build-tool-depends: hls-haddock-comments-plugin:test-server -any
+  hs-source-dirs:     test
+  main-is:            Main.hs
+  build-depends:
+    , base
+    , bytestring
+    , filepath
+    , hls-test-utils
+    , text

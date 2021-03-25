@@ -1,4 +1,4 @@
-cabal-version:      2.2
+cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
 version:            1.0.0.0
@@ -17,7 +17,7 @@ extra-source-files:
   test/golden/*.cabal
   test/golden/*.yaml
   test/golden/*.hs
-  test/golden/*.hs.expected
+  test/golden/*.expected
 
 
 flag pedantic

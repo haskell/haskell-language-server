@@ -8,6 +8,7 @@ import qualified Data.Default
 import           Ide.Plugin.Config
 import qualified Language.LSP.Types.Lens as LSP
 import           Test.Hls
+import           Test.Hls.Command
 
 -- ---------------------------------------------------------------------
 
