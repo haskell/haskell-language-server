@@ -57,7 +57,13 @@ import           Data.Either
 import           Data.List                            (isSuffixOf)
 import           Data.List.Extra                      (dropEnd1, nubOrd)
 
+import           Data.Version                         (showVersion)
 import           HieDb                                hiding (pointCommand)
+import           Packages                             (InstalledPackageInfo (packageVersion),
+                                                       PackageName (..),
+                                                       lookupPackage,
+                                                       packageNameString,
+                                                       sourceLibName)
 
 -- | Gives a Uri for the module, given the .hie file location and the the module info
 -- The Bool denotes if it is a boot module
@@ -219,10 +225,22 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ point
         prettyName (Right n, dets) = T.unlines $
           wrapHaskell (showNameWithoutUniques n <> maybe "" (" :: " <>) ((prettyType <$> identType dets) <|> maybeKind))
           : definedAt n
+          ++ maybeToList (prettyPackageName n)
           ++ catMaybes [ T.unlines . spanDocToMarkdown <$> lookupNameEnv dm n
                        ]
           where maybeKind = fmap showGhc $ safeTyThingType =<< lookupNameEnv km n
         prettyName (Left m,_) = showGhc m
+
+        prettyPackageName n = do
+          m <- nameModule_maybe n
+          let pid = moduleUnitId m
+          conf <- lookupPackage unsafeGlobalDynFlags pid
+          let pkgName = T.pack $ packageNameString conf
+              version = T.pack $ showVersion (packageVersion conf)
+              libName = case sourceLibName conf of
+                Just (PackageName x) -> ":" <> T.pack (unpackFS x)
+                _                    -> ""
+          pure $ " *(" <> pkgName <> "-" <> version <> libName <> ")*"
 
         prettyTypes = map (("_ :: "<>) . prettyType) types
         prettyType t = case kind of
