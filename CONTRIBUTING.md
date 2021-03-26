@@ -18,7 +18,7 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
       "hooks": [
         {
           "entry": "stylish-haskell --inplace",
-          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|^hie-compat/.*$)",
+          "exclude": "(^Setup.hs$|test/testdata/.*$|test/data/.*$|^hie-compat/.*$|^plugins/hls-tactics-plugin/.*$)",
           "files": "\\.l?hs$",
           "id": "stylish-haskell",
           "language": "system",
@@ -34,6 +34,12 @@ If you don't want to use [nix](https://nixos.org/guides/install-nix.html), you c
   ]
 }
 ```
+
+### Why they are excluded?
+
+- `test/testdata` and `test/data` are there as we want to test formatting plugins.
+- `hie-compat` is there as we want to keep its code as close to GHC as possible.
+- `hls-tactics-plugin` is there as the main contributor of the plugin (@isovector) does not want auto-formatting.
 
 ## Testing
 

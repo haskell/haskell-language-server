@@ -110,7 +110,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if retrie
       Retrie.descriptor "retrie" :
 #endif
-#if AGPL && brittany
+#if brittany
       Brittany.descriptor "brittany" :
 #endif
 #if class
