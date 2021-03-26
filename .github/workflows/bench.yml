@@ -92,7 +92,6 @@ jobs:
   bench-example:
     needs: pre_job
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
-    needs: [bench-init]
     runs-on: ${{ matrix.os }}
 
     strategy:
