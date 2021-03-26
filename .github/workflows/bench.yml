@@ -90,7 +90,7 @@ jobs:
         path: ~/.cabal/cabal.tar.gz
 
   bench-example:
-    needs: pre_job
+    needs: [pre_job, bench-init]
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ${{ matrix.os }}
 
