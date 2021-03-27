@@ -67,6 +67,7 @@ import qualified Development.IDE.Types.Logger                 as L
 
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
+import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -129,7 +130,8 @@ getModificationTimeImpl vfs isWatched missingFileDiags file = do
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
         -- we use 'getVirtualFile' to discriminate FOIs so make that
         -- dependency explicit by using the IsFileOfInterest rule
-        _ <- use_ IsFileOfInterest file
+        isWF <- isWorkspaceFile file
+        when isWF $ void $ use_ IsFileOfInterest file
         case mbVirtual of
             Just (virtualFileVersion -> ver) -> do
                 alwaysRerun
