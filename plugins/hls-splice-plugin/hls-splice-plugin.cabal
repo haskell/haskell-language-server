@@ -57,23 +57,9 @@ library
     DataKinds
     TypeOperators
 
-executable test-server
-  default-language: Haskell2010
-  build-depends:
-    , base
-    , data-default
-    , ghcide
-    , hls-plugin-api
-    , hls-splice-plugin
-
-  main-is:          Server.hs
-  hs-source-dirs:   test
-  ghc-options:      -threaded
-
 test-suite tests
   type:               exitcode-stdio-1.0
   default-language:   Haskell2010
-  build-tool-depends: hls-splice-plugin:test-server -any
   hs-source-dirs:     test
   main-is:            Main.hs
   build-depends:

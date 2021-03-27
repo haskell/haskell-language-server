@@ -15,6 +15,7 @@ import           Data.Aeson.Types        (Result (Success))
 import           Data.List.Extra         (nubOrdOn)
 import qualified Data.Text               as T
 import qualified Data.Text.IO            as T
+import qualified Ide.Plugin.Eval         as Eval
 import           Ide.Plugin.Eval.Types   (EvalParams (..))
 import           Language.LSP.Types.Lens (command, range, title)
 import           System.Directory        (doesFileExist)
@@ -24,32 +25,35 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
+evalPlugin :: PluginDescriptor IdeState
+evalPlugin = Eval.descriptor "eval"
+
 tests :: TestTree
 tests =
     testGroup
         "eval"
         [ testCase "Produces Evaluate code lenses" $
-            runSession testCommand fullCaps evalPath $ do
+            runSessionWithServer evalPlugin evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Evaluate..."]
         , testCase "Produces Refresh code lenses" $
-            runSession testCommand fullCaps evalPath $ do
+            runSessionWithServer evalPlugin evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (preview $ command . _Just . title) lenses @?= [Just "Refresh..."]
         , testCase "Code lenses have ranges" $
-            runSession testCommand fullCaps evalPath $ do
+            runSessionWithServer evalPlugin evalPath $ do
                 doc <- openDoc "T1.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
         , testCase "Multi-line expressions have a multi-line range" $ do
-            runSession testCommand fullCaps evalPath $ do
+            runSessionWithServer evalPlugin evalPath $ do
                 doc <- openDoc "T3.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (view range) lenses @?= [Range (Position 3 0) (Position 5 0)]
         , testCase "Executed expressions range covers only the expression" $ do
-            runSession testCommand fullCaps evalPath $ do
+            runSessionWithServer evalPlugin evalPath $ do
                 doc <- openDoc "T2.hs" "haskell"
                 lenses <- getEvalCodeLenses doc
                 liftIO $ map (view range) lenses @?= [Range (Position 4 0) (Position 5 0)]
@@ -132,12 +136,10 @@ tests =
             "Can handle eval inside nested comment properly"
             $ goldenTest "TNested.hs"
         , testCase "Test on last line insert results correctly" $ do
-            runSession testCommand fullCaps evalPath $
-                liftIO $ do
-                    let mdl = "TLastLine.hs"
-                    -- Write the test file, to make sure that it has no final line return
-                    writeFile (evalPath </> mdl) "module TLastLine where\n\n-- >>> take 3 [1..]"
-                    goldenTest mdl
+                let mdl = "TLastLine.hs"
+                -- Write the test file, to make sure that it has no final line return
+                writeFile (evalPath </> mdl) "module TLastLine where\n\n-- >>> take 3 [1..]"
+                goldenTest mdl
             , testGroup "with preprocessors"
             [ knownBrokenInEnv [HostOS Windows, GhcVer GHC84, GhcVer GHC86]
                 "CPP eval on Windows and/or GHC <= 8.6 fails for some reasons" $
@@ -160,7 +162,7 @@ goldenTest = goldenTestBy isEvalTest
  Compare results with the contents of corresponding '.expected' file (and creates it, if missing)
 -}
 goldenTestBy :: (CodeLens -> Bool) -> FilePath -> IO ()
-goldenTestBy fltr input = runSession testCommand fullCaps evalPath $ do
+goldenTestBy fltr input = runSessionWithServer evalPlugin evalPath $ do
     doc <- openDoc input "haskell"
 
     -- Execute lenses backwards, to avoid affecting their position in the source file
@@ -176,7 +178,7 @@ goldenTestBy fltr input = runSession testCommand fullCaps evalPath $ do
     edited <- replaceUnicodeQuotes <$> documentContents doc
     -- liftIO $ T.putStrLn edited
 
-    let expectedFile = evalPath </> input <.> "expected"
+    let expectedFile = input <.> "expected"
 
     liftIO $ do
         -- Write expected file if missing

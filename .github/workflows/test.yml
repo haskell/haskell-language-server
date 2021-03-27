@@ -140,27 +140,27 @@ jobs:
 
       - name: Test hls-brittany-plugin
         if: ${{ matrix.test }}
-        run: cabal test hls-brittany-plugin || cabal test hls-brittany-plugin --test-options="-j1"
+        run: cabal test hls-brittany-plugin --test-options="--rerun-update" || cabal test hls-brittany-plugin --test-options="--rerun"
 
       - name: Test hls-class-plugin
         if: ${{ matrix.test }}
-        run: cabal test hls-class-plugin || cabal test hls-class-plugin --test-options="-j1"
+        run: cabal test hls-class-plugin --test-options="--rerun-update" || cabal test hls-class-plugin --test-options="--rerun"
 
       - name: Test hls-eval-plugin
         if: ${{ matrix.test }}
-        run: cabal test hls-eval-plugin --test-options="-j1 --rerun" || cabal test hls-eval-plugin --test-options="-j1 --rerun"
+        run: cabal test hls-eval-plugin --test-options="--rerun-update" || cabal test hls-eval-plugin --test-options="--rerun"
 
       - name: Test hls-haddock-comments-plugin
         if: ${{ matrix.test }}
-        run: cabal test hls-haddock-comments-plugin || cabal test hls-haddock-comments-plugin --test-options="-j1"
+        run: cabal test hls-haddock-comments-plugin --test-options="--rerun-update" || cabal test hls-haddock-comments-plugin --test-options="--rerun"
 
       - name: Test hls-splice-plugin
         if: ${{ matrix.test }}
-        run: cabal test hls-splice-plugin || cabal test hls-splice-plugin --test-options="-j1"
+        run: cabal test hls-splice-plugin --test-options="--rerun-update" || cabal test hls-splice-plugin --test-options="--rerun"
 
       - name: Test hls-stylish-haskell-plugin
         if: ${{ matrix.test }}
-        run: cabal test hls-stylish-haskell-plugin || cabal test hls-stylish-haskell-plugin --test-options="-j1"
+        run: cabal test hls-stylish-haskell-plugin --test-options="--rerun-update" || cabal test hls-stylish-haskell-plugin --test-options="--rerun"
 
       - name: Test hls-tactics-plugin test suite
         if: ${{ matrix.test }}
