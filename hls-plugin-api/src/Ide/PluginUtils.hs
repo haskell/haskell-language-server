@@ -37,7 +37,6 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
 
-import qualified Data.Map.Strict                 as Map
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server
@@ -144,7 +143,7 @@ clientSupportsDocumentChanges caps =
 -- ---------------------------------------------------------------------
 
 pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
-pluginDescToIdePlugins plugins = IdePlugins $ Map.fromList $ map (\p -> (pluginId p, p)) plugins
+pluginDescToIdePlugins plugins = IdePlugins $ map (\p -> (pluginId p, p)) plugins
 
 
 -- ---------------------------------------------------------------------
@@ -214,12 +213,11 @@ positionInRange (Position pl po) (Range (Position sl so) (Position el eo)) =
 -- ---------------------------------------------------------------------
 
 allLspCmdIds' :: T.Text -> IdePlugins ideState -> [T.Text]
-allLspCmdIds' pid mp = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
+allLspCmdIds' pid (IdePlugins ls) = mkPlugin (allLspCmdIds pid) (Just . pluginCommands)
     where
         justs (p, Just x)  = [(p, x)]
         justs (_, Nothing) = []
 
-        ls = Map.toList (ipMap mp)
 
         mkPlugin maker selector
             = maker $ concatMap (\(pid, p) -> justs (pid, selector p)) ls

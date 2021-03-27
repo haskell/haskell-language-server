@@ -13,7 +13,6 @@ import           Control.Monad.Extra
 import qualified Data.Aeson.Encode.Pretty      as A
 import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Default
-import qualified Data.Map.Strict               as Map
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
 import qualified Development.IDE.Main          as Main
@@ -97,7 +96,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
     when argLSP $ do
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
         hPutStrLn stderr $ "  with arguments: " <> show lspArgs
-        hPutStrLn stderr $ "  with plugins: " <> show (Map.keys $ ipMap idePlugins)
+        hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
