@@ -35,7 +35,7 @@ import           Development.Shake
 import           Development.Shake.Classes
 import           GHC.Exts                                     (toList)
 import           GHC.Generics
-import           Ide.Plugin.Config                            (Config (completionSnippetsOn))
+import           Ide.Plugin.Config                            (Config)
 import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
@@ -47,6 +47,7 @@ descriptor plId = (defaultPluginDescriptor plId)
   { pluginRules = produceCompletions
   , pluginHandlers = mkPluginHandler STextDocumentCompletion getCompletionsLSP
   , pluginCommands = [extendImportCommand]
+  , pluginCustomConfig = mkCustomConfig properties
   }
 
 produceCompletions :: Rules ()
@@ -135,9 +136,8 @@ getCompletionsLSP ide plId
                 -> return (InL $ List [])
               (Just pfix', _) -> do
                 let clientCaps = clientCapabilities $ shakeExtras ide
-                config <- getClientConfig $ shakeExtras ide
-                let snippets = WithSnippets . completionSnippetsOn $ config
-                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps snippets
+                config <- getCompletionsConfig plId
+                allCompletions <- liftIO $ getCompletions plId ideOpts cci' parsedMod bindMap pfix' clientCaps config
                 pure $ InL (List allCompletions)
               _ -> return (InL $ List [])
           _ -> return (InL $ List [])
