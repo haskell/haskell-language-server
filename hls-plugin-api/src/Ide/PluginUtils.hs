@@ -37,6 +37,7 @@ import           Language.LSP.Types
 import qualified Language.LSP.Types              as J
 import           Language.LSP.Types.Capabilities
 
+import           Data.Containers.ListUtils       (nubOrdOn)
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties
 import           Language.LSP.Server
@@ -143,7 +144,8 @@ clientSupportsDocumentChanges caps =
 -- ---------------------------------------------------------------------
 
 pluginDescToIdePlugins :: [PluginDescriptor ideState] -> IdePlugins ideState
-pluginDescToIdePlugins plugins = IdePlugins $ map (\p -> (pluginId p, p)) plugins
+pluginDescToIdePlugins plugins =
+    IdePlugins $ map (\p -> (pluginId p, p)) $ nubOrdOn pluginId plugins
 
 
 -- ---------------------------------------------------------------------
