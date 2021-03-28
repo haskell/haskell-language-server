@@ -198,10 +198,11 @@ getAtPoint file pos = runMaybeT $ do
   opts <- liftIO $ getIdeOptionsIO ide
 
   (hf, mapping) <- useE GetHieAst file
+  df <- hsc_dflags . hscEnv . fst <$> useE GhcSession file
   dkMap <- lift $ maybe (DKMap mempty mempty) fst <$> (runMaybeT $ useE GetDocMap file)
 
   !pos' <- MaybeT (return $ fromCurrentPosition mapping pos)
-  MaybeT $ pure $ fmap (first (toCurrentRange mapping =<<)) $ AtPoint.atPoint opts hf dkMap pos'
+  MaybeT $ pure $ fmap (first (toCurrentRange mapping =<<)) $ AtPoint.atPoint opts hf dkMap df pos'
 
 toCurrentLocations :: PositionMapping -> [Location] -> [Location]
 toCurrentLocations mapping = mapMaybe go

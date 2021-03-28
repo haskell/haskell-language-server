@@ -202,9 +202,10 @@ atPoint
   :: IdeOptions
   -> HieAstResult
   -> DocAndKindMap
+  -> DynFlags
   -> Position
   -> Maybe (Maybe Range, [T.Text])
-atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ pointCommand hf pos hoverInfo
+atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) df pos = listToMaybe $ pointCommand hf pos hoverInfo
   where
     -- Hover info for values/data
     hoverInfo ast = (Just range, prettyNames ++ pTypes)
@@ -234,7 +235,7 @@ atPoint IdeOptions{} (HAR _ hf _ _ kind) (DKMap dm km) pos = listToMaybe $ point
         prettyPackageName n = do
           m <- nameModule_maybe n
           let pid = moduleUnitId m
-          conf <- lookupPackage unsafeGlobalDynFlags pid
+          conf <- lookupPackage df pid
           let pkgName = T.pack $ packageNameString conf
               version = T.pack $ showVersion (packageVersion conf)
               libName = case sourceLibName conf of
