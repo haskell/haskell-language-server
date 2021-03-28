@@ -19,8 +19,8 @@ category:           Development
 build-type:         Simple
 extra-source-files:
   LICENSE
-  test/testdata/*.expected
   test/testdata/*.error
+  test/testdata/*.expected
   test/testdata/*.hs
   test/testdata/*.yaml
 
@@ -58,10 +58,11 @@ library
     TypeOperators
 
 test-suite tests
-  type:               exitcode-stdio-1.0
-  default-language:   Haskell2010
-  hs-source-dirs:     test
-  main-is:            Main.hs
+  type:             exitcode-stdio-1.0
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  main-is:          Main.hs
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
   build-depends:
     , base
     , directory

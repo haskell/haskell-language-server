@@ -34,6 +34,7 @@ library
   hs-source-dirs:   src
   build-depends:
     , aeson
+    , async
     , base
     , blaze-markup
     , bytestring
@@ -59,7 +60,6 @@ library
     , temporary
     , text
     , unordered-containers
-    , async
 
   ghc-options:      -Wall
 
