@@ -42,6 +42,7 @@ import           System.Directory                  (getCurrentDirectory,
                                                     setCurrentDirectory)
 import           System.IO.Extra
 import           System.Process.Extra              (createPipe)
+import           System.Time.Extra
 import           Test.Hls.Util
 import           Test.Tasty                        hiding (Timeout)
 import           Test.Tasty.ExpectedFailure
@@ -108,6 +109,8 @@ runSessionWithServer' plugin conf sconf caps root s = do
                  in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
               argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
             }
-  withAsync server $ \_ ->
+  x <- withAsync server $ \_ ->
     runSessionWithHandles inW outR sconf caps root s
       `finally` setCurrentDirectory cwd
+  sleep 0.5
+  pure x
