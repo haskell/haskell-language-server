@@ -691,7 +691,7 @@ noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 testSession :: String -> Session () -> TestTree
 testSession name s = testCase name $ withTempDir $ \dir ->

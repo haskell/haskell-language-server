@@ -25,7 +25,7 @@ import           Ide.PluginUtils             (makeDiffTextEdit)
 
 import           Control.Monad.IO.Class
 import           Ide.Types
-import           Language.LSP.Server
+import           Language.LSP.Server hiding (defaultConfig)
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens
 import           "fourmolu" Ormolu

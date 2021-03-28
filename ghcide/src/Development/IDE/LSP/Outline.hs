@@ -213,6 +213,7 @@ defDocumentSymbol l = DocumentSymbol { .. } where
   _range          = realSrcSpanToRange l
   _selectionRange = realSrcSpanToRange l
   _children       = Nothing
+  _tags           = Nothing
 
 showRdrName :: RdrName -> Text
 showRdrName = pprText

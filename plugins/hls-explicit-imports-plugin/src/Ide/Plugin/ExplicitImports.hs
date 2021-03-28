@@ -139,12 +139,14 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
               _title = "Make all imports explicit"
               _kind = Just CodeActionQuickFix
               _command = Nothing
-              _edit = Just WorkspaceEdit {_changes, _documentChanges}
+              _edit = Just WorkspaceEdit {_changes, _documentChanges, _changeAnnotations}
               _changes = Just $ HashMap.singleton _uri $ List edits
               _documentChanges = Nothing
               _diagnostics = Nothing
               _isPreferred = Nothing
               _disabled = Nothing
+              _xdata = Nothing
+              _changeAnnotations = Nothing
           return $ Right $ List [caExplicitImports | not (null edits)]
   | otherwise =
     return $ Right $ List []
@@ -232,13 +234,13 @@ mkExplicitEdit posMapping (L src imp) explicit
 -- | Given an import declaration, generate a code lens unless it has an
 -- explicit import list or it's qualified
 generateLens :: PluginId -> Uri -> TextEdit -> IO (Maybe CodeLens)
-generateLens pId uri importEdit@TextEdit {_range} = do
+generateLens pId uri importEdit@TextEdit {_range, _newText} = do
   -- The title of the command is just the minimal explicit import decl
-  let title = _newText importEdit
+  let title = _newText
       -- the code lens has no extra data
       _xdata = Nothing
       -- an edit that replaces the whole declaration with the explicit one
-      edit = WorkspaceEdit (Just editsMap) Nothing
+      edit = WorkspaceEdit (Just editsMap) Nothing Nothing
       editsMap = HashMap.fromList [(uri, List [importEdit])]
       -- the command argument is simply the edit
       _arguments = Just [toJSON $ ImportCommandParams edit]

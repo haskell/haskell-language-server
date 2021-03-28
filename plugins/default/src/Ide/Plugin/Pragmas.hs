@@ -55,7 +55,7 @@ codeActionProvider state _plId (CodeActionParams _ _ docId _ (J.CodeActionContex
 -- thus, not validated.
 pragmaEditToAction :: Uri -> Range -> PragmaEdit -> (Command |? CodeAction)
 pragmaEditToAction uri range (title, p) =
-  InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing
+  InR $ J.CodeAction title (Just J.CodeActionQuickFix) (Just (J.List [])) Nothing Nothing (Just edit) Nothing Nothing
   where
     render (OptGHC x)  = "{-# OPTIONS_GHC -Wno-" <> x <> " #-}\n"
     render (LangExt x) = "{-# LANGUAGE " <> x <> " #-}\n"
@@ -63,6 +63,7 @@ pragmaEditToAction uri range (title, p) =
     edit =
       J.WorkspaceEdit
         (Just $ H.singleton uri textEdits)
+        Nothing
         Nothing
 
 suggest :: Maybe DynFlags -> Diagnostic -> [PragmaEdit]
@@ -166,6 +167,7 @@ completion _ide _ complParams = do
                         _filterText = Nothing,
                         _insertText = Nothing,
                         _insertTextFormat = Nothing,
+                        _insertTextMode = Nothing,
                         _textEdit = Nothing,
                         _additionalTextEdits = Nothing,
                         _commitCharacters = Nothing,

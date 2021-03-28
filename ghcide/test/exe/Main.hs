@@ -4286,18 +4286,19 @@ outlineTests = testGroup
   ]
  where
   docSymbol name kind loc =
-    DocumentSymbol name Nothing kind Nothing loc loc Nothing
+    DocumentSymbol name Nothing kind Nothing Nothing loc loc Nothing
   docSymbol' name kind loc selectionLoc =
-    DocumentSymbol name Nothing kind Nothing loc selectionLoc Nothing
+    DocumentSymbol name Nothing kind Nothing Nothing loc selectionLoc Nothing
   docSymbolD name detail kind loc =
-    DocumentSymbol name (Just detail) kind Nothing loc loc Nothing
+    DocumentSymbol name (Just detail) kind Nothing Nothing loc loc Nothing
   docSymbolWithChildren name kind loc cc =
-    DocumentSymbol name Nothing kind Nothing loc loc (Just $ List cc)
+    DocumentSymbol name Nothing kind Nothing Nothing loc loc (Just $ List cc)
   docSymbolWithChildren' name kind loc selectionLoc cc =
-    DocumentSymbol name Nothing kind Nothing loc selectionLoc (Just $ List cc)
+    DocumentSymbol name Nothing kind Nothing Nothing loc selectionLoc (Just $ List cc)
   moduleSymbol name loc cc = DocumentSymbol name
                                             Nothing
                                             SkFile
+                                            Nothing
                                             Nothing
                                             (R 0 0 maxBound 0)
                                             loc
@@ -4305,6 +4306,7 @@ outlineTests = testGroup
   classSymbol name loc cc = DocumentSymbol name
                                            (Just "class")
                                            SkInterface
+                                           Nothing
                                            Nothing
                                            loc
                                            loc
