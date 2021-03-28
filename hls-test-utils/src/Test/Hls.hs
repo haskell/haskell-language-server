@@ -19,14 +19,13 @@ module Test.Hls
 where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent                (forkIO, killThread)
+import           Control.Concurrent.Async          (withAsync)
 import           Control.Exception.Base
 import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
 import           Data.Default                      (def)
 import qualified Data.Text                         as T
-import           Development.IDE                   (IdeState, hDuplicateTo',
-                                                    noLogging)
+import           Development.IDE                   (IdeState, hDuplicateTo')
 import           Development.IDE.Main
 import qualified Development.IDE.Main              as Ghcide
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
@@ -80,7 +79,6 @@ muteStderr action = withTempFile $ \tmp ->
     h `hDuplicateTo'` stderr
     bracket_ action (hClose old) (old `hDuplicateTo'` stderr)
 
-
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
 runSessionWithServer' ::
@@ -99,18 +97,17 @@ runSessionWithServer' plugin conf sconf caps root s = do
   (outR, outW) <- createPipe
   -- restore cwd after running the session; otherwise the path to test data will be invalid
   cwd <- getCurrentDirectory
-  threadId <-
-    forkIO $
-      Ghcide.defaultMain
-        def
-          { argsHandleIn = pure inR,
-            argsHandleOut = pure outW,
-            argsLogger = pure noLogging,
-            argsDefaultHlsConfig = conf,
-            argsIdeOptions = \config sessionLoader ->
-              let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
-               in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
-            argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
-          }
-  runSessionWithHandles inW outR sconf caps root s
-    `finally` (killThread threadId >> setCurrentDirectory cwd)
+  let server =
+        Ghcide.defaultMain
+          def
+            { argsHandleIn = pure inR,
+              argsHandleOut = pure outW,
+              argsDefaultHlsConfig = conf,
+              argsIdeOptions = \config sessionLoader ->
+                let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
+                 in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
+              argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
+            }
+  withAsync server $ \_ ->
+    runSessionWithHandles inW outR sconf caps root s
+      `finally` setCurrentDirectory cwd

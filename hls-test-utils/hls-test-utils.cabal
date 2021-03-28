@@ -59,6 +59,7 @@ library
     , temporary
     , text
     , unordered-containers
+    , async
 
   ghc-options:      -Wall
 
