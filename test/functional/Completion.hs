@@ -328,7 +328,7 @@ snippetTests = testGroup "snippets" [
     , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
 
-        let config = object [ "haskell" .= object ["completionSnippetsOn" .= False]]
+        let config = object ["haskell" .= object ["plugin" .= object ["ghcide-completions" .= object ["config" .= object ["snippetsOn" .= False]]]]]
 
         sendNotification SWorkspaceDidChangeConfiguration
                         (DidChangeConfigurationParams config)
