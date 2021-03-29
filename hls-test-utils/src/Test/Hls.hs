@@ -19,7 +19,7 @@ module Test.Hls
 where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Async          (withAsync)
+import           Control.Concurrent.Async          (async, wait)
 import           Control.Exception.Base
 import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
@@ -49,11 +49,10 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
-import           Test.Tasty.Runners
 
--- | Run 'defaultMainWithRerun' with -j1, and silence stderr
+-- | Run 'defaultMainWithRerun', and silence stderr
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = muteStderr . defaultMainWithRerun . adjustOption (const $ NumThreads 1)
+defaultTestRunner = silenceStderr . defaultMainWithRerun
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -72,13 +71,17 @@ runSessionWithServerFormatter plugin formatter =
     def
     fullCaps
 
--- | Silence stderr, running an action
-muteStderr :: IO () -> IO ()
-muteStderr action = withTempFile $ \tmp ->
-  bracket (openFile tmp AppendMode) hClose $ \h -> do
+-- | Run an action, with stderr silenced
+silenceStderr :: IO () -> IO ()
+silenceStderr action = withTempFile $ \temp ->
+  bracket (openFile temp ReadWriteMode) hClose $ \h -> do
     old <- hDuplicate stderr
+    buf <- hGetBuffering stderr
     h `hDuplicateTo'` stderr
-    bracket_ action (hClose old) (old `hDuplicateTo'` stderr)
+    bracket_
+      action
+      (hClose old)
+      (old `hDuplicateTo'` stderr >> hSetBuffering stderr buf)
 
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
@@ -98,19 +101,22 @@ runSessionWithServer' plugin conf sconf caps root s = do
   (outR, outW) <- createPipe
   -- restore cwd after running the session; otherwise the path to test data will be invalid
   cwd <- getCurrentDirectory
-  let server =
-        Ghcide.defaultMain
-          def
-            { argsHandleIn = pure inR,
-              argsHandleOut = pure outW,
-              argsDefaultHlsConfig = conf,
-              argsIdeOptions = \config sessionLoader ->
-                let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
-                 in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
-              argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
-            }
-  x <- withAsync server $ \_ ->
+  server <-
+    async $
+      Ghcide.defaultMain
+        def
+          { argsHandleIn = pure inR,
+            argsHandleOut = pure outW,
+            argsDefaultHlsConfig = conf,
+            argsIdeOptions = \config sessionLoader ->
+              let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
+               in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
+            argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
+          }
+
+  x <-
     runSessionWithHandles inW outR sconf caps root s
       `finally` setCurrentDirectory cwd
+  wait server
   sleep 0.5
   pure x
