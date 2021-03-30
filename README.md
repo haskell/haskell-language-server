@@ -1,3 +1,4 @@
+PLEASE DO NOT MERGE THIS: this is just for test.
 # haskell-language-server
 
 ![haskell-language-server][logo]
