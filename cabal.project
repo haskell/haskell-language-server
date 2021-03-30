@@ -88,6 +88,7 @@ write-ghc-environment-files: never
 index-state: 2021-03-29T21:23:14Z
 
 allow-newer:
+    *:*,
 	active:base,
   data-tree-print:base,
 	diagrams-contrib:base,
