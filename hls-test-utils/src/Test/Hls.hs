@@ -25,7 +25,8 @@ import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
 import           Data.Default                      (def)
 import qualified Data.Text                         as T
-import           Development.IDE                   (IdeState, hDuplicateTo')
+import           Development.IDE                   (IdeState, hDuplicateTo',
+                                                    noLogging)
 import           Development.IDE.Main
 import qualified Development.IDE.Main              as Ghcide
 import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
@@ -50,9 +51,9 @@ import           Test.Tasty.Golden
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 
--- | Run 'defaultMainWithRerun', and silence stderr
+-- | Run 'defaultMainWithRerun', limiting each single test case running at most 10 minutes
 defaultTestRunner :: TestTree -> IO ()
-defaultTestRunner = silenceStderr . defaultMainWithRerun
+defaultTestRunner = defaultMainWithRerun . adjustOption (const $ mkTimeout 600000000)
 
 gitDiff :: FilePath -> FilePath -> [String]
 gitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]
@@ -72,16 +73,16 @@ runSessionWithServerFormatter plugin formatter =
     fullCaps
 
 -- | Run an action, with stderr silenced
-silenceStderr :: IO () -> IO ()
+silenceStderr :: IO a -> IO a
 silenceStderr action = withTempFile $ \temp ->
   bracket (openFile temp ReadWriteMode) hClose $ \h -> do
     old <- hDuplicate stderr
     buf <- hGetBuffering stderr
     h `hDuplicateTo'` stderr
-    bracket_
-      action
-      (hClose old)
-      (old `hDuplicateTo'` stderr >> hSetBuffering stderr buf)
+    action `finally` do
+      old `hDuplicateTo'` stderr
+      hSetBuffering stderr buf
+      hClose old
 
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
@@ -96,7 +97,7 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugin conf sconf caps root s = do
+runSessionWithServer' plugin conf sconf caps root s = silenceStderr $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
   -- restore cwd after running the session; otherwise the path to test data will be invalid
@@ -108,6 +109,7 @@ runSessionWithServer' plugin conf sconf caps root s = do
           { argsHandleIn = pure inR,
             argsHandleOut = pure outW,
             argsDefaultHlsConfig = conf,
+            argsLogger = pure noLogging,
             argsIdeOptions = \config sessionLoader ->
               let ideOptions = (argsIdeOptions def config sessionLoader) {optTesting = IdeTesting True}
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
@@ -118,5 +120,5 @@ runSessionWithServer' plugin conf sconf caps root s = do
     runSessionWithHandles inW outR sconf caps root s
       `finally` setCurrentDirectory cwd
   wait server
-  sleep 0.5
+  sleep 0.3
   pure x
