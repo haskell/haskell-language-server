@@ -58,7 +58,7 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/anka-213/ghc-check
-  tag: 63e01825772e06aa6c6f7032f30bfc2b1c88e7d2
+  tag: 3cad1db8bd6ef0921713913be7e92fe2361bae4d
 -- https://github.com/pepeiborra/ghc-check/pull/12
 
 source-repository-package
