@@ -83,6 +83,12 @@ source-repository-package
   subdir: lsp-test
 -- https://github.com/haskell/lsp/pull/312/commits/3bf244fe0cf7ca9b895ae71fb526adba466ceaee
 
+source-repository-package
+  type: git
+  location: https://github.com/mpickering/apply-refact
+  tag: 0.9.2.0
+-- https://github.com/mpickering/apply-refact/issues/107
+
 write-ghc-environment-files: never
 
 index-state: 2021-03-29T21:23:14Z
