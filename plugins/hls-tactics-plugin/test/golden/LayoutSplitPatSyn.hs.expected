@@ -5,7 +5,7 @@ pattern JustSingleton a <- Just [a]
 
 
 test :: Maybe [Bool] -> Maybe Bool
-test (JustSingleton False) = _
-test (JustSingleton True) = _
+test (JustSingleton False) = _0
+test (JustSingleton True) = _1
 
 

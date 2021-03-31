@@ -1,5 +1,5 @@
 test :: Bool -> Bool -> Bool
 test a b
   | a = (case b of
-   False -> _
-   True -> _)
+   False -> _0
+   True -> _1)

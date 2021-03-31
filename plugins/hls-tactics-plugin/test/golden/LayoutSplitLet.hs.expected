@@ -1,7 +1,7 @@
 test :: a
 test =
   let t :: Bool -> a
-      t False = _
-      t True = _
+      t False = _0
+      t True = _1
    in _
 

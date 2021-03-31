@@ -1,5 +1,5 @@
 newtype Reader r a = Reader (r -> a)
 
 test :: b -> Reader r a
-test b = Reader (\ r -> _)
+test b = Reader (\ r -> _0)
 

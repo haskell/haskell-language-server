@@ -1,2 +1,2 @@
 blah :: Int -> Bool -> (a -> b) -> String -> Int
-blah i b fab l_c = _
+blah i b fab l_c = _0

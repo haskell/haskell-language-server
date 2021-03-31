@@ -2,7 +2,7 @@ test :: Bool -> IO ()
 test b = do
   putStrLn "hello"
   case b of
-    False -> _
-    True -> _
+    False -> _0
+    True -> _1
   pure ()
 

@@ -1,5 +1,5 @@
 class Test a where
   test :: Bool -> a
-  test False = _
-  test True = _
+  test False = _0
+  test True = _1
 

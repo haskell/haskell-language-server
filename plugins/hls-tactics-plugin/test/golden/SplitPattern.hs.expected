@@ -4,9 +4,9 @@ case_split :: ADT -> Int
 case_split One        = _
 case_split (Two i)    = _
 case_split Three      = _
-case_split (Four b One) = _
-case_split (Four b (Two i)) = _
-case_split (Four b Three) = _
-case_split (Four b (Four b3 a4)) = _
-case_split (Four b Five) = _
+case_split (Four b One) = _0
+case_split (Four b (Two i)) = _1
+case_split (Four b Three) = _2
+case_split (Four b (Four b3 a4)) = _3
+case_split (Four b Five) = _4
 case_split Five       = _

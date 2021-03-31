@@ -1,6 +1,6 @@
 and :: (a, b) -> Bool -> Bool -> Bool
-and (a, b) False False = _
-and (a, b) True False = _
-and (a, b) False True = _
-and (a, b) True True = _
+and (a, b) False False = _0
+and (a, b) True False = _1
+and (a, b) False True = _2
+and (a, b) True True = _3
 

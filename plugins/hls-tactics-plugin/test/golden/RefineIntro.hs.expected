@@ -1,2 +1,2 @@
 test :: a -> Either a b
-test a = _
+test a = _0

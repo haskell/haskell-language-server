@@ -1,5 +1,5 @@
 and :: Bool -> Bool -> Bool
-and False False = _
-and True False = _
-and False True = _
-and True True = _
+and False False = _0
+and True False = _1
+and False True = _2
+and True True = _3

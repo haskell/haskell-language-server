@@ -1,5 +1,5 @@
 test :: Bool -> Bool
 test b = id $ (case b of
-   False -> _
-   True -> _)
+   False -> _0
+   True -> _1)
 

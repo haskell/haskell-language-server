@@ -4,4 +4,4 @@ data CtxGADT where
   MkCtxGADT :: (Show a, Eq a) => a -> CtxGADT
 
 ctxGADT :: CtxGADT -> String
-ctxGADT (MkCtxGADT a) = _
+ctxGADT (MkCtxGADT a) = _0
