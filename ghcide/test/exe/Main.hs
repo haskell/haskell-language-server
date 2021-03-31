@@ -846,7 +846,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 2 1) (Position 2 10))
+      actionsOrCommands <- getAllCodeActions doc
       let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
                                    , "Use type signature" `T.isInfixOf` actionTitle
                            ]
@@ -866,7 +866,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 2 1) (Position 2 10))
+      actionsOrCommands <- getAllCodeActions doc
       let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
                                     , "Use type signature" `T.isInfixOf` actionTitle
                               ]
@@ -889,7 +889,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 4 1) (Position 4 10))
+      actionsOrCommands <- getAllCodeActions doc
       let [addSignature] = [action | InR action@CodeAction { _title = actionTitle } <- actionsOrCommands
                                     , "Use type signature" `T.isInfixOf` actionTitle
                               ]
@@ -1111,7 +1111,7 @@ removeImportTests = testGroup "remove import actions"
       doc <- createDoc "ModuleC.hs" "haskell" content
       _ <- waitForDiagnostics
       [_, _, _, _, InR action@CodeAction { _title = actionTitle }]
-          <- getCodeActions doc (Range (Position 2 0) (Position 2 5))
+          <- nub <$> getAllCodeActions doc
       liftIO $ "Remove all redundant imports" @=? actionTitle
       executeCodeAction action
       contentAfterAction <- documentContents doc
@@ -1149,7 +1149,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB)"
                     , "main = print (stuffA, stuffB)"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 2 17) (Position 2 18))
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1169,7 +1169,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import ModuleA as A (stuffB)"
                     , "main = print (stuffB .* stuffB)"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 2 17) (Position 2 18))
             ["Add (.*) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1206,7 +1206,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = Constructor"
                     ])
-            (Range (Position 2 5) (Position 2 5))
+            (Range (Position 3 5) (Position 3 5))
             ["Add A(Constructor) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1225,7 +1225,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = Constructor"
                     ])
-            (Range (Position 2 5) (Position 2 5))
+            (Range (Position 3 5) (Position 3 5))
             ["Add A(Constructor) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1245,7 +1245,7 @@ extendImportTests = testGroup "extend import actions"
                     , "b :: A"
                     , "b = ConstructorFoo"
                     ])
-            (Range (Position 2 5) (Position 2 5))
+            (Range (Position 3 5) (Position 3 5))
             ["Add A(ConstructorFoo) to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1266,7 +1266,7 @@ extendImportTests = testGroup "extend import actions"
                     , "import qualified ModuleA as A (stuffB)"
                     , "main = print (A.stuffA, A.stuffB)"
                     ])
-            (Range (Position 3 17) (Position 3 18))
+            (Range (Position 2 17) (Position 2 18))
             ["Add stuffA to the import list of ModuleA"]
             (T.unlines
                     [ "module ModuleB where"
@@ -1682,9 +1682,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
         doc <- openDoc file "haskell"
         waitForProgressDone
         void $ expectDiagnostics [(file, [(DsError, loc, "Ambiguous occurrence") | loc <- locs])]
-        contents <- documentContents doc
-        let range = Range (Position 0 0) (Position (length $ T.lines contents) 0)
-        actions <- getCodeActions doc range
+        actions <- getAllCodeActions doc
         k doc actions
     withHideFunction = withTarget ("HideFunction" <.> "hs")
 
@@ -1891,7 +1889,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
       _ <- waitForDiagnostics
       InR action@CodeAction { _title = actionTitle } : _
                   <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
-                     getCodeActions docB (R 1 0 1 50)
+                     getCodeActions docB (R 0 0 0 50)
       liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
       executeCodeAction action
       contentAfterAction <- documentContents docB
@@ -1915,7 +1913,7 @@ insertNewDefinitionTests = testGroup "insert new definition actions"
       _ <- waitForDiagnostics
       InR action@CodeAction { _title = actionTitle } : _
                   <- sortOn (\(InR CodeAction{_title=x}) -> x) <$>
-                     getCodeActions docB (R 1 0 1 50)
+                     getCodeActions docB (R 0 0 0 50)
       liftIO $ actionTitle @?= "Define select :: [Bool] -> Bool"
       executeCodeAction action
       contentAfterAction <- documentContents docB
@@ -2063,15 +2061,15 @@ deleteUnusedDefinitionTests = testGroup "delete unused definition action"
       docId <- createDoc "A.hs" "haskell" source
       expectDiagnostics [ ("A.hs", [(DsWarning, pos, "not used")]) ]
 
-      (action, title) <- extractCodeAction docId "Delete"
+      (action, title) <- extractCodeAction docId "Delete" pos
 
       liftIO $ title @?= expectedTitle
       executeCodeAction action
       contentAfterAction <- documentContents docId
       liftIO $ contentAfterAction @?= expectedResult
 
-    extractCodeAction docId actionPrefix = do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R 0 0 0 0) [actionPrefix]
+    extractCodeAction docId actionPrefix (l, c) = do
+      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l c) [actionPrefix]
       return (action, actionTitle)
 
 addTypeAnnotationsToLiteralsTest :: TestTree
@@ -2196,15 +2194,16 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
       docId <- createDoc "A.hs" "haskell" source
       expectDiagnostics [ ("A.hs", diag) ]
 
-      (action, title) <- extractCodeAction docId "Add type annotation"
+      let cursors = map snd3 diag
+      (action, title) <- extractCodeAction docId "Add type annotation" (minimum cursors) (maximum cursors)
 
       liftIO $ title @?= expectedTitle
       executeCodeAction action
       contentAfterAction <- documentContents docId
       liftIO $ contentAfterAction @?= expectedResult
 
-    extractCodeAction docId actionPrefix = do
-      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R 0 0 0 0) [actionPrefix]
+    extractCodeAction docId actionPrefix (l,c) (l', c')= do
+      [action@CodeAction { _title = actionTitle }]  <- findCodeActionsByPrefix docId (R l c l' c') [actionPrefix]
       return (action, actionTitle)
 
 
@@ -2250,7 +2249,7 @@ importRenameActionTests = testGroup "import rename actions"
             ]
       doc <- createDoc "Testing.hs" "haskell" content
       _ <- waitForDiagnostics
-      actionsOrCommands <- getCodeActions doc (Range (Position 2 8) (Position 2 16))
+      actionsOrCommands <- getCodeActions doc (Range (Position 1 8) (Position 1 16))
       let [changeToMap] = [action | InR action@CodeAction{ _title = actionTitle } <- actionsOrCommands, ("Data." <> modname) `T.isInfixOf` actionTitle ]
       executeCodeAction changeToMap
       contentAfterAction <- documentContents doc
@@ -2380,7 +2379,7 @@ addInstanceConstraintTests = let
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 68))
+    actionsOrCommands <- getAllCodeActions doc
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2532,7 +2531,7 @@ checkCodeAction :: String -> T.Text -> T.Text -> T.Text -> TestTree
 checkCodeAction testName actionTitle originalCode expectedCode = testSession testName $ do
   doc <- createDoc "Testing.hs" "haskell" originalCode
   _ <- waitForDiagnostics
-  actionsOrCommands <- getCodeActions doc (Range (Position 6 0) (Position 6 maxBound))
+  actionsOrCommands <- getAllCodeActions doc
   chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
   executeCodeAction chosenAction
   modifiedCode <- documentContents doc
@@ -2615,7 +2614,7 @@ removeRedundantConstraintsTests = let
   check actionTitle originalCode expectedCode = testSession (T.unpack actionTitle) $ do
     doc <- createDoc "Testing.hs" "haskell" originalCode
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
+    actionsOrCommands <- getAllCodeActions doc
     chosenAction <- liftIO $ pickActionWithTitle actionTitle actionsOrCommands
     executeCodeAction chosenAction
     modifiedCode <- documentContents doc
@@ -2625,7 +2624,7 @@ removeRedundantConstraintsTests = let
   checkPeculiarFormatting title code = testSession title $ do
     doc <- createDoc "Testing.hs" "haskell" code
     _ <- waitForDiagnostics
-    actionsOrCommands <- getCodeActions doc (Range (Position 4 0) (Position 4 maxBound))
+    actionsOrCommands <- getAllCodeActions doc
     liftIO $ assertBool "Found some actions" (null actionsOrCommands)
 
   in testGroup "remove redundant function constraints"
@@ -2769,7 +2768,7 @@ exportUnusedTests = testGroup "export unused actions"
               , "  ) where"
               , "foo = id"
               , "bar = foo"])
-        (R 4 0 4 3)
+        (R 5 0 5 3)
         "Export ‘bar’"
         (Just $ T.unlines
               [ "{-# OPTIONS_GHC -Wunused-top-binds #-}"
