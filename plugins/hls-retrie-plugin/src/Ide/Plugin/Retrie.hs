@@ -20,7 +20,7 @@ import           Control.Concurrent.Extra             (readVar)
 import           Control.Exception.Safe               (Exception (..),
                                                        SomeException, catch,
                                                        throwIO, try)
-import           Control.Monad                        (forM, unless)
+import           Control.Monad                        (forM, guard, unless)
 import           Control.Monad.Extra                  (maybeM)
 import           Control.Monad.IO.Class               (MonadIO (liftIO))
 import           Control.Monad.Trans.Class            (MonadTrans (lift))
@@ -42,6 +42,7 @@ import           Data.Hashable                        (unhashed)
 import           Data.IORef.Extra                     (atomicModifyIORef'_,
                                                        newIORef, readIORef)
 import           Data.List.Extra                      (find, nubOrdOn)
+import           Data.Maybe
 import           Data.String                          (IsString (fromString))
 import qualified Data.Text                            as T
 import qualified Data.Text.IO                         as T
@@ -66,12 +67,14 @@ import           Development.IDE.GHC.Compat           (GenLocated (L), GhcRn,
                                                        Sig (TypeSig),
                                                        SrcSpan (..),
                                                        TyClDecl (SynDecl),
-                                                       TyClGroup (..), fun_id,
+                                                       TyClGroup (..), Type,
+                                                       fun_id,
                                                        isTypeSynonymTyCon,
                                                        mi_fixities,
                                                        moduleNameString,
                                                        parseModule, rds_rules,
-                                                       srcSpanFile)
+                                                       srcSpanFile,
+                                                       synTyConRhs_maybe)
 import           GHC.Generics                         (Generic)
 import           GhcPlugins                           (Outputable,
                                                        SourceText (NoSourceText),
@@ -109,7 +112,10 @@ import           Retrie.SYB                           (listify)
 import           Retrie.Util                          (Verbosity (Loud))
 import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
+import           TcHsType
+import           TcRnMonad
 import           TcRnTypes
+import           Unify
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId =
@@ -215,9 +221,13 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
   (ModSummary{ms_mod}, topLevelBinds, posMapping, hs_ruleds, hs_tyclds, signatures)
     <- handleMaybeM "typecheck" $ liftIO $ runAction "retrie" state $ getBinds nfp
 
-  typeSynonymNames <- liftIO $ runAction "retrie" state $ getTypeSynonymNames nfp
+  typeSynonyms <- liftIO $ runAction "retrie" state $ getTypeSynonyms nfp
 
   pos <- handleMaybe "pos" $ _start <$> fromCurrentRange posMapping range
+
+  signatureRewrites <- liftIO $ runAction"retrie" state $
+      concat <$> suggestSignatureRewrites nfp pos ms_mod typeSynonyms `mapM` signatures
+
   let rewrites =
         concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
           ++ concatMap (suggestRuleRewrites uri pos ms_mod) hs_ruleds
@@ -227,7 +237,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
                  pos `isInsideSrcSpan` l,
                  r <- suggestTypeRewrites uri ms_mod g
              ]
-          ++ concatMap (suggestSignatureRewrites uri pos ms_mod typeSynonymNames) signatures
+          ++ signatureRewrites
 
   commands <- lift $
     forM rewrites $ \(title, kind, params) -> liftIO $ do
@@ -263,14 +273,15 @@ getBinds nfp = runMaybeT $ do
 
   return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds, sigs)
 
-getTypeSynonymNames :: NormalizedFilePath -> Action [GHC.Name]
-getTypeSynonymNames nfp = do
+getTypeSynonyms :: NormalizedFilePath -> Action [(GHC.Name, Type)]
+getTypeSynonyms nfp = do
   tcModuleResult <- use_ TypeCheck nfp
   let TcGblEnv {tcg_type_env} = tmrTypechecked tcModuleResult
   return
-    [ tyConName tyCon
+    [ (tyConName tyCon, tyConRhs)
       | tyCon <- typeEnvTyCons tcg_type_env,
-        isTypeSynonymTyCon tyCon
+        isTypeSynonymTyCon tyCon,
+        Just tyConRhs <- [synTyConRhs_maybe tyCon]
     ]
 
 suggestBindRewrites ::
@@ -363,22 +374,30 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
 
 suggestRuleRewrites _ _ _ _ = []
 
-suggestSignatureRewrites
-    :: Uri
-    -> Position
-    -> GHC.Module
-    -> [GHC.Name]
-    -> LSig GhcRn
-    -> [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestSignatureRewrites originatingFile pos ms_mod tySynsInScope (L (RealSrcSpan l) sig)
-  | pos `isInsideSrcSpan` RealSrcSpan l = do
-    rdrName <- tySynsInScope
-    let pprName = prettyPrint rdrName
-    let rewrites = [TypeBackward (qualify ms_mod pprName)]
-    let description = "Use " <> T.pack pprName <> " type synonym"
-    let restriction = RangeInOriginatingFile (realSrcSpanToRange l)
-    return (description, CodeActionRefactor, RunRetrieParams{..})
-  | otherwise = []
+suggestSignatureRewrites ::
+  NormalizedFilePath ->
+  Position ->
+  GHC.Module ->
+  [(GHC.Name, Type)] ->
+  LSig GhcRn ->
+  Action [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestSignatureRewrites nfp pos ms_mod tySynsInScope (L (RealSrcSpan span) (TypeSig _ (L _ fstName : _) (HsWC _ (HsIB _ hsTy))))
+  | pos `isInsideSrcSpan` RealSrcSpan span = do
+    hscEnv <- hscEnv <$> use_ GhcSession nfp
+    tcMod <- tmrTypechecked <$> use_ TypeCheck nfp
+    liftIO (initTcWithGbl hscEnv tcMod span $ tcLHsType hsTy) >>= \case
+      (_, Just (sigTy, _)) ->
+        return
+          [ (description, CodeActionRefactor, RunRetrieParams {description, rewrites, restriction, originatingFile = filePathToUri $ fromNormalizedFilePath nfp})
+            | (tySynName, tySynType) <- tySynsInScope,
+              isJust (tcMatchTy tySynType sigTy),
+              let pprName = prettyPrint tySynName,
+              let description = "Use " <> T.pack pprName <> " type synonym",
+              let rewrites = [TypeBackward (qualify ms_mod pprName)],
+              let restriction = RangeInOriginatingFile (realSrcSpanToRange span)
+          ]
+      (_, Nothing) -> pure []
+  | otherwise = pure []
 
 qualify :: GHC.Module -> String -> String
 qualify ms_mod x = prettyPrint ms_mod <> "." <> x
