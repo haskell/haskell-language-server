@@ -3979,7 +3979,7 @@ nonLocalCompletionTests =
             ["module A where", "import Data.Type.Equality ()", "f = Ref"]
             (Position 2 8)
             "Refl"
-            ["module A where", "import Data.Type.Equality ((:~:) (Refl))", "f = Ref"]
+            ["module A where", "import Data.Type.Equality (type (:~:) (Refl))", "f = Ref"]
         ]
       , testGroup "Record completion"
         [ completionCommandTest
