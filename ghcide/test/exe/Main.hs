@@ -906,6 +906,7 @@ typeWildCardActionTests = testGroup "type wildcard actions"
       liftIO $ expectedContentAfterAction @=? contentAfterAction
   ]
 
+{-# HLINT ignore "Use nubOrd" #-}
 removeImportTests :: TestTree
 removeImportTests = testGroup "remove import actions"
   [ testSession "redundant" $ do
