@@ -108,7 +108,7 @@ import qualified Retrie.Options                       as Retrie
 import           Retrie.Replace                       (Change (..),
                                                        Replacement (..))
 import           Retrie.Rewrites
-import           Retrie.SYB                           (listify)
+import           Retrie.SYB                           (everything, listify, mkQ)
 import           Retrie.Util                          (Verbosity (Loud))
 import           StringBuffer                         (stringToStringBuffer)
 import           System.Directory                     (makeAbsolute)
@@ -390,7 +390,7 @@ suggestSignatureRewrites nfp pos ms_mod tySynsInScope (L (RealSrcSpan span) (Typ
         return
           [ (description, CodeActionRefactor, RunRetrieParams {description, rewrites, restriction, originatingFile = filePathToUri $ fromNormalizedFilePath nfp})
             | (tySynName, tySynType) <- tySynsInScope,
-              isJust (tcMatchTy tySynType sigTy),
+              tcMatchTyPart tySynType sigTy,
               let pprName = prettyPrint tySynName,
               let description = "Use " <> T.pack pprName <> " type synonym",
               let rewrites = [TypeBackward (qualify ms_mod pprName)],
@@ -398,6 +398,12 @@ suggestSignatureRewrites nfp pos ms_mod tySynsInScope (L (RealSrcSpan span) (Typ
           ]
       (_, Nothing) -> pure []
   | otherwise = pure []
+
+tcMatchTyPart
+    :: Type -- ^ The "small" type, which should appear in the "big" type
+    -> Type -- ^ The "big" type, that will be searched for instances of the "small" type
+    -> Bool
+tcMatchTyPart smallTy = everything (||) (mkQ False (isJust . tcMatchTy smallTy))
 
 qualify :: GHC.Module -> String -> String
 qualify ms_mod x = prettyPrint ms_mod <> "." <> x
