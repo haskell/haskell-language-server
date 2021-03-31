@@ -624,7 +624,7 @@ disableWarningTests =
       <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
         doc <- createDoc "Module.hs" "haskell" initialContent
         _ <- waitForDiagnostics
-        codeActs <- mapMaybe caResultToCodeAct <$> getCodeActions doc (Range (Position 0 0) (Position 0 0))
+        codeActs <- mapMaybe caResultToCodeAct <$> getAllCodeActions doc
         case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
           Nothing -> liftIO $ assertFailure "No code action with expected title"
           Just action -> do
