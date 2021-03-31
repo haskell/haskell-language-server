@@ -4862,7 +4862,7 @@ asyncTests = testGroup "async"
               , "foo = id"
               ]
             void waitForDiagnostics
-            actions <- getCodeActions doc (Range (Position 0 0) (Position 0 0))
+            actions <- getCodeActions doc (Range (Position 1 0) (Position 1 0))
             liftIO $ [ _title | InR CodeAction{_title} <- actions] @=?
               [ "add signature: foo :: a -> a" ]
     ]
