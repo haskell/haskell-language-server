@@ -298,8 +298,16 @@ instance Monoid UnderlyingState where
 
 
 
-newtype ExtractM a = ExtractM { unExtractM' :: Strict.StateT UnderlyingState (Reader Context) a }
-    deriving newtype (Functor, Applicative, Monad, MonadReader Context, MonadState UnderlyingState)
+newtype ExtractM a = ExtractM
+  { unExtractM' :: Strict.StateT UnderlyingState (Reader Context) a
+  }
+  deriving newtype
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadReader Context
+    , MonadState UnderlyingState
+    )
 
 unExtractM :: ExtractM a -> Reader Context a
 unExtractM = flip Strict.evalStateT mempty . unExtractM'
@@ -310,7 +318,14 @@ instance MonadExtract (Synthesized (LHsExpr GhcPs)) ExtractM where
   hole = do
     u <- gets us_unique_name
     modify' (#us_unique_name +~ 1)
-    pure . pure . noLoc $ var $ fromString $ occNameString $ occName $ mkMetaHoleName u
+    pure
+      . pure
+      . noLoc
+      . var
+      . fromString
+      . occNameString
+      . occName
+      $ mkMetaHoleName u
 
 mkMetaHoleName :: Int -> RdrName
 mkMetaHoleName u = mkRdrUnqual $ mkVarOcc $ "_" <> show u
