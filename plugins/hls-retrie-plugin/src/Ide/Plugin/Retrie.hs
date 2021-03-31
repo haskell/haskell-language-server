@@ -141,13 +141,19 @@ rangeInRestriction :: Restriction -> Range -> Bool
 rangeInRestriction (RangeInOriginatingFile (Range sRestrict eRestrict)) (Range sEdit eEdit) =
     sRestrict <= sEdit && sEdit <= eRestrict &&
     sRestrict <= eEdit && eEdit <= eRestrict
-rangeInRestriction _ _ = True
-
+rangeInRestriction OriginatingFile _ = True
+rangeInRestriction NoRestriction _ = True
 
 restrictToOriginatingFile :: Restriction -> Bool
-restrictToOriginatingFile OriginatingFile            = True
-restrictToOriginatingFile (RangeInOriginatingFile _) = True
-restrictToOriginatingFile NoRestriction              = False
+restrictToOriginatingFile OriginatingFile          = True
+restrictToOriginatingFile RangeInOriginatingFile{} = True
+restrictToOriginatingFile NoRestriction            = False
+
+describeRestriction :: IsString p => Restriction -> p
+describeRestriction NoRestriction              = ""
+describeRestriction OriginatingFile            = " in current file"
+-- TODO: Find a better description for this action
+describeRestriction (RangeInOriginatingFile r) = " at site"
 
 -- | Parameters for the runRetrie PluginCommand.
 data RunRetrieParams = RunRetrieParams
@@ -222,11 +228,9 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
     <- handleMaybeM "typecheck" $ liftIO $ runAction "retrie" state $ getBinds nfp
 
   typeSynonyms <- liftIO $ runAction "retrie" state $ getTypeSynonyms nfp
+  resolvedSignatures <- liftIO $ runAction "retrie" state $ catMaybes <$> (resolveSignatureType nfp `mapM` signatures)
 
   pos <- handleMaybe "pos" $ _start <$> fromCurrentRange posMapping range
-
-  signatureRewrites <- liftIO $ runAction"retrie" state $
-      concat <$> suggestSignatureRewrites nfp pos ms_mod typeSynonyms `mapM` signatures
 
   let rewrites =
         concatMap (suggestBindRewrites uri pos ms_mod) topLevelBinds
@@ -237,7 +241,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
                  pos `isInsideSrcSpan` l,
                  r <- suggestTypeRewrites uri ms_mod g
              ]
-          ++ signatureRewrites
+          ++ concatMap (suggestSignatureRewrites uri pos ms_mod typeSynonyms) resolvedSignatures
 
   commands <- lift $
     forM rewrites $ \(title, kind, params) -> liftIO $ do
@@ -273,17 +277,6 @@ getBinds nfp = runMaybeT $ do
 
   return (tmrModSummary tm, topLevelBinds, posMapping, hs_ruleds, hs_tyclds, sigs)
 
-getTypeSynonyms :: NormalizedFilePath -> Action [(GHC.Name, Type)]
-getTypeSynonyms nfp = do
-  tcModuleResult <- use_ TypeCheck nfp
-  let TcGblEnv {tcg_type_env} = tmrTypechecked tcModuleResult
-  return
-    [ (tyConName tyCon, tyConRhs)
-      | tyCon <- typeEnvTyCons tcg_type_env,
-        isTypeSynonymTyCon tyCon,
-        Just tyConRhs <- [synTyConRhs_maybe tyCon]
-    ]
-
 suggestBindRewrites ::
   Uri ->
   Position ->
@@ -304,12 +297,6 @@ suggestBindRewrites originatingFile pos ms_mod FunBind {fun_id = L l' rdrName}
            in (description, CodeActionRefactorExtract, RunRetrieParams {..})
      in [unfoldRewrite NoRestriction, unfoldRewrite OriginatingFile, foldRewrite NoRestriction, foldRewrite OriginatingFile]
 suggestBindRewrites _ _ _ _ = []
-
-describeRestriction :: IsString p => Restriction -> p
-describeRestriction NoRestriction              = ""
-describeRestriction OriginatingFile            = " in current file"
--- TODO: Find a better description for this action
-describeRestriction (RangeInOriginatingFile r) = " at site"
 
 suggestTypeRewrites ::
   (Outputable (IdP pass)) =>
@@ -374,35 +361,51 @@ suggestRuleRewrites originatingFile pos ms_mod (L _ HsRules {rds_rules}) =
 
 suggestRuleRewrites _ _ _ _ = []
 
+resolveSignatureType :: NormalizedFilePath -> LSig GhcRn -> Action (Maybe (GHC.Located Type))
+resolveSignatureType nfp (L (RealSrcSpan span) (TypeSig _ _ (HsWC _ (HsIB _ hsTy)))) = do
+    hscEnv <- hscEnv <$> use_ GhcSession nfp
+    tcMod <- tmrTypechecked <$> use_ TypeCheck nfp
+    (_, mType) <- liftIO $ initTcWithGbl hscEnv tcMod span $ tcLHsType hsTy
+    case mType of
+        Nothing      -> pure Nothing
+        Just (ty, _) -> pure $ Just (L (RealSrcSpan span) ty)
+resolveSignatureType _ _ = pure Nothing
+
+getTypeSynonyms :: NormalizedFilePath -> Action [(GHC.Name, Type)]
+getTypeSynonyms nfp = do
+  tcg_type_env <- tcg_type_env . tmrTypechecked <$> use_ TypeCheck nfp
+  return
+    [ (tyConName tyCon, tyConRhs)
+      | tyCon <- typeEnvTyCons tcg_type_env,
+        isTypeSynonymTyCon tyCon,
+        Just tyConRhs <- [synTyConRhs_maybe tyCon]
+    ]
+
 suggestSignatureRewrites ::
-  NormalizedFilePath ->
+  Uri ->
   Position ->
   GHC.Module ->
   [(GHC.Name, Type)] ->
-  LSig GhcRn ->
-  Action [(T.Text, CodeActionKind, RunRetrieParams)]
-suggestSignatureRewrites nfp pos ms_mod tySynsInScope (L (RealSrcSpan span) (TypeSig _ (L _ fstName : _) (HsWC _ (HsIB _ hsTy))))
-  | pos `isInsideSrcSpan` RealSrcSpan span = do
-    hscEnv <- hscEnv <$> use_ GhcSession nfp
-    tcMod <- tmrTypechecked <$> use_ TypeCheck nfp
-    liftIO (initTcWithGbl hscEnv tcMod span $ tcLHsType hsTy) >>= \case
-      (_, Just (sigTy, _)) ->
-        return
-          [ (description, CodeActionRefactor, RunRetrieParams {description, rewrites, restriction, originatingFile = filePathToUri $ fromNormalizedFilePath nfp})
-            | (tySynName, tySynType) <- tySynsInScope,
-              tcMatchTyPart tySynType sigTy,
-              let pprName = prettyPrint tySynName,
-              let description = "Use " <> T.pack pprName <> " type synonym",
-              let rewrites = [TypeBackward (qualify ms_mod pprName)],
-              let restriction = RangeInOriginatingFile (realSrcSpanToRange span)
-          ]
-      (_, Nothing) -> pure []
-  | otherwise = pure []
+  GHC.Located Type ->
+  [(T.Text, CodeActionKind, RunRetrieParams)]
+suggestSignatureRewrites originatingFile pos ms_mod tySynsInScope (L (RealSrcSpan span) sigTy)
+  | pos `isInsideSrcSpan` RealSrcSpan span =
+      [ (description, CodeActionRefactor, RunRetrieParams { .. })
+      | (tySynName, tySynRhs) <- tySynsInScope,
+        tcMatchTyPart tySynRhs sigTy,
+        let pprName = prettyPrint tySynName,
+        let description = "Use " <> T.pack pprName <> " type synonym",
+        let rewrites = [TypeBackward (qualify ms_mod pprName)],
+        let restriction = RangeInOriginatingFile (realSrcSpanToRange span)
+      ]
+suggestSignatureRewrites _ _ _ _ _ = []
 
-tcMatchTyPart
-    :: Type -- ^ The "small" type, which should appear in the "big" type
-    -> Type -- ^ The "big" type, that will be searched for instances of the "small" type
-    -> Bool
+tcMatchTyPart ::
+    -- | The "small" type, which should appear in the "big" type
+    Type ->
+    -- | The "big" type, that will be searched for instances of the "small" type
+    Type ->
+    Bool
 tcMatchTyPart smallTy = everything (||) (mkQ False (isJust . tcMatchTy smallTy))
 
 qualify :: GHC.Module -> String -> String
