@@ -18,12 +18,15 @@ import           ConLike (ConLike)
 import           Control.Lens hiding (Context)
 import           Control.Monad.Reader
 import           Control.Monad.State
+import qualified Control.Monad.State.Strict as Strict
 import           Data.Coerce
 import           Data.Function
+import           Data.Generics.Labels ()
 import           Data.Generics.Product (field)
 import           Data.List.NonEmpty (NonEmpty (..))
 import           Data.Semigroup
 import           Data.Set (Set)
+import           Data.String (fromString)
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Tree
@@ -32,6 +35,7 @@ import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           GhcPlugins (mkRdrUnqual)
 import           OccName
 import           Refinery.Tactic
 import           System.IO.Unsafe (unsafePerformIO)
@@ -280,14 +284,36 @@ data Judgement' a = Judgement
 
 type Judgement = Judgement' CType
 
+newtype UnderlyingState = UnderlyingState
+  { us_unique_name :: Int
+  }
+  deriving stock (Generic)
 
-newtype ExtractM a = ExtractM { unExtractM :: Reader Context a }
-    deriving newtype (Functor, Applicative, Monad, MonadReader Context)
+instance Semigroup UnderlyingState where
+  UnderlyingState a1 <> UnderlyingState a2
+    = UnderlyingState (a1 + a2)
+
+instance Monoid UnderlyingState where
+  mempty = UnderlyingState 0
+
+
+
+newtype ExtractM a = ExtractM { unExtractM' :: Strict.StateT UnderlyingState (Reader Context) a }
+    deriving newtype (Functor, Applicative, Monad, MonadReader Context, MonadState UnderlyingState)
+
+unExtractM :: ExtractM a -> Reader Context a
+unExtractM = flip Strict.evalStateT mempty . unExtractM'
 
 ------------------------------------------------------------------------------
 -- | Orphan instance for producing holes when attempting to solve tactics.
 instance MonadExtract (Synthesized (LHsExpr GhcPs)) ExtractM where
-  hole = pure . pure . noLoc $ var "_"
+  hole = do
+    u <- gets us_unique_name
+    modify' (#us_unique_name +~ 1)
+    pure . pure . noLoc $ var $ fromString $ occNameString $ occName $ mkMetaHoleName u
+
+mkMetaHoleName :: Int -> RdrName
+mkMetaHoleName u = mkRdrUnqual $ mkVarOcc $ "_" <> show u
 
 
 ------------------------------------------------------------------------------
