@@ -1,4 +1,0 @@
-resolver: lts-14.27 # Last 8.6.5
-
-packages:
-  - .

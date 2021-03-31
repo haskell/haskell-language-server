@@ -1,7 +1,8 @@
-cabal-version: 2.2
+cabal-version: 2.4
 name:          hls-brittany-plugin
 version:       1.0.0.0
 synopsis:      Integration with the Brittany code formatter
+description:   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 license:       Apache-2.0
 license-file:  LICENSE
 author:        The Haskell IDE Team
@@ -11,12 +12,13 @@ category:      Development
 build-type:    Simple
 extra-source-files:
   LICENSE
+  test/testdata/**/*.hs
 
 library
   exposed-modules:  Ide.Plugin.Brittany
   hs-source-dirs:   src
-  build-depends:    base
-               ,    brittany      >= 0.13.1.0
+  build-depends:    base             >=4.12 && <5
+               ,    brittany         >= 0.13.1.0
                ,    filepath
                ,    ghc
                ,    ghc-boot-th
@@ -50,20 +52,8 @@ test-suite tests
   hs-source-dirs: test
   main-is: Main.hs
   build-depends:
-    , aeson
     , base
     , bytestring
-    , data-default
-    , deepseq
-    , ghcide                ^>= 1.1.0.0
     , hls-brittany-plugin
-    , hspec-expectations
-    , megaparsec
-    , lens
-    , lsp-test
-    , tasty
-    , tasty-ant-xml           >=1.1.6
-    , tasty-hunit
-    , tasty-golden
-    , tasty-rerun
     , text
+    , hls-test-utils

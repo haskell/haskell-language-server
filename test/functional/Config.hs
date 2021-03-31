@@ -2,22 +2,17 @@
 
 module Config (tests) where
 
-import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Lens                    hiding (List)
+import           Control.Lens            hiding (List)
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default
-import qualified Data.Map                        as Map
-import qualified Data.Text                       as T
+import qualified Data.Map                as Map
+import qualified Data.Text               as T
 import           Ide.Plugin.Config
-import           Language.LSP.Test               as Test
-import           Language.LSP.Types
-import qualified Language.LSP.Types.Lens         as L
-import           System.FilePath                 ((</>))
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import           Language.LSP.Test       as Test
+import qualified Language.LSP.Types.Lens as L
+import           System.FilePath         ((</>))
+import           Test.Hls
+import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 

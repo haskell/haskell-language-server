@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveAnyClass     #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE OverloadedLabels   #-}
 module Development.IDE.Plugin.Completions.Types (
   module Development.IDE.Plugin.Completions.Types
 ) where
@@ -13,6 +15,11 @@ import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Text                    (Text)
 import           Development.IDE.Spans.Common
 import           GHC.Generics                 (Generic)
+import           Ide.Plugin.Config            (Config)
+import           Ide.Plugin.Properties
+import           Ide.PluginUtils              (usePropertyLsp)
+import           Ide.Types                    (PluginId)
+import           Language.LSP.Server          (MonadLsp)
 import           Language.LSP.Types           (CompletionItemKind, Uri)
 
 -- From haskell-ide-engine/src/Haskell/Ide/Engine/LSP/Completions.hs
@@ -22,6 +29,29 @@ data Backtick = Surrounded | LeftSide
 
 extendImportCommandId :: Text
 extendImportCommandId = "extendImport"
+
+properties :: Properties
+  '[ 'PropertyKey "autoExtendOn" 'TBoolean,
+     'PropertyKey "snippetsOn" 'TBoolean]
+properties = emptyProperties
+  & defineBooleanProperty #snippetsOn
+    "Inserts snippets when using code completions"
+    True
+  & defineBooleanProperty #autoExtendOn
+    "Extends the import list automatically when completing a out-of-scope identifier"
+    True
+
+getCompletionsConfig :: (MonadLsp Config m) => PluginId -> m CompletionsConfig
+getCompletionsConfig pId =
+  CompletionsConfig
+    <$> usePropertyLsp #snippetsOn pId properties
+    <*> usePropertyLsp #autoExtendOn pId properties
+
+
+data CompletionsConfig = CompletionsConfig {
+  enableSnippets   :: Bool,
+  enableAutoExtend :: Bool
+}
 
 data ExtendImport = ExtendImport
   { doc         :: !Uri,

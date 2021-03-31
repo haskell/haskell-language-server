@@ -6,24 +6,21 @@
 {-# LANGUAGE TypeOperators            #-}
 {-# LANGUAGE ViewPatterns             #-}
 
-module HaddockComments
-  ( tests,
+module Main
+  ( main,
   )
 where
 
-import           Control.Monad.IO.Class (liftIO)
-import qualified Data.ByteString.Lazy   as LBS
-import           Data.Foldable          (find)
-import           Data.Maybe             (mapMaybe)
-import           Data.Text              (Text)
-import           Data.Text.Encoding     (encodeUtf8)
-import           Language.LSP.Test
-import           Language.LSP.Types
-import           System.FilePath        ((<.>), (</>))
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.Golden
-import           Test.Tasty.HUnit
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Foldable        (find)
+import           Data.Maybe           (mapMaybe)
+import           Data.Text            (Text)
+import           Data.Text.Encoding   (encodeUtf8)
+import           System.FilePath      ((<.>), (</>))
+import           Test.Hls
+
+main :: IO ()
+main = defaultTestRunner tests
 
 tests :: TestTree
 tests =
@@ -40,10 +37,9 @@ tests =
     ]
 
 goldenTest :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
-goldenTest fp (toTitle -> expectedTitle) l c = goldenVsStringDiff (fp <> " (golden)") goldenGitDiff goldenFilePath $
-  runSession hlsCommand fullCaps haddockCommentsPath $ do
+goldenTest fp (toTitle -> expectedTitle) l c = goldenGitDiff (fp <> " (golden)") goldenFilePath $
+  runSession testCommand fullCaps haddockCommentsPath $ do
     doc <- openDoc hsFilePath "haskell"
-    _ <- waitForDiagnostics
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
     case find ((== Just expectedTitle) . caTitle) actions of
       Just (InR x) -> do
@@ -56,9 +52,8 @@ goldenTest fp (toTitle -> expectedTitle) l c = goldenVsStringDiff (fp <> " (gold
 
 expectedNothing :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 expectedNothing fp (toTitle -> expectedTitle) l c = testCase fp $
-  runSession hlsCommand fullCaps haddockCommentsPath $ do
+  runSession testCommand fullCaps haddockCommentsPath $ do
     doc <- openDoc (fp <.> "hs") "haskell"
-    _ <- waitForDiagnostics
     titles <- mapMaybe caTitle <$> getCodeActions doc (Range (Position l c) (Position l $ succ c))
     liftIO $ expectedTitle `notElem` titles @? "Unexpected CodeAction"
 
@@ -73,7 +68,5 @@ caTitle (InR CodeAction {_title}) = Just _title
 caTitle _                         = Nothing
 
 haddockCommentsPath :: String
-haddockCommentsPath = "test" </> "testdata" </> "haddockComments"
+haddockCommentsPath = "test" </> "testdata"
 
-goldenGitDiff :: FilePath -> FilePath -> [String]
-goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]

@@ -9,7 +9,6 @@ module Development.IDE.Plugin.Completions.Logic (
   CachedCompletions
 , cacheDataProducer
 , localCompletionsForParsedModule
-, WithSnippets(..)
 , getCompletions
 ) where
 
@@ -56,8 +55,7 @@ import           Development.IDE.Types.Options
 import           GhcPlugins                               (flLabel, unpackFS)
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
-                                                           PluginId,
-                                                           WithSnippets (..))
+                                                           PluginId)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
@@ -465,12 +463,16 @@ findRecordCompl _ _ _ _ = []
 ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
 
-toggleSnippets :: ClientCapabilities -> WithSnippets -> CompletionItem -> CompletionItem
-toggleSnippets ClientCapabilities {_textDocument} (WithSnippets with) =
+toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem
+toggleSnippets ClientCapabilities {_textDocument} (CompletionsConfig with _) =
   removeSnippetsWhen (not $ with && supported)
   where
     supported =
       Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
+
+toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
+toggleAutoExtend (CompletionsConfig _ False) x = x {additionalTextEdits = Nothing}
+toggleAutoExtend _ x = x
 
 removeSnippetsWhen :: Bool -> CompletionItem -> CompletionItem
 removeSnippetsWhen condition x =
@@ -491,10 +493,10 @@ getCompletions
     -> (Bindings, PositionMapping)
     -> VFS.PosPrefixInfo
     -> ClientCapabilities
-    -> WithSnippets
+    -> CompletionsConfig
     -> IO [CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps withSnippets = do
+               maybe_parsed (localBindings, bmapping) prefixInfo caps config = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
@@ -530,7 +532,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
                         Just ValueContext -> filter (not . isTypeCompl) compls
                         Just _            -> filter (not . isTypeCompl) compls
           -- Add whether the text to insert has backticks
-          ctxCompls = map (\comp -> comp { isInfix = infixCompls }) ctxCompls'
+          ctxCompls = map (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
 
           infixCompls :: Maybe Backtick
           infixCompls = isUsedAsInfix fullLine prefixModule prefixText pos
@@ -562,7 +564,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
         ]
 
       filtListWithSnippet f list suffix =
-        [ toggleSnippets caps withSnippets (f label (snippet <> suffix))
+        [ toggleSnippets caps config (f label (snippet <> suffix))
         | (snippet, label) <- list
         , Fuzzy.test fullPrefix label
         ]
@@ -596,7 +598,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
         compls <- mapM (mkCompl plId ideOpts) uniqueFiltCompls
         return $ filtModNameCompls
               ++ filtKeywordCompls
-              ++ map ( toggleSnippets caps withSnippets) compls
+              ++ map (toggleSnippets caps config) compls
 
 
 -- ---------------------------------------------------------------------

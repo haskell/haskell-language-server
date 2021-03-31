@@ -2,19 +2,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Completion(tests) where
 
-import           Control.Lens               hiding ((.=))
-import           Control.Monad.IO.Class
-import           Data.Aeson                 (object, (.=))
-import           Data.Default               (def)
-import qualified Data.Text                  as T
-import           Ide.Plugin.Config          (Config (maxCompletions))
-import           Language.LSP.Test
-import           Language.LSP.Types
-import           Language.LSP.Types.Lens    hiding (applyEdit)
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import           Test.Tasty.HUnit
+import           Control.Lens            hiding ((.=))
+import           Data.Aeson              (object, (.=))
+import qualified Data.Text               as T
+import           Ide.Plugin.Config       (maxCompletions)
+import           Language.LSP.Types.Lens hiding (applyEdit)
+import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "completions" [
@@ -334,7 +328,7 @@ snippetTests = testGroup "snippets" [
     , testCase "respects lsp configuration" $ runSession hlsCommand fullCaps "test/testdata/completion" $ do
         doc <- openDoc "Completion.hs" "haskell"
 
-        let config = object [ "haskell" .= object ["completionSnippetsOn" .= False]]
+        let config = object ["haskell" .= object ["plugin" .= object ["ghcide-completions" .= object ["config" .= object ["snippetsOn" .= False]]]]]
 
         sendNotification SWorkspaceDidChangeConfiguration
                         (DidChangeConfigurationParams config)

@@ -1,4 +1,4 @@
-cabal-version:      2.2
+cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
@@ -15,13 +15,11 @@ homepage:           https://github.com/haskell/haskell-language-server/tree/mast
 bug-reports:        https://github.com/haskell/haskell-language-server/issues
 tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
 extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
-                    test/data/hover/*.hs
-                    test/data/multi/cabal.project
-                    test/data/multi/hie.yaml
-                    test/data/multi/a/a.cabal
-                    test/data/multi/a/*.hs
-                    test/data/multi/b/b.cabal
-                    test/data/multi/b/*.hs
+                    test/data/**/*.project
+                    test/data/**/*.cabal
+                    test/data/**/*.yaml
+                    test/data/**/*.hs
+                    test/data/**/*.hs-boot
 
 source-repository head
     type:     git

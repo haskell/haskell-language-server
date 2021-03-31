@@ -28,6 +28,7 @@ let
             shake-bench = gitignoreSource ../shake-bench;
             hie-compat = gitignoreSource ../hie-compat;
             hls-plugin-api = gitignoreSource ../hls-plugin-api;
+            hls-test-utils = gitignoreSource ../hls-test-utils;
             hls-brittany-plugin = gitignoreSource ../plugins/hls-brittany-plugin;
             hls-stylish-haskell-plugin = gitignoreSource ../plugins/hls-stylish-haskell-plugin;
             hls-class-plugin = gitignoreSource ../plugins/hls-class-plugin;
@@ -79,7 +80,7 @@ in (import sources.nixpkgs
       # default_stages = ["manual" "push"];
       hooks = {
         stylish-haskell.enable = true;
-        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" ];
+        stylish-haskell.excludes = [ "^Setup.hs$" "test/testdata/.*$" "test/data/.*$" "^hie-compat/.*$" "^plugins/hls-tactics-plugin/.*$" ];
       };
     };
   }

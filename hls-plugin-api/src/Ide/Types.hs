@@ -288,8 +288,6 @@ type CommandFunction ideState a
   -> a
   -> LspM Config (Either ResponseError Value)
 
-newtype WithSnippets = WithSnippets Bool
-
 -- ---------------------------------------------------------------------
 
 newtype PluginId = PluginId T.Text
