@@ -1370,7 +1370,7 @@ extendImportTests = testGroup "extend import actions"
                     , "x = Refl"
                     ])
             (Range (Position 3 17) (Position 3 18))
-            ["Add (:~:)(Refl) to the import list of Data.Type.Equality"]
+            ["Add type (:~:)(Refl) to the import list of Data.Type.Equality"]
             (T.unlines
                     [ "module ModuleA where"
                     , "import Data.Type.Equality ((:~:) (Refl))"
@@ -1539,6 +1539,7 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
+    , test True []          "f :: a ~~ b"                 []                "import Data.Type.Equality (type (~~))"
     , test True
       ["qualified Data.Text as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
