@@ -12,14 +12,17 @@ import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor (first)
+import           Data.Bifunctor (first, Bifunctor (bimap))
+import           Data.Data
 import           Data.Foldable (for_)
 import           Data.Maybe
-import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
+import           Development.IDE (GetParsedModule(GetParsedModule), srcSpanToRange)
+import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
+import           Generics.SYB
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -30,6 +33,7 @@ import           System.Timeout
 import           Wingman.CaseSplit
 import           Wingman.GHC
 import           Wingman.LanguageServer
+import           Wingman.LanguageServer.SnippetTextEdit
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
@@ -39,18 +43,46 @@ import           Wingman.Types
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-    { pluginCommands
-        = fmap (\tc ->
-            PluginCommand
-              (tcCommandId tc)
-              (tacticDesc $ tcCommandName tc)
-              (tacticCmd (commandTactic tc) plId))
-              [minBound .. maxBound]
-    , pluginHandlers =
-        mkPluginHandler STextDocumentCodeAction codeActionProvider
-    , pluginCustomConfig =
-        mkCustomConfig properties
-    }
+  { pluginCommands
+      = fmap (\tc ->
+          PluginCommand
+            (tcCommandId tc)
+            (tacticDesc $ tcCommandName tc)
+            (tacticCmd (commandTactic tc) plId))
+            [minBound .. maxBound]
+  , pluginHandlers = mconcat
+      [ mkPluginHandler STextDocumentCodeAction codeActionProvider
+      , mkGetAllHolesPluginHandler getAllHolesProvider
+      ]
+  , pluginCustomConfig =
+      mkCustomConfig properties
+  }
+
+getAllHolesProvider
+    :: MonadLsp cfg m
+    => IdeState
+    -> PluginId
+    -> GetAllHolesRequest
+    -> m (Either ResponseError GetAllHolesResponse)
+getAllHolesProvider state _ (GetAllHolesRequest (TextDocumentIdentifier uri))
+  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
+    x <- liftIO $ runMaybeT $ runStaleIde state nfp GetParsedModule
+    case x of
+      Nothing -> pure $ Left $ mkErr InternalError "Couldn't get a parsed module"
+      Just (pm, mapping) -> do
+        let holes :: [Range]
+            holes =
+              everything (<>)
+                (mkQ mempty $ \case
+                  L span (HsVar _ (L _ name) :: HsExpr GhcPs)
+                    | isHole (occName name) ->
+                        maybeToList $ toCurrentRange mapping =<< srcSpanToRange span
+                  _ -> mempty
+                ) $ pm_parsed_source pm
+        pure $ pure $ GetAllHolesResponse holes
+getAllHolesProvider _ _ _ =
+  pure $ Left $ mkErr InvalidRequest "Bad URI"
+
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
 codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
@@ -105,7 +137,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           showUserFacingMessage TimedOut
         Just (Left ufm) -> do
           showUserFacingMessage ufm
-        Just (Right edit) -> do
+        Just (Right (_, edit)) -> do
           _ <- sendRequest
             SWorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing edit)
@@ -136,15 +168,30 @@ mkWorkspaceEdits
     -> Uri
     -> Annotated ParsedSource
     -> RunTacticResults
-    -> Either UserFacingMessage WorkspaceEdit
+    -> Either UserFacingMessage ([Range], WorkspaceEdit)
 mkWorkspaceEdits span dflags ccs uri pm rtr = do
   for_ (rtr_other_solns rtr) $ \soln -> do
     traceMX "other solution" $ syn_val soln
     traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
   traceMX "solution" $ rtr_extract rtr
   let g = graftHole (RealSrcSpan span) rtr
-      response = transform dflags ccs uri g pm
-   in first (InfrastructureError . T.pack) response
+      response =
+        transformWithOptions
+          (annotatedTextOptions isHoleAst)
+          getAnnotatedText
+          dflags
+          ccs
+          uri
+          g
+          pm
+   in bimap (InfrastructureError . T.pack) (first $ fmap fst) response
+
+
+isHoleAst :: (Data ast) => ast -> Bool
+isHoleAst ast =
+  case cast ast :: Maybe (LHsExpr GhcPs) of
+    Just (L _ (HsVar _ (L _ v))) -> isHole $ occName v
+    _ -> False
 
 
 ------------------------------------------------------------------------------
