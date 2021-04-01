@@ -504,7 +504,10 @@ cradleToOptsAndLibDir cradle file = do
 emptyHscEnv :: IORef NameCache -> FilePath -> IO HscEnv
 emptyHscEnv nc libDir = do
     env <- runGhc (Just libDir) getSession
-    -- initDynLinker env -- This causes ghc9 to crash
+#if !MIN_GHC_API_VERSION(9,0,0)
+    -- This causes ghc9 to crash
+    initDynLinker env
+#endif
     pure $ setNameCache nc env{ hsc_dflags = (hsc_dflags env){useUnicode = True } }
 
 data TargetDetails = TargetDetails
