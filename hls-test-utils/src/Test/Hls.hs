@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module Test.Hls
   ( module Test.Tasty.HUnit,
     module Test.Tasty,
@@ -19,7 +20,7 @@ module Test.Hls
 where
 
 import           Control.Applicative.Combinators
-import           Control.Concurrent.Async          (async, wait)
+import           Control.Concurrent.Async          (async, cancel, wait)
 import           Control.Exception.Base
 import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
@@ -119,6 +120,7 @@ runSessionWithServer' plugin conf sconf caps root s = silenceStderr $ do
   x <-
     runSessionWithHandles inW outR sconf caps root s
       `finally` setCurrentDirectory cwd
-  wait server
-  sleep 0.3
+  timeout 3 (wait server) >>= \case
+    Just () -> pure ()
+    Nothing -> putStrLn "Server does not exit on time, canceling the async task..." >> cancel server
   pure x
