@@ -95,12 +95,14 @@ modifyDynFlags f = do
 -- | Given a 'Unit' try and find the associated 'PackageConfig' in the environment.
 lookupPackageConfig :: Unit -> HscEnv -> Maybe GHC.PackageConfig
 lookupPackageConfig unit env =
-    GHC.lookupPackage' False pkgConfigMap unit
+    -- GHC.lookupPackage' False pkgConfigMap unit
+    GHC.lookupUnit' False pkgConfigMap prClsre unit
     where
         pkgConfigMap =
             -- For some weird reason, the GHC API does not provide a way to get the PackageConfigMap
             -- from PackageState so we have to wrap it in DynFlags first.
             getPackageConfigMap $ hsc_dflags env
+        prClsre = preloadClosureUs $ hsc_dflags env
 
 
 -- | Convert from the @text@ package to the @GHC@ 'StringBuffer'.

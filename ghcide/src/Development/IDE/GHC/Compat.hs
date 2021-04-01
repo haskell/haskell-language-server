@@ -1,10 +1,10 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE CPP               #-}
+{-# LANGUAGE ConstraintKinds   #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE PatternSynonyms   #-}
 {-# OPTIONS -Wno-dodgy-imports -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS -Wno-missing-signatures #-} -- TODO: Remove!
 #include "ghc-api-version.h"
@@ -70,6 +70,8 @@ module Development.IDE.GHC.Compat(
     Scaled,
     scaledThing,
 
+    lookupUnit',
+    preloadClosureUs,
     -- Reexports from Package
     InstalledUnitId,
     PackageConfig,
@@ -82,7 +84,7 @@ module Development.IDE.GHC.Compat(
     packageVersion,
     toInstalledUnitId,
     lookupPackage,
-    lookupPackage',
+    -- lookupPackage',
     explicitPackages,
     exposedModules,
     packageConfigId,
@@ -122,71 +124,67 @@ module Development.IDE.GHC.Compat(
     ,isQualifiedImport) where
 
 #if MIN_GHC_API_VERSION(8,10,0)
-import LinkerTypes
+import           LinkerTypes
 #endif
 
-import StringBuffer
+import           DynFlags             hiding (ExposePackage)
 import qualified DynFlags
-import DynFlags hiding (ExposePackage)
-import Fingerprint (Fingerprint)
-import qualified Outputable as Out
-import qualified ErrUtils as Err
+import qualified ErrUtils             as Err
+import           Fingerprint          (Fingerprint)
 import qualified Module
+import qualified Outputable           as Out
+import           StringBuffer
 #if MIN_GHC_API_VERSION(9,0,1)
-import qualified SrcLoc
-import qualified Data.Set as S
+import qualified Data.Set             as S
+import           GHC.Core.TyCo.Rep    (Scaled, scaledThing)
 import           GHC.Iface.Load
-import           GHC.Core.TyCo.Rep (Scaled, scaledThing)
 import           GHC.Types.Unique.Set (emptyUniqSet)
+import qualified SrcLoc
 #else
-import Module (InstalledUnitId,toInstalledUnitId)
+import           Module               (InstalledUnitId, toInstalledUnitId)
 #endif
-import Packages
-import Data.IORef
-import HscTypes
-import NameCache
-import qualified Data.ByteString as BS
-import MkIface
-import TcRnTypes
-import Compat.HieAst (mkHieFile,enrichHie)
-import Compat.HieBin
-import Compat.HieTypes
-import Compat.HieUtils
+import           Compat.HieAst        (enrichHie, mkHieFile)
+import           Compat.HieBin
+import           Compat.HieTypes
+import           Compat.HieUtils
+import qualified Data.ByteString      as BS
+import           Data.IORef
+import           HscTypes
+import           MkIface
+import           NameCache
+import           Packages
+import           TcRnTypes
 
 #if MIN_GHC_API_VERSION(8,10,0)
-import GHC.Hs.Extension
+import           GHC.Hs.Extension
 #else
-import HsExtension
+import           HsExtension
 #endif
 
+import           Avail
+import           GHC                  hiding (HasSrcSpan, ModLocation, getLoc,
+                                       lookupName)
 import qualified GHC
 import qualified TyCoRep
-import GHC hiding (
-      ModLocation,
-      HasSrcSpan,
-      lookupName,
-      getLoc
-    )
-import Avail
 #if MIN_GHC_API_VERSION(8,8,0)
-import Data.List (foldl')
+import           Data.List            (foldl')
 #else
-import Data.List (foldl', isSuffixOf)
+import           Data.List            (foldl', isSuffixOf)
 #endif
 
-import DynamicLoading
-import Plugins (Plugin(parsedResultAction), withPlugins)
-import qualified Data.Map as M
+import qualified Data.Map             as M
+import           DynamicLoading
+import           Plugins              (Plugin (parsedResultAction), withPlugins)
 
 #if !MIN_GHC_API_VERSION(8,8,0)
-import System.FilePath ((-<.>))
+import           System.FilePath      ((-<.>))
 #endif
 
 #if !MIN_GHC_API_VERSION(8,8,0)
 import qualified EnumSet
 
-import System.IO
-import Foreign.ForeignPtr
+import           Foreign.ForeignPtr
+import           System.IO
 
 
 hPutStringBuffer :: Handle -> StringBuffer -> IO ()
@@ -250,10 +248,11 @@ addIncludePathsQuote path x = x{includePaths = f $ includePaths x}
     where f i = i{includePathsQuote = path : includePathsQuote i}
 
 pattern ModLocation :: Maybe FilePath -> FilePath -> FilePath -> GHC.ModLocation
-pattern ModLocation a b c <-
 #if MIN_GHC_API_VERSION(8,8,0)
+pattern ModLocation a b c <-
     GHC.ModLocation a b c _ where ModLocation a b c = GHC.ModLocation a b c ""
 #else
+pattern ModLocation a b c <-
     GHC.ModLocation a b c where ModLocation a b c = GHC.ModLocation a b c
 #endif
 
@@ -356,9 +355,11 @@ packageName            = Packages.unitPackageName
 lookupPackage          = Packages.lookupUnit . unitState
 -- lookupPackage'         = undefined
 -- lookupPackage' b pm u  = Packages.lookupUnit' b pm undefined u
-lookupPackage' b pm u  = Packages.lookupUnit' b pm emptyUniqSet u -- TODO: Is this correct?
+-- lookupPackage' b pm u  = Packages.lookupUnit' b pm emptyUniqSet u -- TODO: Is this correct?
 -- lookupPackage'         = fmap Packages.lookupUnit' . unitState
 getPackageConfigMap    = Packages.unitInfoMap . unitState
+preloadClosureUs         = Packages.preloadClosure . unitState
+-- getPackageConfigMap    = unitState
 -- getPackageIncludePath  = undefined
 getPackageIncludePath  = Packages.getUnitIncludePath
 explicitPackages       = Packages.explicitUnits
@@ -394,22 +395,34 @@ oldLookupModuleWithSuggestions = Packages.lookupModuleWithSuggestions . unitStat
 oldRenderWithStyle dflags sdoc sty = Out.renderWithStyle (initSDocContext dflags sty) sdoc
 oldMkUserStyle _ = Out.mkUserStyle
 oldMkErrStyle _ = Out.mkErrStyle
+
+-- TODO: This is still a mess!
 oldFormatErrDoc :: DynFlags -> Err.ErrDoc -> Out.SDoc
-oldFormatErrDoc = Err.formatErrDoc . undefined
+oldFormatErrDoc dflags = Err.formatErrDoc dummySDocContext
+  where dummySDocContext = initSDocContext dflags Out.defaultUserStyle
 -- oldFormatErrDoc = Err.formatErrDoc . undefined
 writeIfaceFile = writeIface
 
 #else
 type Unit = Module.UnitId
 -- type PackageConfig = Packages.PackageConfig
+definiteUnitId :: Module.DefUnitId -> UnitId
 definiteUnitId = Module.DefiniteUnitId
+defUnitId :: InstalledUnitId -> Module.DefUnitId
 defUnitId = Module.DefUnitId
+installedModule :: InstalledUnitId -> ModuleName -> Module.InstalledModule
 installedModule = Module.InstalledModule
+oldLookupInstalledPackage :: DynFlags -> InstalledUnitId -> Maybe PackageConfig
 oldLookupInstalledPackage = Packages.lookupInstalledPackage
 -- packageName = Packages.packageName
 -- lookupPackage = Packages.lookupPackage
 -- getPackageConfigMap = Packages.getPackageConfigMap
+setThisInstalledUnitId :: InstalledUnitId -> DynFlags -> DynFlags
 setThisInstalledUnitId uid df = df { thisInstalledUnitId = uid}
+
+lookupUnit' :: Bool -> PackageConfigMap -> p -> UnitId -> Maybe PackageConfig
+lookupUnit' b pcm _ = Packages.lookupPackage' b pcm
+preloadClosureUs = const ()
 
 oldUnhelpfulSpan  = UnhelpfulSpan
 pattern OldRealSrcSpan :: RealSrcSpan -> SrcSpan
@@ -486,15 +499,15 @@ pattern FunTy arg res <- TyCoRep.FunTy arg res
 isQualifiedImport :: ImportDecl a -> Bool
 #if MIN_GHC_API_VERSION(8,10,0)
 isQualifiedImport ImportDecl{ideclQualified = NotQualified} = False
-isQualifiedImport ImportDecl{} = True
+isQualifiedImport ImportDecl{}                              = True
 #else
-isQualifiedImport ImportDecl{ideclQualified} = ideclQualified
+isQualifiedImport ImportDecl{ideclQualified}                = ideclQualified
 #endif
-isQualifiedImport _ = False
+isQualifiedImport _                                         = False
 
 getRealSpan :: SrcSpan -> Maybe RealSrcSpan
 getRealSpan (OldRealSrcSpan x) = Just x
-getRealSpan _ = Nothing
+getRealSpan _                  = Nothing
 
 
 
