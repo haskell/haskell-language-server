@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP                #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 
 module Development.IDE.GHC.Warnings(withWarnings) where
@@ -28,9 +29,16 @@ import           Language.LSP.Types                (type (|?) (..))
 withWarnings :: T.Text -> ((ModSummary -> ModSummary) -> IO a) -> IO ([(WarnReason, FileDiagnostic)], a)
 withWarnings diagSource action = do
   warnings <- newVar []
+#if __GLASGOW_HASKELL__ >= 900
+  let newAction :: DynFlags -> WarnReason -> Severity -> SrcSpan -> MsgDoc -> IO ()
+      newAction dynFlags wr _ loc msg = do
+        let prUnqual = alwaysQualify :: PrintUnqualified -- TODO: Do something proper here
+#else
   let newAction :: DynFlags -> WarnReason -> Severity -> SrcSpan -> PprStyle -> SDoc -> IO ()
       newAction dynFlags wr _ loc style msg = do
-        let wr_d = map ((wr,) . third3 (attachReason wr)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc (queryQual style) msg
+        let prUnqual = queryQual style
+#endif
+        let wr_d = map ((wr,) . third3 (attachReason wr)) $ diagFromErrMsg diagSource dynFlags $ mkWarnMsg dynFlags loc prUnqual msg
         modifyVar_ warnings $ return . (wr_d:)
   res <- action $ \x -> x{ms_hspp_opts = (ms_hspp_opts x){log_action = newAction}}
   warns <- readVar warnings

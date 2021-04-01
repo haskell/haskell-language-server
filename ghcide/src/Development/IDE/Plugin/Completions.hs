@@ -40,7 +40,11 @@ import           Ide.Types
 import qualified Language.LSP.Server                          as LSP
 import           Language.LSP.Types
 import qualified Language.LSP.VFS                             as VFS
+#if MIN_GHC_API_VERSION(9,0,0)
+import           GHC.Tc.Module                                (tcRnImportDecls)
+#else
 import           TcRnDriver                                   (tcRnImportDecls)
+#endif
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)

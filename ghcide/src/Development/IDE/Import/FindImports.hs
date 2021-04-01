@@ -14,7 +14,7 @@ module Development.IDE.Import.FindImports
   , mkImportDirs
   ) where
 
-import           Development.IDE.GHC.Compat
+import           Development.IDE.GHC.Compat        as Compat
 import           Development.IDE.GHC.Error         as ErrUtils
 import           Development.IDE.GHC.Orphans       ()
 import           Development.IDE.Types.Diagnostics
@@ -88,7 +88,7 @@ locateModuleFile import_dirss exts doesExist isSource modName = do
 -- It only returns Just for unit-ids which are possible to import into the
 -- current module. In particular, it will return Nothing for 'main' components
 -- as they can never be imported into another package.
-mkImportDirs :: DynFlags -> (M.InstalledUnitId, DynFlags) -> Maybe (PackageName, [FilePath])
+mkImportDirs :: DynFlags -> (Compat.InstalledUnitId, DynFlags) -> Maybe (PackageName, [FilePath])
 mkImportDirs df (i, DynFlags{importPaths}) = (, importPaths) <$> getPackageName df i
 
 -- | locate a module in either the file system or the package database. Where we go from *daml to
@@ -96,7 +96,7 @@ mkImportDirs df (i, DynFlags{importPaths}) = (, importPaths) <$> getPackageName 
 locateModule
     :: MonadIO m
     => DynFlags
-    -> [(M.InstalledUnitId, DynFlags)] -- ^ Import directories
+    -> [(Compat.InstalledUnitId, DynFlags)] -- ^ Import directories
     -> [String]                        -- ^ File extensions
     -> (ModuleName -> NormalizedFilePath -> m Bool)  -- ^ does file exist predicate
     -> Located ModuleName              -- ^ Module name
@@ -136,7 +136,7 @@ locateModule dflags comp_info exts doesExist modName mbPkgName isSource = do
         Just file -> toModLocation file
 
     lookupInPackageDB dfs =
-      case lookupModuleWithSuggestions dfs (unLoc modName) mbPkgName of
+      case oldLookupModuleWithSuggestions dfs (unLoc modName) mbPkgName of
         LookupFound _m _pkgConfig -> return $ Right PackageImport
         reason -> return $ Left $ notFoundErr dfs modName reason
 

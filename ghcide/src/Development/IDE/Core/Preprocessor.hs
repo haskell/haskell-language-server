@@ -1,5 +1,6 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
+{-# LANGUAGE CPP #-}
 
 module Development.IDE.Core.Preprocessor
   ( preprocessor
@@ -79,7 +80,11 @@ preprocessor env filename mbContents = do
         return (contents, opts, dflags)
   where
     logAction :: IORef [CPPLog] -> LogAction
+#if __GLASGOW_HASKELL__ >= 900
+    logAction cppLogs dflags _reason severity srcSpan msg = do
+#else
     logAction cppLogs dflags _reason severity srcSpan _style msg = do
+#endif
       let log = CPPLog severity srcSpan $ T.pack $ showSDoc dflags msg
       modifyIORef cppLogs (log :)
 
@@ -107,7 +112,7 @@ diagsFromCPPLogs filename logs =
     -- informational log messages and attaches them to the initial log message.
     go :: [CPPDiag] -> [CPPLog] -> [CPPDiag]
     go acc [] = reverse $ map (\d -> d {cdMessage = reverse $ cdMessage d}) acc
-    go acc (CPPLog sev (RealSrcSpan span) msg : logs) =
+    go acc (CPPLog sev (OldRealSrcSpan span) msg : logs) =
       let diag = CPPDiag (realSrcSpanToRange span) (toDSeverity sev) [msg]
        in go (diag : acc) logs
     go (diag : diags) (CPPLog _sev (UnhelpfulSpan _) msg : logs) =

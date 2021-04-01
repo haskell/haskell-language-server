@@ -6,6 +6,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS -Wno-dodgy-imports -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS -Wno-missing-signatures #-} -- TODO: Remove!
 #include "ghc-api-version.h"
 
 -- | Attempt at hiding the GHC version differences we can.
@@ -17,7 +18,6 @@ module Development.IDE.GHC.Compat(
     mkHieFile,
     mkHieFile',
     enrichHie,
-    RefMap,
     writeHieFile,
     readHieFile,
     supportsHieFiles,
@@ -53,6 +53,65 @@ module Development.IDE.GHC.Compat(
     linkableTime,
 #endif
 
+#if MIN_GHC_API_VERSION(9,0,1)
+    -- Reexports from GHC
+    UnitId,
+    moduleUnitId,
+    pkgState,
+    thisInstalledUnitId,
+    -- Reexports from DynFlags
+    thisPackage,
+    writeIfaceFile,
+#else
+    RefMap,
+    Unit,
+#endif
+    -- Linear
+    Scaled,
+    scaledThing,
+
+    -- Reexports from Package
+    InstalledUnitId,
+    PackageConfig,
+    getPackageConfigMap,
+    getPackageIncludePath,
+    installedModule,
+
+    packageName,
+    packageNameString,
+    packageVersion,
+    toInstalledUnitId,
+    lookupPackage,
+    lookupPackage',
+    explicitPackages,
+    exposedModules,
+    packageConfigId,
+    setThisInstalledUnitId,
+    initUnits,
+    lookupInstalledPackage,
+    oldLookupInstalledPackage,
+    unitDepends,
+
+    haddockInterfaces,
+
+    oldUnhelpfulSpan ,
+    pattern IsBoot,
+    pattern NotBoot,
+    pattern OldRealSrcSpan,
+
+    oldRenderWithStyle,
+    oldMkUserStyle,
+    oldMkErrStyle,
+    oldFormatErrDoc,
+    oldListVisibleModuleNames,
+    oldLookupModuleWithSuggestions,
+
+    getRealSpan,
+    nodeInfo',
+    getNodeIds,
+    stringToUnit,
+    rtsUnit,
+
     module GHC,
     module DynFlags,
     initializePlugins,
@@ -70,7 +129,18 @@ import StringBuffer
 import qualified DynFlags
 import DynFlags hiding (ExposePackage)
 import Fingerprint (Fingerprint)
+import qualified Outputable as Out
+import qualified ErrUtils as Err
 import qualified Module
+#if MIN_GHC_API_VERSION(9,0,1)
+import qualified SrcLoc
+import qualified Data.Set as S
+import           GHC.Iface.Load
+import           GHC.Core.TyCo.Rep (Scaled, scaledThing)
+import           GHC.Types.Unique.Set (emptyUniqSet)
+#else
+import Module (InstalledUnitId,toInstalledUnitId)
+#endif
 import Packages
 import Data.IORef
 import HscTypes
@@ -106,7 +176,7 @@ import Data.List (foldl', isSuffixOf)
 
 import DynamicLoading
 import Plugins (Plugin(parsedResultAction), withPlugins)
-import Data.Map.Strict (Map)
+import qualified Data.Map as M
 
 #if !MIN_GHC_API_VERSION(8,8,0)
 import System.FilePath ((-<.>))
@@ -153,7 +223,9 @@ upNameCache = updNameCache
 #endif
 
 
-type RefMap a = Map Identifier [(Span, IdentifierDetails a)]
+#if !MIN_GHC_API_VERSION(9,0,1)
+type RefMap a = M.Map Identifier [(Span, IdentifierDetails a)]
+#endif
 
 mkHieFile' :: ModSummary
            -> [AvailInfo]
@@ -226,8 +298,20 @@ nameListFromAvails :: [AvailInfo] -> [(SrcSpan, Name)]
 nameListFromAvails as =
   map (\n -> (nameSrcSpan n, n)) (concatMap availNames as)
 
-#if MIN_GHC_API_VERSION(8,8,0)
+#if MIN_GHC_API_VERSION(9,0,0)
+-- type HasSrcSpan x a = (GenLocated SrcSpan a ~ x)
+-- type HasSrcSpan x = () :: Constraint
 
+class HasSrcSpan a where
+  getLoc :: a -> SrcSpan
+
+instance HasSrcSpan (GenLocated SrcSpan a) where
+  getLoc = GHC.getLoc
+
+-- getLoc :: GenLocated l a -> l
+-- getLoc = GHC.getLoc
+
+#elif MIN_GHC_API_VERSION(8,8,0)
 type HasSrcSpan = GHC.HasSrcSpan
 getLoc :: HasSrcSpan a => a -> SrcSpan
 getLoc = GHC.getLoc
@@ -257,8 +341,106 @@ getModuleHash = mi_mod_hash . mi_final_exts
 getModuleHash = mi_mod_hash
 #endif
 
-getPackageName :: DynFlags -> Module.InstalledUnitId -> Maybe PackageName
-getPackageName dfs i = packageName <$> lookupPackage dfs (Module.DefiniteUnitId (Module.DefUnitId i))
+-- type PackageName = Packages.PackageName
+#if MIN_GHC_API_VERSION(9,0,0)
+-- NOTE: Since both the new and old version uses UnitId with different meaning,
+-- we try to avoid it and instead use InstalledUnitId and Unit, since it is unambiguous.
+type UnitId            = Module.Unit
+type InstalledUnitId   = Module.UnitId
+type PackageConfig     = Packages.UnitInfo
+definiteUnitId         = Module.RealUnit
+defUnitId              = Module.Definite
+installedModule        = Module.Module
+-- pattern InstalledModule a b = Module.Module a b
+packageName            = Packages.unitPackageName
+lookupPackage          = Packages.lookupUnit . unitState
+-- lookupPackage'         = undefined
+-- lookupPackage' b pm u  = Packages.lookupUnit' b pm undefined u
+lookupPackage' b pm u  = Packages.lookupUnit' b pm emptyUniqSet u -- TODO: Is this correct?
+-- lookupPackage'         = fmap Packages.lookupUnit' . unitState
+getPackageConfigMap    = Packages.unitInfoMap . unitState
+-- getPackageIncludePath  = undefined
+getPackageIncludePath  = Packages.getUnitIncludePath
+explicitPackages       = Packages.explicitUnits
+pkgState               = GHC.unitState
+packageNameString      = Packages.unitPackageNameString
+packageVersion         = Packages.unitPackageVersion
+-- toInstalledUnitId      = id -- Module.toUnitId -- TODO: This is probably wrong
+toInstalledUnitId      = Module.toUnitId
+exposedModules         = Packages.unitExposedModules
+packageConfigId        = Packages.mkUnit
+moduleUnitId           = Module.moduleUnit
+lookupInstalledPackage = Packages.lookupUnitId
+oldLookupInstalledPackage = Packages.lookupUnitId . unitState
+-- initUnits              = Packages.initUnits
+-- initPackages           = initPackagesx
+haddockInterfaces      = unitHaddockInterfaces
+
+thisInstalledUnitId    = GHC.homeUnitId
+thisPackage            = DynFlags.homeUnit
+setThisInstalledUnitId uid df = df { homeUnitId = uid}
+
+oldUnhelpfulSpan  = UnhelpfulSpan . SrcLoc.UnhelpfulOther
+-- unhelpfulOther = unhelpfulOther . _
+pattern OldRealSrcSpan :: RealSrcSpan -> SrcSpan
+pattern OldRealSrcSpan x <- RealSrcSpan x _ where
+    OldRealSrcSpan x = RealSrcSpan x Nothing
+{-# COMPLETE OldRealSrcSpan, UnhelpfulSpan #-}
+
+oldListVisibleModuleNames = Packages.listVisibleModuleNames . unitState
+oldLookupModuleWithSuggestions = Packages.lookupModuleWithSuggestions . unitState
+-- oldLookupInPackageDB = Packages.lookupInPackageDB . unitState
+
+oldRenderWithStyle dflags sdoc sty = Out.renderWithStyle (initSDocContext dflags sty) sdoc
+oldMkUserStyle _ = Out.mkUserStyle
+oldMkErrStyle _ = Out.mkErrStyle
+oldFormatErrDoc :: DynFlags -> Err.ErrDoc -> Out.SDoc
+oldFormatErrDoc = Err.formatErrDoc . undefined
+-- oldFormatErrDoc = Err.formatErrDoc . undefined
+writeIfaceFile = writeIface
+
+#else
+type Unit = Module.UnitId
+-- type PackageConfig = Packages.PackageConfig
+definiteUnitId = Module.DefiniteUnitId
+defUnitId = Module.DefUnitId
+installedModule = Module.InstalledModule
+oldLookupInstalledPackage = Packages.lookupInstalledPackage
+-- packageName = Packages.packageName
+-- lookupPackage = Packages.lookupPackage
+-- getPackageConfigMap = Packages.getPackageConfigMap
+setThisInstalledUnitId uid df = df { thisInstalledUnitId = uid}
+
+oldUnhelpfulSpan  = UnhelpfulSpan
+pattern OldRealSrcSpan :: RealSrcSpan -> SrcSpan
+pattern OldRealSrcSpan x = RealSrcSpan x
+{-# COMPLETE OldRealSrcSpan, UnhelpfulSpan #-}
+
+pattern NotBoot, IsBoot :: IsBootInterface
+pattern NotBoot = False
+pattern IsBoot = True
+
+initUnits              = fmap fst . Packages.initPackages
+
+unitDepends            = depends
+
+oldListVisibleModuleNames = Packages.listVisibleModuleNames
+oldLookupModuleWithSuggestions = Packages.lookupModuleWithSuggestions
+-- oldLookupInPackageDB = Packages.lookupInPackageDB
+
+oldRenderWithStyle = Out.renderWithStyle
+oldMkUserStyle = Out.mkUserStyle
+oldMkErrStyle = Out.mkErrStyle
+oldFormatErrDoc = Err.formatErrDoc
+
+-- Linear Haskell
+type Scaled a = a
+scaledThing :: Scaled a -> a
+scaledThing = id
+#endif
+
+getPackageName :: DynFlags -> InstalledUnitId -> Maybe PackageName
+getPackageName dfs i = packageName <$> lookupPackage dfs (definiteUnitId (defUnitId i))
 
 disableWarningsAsErrors :: DynFlags -> DynFlags
 disableWarningsAsErrors df =
@@ -309,3 +491,58 @@ isQualifiedImport ImportDecl{} = True
 isQualifiedImport ImportDecl{ideclQualified} = ideclQualified
 #endif
 isQualifiedImport _ = False
+
+getRealSpan :: SrcSpan -> Maybe RealSrcSpan
+getRealSpan (OldRealSrcSpan x) = Just x
+getRealSpan _ = Nothing
+
+
+
+#if __GLASGOW_HASKELL__ >= 900
+getNodeIds :: HieAST a -> M.Map Identifier (IdentifierDetails a)
+getNodeIds = M.foldl' combineNodeIds M.empty . getSourcedNodeInfo . sourcedNodeInfo
+
+ad `combineNodeIds` (NodeInfo _ _ bd) = M.unionWith (<>) ad bd
+
+--  Copied from GHC and adjusted to accept TypeIndex instead of Type
+-- nodeInfo' :: Ord a => HieAST a -> NodeInfo a
+nodeInfo' :: HieAST TypeIndex -> NodeInfo TypeIndex
+nodeInfo' = M.foldl' combineNodeInfo' emptyNodeInfo . getSourcedNodeInfo . sourcedNodeInfo
+
+combineNodeInfo' :: Ord a => NodeInfo a -> NodeInfo a -> NodeInfo a
+(NodeInfo as ai ad) `combineNodeInfo'` (NodeInfo bs bi bd) =
+  NodeInfo (S.union as bs) (mergeSorted ai bi) (M.unionWith (<>) ad bd)
+  where
+    mergeSorted :: Ord a => [a] -> [a] -> [a]
+    mergeSorted la@(a:as) lb@(b:bs) = case compare a b of
+                                        LT -> a : mergeSorted as lb
+                                        EQ -> a : mergeSorted as bs
+                                        GT -> b : mergeSorted la bs
+    mergeSorted as [] = as
+    mergeSorted [] bs = bs
+
+stringToUnit = Module.stringToUnit
+rtsUnit = Module.rtsUnit
+#else
+
+getNodeIds = nodeIdentifiers . nodeInfo
+-- import qualified FastString as FS
+
+-- nodeInfo' :: HieAST TypeIndex -> NodeInfo TypeIndex
+nodeInfo' :: Ord a => HieAST a -> NodeInfo a
+nodeInfo' = nodeInfo
+-- type Unit = UnitId
+-- unitString :: Unit -> String
+-- unitString = unitIdString
+stringToUnit :: String -> Unit
+stringToUnit = Module.stringToUnitId
+-- moduleUnit :: Module -> Unit
+-- moduleUnit = moduleUnitId
+-- unhelpfulSpanFS :: FS.FastString -> FS.FastString
+-- unhelpfulSpanFS = id
+rtsUnit = Module.rtsUnitId
+#endif
+
+#if MIN_GHC_API_VERSION(9,0,0)
+#else
+#endif

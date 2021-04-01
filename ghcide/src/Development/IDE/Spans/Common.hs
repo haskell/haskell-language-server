@@ -31,6 +31,8 @@ import           NameEnv
 import           Outputable                   hiding ((<>))
 import           Var
 
+import           Development.IDE.GHC.Compat   (oldMkUserStyle,
+                                               oldRenderWithStyle)
 import           Development.IDE.GHC.Orphans  ()
 import           Development.IDE.GHC.Util
 import qualified Documentation.Haddock.Parser as H
@@ -50,8 +52,8 @@ showNameWithoutUniques :: Outputable a => a -> T.Text
 showNameWithoutUniques = T.pack . prettyprint
   where
     dyn = unsafeGlobalDynFlags `gopt_set` Opt_SuppressUniques
-    prettyprint x = renderWithStyle dyn (ppr x) style
-    style = mkUserStyle dyn neverQualify AllTheWay
+    prettyprint x = oldRenderWithStyle dyn (ppr x) style
+    style = oldMkUserStyle dyn neverQualify AllTheWay
 
 -- | Shows IEWrappedName, without any modifier, qualifier or unique identifier.
 unqualIEWrapName :: IEWrappedName RdrName -> T.Text

@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+#include "ghc-api-version.h"
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
 
@@ -67,12 +68,11 @@ import           Lexer
 import           Module                         (moduleNameSlashes)
 import           OccName                        (parenSymOcc)
 import           Outputable                     (Depth (..), Outputable, SDoc,
-                                                 mkUserStyle, neverQualify, ppr,
-                                                 renderWithStyle,
+                                                 neverQualify, ppr,
                                                  showSDocUnsafe)
-import           PackageConfig                  (PackageConfig)
-import           Packages                       (getPackageConfigMap,
-                                                 lookupPackage')
+-- import           PackageConfig                  (PackageConfig)
+-- import           Packages                       ( -- getPackageConfigMap,
+--                                                  lookupPackage')
 import           RdrName                        (nameRdrName, rdrNameOcc)
 import           SrcLoc                         (mkRealSrcLoc)
 import           StringBuffer
@@ -92,10 +92,10 @@ modifyDynFlags f = do
   modifySession $ \h ->
     h { hsc_dflags = newFlags, hsc_IC = (hsc_IC h) {ic_dflags = newFlags} }
 
--- | Given a 'UnitId' try and find the associated 'PackageConfig' in the environment.
-lookupPackageConfig :: UnitId -> HscEnv -> Maybe PackageConfig
-lookupPackageConfig unitId env =
-    lookupPackage' False pkgConfigMap unitId
+-- | Given a 'Unit' try and find the associated 'PackageConfig' in the environment.
+lookupPackageConfig :: Unit -> HscEnv -> Maybe GHC.PackageConfig
+lookupPackageConfig unit env =
+    GHC.lookupPackage' False pkgConfigMap unit
     where
         pkgConfigMap =
             -- For some weird reason, the GHC API does not provide a way to get the PackageConfigMap
@@ -127,7 +127,7 @@ prettyPrint :: Outputable a => a -> String
 prettyPrint = unsafePrintSDoc . ppr
 
 unsafePrintSDoc :: SDoc -> String
-unsafePrintSDoc sdoc = renderWithStyle dflags sdoc (mkUserStyle dflags neverQualify AllTheWay)
+unsafePrintSDoc sdoc = oldRenderWithStyle dflags sdoc (oldMkUserStyle dflags neverQualify AllTheWay)
   where
     dflags = unsafeGlobalDynFlags
 
@@ -260,13 +260,17 @@ dupHandleTo filepath h other_side
 
 -- | This is copied unmodified from GHC since it is not exposed.
 -- Note the beautiful inline comment!
+#if MIN_GHC_API_VERSION(9,0,0)
+dupHandle_ :: (RawIO dev, IODevice dev, BufferedIO dev, Typeable dev) => dev
+#else
 dupHandle_ :: (IODevice dev, BufferedIO dev, Typeable dev) => dev
+#endif
            -> FilePath
            -> Maybe (MVar Handle__)
            -> Handle__
            -> Maybe HandleFinalizer
            -> IO Handle
-dupHandle_ new_dev filepath other_side _h_@Handle__{..} mb_finalizer = do
+dupHandle_ new_dev filepath other_side Handle__{..} mb_finalizer = do
    -- XXX wrong!
   mb_codec <- if isJust haEncoder then fmap Just getLocaleEncoding else return Nothing
   mkHandle new_dev filepath haType True{-buffered-} mb_codec

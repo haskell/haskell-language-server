@@ -26,15 +26,10 @@ import           Development.IDE.GHC.Error     (catchSrcErrors)
 import           Development.IDE.GHC.Util      (lookupPackageConfig)
 import           Development.IDE.Types.Exports (ExportsMap, createExportsMap)
 import           Development.IDE.Graph.Classes
-import           GhcPlugins                    (HscEnv (hsc_dflags),
-                                                InstalledPackageInfo (exposedModules),
-                                                Module (..),
-                                                PackageState (explicitPackages),
-                                                listVisibleModuleNames,
-                                                packageConfigId)
+import           GhcPlugins                    (HscEnv (hsc_dflags))
 import           LoadIface                     (loadInterface)
 import qualified Maybes
-import           Module                        (InstalledUnitId)
+-- import           Module                        (InstalledUnitId)
 import           OpenTelemetry.Eventlog        (withSpan)
 import           System.Directory              (canonicalizePath)
 import           System.FilePath
@@ -95,8 +90,8 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
             doOne (pkg, mn) = do
                 modIface <- liftIO $ initIfaceLoad hscEnv $ loadInterface
                     ""
-                    (Module (packageConfigId pkg) mn)
-                    (ImportByUser False)
+                    (mkModule (packageConfigId pkg) mn)
+                    (ImportByUser NotBoot)
                 return $ case modIface of
                     Maybes.Failed    _r -> Nothing
                     Maybes.Succeeded mi -> Just mi
@@ -109,7 +104,7 @@ newHscEnvEqWithImportPaths envImportPaths hscEnv deps = do
         <$> catchSrcErrors
           dflags
           "listVisibleModuleNames"
-          (evaluate . force . Just $ listVisibleModuleNames dflags)
+          (evaluate . force . Just $ oldListVisibleModuleNames dflags)
 
     return HscEnvEq{..}
 

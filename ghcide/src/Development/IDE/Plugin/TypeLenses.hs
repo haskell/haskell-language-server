@@ -1,6 +1,8 @@
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE DeriveAnyClass   #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TypeFamilies     #-}
+#include "ghc-api-version.h"
 
 -- | An HLS plugin to provide code lenses for type signatures
 module Development.IDE.Plugin.TypeLenses (
@@ -80,7 +82,11 @@ import           PatSyn                              (patSynName)
 import           TcEnv                               (tcInitTidyEnv)
 import           TcRnMonad                           (initTcWithGbl)
 import           TcRnTypes                           (TcGblEnv (..))
+#if MIN_GHC_API_VERSION(9,0,1)
+import           GHC.Core.TyCo.Ppr                   (pprSigmaType)
+#else
 import           TcType                              (pprSigmaType)
+#endif
 import           Text.Regex.TDFA                     ((=~), (=~~))
 
 typeLensCommandId :: T.Text
