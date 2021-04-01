@@ -12,7 +12,6 @@ import           Control.Monad.Extra               (unless, when, whenJust)
 import qualified Data.Aeson.Encode.Pretty          as A
 import           Data.Default                      (Default (def))
 import           Data.List.Extra                   (upper)
-import           Data.Maybe                        (fromMaybe)
 import qualified Data.Text                         as T
 import qualified Data.Text.IO                      as T
 import           Data.Text.Lazy.Encoding           (decodeUtf8)
@@ -122,7 +121,7 @@ main = do
                 then Test.plugin
                 else mempty
 
-            ,Main.argsIdeOptions = \(fromMaybe def -> config) sessionLoader ->
+            ,Main.argsIdeOptions = \config  sessionLoader ->
                 let defOptions = defaultIdeOptions sessionLoader
                 in defOptions
                   { optShakeProfiling = argsShakeProfiling

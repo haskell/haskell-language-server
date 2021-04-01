@@ -88,7 +88,7 @@ data Arguments = Arguments
     , argsHlsPlugins :: IdePlugins IdeState
     , argsGhcidePlugin :: Plugin Config  -- ^ Deprecated
     , argsSessionLoadingOptions :: SessionLoadingOptions
-    , argsIdeOptions :: Maybe Config -> Action IdeGhcSession -> IdeOptions
+    , argsIdeOptions :: Config -> Action IdeGhcSession -> IdeOptions
     , argsLspOptions :: LSP.Options
     , argsDefaultHlsConfig :: Config
     , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
@@ -142,11 +142,11 @@ defaultMain Arguments{..} = do
     logger <- argsLogger
     hSetBuffering stderr LineBuffering
 
-    let hlsPlugin = asGhcIdePlugin argsDefaultHlsConfig argsHlsPlugins
+    let hlsPlugin = asGhcIdePlugin argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
         options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
-        argsOnConfigChange _ide = pure . getConfigFromNotification argsDefaultHlsConfig
+        argsOnConfigChange = getConfigFromNotification
         rules = argsRules >> pluginRules plugins
 
     debouncer <- argsDebouncer
@@ -158,7 +158,7 @@ defaultMain Arguments{..} = do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-            runLanguageServer options inH outH argsGetHieDbLoc argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
+            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
@@ -214,7 +214,7 @@ defaultMain Arguments{..} = do
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
-            let options = (argsIdeOptions Nothing sessionLoader)
+            let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }

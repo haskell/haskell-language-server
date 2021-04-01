@@ -50,7 +50,7 @@ module Development.IDE.Core.Shake(
     getIdeOptions,
     getIdeOptionsIO,
     GlobalIdeOptions(..),
-    getClientConfig,
+    HLS.getClientConfig,
     getPluginConfig,
     garbageCollect,
     knownTargets,
@@ -230,14 +230,10 @@ getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
 
-getClientConfig :: LSP.MonadLsp Config m => ShakeExtras -> m Config
-getClientConfig ShakeExtras { defaultConfig } =
-    fromMaybe defaultConfig <$> HLS.getClientConfig
-
 getPluginConfig
-    :: LSP.MonadLsp Config m => ShakeExtras -> PluginId -> m PluginConfig
-getPluginConfig extras plugin = do
-    config <- getClientConfig extras
+    :: LSP.MonadLsp Config m => PluginId -> m PluginConfig
+getPluginConfig plugin = do
+    config <- HLS.getClientConfig
     return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk

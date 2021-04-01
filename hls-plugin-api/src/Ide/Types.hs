@@ -143,8 +143,8 @@ instance PluginMethod TextDocumentDocumentSymbol where
       res
         | supportsHierarchy = InL $ sconcat $ fmap (either id (fmap siToDs)) dsOrSi
         | otherwise = InR $ sconcat $ fmap (either (List . concatMap dsToSi) id) dsOrSi
-      siToDs (SymbolInformation name kind dep (Location _uri range) cont)
-        = DocumentSymbol name cont kind dep range range Nothing
+      siToDs (SymbolInformation name kind _tags dep (Location _uri range) cont)
+        = DocumentSymbol name cont kind Nothing dep range range Nothing
       dsToSi = go Nothing
       go :: Maybe T.Text -> DocumentSymbol -> [SymbolInformation]
       go parent ds =
@@ -152,7 +152,7 @@ instance PluginMethod TextDocumentDocumentSymbol where
             children' = concatMap (go (Just name')) (fromMaybe mempty (ds ^. children))
             loc = Location uri' (ds ^. range)
             name' = ds ^. name
-            si = SymbolInformation name' (ds ^. kind) (ds ^. deprecated) loc parent
+            si = SymbolInformation name' (ds ^. kind) Nothing (ds ^. deprecated) loc parent
         in [si] <> children'
 
 instance PluginMethod TextDocumentCompletion where

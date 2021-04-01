@@ -624,7 +624,7 @@ disableWarningTests =
       <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
         doc <- createDoc "Module.hs" "haskell" initialContent
         _ <- waitForDiagnostics
-        codeActs <- mapMaybe caResultToCodeAct <$> getCodeActions doc (Range (Position 0 0) (Position 0 0))
+        codeActs <- mapMaybe caResultToCodeAct <$> getAllCodeActions doc
         case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
           Nothing -> liftIO $ assertFailure "No code action with expected title"
           Just action -> do
@@ -691,7 +691,7 @@ noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 testSession :: String -> Session () -> TestTree
 testSession name s = testCase name $ withTempDir $ \dir ->

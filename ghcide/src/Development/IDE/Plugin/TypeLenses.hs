@@ -117,7 +117,7 @@ codeLensProvider ideState pId CodeLensParams{_textDocument = TextDocumentIdentif
       diag <- getDiagnostics ideState
       hDiag <- getHiddenDiagnostics ideState
 
-      let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+      let toWorkSpaceEdit tedit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
           generateLensForGlobal sig@GlobalBindingTypeSig{..} = do
             range <- srcSpanToRange $ gbSrcSpan sig
             tedit <- gblBindingTypeSigToEdit sig
