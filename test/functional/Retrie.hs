@@ -13,9 +13,7 @@ import qualified Data.Text.IO                    as T
 import           Language.LSP.Test
 import           Language.LSP.Types
 import           System.FilePath
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import           Test.Hls
 
 tests :: TestTree
 tests = testGroup "retrie"
@@ -26,7 +24,7 @@ tests = testGroup "retrie"
 goldenTest :: FilePath -> (Text -> Bool) -> Int -> Int -> TestTree
 goldenTest input actionPred line col =
     testCase input $ do
-        runSession hlsCommand fullCaps spliceTestPath $ do
+        runSession testCommand fullCaps spliceTestPath $ do
             doc <- openDoc input "haskell"
             _ <- waitForDiagnostics
             actions <- getCodeActions doc $ pointRange line col
