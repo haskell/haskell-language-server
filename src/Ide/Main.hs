@@ -1,34 +1,38 @@
 -- Copyright (c) 2019 The DAML Authors. All rights reserved.
 -- SPDX-License-Identifier: Apache-2.0
-{-# LANGUAGE CPP #-} -- To get precise GHC version
+{-# LANGUAGE CPP                 #-}
 {-# OPTIONS_GHC -Wno-dodgy-imports #-} -- GHC no longer exports def in GHC 8.6 and above
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies        #-}
 
 module Ide.Main(defaultMain, runLspMode) where
 
-import Control.Monad.Extra
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as T
-import Development.IDE.Core.Rules
-import Development.IDE.Session (setInitialDynFlags, getHieDbLoc)
-import Development.IDE.Types.Logger as G
-import qualified Language.LSP.Server as LSP
-import Ide.Arguments
-import Ide.Logger
-import Ide.Version
-import Ide.Types (IdePlugins, ipMap)
-import qualified System.Directory.Extra as IO
-import System.Exit
-import System.IO
-import qualified System.Log.Logger as L
-import HieDb.Run
-import qualified Development.IDE.Main as Main
+import           Control.Monad.Extra
+import qualified Data.Aeson.Encode.Pretty      as A
+import qualified Data.ByteString.Lazy.Char8    as LBS
+import           Data.Default
+import qualified Data.Map.Strict               as Map
+import qualified Data.Text                     as T
+import           Development.IDE.Core.Rules
+import qualified Development.IDE.Main          as Main
+import           Development.IDE.Session       (getHieDbLoc, setInitialDynFlags)
+import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
-import Development.Shake (ShakeOptions(shakeThreads))
-import Data.Default
+import           Development.Shake             (ShakeOptions (shakeThreads))
+import           HieDb.Run
+import           Ide.Arguments
+import           Ide.Logger
+import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
+                                                pluginsToVSCodeExtensionSchema)
+import           Ide.Types                     (IdePlugins, ipMap)
+import           Ide.Version
+import qualified Language.LSP.Server           as LSP
+import qualified System.Directory.Extra        as IO
+import           System.Exit
+import           System.IO
+import qualified System.Log.Logger             as L
 
 defaultMain :: Arguments -> IdePlugins IdeState -> IO ()
 defaultMain args idePlugins = do
@@ -64,6 +68,12 @@ defaultMain args idePlugins = do
             hPutStrLn stderr hlsVer
             runLspMode lspArgs idePlugins
 
+        VSCodeExtensionSchemaMode -> do
+          LBS.putStrLn $ A.encodePretty $ pluginsToVSCodeExtensionSchema idePlugins
+
+        DefaultConfigurationMode -> do
+          LBS.putStrLn $ A.encodePretty $ pluginsToDefaultConfig idePlugins
+
 -- ---------------------------------------------------------------------
 
 hlsLogger :: G.Logger
@@ -92,9 +102,9 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
     Main.defaultMain def
-      { Main.argFiles = if argLSP then Nothing else Just []
+      { Main.argFiles = if argLSP then Nothing else Just argFiles
       , Main.argsHlsPlugins = idePlugins
-      , Main.argsLogger = hlsLogger
+      , Main.argsLogger = pure hlsLogger
       , Main.argsIdeOptions = \_config sessionLoader ->
         let defOptions = Ghcide.defaultIdeOptions sessionLoader
         in defOptions

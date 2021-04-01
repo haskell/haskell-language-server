@@ -38,7 +38,10 @@ module Development.IDE.Core.Shake(
     useWithStale, usesWithStale,
     useWithStale_, usesWithStale_,
     BadDependency(..),
-    define, defineEarlyCutoff, defineOnDisk, needOnDisk, needOnDisks,
+    RuleBody(..),
+    define, defineNoDiagnostics,
+    defineEarlyCutoff,
+    defineOnDisk, needOnDisk, needOnDisks,
     getDiagnostics,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
@@ -74,8 +77,8 @@ module Development.IDE.Core.Shake(
     ) where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Extra
 import           Control.Concurrent.STM
+import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -244,9 +247,7 @@ getPluginConfig extras plugin = do
 addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,TextDocumentVersion))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
-  liftIO $ modifyVar_ persistentKeys $ \hm -> do
-    pure $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal) hm
-  return ()
+  void $ liftIO $ modifyVar' persistentKeys $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal)
 
 class Typeable a => IsIdeGlobal a where
 
@@ -270,7 +271,7 @@ addIdeGlobal x = do
 
 addIdeGlobalExtras :: IsIdeGlobal a => ShakeExtras -> a -> IO ()
 addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
-    liftIO $ modifyVar_ globals $ \mp -> case HMap.lookup ty mp of
+    void $ liftIO $ modifyVarIO' globals $ \mp -> case HMap.lookup ty mp of
         Just _ -> errorIO $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
         Nothing -> return $! HMap.insert ty (toDyn x) mp
 
@@ -322,10 +323,13 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
-          modifyVar state $ \hm -> pure $ case mv of
-            Nothing -> (HMap.alter (alterValue $ Failed True) (file,Key k) hm,Nothing)
-            Just (v,del,ver) -> (HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (file,Key k) hm
-                                ,Just (v,addDelta del $ mappingForVersion allMappings file ver))
+          case mv of
+            Nothing -> do
+                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (file,Key k)
+                return Nothing
+            Just (v,del,ver) -> do
+                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (file,Key k)
+                return $ Just (v,addDelta del $ mappingForVersion allMappings file ver)
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
         alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
@@ -413,19 +417,18 @@ setValues :: IdeRule k v
           -> Value v
           -> Vector FileDiagnostic
           -> IO ()
-setValues state key file val diags = modifyVar_ state $ \vals -> do
-    -- Force to make sure the old HashMap is not retained
-    evaluate $ HMap.insert (file, Key key) (ValueWithDiagnostics (fmap toDyn val) diags) vals
+setValues state key file val diags =
+    void $ modifyVar' state $ HMap.insert (file, Key key) (ValueWithDiagnostics (fmap toDyn val) diags)
+
 
 -- | Delete the value stored for a given ide build key
 deleteValue
   :: (Typeable k, Hashable k, Eq k, Show k)
-  => IdeState
+  => ShakeExtras
   -> k
   -> NormalizedFilePath
   -> IO ()
-deleteValue IdeState{shakeExtras = ShakeExtras{state}} key file = modifyVar_ state $ \vals ->
-    evaluate $ HMap.delete (file, Key key) vals
+deleteValue ShakeExtras{state} key file = void $ modifyVar' state $ HMap.delete (file, Key key)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
@@ -780,23 +783,26 @@ garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
 garbageCollect keep = do
     ShakeExtras{state, diagnostics,hiddenDiagnostics,publishedDiagnostics,positionMapping} <- getShakeExtras
     liftIO $
-        do newState <- modifyVar state $ \values -> do
-               values <- evaluate $ HMap.filterWithKey (\(file, _) _ -> keep file) values
-               return $! dupe values
-           modifyVar_ diagnostics $ \diags -> return $! filterDiagnostics keep diags
-           modifyVar_ hiddenDiagnostics $ \hdiags -> return $! filterDiagnostics keep hdiags
-           modifyVar_ publishedDiagnostics $ \diags -> return $! HMap.filterWithKey (\uri _ -> keep (fromUri uri)) diags
+        do newState <- modifyVar' state $ HMap.filterWithKey (\(file, _) _ -> keep file)
+           void $ modifyVar' diagnostics $ filterDiagnostics keep
+           void $ modifyVar' hiddenDiagnostics $ filterDiagnostics keep
+           void $ modifyVar' publishedDiagnostics $ HMap.filterWithKey (\uri _ -> keep (fromUri uri))
            let versionsForFile =
                    HMap.fromListWith Set.union $
                    mapMaybe (\((file, _key), ValueWithDiagnostics v _) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
                    HMap.toList newState
-           modifyVar_ positionMapping $ \mappings -> return $! filterVersionMap versionsForFile mappings
+           void $ modifyVar' positionMapping $ filterVersionMap versionsForFile
 
 -- | Define a new Rule without early cutoff
 define
     :: IdeRule k v
     => (k -> NormalizedFilePath -> Action (IdeResult v)) -> Rules ()
-define op = defineEarlyCutoff $ \k v -> (Nothing,) <$> op k v
+define op = defineEarlyCutoff $ Rule $ \k v -> (Nothing,) <$> op k v
+
+defineNoDiagnostics
+    :: IdeRule k v
+    => (k -> NormalizedFilePath -> Action (Maybe v)) -> Rules ()
+defineNoDiagnostics op = defineEarlyCutoff $ RuleNoDiagnostics $ \k v -> (Nothing,) <$> op k v
 
 -- | Request a Rule result if available
 use :: IdeRule k v
@@ -905,15 +911,34 @@ usesWithStale key files = do
     -- whether the rule succeeded or not.
     mapM (lastValue key) files
 
+data RuleBody k v
+  = Rule (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
+  | RuleNoDiagnostics (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, Maybe v))
+
+
 -- | Define a new Rule with early cutoff
 defineEarlyCutoff
     :: IdeRule k v
-    => (k -> NormalizedFilePath -> Action (Maybe BS.ByteString, IdeResult v))
+    => RuleBody k v
     -> Rules ()
-defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
-    extras@ShakeExtras{state, inProgress} <- getShakeExtras
-    -- don't do progress for GetFileExists, as there are lots of non-nodes for just that one key
-    (if show key == "GetFileExists" then id else withProgressVar inProgress file) $ do
+defineEarlyCutoff (Rule op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+    defineEarlyCutoff' True key file old mode $ op key file
+defineEarlyCutoff (RuleNoDiagnostics op) = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old :: Maybe BS.ByteString) mode -> otTracedAction key file isSuccess $ do
+    defineEarlyCutoff' False key file old mode $ second (mempty,) <$> op key file
+
+defineEarlyCutoff'
+    :: IdeRule k v
+    => Bool  -- ^ update diagnostics
+    -> k
+    -> NormalizedFilePath
+    -> Maybe BS.ByteString
+    -> RunMode
+    -> Action (Maybe BS.ByteString, IdeResult v)
+    -> Action (RunResult (A (RuleResult k)))
+defineEarlyCutoff' doDiagnostics key file old mode action = do
+    extras@ShakeExtras{state, inProgress, logger} <- getShakeExtras
+    options <- getIdeOptions
+    (if optSkipProgress options key then id else withProgressVar inProgress file) $ do
         val <- case old of
             Just old | mode == RunDependenciesSame -> do
                 v <- liftIO $ getValues state key file
@@ -921,7 +946,8 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                     -- No changes in the dependencies and we have
                     -- an existing result.
                     Just (v, diags) -> do
-                        updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
+                        when doDiagnostics $
+                            updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) $ Vector.toList diags
                         return $ Just $ RunResult ChangedNothing old $ A v
                     _ -> return Nothing
             _ -> return Nothing
@@ -929,7 +955,7 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
             Just res -> return res
             Nothing -> do
                 (bs, (diags, res)) <- actionCatch
-                    (do v <- op key file; liftIO $ evaluate $ force v) $
+                    (do v <- action; liftIO $ evaluate $ force v) $
                     \(e :: SomeException) -> pure (Nothing, ([ideErrorText file $ T.pack $ show e | not $ isBadDependency e],Nothing))
                 modTime <- liftIO $ (currentValue . fst =<<) <$> getValues state GetModificationTime file
                 (bs, res) <- case res of
@@ -946,7 +972,9 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                                     (toShakeValue ShakeResult bs, Failed b)
                     Just v -> pure (maybe ShakeNoCutoff ShakeResult bs, Succeeded (vfsVersion =<< modTime) v)
                 liftIO $ setValues state key file res (Vector.fromList diags)
-                updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+                if doDiagnostics
+                    then updateFileDiagnostics file (Key key) extras $ map (\(_,y,z) -> (y,z)) diags
+                    else forM_ diags $ \d -> liftIO $ logWarning logger $ showDiagnosticsColored [d]
                 let eq = case (bs, fmap decodeShakeValue old) of
                         (ShakeResult a, Just (ShakeResult b)) -> a == b
                         (ShakeStale a, Just (ShakeStale b))   -> a == b
@@ -957,13 +985,14 @@ defineEarlyCutoff op = addBuiltinRule noLint noIdentity $ \(Q (key, file)) (old 
                     (if eq then ChangedRecomputeSame else ChangedRecomputeDiff)
                     (encodeShakeValue bs) $
                     A res
-  where
-    withProgressVar :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
-    withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
-        -- This functions are deliberately eta-expanded to avoid space leaks.
-        -- Do not remove the eta-expansion without profiling a session with at
-        -- least 1000 modifications.
-        where f shift = modifyVar_ var $ \x -> evaluate $ HMap.insertWith (\_ x -> shift x) file (shift 0) x
+    where
+
+        withProgressVar :: (Eq a, Hashable a) => Var (HMap.HashMap a Int) -> a -> Action b -> Action b
+        withProgressVar var file = actionBracket (f succ) (const $ f pred) . const
+            -- This functions are deliberately eta-expanded to avoid space leaks.
+            -- Do not remove the eta-expansion without profiling a session with at
+            -- least 1000 modifications.
+            where f shift = void $ modifyVar' var $ HMap.insertWith (\_ x -> shift x) file (shift 0)
 
 isSuccess :: RunResult (A v) -> Bool
 isSuccess (RunResult _ _ (A Failed{})) = False
@@ -1055,29 +1084,30 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
         ver = vfsVersion =<< modTime
-        updateDiagnosticsWithForcing new store = do
-            store' <- evaluate $ setStageDiagnostics uri ver (T.pack $ show k) new store
-            new' <- evaluate $ getUriDiagnostics uri store'
-            return (store', new')
+        update new store =
+            let store' = setStageDiagnostics uri ver (T.pack $ show k) new store
+                new' = getUriDiagnostics uri store'
+            in (store', new')
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- modifyVar diagnostics $ updateDiagnosticsWithForcing $ map snd currentShown
-        _ <- modifyVar hiddenDiagnostics $  updateDiagnosticsWithForcing $ map snd currentHidden
+        newDiags <- modifyVar diagnostics $ pure . update (map snd currentShown)
+        _ <- modifyVar hiddenDiagnostics $  pure . update (map snd currentHidden)
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
-             mask_ $ modifyVar_ publishedDiagnostics $ \published -> do
+             join $ mask_ $ modifyVar publishedDiagnostics $ \published -> do
                  let lastPublish = HMap.lookupDefault [] uri published
-                 when (lastPublish /= newDiags) $ case lspEnv of
-                   Nothing -> -- Print an LSP event.
-                     logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
-                   Just env -> LSP.runLspT env $
-                     LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
-                       LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
-                 pure $! HMap.insert uri newDiags published
+                     !published' = HMap.insert uri newDiags published
+                     action = when (lastPublish /= newDiags) $ case lspEnv of
+                        Nothing -> -- Print an LSP event.
+                            logInfo logger $ showDiagnosticsColored $ map (fp,ShowDiag,) newDiags
+                        Just env -> LSP.runLspT env $
+                            LSP.sendNotification LSP.STextDocumentPublishDiagnostics $
+                            LSP.PublishDiagnosticsParams (fromNormalizedUri uri) ver (List newDiags)
+                 return (published', action)
 
 newtype Priority = Priority Double
 
@@ -1150,6 +1180,6 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
                 Map.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
                   zeroMapping
                   (Map.insert _version (shared_change, zeroMapping) mappingForUri)
-        pure $! HMap.insert uri updatedMapping allMappings
+        pure $ HMap.insert uri updatedMapping allMappings
   where
     shared_change = mkDelta changes

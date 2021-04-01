@@ -1,8 +1,8 @@
-cabal-version:      2.2
+cabal-version:      2.4
 build-type:         Simple
 category:           Development
 name:               ghcide
-version:            1.0.0.0
+version:            1.1.0.0
 license:            Apache-2.0
 license-file:       LICENSE
 author:             Digital Asset and Ghcide contributors
@@ -11,21 +11,19 @@ copyright:          Digital Asset and Ghcide contributors 2018-2020
 synopsis:           The core of an IDE
 description:
     A library for building Haskell IDE's on top of the GHC API.
-homepage:           https://github.com/haskell/ghcide#readme
-bug-reports:        https://github.com/haskell/ghcide/issues
+homepage:           https://github.com/haskell/haskell-language-server/tree/master/ghcide#readme
+bug-reports:        https://github.com/haskell/haskell-language-server/issues
 tested-with:        GHC == 8.6.4 || == 8.6.5 || == 8.8.2 || == 8.8.3 || == 8.8.4 || == 8.10.2 || == 8.10.3 || == 8.10.4
 extra-source-files: include/ghc-api-version.h README.md CHANGELOG.md
-                    test/data/hover/*.hs
-                    test/data/multi/cabal.project
-                    test/data/multi/hie.yaml
-                    test/data/multi/a/a.cabal
-                    test/data/multi/a/*.hs
-                    test/data/multi/b/b.cabal
-                    test/data/multi/b/*.hs
+                    test/data/**/*.project
+                    test/data/**/*.cabal
+                    test/data/**/*.yaml
+                    test/data/**/*.hs
+                    test/data/**/*.hs-boot
 
 source-repository head
     type:     git
-    location: https://github.com/haskell/ghcide.git
+    location: https://github.com/haskell/haskell-language-server.git
 
 flag ghc-patched-unboxed-bytecode
     description: The GHC version we link against supports unboxed sums and tuples in bytecode
@@ -55,10 +53,10 @@ library
         fingertree,
         ghc-exactprint,
         Glob,
-        haddock-library >= 1.8 && < 1.10,
+        haddock-library ^>= 1.10.0,
         hashable,
         hie-compat ^>= 0.1.0.0,
-        hls-plugin-api ^>= 1.0.0.0,
+        hls-plugin-api ^>= 1.1.0.0,
         lens,
         hiedb == 0.3.0.1,
         lsp-types == 1.1.*,
@@ -101,7 +99,7 @@ library
         cryptohash-sha1 >=0.11.100 && <0.12,
         hie-bios >= 0.7.1 && < 0.8.0,
         implicit-hie-cradle >= 0.3.0.2 && < 0.4,
-        base16-bytestring >=0.1.1 && <0.2
+        base16-bytestring >=0.1.1 && <1.1
     if os(windows)
       build-depends:
         Win32
@@ -136,6 +134,7 @@ library
     include-dirs:
         include
     exposed-modules:
+        Control.Concurrent.Strict
         Development.IDE
         Development.IDE.Main
         Development.IDE.Core.Debouncer
@@ -190,6 +189,7 @@ library
         Development.IDE.GHC.Warnings
         Development.IDE.LSP.Notifications
         Development.IDE.Plugin.CodeAction.PositionIndexed
+        Development.IDE.Plugin.CodeAction.Args
         Development.IDE.Plugin.Completions.Logic
         Development.IDE.Session.VersionCheck
         Development.IDE.Types.Action
@@ -282,7 +282,8 @@ executable ghcide
         optparse-applicative,
         shake,
         text,
-        unordered-containers
+        unordered-containers,
+        aeson-pretty
     other-modules:
         Arguments
         Paths_ghcide

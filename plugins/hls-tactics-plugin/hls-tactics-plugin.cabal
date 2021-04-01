@@ -1,4 +1,4 @@
-cabal-version:      2.2
+cabal-version:      2.4
 category:           Development
 name:               hls-tactics-plugin
 version:            1.0.0.0
@@ -14,7 +14,11 @@ license-file:       LICENSE
 build-type:         Simple
 extra-source-files:
   README.md
---   ChangeLog.md
+  test/golden/*.cabal
+  test/golden/*.yaml
+  test/golden/*.hs
+  test/golden/*.expected
+
 
 flag pedantic
   description: Enable -Werror
@@ -25,28 +29,30 @@ library
   hs-source-dirs:   src
   exposed-modules:
     Ide.Plugin.Tactic
-    Ide.Plugin.Tactic.Auto
-    Ide.Plugin.Tactic.CaseSplit
-    Ide.Plugin.Tactic.CodeGen
-    Ide.Plugin.Tactic.CodeGen.Utils
-    Ide.Plugin.Tactic.Context
-    Ide.Plugin.Tactic.Debug
-    Ide.Plugin.Tactic.FeatureSet
-    Ide.Plugin.Tactic.GHC
-    Ide.Plugin.Tactic.Judgements
-    Ide.Plugin.Tactic.KnownStrategies
-    Ide.Plugin.Tactic.KnownStrategies.QuickCheck
-    Ide.Plugin.Tactic.LanguageServer
-    Ide.Plugin.Tactic.LanguageServer.TacticProviders
-    Ide.Plugin.Tactic.Machinery
-    Ide.Plugin.Tactic.Naming
-    Ide.Plugin.Tactic.Range
-    Ide.Plugin.Tactic.Simplify
-    Ide.Plugin.Tactic.Tactics
-    Ide.Plugin.Tactic.Types
+    Wingman.Auto
+    Wingman.CaseSplit
+    Wingman.CodeGen
+    Wingman.CodeGen.Utils
+    Wingman.Context
+    Wingman.Debug
+    Wingman.FeatureSet
+    Wingman.GHC
+    Wingman.Judgements
+    Wingman.Judgements.Theta
+    Wingman.KnownStrategies
+    Wingman.KnownStrategies.QuickCheck
+    Wingman.LanguageServer
+    Wingman.LanguageServer.TacticProviders
+    Wingman.Machinery
+    Wingman.Naming
+    Wingman.Plugin
+    Wingman.Range
+    Wingman.Simplify
+    Wingman.Tactics
+    Wingman.Types
 
   ghc-options:
-    -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
+    -Wall -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
   if flag(pedantic)
     ghc-options: -Werror
 
@@ -63,9 +69,9 @@ library
     , ghc-boot-th
     , ghc-exactprint
     , ghc-source-gen
-    , ghcide         ^>= 1.0.0.0
+    , ghcide         ^>= 1.1.0.0
     , lsp
-    , hls-plugin-api ^>= 1.0.0.0
+    , hls-plugin-api >= 1.0 && < 1.2
     , lens
     , mtl
     , refinery       ^>=0.3
@@ -77,7 +83,29 @@ library
     , deepseq
 
   default-language: Haskell2010
-  default-extensions: DataKinds, TypeOperators
+  default-extensions:
+    DataKinds,
+    DeriveAnyClass,
+    DeriveFunctor,
+    DeriveGeneric,
+    DeriveDataTypeable,
+    DeriveFoldable,
+    DeriveTraversable,
+    DerivingStrategies,
+    DerivingVia,
+    FlexibleContexts,
+    FlexibleInstances,
+    GADTs,
+    GeneralizedNewtypeDeriving,
+    LambdaCase,
+    MultiParamTypeClasses,
+    NumDecimals,
+    OverloadedLabels,
+    PatternSynonyms,
+    ScopedTypeVariables,
+    TypeApplications,
+    TypeOperators,
+    ViewPatterns
 
 
 executable test-server

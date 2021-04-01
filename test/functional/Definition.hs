@@ -1,15 +1,10 @@
 module Definition (tests) where
 
 import           Control.Lens
-import           Control.Monad.IO.Class
-import           Language.LSP.Test
-import           Language.LSP.Types
 import           Language.LSP.Types.Lens
 import           System.Directory
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure (ignoreTestBecause)
-import           Test.Tasty.HUnit
+import           Test.Hls
+import           Test.Hls.Command
 
 tests :: TestTree
 tests = testGroup "definitions" [

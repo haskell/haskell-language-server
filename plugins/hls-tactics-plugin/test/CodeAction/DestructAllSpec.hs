@@ -7,7 +7,7 @@
 
 module CodeAction.DestructAllSpec where
 
-import Ide.Plugin.Tactic.Types
+import Wingman.Types
 import Test.Hspec
 import Utils
 

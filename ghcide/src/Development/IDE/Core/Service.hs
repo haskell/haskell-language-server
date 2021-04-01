@@ -20,7 +20,6 @@ module Development.IDE.Core.Service(
 
 import           Development.IDE.Core.Debouncer
 import           Development.IDE.Core.FileExists (fileExistsRules)
-import           Development.IDE.Core.FileStore  (fileStoreRules)
 import           Development.IDE.Core.OfInterest
 import           Development.IDE.Types.Logger    as Logger
 import           Development.IDE.Types.Options   (IdeOptions (..))
@@ -62,7 +61,6 @@ initialise defaultConfig mainRule lspEnv logger debouncer options vfs hiedb hied
         (optShakeOptions options)
           $ do
             addIdeGlobal $ GlobalIdeOptions options
-            fileStoreRules vfs
             ofInterestRules
             fileExistsRules lspEnv vfs
             mainRule

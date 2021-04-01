@@ -114,16 +114,11 @@ import           Control.Concurrent.Extra
 import           Control.Concurrent.STM            hiding (orElse)
 import           Data.Aeson                        (toJSON)
 import           Data.Binary
-import           Data.Binary.Put
-import           Data.Bits                         (shiftR)
-import qualified Data.ByteString.Lazy              as LBS
 import           Data.Coerce
 import           Data.Functor
 import qualified Data.HashMap.Strict               as HashMap
 import           Data.Tuple.Extra                  (dupe)
 import           Data.Unique
-import           Data.Word
-import           Foreign.Marshal.Array             (withArrayLen)
 import           GHC.Fingerprint
 import qualified Language.LSP.Server               as LSP
 import qualified Language.LSP.Types                as LSP
@@ -245,7 +240,7 @@ mkHiFileResultNoCompile session tcm = do
   (iface, _) <- mkIfaceTc hsc_env_tmp Nothing sf details tcGblEnv
 #endif
   let mod_info = HomeModInfo iface details Nothing
-  pure $! HiFileResult ms mod_info
+  pure $! mkHiFileResult ms mod_info
 
 mkHiFileResultCompile
     :: HscEnv
@@ -280,7 +275,7 @@ mkHiFileResultCompile session' tcm simplified_guts ltype = catchErrs $ do
   (final_iface,_) <- mkIface session Nothing details simplified_guts
 #endif
   let mod_info = HomeModInfo final_iface details linkable
-  pure (diags, Just $! HiFileResult ms mod_info)
+  pure (diags, Just $! mkHiFileResult ms mod_info)
 
   where
     dflags = hsc_dflags session'
@@ -753,13 +748,12 @@ getModSummaryFromImports env fp modTime contents = do
         -- Compute a fingerprint from the contents of `ModSummary`,
         -- eliding the timestamps, the preprocessed source and other non relevant fields
         computeFingerprint opts ModSummary{..} = do
-            let moduleUniques = runPut $ do
+            fingerPrintImports <- fingerprintFromPut $ do
                   put $ uniq $ moduleNameFS $ moduleName ms_mod
                   forM_ (ms_srcimps ++ ms_textual_imps) $ \(mb_p, m) -> do
                     put $ uniq $ moduleNameFS $ unLoc m
                     whenJust mb_p $ put . uniq
-            fingerPrintImports <- fingerprintFromByteString $ LBS.toStrict moduleUniques
-            return $ fingerprintFingerprints $
+            return $! fingerprintFingerprints $
                     [ fingerprintString fp
                     , fingerPrintImports
                     ] ++ map fingerprintString opts
@@ -930,7 +924,7 @@ loadInterface session ms sourceMod linkableNeeded regen = do
              if objUpToDate
              then do
                hmi <- liftIO $ mkDetailsFromIface sessionWithMsDynFlags iface linkable
-               return ([], Just $ HiFileResult ms hmi)
+               return ([], Just $ mkHiFileResult ms hmi)
              else regen linkableNeeded
           (_reason, _) -> regen linkableNeeded
 

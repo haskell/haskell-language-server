@@ -71,7 +71,7 @@ import           Ide.Plugin.Ormolu                 as Ormolu
 import           Ide.Plugin.StylishHaskell         as StylishHaskell
 #endif
 
-#if AGPL && brittany
+#if brittany
 import           Ide.Plugin.Brittany               as Brittany
 #endif
 
@@ -89,7 +89,6 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
                    then basePlugins ++ examplePlugins
                    else basePlugins
     basePlugins =
-      GhcIde.descriptors ++
 #if pragmas
       Pragmas.descriptor  "pragmas" :
 #endif
@@ -100,7 +99,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
       Fourmolu.descriptor "fourmolu" :
 #endif
 #if tactic
-      Tactic.descriptor "tactic" :
+      Tactic.descriptor "tactics" :
 #endif
 #if ormolu
       Ormolu.descriptor   "ormolu" :
@@ -111,7 +110,7 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if retrie
       Retrie.descriptor "retrie" :
 #endif
-#if AGPL && brittany
+#if brittany
       Brittany.descriptor "brittany" :
 #endif
 #if class
@@ -135,7 +134,9 @@ idePlugins includeExamples = pluginDescToIdePlugins allPlugins
 #if splice
       Splice.descriptor "splice" :
 #endif
-      []
+    -- The ghcide descriptors should come last so that the notification handlers
+    -- (which restart the Shake build) run after everything else
+      GhcIde.descriptors
     examplePlugins =
       [Example.descriptor  "eg"
       ,Example2.descriptor "eg2"

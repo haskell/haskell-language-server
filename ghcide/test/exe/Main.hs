@@ -1434,38 +1434,17 @@ suggesImportClassMethodTests =
     [ testGroup
         "new"
         [ testSession "via parent" $
-            template
-              [ "module A where",
-                ""
-              ]
-              (Range (Position 5 2) (Position 5 8))
-              "Import Data.Semigroup with Semigroup(stimes)"
-              [ "module A where",
-                "",
-                "import Data.Semigroup (Semigroup(stimes))"
-              ],
+            template'
+            "import Data.Semigroup (Semigroup(stimes))"
+            (Range (Position 5 2) (Position 5 8)),
           testSession "top level" $
-            template
-              [ "module A where",
-                ""
-              ]
-              (Range (Position 5 2) (Position 5 8))
-              "Import Data.Semigroup with stimes"
-              [ "module A where",
-                "",
-                "import Data.Semigroup (stimes)"
-              ],
+            template'
+              "import Data.Semigroup (stimes)"
+              (Range (Position 5 2) (Position 5 8)),
           testSession "all" $
-            template
-              [ "module A where",
-                ""
-              ]
+            template'
+              "import Data.Semigroup"
               (Range (Position 5 2) (Position 5 8))
-              "Import Data.Semigroup"
-              [ "module A where",
-                "",
-                "import Data.Semigroup"
-              ]
         ],
       testGroup
         "extend"
@@ -1513,6 +1492,7 @@ suggesImportClassMethodTests =
       executeCodeAction $ fromJust $ find (\CodeAction {_title} -> _title == executeTitle) actions'
       content <- documentContents doc
       liftIO $ T.unlines (expectedContent <> decls) @=? content
+    template' executeTitle range = let c = ["module A where", ""] in template c range executeTitle $ c <> [executeTitle]
 
 suggestImportTests :: TestTree
 suggestImportTests = testGroup "suggest import actions"
@@ -1559,14 +1539,14 @@ suggestImportTests = testGroup "suggest import actions"
     , test True []          "f = (&) [] id"               []                "import Data.Function ((&))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits (Bits((.|.)))"
     , test True []          "f = (.|.)"                   []                "import Data.Bits ((.|.))"
-    , test True 
+    , test True
       ["qualified Data.Text as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , test True 
+    , test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
-    , test True 
+    , test True
       [ "qualified Data.Text as T"
       , "qualified Data.Function as T"
       , "qualified Data.Functor as T"
@@ -3788,7 +3768,7 @@ topLevelCompletionTests = [
         "class"
         ["bar :: Xx", "xxx = ()", "-- | haddock", "class Xxx a"]
         (Position 0 9)
-        [("Xxx", CiClass, "Xxx", False, True, Nothing)],
+        [("Xxx", CiInterface, "Xxx", False, True, Nothing)],
     completionTest
         "records"
         ["data Person = Person { _personName:: String, _personAge:: Int}", "bar = Person { _pers }" ]
@@ -3882,7 +3862,7 @@ nonLocalCompletionTests =
       "type"
       ["{-# OPTIONS_GHC -Wall #-}", "module A () where", "f :: Bo", "f = True"]
       (Position 2 7)
-      [ ("Bounded", CiClass, "Bounded ${1:*}", True, True, Nothing),
+      [ ("Bounded", CiInterface, "Bounded ${1:*}", True, True, Nothing),
         ("Bool", CiStruct, "Bool ", True, True, Nothing)
       ],
     completionTest
@@ -3993,6 +3973,12 @@ nonLocalCompletionTests =
             ["module A where", "import Data.Maybe ()", "Nothing"]
             (Position 2 4)
             "Nothing"
+        , completionCommandTest
+            "type operator parent"
+            ["module A where", "import Data.Type.Equality ()", "f = Ref"]
+            (Position 2 8)
+            "Refl"
+            ["module A where", "import Data.Type.Equality ((:~:) (Refl))", "f = Ref"]
         ]
       , testGroup "Record completion"
         [ completionCommandTest
@@ -4177,7 +4163,7 @@ outlineTests = testGroup
     let source = T.unlines ["{-# language TypeFamilies #-}", "type family A"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "A" "type family" SkClass (R 1 0 1 13)]
+    liftIO $ symbols @?= Left [docSymbolD "A" "type family" SkFunction (R 1 0 1 13)]
   , testSessionWait "type family instance " $ do
     let source = T.unlines
           [ "{-# language TypeFamilies #-}"
@@ -4187,14 +4173,14 @@ outlineTests = testGroup
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Left
-      [ docSymbolD "A a"   "type family" SkClass     (R 1 0 1 15)
+      [ docSymbolD "A a"   "type family" SkFunction     (R 1 0 1 15)
       , docSymbol "A ()" SkInterface (R 2 0 2 23)
       ]
   , testSessionWait "data family" $ do
     let source = T.unlines ["{-# language TypeFamilies #-}", "data family A"]
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
-    liftIO $ symbols @?= Left [docSymbolD "A" "data family" SkClass (R 1 0 1 11)]
+    liftIO $ symbols @?= Left [docSymbolD "A" "data family" SkFunction (R 1 0 1 11)]
   , testSessionWait "data family instance " $ do
     let source = T.unlines
           [ "{-# language TypeFamilies #-}"
@@ -4204,7 +4190,7 @@ outlineTests = testGroup
     docId   <- createDoc "A.hs" "haskell" source
     symbols <- getDocumentSymbols docId
     liftIO $ symbols @?= Left
-      [ docSymbolD "A a"   "data family" SkClass     (R 1 0 1 11)
+      [ docSymbolD "A a"   "data family" SkFunction     (R 1 0 1 11)
       , docSymbol "A ()" SkInterface (R 2 0 2 25)
       ]
   , testSessionWait "constant" $ do
@@ -4318,7 +4304,7 @@ outlineTests = testGroup
                                             (Just $ List cc)
   classSymbol name loc cc = DocumentSymbol name
                                            (Just "class")
-                                           SkClass
+                                           SkInterface
                                            Nothing
                                            loc
                                            loc
@@ -5149,8 +5135,11 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   -- since the package import test creates "Data/List.hs", which otherwise has no physical home
   createDirectoryIfMissing True $ projDir ++ "/Data"
 
+  shakeProfiling <- getEnv "SHAKE_PROFILING"
   let cmd = unwords $
-       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir] ++ extraOptions
+       [ghcideExe, "--lsp", "--test", "--verbose", "-j2", "--cwd", startDir
+       ] ++ ["--shake-profiling=" <> dir | Just dir <- [shakeProfiling]
+       ] ++ extraOptions
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False

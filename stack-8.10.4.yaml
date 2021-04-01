@@ -5,6 +5,7 @@ packages:
   - ./hie-compat
   - ./ghcide/
   - ./hls-plugin-api
+  - ./hls-test-utils
   # - ./shake-bench
   - ./plugins/hls-class-plugin
   - ./plugins/hls-haddock-comments-plugin
@@ -14,6 +15,8 @@ packages:
   - ./plugins/hls-retrie-plugin
   - ./plugins/hls-splice-plugin
   - ./plugins/hls-tactics-plugin
+  - ./plugins/hls-brittany-plugin
+  - ./plugins/hls-stylish-haskell-plugin
 
 ghc-options:
   "$everything": -haddock
@@ -25,6 +28,7 @@ extra-deps:
   - data-tree-print-0.1.0.2@rev:2
   - floskell-0.10.4
   - fourmolu-0.3.0.0
+  - haddock-library-1.10.0
   - heapsize-0.3.0
   - hie-bios-0.7.4
   - implicit-hie-cradle-0.3.0.2
@@ -46,8 +50,6 @@ extra-deps:
   - constraints-extras-0.3.0.2@sha256:013b8d0392582c6ca068e226718a4fe8be8e22321cc0634f6115505bf377ad26,1853
   - some-1.0.1@sha256:26e5bab7276f48b25ea8660d3fd1166c0f20fd497dac879a40f408e23211f93e,2055
   - unliftio-core-0.2.0.1@sha256:9b3e44ea9aacacbfc35b3b54015af450091916ac3618a41868ebf6546977659a,1082
-  # To avoid issue #1372
-  - with-utf8-1.0.2.2
 
 configure-options:
   ghcide:

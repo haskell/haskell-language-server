@@ -6,30 +6,23 @@
 
 module FunctionalCodeAction (tests) where
 
-import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
 import           Language.LSP.Test               as Test
-import           Language.LSP.Types
 import qualified Language.LSP.Types.Capabilities as C
 import qualified Language.LSP.Types.Lens         as L
-import           Test.Hls.Util
+import           Test.Hls
 import           Test.Hspec.Expectations
 
 import           System.FilePath                 ((</>))
 import           System.IO.Extra                 (withTempDir)
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure      (expectFailBecause,
-                                                  ignoreTestBecause)
-import           Test.Tasty.HUnit
+import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -275,8 +268,6 @@ importTests = testGroup "import suggestions" [
         importControlMonad <- liftIO $ inspectCodeAction actionsOrCommands ["import Control.Monad"]
         liftIO $ do
             expectCodeAction actionsOrCommands ["import Control.Monad (when)"]
-            forM_ actns $ \a -> do
-                a ^. L.kind @?= Just CodeActionQuickFix
             length actns >= 10 @? "There are some actions"
 
         executeCodeAction importControlMonad

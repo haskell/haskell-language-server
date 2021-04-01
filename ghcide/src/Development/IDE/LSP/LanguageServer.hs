@@ -26,7 +26,6 @@ import qualified Data.Text                             as T
 import qualified Development.IDE.GHC.Util              as Ghcide
 import           Development.IDE.LSP.Server
 import           Development.IDE.Session               (runWithDb)
-import           GHC.IO.Handle                         (hDuplicate)
 import           Ide.Types                             (traceWithSpan)
 import qualified Language.LSP.Server                   as LSP
 import           Language.LSP.Types
@@ -41,7 +40,6 @@ import           Development.IDE.Core.IdeConfiguration
 import           Development.IDE.Core.Shake
 import           Development.IDE.Core.Tracing
 import           Development.IDE.LSP.HoverDefinition
-import           Development.IDE.LSP.Notifications
 import           Development.IDE.Types.Logger
 
 import           System.IO.Unsafe                      (unsafeInterleaveIO)
@@ -49,25 +47,14 @@ import           System.IO.Unsafe                      (unsafeInterleaveIO)
 runLanguageServer
     :: forall config. (Show config)
     => LSP.Options
+    -> Handle -- input
+    -> Handle -- output
     -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
     -> (IdeState -> Value -> IO (Either T.Text config))
     -> LSP.Handlers (ServerM config)
     -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
     -> IO ()
-runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeState = do
-    -- Move stdout to another file descriptor and duplicate stderr
-    -- to stdout. This guards against stray prints from corrupting the JSON-RPC
-    -- message stream.
-    newStdout <- hDuplicate stdout
-    stderr `Ghcide.hDuplicateTo'` stdout
-    hSetBuffering stderr NoBuffering
-    hSetBuffering stdout NoBuffering
-
-    -- Print out a single space to assert that the above redirection works.
-    -- This is interleaved with the logger, hence we just print a space here in
-    -- order not to mess up the output too much. Verified that this breaks
-    -- the language server tests without the redirection.
-    putStr " " >> hFlush stdout
+runLanguageServer options inH outH getHieDbLoc onConfigurationChange userHandlers getIdeState = do
 
     -- These barriers are signaled when the threads reading from these chans exit.
     -- This should not happen but if it does, we will make sure that the whole server
@@ -100,7 +87,6 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
     let ideHandlers = mconcat
           [ setIdeHandlers
           , userHandlers
-          , setHandlersNotifications -- absolutely critical, join them with user notifications
           ]
 
     -- Send everything over a channel, since you need to wait until after initialise before
@@ -128,8 +114,8 @@ runLanguageServer options getHieDbLoc onConfigurationChange userHandlers getIdeS
 
     void $ waitAnyCancel =<< traverse async
         [ void $ LSP.runServerWithHandles
-            stdin
-            newStdout
+            inH
+            outH
             serverDefinition
         , void $ waitBarrier clientMsgBarrier
         ]
@@ -200,7 +186,11 @@ cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \Notifica
   liftIO $ cancelRequest (SomeLspId _id)
 
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
-exitHandler exit = LSP.notificationHandler SExit (const $ liftIO exit)
+exitHandler exit = LSP.notificationHandler SExit $ const $ do
+    (_, ide) <- ask
+    -- flush out the Shake session to record a Shake profile if applicable
+    liftIO $ restartShakeSession (shakeExtras ide) []
+    liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
 modifyOptions x = x{ LSP.textDocumentSync   = Just $ tweakTDS origTDS

@@ -7,16 +7,17 @@
 
 module CodeAction.AutoSpec where
 
-import Ide.Plugin.Tactic.Types
+import Wingman.Types
 import Test.Hspec
 import Utils
+import Wingman.FeatureSet (allFeatures)
 
 
 spec :: Spec
 spec = do
   let autoTest = goldenTest Auto ""
 
-  describe "golden tests" $ do
+  describe "golden" $ do
     autoTest 11  8 "AutoSplitGADT.hs"
     autoTest  2 11 "GoldenEitherAuto.hs"
     autoTest  4 12 "GoldenJoinCont.hs"
@@ -45,10 +46,29 @@ spec = do
     autoTest  2 14 "FmapJoin.hs"
     autoTest  2  9 "Fgmap.hs"
     autoTest  4 19 "FmapJoinInLet.hs"
+    autoTest  9 12 "AutoEndo.hs"
+    autoTest  2 16 "AutoEmptyString.hs"
+    autoTest  7 35 "AutoPatSynUse.hs"
+    autoTest  2 28 "AutoZip.hs"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen.hs"
 
     failing "not enough auto gas" $
       autoTest 5 18 "GoldenFish.hs"
+
+  describe "theta" $ do
+    autoTest 12 10 "AutoThetaFix.hs"
+    autoTest  7 20 "AutoThetaRankN.hs"
+    autoTest  6 10 "AutoThetaGADT.hs"
+    autoTest  6  8 "AutoThetaGADTDestruct.hs"
+    autoTest  4  8 "AutoThetaEqCtx.hs"
+    autoTest  6 10 "AutoThetaEqGADT.hs"
+    autoTest  6  8 "AutoThetaEqGADTDestruct.hs"
+    autoTest  6 10 "AutoThetaRefl.hs"
+    autoTest  6  8 "AutoThetaReflDestruct.hs"
+
+
+  describe "messages" $ do
+    mkShowMessageTest allFeatures Auto "" 2 8 "MessageForallA.hs" TacticErrors
 

@@ -20,7 +20,7 @@ module Development.IDE.Session
 -- building with ghc-lib we need to make this Haskell agnostic, so no hie-bios!
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import           Control.Exception.Safe
 import           Control.Monad
 import           Control.Monad.Extra
@@ -83,6 +83,7 @@ import           Packages
 
 import           Control.Concurrent.STM               (atomically)
 import           Control.Concurrent.STM.TQueue
+import qualified Data.HashSet                         as Set
 import           Database.SQLite.Simple
 import           HIE.Bios.Cradle                      (yamlConfig)
 import           HieDb.Create
@@ -213,7 +214,7 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
   version <- newVar 0
   let returnWithVersion fun = IdeGhcSession fun <$> liftIO (readVar version)
   let invalidateShakeCache = do
-        modifyVar_ version (return . succ)
+        void $ modifyVar' version succ
   -- This caches the mapping from Mod.hs -> hie.yaml
   cradleLoc <- liftIO $ memoIO $ \v -> do
       res <- findCradle v
@@ -246,12 +247,12 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
               TargetModule _ -> do
                 found <- filterM (IO.doesFileExist . fromNormalizedFilePath) targetLocations
                 return (targetTarget, found)
-          modifyVar_ knownTargetsVar $ traverseHashed $ \known -> do
-            let known' = HM.unionWith (<>) known $ HM.fromList knownTargets
+          modifyVarIO' knownTargetsVar $ traverseHashed $ \known -> do
+            let known' = HM.unionWith (<>) known $ HM.fromList $ map (second Set.fromList) knownTargets
             when (known /= known') $
                 logDebug logger $ "Known files updated: " <>
-                    T.pack(show $ (HM.map . map) fromNormalizedFilePath known')
-            evaluate known'
+                    T.pack(show $ (HM.map . Set.map) fromNormalizedFilePath known')
+            pure known'
 
     -- Create a new HscEnv from a hieYaml root and a set of options
     -- If the hieYaml file already has an HscEnv, the new component is
@@ -364,12 +365,12 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
 
           let all_targets = cs ++ cached_targets
 
-          modifyVar_ fileToFlags $ \var -> do
-              pure $ Map.insert hieYaml (HM.fromList (concatMap toFlagsMap all_targets)) var
-          modifyVar_ filesMap $ \var -> do
-              evaluate $ HM.union var (HM.fromList (zip (map fst $ concatMap toFlagsMap all_targets) (repeat hieYaml)))
+          void $ modifyVar' fileToFlags $
+              Map.insert hieYaml (HM.fromList (concatMap toFlagsMap all_targets))
+          void $ modifyVar' filesMap $
+              flip HM.union (HM.fromList (zip (map fst $ concatMap toFlagsMap all_targets) (repeat hieYaml)))
 
-          extendKnownTargets all_targets
+          void $ extendKnownTargets all_targets
 
           -- Invalidate all the existing GhcSession build nodes by restarting the Shake session
           invalidateShakeCache
@@ -395,8 +396,8 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
            lfp <- flip makeRelative cfp <$> getCurrentDirectory
            logInfo logger $ T.pack ("Consulting the cradle for " <> show lfp)
 
-           when (isNothing hieYaml) $ mRunLspT lspEnv $
-             sendNotification SWindowShowMessage $ notifyUserImplicitCradle lfp
+           when (isNothing hieYaml) $
+             logWarning logger $ implicitCradleWarning lfp
 
            cradle <- maybe (loadImplicitHieCradle $ addTrailingPathSeparator dir) loadCradle hieYaml
 
@@ -427,10 +428,9 @@ loadSessionWithOptions SessionLoadingOptions{..} dir = do
                dep_info <- getDependencyInfo (maybeToList hieYaml)
                let ncfp = toNormalizedFilePath' cfp
                let res = (map (renderCradleError ncfp) err, Nothing)
-               modifyVar_ fileToFlags $ \var -> do
-                 pure $ Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info)) var
-               modifyVar_ filesMap $ \var -> do
-                 evaluate $ HM.insert ncfp hieYaml var
+               void $ modifyVar' fileToFlags $
+                    Map.insertWith HM.union hieYaml (HM.singleton ncfp (res, dep_info))
+               void $ modifyVar' filesMap $ HM.insert ncfp hieYaml
                return (res, maybe [] pure hieYaml ++ concatMap cradleErrorDependencies err)
 
     -- This caches the mapping from hie.yaml + Mod.hs -> [String]
@@ -820,8 +820,8 @@ getCacheDirsDefault prefix opts = do
 cacheDir :: String
 cacheDir = "ghcide"
 
-notifyUserImplicitCradle:: FilePath -> ShowMessageParams
-notifyUserImplicitCradle fp =ShowMessageParams MtWarning $
+implicitCradleWarning :: FilePath -> T.Text
+implicitCradleWarning fp =
   "No [cradle](https://github.com/mpickering/hie-bios#hie-bios) found for "
   <> T.pack fp <>
   ".\n Proceeding with [implicit cradle](https://hackage.haskell.org/package/implicit-hie).\n"<>

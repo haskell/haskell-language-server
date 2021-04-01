@@ -7,7 +7,7 @@
 
 module CodeAction.DestructSpec where
 
-import Ide.Plugin.Tactic.Types
+import Wingman.Types
 import Test.Hspec
 import Utils
 
@@ -22,8 +22,16 @@ spec = do
     destructTest "a"    7 25 "SplitPattern.hs"
 
   describe "layout" $ do
-    destructTest "b" 4  3 "LayoutBind.hs"
-    destructTest "b" 2 15 "LayoutDollarApp.hs"
-    destructTest "b" 2 18 "LayoutOpApp.hs"
-    destructTest "b" 2 14 "LayoutLam.hs"
+    destructTest "b"  4  3 "LayoutBind.hs"
+    destructTest "b"  2 15 "LayoutDollarApp.hs"
+    destructTest "b"  2 18 "LayoutOpApp.hs"
+    destructTest "b"  2 14 "LayoutLam.hs"
+    destructTest "x" 11 15 "LayoutSplitWhere.hs"
+    destructTest "x"  3 12 "LayoutSplitClass.hs"
+    destructTest "b"  3  9 "LayoutSplitGuard.hs"
+    destructTest "b"  4 13 "LayoutSplitLet.hs"
+    destructTest "a"  4  7 "LayoutSplitIn.hs"
+    destructTest "a"  4 31 "LayoutSplitViewPat.hs"
+    destructTest "a"  7 17 "LayoutSplitPattern.hs"
+    destructTest "a"  8 26 "LayoutSplitPatSyn.hs"
 

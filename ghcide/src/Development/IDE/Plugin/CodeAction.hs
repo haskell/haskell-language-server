@@ -3,11 +3,10 @@
 
 {-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE RankNTypes            #-}
 #include "ghc-api-version.h"
 
 -- | Go to the definition of a variable.
+
 module Development.IDE.Plugin.CodeAction
     ( descriptor
 
@@ -20,7 +19,6 @@ import           Control.Applicative                               ((<|>))
 import           Control.Arrow                                     (second,
                                                                     (>>>))
 import           Control.Concurrent.Extra                          (readVar)
-import           Control.Lens                                      (alaf)
 import           Control.Monad                                     (guard, join)
 import           Control.Monad.IO.Class
 import           Data.Char
@@ -34,10 +32,10 @@ import           Data.List.NonEmpty                                (NonEmpty ((:
 import qualified Data.List.NonEmpty                                as NE
 import qualified Data.Map                                          as M
 import           Data.Maybe
-import           Data.Monoid                                       (Ap (..))
 import qualified Data.Rope.UTF16                                   as Rope
 import qualified Data.Set                                          as S
 import qualified Data.Text                                         as T
+import           Data.Tuple.Extra                                  (fst3)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Service
@@ -46,14 +44,14 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.ExactPrint
 import           Development.IDE.GHC.Util                          (prettyPrint,
-                                                                    printRdrName)
+                                                                    printRdrName,
+                                                                    unsafePrintSDoc)
+import           Development.IDE.Plugin.CodeAction.Args
 import           Development.IDE.Plugin.CodeAction.ExactPrint
 import           Development.IDE.Plugin.CodeAction.PositionIndexed
 import           Development.IDE.Plugin.TypeLenses                 (GetGlobalBindingTypeSigs (GetGlobalBindingTypeSigs),
-                                                                    GlobalBindingTypeSigsResult,
                                                                     suggestSignature)
 import           Development.IDE.Spans.Common
-import           Development.IDE.Spans.LocalBindings               (Bindings)
 import           Development.IDE.Types.Exports
 import           Development.IDE.Types.HscEnvEq
 import           Development.IDE.Types.Location
@@ -75,7 +73,8 @@ import           Outputable                                        (Outputable,
 import           RdrName                                           (GlobalRdrElt (..),
                                                                     lookupGlobalRdrEnv)
 import           Safe                                              (atMay)
-import           SrcLoc                                            (realSrcSpanStart)
+import           SrcLoc                                            (realSrcSpanEnd,
+                                                                    realSrcSpanStart)
 import           TcRnTypes                                         (ImportAvails (..),
                                                                     TcGblEnv (..))
 import           Text.Regex.TDFA                                   (mrAfter,
@@ -116,8 +115,8 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
       exportsMap = localExports <> pkgExports
       df = ms_hspp_opts . pm_mod_summary <$> parsedModule
       actions =
-        [ mkCA title  [x] edit
-        | x <- xs, (title, tedit) <- suggestAction exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
+        [ mkCA title kind isPreferred [x] edit
+        | x <- xs, (title, kind, isPreferred, tedit) <- suggestAction $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
         , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
         ]
       actions' = caRemoveRedundantImports parsedModule text diag xs uri
@@ -125,59 +124,35 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
                <> caRemoveInvalidExports parsedModule text diag xs uri
     pure $ Right $ List actions'
 
-mkCA :: T.Text -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
-mkCA title diags edit =
-  InR $ CodeAction title (Just CodeActionQuickFix) (Just $ List diags) Nothing Nothing (Just edit) Nothing
+mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
+mkCA title kind isPreferred diags edit =
+  InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing
 
-rewrite ::
-    Maybe DynFlags ->
-    Maybe (Annotated ParsedSource) ->
-    (DynFlags -> ParsedSource -> [(T.Text, [Rewrite])]) ->
-    [(T.Text, [TextEdit])]
-rewrite (Just df) (Just ps) f
-    | Right edit <- (traverse . traverse)
-        (alaf Ap foldMap (rewriteToEdit df (annsA ps)))
-        (f df $ astA ps) = edit
-rewrite _ _ _ = []
-
-suggestAction
-  :: ExportsMap
-  -> IdeOptions
-  -> Maybe ParsedModule
-  -> Maybe T.Text
-  -> Maybe DynFlags
-  -> Maybe (Annotated ParsedSource)
-  -> Maybe TcModuleResult
-  -> Maybe HieAstResult
-  -> Maybe Bindings
-  -> Maybe GlobalBindingTypeSigsResult
-  -> Diagnostic
-  -> [(T.Text, [TextEdit])]
-suggestAction packageExports ideOptions parsedModule text df annSource tcM har bindings gblSigs diag =
-    concat
-   -- Order these suggestions by priority
-    [ suggestSignature True gblSigs tcM bindings diag
-    , rewrite df annSource $ \_ ps -> suggestExtendImport packageExports ps diag
-    , rewrite df annSource $ \df ps ->
-        suggestImportDisambiguation df text ps diag
-    , rewrite df annSource $ \_ ps -> suggestNewOrExtendImportForClassMethod packageExports ps diag
-    , suggestFillTypeWildcard diag
-    , suggestFixConstructorImport text diag
-    , suggestModuleTypo diag
-    , suggestReplaceIdentifier text diag
-    , removeRedundantConstraints text diag
-    , suggestAddTypeAnnotationToSatisfyContraints text diag
-    , rewrite df annSource $ \df ps -> suggestConstraint df ps diag
-    , rewrite df annSource $ \_ ps -> suggestImplicitParameter ps diag
-    , rewrite df annSource $ \_ ps -> suggestHideShadow ps tcM har diag
-    ] ++ concat
-    [  suggestNewDefinition ideOptions pm text diag
-    ++ suggestNewImport packageExports pm diag
-    ++ suggestDeleteUnusedBinding pm text diag
-    ++ suggestExportUnusedTopBinding text pm diag
-    | Just pm <- [parsedModule]
-    ] ++
-    suggestFillHole diag                   -- Lowest priority
+suggestAction :: CodeActionArgs -> GhcideCodeActions
+suggestAction caa =
+  concat   -- Order these suggestions by priority
+    [ wrap $ suggestSignature True
+    , wrap suggestExtendImport
+    , wrap suggestImportDisambiguation
+    , wrap suggestNewOrExtendImportForClassMethod
+    , wrap suggestFillTypeWildcard
+    , wrap suggestFixConstructorImport
+    , wrap suggestModuleTypo
+    , wrap suggestReplaceIdentifier
+    , wrap removeRedundantConstraints
+    , wrap suggestAddTypeAnnotationToSatisfyContraints
+    , wrap suggestConstraint
+    , wrap suggestImplicitParameter
+    , wrap suggestHideShadow
+    , wrap suggestNewDefinition
+    , wrap suggestNewImport
+    , wrap suggestDeleteUnusedBinding
+    , wrap suggestExportUnusedTopBinding
+    , wrap suggestFillHole -- Lowest priority
+    ]
+    where
+      wrap :: ToCodeAction a => a -> GhcideCodeActions
+      wrap = toCodeAction caa
 
 findSigOfDecl :: (IdP p -> Bool) -> [LHsDecl p] -> Maybe (Sig p)
 findSigOfDecl pred decls =
@@ -207,8 +182,8 @@ findDeclContainingLoc loc = find (\(L l _) -> loc `isInsideSrcSpan` l)
 --  imported from ‘Data.ByteString’ at B.hs:6:1-22
 --  imported from ‘Data.ByteString.Lazy’ at B.hs:8:1-27
 --  imported from ‘Data.Text’ at B.hs:7:1-16
-suggestHideShadow :: ParsedSource -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Rewrite])]
-suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_message, _range}
+suggestHideShadow :: ParsedSource -> Maybe TcModuleResult -> Maybe HieAstResult -> Diagnostic -> [(T.Text, [Either TextEdit Rewrite])]
+suggestHideShadow ps@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_message, _range}
   | Just [identifier, modName, s] <-
       matchRegexUnifySpaces
         _message
@@ -233,8 +208,8 @@ suggestHideShadow pm@(L _ HsModule {hsmodImports}) mTcM mHar Diagnostic {_messag
         mDecl <- findImportDeclByModuleName hsmodImports $ T.unpack modName,
         title <- "Hide " <> identifier <> " from " <> modName =
         if modName == "Prelude" && null mDecl
-          then [(title, maybeToList $ hideImplicitPreludeSymbol (T.unpack identifier) pm)]
-          else maybeToList $ (title,) . pure . hideSymbol (T.unpack identifier) <$> mDecl
+          then maybeToList $ (\(_, te) -> (title, [Left te])) <$> newImportToEdit (hideImplicitPreludeSymbol identifier) ps
+          else maybeToList $ (title,) . pure . pure . hideSymbol (T.unpack identifier) <$> mDecl
       | otherwise = []
 
 findImportDeclByModuleName :: [LImportDecl GhcPs] -> String -> Maybe (LImportDecl GhcPs)
@@ -304,7 +279,7 @@ caRemoveRedundantImports m contents digs ctxDigs uri
       = caRemoveCtx ++ [caRemoveAll]
   | otherwise = []
   where
-    removeSingle title tedit diagnostic = mkCA title [diagnostic] WorkspaceEdit{..} where
+    removeSingle title tedit diagnostic = mkCA title (Just CodeActionQuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _documentChanges = Nothing
     removeAll tedit = InR $ CodeAction{..} where
@@ -504,7 +479,7 @@ data ExportsAs = ExportName | ExportPattern | ExportAll
 getLocatedRange :: Located a -> Maybe Range
 getLocatedRange = srcSpanToRange . getLoc
 
-suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
+suggestExportUnusedTopBinding :: Maybe T.Text -> ParsedModule -> Diagnostic -> [(T.Text, TextEdit)]
 suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}
 -- Foo.hs:4:1: warning: [-Wunused-top-binds] Defined but not used: ‘f’
 -- Foo.hs:5:1: warning: [-Wunused-top-binds] Defined but not used: type constructor or class ‘F’
@@ -522,7 +497,7 @@ suggestExportUnusedTopBinding srcOpt ParsedModule{pm_parsed_source = L _ HsModul
   , Just needComma <- needsComma source <$> hsmodExports
   , let exportName = (if needComma then "," else "") <> printExport exportType name
         insertPos = pos {_character = pred $ _character pos}
-  = [("Export ‘" <> name <> "’", [TextEdit (Range insertPos insertPos) exportName])]
+  = [("Export ‘" <> name <> "’", TextEdit (Range insertPos insertPos) exportName)]
   | otherwise = []
   where
     -- we get the last export and the closing bracket and check for comma in that range
@@ -669,7 +644,7 @@ newDefinitionAction IdeOptions{..} parsedModule Range{_start} name typ
     ParsedModule{pm_parsed_source = L _ HsModule{hsmodDecls}} = parsedModule
 
 
-suggestFillTypeWildcard :: Diagnostic -> [(T.Text, [TextEdit])]
+suggestFillTypeWildcard :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillTypeWildcard Diagnostic{_range=_range,..}
 -- Foo.hs:3:8: error:
 --     * Found type wildcard `_' standing for `p -> p1 -> p'
@@ -677,10 +652,10 @@ suggestFillTypeWildcard Diagnostic{_range=_range,..}
     | "Found type wildcard" `T.isInfixOf` _message
     , " standing for " `T.isInfixOf` _message
     , typeSignature <- extractWildCardTypeSignature _message
-        =  [("Use type signature: ‘" <> typeSignature <> "’", [TextEdit _range typeSignature])]
+        =  [("Use type signature: ‘" <> typeSignature <> "’", TextEdit _range typeSignature)]
     | otherwise = []
 
-suggestModuleTypo :: Diagnostic -> [(T.Text, [TextEdit])]
+suggestModuleTypo :: Diagnostic -> [(T.Text, TextEdit)]
 suggestModuleTypo Diagnostic{_range=_range,..}
 -- src/Development/IDE/Core/Compile.hs:58:1: error:
 --     Could not find module ‘Data.Cha’
@@ -688,11 +663,11 @@ suggestModuleTypo Diagnostic{_range=_range,..}
     | "Could not find module" `T.isInfixOf` _message
     , "Perhaps you meant"     `T.isInfixOf` _message = let
       findSuggestedModules = map (head . T.words) . drop 2 . T.lines
-      proposeModule mod = ("replace with " <> mod, [TextEdit _range mod])
+      proposeModule mod = ("replace with " <> mod, TextEdit _range mod)
       in map proposeModule $ nubOrd $ findSuggestedModules _message
     | otherwise = []
 
-suggestFillHole :: Diagnostic -> [(T.Text, [TextEdit])]
+suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillHole Diagnostic{_range=_range,..}
     | Just holeName <- extractHoleName _message
     , (holeFits, refFits) <- processHoleSuggestions (T.lines _message)
@@ -703,7 +678,7 @@ suggestFillHole Diagnostic{_range=_range,..}
       extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
       proposeHoleFit holeName parenthise name =
           ( "replace " <> holeName <> " with " <> name
-          , [TextEdit _range $ if parenthise then parens name else name])
+          , TextEdit _range $ if parenthise then parens name else name)
       parens x = "(" <> x <> ")"
 
 processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
@@ -766,7 +741,7 @@ getIndentedGroupsBy pred inp = case dropWhile (not.pred) inp of
 indentation :: T.Text -> Int
 indentation = T.length . T.takeWhile isSpace
 
-suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, [Rewrite])]
+suggestExtendImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, Rewrite)]
 suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_range,..}
     | Just [binding, mod, srcspan] <-
       matchRegexUnifySpaces _message
@@ -785,7 +760,8 @@ suggestExtendImport exportsMap (L _ HsModule {hsmodImports}) Diagnostic{_range=_
             Just decl <- findImportDeclByRange decls range,
             Just ident <- lookupExportMap binding mod
           = [ ( "Add " <> renderImportStyle importStyle <> " to the import list of " <> mod
-              , [uncurry extendImport (unImportStyle importStyle) decl]
+              , quickFixImportKind' "extend" importStyle
+              , uncurry extendImport (unImportStyle importStyle) decl
               )
             | importStyle <- NE.toList $ importStyles ident
             ]
@@ -836,7 +812,7 @@ suggestImportDisambiguation ::
     Maybe T.Text ->
     ParsedSource ->
     Diagnostic ->
-    [(T.Text, [Rewrite])]
+    [(T.Text, [Either TextEdit Rewrite])]
 suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@Diagnostic {..}
     | Just [ambiguous] <-
         matchRegexUnifySpaces
@@ -925,23 +901,23 @@ disambiguateSymbol ::
     Diagnostic ->
     T.Text ->
     HidingMode ->
-    [Rewrite]
+    [Either TextEdit Rewrite]
 disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
     (HideOthers hiddens0) ->
-        [ hideSymbol symbol idecl
+        [ Right $ hideSymbol symbol idecl
         | ExistingImp idecls <- hiddens0
         , idecl <- NE.toList idecls
         ]
             ++ mconcat
                 [ if null imps
-                    then maybeToList $ hideImplicitPreludeSymbol symbol pm
-                    else hideSymbol symbol <$> imps
+                    then maybeToList $ Left . snd <$> newImportToEdit (hideImplicitPreludeSymbol $ T.pack symbol) pm
+                    else Right . hideSymbol symbol <$> imps
                 | ImplicitPrelude imps <- hiddens0
                 ]
     (ToQualified parensed qualMod) ->
         let occSym = mkVarOcc symbol
             rdr = Qual qualMod occSym
-         in [ if parensed
+         in Right <$> [ if parensed
                 then Rewrite (rangeToSrcSpan "<dummy>" _range) $ \df ->
                     liftParseAST @(HsExpr GhcPs) df $
                     prettyPrint $
@@ -955,8 +931,8 @@ disambiguateSymbol pm Diagnostic {..} (T.unpack -> symbol) = \case
 findImportDeclByRange :: [LImportDecl GhcPs] -> Range -> Maybe (LImportDecl GhcPs)
 findImportDeclByRange xs range = find (\(L l _)-> srcSpanToRange l == Just range) xs
 
-suggestFixConstructorImport :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestFixConstructorImport _ Diagnostic{_range=_range,..}
+suggestFixConstructorImport :: Diagnostic -> [(T.Text, TextEdit)]
+suggestFixConstructorImport Diagnostic{_range=_range,..}
     -- ‘Success’ is a data constructor of ‘Result’
     -- To import it use
     -- import Data.Aeson.Types( Result( Success ) )
@@ -966,16 +942,16 @@ suggestFixConstructorImport _ Diagnostic{_range=_range,..}
     matchRegexUnifySpaces _message
     "‘([^’]*)’ is a data constructor of ‘([^’]*)’ To import it use"
   = let fixedImport = typ <> "(" <> constructor <> ")"
-    in [("Fix import of " <> fixedImport, [TextEdit _range fixedImport])]
+    in [("Fix import of " <> fixedImport, TextEdit _range fixedImport)]
   | otherwise = []
 -- | Suggests a constraint for a declaration for which a constraint is missing.
-suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, [Rewrite])]
+suggestConstraint :: DynFlags -> ParsedSource -> Diagnostic -> [(T.Text, Rewrite)]
 suggestConstraint df parsedModule diag@Diagnostic {..}
   | Just missingConstraint <- findMissingConstraint _message
   = let codeAction = if _message =~ ("the type signature for:" :: String)
                         then suggestFunctionConstraint df parsedModule
                         else suggestInstanceConstraint df parsedModule
-     in map (second (:[])) $ codeAction diag missingConstraint
+     in codeAction diag missingConstraint
   | otherwise = []
     where
       findMissingConstraint :: T.Text -> Maybe T.Text
@@ -1031,14 +1007,14 @@ suggestInstanceConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
 suggestImplicitParameter ::
   ParsedSource ->
   Diagnostic ->
-  [(T.Text, [Rewrite])]
+  [(T.Text, Rewrite)]
 suggestImplicitParameter (L _ HsModule {hsmodDecls}) Diagnostic {_message, _range}
   | Just [implicitT] <- matchRegexUnifySpaces _message "Unbound implicit parameter \\(([^:]+::.+)\\) arising",
     Just (L _ (ValD _ FunBind {fun_id = L _ funId})) <- findDeclContainingLoc (_start _range) hsmodDecls,
     Just (TypeSig _ _ HsWC {hswc_body = HsIB {hsib_body}}) <- findSigOfDecl (== funId) hsmodDecls
     =
       [( "Add " <> implicitT <> " to the context of " <> T.pack (printRdrName funId)
-        , [appendConstraint (T.unpack implicitT) hsib_body])]
+        , appendConstraint (T.unpack implicitT) hsib_body)]
   | otherwise = []
 
 findTypeSignatureName :: T.Text -> Maybe T.Text
@@ -1086,7 +1062,7 @@ suggestFunctionConstraint df (L _ HsModule {hsmodDecls}) Diagnostic {..} missing
         <> "` to the context of the type signature for `" <> typeSignatureName <> "`"
 
 -- | Suggests the removal of a redundant constraint for a type signature.
-removeRedundantConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, [TextEdit])]
+removeRedundantConstraints :: Maybe T.Text -> Diagnostic -> [(T.Text, TextEdit)]
 removeRedundantConstraints mContents Diagnostic{..}
 -- • Redundant constraint: Eq a
 -- • In the type signature for:
@@ -1108,7 +1084,7 @@ removeRedundantConstraints mContents Diagnostic{..}
         endOfConstraint = Position typeSignatureLine $
           typeSignatureFirstChar + T.length (constraints <> " => ")
         range = Range startOfConstraint endOfConstraint
-     in [(actionTitle redundantConstraintList typeSignatureName, [TextEdit range newConstraints])]
+     in [(actionTitle redundantConstraintList typeSignatureName, TextEdit range newConstraints)]
   | otherwise = []
     where
       parseConstraints :: T.Text -> [T.Text]
@@ -1164,7 +1140,7 @@ removeRedundantConstraints mContents Diagnostic{..}
 
 -------------------------------------------------------------------------------------------------
 
-suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, [Rewrite])]
+suggestNewOrExtendImportForClassMethod :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, [Either TextEdit Rewrite])]
 suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message}
   | Just [methodName, className] <-
       matchRegexUnifySpaces
@@ -1183,22 +1159,25 @@ suggestNewOrExtendImportForClassMethod packageExportsMap ps Diagnostic {_message
           -- extend
           Just decl ->
             [ ( "Add " <> renderImportStyle style <> " to the import list of " <> moduleNameText,
-                [uncurry extendImport (unImportStyle style) decl]
+                quickFixImportKind' "extend" style,
+                [Right $ uncurry extendImport (unImportStyle style) decl]
               )
               | style <- importStyle
             ]
           -- new
-          _ ->
-            [ ( "Import " <> moduleNameText <> " with " <> rendered,
-                maybeToList $ newUnqualImport (T.unpack moduleNameText) (T.unpack rendered) False ps
-              )
+          _
+            | Just (range, indent) <- newImportInsertRange ps
+            ->
+             (\(kind, unNewImport -> x) -> (x, kind, [Left $ TextEdit range (x <> "\n" <> T.replicate indent " ")])) <$>
+            [ (quickFixImportKind' "new" style, newUnqualImport moduleNameText rendered False)
               | style <- importStyle,
                 let rendered = renderImportStyle style
             ]
-              <> maybeToList (("Import " <> moduleNameText,) <$> fmap pure (newImportAll (T.unpack moduleNameText) ps))
+              <> [(quickFixImportKind "new.all", newImportAll moduleNameText)]
+            | otherwise -> []
 
-suggestNewImport :: ExportsMap -> ParsedModule -> Diagnostic -> [(T.Text, [TextEdit])]
-suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule {..}} Diagnostic{_message}
+suggestNewImport :: ExportsMap -> ParsedSource -> Diagnostic -> [(T.Text, CodeActionKind, TextEdit)]
+suggestNewImport packageExportsMap ps@(L _ HsModule {..}) Diagnostic{_message}
   | msg <- unifySpaces _message
   , Just thingMissing <- extractNotInScopeName msg
   , qual <- extractQualifiedModuleName msg
@@ -1207,24 +1186,17 @@ suggestNewImport packageExportsMap ParsedModule {pm_parsed_source = L _ HsModule
         >>= (findImportDeclByModuleName hsmodImports . T.unpack)
         >>= ideclAs . unLoc
         <&> T.pack . moduleNameString . unLoc
-  , Just insertLine <- case hsmodImports of
-        [] -> case srcSpanStart $ getLoc (head hsmodDecls) of
-          RealSrcLoc s -> Just $ srcLocLine s - 1
-          _            -> Nothing
-        _ -> case srcSpanEnd $ getLoc (last hsmodImports) of
-          RealSrcLoc s -> Just $ srcLocLine s
-          _            -> Nothing
-  , insertPos <- Position insertLine 0
+  , Just (range, indent) <- newImportInsertRange ps
   , extendImportSuggestions <- matchRegexUnifySpaces msg
     "Perhaps you want to add ‘[^’]*’ to the import list in the import of ‘([^’]*)’"
-  = [(imp, [TextEdit (Range insertPos insertPos) (imp <> "\n")])
-    | imp <- sort $ constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
+  = sortOn fst3 [(imp, kind, TextEdit range (imp <> "\n" <> T.replicate indent " "))
+    | (kind, unNewImport -> imp) <- constructNewImportSuggestions packageExportsMap (qual <|> qual', thingMissing) extendImportSuggestions
     ]
 suggestNewImport _ _ _ = []
 
 constructNewImportSuggestions
-  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [T.Text]
-constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrd
+  :: ExportsMap -> (Maybe T.Text, NotInScope) -> Maybe [T.Text] -> [(CodeActionKind, NewImport)]
+constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = nubOrdOn snd
   [ suggestion
   | Just name <- [T.stripPrefix (maybe "" (<> ".") qual) $ notInScope thingMissing]
   , identInfo <- maybe [] Set.toList $ Map.lookup name (getExportsMap exportsMap)
@@ -1233,17 +1205,73 @@ constructNewImportSuggestions exportsMap (qual, thingMissing) notTheseModules = 
   , suggestion <- renderNewImport identInfo
   ]
  where
-  renderNewImport :: IdentInfo -> [T.Text]
+  renderNewImport :: IdentInfo -> [(CodeActionKind, NewImport)]
   renderNewImport identInfo
     | Just q <- qual
-    , asQ <- if q == m then "" else " as " <> q
-    = ["import qualified " <> m <> asQ]
+    = [(quickFixImportKind "new.qualified", newQualImport m q)]
     | otherwise
-    = ["import " <> m <> " (" <> renderImportStyle importStyle <> ")"
+    = [(quickFixImportKind' "new" importStyle, newUnqualImport m (renderImportStyle importStyle) False)
       | importStyle <- NE.toList $ importStyles identInfo] ++
-      ["import " <> m ]
+      [(quickFixImportKind "new.all", newImportAll m)]
     where
         m = moduleNameText identInfo
+
+newtype NewImport = NewImport {unNewImport :: T.Text}
+  deriving (Show, Eq, Ord)
+
+newImportToEdit :: NewImport -> ParsedSource -> Maybe (T.Text, TextEdit)
+newImportToEdit (unNewImport -> imp) ps
+  | Just (range, indent) <- newImportInsertRange ps
+  = Just (imp, TextEdit range (imp <> "\n" <> T.replicate indent " "))
+  | otherwise = Nothing
+
+newImportInsertRange :: ParsedSource -> Maybe (Range, Int)
+newImportInsertRange (L _ HsModule {..})
+  |  Just (uncurry Position -> insertPos, col) <- case hsmodImports of
+      [] -> case getLoc (head hsmodDecls) of
+        RealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
+              in Just ((srcLocLine (realSrcSpanStart s) - 1, col), col)
+        _            -> Nothing
+      _ -> case  getLoc (last hsmodImports) of
+        RealSrcSpan s -> let col = srcLocCol (realSrcSpanStart s) - 1
+            in Just ((srcLocLine $ realSrcSpanEnd s,col), col)
+        _            -> Nothing
+    = Just (Range insertPos insertPos, col)
+  | otherwise = Nothing
+
+-- | Construct an import declaration with at most one symbol
+newImport
+  :: T.Text -- ^ module name
+  -> Maybe T.Text -- ^  the symbol
+  -> Maybe T.Text -- ^ qualified name
+  -> Bool -- ^ the symbol is to be imported or hidden
+  -> NewImport
+newImport modName mSymbol mQual hiding = NewImport impStmt
+  where
+     symImp
+            | Just symbol <- mSymbol
+              , symOcc <- mkVarOcc $ T.unpack symbol =
+              " (" <> T.pack (unsafePrintSDoc (parenSymOcc symOcc $ ppr symOcc)) <> ")"
+            | otherwise = ""
+     impStmt =
+       "import "
+         <> maybe "" (const "qualified ") mQual
+         <> modName
+         <> (if hiding then " hiding" else "")
+         <> symImp
+         <> maybe "" (\qual -> if modName == qual then "" else " as " <> qual) mQual
+
+newQualImport :: T.Text -> T.Text -> NewImport
+newQualImport modName qual = newImport modName Nothing (Just qual) False
+
+newUnqualImport :: T.Text -> T.Text -> Bool -> NewImport
+newUnqualImport modName symbol = newImport modName (Just symbol) Nothing
+
+newImportAll :: T.Text -> NewImport
+newImportAll modName = newImport modName Nothing Nothing False
+
+hideImplicitPreludeSymbol :: T.Text -> NewImport
+hideImplicitPreludeSymbol symbol = newUnqualImport "Prelude" symbol True
 
 canUseIdent :: NotInScope -> IdentInfo -> Bool
 canUseIdent NotInScopeDataConstructor{} = isDatacon
@@ -1529,3 +1557,10 @@ renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
 unImportStyle :: ImportStyle -> (Maybe String, String)
 unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
+
+quickFixImportKind' :: T.Text -> ImportStyle -> CodeActionKind
+quickFixImportKind' x (ImportTopLevel _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.topLevel"
+quickFixImportKind' x (ImportViaParent _ _) = CodeActionUnknown $ "quickfix.import." <> x <> ".list.withParent"
+
+quickFixImportKind :: T.Text -> CodeActionKind
+quickFixImportKind x = CodeActionUnknown $ "quickfix.import." <> x

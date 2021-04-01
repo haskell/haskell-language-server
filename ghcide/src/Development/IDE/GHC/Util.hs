@@ -21,6 +21,7 @@ module Development.IDE.GHC.Util(
     fingerprintToBS,
     fingerprintFromByteString,
     fingerprintFromStringBuffer,
+    fingerprintFromPut,
     -- * General utilities
     readFileUtf8,
     hDuplicateTo',
@@ -31,9 +32,11 @@ module Development.IDE.GHC.Util(
 
 import           Control.Concurrent
 import           Control.Exception
+import           Data.Binary.Put                (Put, runPut)
 import qualified Data.ByteString                as BS
 import           Data.ByteString.Internal       (ByteString (..))
 import qualified Data.ByteString.Internal       as BS
+import qualified Data.ByteString.Lazy           as LBS
 import           Data.IORef
 import           Data.List.Extra
 import           Data.Maybe
@@ -41,7 +44,8 @@ import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import qualified Data.Text.Encoding.Error       as T
 import           Data.Typeable
-import           DynFlags
+import           Development.IDE.GHC.Compat     as GHC
+import           Development.IDE.Types.Location
 import           FastString                     (mkFastString)
 import           FileCleanup
 import           Fingerprint
@@ -73,9 +77,6 @@ import           RdrName                        (nameRdrName, rdrNameOcc)
 import           SrcLoc                         (mkRealSrcLoc)
 import           StringBuffer
 import           System.FilePath
-
-import           Development.IDE.GHC.Compat     as GHC
-import           Development.IDE.Types.Location
 
 
 ----------------------------------------------------------------------
@@ -206,6 +207,9 @@ fingerprintFromByteString bs = do
     let (fptr, offset, len) = BS.toForeignPtr bs
     withForeignPtr fptr $ \ptr ->
         fingerprintData (ptr `plusPtr` offset) len
+
+fingerprintFromPut :: Put -> IO Fingerprint
+fingerprintFromPut = fingerprintFromByteString . LBS.toStrict . runPut
 
 -- | A slightly modified version of 'hDuplicateTo' from GHC.
 --   Importantly, it avoids the bug listed in https://gitlab.haskell.org/ghc/ghc/merge_requests/2318.

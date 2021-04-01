@@ -9,26 +9,26 @@
 module Development.IDE.Core.OfInterest(
     ofInterestRules,
     getFilesOfInterest, setFilesOfInterest, modifyFilesOfInterest,
-    kick, FileOfInterestStatus(..)
+    kick, FileOfInterestStatus(..),
+    OfInterestVar(..)
     ) where
 
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Exception
 import           Control.Monad
 import           Data.Binary
-import qualified Data.ByteString.UTF8                         as BS
 import           Data.HashMap.Strict                          (HashMap)
 import qualified Data.HashMap.Strict                          as HashMap
 import           Data.Hashable
 import qualified Data.Text                                    as T
-import           Data.Tuple.Extra
 import           Data.Typeable
 import           Development.Shake
 import           GHC.Generics
 
 import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
+import qualified Data.ByteString.Lazy                         as LBS
 import           Data.List.Extra                              (nubOrd)
 import           Data.Maybe                                   (catMaybes)
 import           Development.IDE.Core.RuleTypes
@@ -55,17 +55,15 @@ instance Binary   GetFilesOfInterest
 ofInterestRules :: Rules ()
 ofInterestRules = do
     addIdeGlobal . OfInterestVar =<< liftIO (newVar HashMap.empty)
-    defineEarlyCutoff $ \GetFilesOfInterest _file -> assert (null $ fromNormalizedFilePath _file) $ do
+    defineEarlyCutoff $ RuleNoDiagnostics $ \GetFilesOfInterest _file -> assert (null $ fromNormalizedFilePath _file) $ do
         alwaysRerun
         filesOfInterest <- getFilesOfInterestUntracked
-        pure (Just $ BS.fromString $ show filesOfInterest, ([], Just filesOfInterest))
-
+        let !cutoff = LBS.toStrict $ encode $ HashMap.toList filesOfInterest
+        pure (Just cutoff, Just filesOfInterest)
 
 -- | Get the files that are open in the IDE.
 getFilesOfInterest :: Action (HashMap NormalizedFilePath FileOfInterestStatus)
 getFilesOfInterest = useNoFile_ GetFilesOfInterest
-
-
 
 ------------------------------------------------------------
 -- Exposed API
@@ -88,7 +86,7 @@ modifyFilesOfInterest
   -> IO ()
 modifyFilesOfInterest state f = do
     OfInterestVar var <- getIdeGlobalState state
-    files <- modifyVar var $ pure . dupe . f
+    files <- modifyVar' var f
     logDebug (ideLogger state) $ "Set files of interest to: " <> T.pack (show $ HashMap.toList files)
 
 -- | Typecheck all the files of interest.
@@ -115,7 +113,7 @@ kick = do
     let mguts = catMaybes results
         !exportsMap' = createExportsMapMg mguts
         !exportsMap'' = maybe mempty createExportsMap ifaces
-    liftIO $ modifyVar_ exportsMap $ evaluate . (exportsMap'' <>) . (exportsMap' <>)
+    void $ liftIO $ modifyVar' exportsMap $ (exportsMap'' <>) . (exportsMap' <>)
 
     liftIO $ progressUpdate KickCompleted
 

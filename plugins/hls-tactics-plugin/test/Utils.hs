@@ -8,7 +8,7 @@
 module Utils where
 
 import           Control.Applicative.Combinators (skipManyTill)
-import           Control.Lens hiding (failing, (<.>))
+import           Control.Lens hiding (failing, (<.>), (.=))
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
@@ -19,8 +19,9 @@ import           Data.Maybe
 import           Data.Text (Text)
 import qualified Data.Text.IO as T
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.Plugin.Tactic.FeatureSet (FeatureSet, allFeatures)
-import           Ide.Plugin.Tactic.Types
+import           Wingman.FeatureSet (FeatureSet, allFeatures, prettyFeatureSet)
+import           Wingman.LanguageServer (mkShowMessageParams)
+import           Wingman.Types
 import           Language.LSP.Test
 import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
@@ -82,8 +83,7 @@ setFeatureSet features = do
       config =
         def_config
           { Plugin.plugins = M.fromList [("tactics",
-              def { Plugin.plcConfig = unObject $ toJSON $
-                emptyConfig { cfg_feature_set = features }}
+              def { Plugin.plcConfig = unObject $ object ["features" .= prettyFeatureSet features] }
           )] <> Plugin.plugins def_config }
 
   sendNotification SWorkspaceDidChangeConfiguration $
@@ -117,6 +117,29 @@ mkGoldenTest features tc occ line col input =
         T.writeFile expected_name edited
       expected <- liftIO $ T.readFile expected_name
       liftIO $ edited `shouldBe` expected
+
+mkShowMessageTest
+    :: FeatureSet
+    -> TacticCommand
+    -> Text
+    -> Int
+    -> Int
+    -> FilePath
+    -> UserFacingMessage
+    -> SpecWith ()
+mkShowMessageTest features tc occ line col input ufm =
+  it (input <> " (golden)") $ do
+    runSession testCommand fullCaps tacticPath $ do
+      setFeatureSet features
+      doc <- openDoc input "haskell"
+      _ <- waitForDiagnostics
+      actions <- getCodeActions doc $ pointRange line col
+      Just (InR CodeAction {_command = Just c})
+        <- pure $ find ((== Just (tacticTitle tc occ)) . codeActionTitle) actions
+      executeCommand c
+      NotificationMessage _ _ err <- skipManyTill anyMessage (message SWindowShowMessage)
+      liftIO $ err `shouldBe` mkShowMessageParams ufm
+
 
 goldenTest :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
 goldenTest = mkGoldenTest allFeatures

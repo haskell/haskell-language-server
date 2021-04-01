@@ -8,7 +8,7 @@ import           Data.List
 import           ErrUtils
 import           GhcPlugins                        as GHC hiding (Var, (<>))
 
-import           Control.Concurrent.Extra
+import           Control.Concurrent.Strict
 import qualified Data.Text                         as T
 
 import           Development.IDE.GHC.Error

@@ -4,18 +4,22 @@ on:
   pull_request:
     branches:
       - '**'
-    paths-ignore:
-      - '**/docs/**'
-      - '**.md'
-      - '**/LICENSE'
-      - '.circleci/**'
-      - 'install/**'
-      - 'nix/**'
-      - 'test/**'
-      - 'ghcide/test/**'
 
 jobs:
+  pre_job:
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@master
+        with:
+          cancel_others: true
+          paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "nix/**", "**/test/**"]'
+
   bench-init:
+    needs: pre_job
+    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -86,7 +90,8 @@ jobs:
         path: ~/.cabal/cabal.tar.gz
 
   bench-example:
-    needs: [bench-init]
+    needs: [pre_job, bench-init]
+    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -94,7 +99,7 @@ jobs:
       matrix:
         ghc: ['8.10.4']
         os: [ubuntu-latest]
-        example: ['Cabal-3.0.0.0', 'lsp-types-1.0.0.1', 'bench_example_HLS']
+        example: ['Cabal-3.0.0.0', 'lsp-types-1.0.0.1']
 
     steps:
     # Cancel queued workflows from earlier commits in this branch
