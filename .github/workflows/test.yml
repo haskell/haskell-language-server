@@ -21,10 +21,7 @@ jobs:
           cancel_others: true
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "nix/**"]'
 
-
   test:
-    needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -58,33 +55,36 @@ jobs:
           #   ghc: '8.6.4'
 
     steps:
-      # Cancel queued workflows from earlier commits in this branch
-      - uses: fkirc/skip-duplicate-actions@master
-
-      - uses: actions/checkout@v2
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        run: exit 0
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        uses: actions/checkout@v2
         with:
           submodules: true
-      - uses: haskell/actions/setup@v1
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        uses: haskell/actions/setup@v1
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: "3.2"
 
-      - run: ./fmt.sh
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        run: ./fmt.sh
         name: "HLint via ./fmt.sh"
 
-      - name: Set some window specific things
-        if: matrix.os == 'windows-latest'
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.os == 'windows-latest'}}
+        name: Set some window specific things
         run: |
           echo "CABAL_STORE_DIR=$SYSTEMDRIVE\\SR" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~\\AppData\\cabal\\packages" >> $GITHUB_ENV
 
-      - name: Set some linux/macOS specific things
-        if: matrix.os != 'windows-latest'
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.os != 'windows-latest'}}
+        name: Set some linux/macOS specific things
         run: |
           echo "CABAL_STORE_DIR=~/.cabal/store" >> $GITHUB_ENV
           echo "CABAL_PKGS_DIR=~/.cabal/packages" >> $GITHUB_ENV
 
-      - name: Cache Cabal
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        name: Cache Cabal
         uses: actions/cache@v2
         env:
           cache-name: cache-cabal
@@ -98,10 +98,12 @@ jobs:
             v2-${{ runner.os }}-${{ matrix.ghc }}-build-
             v2-${{ runner.os }}-${{ matrix.ghc }}
 
-      - run: cabal update
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        run: cabal update
 
       # Need this to work around filepath length limits in Windows
-      - name: Shorten binary names
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        name: Shorten binary names
         run: |
           sed -i.bak -e 's/haskell-language-server/hls/g' \
                      -e 's/haskell_language_server/hls/g' \
@@ -109,17 +111,18 @@ jobs:
           sed -i.bak -e 's/Paths_haskell_language_server/Paths_hls/g' \
                      src/**/*.hs exe/*.hs
 
-      - name: Build
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+        name: Build
         # Retry it three times to workaround compiler segfaults in windows
         run: cabal build || cabal build || cabal build
 
-      - name: Test ghcide
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' &&  matrix.test }}
+        name: Test ghcide
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ghcide --test-options="-j1 --rerun-update" || cabal test ghcide --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="-j1 --rerun"
 
-      - name: Test func-test suite
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test func-test suite
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
@@ -128,8 +131,8 @@ jobs:
         # instances to be spun up for the poor github actions runner to handle
         run: cabal test func-test --test-options="-j1 --rerun --rerun-update" || cabal test func-test --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test func-test --test-options="-j1 --rerun"
 
-      - name: Test wrapper-test suite
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test wrapper-test suite
         env:
           HLS_TEST_EXE: hls
           HLS_WRAPPER_TEST_EXE: hls-wrapper
@@ -138,30 +141,30 @@ jobs:
         # instances to be spun up for the poor github actions runner to handle
         run: cabal test wrapper-test --test-options="-j1" || cabal test wrapper-test --test-options="-j1" || cabal test wrapper-test --test-options="-j1"
 
-      - name: Test hls-brittany-plugin
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test hls-brittany-plugin
         run: cabal test hls-brittany-plugin || cabal test hls-brittany-plugin --test-options="-j1"
 
-      - name: Test hls-class-plugin
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test hls-class-plugin
         run: cabal test hls-class-plugin || cabal test hls-class-plugin --test-options="-j1"
 
-      - name: Test hls-eval-plugin
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test hls-eval-plugin
         run: cabal test hls-eval-plugin --test-options="-j1 --rerun" || cabal test hls-eval-plugin --test-options="-j1 --rerun"
 
-      - name: Test hls-haddock-comments-plugin
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test hls-haddock-comments-plugin
         run: cabal test hls-haddock-comments-plugin || cabal test hls-haddock-comments-plugin --test-options="-j1"
 
-      - name: Test hls-splice-plugin
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test hls-splice-plugin
         run: cabal test hls-splice-plugin || cabal test hls-splice-plugin --test-options="-j1"
 
-      - name: Test hls-stylish-haskell-plugin
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test hls-stylish-haskell-plugin
         run: cabal test hls-stylish-haskell-plugin || cabal test hls-stylish-haskell-plugin --test-options="-j1"
 
-      - name: Test hls-tactics-plugin test suite
-        if: ${{ matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip == 'true' && matrix.test }}
+        name: Test hls-tactics-plugin test suite
         run: LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test hls-tactics-plugin --test-options="-j1"

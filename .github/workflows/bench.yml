@@ -19,7 +19,6 @@ jobs:
 
   bench-init:
     needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -29,18 +28,21 @@ jobs:
         os: [ubuntu-latest]
 
     steps:
-    # Cancel queued workflows from earlier commits in this branch
-    - uses: fkirc/skip-duplicate-actions@master
-
-    - uses: actions/checkout@v2
-    - run: git fetch origin master # check the master branch for benchmarking
-    - uses: haskell/actions/setup@v1
+    - if: ${{ needs.pre_job.outputs.should_skip == 'true' }}
+      run: exit 0
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      uses: actions/checkout@v2
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      run: git fetch origin master # check the master branch for benchmarking
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
         enable-stack: false
 
-    - name: Cache Cabal
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Cache Cabal
       uses: actions/cache@v2
       with:
         path: |
@@ -52,37 +54,45 @@ jobs:
             v2-${{ runner.os }}-${{ matrix.ghc }}-bench-
             v2-${{ runner.os }}-${{ matrix.ghc }}
 
-    - run: cabal update
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      run: cabal update
 
-    - run: cabal configure --enable-benchmarks
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      run: cabal configure --enable-benchmarks
 
-    - name: Build
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Build
       shell: bash
       run: cabal build ghcide:benchHist
 
-    - name: Bench init
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Bench init
       shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="all-binaries"
 
     # tar is required to preserve file permissions
     # compression speeds up upload/download nicely
-    - name: tar workspace
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: tar workspace
       shell: bash
       run: tar -czf workspace.tar.gz * .git
 
-    - name: tar cabal
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: tar cabal
       run: |
         cd ~/.cabal
         tar -czf cabal.tar.gz *
 
-    - name: Upload workspace
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Upload workspace
       uses: actions/upload-artifact@v2
       with:
         name: workspace
         retention-days: 1
         path: workspace.tar.gz
 
-    - name: Upload .cabal
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Upload .cabal
       uses: actions/upload-artifact@v2
       with:
         name: cabal-home
@@ -90,8 +100,7 @@ jobs:
         path: ~/.cabal/cabal.tar.gz
 
   bench-example:
-    needs: [pre_job, bench-init]
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    needs: [bench-init, pre_job]
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -102,42 +111,46 @@ jobs:
         example: ['Cabal-3.0.0.0', 'lsp-types-1.0.0.1']
 
     steps:
-    # Cancel queued workflows from earlier commits in this branch
-    - uses: fkirc/skip-duplicate-actions@master
-
-    - uses: haskell/actions/setup@v1
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      uses: haskell/actions/setup@v1
       with:
         ghc-version: ${{ matrix.ghc }}
         cabal-version: '3.2'
         enable-stack: false
 
-    - name: Download cabal home
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Download cabal home
       uses: actions/download-artifact@v2
       with:
         name: cabal-home
         path: .
 
-    - name: Download workspace
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Download workspace
       uses: actions/download-artifact@v2
       with:
         name: workspace
         path: .
 
-    - name: untar
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: untar
       run: |
         tar xzf workspace.tar.gz
         tar xzf cabal.tar.gz --directory ~/.cabal
 
-    - name: Bench
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Bench
       shell: bash
       run: cabal bench ghcide:benchHist  -j --benchmark-options="${{ matrix.example }}"
 
-    - name: Display results
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Display results
       shell: bash
       run: |
         column -s, -t < ghcide/bench-results/unprofiled/${{ matrix.example }}/results.csv | tee ghcide/bench-results/unprofiled/${{ matrix.example }}/results.txt
 
-    - name: Archive benchmarking artifacts
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Archive benchmarking artifacts
       uses: actions/upload-artifact@v2
       with:
         name: bench-results-${{ runner.os }}-${{ matrix.ghc }}
@@ -147,7 +160,8 @@ jobs:
            ghcide/bench-results/**/*.svg
            ghcide/bench-results/**/*.eventlog.html
 
-    - name: Archive benchmark logs
+    - if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+      name: Archive benchmark logs
       uses: actions/upload-artifact@v2
       with:
         name: bench-logs-${{ runner.os }}-${{ matrix.ghc }}
