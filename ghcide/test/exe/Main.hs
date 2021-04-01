@@ -1377,6 +1377,26 @@ extendImportTests = testGroup "extend import actions"
                     , "x :: (:~:) [] []"
                     , "x = Refl"
                     ])
+        , expectFailBecause "importing pattern synonyms is unsupported"
+          $ testSession "extend import list with pattern synonym" $ template
+            [("ModuleA.hs", T.unlines 
+                    [ "{-# LANGUAGE PatternSynonyms #-}"
+                      , "module ModuleA where"
+                      , "pattern Some x = Just x"
+                    ])
+            ]
+            ("ModuleB.hs", T.unlines
+                    [ "module ModuleB where"
+                    , "import A ()"
+                    , "k (Some x) = x"
+                    ])
+            (Range (Position 2 3) (Position 2 7))
+            ["Add pattern Some to the import list of A"]
+            (T.unlines
+                    [ "module ModuleB where"
+                    , "import A (pattern Some)"
+                    , "k (Some x) = x"
+                    ])
         ]
       where
         codeActionTitle CodeAction{_title=x} = x
@@ -1554,6 +1574,7 @@ suggestImportTests = testGroup "suggest import actions"
       , "qualified Data.Data as T"
       ]                     "f = T.putStrLn"              []                "import qualified Data.Text.IO as T"
     ]
+    , expectFailBecause "importing pattern synonyms is unsupported" $ test True [] "k (Some x) = x" [] "import B (pattern Some)"
   ]
   where
     test = test' False
@@ -1561,8 +1582,9 @@ suggestImportTests = testGroup "suggest import actions"
     test' waitForCheckProject wanted imps def other newImp = testSessionWithExtraFiles "hover" (T.unpack def) $ \dir -> do
       let before = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ def : other
           after  = T.unlines $ "module A where" : ["import " <> x | x <- imps] ++ [newImp] ++ def : other
-          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo]}}"
+          cradle = "cradle: {direct: {arguments: [-hide-all-packages, -package, base, -package, text, -package-env, -, A, Bar, Foo, B]}}"
       liftIO $ writeFileUTF8 (dir </> "hie.yaml") cradle
+      liftIO $ writeFileUTF8 (dir </> "B.hs") $ unlines ["{-# LANGUAGE PatternSynonyms #-}", "module B where", "pattern Some x = Just x"]
       doc <- createDoc "Test.hs" "haskell" before
       waitForProgressDone
       _diags <- waitForDiagnostics
