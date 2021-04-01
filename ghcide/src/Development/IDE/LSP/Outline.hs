@@ -223,4 +223,8 @@ pprText = pack . showSDocUnsafe . ppr
 getConNames' :: ConDecl GhcPs -> [Located (IdP GhcPs)]
 getConNames' ConDeclH98  {con_name  = name}  = [name]
 getConNames' ConDeclGADT {con_names = names} = names
+#if !MIN_GHC_API_VERSION(8,10,0)
+getConNames' (XConDecl NoExt)                = []
+#elif !MIN_GHC_API_VERSION(9,0,0)
 getConNames' (XConDecl x)                    = noExtCon x
+#endif
