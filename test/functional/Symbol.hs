@@ -21,9 +21,9 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
-        let myData = DocumentSymbol "MyData" Nothing SkStruct Nothing myDataR myDataSR (Just (List [a, b]))
-            a = DocumentSymbol "A" Nothing SkConstructor Nothing aR aSR Nothing
-            b = DocumentSymbol "B" Nothing SkConstructor Nothing bR bSR Nothing
+        let myData = DocumentSymbol "MyData" Nothing SkStruct Nothing Nothing myDataR myDataSR (Just (List [a, b]))
+            a = DocumentSymbol "A" Nothing SkConstructor Nothing Nothing aR aSR Nothing
+            b = DocumentSymbol "B" Nothing SkConstructor Nothing Nothing bR bSR Nothing
         let myData' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 2
 
         liftIO $ Just myData == myData' @? "Contains symbol"
@@ -32,10 +32,10 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
-        let foo = DocumentSymbol "foo" Nothing SkFunction Nothing fooR fooSR (Just (List [bar]))
-            bar = DocumentSymbol "bar" Nothing SkFunction Nothing barR barSR (Just (List [dog, cat]))
-            dog = DocumentSymbol "dog" Nothing SkVariable Nothing dogR dogSR (Just mempty)
-            cat = DocumentSymbol "cat" Nothing SkVariable Nothing catR catSR (Just mempty)
+        let foo = DocumentSymbol "foo" Nothing SkFunction Nothing Nothing fooR fooSR (Just (List [bar]))
+            bar = DocumentSymbol "bar" Nothing SkFunction Nothing Nothing barR barSR (Just (List [dog, cat]))
+            dog = DocumentSymbol "dog" Nothing SkVariable Nothing Nothing dogR dogSR (Just mempty)
+            cat = DocumentSymbol "cat" Nothing SkVariable Nothing Nothing catR catSR (Just mempty)
         let foo' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 1
 
         liftIO $ Just foo == foo' @? "Contains symbol"
@@ -45,7 +45,7 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
         Left symbs <- getDocumentSymbols doc
 
         let testPattern = DocumentSymbol "TestPattern"
-                Nothing SkFunction Nothing testPatternR testPatternSR (Just mempty)
+                Nothing SkFunction Nothing Nothing testPatternR testPatternSR (Just mempty)
         let testPattern' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 3
 
         liftIO $ Just testPattern == testPattern' @? "Contains symbol"
@@ -54,8 +54,8 @@ v310Tests = testGroup "3.10 hierarchical document symbols" [
         doc <- openDoc "Symbols.hs" "haskell"
         Left symbs <- getDocumentSymbols doc
 
-        let imports = DocumentSymbol "imports" Nothing SkModule Nothing importsR importsSR (Just (List [importDataMaybe]))
-            importDataMaybe = DocumentSymbol "import Data.Maybe" Nothing SkModule Nothing importDataMaybeR importDataMaybeSR Nothing
+        let imports = DocumentSymbol "imports" Nothing SkModule Nothing Nothing importsR importsSR (Just (List [importDataMaybe]))
+            importDataMaybe = DocumentSymbol "import Data.Maybe" Nothing SkModule Nothing Nothing importDataMaybeR importDataMaybeSR Nothing
         let imports' = symbs ^? ix 0 . L.children . _Just .to fromList . ix 0
 
         liftIO $ Just imports == imports' @? "Contains symbol"
@@ -67,9 +67,9 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 
-        let myData = SymbolInformation "MyData" SkStruct Nothing (Location testUri myDataR) (Just "Symbols")
-            a = SymbolInformation "A" SkConstructor Nothing (Location testUri aR) (Just "MyData")
-            b = SymbolInformation "B" SkConstructor Nothing (Location testUri bR) (Just "MyData")
+        let myData = SymbolInformation "MyData" SkStruct Nothing Nothing (Location testUri myDataR) (Just "Symbols")
+            a = SymbolInformation "A" SkConstructor Nothing Nothing (Location testUri aR) (Just "MyData")
+            b = SymbolInformation "B" SkConstructor Nothing Nothing (Location testUri bR) (Just "MyData")
 
         liftIO $ [myData, a, b] `isInfixOf` symbs @? "Contains symbols"
 
@@ -77,10 +77,10 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 
-        let foo = SymbolInformation "foo" SkFunction Nothing (Location testUri fooR) (Just "Symbols")
-            bar = SymbolInformation "bar" SkFunction Nothing (Location testUri barR) (Just "foo")
-            dog = SymbolInformation "dog" SkVariable Nothing (Location testUri dogR) (Just "bar")
-            cat = SymbolInformation "cat" SkVariable Nothing (Location testUri catR) (Just "bar")
+        let foo = SymbolInformation "foo" SkFunction Nothing Nothing (Location testUri fooR) (Just "Symbols")
+            bar = SymbolInformation "bar" SkFunction Nothing Nothing (Location testUri barR) (Just "foo")
+            dog = SymbolInformation "dog" SkVariable Nothing Nothing (Location testUri dogR) (Just "bar")
+            cat = SymbolInformation "cat" SkVariable Nothing Nothing (Location testUri catR) (Just "bar")
 
         -- Order is important!
         liftIO $ [foo, bar, dog, cat] `isInfixOf` symbs @? "Contains symbols"
@@ -90,7 +90,7 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
         Right symbs <- getDocumentSymbols doc
 
         let testPattern = SymbolInformation "TestPattern"
-                SkFunction Nothing (Location testUri testPatternR) (Just "Symbols")
+                SkFunction Nothing Nothing (Location testUri testPatternR) (Just "Symbols")
 
         liftIO $ testPattern `elem` symbs @? "Contains symbols"
 
@@ -98,8 +98,8 @@ pre310Tests = testGroup "pre 3.10 symbol information" [
         doc@(TextDocumentIdentifier testUri) <- openDoc "Symbols.hs" "haskell"
         Right symbs <- getDocumentSymbols doc
 
-        let imports = SymbolInformation "imports" SkModule Nothing (Location testUri importsR) (Just "Symbols")
-            importDataMaybe = SymbolInformation "import Data.Maybe" SkModule Nothing (Location testUri importDataMaybeR) (Just "imports")
+        let imports = SymbolInformation "imports" SkModule Nothing Nothing (Location testUri importsR) (Just "Symbols")
+            importDataMaybe = SymbolInformation "import Data.Maybe" SkModule Nothing Nothing (Location testUri importDataMaybeR) (Just "imports")
 
         liftIO $ [imports, importDataMaybe] `isInfixOf` symbs @? "Contains symbol"
     ]

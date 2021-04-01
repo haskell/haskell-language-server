@@ -19,7 +19,7 @@ import qualified Data.Text                      as T
 import           Development.IDE.Core.Rules
 import           Development.IDE.Core.Shake
 import           Development.IDE.GHC.Compat
-import           Development.IDE.GHC.Error      (realSrcSpanToRange)
+import           Development.IDE.GHC.Error      (realSrcSpanToRange, rangeToRealSrcSpan)
 import           Development.IDE.Types.Location
 import           Language.LSP.Server            (LspM)
 import           Language.LSP.Types
@@ -183,12 +183,10 @@ documentSymbolForImportSummary importSymbols =
       mergeRanges xs = Range (minimum $ map _start xs) (maximum $ map _end xs)
       importRange = mergeRanges $ map (_range :: DocumentSymbol -> Range) importSymbols
     in
-      Just (defDocumentSymbol empty :: DocumentSymbol)
+      Just (defDocumentSymbol (rangeToRealSrcSpan "" importRange))
           { _name = "imports"
           , _kind = SkModule
           , _children = Just (List importSymbols)
-          , _range = importRange
-          , _selectionRange = importRange
           }
 
 documentSymbolForImport :: Located (ImportDecl GhcPs) -> Maybe DocumentSymbol
@@ -213,6 +211,7 @@ defDocumentSymbol l = DocumentSymbol { .. } where
   _range          = realSrcSpanToRange l
   _selectionRange = realSrcSpanToRange l
   _children       = Nothing
+  _tags           = Nothing
 
 showRdrName :: RdrName -> Text
 showRdrName = pprText
