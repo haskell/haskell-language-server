@@ -85,6 +85,10 @@ silenceStderr action = withTempFile $ \temp ->
       hSetBuffering stderr buf
       hClose old
 
+-- | Restore cwd after running an action
+keepCurrentDirectory :: IO a -> IO a
+keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
+
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
 runSessionWithServer' ::
@@ -98,11 +102,9 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugin conf sconf caps root s = silenceStderr $ do
+runSessionWithServer' plugin conf sconf caps root s = keepCurrentDirectory $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
-  -- restore cwd after running the session; otherwise the path to test data will be invalid
-  cwd <- getCurrentDirectory
   server <-
     async $
       Ghcide.defaultMain
@@ -116,11 +118,12 @@ runSessionWithServer' plugin conf sconf caps root s = silenceStderr $ do
                in ideOptions {optShakeOptions = (optShakeOptions ideOptions) {shakeThreads = 2}},
             argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
           }
-
-  x <-
-    runSessionWithHandles inW outR sconf caps root s
-      `finally` setCurrentDirectory cwd
+  x <- runSessionWithHandles inW outR sconf caps root s
   timeout 3 (wait server) >>= \case
     Just () -> pure ()
-    Nothing -> putStrLn "Server does not exit on time, canceling the async task..." >> cancel server
+    Nothing -> do
+      putStrLn "Server does not exit in 3s, canceling the async task..."
+      (t, _) <- duration $ cancel server
+      putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
+  sleep 0.1
   pure x
