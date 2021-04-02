@@ -547,7 +547,7 @@ indexHieFile se mod_summary srcPath hash hf = do
               _ <- LSP.sendRequest LSP.SWindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
               LSP.sendNotification LSP.SProgress $ LSP.ProgressParams u $
                 LSP.Begin $ LSP.WorkDoneProgressBeginParams
-                  { _title = "Indexing references"
+                  { _title = "Indexing"
                   , _cancellable = Nothing
                   , _message = Nothing
                   , _percentage = Nothing
