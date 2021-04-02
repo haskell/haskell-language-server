@@ -51,6 +51,10 @@ library
     Wingman.Tactics
     Wingman.Types
 
+    Wingman.LanguageServer.SnippetTextEdit
+    Wingman.LanguageServer.TH
+
+
   ghc-options:
     -Wall -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors
   if flag(pedantic)
@@ -81,6 +85,7 @@ library
     , text
     , transformers
     , deepseq
+    , unordered-containers
 
   default-language: Haskell2010
   default-extensions:

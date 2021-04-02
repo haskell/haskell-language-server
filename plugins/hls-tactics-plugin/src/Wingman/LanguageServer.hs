@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies      #-}
 
+{-# LANGUAGE StandaloneDeriving #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Wingman.LanguageServer where
 
 import           ConLike
@@ -18,21 +21,23 @@ import           Data.Monoid
 import qualified Data.Set  as S
 import qualified Data.Text as T
 import           Data.Traversable
+import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), useWithStale)
+import           Development.IDE.Core.Shake (IdeState (..), useWithStale, uses, define, use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
-import           Development.Shake (Action, RuleResult)
+import           Development.Shake (Action, RuleResult, Rules, action)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
+import           GHC.Generics (Generic)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
-import           Ide.Types (PluginId)
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Plugin.Properties
+import           Ide.PluginUtils (usePropertyLsp)
+import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
@@ -46,6 +51,8 @@ import           Wingman.Judgements
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
+import qualified Data.HashMap.Strict as Map
+import HsDumpAst
 
 
 tacticDesc :: T.Text -> T.Text
@@ -364,3 +371,61 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
 showLspMessage = sendNotification SWindowShowMessage
+
+
+-- This rule only exists for generating file diagnostics
+-- so the RuleResult is empty
+data WriteDiagnostics = WriteDiagnostics
+    deriving (Eq, Show, Typeable, Generic)
+
+deriving instance Hashable Position
+deriving instance Hashable Range
+deriving instance Binary Position
+deriving instance Binary Range
+
+instance Hashable WriteDiagnostics
+instance NFData   WriteDiagnostics
+instance Binary   WriteDiagnostics
+
+type instance RuleResult WriteDiagnostics = ()
+
+wingmanRules :: Rules ()
+wingmanRules = do
+  define $ \WriteDiagnostics nfp -> do
+    x <- use GetParsedModule nfp
+    case x of
+      Nothing -> do
+        traceMX "no diagnostics" x
+        pure ([], Nothing)
+      Just pm -> do
+        let holes :: [Range]
+            holes =
+              everything (<>)
+                (mkQ mempty $ \case
+                  L span (HsVar _ (L _ name))
+                    | isHole (occName name) ->
+                        maybeToList $ srcSpanToRange span
+                  L span (HsUnboundVar _ (TrueExprHole occ))
+                    | isHole occ ->
+                        maybeToList $ srcSpanToRange span
+                  L span (HsUnboundVar _ (OutOfScope occ _))
+                    | isHole occ ->
+                        maybeToList $ srcSpanToRange span
+                  L span (EWildPat _) ->
+                    maybeToList $ srcSpanToRange span
+                  (_ :: LHsExpr GhcPs) -> mempty
+                ) $ pm_parsed_source pm
+        traceMX "adding diagnostics" $ holes
+        pure $ (fmap (\r -> (nfp, ShowDiag, mkDiagnostic r)) holes, Just ())
+
+
+mkDiagnostic :: Range -> Diagnostic
+mkDiagnostic r =
+  Diagnostic r
+    (Just DsError)
+    (Just $ InR "wingmanhole")
+    (Just "wingman")
+    "Hole"
+    Nothing
+    Nothing
+

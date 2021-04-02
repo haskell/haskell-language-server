@@ -19,7 +19,7 @@ import           Data.Maybe
 import qualified Data.Text as T
 import           Development.IDE (GetParsedModule(GetParsedModule), srcSpanToRange)
 import           Development.IDE.Core.PositionMapping (toCurrentRange)
-import           Development.IDE.Core.Shake (IdeState (..))
+import           Development.IDE.Core.Shake (IdeState (..), use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Generics.SYB
@@ -54,6 +54,7 @@ descriptor plId = (defaultPluginDescriptor plId)
       [ mkPluginHandler STextDocumentCodeAction codeActionProvider
       , mkGetAllHolesPluginHandler getAllHolesProvider
       ]
+  , pluginRules = wingmanRules
   , pluginCustomConfig =
       mkCustomConfig properties
   }
@@ -137,11 +138,12 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           showUserFacingMessage TimedOut
         Just (Left ufm) -> do
           showUserFacingMessage ufm
-        Just (Right (_, edit)) -> do
+        Just (Right (holes, edit)) -> do
           _ <- sendRequest
             SWorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing edit)
             (const $ pure ())
+          _ <- liftIO $ runIde state $ use WriteDiagnostics nfp
           pure $ Right Null
 tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
