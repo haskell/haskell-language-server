@@ -26,6 +26,7 @@ module Development.IDE.GHC.Compat(
 #if !MIN_GHC_API_VERSION(8,8,0)
     ml_hie_file,
     addBootSuffixLocnOut,
+    getRealSrcSpan,
 #endif
     hPutStringBuffer,
     addIncludePathsQuote,
@@ -108,7 +109,6 @@ module Development.IDE.GHC.Compat(
     oldListVisibleModuleNames,
     oldLookupModuleWithSuggestions,
 
-    getRealSpan,
     nodeInfo',
     getNodeIds,
     stringToUnit,
@@ -177,6 +177,7 @@ import           DynamicLoading
 import           Plugins              (Plugin (parsedResultAction), withPlugins)
 
 #if !MIN_GHC_API_VERSION(8,8,0)
+import           SrcLoc               (RealLocated)
 import           System.FilePath      ((-<.>))
 #endif
 
@@ -463,6 +464,9 @@ disableWarningsAsErrors df =
 wopt_unset_fatal :: DynFlags -> WarningFlag -> DynFlags
 wopt_unset_fatal dfs f
     = dfs { fatalWarningFlags = EnumSet.delete f (fatalWarningFlags dfs) }
+
+getRealSrcSpan :: RealLocated a -> RealSrcSpan
+getRealSrcSpan = GHC.getLoc
 #endif
 
 applyPluginsParsedResultAction :: HscEnv -> DynFlags -> ModSummary -> ApiAnns -> ParsedSource -> IO ParsedSource
@@ -504,10 +508,6 @@ isQualifiedImport ImportDecl{}                              = True
 isQualifiedImport ImportDecl{ideclQualified}                = ideclQualified
 #endif
 isQualifiedImport _                                         = False
-
-getRealSpan :: SrcSpan -> Maybe RealSrcSpan
-getRealSpan (OldRealSrcSpan x) = Just x
-getRealSpan _                  = Nothing
 
 
 
