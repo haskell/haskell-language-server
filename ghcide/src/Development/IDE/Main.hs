@@ -81,20 +81,20 @@ import           System.Time.Extra                     (offsetTime,
 import           Text.Printf                           (printf)
 
 data Arguments = Arguments
-    { argsOTMemoryProfiling :: Bool
-    , argFiles :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
-    , argsLogger :: IO Logger
-    , argsRules :: Rules ()
-    , argsHlsPlugins :: IdePlugins IdeState
-    , argsGhcidePlugin :: Plugin Config  -- ^ Deprecated
+    { argsOTMemoryProfiling     :: Bool
+    , argFiles                  :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
+    , argsLogger                :: IO Logger
+    , argsRules                 :: Rules ()
+    , argsHlsPlugins            :: IdePlugins IdeState
+    , argsGhcidePlugin          :: Plugin Config  -- ^ Deprecated
     , argsSessionLoadingOptions :: SessionLoadingOptions
-    , argsIdeOptions :: Config -> Action IdeGhcSession -> IdeOptions
-    , argsLspOptions :: LSP.Options
-    , argsDefaultHlsConfig :: Config
-    , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
-    , argsDebouncer :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
-    , argsHandleIn :: IO Handle
-    , argsHandleOut :: IO Handle
+    , argsIdeOptions            :: Config -> Action IdeGhcSession -> IdeOptions
+    , argsLspOptions            :: LSP.Options
+    , argsDefaultHlsConfig      :: Config
+    , argsGetHieDbLoc           :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
+    , argsDebouncer             :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
+    , argsHandleIn              :: IO Handle
+    , argsHandleOut             :: IO Handle
     }
 
 instance Default Arguments where
@@ -135,7 +135,7 @@ stderrLogger = do
     return $ Logger $ \p m -> withLock lock $
         T.hPutStrLn stderr $ "[" <> T.pack (show p) <> "] " <> m
 
-defaultMain :: Arguments -> IO ()
+defaultMain :: Arguments -> IO Int
 defaultMain Arguments{..} = do
     setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
@@ -249,6 +249,8 @@ defaultMain Arguments{..} = do
                 measureMemory logger [keys] consoleObserver valuesRef
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
+            return 0
+
 {-# ANN defaultMain ("HLint: ignore Use nubOrd" :: String) #-}
 
 expandFiles :: [FilePath] -> IO [FilePath]

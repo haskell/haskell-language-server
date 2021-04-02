@@ -151,7 +151,7 @@ setInitialDynFlags SessionLoadingOptions{..} = do
 -- writing. Actions are picked off one by one from the `HieWriterChan` and executed in serial
 -- by a worker thread using a dedicated database connection.
 -- This is done in order to serialize writes to the database, or else SQLite becomes unhappy
-runWithDb :: FilePath -> (HieDb -> IndexQueue -> IO ()) -> IO ()
+runWithDb :: FilePath -> (HieDb -> IndexQueue -> IO a) -> IO a
 runWithDb fp k = do
   -- Delete the database if it has an incompatible schema version
   withHieDb fp (const $ pure ())

@@ -46,22 +46,15 @@ import           System.IO.Unsafe                      (unsafeInterleaveIO)
 runLanguageServer
     :: forall config. (Show config)
     => LSP.Options
-    -> Handle -- input
-    -> Handle -- output
+    -> Handle -- ^ input
+    -> Handle -- ^ output
     -> (FilePath -> IO FilePath) -- ^ Map root paths to the location of the hiedb for the project
     -> config
     -> (config -> Value -> Either T.Text config)
     -> LSP.Handlers (ServerM config)
     -> (LSP.LanguageContextEnv config -> VFSHandle -> Maybe FilePath -> HieDb -> IndexQueue -> IO IdeState)
-    -> IO ()
+    -> IO Int -- ^ exit code
 runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
-
-    -- These barriers are signaled when the threads reading from these chans exit.
-    -- This should not happen but if it does, we will make sure that the whole server
-    -- dies and can be restarted instead of losing threads silently.
-    clientMsgBarrier <- newBarrier
-    -- Forcefully exit
-    let exit = signalBarrier clientMsgBarrier ()
 
     -- The set of requests ids that we have received but not finished processing
     pendingRequests <- newTVarIO Set.empty
@@ -96,7 +89,6 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
     let asyncHandlers = mconcat
           [ ideHandlers
           , cancelHandler cancelRequest
-          , exitHandler exit
           ]
           -- Cancel requests are special since they need to be handled
           -- out of order to be useful. Existing handlers are run afterwards.
@@ -105,25 +97,22 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
     let serverDefinition = LSP.ServerDefinition
             { LSP.onConfigurationChange = onConfigurationChange
             , LSP.defaultConfig = defaultConfig
-            , LSP.doInitialize = handleInit exit clearReqId waitForCancel clientMsgChan
+            , LSP.doInitialize = handleInit clearReqId waitForCancel clientMsgChan
             , LSP.staticHandlers = asyncHandlers
             , LSP.interpretHandler = \(env, st) -> LSP.Iso (LSP.runLspT env . flip runReaderT (clientMsgChan,st)) liftIO
             , LSP.options = modifyOptions options
             }
 
-    void $ waitAnyCancel =<< traverse async
-        [ void $ LSP.runServerWithHandles
+    LSP.runServerWithHandles
             inH
             outH
             serverDefinition
-        , void $ waitBarrier clientMsgBarrier
-        ]
 
     where
         handleInit
-          :: IO () -> (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
+          :: (SomeLspId -> IO ()) -> (SomeLspId -> IO ()) -> Chan ReactorMessage
           -> LSP.LanguageContextEnv config -> RequestMessage Initialize -> IO (Either err (LSP.LanguageContextEnv config, IdeState))
-        handleInit exitClientMsg clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
+        handleInit clearReqId waitForCancel clientMsgChan env (RequestMessage _ _ m params) = otTracedHandler "Initialize" (show m) $ \sp -> do
             traceWithSpan sp params
             let root = LSP.resRootPath env
 
@@ -141,7 +130,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
-            _ <- flip forkFinally (const exitClientMsg) $ runWithDb dbLoc $ \hiedb hieChan -> do
+            _ <- runWithDb dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
                 msg <- readChan clientMsgChan
