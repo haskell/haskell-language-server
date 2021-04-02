@@ -21,6 +21,7 @@ where
 
 import           Control.Applicative.Combinators
 import           Control.Concurrent.Async          (async, cancel, wait)
+import           Control.Concurrent.Extra
 import           Control.Exception.Base
 import           Control.Monad.IO.Class
 import           Data.ByteString.Lazy              (ByteString)
@@ -43,6 +44,7 @@ import           Language.LSP.Types.Capabilities   (ClientCapabilities)
 import           System.Directory                  (getCurrentDirectory,
                                                     setCurrentDirectory)
 import           System.IO.Extra
+import           System.IO.Unsafe                  (unsafePerformIO)
 import           System.Process.Extra              (createPipe)
 import           System.Time.Extra
 import           Test.Hls.Util
@@ -89,6 +91,11 @@ silenceStderr action = withTempFile $ \temp ->
 keepCurrentDirectory :: IO a -> IO a
 keepCurrentDirectory = bracket getCurrentDirectory setCurrentDirectory . const
 
+{-# NOINLINE lock #-}
+-- | Never run in parallel
+lock :: Lock
+lock = unsafePerformIO newLock
+
 -- | Host a server, and run a test session on it
 -- Note: cwd will be shifted into @root@ in @Session a@
 runSessionWithServer' ::
@@ -102,7 +109,7 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugin conf sconf caps root s = keepCurrentDirectory $ do
+runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
   server <-
@@ -119,11 +126,12 @@ runSessionWithServer' plugin conf sconf caps root s = keepCurrentDirectory $ do
             argsHlsPlugins = pluginDescToIdePlugins $ plugin ++ Ghcide.descriptors
           }
   x <- runSessionWithHandles inW outR sconf caps root s
+  hClose inW
   timeout 3 (wait server) >>= \case
     Just () -> pure ()
     Nothing -> do
       putStrLn "Server does not exit in 3s, canceling the async task..."
       (t, _) <- duration $ cancel server
       putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
-  sleep 0.1
+  sleep 0.2
   pure x
