@@ -51,9 +51,6 @@ library
     Wingman.Tactics
     Wingman.Types
 
-    Wingman.LanguageServer.SnippetTextEdit
-    Wingman.LanguageServer.TH
-
 
   ghc-options:
     -Wall -Wno-name-shadowing -Wredundant-constraints -Wno-unticked-promoted-constructors

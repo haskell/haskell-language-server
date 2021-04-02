@@ -4,9 +4,6 @@
 {-# LANGUAGE RankNTypes   #-}
 {-# LANGUAGE TypeFamilies #-}
 
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE RecordWildCards #-}
-
 module Development.IDE.GHC.ExactPrint
     ( Graft(..),
       graftDecls,
@@ -19,9 +16,7 @@ module Development.IDE.GHC.ExactPrint
       genericGraftWithLargestM,
       graftSmallestDeclsWithM,
       transform,
-      transformWithOptions,
       transformM,
-      transformWithOptionsM,
       useAnnotatedSource,
       annotateParsedSource,
       getAnnotatedParsedSourceRule,
@@ -35,9 +30,6 @@ module Development.IDE.GHC.ExactPrint
       mkBindListT,
       setPrecedingLinesT,
       everywhereM',
-      -- * Annotated ranges
-      annotatedTextOptions,
-      getAnnotatedText,
     )
 where
 
@@ -60,7 +52,7 @@ import Development.IDE.Core.Shake
 import Development.IDE.GHC.Compat hiding (parseExpr)
 import Development.IDE.Types.Location
 import Development.Shake (RuleResult, Rules)
-import Development.Shake.Classes (Hashable, NFData, Binary)
+import Development.Shake.Classes
 import qualified GHC.Generics as GHC
 import Generics.SYB
 import Ide.PluginUtils
@@ -69,7 +61,7 @@ import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.LSP.Types
 import Language.LSP.Types.Capabilities (ClientCapabilities)
 import Outputable (Outputable, ppr, showSDoc)
-import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType, printA)
+import Retrie.ExactPrint hiding (parseDecl, parseExpr, parsePattern, parseType)
 import Parser (parseIdentifier)
 import Data.Traversable (for)
 import Data.Foldable (Foldable(fold))
@@ -79,13 +71,6 @@ import Data.Functor.Compose (Compose(Compose))
 #if __GLASGOW_HASKELL__ == 808
 import Control.Arrow
 #endif
-import Control.Monad.State.Strict (evalStateT, StateT, modify', get)
-import Control.Monad.Trans.Writer.CPS (runWriter, Writer, tell)
-import Data.Tuple (swap)
-import Language.Haskell.GHC.ExactPrint.Print
-import Data.Functor.Identity (Identity (runIdentity))
-import Language.Haskell.GHC.ExactPrint.Types (Rigidity(NormalLayout))
-import qualified Development.IDE.GHC.Compat as GHC
 
 
 ------------------------------------------------------------------------------
@@ -157,71 +142,6 @@ instance Monad m => Semigroup (Graft m a) where
 instance Monad m => Monoid (Graft m a) where
     mempty = Graft $ const pure
 
-
-data Noted
-  = Note AnnotatedText
-  | Uninteresting String
-
-newtype AnnotatedText = AnnotatedText
-  { unAnnotatedText :: [Noted]
-  }
-  deriving newtype (Semigroup, Monoid)
-
-
-runAnnotatedText :: AnnotatedText -> StateT (Int, Int) (Writer [(Range, String)]) String
-runAnnotatedText = fmap join . traverse runNoted . unAnnotatedText
-
-
-runNoted :: Noted -> StateT (Int, Int) (Writer [(Range, String)]) String
-runNoted (Uninteresting str) =
-  for str $ \case
-    '\n' -> do
-      modify' $! \(l, _) -> (l + 1, 0)
-      pure '\n'
-    x -> do
-      modify' $! \(l, c) -> (l, c + 1)
-      pure x
-runNoted (Note n) = do
-  (l, c) <- get
-  res <- runAnnotatedText n
-  (l', c') <- get
-  lift
-    $ tell
-    $ pure
-       ( Range (Position l c) (Position l' c')
-       , res
-       )
-  pure res
-
-
-------------------------------------------------------------------------------
--- | Given an 'AnnotatedText' (likely from 'annotatedTextOptions'), get the
--- resulting ranges of the annotated nodes in the string.
-getAnnotatedText :: AnnotatedText -> ([(Range, String)], String)
-getAnnotatedText t = swap $ runWriter $ evalStateT (runAnnotatedText t) (0, 0)
-
-
-------------------------------------------------------------------------------
--- | A 'PrintOptions' for 'transformWithOptions' that, when combined with
--- 'getAnnotatedText', allows you to get the resulting source 'Range's of nodes
--- in the AST.
-annotatedTextOptions
-    :: (forall ast. (Data ast, GHC.HasSrcSpan ast) => ast -> Bool)
-    -> PrintOptions Identity AnnotatedText
-annotatedTextOptions should_note =
-  printOptions
-    (\ast n ->
-      case should_note ast of
-        True -> pure $ AnnotatedText $ pure $ Note n
-        False -> pure n
-    )
-    (pure . AnnotatedText . pure . Uninteresting)
-    (pure . AnnotatedText . pure . Uninteresting)
-    NormalLayout
-
-
-
-
 ------------------------------------------------------------------------------
 
 -- | Convert a 'Graft' into a 'WorkspaceEdit'.
@@ -232,24 +152,11 @@ transform ::
     Graft (Either String) ParsedSource ->
     Annotated ParsedSource ->
     Either String WorkspaceEdit
-transform dflags ccs uri f a =
-  fmap snd $ transformWithOptions stringOptions ((), ) dflags ccs uri f a
-
--- | Convert a 'Graft' into a 'WorkspaceEdit'.
-transformWithOptions ::
-    Monoid res =>
-    PrintOptions Identity res ->
-    (res -> (b, String)) ->
-    DynFlags ->
-    ClientCapabilities ->
-    Uri ->
-    Graft (Either String) ParsedSource ->
-    Annotated ParsedSource ->
-    Either String (b, WorkspaceEdit)
-transformWithOptions options split dflags ccs uri f a =
-  runIdentity $
-    transformWithOptionsM options split dflags ccs uri (hoistGraft (ExceptStringT . except) f) a
-
+transform dflags ccs uri f a = do
+    let src = printA a
+    a' <- transformA a $ runGraft f dflags
+    let res = printA a'
+    pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 ------------------------------------------------------------------------------
 
@@ -262,31 +169,12 @@ transformM ::
     Graft (ExceptStringT m) ParsedSource ->
     Annotated ParsedSource ->
     m (Either String WorkspaceEdit)
-transformM dflags ccs uri f a =
-  fmap (fmap snd) $ transformWithOptionsM stringOptions ((), ) dflags ccs uri f a
-
--- | Convert a 'Graft' into a 'WorkspaceEdit'.
-transformWithOptionsM ::
-    (Monad m, Monoid res) =>
-    PrintOptions Identity res ->
-    (res -> (b, String)) ->
-    DynFlags ->
-    ClientCapabilities ->
-    Uri ->
-    Graft (ExceptStringT m) ParsedSource ->
-    Annotated ParsedSource ->
-    m (Either String (b, WorkspaceEdit))
-transformWithOptionsM options split dflags ccs uri f a = runExceptT $
+transformM dflags ccs uri f a = runExceptT $
     runExceptString $ do
-        let (_, src) = split $ printA options a
+        let src = printA a
         a' <- transformA a $ runGraft f dflags
-        let (b, res) = split $ printA options a'
-        pure $ (b, diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions)
-
-
--- | Exactprint an 'Annotated' thing.
-printA :: (Monoid res, Annotate ast) => PrintOptions Identity res -> Annotated (Located ast) -> res
-printA options a = runIdentity $ exactPrintWithOptions options (astA a) (annsA a)
+        let res = printA a'
+        pure $ diffText ccs (uri, T.pack src) (T.pack res) IncludeDeletions
 
 
 -- | Returns whether or not this node requires its immediate children to have

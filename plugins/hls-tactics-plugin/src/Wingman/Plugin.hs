@@ -12,17 +12,14 @@ import           Control.Monad
 import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
-import           Data.Bifunctor (first, Bifunctor (bimap))
+import           Data.Bifunctor (first)
 import           Data.Data
 import           Data.Foldable (for_)
 import           Data.Maybe
 import qualified Data.Text as T
-import           Development.IDE (GetParsedModule(GetParsedModule), srcSpanToRange)
-import           Development.IDE.Core.PositionMapping (toCurrentRange)
 import           Development.IDE.Core.Shake (IdeState (..), use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
-import           Generics.SYB
 import           Ide.Types
 import           Language.LSP.Server
 import           Language.LSP.Types
@@ -33,7 +30,6 @@ import           System.Timeout
 import           Wingman.CaseSplit
 import           Wingman.GHC
 import           Wingman.LanguageServer
-import           Wingman.LanguageServer.SnippetTextEdit
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
 import           Wingman.Range
@@ -112,7 +108,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           showUserFacingMessage TimedOut
         Just (Left ufm) -> do
           showUserFacingMessage ufm
-        Just (Right (_holes, edit)) -> do
+        Just (Right edit) -> do
           _ <- sendRequest
             SWorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing edit)
@@ -144,7 +140,7 @@ mkWorkspaceEdits
     -> Uri
     -> Annotated ParsedSource
     -> RunTacticResults
-    -> Either UserFacingMessage ([Range], WorkspaceEdit)
+    -> Either UserFacingMessage WorkspaceEdit
 mkWorkspaceEdits span dflags ccs uri pm rtr = do
   for_ (rtr_other_solns rtr) $ \soln -> do
     traceMX "other solution" $ syn_val soln
@@ -152,22 +148,13 @@ mkWorkspaceEdits span dflags ccs uri pm rtr = do
   traceMX "solution" $ rtr_extract rtr
   let g = graftHole (RealSrcSpan span) rtr
       response =
-        transformWithOptions
-          (annotatedTextOptions isHoleAst)
-          getAnnotatedText
+        transform
           dflags
           ccs
           uri
           g
           pm
-   in bimap (InfrastructureError . T.pack) (first $ fmap fst) response
-
-
-isHoleAst :: (Data ast) => ast -> Bool
-isHoleAst ast =
-  case cast ast :: Maybe (LHsExpr GhcPs) of
-    Just (L _ (HsVar _ (L _ v))) -> isHole $ occName v
-    _ -> False
+   in first (InfrastructureError . T.pack) response
 
 
 ------------------------------------------------------------------------------
