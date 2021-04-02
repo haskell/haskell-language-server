@@ -52,37 +52,11 @@ descriptor plId = (defaultPluginDescriptor plId)
             [minBound .. maxBound]
   , pluginHandlers = mconcat
       [ mkPluginHandler STextDocumentCodeAction codeActionProvider
-      , mkGetAllHolesPluginHandler getAllHolesProvider
       ]
-  , pluginRules = wingmanRules
+  , pluginRules = wingmanRules plId
   , pluginCustomConfig =
       mkCustomConfig properties
   }
-
-getAllHolesProvider
-    :: MonadLsp cfg m
-    => IdeState
-    -> PluginId
-    -> GetAllHolesRequest
-    -> m (Either ResponseError GetAllHolesResponse)
-getAllHolesProvider state _ (GetAllHolesRequest (TextDocumentIdentifier uri))
-  | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
-    x <- liftIO $ runMaybeT $ runStaleIde state nfp GetParsedModule
-    case x of
-      Nothing -> pure $ Left $ mkErr InternalError "Couldn't get a parsed module"
-      Just (pm, mapping) -> do
-        let holes :: [Range]
-            holes =
-              everything (<>)
-                (mkQ mempty $ \case
-                  L span (HsVar _ (L _ name) :: HsExpr GhcPs)
-                    | isHole (occName name) ->
-                        maybeToList $ toCurrentRange mapping =<< srcSpanToRange span
-                  _ -> mempty
-                ) $ pm_parsed_source pm
-        pure $ pure $ GetAllHolesResponse holes
-getAllHolesProvider _ _ _ =
-  pure $ Left $ mkErr InvalidRequest "Bad URI"
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
@@ -138,7 +112,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           showUserFacingMessage TimedOut
         Just (Left ufm) -> do
           showUserFacingMessage ufm
-        Just (Right (holes, edit)) -> do
+        Just (Right (_holes, edit)) -> do
           _ <- sendRequest
             SWorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing edit)
