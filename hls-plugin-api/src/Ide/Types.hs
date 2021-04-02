@@ -54,7 +54,7 @@ import           Text.Regex.TDFA.Text            ()
 -- ---------------------------------------------------------------------
 
 newtype IdePlugins ideState = IdePlugins
-  { ipMap :: Map.Map PluginId (PluginDescriptor ideState)}
+  { ipMap :: [(PluginId, PluginDescriptor ideState)]}
 
 -- ---------------------------------------------------------------------
 
