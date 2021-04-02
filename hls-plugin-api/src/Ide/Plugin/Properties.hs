@@ -215,12 +215,9 @@ useProperty ::
   (HasProperty s k t r) =>
   KeyNameProxy s ->
   Properties r ->
-  Maybe A.Object ->
+  A.Object ->
   ToHsType t
-useProperty kn p =
-  maybe
-    (defaultValue metadata)
-    (fromRight (defaultValue metadata) . usePropertyEither kn p)
+useProperty kn p = fromRight (defaultValue metadata) . usePropertyEither kn p
   where
     (_, metadata) = find kn p
 

@@ -45,8 +45,8 @@ library
     , hspec
     , hspec-core
     , lens
-    , lsp-test                ==0.13.0.0
-    , lsp-types               ^>=1.1
+    , lsp-test                ==0.14.0.0
+    , lsp-types               ^>=1.2
     , tasty
     , tasty-ant-xml           >=1.1.6
     , tasty-expected-failure

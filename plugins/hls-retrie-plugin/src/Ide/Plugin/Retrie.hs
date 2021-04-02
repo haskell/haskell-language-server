@@ -203,7 +203,7 @@ provider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range ca)
   commands <- lift $
     forM rewrites $ \(title, kind, params) -> liftIO $ do
       let c = mkLspCommand plId (coerce retrieCommandName) title (Just [toJSON params])
-      return $ CodeAction title (Just kind) Nothing Nothing Nothing Nothing (Just c)
+      return $ CodeAction title (Just kind) Nothing Nothing Nothing Nothing (Just c) Nothing
 
   return $ J.List [InR c | c <- commands]
 
@@ -430,7 +430,7 @@ callRetrie state session rewrites origin restrictToOriginatingFile = do
   let (errors :: [CallRetrieError], replacements) = partitionEithers results
       editParams :: WorkspaceEdit
       editParams =
-        WorkspaceEdit (Just $ asEditMap replacements) Nothing
+        WorkspaceEdit (Just $ asEditMap replacements) Nothing Nothing
 
   return (errors, editParams)
   where

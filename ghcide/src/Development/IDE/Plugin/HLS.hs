@@ -20,7 +20,6 @@ import           Data.Either
 import qualified Data.List                    as List
 import           Data.List.NonEmpty           (NonEmpty, nonEmpty, toList)
 import qualified Data.Map                     as Map
-import           Data.Maybe                   (fromMaybe)
 import           Data.String
 import qualified Data.Text                    as T
 import           Development.IDE.Core.Shake
@@ -44,14 +43,13 @@ import           UnliftIO.Exception           (catchAny)
 --
 
 -- | Map a set of plugins to the underlying ghcide engine.
-asGhcIdePlugin :: Config -> IdePlugins IdeState -> Plugin Config
-asGhcIdePlugin defaultConfig mp =
+asGhcIdePlugin :: IdePlugins IdeState -> Plugin Config
+asGhcIdePlugin (IdePlugins ls) =
     mkPlugin rulesPlugins HLS.pluginRules <>
     mkPlugin executeCommandPlugins HLS.pluginCommands <>
-    mkPlugin (extensiblePlugins defaultConfig) HLS.pluginHandlers <>
-    mkPlugin (extensibleNotificationPlugins defaultConfig) HLS.pluginNotificationHandlers
+    mkPlugin extensiblePlugins HLS.pluginHandlers <>
+    mkPlugin extensibleNotificationPlugins HLS.pluginNotificationHandlers
     where
-        ls = Map.toList (ipMap mp)
 
         mkPlugin :: ([(PluginId, b)] -> Plugin Config) -> (PluginDescriptor IdeState -> b) -> Plugin Config
         mkPlugin maker selector =
@@ -133,8 +131,8 @@ executeCommandHandlers ecs = requestHandler SWorkspaceExecuteCommand execCmd
 
 -- ---------------------------------------------------------------------
 
-extensiblePlugins :: Config -> [(PluginId, PluginHandlers IdeState)] -> Plugin Config
-extensiblePlugins defaultConfig xs = Plugin mempty handlers
+extensiblePlugins :: [(PluginId, PluginHandlers IdeState)] -> Plugin Config
+extensiblePlugins xs = Plugin mempty handlers
   where
     IdeHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginHandlers IdeState) -> IdeHandlers
@@ -144,7 +142,7 @@ extensiblePlugins defaultConfig xs = Plugin mempty handlers
     handlers = mconcat $ do
       (IdeMethod m :=> IdeHandler fs') <- DMap.assocs handlers'
       pure $ requestHandler m $ \ide params -> do
-        config <- fromMaybe defaultConfig <$> Ide.PluginUtils.getClientConfig
+        config <- Ide.PluginUtils.getClientConfig
         let fs = filter (\(pid,_) -> pluginEnabled m pid config) fs'
         case nonEmpty fs of
           Nothing -> pure $ Left $ ResponseError InvalidRequest
@@ -161,8 +159,8 @@ extensiblePlugins defaultConfig xs = Plugin mempty handlers
                 pure $ Right $ combineResponses m config caps params xs
 -- ---------------------------------------------------------------------
 
-extensibleNotificationPlugins :: Config -> [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
-extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
+extensibleNotificationPlugins :: [(PluginId, PluginNotificationHandlers IdeState)] -> Plugin Config
+extensibleNotificationPlugins xs = Plugin mempty handlers
   where
     IdeNotificationHandlers handlers' = foldMap bakePluginId xs
     bakePluginId :: (PluginId, PluginNotificationHandlers IdeState) -> IdeNotificationHandlers
@@ -172,7 +170,7 @@ extensibleNotificationPlugins defaultConfig xs = Plugin mempty handlers
     handlers = mconcat $ do
       (IdeNotification m :=> IdeNotificationHandler fs') <- DMap.assocs handlers'
       pure $ notificationHandler m $ \ide params -> do
-        config <- fromMaybe defaultConfig <$> Ide.PluginUtils.getClientConfig
+        config <- Ide.PluginUtils.getClientConfig
         let fs = filter (\(pid,_) -> plcGlobalOn $ configForPlugin config pid) fs'
         case nonEmpty fs of
           Nothing -> do

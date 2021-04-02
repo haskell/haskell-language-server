@@ -289,7 +289,7 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
     applyAllAction =
       let args = Just [toJSON (docId ^. LSP.uri)]
           cmd = mkLspCommand plId "applyAll" "Apply all hints" args
-        in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd)
+        in LSP.CodeAction "Apply all hints" (Just LSP.CodeActionQuickFix) Nothing Nothing Nothing Nothing (Just cmd) Nothing
 
     applyOneActions :: [LSP.CodeAction]
     applyOneActions = mapMaybe mkHlintAction (filter validCommand diags)
@@ -306,7 +306,7 @@ codeActionProvider ideState plId (CodeActionParams _ _ docId _ context) = Right 
     mkHlintAction diag@(LSP.Diagnostic (LSP.Range start _) _s (Just (InR code)) (Just "hlint") _ _ _) =
       Just . codeAction $ mkLspCommand plId "applyOne" title (Just args)
      where
-       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd)
+       codeAction cmd = LSP.CodeAction title (Just LSP.CodeActionQuickFix) (Just (LSP.List [diag])) Nothing Nothing Nothing (Just cmd) Nothing
        -- we have to recover the original ideaHint removing the prefix
        ideaHint = T.replace "refact:" "" code
        title = "Apply hint: " <> ideaHint

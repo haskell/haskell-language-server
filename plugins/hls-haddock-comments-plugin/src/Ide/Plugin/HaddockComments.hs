@@ -125,6 +125,9 @@ toAction title uri edit = CodeAction {..}
     _edit = Just WorkspaceEdit {..}
     _isPreferred = Nothing
     _disabled = Nothing
+    _xdata = Nothing
+    _changeAnnotations = Nothing
+
 
 toRange :: SrcSpan -> Maybe Range
 toRange src
