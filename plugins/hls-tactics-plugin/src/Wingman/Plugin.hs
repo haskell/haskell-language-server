@@ -17,7 +17,7 @@ import           Data.Data
 import           Data.Foldable (for_)
 import           Data.Maybe
 import qualified Data.Text as T
-import           Development.IDE.Core.Shake (IdeState (..), use)
+import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Ide.Types
@@ -46,9 +46,8 @@ descriptor plId = (defaultPluginDescriptor plId)
             (tacticDesc $ tcCommandName tc)
             (tacticCmd (commandTactic tc) plId))
             [minBound .. maxBound]
-  , pluginHandlers = mconcat
-      [ mkPluginHandler STextDocumentCodeAction codeActionProvider
-      ]
+  , pluginHandlers =
+      mkPluginHandler STextDocumentCodeAction codeActionProvider
   , pluginRules = wingmanRules plId
   , pluginCustomConfig =
       mkCustomConfig properties
@@ -113,7 +112,6 @@ tacticCmd tac pId state (TacticParams uri range var_name)
             SWorkspaceApplyEdit
             (ApplyWorkspaceEditParams Nothing edit)
             (const $ pure ())
-          _ <- liftIO $ runIde state $ use WriteDiagnostics nfp
           pure $ Right Null
 tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
@@ -147,13 +145,7 @@ mkWorkspaceEdits span dflags ccs uri pm rtr = do
     traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
   traceMX "solution" $ rtr_extract rtr
   let g = graftHole (RealSrcSpan span) rtr
-      response =
-        transform
-          dflags
-          ccs
-          uri
-          g
-          pm
+      response = transform dflags ccs uri g pm
    in first (InfrastructureError . T.pack) response
 
 

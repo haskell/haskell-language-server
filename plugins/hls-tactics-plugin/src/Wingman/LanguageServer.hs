@@ -2,8 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
-{-# LANGUAGE StandaloneDeriving #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
 module Wingman.LanguageServer where
 
 import           ConLike
@@ -387,11 +385,6 @@ showLspMessage = sendNotification SWindowShowMessage
 -- so the RuleResult is empty
 data WriteDiagnostics = WriteDiagnostics
     deriving (Eq, Show, Typeable, Generic)
-
-deriving instance Hashable Position
-deriving instance Hashable Range
-deriving instance Binary Position
-deriving instance Binary Range
 
 instance Hashable WriteDiagnostics
 instance NFData   WriteDiagnostics
