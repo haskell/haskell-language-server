@@ -22,6 +22,7 @@ jobs:
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "nix/**"]'
 
   test:
+    needs: pre_job
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
