@@ -36,6 +36,7 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            positionResultToMaybe,
                                                            toCurrent)
 import           Development.IDE.Core.Shake               (Q (..))
+import           Development.IDE.Main                     as IDE
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
@@ -75,7 +76,7 @@ import qualified System.IO.Extra
 import           System.Info.Extra                        (isWindows)
 import           System.Process.Extra                     (CreateProcess (cwd),
                                                            proc,
-                                                           readCreateProcessWithExitCode)
+                                                           readCreateProcessWithExitCode, createPipe)
 import           Test.QuickCheck
 -- import Test.QuickCheck.Instances ()
 import           Control.Lens                             ((^.))
@@ -92,6 +93,14 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
+import Data.IORef
+import Ide.PluginUtils (pluginDescToIdePlugins)
+import Control.Concurrent.Async
+import Ide.Types
+import Data.String (IsString(fromString))
+import qualified Language.LSP.Types as LSP
+import Data.IORef.Extra (atomicModifyIORef_)
+import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
 
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
@@ -179,7 +188,7 @@ initializeResponseTests = withResource acquire release tests where
     , chk "NO doc link"               _documentLinkProvider Nothing
     , chk "NO color"                         _colorProvider (Just $ InL False)
     , chk "NO folding range"          _foldingRangeProvider (Just $ InL False)
-    , che "   execute command"      _executeCommandProvider [blockCommandId, extendImportCommandId, typeLensCommandId]
+    , che "   execute command"      _executeCommandProvider [extendImportCommandId, typeLensCommandId, blockCommandId]
     , chk "   workspace"                         _workspace (Just $ WorkspaceServerCapabilities (Just WorkspaceFoldersServerCapabilities{_supported = Just True, _changeNotifications = Just ( InR True )}))
     , chk "NO experimental"                   _experimental Nothing
     ] where
@@ -5145,20 +5154,25 @@ runInDir' dir startExeIn startSessionIn extraOptions s = do
   -- HIE calls getXgdDirectory which assumes that HOME is set.
   -- Only sets HOME if it wasn't already set.
   setEnv "HOME" "/homeless-shelter" False
-  let lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
+  conf <- getConfigFromEnv
+  runSessionWithConfig conf cmd lspTestCaps projDir s
+
+getConfigFromEnv :: IO SessionConfig
+getConfigFromEnv = do
   logColor <- fromMaybe True <$> checkEnv "LSP_TEST_LOG_COLOR"
   timeoutOverride <- fmap read <$> getEnv "LSP_TIMEOUT"
-  let conf = defaultConfig{messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride}
-            -- uncomment this or set LSP_TEST_LOG_STDERR=1 to see all logging
-            --   { logStdErr = True }
-            --   uncomment this or set LSP_TEST_LOG_MESSAGES=1 to see all messages
-            --   { logMessages = True }
-  runSessionWithConfig conf{logColor} cmd lspTestCaps projDir s
+  return defaultConfig
+    { messageTimeout = fromMaybe (messageTimeout defaultConfig) timeoutOverride
+    , logColor
+    }
   where
     checkEnv :: String -> IO (Maybe Bool)
     checkEnv s = fmap convertVal <$> getEnv s
     convertVal "0" = False
     convertVal _   = True
+
+lspTestCaps :: ClientCapabilities
+lspTestCaps = fullCaps { _window = Just $ WindowClientCapabilities $ Just True }
 
 openTestDataDoc :: FilePath -> Session TextDocumentIdentifier
 openTestDataDoc path = do
@@ -5227,7 +5241,38 @@ unitTests = do
          let expected = "1:2-3:4"
          assertBool (unwords ["expected to find range", expected, "in diagnostic", shown]) $
              expected `isInfixOf` shown
+     , testCase "notification handlers run sequentially" $ do
+        orderRef <- newIORef []
+        let plugins = pluginDescToIdePlugins $
+                [ (defaultPluginDescriptor $ fromString $ show i)
+                    { pluginNotificationHandlers = mconcat
+                        [ mkPluginNotificationHandler LSP.STextDocumentDidOpen $ \_ _ _ ->
+                            liftIO $ atomicModifyIORef_ orderRef (i:)
+                        ]
+                    }
+                    | i <- [(1::Int)..20]
+                ] ++ Ghcide.descriptors
+
+        testIde def{argsHlsPlugins = plugins} $ do
+            _ <- createDoc "haskell" "A.hs" "module A where"
+            waitForProgressDone
+            actualOrder <- liftIO $ readIORef orderRef
+
+            liftIO $ actualOrder @?= reverse [(1::Int)..20]
      ]
+
+testIde :: Arguments -> Session () -> IO ()
+testIde arguments session = do
+    config <- getConfigFromEnv
+    (hInRead, hInWrite) <- createPipe
+    (hOutRead, hOutWrite) <- createPipe
+    let server = IDE.defaultMain arguments
+            { argsHandleIn = pure hInRead
+            , argsHandleOut = pure hOutWrite
+            }
+
+    withAsync server $ \_ ->
+        runSessionWithHandles hInWrite hOutRead config lspTestCaps "." session
 
 positionMappingTests :: TestTree
 positionMappingTests =
