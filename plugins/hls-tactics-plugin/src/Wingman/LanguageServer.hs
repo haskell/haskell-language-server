@@ -394,8 +394,7 @@ wingmanRules = do
   define $ \WriteDiagnostics nfp -> do
     x <- use GetParsedModule nfp
     case x of
-      Nothing -> do
-        traceMX "no diagnostics" x
+      Nothing ->
         pure ([], Nothing)
       Just pm -> do
         let holes :: [Range]
@@ -415,17 +414,20 @@ wingmanRules = do
                     maybeToList $ srcSpanToRange span
                   (_ :: LHsExpr GhcPs) -> mempty
                 ) $ pm_parsed_source pm
-        traceMX "adding diagnostics" $ holes
         pure $ (fmap (\r -> (nfp, ShowDiag, mkDiagnostic r)) holes, Just ())
+
+  action $ do
+    files <- getFilesOfInterest
+    void $ uses WriteDiagnostics $ Map.keys files
 
 
 mkDiagnostic :: Range -> Diagnostic
 mkDiagnostic r =
   Diagnostic r
-    (Just DsError)
-    (Just $ InR "wingmanhole")
+    (Just DsInfo)
+    (Just $ InR "hole")
     (Just "wingman")
     "Hole"
-    Nothing
+    (Just $ List [DtUnnecessary])
     Nothing
 
