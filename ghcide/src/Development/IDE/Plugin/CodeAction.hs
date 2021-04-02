@@ -117,7 +117,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
       actions =
         [ mkCA title kind isPreferred [x] edit
         | x <- xs, (title, kind, isPreferred, tedit) <- suggestAction $ CodeActionArgs exportsMap ideOptions parsedModule text df annotatedPS tcM har bindings gblSigs x
-        , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing
+        , let edit = WorkspaceEdit (Just $ Map.singleton uri $ List tedit) Nothing Nothing
         ]
       actions' = caRemoveRedundantImports parsedModule text diag xs uri
                <> actions
@@ -126,7 +126,7 @@ codeAction state _ (CodeActionParams _ _ (TextDocumentIdentifier uri) _range Cod
 
 mkCA :: T.Text -> Maybe CodeActionKind -> Maybe Bool -> [Diagnostic] -> WorkspaceEdit -> (Command |? CodeAction)
 mkCA title kind isPreferred diags edit =
-  InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing
+  InR $ CodeAction title kind (Just $ List diags) isPreferred Nothing (Just edit) Nothing Nothing
 
 suggestAction :: CodeActionArgs -> GhcideCodeActions
 suggestAction caa =
@@ -282,6 +282,7 @@ caRemoveRedundantImports m contents digs ctxDigs uri
     removeSingle title tedit diagnostic = mkCA title (Just CodeActionQuickFix) Nothing [diagnostic] WorkspaceEdit{..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _documentChanges = Nothing
+        _changeAnnotations = Nothing
     removeAll tedit = InR $ CodeAction{..} where
         _changes = Just $ Map.singleton uri $ List tedit
         _title = "Remove all redundant imports"
@@ -292,6 +293,8 @@ caRemoveRedundantImports m contents digs ctxDigs uri
         _isPreferred = Nothing
         _command = Nothing
         _disabled = Nothing
+        _xdata = Nothing
+        _changeAnnotations = Nothing
 
 caRemoveInvalidExports :: Maybe ParsedModule -> Maybe T.Text -> [Diagnostic] -> [Diagnostic] -> Uri -> [Command |? CodeAction]
 caRemoveInvalidExports m contents digs ctxDigs uri
@@ -328,6 +331,8 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _command = Nothing
         _isPreferred = Nothing
         _disabled = Nothing
+        _xdata = Nothing
+        _changeAnnotations = Nothing
     removeAll [] = Nothing
     removeAll ranges = Just $ InR $ CodeAction{..} where
         tedit = concatMap (\r -> [TextEdit r ""]) ranges
@@ -340,6 +345,8 @@ caRemoveInvalidExports m contents digs ctxDigs uri
         _command = Nothing
         _isPreferred = Nothing
         _disabled = Nothing
+        _xdata = Nothing
+        _changeAnnotations = Nothing
 
 suggestRemoveRedundantExport :: ParsedModule -> Diagnostic -> Maybe (T.Text, [Range])
 suggestRemoveRedundantExport ParsedModule{pm_parsed_source = L _ HsModule{..}} Diagnostic{..}

@@ -83,6 +83,7 @@ rewriteToWEdit dflags uri anns r = do
     WorkspaceEdit
       { _changes = Just (fromList [(uri, List edits)])
       , _documentChanges = Nothing
+      , _changeAnnotations = Nothing
       }
 
 ------------------------------------------------------------------------------

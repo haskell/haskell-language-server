@@ -261,13 +261,15 @@ provide tc name TacticProviderData{..} = do
     $ pure
     $ InR
     $ CodeAction
-        title
-        (Just $ mkTacticKind tc)
-        Nothing
-        (Just $ tacticPreferred tc)
-        Nothing
-        Nothing
-    $ Just cmd
+        { _title       = title
+        , _kind        = Just $ mkTacticKind tc
+        , _diagnostics = Nothing
+        , _isPreferred = Just $ tacticPreferred tc
+        , _disabled    = Nothing
+        , _edit        = Nothing
+        , _command     = Just cmd
+        , _xdata       = Nothing
+        }
 
 
 ------------------------------------------------------------------------------
