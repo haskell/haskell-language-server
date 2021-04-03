@@ -188,7 +188,7 @@ exitHandler :: IO () -> LSP.Handlers (ServerM c)
 exitHandler exit = LSP.notificationHandler SExit $ const $ do
     (_, ide) <- ask
     -- flush out the Shake session to record a Shake profile if applicable
-    liftIO $ restartShakeSession (shakeExtras ide) []
+    liftIO $ shakeShut ide
     liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
