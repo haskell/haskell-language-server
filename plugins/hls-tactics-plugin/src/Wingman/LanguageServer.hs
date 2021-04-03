@@ -154,19 +154,14 @@ judgementForHole state nfp range features = do
   case unTrack asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
     HAR _ (cautiousCopyAge asts -> hf) _ _ HieFresh -> do
-      range' <- liftMaybe $ fromCurrentRange amapping range
-      TrackedStale old_binds bmapping <- runStaleIde state nfp GetBindings
-      TrackedStale old_tcmod tcmmapping <- fmap (fmap tmrTypechecked)
-                                        $ runStaleIde state nfp TypeCheck
-      binds <- liftMaybe $ mapPositionsToCurrent bmapping old_binds
-      tcmod <- liftMaybe $ mapPositionsToCurrent tcmmapping old_tcmod
+      range' <- liftMaybe $ mapAgeFrom amapping range
+      binds <- runStaleIde state nfp GetBindings
+      tcmod <- fmap (fmap tmrTypechecked)
+             $ runStaleIde state nfp TypeCheck
 
-      (old_rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
-      new_rss <- liftMaybe
-              $ fmap cautiousToCurrent
-              $ mapRangeOfRealSrcSpan (unsafeToCurrentRange amapping)
-              $ unTrack old_rss
-      let (jdg, ctx) = mkJudgementAndContext features g binds new_rss tcmod
+      (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+      new_rss <- liftMaybe $ mapAgeTo amapping rss
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext features g binds new_rss tcmod
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
 
@@ -174,28 +169,33 @@ judgementForHole state nfp range features = do
 mkJudgementAndContext
     :: FeatureSet
     -> Type
-    -> Tracked age Bindings
-    -> Tracked age RealSrcSpan
-    -> Tracked age TcGblEnv
-    -> (Judgement, Context)
-mkJudgementAndContext features g binds rss tcg = do
-      let tcs = fmap tcg_binds tcg
-          ctx = mkContext features
-                  (mapMaybe (sequenceA . (occName *** coerce))
-                    $ getDefiningBindings (unTrack binds) $ unTrack rss)
-                  (unTrack tcg)
-          top_provs = getRhsPosVals rss tcs
-          local_hy = spliceProvenance top_provs
-                   $ hypothesisFromBindings rss binds
-          evidence = getEvidenceAtHole (fmap RealSrcSpan rss) tcs
-          cls_hy = foldMap evidenceToHypothesis evidence
-          subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
-       in ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
-              (local_hy <> cls_hy)
-              (isRhsHole rss tcs)
-              g
-          , ctx
-          )
+    -> TrackedStale Bindings
+    -> Tracked 'Current RealSrcSpan
+    -> TrackedStale TcGblEnv
+    -> Maybe (Judgement, Context)
+mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) = do
+  binds_rss <- mapAgeFrom bmap rss
+  tcg_rss <- mapAgeFrom tcgmap rss
+
+  let tcs = fmap tcg_binds tcg
+      ctx = mkContext features
+              (mapMaybe (sequenceA . (occName *** coerce))
+                $ unTrack
+                $ getDefiningBindings <$> binds <*> binds_rss)
+              (unTrack tcg)
+      top_provs = getRhsPosVals tcg_rss tcs
+      local_hy = spliceProvenance top_provs
+                $ hypothesisFromBindings binds_rss binds
+      evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
+      cls_hy = foldMap evidenceToHypothesis evidence
+      subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+  pure
+    ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+          (local_hy <> cls_hy)
+          (isRhsHole tcg_rss tcs)
+          g
+    , ctx
+    )
 
 
 getSpanAndTypeAtHole
