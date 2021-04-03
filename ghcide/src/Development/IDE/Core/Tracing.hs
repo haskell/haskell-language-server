@@ -6,7 +6,10 @@ module Development.IDE.Core.Tracing
     , startTelemetry
     , measureMemory
     , getInstrumentCached
-    ,otTracedProvider,otSetUri)
+    , otTracedProvider
+    , otSetUri
+    , isTracingEnabled
+    )
 where
 
 import           Control.Concurrent.Async       (Async, async)
@@ -58,14 +61,15 @@ otTracedHandler
     -> (SpanInFlight -> m a)
     -> m a
 otTracedHandler requestType label act =
-  let !name =
-        if null label
-          then requestType
-          else requestType <> ":" <> show label
-   -- Add an event so all requests can be quickly seen in the viewer without searching
-   in do
-     runInIO <- askRunInIO
-     liftIO $ withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> runInIO (act sp))
+  | isTracingEnabled = do
+    let !name =
+            if null label
+            then requestType
+            else requestType <> ":" <> show label
+    -- Add an event so all requests can be quickly seen in the viewer without searching
+    runInIO <- askRunInIO
+    liftIO $ withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> runInIO (act sp))
+  | otherwise = act
 
 otSetUri :: SpanInFlight -> Uri -> IO ()
 otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
@@ -106,11 +110,13 @@ otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 #else
 otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
 #endif
-otTracedProvider (PluginId pluginName) provider act = do
-  runInIO <- askRunInIO
-  liftIO $ withSpan (provider <> " provider") $ \sp -> do
-    setTag sp "plugin" (encodeUtf8 pluginName)
-    runInIO act
+otTracedProvider (PluginId pluginName) provider act
+  | isTracingEnabled = do
+    runInIO <- askRunInIO
+    liftIO $ withSpan (provider <> " provider") $ \sp -> do
+        setTag sp "plugin" (encodeUtf8 pluginName)
+        runInIO act
+  | otherwise = act
 
 startTelemetry :: Bool -> Logger -> Var Values -> IO ()
 startTelemetry allTheTime logger stateRef = do
