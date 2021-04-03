@@ -396,7 +396,11 @@ wingmanRules :: PluginId -> Rules ()
 wingmanRules plId = do
   define $ \WriteDiagnostics nfp -> do
     cfg <- flip configForPlugin plId <$> getClientConfigAction def
-    let severity = useProperty #hole_severity properties $ Just $ Plugin.plcConfig cfg
+    let severity = useProperty #hole_severity properties
+#if __GLASGOW_HASKELL__ <= 808
+                 $ Just
+#endif
+                 $ Plugin.plcConfig cfg
     x <- use GetParsedModule nfp
     case x of
       Nothing ->
