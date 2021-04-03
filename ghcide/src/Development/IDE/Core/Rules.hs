@@ -861,8 +861,9 @@ isHiFileStableRule = defineEarlyCutoff $ RuleNoDiagnostics $ \IsHiFileStable f -
     ms <- msrModSummary <$> use_ GetModSummaryWithoutTimestamps f
     let hiFile = toNormalizedFilePath'
                 $ ml_hi_file $ ms_location ms
-    mbHiVersion <- use  GetModificationTime_{missingFileDiagnostics=False} hiFile
-    modVersion  <- use_ GetModificationTime f
+    (mbHiVersion, Just modVersion) <- applyConcurrently $ (,)
+        <$> useConcurrently GetModificationTime_{missingFileDiagnostics=False} hiFile
+        <*> useConcurrently GetModificationTime f
     sourceModified <- case mbHiVersion of
         Nothing -> pure SourceModified
         Just x ->

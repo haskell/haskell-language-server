@@ -33,6 +33,7 @@ module Development.IDE.Core.Shake(
     shakeEnqueue,
     shakeProfile,
     use, useNoFile, uses, useWithStaleFast, useWithStaleFast', delayedAction,
+    useConcurrently,
     FastResult(..),
     use_, useNoFile_, uses_,
     useWithStale, usesWithStale,
@@ -837,6 +838,9 @@ usesWithStale_ key files = do
     case sequence res of
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
         Just v  -> return v
+
+useConcurrently :: IdeRule k v => k -> NormalizedFilePath -> Apply (Maybe v)
+useConcurrently key file = (\(A value) -> currentValue value) <$> apply' (Q (key,file))
 
 newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
     deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
