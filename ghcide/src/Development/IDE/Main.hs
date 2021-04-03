@@ -81,20 +81,20 @@ import           System.Time.Extra                     (offsetTime,
 import           Text.Printf                           (printf)
 
 data Arguments = Arguments
-    { argsOTMemoryProfiling :: Bool
-    , argFiles :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
-    , argsLogger :: IO Logger
-    , argsRules :: Rules ()
-    , argsHlsPlugins :: IdePlugins IdeState
-    , argsGhcidePlugin :: Plugin Config  -- ^ Deprecated
+    { argsOTMemoryProfiling     :: Bool
+    , argFiles                  :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
+    , argsLogger                :: IO Logger
+    , argsRules                 :: Rules ()
+    , argsHlsPlugins            :: IdePlugins IdeState
+    , argsGhcidePlugin          :: Plugin Config  -- ^ Deprecated
     , argsSessionLoadingOptions :: SessionLoadingOptions
-    , argsIdeOptions :: Config -> Action IdeGhcSession -> IdeOptions
-    , argsLspOptions :: LSP.Options
-    , argsDefaultHlsConfig :: Config
-    , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
-    , argsDebouncer :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
-    , argsHandleIn :: IO Handle
-    , argsHandleOut :: IO Handle
+    , argsIdeOptions            :: Config -> Action IdeGhcSession -> IdeOptions
+    , argsLspOptions            :: LSP.Options
+    , argsDefaultHlsConfig      :: Config
+    , argsGetHieDbLoc           :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
+    , argsDebouncer             :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
+    , argsHandleIn              :: IO Handle
+    , argsHandleOut             :: IO Handle
     }
 
 instance Default Arguments where
@@ -145,7 +145,7 @@ defaultMain Arguments{..} = do
     let hlsPlugin = asGhcIdePlugin argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
-        options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
+        options = argsLspOptions { LSP.executeCommandCommands = LSP.executeCommandCommands argsLspOptions <> Just hlsCommands }
         argsOnConfigChange = getConfigFromNotification
         rules = argsRules >> pluginRules plugins
 
