@@ -141,7 +141,12 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
-            _ <- flip forkFinally (const exitClientMsg) $ runWithDb dbLoc $ \hiedb hieChan -> do
+            let handleServerException (Left e) = do
+                    logError (ideLogger ide) $
+                        T.pack $ "Fatal error in server thread: " <> show e
+                    exitClientMsg
+                handleServerException _ = pure ()
+            _ <- flip forkFinally handleServerException $ runWithDb dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
                 msg <- readChan clientMsgChan
@@ -188,7 +193,7 @@ exitHandler :: IO () -> LSP.Handlers (ServerM c)
 exitHandler exit = LSP.notificationHandler SExit $ const $ do
     (_, ide) <- ask
     -- flush out the Shake session to record a Shake profile if applicable
-    liftIO $ restartShakeSession (shakeExtras ide) []
+    liftIO $ shakeShut ide
     liftIO exit
 
 modifyOptions :: LSP.Options -> LSP.Options
