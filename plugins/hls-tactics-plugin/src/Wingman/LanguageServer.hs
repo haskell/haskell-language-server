@@ -37,7 +37,7 @@ import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds)
+import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
@@ -155,14 +155,20 @@ judgementForHole state nfp range features = do
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
     HAR _ (cautiousCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ fromCurrentRange amapping range
-      TrackedStale binds bmapping <- runStaleIde state nfp GetBindings
-      TrackedStale tcmod tcmmapping <- runStaleIde state nfp TypeCheck
+      TrackedStale old_binds bmapping <- runStaleIde state nfp GetBindings
+      TrackedStale old_tcmod tcmmapping <- fmap (fmap tmrTypechecked)
+                                        $ runStaleIde state nfp TypeCheck
+      binds <- liftMaybe $ mapPositionsToCurrent bmapping old_binds
+      tcmod <- liftMaybe $ mapPositionsToCurrent tcmmapping old_tcmod
 
-      (rss, g)   <- liftMaybe $ getSpanAndTypeAtHole range' hf
-      resulting_range <- liftMaybe $ toCurrentRange amapping $ fmap realSrcSpanToRange rss
-      let (jdg, ctx) = mkJudgementAndContext features g binds rss tcmod
+      (old_rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+      new_rss <- liftMaybe
+              $ fmap cautiousToCurrent
+              $ mapRangeOfRealSrcSpan (unsafeToCurrentRange amapping)
+              $ unTrack old_rss
+      let (jdg, ctx) = mkJudgementAndContext features g binds new_rss tcmod
       dflags <- getIdeDynflags state nfp
-      pure (resulting_range, jdg, ctx, dflags)
+      pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
 
 
 mkJudgementAndContext
@@ -170,11 +176,10 @@ mkJudgementAndContext
     -> Type
     -> Tracked age Bindings
     -> Tracked age RealSrcSpan
-    -> Tracked age TcModuleResult
+    -> Tracked age TcGblEnv
     -> (Judgement, Context)
-mkJudgementAndContext features g binds rss tcmod = do
-      let tcg = fmap tmrTypechecked tcmod
-          tcs = fmap tcg_binds tcg
+mkJudgementAndContext features g binds rss tcg = do
+      let tcs = fmap tcg_binds tcg
           ctx = mkContext features
                   (mapMaybe (sequenceA . (occName *** coerce))
                     $ getDefiningBindings (unTrack binds) $ unTrack rss)
@@ -397,3 +402,4 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
 showLspMessage = sendNotification SWindowShowMessage
+

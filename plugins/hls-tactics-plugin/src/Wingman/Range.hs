@@ -13,6 +13,7 @@ import           Development.IDE hiding (rangeToRealSrcSpan)
 import qualified Development.IDE.Core.PositionMapping as P
 import qualified FastString as FS
 import           SrcLoc
+import Generics.SYB
 
 
 
@@ -50,6 +51,10 @@ data TrackedStale a where
       -> PositionMapping s
       -> TrackedStale a
 
+instance Functor TrackedStale where
+  fmap f (TrackedStale t pm) = TrackedStale (fmap f t) pm
+
+
 
 cautiousToCurrent :: age ->  Tracked 'Current age
 cautiousToCurrent = coerce
@@ -74,4 +79,27 @@ toCurrentRange
     -> Tracked (Stale s) Range
     -> Maybe (Tracked 'Current Range)
 toCurrentRange = coerce P.toCurrentRange
+
+unsafeToCurrentRange :: PositionMapping s -> Range -> Maybe Range
+unsafeToCurrentRange = coerce P.toCurrentRange
+
+
+mapRangeOfRealSrcSpan :: Functor f => (Range -> f Range) -> RealSrcSpan -> f RealSrcSpan
+mapRangeOfRealSrcSpan f rss
+  = fmap (rangeToRealSrcSpan $ FS.unpackFS $ srcSpanFile rss)
+  . f
+  $ realSrcSpanToRange rss
+
+
+mapPositionsToCurrent
+    :: Data a
+    => PositionMapping s
+    -> Tracked (Stale s) a
+    -> Maybe (Tracked Current a)
+mapPositionsToCurrent (PositionMapping am) (Tracked t)
+  = fmap Tracked
+  $ everywhereM
+    (        mkM (P.toCurrentRange am)
+      `extM` (mapRangeOfRealSrcSpan (P.toCurrentRange am))
+    ) t
 
