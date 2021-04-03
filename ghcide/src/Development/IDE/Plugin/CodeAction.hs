@@ -1557,10 +1557,13 @@ importStyles IdentInfo {parent, rendered, isDatacon}
   | otherwise
   = ImportTopLevel rendered :| []
 
+-- | Used for adding new imports
 renderImportStyle :: ImportStyle -> T.Text
-renderImportStyle (ImportTopLevel x)    = x
+renderImportStyle (ImportTopLevel x)   = x
+renderImportStyle (ImportViaParent x p@(T.uncons -> Just ('(', _))) = "type " <> p <> "(" <> x <> ")"
 renderImportStyle (ImportViaParent x p) = p <> "(" <> x <> ")"
 
+-- | Used for extending import lists
 unImportStyle :: ImportStyle -> (Maybe String, String)
 unImportStyle (ImportTopLevel x)    = (Nothing, T.unpack x)
 unImportStyle (ImportViaParent x y) = (Just $ T.unpack y, T.unpack x)
