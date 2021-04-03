@@ -141,9 +141,11 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             logInfo (ideLogger ide) $ T.pack $ "Registering ide configuration: " <> show initConfig
             registerIdeConfiguration (shakeExtras ide) initConfig
 
-            let handleServerException e = do
-                    logError (ideLogger ide) (T.pack $ "Unexpected exception in server thread: " <> show e)
+            let handleServerException (Left e) = do
+                    logError (ideLogger ide) $
+                        T.pack $ "Fatal error in server thread: " <> show e
                     exitClientMsg
+                handleServerException _ = pure ()
             _ <- flip forkFinally handleServerException $ runWithDb dbLoc $ \hiedb hieChan -> do
               putMVar dbMVar (hiedb,hieChan)
               forever $ do
