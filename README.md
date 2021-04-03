@@ -809,3 +809,4 @@ This will typically provide instructions for how to support new languages.
 
 In some cases you may need to write a small bit of additional client support, or expose a way for the user to set the server's [configuration options](#configuring-haskell-language-server) and
 for them to configure how the server is started.
+
