@@ -14,6 +14,7 @@ import qualified Development.IDE.Core.PositionMapping as P
 import qualified FastString as FS
 import           SrcLoc
 import Generics.SYB
+import Data.Functor.Identity (Identity(Identity))
 
 
 
@@ -38,6 +39,7 @@ newtype Tracked (age :: Age) a  = Tracked
   }
   deriving stock Functor
   deriving newtype (Eq, Ord, Show, Read, ToJSON, FromJSON, NFData)
+  deriving Applicative via Identity
 
 
 newtype PositionMapping s = PositionMapping
