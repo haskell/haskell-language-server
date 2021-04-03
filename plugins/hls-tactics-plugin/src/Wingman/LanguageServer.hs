@@ -416,7 +416,7 @@ wingmanRules plId = do
                   L span (HsUnboundVar _ (TrueExprHole occ))
                     | isHole occ ->
                         maybeToList $ srcSpanToRange span
-#if __GLASGOW_HASKELL__ <= 808
+#if __GLASGOW_HASKELL__ <= 810
                   L span (EWildPat _) ->
                     maybeToList $ srcSpanToRange span
 #endif
