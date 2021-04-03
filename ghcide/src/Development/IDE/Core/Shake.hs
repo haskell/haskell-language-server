@@ -43,6 +43,7 @@ module Development.IDE.Core.Shake(
     defineEarlyCutoff,
     defineOnDisk, needOnDisk, needOnDisks,
     getDiagnostics,
+    getDiagnosticsAction,
     mRunLspT, mRunLspTCallback,
     getHiddenDiagnostics,
     IsIdeGlobal, addIdeGlobal, addIdeGlobalExtras, getIdeGlobalState, getIdeGlobalAction,
@@ -772,6 +773,13 @@ getDiagnostics :: IdeState -> IO [FileDiagnostic]
 getDiagnostics IdeState{shakeExtras = ShakeExtras{diagnostics}} = do
     val <- readVar diagnostics
     return $ getAllDiagnostics val
+
+getDiagnosticsAction :: Action [FileDiagnostic]
+getDiagnosticsAction = do
+    extra <- getShakeExtras
+    liftIO $ do
+      val <- readVar $ diagnostics extra
+      pure $ getAllDiagnostics val
 
 getHiddenDiagnostics :: IdeState -> IO [FileDiagnostic]
 getHiddenDiagnostics IdeState{shakeExtras = ShakeExtras{hiddenDiagnostics}} = do
