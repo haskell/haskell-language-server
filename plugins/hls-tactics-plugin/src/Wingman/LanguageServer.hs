@@ -397,7 +397,7 @@ wingmanRules plId = do
   define $ \WriteDiagnostics nfp -> do
     cfg <- flip configForPlugin plId <$> getClientConfigAction def
     let severity = useProperty #hole_severity properties
-#if __GLASGOW_HASKELL__ <= 808
+#if __GLASGOW_HASKELL__ <= 810
                  $ Just
 #endif
                  $ Plugin.plcConfig cfg
@@ -416,7 +416,7 @@ wingmanRules plId = do
                   L span (HsUnboundVar _ (TrueExprHole occ))
                     | isHole occ ->
                         maybeToList $ srcSpanToRange span
-#if __GLASGOW_HASKELL__ <= 810
+#if __GLASGOW_HASKELL__ <= 808
                   L span (EWildPat _) ->
                     maybeToList $ srcSpanToRange span
 #endif
