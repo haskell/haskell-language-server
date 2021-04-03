@@ -60,7 +60,7 @@ otTracedHandler
     -> String -- ^ Message label
     -> (SpanInFlight -> m a)
     -> m a
-otTracedHandler requestType label act =
+otTracedHandler requestType label act
   | isTracingEnabled = do
     let !name =
             if null label
