@@ -46,7 +46,7 @@ import           Ide.Types                      (PluginId (..))
 import           Language.LSP.Types             (NormalizedFilePath,
                                                  fromNormalizedFilePath)
 import           Numeric.Natural                (Natural)
-import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight,
+import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight (..),
                                                  Synchronicity (Asynchronous),
                                                  addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
@@ -69,7 +69,7 @@ otTracedHandler requestType label act
     -- Add an event so all requests can be quickly seen in the viewer without searching
     runInIO <- askRunInIO
     liftIO $ withSpan (fromString name) (\sp -> addEvent sp "" (fromString $ name <> " received") >> runInIO (act sp))
-  | otherwise = act
+  | otherwise = act (SpanInFlight 0)
 
 otSetUri :: SpanInFlight -> Uri -> IO ()
 otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
