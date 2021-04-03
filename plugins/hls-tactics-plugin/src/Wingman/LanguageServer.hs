@@ -185,7 +185,7 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
               (unTrack tcg)
       top_provs = getRhsPosVals tcg_rss tcs
       local_hy = spliceProvenance top_provs
-                $ hypothesisFromBindings binds_rss binds
+               $ hypothesisFromBindings binds_rss binds
       evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
