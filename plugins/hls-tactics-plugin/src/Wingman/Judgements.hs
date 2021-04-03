@@ -17,13 +17,14 @@ import           OccName
 import           SrcLoc
 import           Type
 import           Wingman.GHC (algebraicTyCon)
+import           Wingman.Range (Tracked(..))
 import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
 -- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
-hypothesisFromBindings :: RealSrcSpan -> Bindings -> Hypothesis CType
-hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
+hypothesisFromBindings :: Tracked age RealSrcSpan -> Tracked age Bindings -> Hypothesis CType
+hypothesisFromBindings (unTrack -> span) (unTrack -> bs) = buildHypothesis $ getLocalScope bs span
 
 
 ------------------------------------------------------------------------------

@@ -13,9 +13,9 @@ import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Bifunctor (first)
+import           Data.Data
 import           Data.Foldable (for_)
 import           Data.Maybe
-import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import           Development.IDE.Core.Shake (IdeState (..))
 import           Development.IDE.GHC.Compat
@@ -39,21 +39,22 @@ import           Wingman.Types
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-    { pluginCommands
-        = fmap (\tc ->
-            PluginCommand
-              (tcCommandId tc)
-              (tacticDesc $ tcCommandName tc)
-              (tacticCmd (commandTactic tc) plId))
-              [minBound .. maxBound]
-    , pluginHandlers =
-        mkPluginHandler STextDocumentCodeAction codeActionProvider
-    , pluginCustomConfig =
-        mkCustomConfig properties
-    }
+  { pluginCommands
+      = fmap (\tc ->
+          PluginCommand
+            (tcCommandId tc)
+            (tacticDesc $ tcCommandName tc)
+            (tacticCmd (commandTactic tc) plId))
+            [minBound .. maxBound]
+  , pluginHandlers =
+      mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginCustomConfig =
+      mkCustomConfig properties
+  }
+
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
+codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) (cautiousToCurrent -> range) _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
@@ -88,8 +89,8 @@ tacticCmd tac pId state (TacticParams uri range var_name)
       ccs <- getClientCapabilities
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
-        let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
-        pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
+        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
+        pm <- runStaleIde state nfp GetAnnotatedParsedSource
 
         timingOut 2e8 $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
@@ -98,7 +99,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkWorkspaceEdits span dflags ccs uri pm rtr
+                _ -> pure $ mkWorkspaceEdits (unTrack span) dflags ccs uri pm rtr
 
       case res of
         Nothing -> do

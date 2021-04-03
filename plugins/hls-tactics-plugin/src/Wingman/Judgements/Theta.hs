@@ -25,6 +25,7 @@ import           TcEvidence
 import           TcType (tcTyConAppTyCon_maybe)
 import           TysPrim (eqPrimTyCon)
 import           Wingman.Machinery
+import           Wingman.Range (Tracked(..))
 import           Wingman.Types
 
 
@@ -50,11 +51,12 @@ mkEvidence _ = Nothing
 
 ------------------------------------------------------------------------------
 -- | Compute all the 'Evidence' implicitly bound at the given 'SrcSpan'.
-getEvidenceAtHole :: SrcSpan -> LHsBinds GhcTc -> [Evidence]
-getEvidenceAtHole dst
+getEvidenceAtHole :: Tracked age SrcSpan -> Tracked age (LHsBinds GhcTc) -> [Evidence]
+getEvidenceAtHole (unTrack -> dst)
   = mapMaybe mkEvidence
   . (everything (<>) $
         mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
+  . unTrack
 
 
 ------------------------------------------------------------------------------
