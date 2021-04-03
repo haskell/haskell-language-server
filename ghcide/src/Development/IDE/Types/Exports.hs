@@ -56,21 +56,30 @@ instance NFData IdentInfo where
         -- deliberately skip the rendered field
         rnf name `seq` rnf parent `seq` rnf isDatacon `seq` rnf moduleNameText
 
+-- | Render an identifier as imported or exported style.
+-- TODO: pattern synonym
+renderIEWrapped :: Name -> Text
+renderIEWrapped n
+  | isTcOcc occ && isSymOcc occ = "type " <> pack (printName n)
+  | otherwise = pack $ printName n
+  where
+    occ = occName n
+
 mkIdentInfos :: Text -> AvailInfo -> [IdentInfo]
 mkIdentInfos mod (Avail n) =
-    [IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n) mod]
+    [IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) Nothing (isDataConName n) mod]
 mkIdentInfos mod (AvailTC parent (n:nn) flds)
     -- Following the GHC convention that parent == n if parent is exported
     | n == parent
-    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) (Just $! parentP) (isDataConName n) mod
+    = [ IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) (Just $! parentP) (isDataConName n) mod
         | n <- nn ++ map flSelector flds
       ] ++
-      [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n) mod]
+      [ IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) Nothing (isDataConName n) mod]
     where
         parentP = pack $ printName parent
 
 mkIdentInfos mod (AvailTC _ nn flds)
-    = [ IdentInfo (pack (prettyPrint n)) (pack (printName n)) Nothing (isDataConName n) mod
+    = [ IdentInfo (pack (prettyPrint n)) (renderIEWrapped n) Nothing (isDataConName n) mod
         | n <- nn ++ map flSelector flds
       ]
 
