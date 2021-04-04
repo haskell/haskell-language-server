@@ -848,31 +848,39 @@ suggestImportDisambiguation df (Just txt) ps@(L _ HsModule {hsmodImports}) diag@
         toModuleTarget mName = ExistingImp <$> Map.lookup mName locDic
         parensed =
             "(" `T.isPrefixOf` T.strip (textInRange _range txt)
+        -- > removeAllDuplicates [1, 1, 2, 3, 2] = [3]
+        removeAllDuplicates = map head . filter ((==1) <$> length) . group . sort
+        hasDuplicate xs = length xs /= length (S.fromList xs)
         suggestions symbol mods
-            | Just targets <- mapM toModuleTarget mods =
-                sortOn fst
-                [ ( renderUniquify mode modNameText symbol
-                  , disambiguateSymbol ps diag symbol mode
-                  )
-                | (modTarget, restImports) <- oneAndOthers targets
-                , let modName = targetModuleName modTarget
-                      modNameText = T.pack $ moduleNameString modName
-                , mode <-
-                    HideOthers restImports :
-                    [ ToQualified parensed qual
-                    | ExistingImp imps <- [modTarget]
-                    , L _ qual <- nubOrd $ mapMaybe (ideclAs . unLoc)
-                        $ NE.toList imps
-                    ]
-                    ++ [ToQualified parensed modName
-                        | any (occursUnqualified symbol . unLoc)
-                            (targetImports modTarget)
-                        || case modTarget of
-                            ImplicitPrelude{} -> True
-                            _                 -> False
-                        ]
+          | hasDuplicate mods = case mapM toModuleTarget (removeAllDuplicates mods) of
+                                  Just targets -> suggestionsImpl symbol (map (, []) targets)
+                                  Nothing      -> []
+          | otherwise         = case mapM toModuleTarget mods of
+                                  Just targets -> suggestionsImpl symbol (oneAndOthers targets)
+                                  Nothing      -> []
+        suggestionsImpl symbol targetsWithRestImports = 
+            sortOn fst
+            [ ( renderUniquify mode modNameText symbol
+              , disambiguateSymbol ps diag symbol mode
+              )
+            | (modTarget, restImports) <- targetsWithRestImports
+            , let modName = targetModuleName modTarget
+                  modNameText = T.pack $ moduleNameString modName
+            , mode <-
+                [ ToQualified parensed qual
+                | ExistingImp imps <- [modTarget]
+                , L _ qual <- nubOrd $ mapMaybe (ideclAs . unLoc)
+                    $ NE.toList imps
                 ]
-            | otherwise = []
+                ++ [ToQualified parensed modName
+                    | any (occursUnqualified symbol . unLoc)
+                        (targetImports modTarget)
+                    || case modTarget of
+                        ImplicitPrelude{} -> True
+                        _                 -> False
+                    ]
+                ++ [HideOthers restImports | not (null restImports)]
+            ]
         renderUniquify HideOthers {} modName symbol =
             "Use " <> modName <> " for " <> symbol <> ", hiding other imports"
         renderUniquify (ToQualified _ qual) _ symbol =
