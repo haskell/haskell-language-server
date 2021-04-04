@@ -1,6 +1,16 @@
 {-# LANGUAGE NoApplicativeDo #-}
 {-# LANGUAGE TypeFamilies    #-}
-module Development.IDE.Core.Actions where
+module Development.IDE.Core.Actions
+( getAtPoint
+, getDefinition
+, getTypeDefinition
+, highlightAtPoint
+, refsAtPoint
+, useE
+, useNoFileE
+, usesE
+, workspaceSymbols
+) where
 
 import           Control.Monad.Reader
 import           Control.Monad.Trans.Maybe
