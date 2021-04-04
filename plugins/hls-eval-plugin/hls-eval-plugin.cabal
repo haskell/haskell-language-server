@@ -19,11 +19,11 @@ build-type:         Simple
 extra-source-files:
   LICENSE
   README.md
-  test/testdata/*.yaml
-  test/testdata/*.hs
-  test/testdata/*.expected
-  test/testdata/*.lhs
   test/testdata/*.cabal
+  test/testdata/*.expected
+  test/testdata/*.hs
+  test/testdata/*.lhs
+  test/testdata/*.yaml
 
 flag pedantic
   description: Enable -Werror
@@ -53,7 +53,7 @@ library
     , base                  >=4.12    && <5
     , containers
     , deepseq
-    , Diff
+    , Diff                  ^>=0.4.0
     , directory
     , dlist
     , extra
@@ -111,7 +111,6 @@ test-suite tests
   build-tool-depends: hls-eval-plugin:test-server -any
   hs-source-dirs:     test
   main-is:            Main.hs
-
   build-depends:
     , aeson
     , base
