@@ -19,7 +19,7 @@ library
                      , Env
                      , Help
   build-depends:       base >= 4.9 && < 5
-                     , shake >= 0.16.4 && < 0.19
+                     , shake >=0.17.5
                      , directory
                      , filepath
                      , extra
