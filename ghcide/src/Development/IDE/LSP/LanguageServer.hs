@@ -12,9 +12,6 @@ module Development.IDE.LSP.LanguageServer
     ( runLanguageServer
     ) where
 
-import           Control.Concurrent.Extra              (newBarrier,
-                                                        signalBarrier,
-                                                        waitBarrier)
 import           Control.Concurrent.STM
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -56,12 +53,11 @@ runLanguageServer
     -> IO ()
 runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChange userHandlers getIdeState = do
 
-    -- These barriers are signaled when the threads reading from these chans exit.
-    -- This should not happen but if it does, we will make sure that the whole server
-    -- dies and can be restarted instead of losing threads silently.
-    clientMsgBarrier <- newBarrier
+    -- This MVar becomes full when the server thread exits or we receive exit message from client.
+    -- LSP loop will be canceled when it's full.
+    clientMsgVar <- newEmptyMVar
     -- Forcefully exit
-    let exit = signalBarrier clientMsgBarrier ()
+    let exit = void $ tryPutMVar clientMsgVar ()
 
     -- The set of requests ids that we have received but not finished processing
     pendingRequests <- newTVarIO Set.empty
@@ -116,7 +112,7 @@ runLanguageServer options inH outH getHieDbLoc defaultConfig onConfigurationChan
             inH
             outH
             serverDefinition
-        , void $ waitBarrier clientMsgBarrier
+        , void $ readMVar clientMsgVar
         ]
 
     where
@@ -192,6 +188,7 @@ cancelHandler cancelRequest = LSP.notificationHandler SCancelRequest $ \Notifica
 exitHandler :: IO () -> LSP.Handlers (ServerM c)
 exitHandler exit = LSP.notificationHandler SExit $ const $ do
     (_, ide) <- ask
+    liftIO $ logDebug (ideLogger ide) "Received exit message"
     -- flush out the Shake session to record a Shake profile if applicable
     liftIO $ shakeShut ide
     liftIO exit
