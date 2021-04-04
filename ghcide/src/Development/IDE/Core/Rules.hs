@@ -139,6 +139,7 @@ import           Language.LSP.Types                           (SMethod (SCustomM
 import           Language.LSP.VFS
 import           Module
 import           TcRnMonad                                    (tcg_dependent_files)
+import Control.Applicative
 
 -- | This is useful for rules to convert rules that can only produce errors or
 -- a result into the more general IdeResult type that supports producing
@@ -963,8 +964,8 @@ needsCompilationRule = defineEarlyCutoff $ RuleNoDiagnostics $ \NeedsCompilation
         -- again, this time keeping the object code.
         -- A file needs to be compiled if any file that depends on it uses TemplateHaskell or needs to be compiled
         ms <- msrModSummary . fst <$> useWithStale_ GetModSummaryWithoutTimestamps file
-        (modsums,needsComps) <-
-            par (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
+        (modsums,needsComps) <- liftA2
+            (,) (map (fmap (msrModSummary . fst)) <$> usesWithStale GetModSummaryWithoutTimestamps revdeps)
                 (uses NeedsCompilation revdeps)
         pure $ computeLinkableType ms modsums (map join needsComps)
 
