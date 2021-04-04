@@ -109,7 +109,7 @@ runSessionWithServer' ::
   FilePath ->
   Session a ->
   IO a
-runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ do
+runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurrentDirectory $ silenceStderr $ do
   (inR, inW) <- createPipe
   (outR, outW) <- createPipe
   server <-
