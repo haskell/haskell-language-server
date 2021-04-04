@@ -128,17 +128,20 @@ getModificationTimeImpl vfs isWatched missingFileDiags file = do
         let file' = fromNormalizedFilePath file
         let wrap time@(l,s) = (Just $ LBS.toStrict $ B.encode time, ([], Just $ ModificationTime l s))
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
-        -- we use 'getVirtualFile' to discriminate FOIs so make that
-        -- dependency explicit by using the IsFileOfInterest rule
-        isWF <- isWorkspaceFile file
-        when isWF $ void $ use_ IsFileOfInterest file
         case mbVirtual of
             Just (virtualFileVersion -> ver) -> do
                 alwaysRerun
                 pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
             Nothing -> do
                 isWF <- isWatched file
-                unless (isWF || isInterface file) alwaysRerun
+                unless (isWF || isInterface file)
+                    -- If the file is watched, we don't need alwaysRerun.
+                    -- Interface files are not watched by the LSP client but
+                    -- we keep track of their freshness, so no alwaysRerun
+                    alwaysRerun
+                when (isWF && not (isInterface file)) $
+                    -- we use 'getVirtualFile' to discriminate FOIs so make that dependency explicit
+                    void $ use_ IsFileOfInterest file
                 liftIO $ fmap wrap (getModTime file')
                     `catch` \(e :: IOException) -> do
                         let err | isDoesNotExistError e = "File does not exist: " ++ file'
