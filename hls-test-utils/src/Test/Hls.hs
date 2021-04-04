@@ -133,5 +133,4 @@ runSessionWithServer' plugin conf sconf caps root s = withLock lock $ keepCurren
       putStrLn "Server does not exit in 3s, canceling the async task..."
       (t, _) <- duration $ cancel server
       putStrLn $ "Finishing canceling (took " <> showDuration t <> "s)"
-  sleep 0.2
   pure x
