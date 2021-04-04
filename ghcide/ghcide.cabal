@@ -110,6 +110,7 @@ library
         cbits/getmodtime.c
 
     default-extensions:
+        ApplicativeDo
         BangPatterns
         DeriveFunctor
         DeriveGeneric
@@ -137,6 +138,7 @@ library
         Control.Concurrent.Strict
         Development.IDE
         Development.IDE.Main
+        Development.IDE.Core.Actions
         Development.IDE.Core.Debouncer
         Development.IDE.Core.FileStore
         Development.IDE.Core.IdeConfiguration
