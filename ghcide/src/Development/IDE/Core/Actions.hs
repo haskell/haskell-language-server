@@ -3,7 +3,6 @@
 module Development.IDE.Core.Actions where
 
 import           Control.Monad.Reader
-import           Control.Monad.Trans.Class
 import           Control.Monad.Trans.Maybe
 import qualified Data.HashMap.Strict                  as HM
 import           Data.Maybe
