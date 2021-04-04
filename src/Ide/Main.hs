@@ -101,7 +101,7 @@ runLspMode lspArgs@LspArguments{..} idePlugins = do
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
     Main.defaultMain def
-      { Main.argFiles = if argLSP then Nothing else Just argFiles
+      { Main.argCommand = if argLSP then Main.Lsp else Main.Check argFiles
       , Main.argsHlsPlugins = idePlugins
       , Main.argsLogger = pure hlsLogger
       , Main.argsIdeOptions = \_config sessionLoader ->

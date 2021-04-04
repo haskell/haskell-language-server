@@ -1,21 +1,29 @@
-module Development.IDE.Main (Arguments(..), defaultMain) where
+module Development.IDE.Main
+(Arguments(..)
+,Command(..)
+,defaultMain
+) where
 import           Control.Concurrent.Extra              (newLock, readVar,
                                                         withLock)
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
                                                         when)
+import           Control.Monad.IO.Class
 import           Data.Default                          (Default (def))
+import           Data.Foldable                         (toList)
 import qualified Data.HashMap.Strict                   as HashMap
 import           Data.Hashable                         (hashed)
 import           Data.List.Extra                       (intercalate, isPrefixOf,
                                                         nub, nubOrd, partition)
 import           Data.Maybe                            (catMaybes, fromMaybe,
-                                                        isJust)
+                                                        isJust, isNothing)
 import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
-import           Development.IDE                       (Action, Rules,
-                                                        hDuplicateTo')
+import           Development.IDE                       (Action,
+                                                        GetKnownTargets (GetKnownTargets),
+                                                        GetModIfaceFromDiskAndIndex (GetModIfaceFromDiskAndIndex),
+                                                        Rules, hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (makeVFSHandle)
@@ -34,7 +42,8 @@ import           Development.IDE.Core.Rules            (GhcSessionIO (GhcSession
 import           Development.IDE.Core.Service          (initialise, runAction)
 import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
                                                         ShakeExtras (state),
-                                                        uses)
+                                                        toKnownFiles,
+                                                        useNoFile_, uses)
 import           Development.IDE.Core.Tracing          (measureMemory)
 import           Development.IDE.LSP.LanguageServer    (runLanguageServer)
 import           Development.IDE.Plugin                (Plugin (pluginHandlers, pluginRules))
@@ -57,6 +66,7 @@ import           Development.Shake                     (action)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
+import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
                                                         Config,
                                                         getConfigFromNotification)
@@ -80,9 +90,15 @@ import           System.Time.Extra                     (offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
 
+data Command
+    = Lsp   -- ^ Run the LSP server
+    | Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
+    | Index FilePath -- ^ Index the whole project and print the path to the database
+    | Db FilePath HieDb.Options HieDb.Command -- ^ Run a command in the hiedb
+
 data Arguments = Arguments
     { argsOTMemoryProfiling     :: Bool
-    , argFiles                  :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
+    , argCommand                :: Command
     , argsLogger                :: IO Logger
     , argsRules                 :: Rules ()
     , argsHlsPlugins            :: IdePlugins IdeState
@@ -100,7 +116,7 @@ data Arguments = Arguments
 instance Default Arguments where
     def = Arguments
         { argsOTMemoryProfiling = False
-        , argFiles = Nothing
+        , argCommand = Lsp
         , argsLogger = stderrLogger
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
@@ -153,8 +169,8 @@ defaultMain Arguments{..} = do
     inH <- argsHandleIn
     outH <- argsHandleOut
 
-    case argFiles of
-        Nothing -> do
+    case argCommand of
+        Lsp -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
@@ -188,7 +204,7 @@ defaultMain Arguments{..} = do
                     vfs
                     hiedb
                     hieChan
-        Just argFiles -> do
+        Check argFiles -> do
           dir <- IO.getCurrentDirectory
           dbLoc <- getHieDbLoc dir
           runWithDb dbLoc $ \hiedb hieChan -> do
@@ -249,7 +265,34 @@ defaultMain Arguments{..} = do
                 measureMemory logger [keys] consoleObserver valuesRef
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
+        Index dir -> do
+          dbLoc <- getHieDbLoc dir
+          runWithDb dbLoc $ \hiedb hieChan -> do
+            vfs <- makeVFSHandle
+            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
+            let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
+                        { optCheckParents = pure NeverCheck
+                        , optCheckProject = pure False
+                        }
+            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
+            results <- runAction "Index" ide $ do
+                allKnownTargets <- toKnownFiles <$> useNoFile_ GetKnownTargets
+                liftIO $ hPutStrLn stderr $ "Found " <> show(length allKnownTargets) <> " targets"
+                uses GetModIfaceFromDiskAndIndex $ toList allKnownTargets
+            putStrLn dbLoc
+            let nfailures = length $ filter isNothing results
+            unless (nfailures == 0) $ exitWith $ ExitFailure nfailures
+        Db dir opts cmd -> do
+            dbLoc <- getHieDbLoc dir
+            hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
+            mlibdir <- setInitialDynFlags def
+            case mlibdir of
+                Nothing     -> exitWith $ ExitFailure 1
+                Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
+
 {-# ANN defaultMain ("HLint: ignore Use nubOrd" :: String) #-}
+
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do

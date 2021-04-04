@@ -25,11 +25,8 @@ import           Development.IDE.Core.Rules        (mainRule)
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Development.IDE.Plugin.Test       as Test
-import           Development.IDE.Session           (getHieDbLoc,
-                                                    setInitialDynFlags)
 import           Development.IDE.Types.Options
 import           Development.Shake                 (ShakeOptions (shakeThreads))
-import           HieDb.Run                         (Options (..), runCommand)
 import           Ide.Plugin.Config                 (Config (checkParents, checkProject))
 import           Ide.Plugin.ConfigUtils            (pluginsToDefaultConfig,
                                                     pluginsToVSCodeExtensionSchema)
@@ -37,8 +34,7 @@ import           Ide.PluginUtils                   (pluginDescToIdePlugins)
 import           Paths_ghcide                      (version)
 import qualified System.Directory.Extra            as IO
 import           System.Environment                (getExecutablePath)
-import           System.Exit                       (ExitCode (ExitFailure),
-                                                    exitSuccess, exitWith)
+import           System.Exit                       (exitSuccess)
 import           System.IO                         (hPutStrLn, stderr)
 import           System.Info                       (compilerVersion)
 
@@ -81,55 +77,45 @@ main = do
         logLevel = if argsVerbose then minBound else Info
 
     case argFilesOrCmd of
-      DbCmd opts cmd -> do
-        dir <- IO.getCurrentDirectory
-        dbLoc <- getHieDbLoc dir
-        mlibdir <- setInitialDynFlags def
-        case mlibdir of
-          Nothing     -> exitWith $ ExitFailure 1
-          Just libdir -> runCommand libdir opts{database = dbLoc} cmd
+        LSP -> do
+            hPutStrLn stderr "Starting LSP server..."
+            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
+        _ -> return ()
 
-      _ -> do
+    Main.defaultMain def
+        {Main.argCommand = case argFilesOrCmd of
+            Typecheck x | not argLSP -> Main.Check x
+            DbCmd x y                -> Main.Db "." x y
+            _                        -> Main.Lsp
 
-          case argFilesOrCmd of
-              LSP -> do
-                hPutStrLn stderr "Starting LSP server..."
-                hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-              _ -> return ()
+        ,Main.argsLogger = pure logger
 
-          Main.defaultMain def
-            {Main.argFiles = case argFilesOrCmd of
-                Typecheck x | not argLSP -> Just x
-                _                        -> Nothing
+        ,Main.argsRules = do
+            -- install the main and ghcide-plugin rules
+            mainRule
+            -- install the kick action, which triggers a typecheck on every
+            -- Shake database restart, i.e. on every user edit.
+            unless argsDisableKick $
+                action kick
 
-            ,Main.argsLogger = pure logger
+        ,Main.argsHlsPlugins =
+            pluginDescToIdePlugins $
+            GhcIde.descriptors
+            ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
 
-            ,Main.argsRules = do
-                -- install the main and ghcide-plugin rules
-                mainRule
-                -- install the kick action, which triggers a typecheck on every
-                -- Shake database restart, i.e. on every user edit.
-                unless argsDisableKick $
-                    action kick
+        ,Main.argsGhcidePlugin = if argsTesting
+            then Test.plugin
+            else mempty
 
-            ,Main.argsHlsPlugins =
-                pluginDescToIdePlugins $
-                GhcIde.descriptors
-                ++ [Test.blockCommandDescriptor "block-command" | argsTesting]
-
-            ,Main.argsGhcidePlugin = if argsTesting
-                then Test.plugin
-                else mempty
-
-            ,Main.argsIdeOptions = \config  sessionLoader ->
-                let defOptions = defaultIdeOptions sessionLoader
-                in defOptions
-                  { optShakeProfiling = argsShakeProfiling
-                  , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
-                  , optTesting = IdeTesting argsTesting
-                  , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
-                  , optCheckParents = pure $ checkParents config
-                  , optCheckProject = pure $ checkProject config
-                  }
-            }
+        ,Main.argsIdeOptions = \config  sessionLoader ->
+            let defOptions = defaultIdeOptions sessionLoader
+            in defOptions
+                { optShakeProfiling = argsShakeProfiling
+                , optOTMemoryProfiling = IdeOTMemoryProfiling argsOTMemoryProfiling
+                , optTesting = IdeTesting argsTesting
+                , optShakeOptions = (optShakeOptions defOptions){shakeThreads = argsThreads}
+                , optCheckParents = pure $ checkParents config
+                , optCheckProject = pure $ checkProject config
+                }
+        }
 
