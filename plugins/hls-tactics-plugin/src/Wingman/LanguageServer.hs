@@ -213,7 +213,7 @@ getSpanAndTypeAtHole (unTrack -> range) (unTrack -> hf) = do
         -- Ensure we're actually looking at a hole here
         guard $ all (either (const False) $ isHole . occName)
           $ M.keysSet $ nodeIdentifiers info
-        pure (Tracked $ nodeSpan ast', ty)
+        pure (UnsafeTracked $ nodeSpan ast', ty)
 
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a
