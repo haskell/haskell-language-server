@@ -72,6 +72,7 @@ spec = do
     autoTest  6 10 "KnownBigSemigroup.hs"
     autoTest  4 10 "KnownThetaSemigroup.hs"
     autoTest  6 10 "KnownCounterfactualSemigroup.hs"
+    autoTest 10 10 "KnownModuleInstanceSemigroup.hs"
     autoTest  4 10 "KnownMissingSemigroup.hs"
     autoTest  7 12 "KnownMonoid.hs"
     autoTest  7 12 "KnownPolyMonoid.hs"
