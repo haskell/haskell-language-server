@@ -301,6 +301,8 @@ unXPat (XPat (L _ pat)) = unXPat pat
 unXPat pat              = pat
 
 
+------------------------------------------------------------------------------
+-- | Build a 'KnownThings'.
 knownThings :: TcGblEnv -> HscEnvEq -> MaybeT IO KnownThings
 knownThings tcg hscenv= do
   let cls = knownClass tcg hscenv
@@ -309,12 +311,16 @@ knownThings tcg hscenv= do
     <*> cls (mkClsOcc "Monoid")
 
 
+------------------------------------------------------------------------------
+-- | Like 'knownThing' but specialized to classes.
 knownClass :: TcGblEnv -> HscEnvEq -> OccName -> MaybeT IO Class
 knownClass = knownThing $ \case
   ATyCon tc -> tyConClass_maybe tc
   _         -> Nothing
 
 
+------------------------------------------------------------------------------
+-- | Helper function for defining 'knownThings'.
 knownThing :: (TyThing -> Maybe a) -> TcGblEnv -> HscEnvEq -> OccName -> MaybeT IO a
 knownThing f tcg hscenv occ = do
   let modul = extractModule tcg

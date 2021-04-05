@@ -10,6 +10,7 @@ module Wingman.Judgements.Theta
   , evidenceToThetaType
   ) where
 
+import           Class (classTyVars)
 import           Control.Applicative (empty)
 import           Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import           Data.Set (Set)
@@ -17,20 +18,18 @@ import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
 import           Generics.SYB hiding (tyConName, empty)
 import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst)
-import           TcEvidence
-import           TcType (tcTyConAppTyCon_maybe)
-import           TysPrim (eqPrimTyCon)
-import           Wingman.Machinery
-import           Wingman.Types
-
 #if __GLASGOW_HASKELL__ > 806
 import           GhcPlugins (eqTyCon)
-import Class (classTyVars)
-import TcType (substTy)
 #else
 import           GhcPlugins (nameRdrName, tyConName)
 import           PrelNames (eqTyCon_RDR)
 #endif
+import           TcEvidence
+import           TcType (substTy)
+import           TcType (tcTyConAppTyCon_maybe)
+import           TysPrim (eqPrimTyCon)
+import           Wingman.Machinery
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -57,6 +56,8 @@ mkEvidence inst@(tcTyConAppTyCon_maybe -> Just (tyConClass_maybe -> Just cls)) =
 mkEvidence _ = empty
 
 
+------------------------------------------------------------------------------
+-- | Build a set of 'PredType's from the evidence.
 evidenceToThetaType :: [Evidence] -> Set CType
 evidenceToThetaType evs = S.fromList $ do
   HasInstance t <- evs

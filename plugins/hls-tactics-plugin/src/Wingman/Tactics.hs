@@ -11,6 +11,7 @@ import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Foldable
+import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
 import qualified Data.Map as M
@@ -34,7 +35,6 @@ import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
-import Data.Functor ((<&>))
 
 
 ------------------------------------------------------------------------------
@@ -347,7 +347,6 @@ refine = do
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
-  traceMX "falling through to auto" n
   let loop = auto' (n - 1)
   try intros
   choice
@@ -384,9 +383,7 @@ applyMethod cls df method_name = do
       let (_, apps) = splitAppTys df
       let ty = piResultTys (idType method) apps
       apply $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
-    Nothing -> do
-      traceMX "not in scope" method_name
-      throwError $ NotInScope method_name
+    Nothing -> throwError $ NotInScope method_name
 
 
 applyByName :: OccName -> TacticsM ()

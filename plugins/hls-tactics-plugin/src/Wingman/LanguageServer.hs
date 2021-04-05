@@ -12,12 +12,14 @@ import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
+import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Set  as S
 import qualified Data.Text as T
 import           Data.Traversable
+import           Development.IDE (hscEnv)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
@@ -46,8 +48,6 @@ import           Wingman.Judgements
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
-import Development.IDE (hscEnv)
-import Data.IORef (readIORef)
 
 
 tacticDesc :: T.Text -> T.Text

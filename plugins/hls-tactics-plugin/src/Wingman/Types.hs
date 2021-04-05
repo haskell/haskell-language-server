@@ -410,6 +410,8 @@ instance Show Context where
     ]
 
 
+------------------------------------------------------------------------------
+-- | Things we'd like to look up, that don't exist in TysWiredIn.
 data KnownThings = KnownThings
   { kt_semigroup :: Class
   , kt_monoid    :: Class
