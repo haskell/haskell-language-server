@@ -93,14 +93,15 @@ import           Test.Tasty.ExpectedFailure
 import           Test.Tasty.HUnit
 import           Test.Tasty.Ingredients.Rerun
 import           Test.Tasty.QuickCheck
-import Data.IORef
-import Ide.PluginUtils (pluginDescToIdePlugins)
-import Control.Concurrent.Async
-import Ide.Types
-import Data.String (IsString(fromString))
-import qualified Language.LSP.Types as LSP
-import Data.IORef.Extra (atomicModifyIORef_)
-import qualified Development.IDE.Plugin.HLS.GhcIde as Ghcide
+import           Data.IORef
+import           Ide.PluginUtils (pluginDescToIdePlugins)
+import           Control.Concurrent.Async
+import           Ide.Types
+import           Data.String                              (IsString(fromString))
+import qualified Language.LSP.Types                       as LSP
+import           Data.IORef.Extra                         (atomicModifyIORef_)
+import qualified Development.IDE.Plugin.HLS.GhcIde        as Ghcide
+import           Text.Regex.TDFA                          ((=~))
 
 waitForProgressBegin :: Session ()
 waitForProgressBegin = skipManyTill anyMessage $ satisfyMaybe $ \case
@@ -1673,6 +1674,23 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             compareHideFunctionTo [(8,9),(10,8)]
                 "Replace with qualified: E.fromList"
                 "HideFunction.expected.qualified.fromList.E.hs"
+        , testCase "Hide DuplicateRecordFields" $
+            compareTwo
+                "HideQualifyDuplicateRecordFields.hs" [(9, 9)]
+                "Replace with qualified: AVec.fromList"
+                "HideQualifyDuplicateRecordFields.expected.hs"
+        , testCase "Duplicate record fields should not be imported" $ do
+          withTarget ("HideQualifyDuplicateRecordFields" <.> ".hs") [(9, 9)] $
+            \_ actions -> do
+              liftIO $
+                assertBool "Hidings should not be presented while DuplicateRecordFields exists" $
+                  all not [ actionTitle =~ T.pack "Use ([A-Za-z][A-Za-z0-9]*) for fromList, hiding other imports"
+                      | InR CodeAction { _title = actionTitle } <- actions]
+          withTarget ("HideQualifyDuplicateRecordFieldsSelf" <.> ".hs") [(4, 4)] $
+            \_ actions -> do
+              liftIO $
+                assertBool "ambiguity from DuplicateRecordFields should not be imported" $
+                  null actions
         ]
     , testGroup "(++)"
         [ testCase "Prelude, parensed" $
@@ -1708,7 +1726,7 @@ suggestImportDisambiguationTests = testGroup "suggest import disambiguation acti
             contentAfterAction <- documentContents doc
             liftIO $ T.replace "\r\n" "\n" expected @=? contentAfterAction
     compareHideFunctionTo = compareTwo "HideFunction.hs"
-    auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs"]
+    auxFiles = ["AVec.hs", "BVec.hs", "CVec.hs", "DVec.hs", "EVec.hs", "FVec.hs"]
     withTarget file locs k = withTempDir $ \dir -> runInDir dir $ do
         liftIO $ mapM_ (\fp -> copyFile (hidingDir </> fp) $ dir </> fp)
             $ file : auxFiles
