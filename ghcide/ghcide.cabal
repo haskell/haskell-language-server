@@ -52,6 +52,7 @@ library
         filepath,
         fingertree,
         ghc-exactprint,
+        ghc-trace-events,
         Glob,
         haddock-library ^>= 1.10.0,
         hashable,
