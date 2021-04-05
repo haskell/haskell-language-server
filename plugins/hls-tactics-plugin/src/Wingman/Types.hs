@@ -397,6 +397,7 @@ data Context = Context
   , ctxFeatureSet    :: FeatureSet
   , ctxKnownThings   :: KnownThings
   , ctxInstEnvs      :: InstEnvs
+  , ctxTheta         :: Set CType
   }
 
 instance Show Context where
@@ -405,6 +406,7 @@ instance Show Context where
     , showsPrec 10 ctxDefiningFuncs ""
     , showsPrec 10 ctxModuleFuncs ""
     , showsPrec 10 ctxFeatureSet ""
+    , showsPrec 10 ctxTheta ""
     ]
 
 
@@ -424,6 +426,7 @@ emptyContext
       , ctxFeatureSet = mempty
       , ctxKnownThings = error "empty known things from emptyContext"
       , ctxInstEnvs = InstEnvs mempty mempty mempty
+      , ctxTheta = mempty
       }
 
 

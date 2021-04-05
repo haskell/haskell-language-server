@@ -1,7 +1,7 @@
 module Wingman.KnownStrategies where
 
 import Control.Monad.Error.Class
-import OccName (mkVarOcc, mkMethodOcc)
+import OccName (mkVarOcc)
 import Refinery.Tactic
 import Wingman.Context (getCurrentDefinitions, getKnownInstance)
 import Wingman.KnownStrategies.QuickCheck (deriveArbitrary)
@@ -10,16 +10,27 @@ import Wingman.Tactics
 import Wingman.Types
 import Wingman.Judgements (jGoal)
 import Data.Foldable (for_)
+import Wingman.FeatureSet
+import Control.Applicative (empty)
+import Control.Monad.Reader.Class (asks)
 
 
 knownStrategies :: TacticsM ()
 knownStrategies = choice
   [ known "fmap" deriveFmap
   , known "mempty" deriveMempty
-  , known "<>" deriveMappend
-  , known "mappend" deriveMappend
   , known "arbitrary" deriveArbitrary
+  , featureGuard FeatureKnownMonoid $ known "<>" deriveMappend
+  , featureGuard FeatureKnownMonoid $ known "mappend" deriveMappend
   ]
+
+
+featureGuard :: Feature -> TacticsM a -> TacticsM a
+featureGuard feat t = do
+  fs <- asks ctxFeatureSet
+  case hasFeature feat fs of
+    True -> t
+    False -> empty
 
 
 known :: String -> TacticsM () -> TacticsM ()
@@ -47,10 +58,13 @@ deriveMappend = do
   destructAll
   split
   g <- goal
-  minst <- getKnownInstance kt_semigroup [unCType $ jGoal g]
-  for_ minst $ \inst -> do
+  minst <- getKnownInstance kt_semigroup
+         . pure
+         . unCType
+         $ jGoal g
+  for_ minst $ \(cls, df) -> do
     restrictPositionForApplication
-      (applyMethod inst $ mkVarOcc "<>")
+      (applyMethod cls df $ mkVarOcc "<>")
       assumption
   try $
     restrictPositionForApplication
@@ -63,8 +77,7 @@ deriveMempty = do
   split
   g <- goal
   minst <- getKnownInstance kt_monoid [unCType $ jGoal g]
-  for_ minst $ \inst -> do
-    applyMethod inst (mkVarOcc "mempty" )
+  for_ minst $ \(cls, df) -> do
+    applyMethod cls df $ mkVarOcc "mempty"
   try assumption
-
 

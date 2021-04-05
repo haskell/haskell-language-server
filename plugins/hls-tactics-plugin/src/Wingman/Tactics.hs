@@ -22,13 +22,11 @@ import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
-import           InstEnv (InstMatch, ClsInst (is_cls, is_dfun))
 import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
-import           TysPrim (alphaTys)
 import           Wingman.CodeGen
 import           Wingman.Context
 import           Wingman.GHC
@@ -349,6 +347,7 @@ refine = do
 auto' :: Int -> TacticsM ()
 auto' 0 = throwError NoProgress
 auto' n = do
+  traceMX "falling through to auto" n
   let loop = auto' (n - 1)
   try intros
   choice
@@ -378,27 +377,24 @@ allNames :: Judgement -> Set OccName
 allNames = hyNamesInScope . jHypothesis
 
 
-applyMethod :: InstMatch -> OccName -> TacticsM ()
-applyMethod (inst, mapps) method_name = do
-  let cls  = is_cls inst
+applyMethod :: Class -> PredType -> OccName -> TacticsM ()
+applyMethod cls df method_name = do
   case find ((== method_name) . occName) $ classMethods cls of
     Just method -> do
-      -- Get the instantiated type of the dictionary
-      let df = piResultTys (idType $ is_dfun inst) $ zipWith fromMaybe alphaTys mapps
-      -- pull off its resulting arguments
       let (_, apps) = splitAppTys df
-      -- and apply them to the type of the instance
-      let ty = snd $ splitFunTy (piResultTys (idType method) apps)
+      let ty = piResultTys (idType method) apps
       apply $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
     Nothing -> do
+      traceMX "not in scope" method_name
       throwError $ NotInScope method_name
 
 
 applyByName :: OccName -> TacticsM ()
 applyByName name = do
   g <- goal
-  for_ (unHypothesis (jHypothesis g)) $ \hi ->
+  choice $ (unHypothesis (jHypothesis g)) <&> \hi ->
     case hi_name hi == name of
-      True -> try $ apply hi
-      False -> pure ()
+      True  -> apply hi
+      False -> empty
+
 

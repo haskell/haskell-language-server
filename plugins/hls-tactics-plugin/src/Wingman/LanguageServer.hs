@@ -151,16 +151,17 @@ mkJudgementAndContext
     -> (Judgement, Context)
 mkJudgementAndContext features g binds rss tcg eps kt = do
       let tcs = tcg_binds tcg
+          evidence = getEvidenceAtHole (RealSrcSpan rss) tcs
           ctx = mkContext features
                   (mapMaybe (sequenceA . (occName *** coerce))
                     $ getDefiningBindings binds rss)
                   tcg
                   eps
                   kt
+                  evidence
           top_provs = getRhsPosVals rss tcs
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
-          evidence = getEvidenceAtHole (RealSrcSpan rss) tcs
           cls_hy = foldMap evidenceToHypothesis evidence
           subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
        in ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement

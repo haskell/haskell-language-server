@@ -1,16 +1,21 @@
 module Wingman.Context where
 
-import Bag
-import Control.Arrow
-import Control.Monad.Reader
-import Development.IDE.GHC.Compat
-import OccName
-import TcRnTypes
-import Wingman.FeatureSet (FeatureSet)
-import Wingman.Types
-import InstEnv (InstMatch, lookupInstEnv, InstEnvs(..))
-import GhcPlugins (ExternalPackageState (eps_inst_env))
-import Data.Maybe (listToMaybe)
+import           Bag
+import           Control.Arrow
+import           Control.Monad.Reader
+import           Data.Foldable.Extra (allM)
+import           Data.Maybe (fromMaybe, isJust)
+import qualified Data.Set as S
+import           Development.IDE.GHC.Compat
+import           GhcPlugins (ExternalPackageState (eps_inst_env), piResultTys)
+import           InstEnv (lookupInstEnv, InstEnvs(..), is_dfun)
+import           OccName
+import           TcRnTypes
+import           TcType (tcSplitTyConApp, tcSplitPhiTy)
+import           TysPrim (alphaTys)
+import           Wingman.FeatureSet (FeatureSet)
+import           Wingman.Judgements.Theta
+import           Wingman.Types
 
 
 mkContext
@@ -19,8 +24,9 @@ mkContext
     -> TcGblEnv
     -> ExternalPackageState
     -> KnownThings
+    -> [Evidence]
     -> Context
-mkContext features locals tcg eps kt = Context
+mkContext features locals tcg eps kt ev = Context
   { ctxDefiningFuncs = locals
   , ctxModuleFuncs = fmap splitId
                    . (getFunBindId =<<)
@@ -34,6 +40,7 @@ mkContext features locals tcg eps kt = Context
         (tcg_inst_env tcg)
         (tcVisibleOrphanMods tcg)
   , ctxKnownThings = kt
+  , ctxTheta = evidenceToThetaType ev
   }
 
 
@@ -57,15 +64,41 @@ getKnownThing :: MonadReader Context m => (KnownThings -> a) -> m a
 getKnownThing f = asks $ f . ctxKnownThings
 
 
-getKnownInstance :: MonadReader Context m => (KnownThings -> Class) -> [Type] -> m (Maybe InstMatch)
+getKnownInstance :: MonadReader Context m => (KnownThings -> Class) -> [Type] -> m (Maybe (Class, PredType))
 getKnownInstance f tys = do
   cls <- getKnownThing f
   getInstance cls tys
 
 
-getInstance :: MonadReader Context m => Class -> [Type] -> m (Maybe InstMatch)
+getInstance :: MonadReader Context m => Class -> [Type] -> m (Maybe (Class, PredType))
 getInstance cls tys = do
   env <- asks ctxInstEnvs
-  let (res, _, _) = lookupInstEnv False env cls tys
-  pure $ listToMaybe res
+  let (mres, _, _) = lookupInstEnv False env cls tys
+  case mres of
+    ((inst, mapps) : _) -> do
+      -- Get the instantiated type of the dictionary
+      let df = piResultTys (idType $ is_dfun inst) $ zipWith fromMaybe alphaTys mapps
+      -- pull off its resulting arguments
+      let (theta, df') = tcSplitPhiTy df
+      traceMX "looking for instances" theta
+      allM hasClassInstance theta >>= \case
+        True -> pure $ do
+          traceMX "solved instance for" df'
+          Just (cls, df')
+        False -> pure Nothing
+    _ -> pure Nothing
+
+
+hasClassInstance :: MonadReader Context m => PredType -> m Bool
+hasClassInstance predty = do
+  theta <- asks ctxTheta
+  case S.member (CType predty) theta of
+    True -> do
+      traceMX "cached instance for " predty
+      pure True
+    False -> do
+      let (con, apps) = tcSplitTyConApp predty
+      case tyConClass_maybe con of
+        Nothing -> pure False
+        Just cls -> fmap isJust $ getInstance cls apps
 

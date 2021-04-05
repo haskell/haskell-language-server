@@ -7,25 +7,30 @@ module Wingman.Judgements.Theta
   , mkEvidence
   , evidenceToSubst
   , evidenceToHypothesis
+  , evidenceToThetaType
   ) where
 
-import           Data.Maybe (fromMaybe, mapMaybe)
+import           Control.Applicative (empty)
+import           Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import           Data.Set (Set)
 import qualified Data.Set as S
 import           Development.IDE.GHC.Compat
-import           Generics.SYB hiding (tyConName)
-import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe)
-#if __GLASGOW_HASKELL__ > 806
-import           GhcPlugins (eqTyCon)
-#else
-import           GhcPlugins (nameRdrName, tyConName)
-import           PrelNames (eqTyCon_RDR)
-#endif
+import           Generics.SYB hiding (tyConName, empty)
+import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst)
 import           TcEvidence
 import           TcType (tcTyConAppTyCon_maybe)
 import           TysPrim (eqPrimTyCon)
 import           Wingman.Machinery
 import           Wingman.Types
+
+#if __GLASGOW_HASKELL__ > 806
+import           GhcPlugins (eqTyCon)
+import Class (classTyVars)
+import TcType (substTy)
+#else
+import           GhcPlugins (nameRdrName, tyConName)
+import           PrelNames (eqTyCon_RDR)
+#endif
 
 
 ------------------------------------------------------------------------------
@@ -40,19 +45,29 @@ data Evidence
 
 ------------------------------------------------------------------------------
 -- | Given a 'PredType', pull an 'Evidence' out of it.
-mkEvidence :: PredType -> Maybe Evidence
+mkEvidence :: PredType -> [Evidence]
 mkEvidence (getEqualityTheta -> Just (a, b))
-  = Just $ EqualityOfTypes a b
-mkEvidence inst@(tcTyConAppTyCon_maybe -> Just (isClassTyCon -> True))
-  = Just $ HasInstance inst
-mkEvidence _ = Nothing
+  = pure $ EqualityOfTypes a b
+mkEvidence inst@(tcTyConAppTyCon_maybe -> Just (tyConClass_maybe -> Just cls)) = do
+  (_, apps) <- maybeToList $ splitTyConApp_maybe inst
+  let tvs     = classTyVars cls
+      subst   = zipTvSubst tvs apps
+  sc_ev <- traverse (mkEvidence . substTy subst) $ classSCTheta cls
+  HasInstance inst : sc_ev
+mkEvidence _ = empty
+
+
+evidenceToThetaType :: [Evidence] -> Set CType
+evidenceToThetaType evs = S.fromList $ do
+  HasInstance t <- evs
+  pure $ CType t
 
 
 ------------------------------------------------------------------------------
 -- | Compute all the 'Evidence' implicitly bound at the given 'SrcSpan'.
 getEvidenceAtHole :: SrcSpan -> LHsBinds GhcTc -> [Evidence]
 getEvidenceAtHole dst
-  = mapMaybe mkEvidence
+  = concatMap mkEvidence
   . (everything (<>) $
         mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
 
@@ -111,6 +126,8 @@ excludeForbiddenMethods = filter (not . flip S.member forbiddenMethods . hi_name
         -- show
       , "showsPrec"
       , "showList"
+        -- monad
+      , "return"
       ]
 
 
