@@ -32,6 +32,7 @@ import           Development.IDE.GHC.Orphans ()
 import           Development.IDE.Types.Location
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           InstEnv (InstEnvs(..))
 import           OccName
 import           Refinery.Tactic
 import           System.IO.Unsafe (unsafePerformIO)
@@ -394,14 +395,36 @@ data Context = Context
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
   , ctxFeatureSet    :: FeatureSet
+  , ctxKnownThings   :: KnownThings
+  , ctxInstEnvs      :: InstEnvs
   }
-  deriving stock (Eq, Ord, Show)
+
+instance Show Context where
+  show (Context {..}) = mconcat
+    [ "Context "
+    , showsPrec 10 ctxDefiningFuncs ""
+    , showsPrec 10 ctxModuleFuncs ""
+    , showsPrec 10 ctxFeatureSet ""
+    ]
+
+
+data KnownThings = KnownThings
+  { kt_semigroup :: Class
+  , kt_monoid    :: Class
+  }
 
 
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty mempty
+emptyContext
+  = Context
+      { ctxDefiningFuncs = mempty
+      , ctxModuleFuncs = mempty
+      , ctxFeatureSet = mempty
+      , ctxKnownThings = error "empty known things from emptyContext"
+      , ctxInstEnvs = InstEnvs mempty mempty mempty
+      }
 
 
 newtype Rose a = Rose (Tree a)

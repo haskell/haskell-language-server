@@ -34,6 +34,8 @@ import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
+import InstEnv (InstMatch, ClsInst (is_cls, is_dfun))
+import TysPrim (alphaTys)
 
 
 ------------------------------------------------------------------------------
@@ -363,4 +365,22 @@ overAlgebraicTerms =
 
 allNames :: Judgement -> Set OccName
 allNames = hyNamesInScope . jHypothesis
+
+
+applyMethod :: InstMatch -> OccName -> TacticsM ()
+applyMethod (inst, mapps) method_name = do
+  traceMX "applying method" method_name
+  let cls  = is_cls inst
+  case find ((== method_name) . occName) $ classMethods cls of
+    Just method -> do
+      -- Get the instantiated type of the dictionary
+      let df = piResultTys (idType $ is_dfun inst) $ zipWith fromMaybe alphaTys mapps
+      -- pull off its resulting arguments
+      let (_, apps) = splitAppTys df
+      -- and apply them to the type of the instance
+      let ty = snd $ splitFunTy (piResultTys (idType method) apps)
+      apply $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
+    Nothing -> do
+      traceMX "no method" $ classMethods cls
+      throwError $ NotInScope method_name
 

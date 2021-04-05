@@ -28,17 +28,17 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
-import           Ide.Types (PluginId)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Plugin.Properties
+import           Ide.PluginUtils (usePropertyLsp)
+import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds)
+import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
@@ -46,6 +46,8 @@ import           Wingman.Judgements
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
+import Development.IDE (hscEnv)
+import Data.IORef (readIORef)
 
 
 tacticDesc :: T.Text -> T.Text
@@ -127,9 +129,13 @@ judgementForHole state nfp range features = do
     HAR _ hf _ _ HieFresh -> do
       (binds, _) <- runStaleIde state nfp GetBindings
       (tcmod, _) <- runStaleIde state nfp TypeCheck
+      (hscenv, _) <- runStaleIde state nfp GhcSessionDeps
       (rss, g)   <- liftMaybe $ getSpanAndTypeAtHole amapping range hf
       resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-      let (jdg, ctx) = mkJudgementAndContext features g binds rss tcmod
+      eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv hscenv
+      let tcg = tmrTypechecked tcmod
+      kt <- knownThings tcg hscenv
+      let (jdg, ctx) = mkJudgementAndContext features g binds rss tcg eps kt
       dflags <- getIdeDynflags state nfp
       pure (resulting_range, jdg, ctx, dflags)
 
@@ -139,15 +145,18 @@ mkJudgementAndContext
     -> Type
     -> Bindings
     -> RealSrcSpan
-    -> TcModuleResult
+    -> TcGblEnv
+    -> ExternalPackageState
+    -> KnownThings
     -> (Judgement, Context)
-mkJudgementAndContext features g binds rss tcmod = do
-      let tcg = tmrTypechecked tcmod
-          tcs = tcg_binds tcg
+mkJudgementAndContext features g binds rss tcg eps kt = do
+      let tcs = tcg_binds tcg
           ctx = mkContext features
                   (mapMaybe (sequenceA . (occName *** coerce))
                     $ getDefiningBindings binds rss)
                   tcg
+                  eps
+                  kt
           top_provs = getRhsPosVals rss tcs
           local_hy = spliceProvenance top_provs
                    $ hypothesisFromBindings rss binds
@@ -181,9 +190,6 @@ getSpanAndTypeAtHole amapping range hf = do
           $ M.keysSet $ nodeIdentifiers info
         pure (nodeSpan ast', ty)
 
-
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe a = MaybeT $ pure a
 
 
 ------------------------------------------------------------------------------
@@ -364,3 +370,4 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
 showLspMessage = sendNotification SWindowShowMessage
+
