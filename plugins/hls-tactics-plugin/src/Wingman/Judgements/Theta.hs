@@ -12,6 +12,7 @@ module Wingman.Judgements.Theta
 import           Data.Maybe (fromMaybe, mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Generics.SYB hiding (tyConName)
 import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe)
@@ -25,7 +26,6 @@ import           TcEvidence
 import           TcType (tcTyConAppTyCon_maybe)
 import           TysPrim (eqPrimTyCon)
 import           Wingman.Machinery
-import           Wingman.Range (Tracked(..))
 import           Wingman.Types
 
 

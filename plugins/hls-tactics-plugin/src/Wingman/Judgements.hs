@@ -12,12 +12,12 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.UseStale (Tracked, unTrack)
 import           Development.IDE.Spans.LocalBindings
 import           OccName
 import           SrcLoc
 import           Type
 import           Wingman.GHC (algebraicTyCon)
-import           Wingman.Range (Tracked(..))
 import           Wingman.Types
 
 

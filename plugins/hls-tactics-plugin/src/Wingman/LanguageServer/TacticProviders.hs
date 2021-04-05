@@ -20,6 +20,7 @@ import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
 import           DataCon (dataConName)
+import           Development.IDE.Core.UseStale (Tracked, Age(..))
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
@@ -33,7 +34,6 @@ import           Wingman.Auto
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
-import           Wingman.Range
 import           Wingman.Tactics
 import           Wingman.Types
 

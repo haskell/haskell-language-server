@@ -20,7 +20,9 @@ import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), useWithStale, use)
+import           Development.IDE.Core.Shake (IdeState (..), use)
+import qualified Development.IDE.Core.Shake as IDE
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
@@ -28,10 +30,10 @@ import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
-import           Ide.Types (PluginId)
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Plugin.Properties
+import           Ide.PluginUtils (usePropertyLsp)
+import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
@@ -71,7 +73,7 @@ runCurrentIde
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (Tracked 'Current r)
-runCurrentIde state nfp a = MaybeT $ coerce $ runIde state $ use a nfp
+runCurrentIde state nfp a = MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde state $ use a nfp
 
 
 runStaleIde
@@ -84,9 +86,7 @@ runStaleIde
     -> NormalizedFilePath
     -> a
     -> MaybeT IO (TrackedStale r)
-runStaleIde state nfp a = do
-  (r, pm) <- MaybeT $ runIde state $ useWithStale a nfp
-  pure $ TrackedStale (coerce r) (coerce pm)
+runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 
 
 unsafeRunStaleIde
@@ -100,7 +100,7 @@ unsafeRunStaleIde
     -> a
     -> MaybeT IO r
 unsafeRunStaleIde state nfp a = do
-  (r, _) <- MaybeT $ runIde state $ useWithStale a nfp
+  (r, _) <- MaybeT $ runIde state $ IDE.useWithStale a nfp
   pure r
 
 
@@ -153,7 +153,7 @@ judgementForHole state nfp range features = do
   TrackedStale asts amapping  <- runStaleIde state nfp GetHieAst
   case unTrack asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
-    HAR _ (cautiousCopyAge asts -> hf) _ _ HieFresh -> do
+    HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
       binds <- runStaleIde state nfp GetBindings
       tcmod <- fmap (fmap tmrTypechecked)
@@ -202,7 +202,7 @@ getSpanAndTypeAtHole
     :: Tracked age Range
     -> Tracked age (HieASTs b)
     -> Maybe (Tracked age RealSrcSpan, b)
-getSpanAndTypeAtHole (unTrack -> range) (unTrack -> hf) = do
+getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
   join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
     case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
       Nothing -> Nothing
@@ -213,7 +213,7 @@ getSpanAndTypeAtHole (unTrack -> range) (unTrack -> hf) = do
         -- Ensure we're actually looking at a hole here
         guard $ all (either (const False) $ isHole . occName)
           $ M.keysSet $ nodeIdentifiers info
-        pure (UnsafeTracked $ nodeSpan ast', ty)
+        pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
 
 liftMaybe :: Monad m => Maybe a -> MaybeT m a

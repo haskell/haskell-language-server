@@ -18,6 +18,7 @@ import           Data.Foldable (for_)
 import           Data.Maybe
 import qualified Data.Text as T
 import           Development.IDE.Core.Shake (IdeState (..))
+import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Ide.Types
@@ -54,7 +55,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) (cautiousToCurrent -> range) _ctx)
+codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) (unsafeMkCurrent -> range) _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
