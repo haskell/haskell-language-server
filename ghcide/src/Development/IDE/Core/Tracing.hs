@@ -8,7 +8,6 @@ module Development.IDE.Core.Tracing
     , getInstrumentCached
     , otTracedProvider
     , otSetUri
-    , isTracingEnabled
     )
 where
 
@@ -29,6 +28,7 @@ import           Data.IORef                     (modifyIORef', newIORef,
                                                  readIORef, writeIORef)
 import           Data.String                    (IsString (fromString))
 import           Data.Text.Encoding             (encodeUtf8)
+import           Debug.Trace.Flags              (userTracingEnabled)
 import           Development.IDE.Core.RuleTypes (GhcSession (GhcSession),
                                                  GhcSessionDeps (GhcSessionDeps),
                                                  GhcSessionIO (GhcSessionIO))
@@ -39,7 +39,6 @@ import           Development.IDE.Types.Shake    (Key (..), Value,
                                                  Values)
 import           Development.Shake              (Action, actionBracket)
 import           Foreign.Storable               (Storable (sizeOf))
-import           GHC.RTS.Flags
 import           HeapSize                       (recursiveSize, runHeapsize)
 import           Ide.PluginUtils                (installSigUsr1Handler)
 import           Ide.Types                      (PluginId (..))
@@ -51,7 +50,6 @@ import           OpenTelemetry.Eventlog         (Instrument, SpanInFlight (..),
                                                  addEvent, beginSpan, endSpan,
                                                  mkValueObserver, observe,
                                                  setTag, withSpan, withSpan_)
-import           System.IO.Unsafe               (unsafePerformIO)
 
 -- | Trace a handler using OpenTelemetry. Adds various useful info into tags in the OpenTelemetry span.
 otTracedHandler
@@ -61,7 +59,7 @@ otTracedHandler
     -> (SpanInFlight -> m a)
     -> m a
 otTracedHandler requestType label act
-  | isTracingEnabled = do
+  | userTracingEnabled = do
     let !name =
             if null label
             then requestType
@@ -74,14 +72,6 @@ otTracedHandler requestType label act
 otSetUri :: SpanInFlight -> Uri -> IO ()
 otSetUri sp (Uri t) = setTag sp "uri" (encodeUtf8 t)
 
-{-# NOINLINE isTracingEnabled #-}
-isTracingEnabled :: Bool
-isTracingEnabled = unsafePerformIO $ do
-    flags <- getTraceFlags
-    case tracing flags of
-        TraceNone -> return False
-        _         -> return True
-
 -- | Trace a Shake action using opentelemetry.
 otTracedAction
     :: Show k
@@ -91,7 +81,7 @@ otTracedAction
     -> Action a -- ^ The action
     -> Action a
 otTracedAction key file success act
-  | isTracingEnabled =
+  | userTracingEnabled =
     actionBracket
         (do
             sp <- beginSpan (fromString (show key))
@@ -111,7 +101,7 @@ otTracedProvider :: MonadUnliftIO m => PluginId -> ByteString -> m a -> m a
 otTracedProvider :: MonadUnliftIO m => PluginId -> String -> m a -> m a
 #endif
 otTracedProvider (PluginId pluginName) provider act
-  | isTracingEnabled = do
+  | userTracingEnabled = do
     runInIO <- askRunInIO
     liftIO $ withSpan (provider <> " provider") $ \sp -> do
         setTag sp "plugin" (encodeUtf8 pluginName)
