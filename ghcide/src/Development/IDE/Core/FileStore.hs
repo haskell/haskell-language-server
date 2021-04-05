@@ -134,11 +134,17 @@ getModificationTimeImpl vfs isWatched missingFileDiags file = do
                 pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
             Nothing -> do
                 isWF <- isWatched file
-                unless (isWF || isInterface file)
-                    -- If the file is watched, we don't need alwaysRerun.
-                    -- Interface files are not watched by the LSP client but
-                    -- we keep track of their freshness, so no alwaysRerun
-                    alwaysRerun
+                if isWF
+                    then -- the file is watched so we can rely on FileWatched notifications,
+                         -- but also need a dependency on IsFileOfInterest to reinstall
+                         -- alwaysRerun when the file becomes VFS
+                        void (use_ IsFileOfInterest file)
+                    else if isInterface file
+                        then -- interface files are tracked specially using the closed world assumption
+                            pure ()
+                        else -- in all other cases we will need to freshly check the file system
+                            alwaysRerun
+
                 when (isWF && not (isInterface file)) $
                     -- we use 'getVirtualFile' to discriminate FOIs so make that dependency explicit
                     void $ use_ IsFileOfInterest file
