@@ -1,10 +1,7 @@
-{-# LANGUAGE DeriveFoldable     #-}
-{-# LANGUAGE DeriveTraversable  #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DerivingVia        #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE DerivingVia    #-}
+{-# LANGUAGE GADTs          #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes     #-}
 
 module Development.IDE.Core.UseStale
   ( Age(..)

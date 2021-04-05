@@ -113,6 +113,8 @@ library
         BangPatterns
         DeriveFunctor
         DeriveGeneric
+        DeriveFoldable
+        DeriveTraversable
         FlexibleContexts
         GeneralizedNewtypeDeriving
         LambdaCase
