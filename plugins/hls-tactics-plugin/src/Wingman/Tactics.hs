@@ -22,11 +22,13 @@ import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
+import           InstEnv (InstMatch, ClsInst (is_cls, is_dfun))
 import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
 import           TcType
 import           Type hiding (Var)
+import           TysPrim (alphaTys)
 import           Wingman.CodeGen
 import           Wingman.Context
 import           Wingman.GHC
@@ -34,8 +36,7 @@ import           Wingman.Judgements
 import           Wingman.Machinery
 import           Wingman.Naming
 import           Wingman.Types
-import InstEnv (InstMatch, ClsInst (is_cls, is_dfun))
-import TysPrim (alphaTys)
+import Data.Functor ((<&>))
 
 
 ------------------------------------------------------------------------------
@@ -80,6 +81,16 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
     let hy' = recursiveHypothesis defs
     localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
       <@> fmap (localTactic assumption . filterPosition name) [0..]
+
+
+restrictPositionForApplication :: TacticsM () -> TacticsM () -> TacticsM ()
+restrictPositionForApplication f app = do
+  -- NOTE(sandy): Safe use of head; context is guaranteed to have a defining
+  -- binding
+  name <- head . fmap fst <$> getCurrentDefinitions
+  f <@>
+    fmap
+      (localTactic app . filterPosition name) [0..]
 
 
 ------------------------------------------------------------------------------
@@ -369,7 +380,6 @@ allNames = hyNamesInScope . jHypothesis
 
 applyMethod :: InstMatch -> OccName -> TacticsM ()
 applyMethod (inst, mapps) method_name = do
-  traceMX "applying method" method_name
   let cls  = is_cls inst
   case find ((== method_name) . occName) $ classMethods cls of
     Just method -> do
@@ -381,6 +391,14 @@ applyMethod (inst, mapps) method_name = do
       let ty = snd $ splitFunTy (piResultTys (idType method) apps)
       apply $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
     Nothing -> do
-      traceMX "no method" $ classMethods cls
       throwError $ NotInScope method_name
+
+
+applyByName :: OccName -> TacticsM ()
+applyByName name = do
+  g <- goal
+  for_ (unHypothesis (jHypothesis g)) $ \hi ->
+    case hi_name hi == name of
+      True -> try $ apply hi
+      False -> pure ()
 

@@ -16,6 +16,8 @@ knownStrategies :: TacticsM ()
 knownStrategies = choice
   [ known "fmap" deriveFmap
   , known "mempty" deriveMempty
+  , known "<>" deriveMappend
+  , known "mappend" deriveMappend
   , known "arbitrary" deriveArbitrary
   ]
 
@@ -39,12 +41,30 @@ deriveFmap = do
     ]
 
 
+deriveMappend :: TacticsM ()
+deriveMappend = do
+  try intros
+  destructAll
+  split
+  g <- goal
+  minst <- getKnownInstance kt_semigroup [unCType $ jGoal g]
+  for_ minst $ \inst -> do
+    restrictPositionForApplication
+      (applyMethod inst $ mkVarOcc "<>")
+      assumption
+  try $
+    restrictPositionForApplication
+      (applyByName $ mkVarOcc "<>")
+      assumption
+
+
 deriveMempty :: TacticsM ()
 deriveMempty = do
   split
   g <- goal
   minst <- getKnownInstance kt_monoid [unCType $ jGoal g]
-  for_ minst $ \inst ->
-    applyMethod inst $ mkVarOcc "mempty"
+  for_ minst $ \inst -> do
+    applyMethod inst (mkVarOcc "mempty" )
+  try assumption
 
 
