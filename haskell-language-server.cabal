@@ -391,7 +391,7 @@ test-suite func-test
     , lsp-types
     , aeson
     , hls-plugin-api        >= 1.0 && < 1.2
-    , lsp-test              == 0.13.0.0
+    , lsp-test              == 0.14.0.0
     , containers
     , unordered-containers
 

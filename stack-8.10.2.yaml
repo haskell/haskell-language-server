@@ -32,9 +32,9 @@ extra-deps:
   - ghc-exactprint-0.6.3.4
   - ghc-lib-8.10.4.20210206
   - ghc-lib-parser-8.10.4.20210206
-  - lsp-1.1.1.0
-  - lsp-types-1.1.0.0
-  - lsp-test-0.13.0.0
+  - lsp-1.2.0.0
+  - lsp-types-1.2.0.0
+  - lsp-test-0.14.0.0
   - haddock-library-1.10.0
   - heapsize-0.3.0
   - hie-bios-0.7.4

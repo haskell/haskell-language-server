@@ -50,7 +50,7 @@ module Development.IDE.Core.Shake(
     getIdeOptions,
     getIdeOptionsIO,
     GlobalIdeOptions(..),
-    getClientConfig,
+    HLS.getClientConfig,
     getPluginConfig,
     garbageCollect,
     knownTargets,
@@ -230,14 +230,10 @@ getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
 
-getClientConfig :: LSP.MonadLsp Config m => ShakeExtras -> m Config
-getClientConfig ShakeExtras { defaultConfig } =
-    fromMaybe defaultConfig <$> HLS.getClientConfig
-
 getPluginConfig
-    :: LSP.MonadLsp Config m => ShakeExtras -> PluginId -> m PluginConfig
-getPluginConfig extras plugin = do
-    config <- getClientConfig extras
+    :: LSP.MonadLsp Config m => PluginId -> m PluginConfig
+getPluginConfig plugin = do
+    config <- HLS.getClientConfig
     return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
@@ -503,7 +499,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         let hiedbWriter = HieDbWriter{..}
         progressAsync <- async $
             when reportProgress $
-                progressThread mostRecentProgressEvent inProgress
+                progressThread optProgressStyle mostRecentProgressEvent inProgress
         exportsMap <- newVar mempty
 
         actionQueue <- newQueue
@@ -521,7 +517,10 @@ shakeOpen lspEnv defaultConfig logger debouncer
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
 
-    IdeOptions{ optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled } <- getIdeOptionsIO shakeExtras
+    IdeOptions
+        { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
+        , optProgressStyle
+        } <- getIdeOptionsIO shakeExtras
     startTelemetry otProfilingEnabled logger $ state shakeExtras
 
     return ideState
@@ -532,7 +531,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         -- And two transitions, modelled by 'ProgressEvent':
         --   1. KickCompleted - transitions from Reporting into Idle
         --   2. KickStarted - transitions from Idle into Reporting
-        progressThread mostRecentProgressEvent inProgress = progressLoopIdle
+        progressThread style mostRecentProgressEvent inProgress = progressLoopIdle
           where
             progressLoopIdle = do
                 atomically $ do
@@ -564,7 +563,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
                 bracket_
                   (start u)
                   (stop u)
-                  (loop u Nothing)
+                  (loop u 0)
                 where
                     start id = LSP.sendNotification LSP.SProgress $
                         LSP.ProgressParams
@@ -589,16 +588,27 @@ shakeOpen lspEnv defaultConfig logger debouncer
                         current <- liftIO $ readVar inProgress
                         let done = length $ filter (== 0) $ HMap.elems current
                         let todo = HMap.size current
-                        let next = Just $ T.pack $ show done <> "/" <> show todo
+                        let next = 100 * fromIntegral done / fromIntegral todo
                         when (next /= prev) $
                           LSP.sendNotification LSP.SProgress $
                           LSP.ProgressParams
                               { _token = id
-                              , _value = LSP.Report $ LSP.WorkDoneProgressReportParams
-                                { _cancellable = Nothing
-                                , _message = next
-                                , _percentage = Nothing
-                                }
+                              , _value = LSP.Report $ case style of
+                                  Explicit -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Just $ T.pack $ show done <> "/" <> show todo
+                                    , _percentage = Nothing
+                                    }
+                                  Percentage -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Nothing
+                                    , _percentage = Just next
+                                    }
+                                  NoProgress -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Nothing
+                                    , _percentage = Nothing
+                                    }
                               }
                         loop id next
 

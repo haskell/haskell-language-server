@@ -128,4 +128,4 @@ pointRange
 -- | Get the title of a code action.
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
 codeActionTitle InL{}                               = Nothing
-codeActionTitle (InR(CodeAction title _ _ _ _ _ _)) = Just title
+codeActionTitle (InR(CodeAction title _ _ _ _ _ _ _)) = Just title
