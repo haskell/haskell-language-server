@@ -64,6 +64,7 @@ library
         lsp == 1.2.*,
         mtl,
         network-uri,
+        optparse-applicative,
         parallel,
         prettyprinter-ansi-terminal,
         prettyprinter-ansi-terminal,

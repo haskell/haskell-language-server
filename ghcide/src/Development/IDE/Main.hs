@@ -1,6 +1,9 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Development.IDE.Main
 (Arguments(..)
 ,Command(..)
+,isLSP
+,commandP
 ,defaultMain
 ) where
 import           Control.Concurrent.Extra              (newLock, readVar,
@@ -77,6 +80,7 @@ import           Ide.PluginUtils                       (allLspCmdIds',
                                                         pluginDescToIdePlugins)
 import           Ide.Types                             (IdePlugins)
 import qualified Language.LSP.Server                   as LSP
+import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
                                                         exitWith)
@@ -93,10 +97,33 @@ import           System.Time.Extra                     (offsetTime,
 import           Text.Printf                           (printf)
 
 data Command
-    = Lsp   -- ^ Run the LSP server
-    | Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
-    | Index [FilePath]  -- ^ Index all the targets and print the path to the database
+    = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
     | Db FilePath HieDb.Options HieDb.Command -- ^ Run a command in the hiedb
+    | Index [FilePath]  -- ^ Index all the targets and print the path to the database
+    | LSP   -- ^ Run the LSP server
+    deriving Show
+
+-- TODO move these to hiedb
+deriving instance Show HieDb.Command
+deriving instance Show HieDb.Options
+
+isLSP :: Command -> Bool
+isLSP LSP = True
+isLSP _   = False
+
+commandP :: Parser Command
+commandP = hsubparser (command "typecheck" (info (Check <$> fileCmd) fileInfo)
+                   <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
+                   <> command "index" (info (Index <$> fileCmd) indexInfo)
+                   <> command "lsp" (info (pure LSP <**> helper) lspInfo)
+                   )
+  where
+    fileCmd = many (argument str (metavar "FILES/DIRS..."))
+    lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
+    fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
+    hieInfo = fullDesc <> progDesc "Query .hie files"
+    indexInfo = fullDesc <> progDesc "Load the given files and index all the known targets"
+
 
 data Arguments = Arguments
     { argsOTMemoryProfiling     :: Bool
@@ -118,7 +145,7 @@ data Arguments = Arguments
 instance Default Arguments where
     def = Arguments
         { argsOTMemoryProfiling = False
-        , argCommand = Lsp
+        , argCommand = LSP
         , argsLogger = stderrLogger
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
@@ -172,7 +199,7 @@ defaultMain Arguments{..} = do
     outH <- argsHandleOut
 
     case argCommand of
-        Lsp -> do
+        LSP -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"

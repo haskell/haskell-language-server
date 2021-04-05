@@ -15,12 +15,11 @@ import qualified Data.ByteString.Lazy.Char8    as LBS
 import           Data.Default
 import qualified Data.Text                     as T
 import           Development.IDE.Core.Rules
+import           Development.IDE.Main          (isLSP)
 import qualified Development.IDE.Main          as Main
-import           Development.IDE.Session       (getHieDbLoc, setInitialDynFlags)
 import           Development.IDE.Types.Logger  as G
 import qualified Development.IDE.Types.Options as Ghcide
 import           Development.Shake             (ShakeOptions (shakeThreads))
-import           HieDb.Run
 import           Ide.Arguments
 import           Ide.Logger
 import           Ide.Plugin.ConfigUtils        (pluginsToDefaultConfig,
@@ -29,7 +28,6 @@ import           Ide.Types                     (IdePlugins, ipMap)
 import           Ide.Version
 import qualified Language.LSP.Server           as LSP
 import qualified System.Directory.Extra        as IO
-import           System.Exit
 import           System.IO
 import qualified System.Log.Logger             as L
 
@@ -52,20 +50,10 @@ defaultMain args idePlugins = do
         VersionMode PrintNumericVersion ->
             putStrLn haskellLanguageServerNumericVersion
 
-        DbCmd opts cmd -> do
-          dir <- IO.getCurrentDirectory
-          dbLoc <- getHieDbLoc dir
-          hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
-          mlibdir <- setInitialDynFlags def
-          case mlibdir of
-            Nothing -> exitWith $ ExitFailure 1
-            Just libdir ->
-              runCommand libdir opts{database = dbLoc} cmd
-
-        LspMode lspArgs -> do
+        Ghcide ghcideArgs -> do
             {- see WARNING above -}
             hPutStrLn stderr hlsVer
-            runLspMode lspArgs idePlugins
+            runLspMode ghcideArgs idePlugins
 
         VSCodeExtensionSchemaMode -> do
           LBS.putStrLn $ A.encodePretty $ pluginsToVSCodeExtensionSchema idePlugins
@@ -86,22 +74,22 @@ hlsLogger = G.Logger $ \pri txt ->
 
 -- ---------------------------------------------------------------------
 
-runLspMode :: LspArguments -> IdePlugins IdeState -> IO ()
-runLspMode lspArgs@LspArguments{..} idePlugins = do
+runLspMode :: GhcideArguments -> IdePlugins IdeState -> IO ()
+runLspMode ghcideArgs@GhcideArguments{..} idePlugins = do
     whenJust argsCwd IO.setCurrentDirectory
     dir <- IO.getCurrentDirectory
     LSP.setupLogger argsLogFile ["hls", "hie-bios"]
       $ if argsDebugOn then L.DEBUG else L.INFO
 
-    when argLSP $ do
+    when (isLSP argsCommand) $ do
         hPutStrLn stderr "Starting (haskell-language-server)LSP server..."
-        hPutStrLn stderr $ "  with arguments: " <> show lspArgs
+        hPutStrLn stderr $ "  with arguments: " <> show ghcideArgs
         hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
         hPutStrLn stderr $ "  in directory: " <> dir
         hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
     Main.defaultMain def
-      { Main.argCommand = if argLSP then Main.Lsp else Main.Check argFiles
+      { Main.argCommand = argsCommand
       , Main.argsHlsPlugins = idePlugins
       , Main.argsLogger = pure hlsLogger
       , Main.argsIdeOptions = \_config sessionLoader ->
