@@ -5,6 +5,7 @@ module Development.IDE.Main
 ) where
 import           Control.Concurrent.Extra              (newLock, readVar,
                                                         withLock)
+import           Control.Concurrent.STM
 import           Control.Exception.Safe                (Exception (displayException),
                                                         catchAny)
 import           Control.Monad.Extra                   (concatMapM, unless,
@@ -40,8 +41,9 @@ import           Development.IDE.Core.RuleTypes        (GenerateCore (GenerateCo
 import           Development.IDE.Core.Rules            (GhcSessionIO (GhcSessionIO),
                                                         mainRule)
 import           Development.IDE.Core.Service          (initialise, runAction)
-import           Development.IDE.Core.Shake            (IdeState (shakeExtras),
-                                                        ShakeExtras (state),
+import           Development.IDE.Core.Shake            (HieDbWriter (indexPending),
+                                                        IdeState (shakeExtras),
+                                                        ShakeExtras (hiedbWriter, state),
                                                         toKnownFiles,
                                                         useNoFile_, uses)
 import           Development.IDE.Core.Tracing          (measureMemory)
@@ -282,6 +284,13 @@ defaultMain Arguments{..} = do
                 uses GetModIfaceFromDiskAndIndex $ toList allKnownTargets
             putStrLn dbLoc
             let nfailures = length $ filter isNothing results
+            let pending = indexPending $ hiedbWriter $ shakeExtras ide
+
+            hPutStrLn stderr "Waiting for indexing..."
+            atomically $ do
+                n <- readTVar pending
+                unless (HashMap.size n == 0) retry
+
             unless (nfailures == 0) $ exitWith $ ExitFailure nfailures
         Db dir opts cmd -> do
             dbLoc <- getHieDbLoc dir
