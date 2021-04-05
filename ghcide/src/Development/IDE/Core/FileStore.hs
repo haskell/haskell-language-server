@@ -145,9 +145,6 @@ getModificationTimeImpl vfs isWatched missingFileDiags file = do
                         else -- in all other cases we will need to freshly check the file system
                             alwaysRerun
 
-                when (isWF && not (isInterface file)) $
-                    -- we use 'getVirtualFile' to discriminate FOIs so make that dependency explicit
-                    void $ use_ IsFileOfInterest file
                 liftIO $ fmap wrap (getModTime file')
                     `catch` \(e :: IOException) -> do
                         let err | isDoesNotExistError e = "File does not exist: " ++ file'
