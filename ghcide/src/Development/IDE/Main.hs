@@ -95,7 +95,7 @@ import           Text.Printf                           (printf)
 data Command
     = Lsp   -- ^ Run the LSP server
     | Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
-    | Index FilePath -- ^ Index the whole project and print the path to the database
+    | Index [FilePath]  -- ^ Index all the targets and print the path to the database
     | Db FilePath HieDb.Options HieDb.Command -- ^ Run a command in the hiedb
 
 data Arguments = Arguments
@@ -267,31 +267,38 @@ defaultMain Arguments{..} = do
                 measureMemory logger [keys] consoleObserver valuesRef
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
-        Index dir -> do
-          dbLoc <- getHieDbLoc dir
+        Index argFiles -> do
+          dbLoc <- getHieDbLoc "."
+          files <- expandFiles (argFiles ++ ["." | null argFiles])
           runWithDb dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
-            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
+            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
             let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }
             ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
             registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
+            let fois = map toNormalizedFilePath' files
+            setFilesOfInterest ide $ HashMap.fromList $ map (,OnDisk) fois
             results <- runAction "Index" ide $ do
+                _ <- uses GetModIfaceFromDiskAndIndex fois
                 allKnownTargets <- toKnownFiles <$> useNoFile_ GetKnownTargets
-                liftIO $ hPutStrLn stderr $ "Found " <> show(length allKnownTargets) <> " targets"
+                liftIO $ hPutStrLn stderr $ "Indexing " <> show(length allKnownTargets) <> " targets"
                 uses GetModIfaceFromDiskAndIndex $ toList allKnownTargets
-            putStrLn dbLoc
-            let nfailures = length $ filter isNothing results
-            let pending = indexPending $ hiedbWriter $ shakeExtras ide
 
-            hPutStrLn stderr "Waiting for indexing..."
+            hPutStrLn stderr "Writing index... "
+
+            let !nfailures = length $ filter isNothing results
+            let !pending = indexPending $ hiedbWriter $ shakeExtras ide
+
             atomically $ do
                 n <- readTVar pending
                 unless (HashMap.size n == 0) retry
 
+            putStrLn dbLoc
             unless (nfailures == 0) $ exitWith $ ExitFailure nfailures
+
         Db dir opts cmd -> do
             dbLoc <- getHieDbLoc dir
             hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
