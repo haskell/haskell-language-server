@@ -98,8 +98,10 @@ import           Text.Printf                           (printf)
 
 data Command
     = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
-    | Db FilePath HieDb.Options HieDb.Command -- ^ Run a command in the hiedb
-    | Index [FilePath]  -- ^ Index all the targets and print the path to the database
+    | Index {projectRoot :: FilePath, targetsToLoad :: [FilePath]}
+    -- ^ Index all the targets and print the path to the database
+    | Db {projectRoot :: FilePath, hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
+     -- ^ Run a command in the hiedb
     | LSP   -- ^ Run the LSP server
     deriving Show
 
@@ -113,10 +115,10 @@ isLSP _   = False
 
 commandP :: Parser Command
 commandP = hsubparser (command "typecheck" (info (Check <$> fileCmd) fileInfo)
-                   <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
-                   <> command "index" (info (Index <$> fileCmd) indexInfo)
-                   <> command "lsp" (info (pure LSP <**> helper) lspInfo)
-                   )
+                    <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
+                    <> command "index" (info (Index "." <$> fileCmd) indexInfo)
+                    <> command "lsp" (info (pure LSP <**> helper) lspInfo)
+                    )
   where
     fileCmd = many (argument str (metavar "FILES/DIRS..."))
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
@@ -294,9 +296,9 @@ defaultMain Arguments{..} = do
                 measureMemory logger [keys] consoleObserver valuesRef
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
-        Index argFiles -> do
-          dbLoc <- getHieDbLoc "."
-          files <- expandFiles (argFiles ++ ["." | null argFiles])
+        Index{..} -> do
+          dbLoc <- getHieDbLoc projectRoot
+          files <- expandFiles (targetsToLoad ++ [projectRoot | null targetsToLoad])
           runWithDb dbLoc $ \hiedb hieChan -> do
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
