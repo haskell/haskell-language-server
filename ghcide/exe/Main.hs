@@ -86,6 +86,7 @@ main = do
         {Main.argCommand = case argFilesOrCmd of
             Typecheck x | not argLSP -> Main.Check x
             DbCmd x y                -> Main.Db "." x y
+            DbIndex dir              -> Main.Index dir
             _                        -> Main.Lsp
 
         ,Main.argsLogger = pure logger

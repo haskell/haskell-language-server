@@ -8,7 +8,7 @@ import           Options.Applicative
 
 type Arguments = Arguments' IdeCmd
 
-data IdeCmd = Typecheck [FilePath] | DbCmd Options Command | LSP
+data IdeCmd = Typecheck [FilePath] | DbCmd Options Command | DbIndex [FilePath] | LSP
 
 data Arguments' a = Arguments
     {argLSP                    :: Bool
@@ -47,10 +47,12 @@ arguments = Arguments
       <*> switch (long "verbose" <> help "Include internal events in logging output")
       <*> ( hsubparser (command "typecheck" (info (Typecheck <$> fileCmd) fileInfo)
                    <> command "hiedb" (info (DbCmd <$> optParser "" True <*> cmdParser <**> helper) hieInfo)
-                   <> command "lsp" (info (pure LSP <**> helper) lspInfo)  )
+                   <> command "index" (info (DbIndex <$> fileCmd) indexInfo)
+                   <> command "lsp" (info (pure LSP <**> helper) lspInfo))
          <|> Typecheck <$> fileCmd )
   where
     fileCmd = many (argument str (metavar "FILES/DIRS..."))
     lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
     fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
     hieInfo = fullDesc <> progDesc "Query .hie files"
+    indexInfo = fullDesc <> progDesc "Load the given files and index all the known targets"
