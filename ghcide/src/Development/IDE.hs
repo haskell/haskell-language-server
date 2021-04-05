@@ -8,7 +8,9 @@ module Development.IDE
 
 import           Development.IDE.Core.Actions          as X (getAtPoint,
                                                              getDefinition,
-                                                             getTypeDefinition)
+                                                             getTypeDefinition,
+                                                             useE, useNoFileE,
+                                                             usesE)
 import           Development.IDE.Core.FileExists       as X (getFileExists)
 import           Development.IDE.Core.FileStore        as X (getFileContents)
 import           Development.IDE.Core.IdeConfiguration as X (IdeConfiguration (..),
