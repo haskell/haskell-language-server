@@ -12,6 +12,7 @@ import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.UseStale (Tracked, unTrack)
 import           Development.IDE.Spans.LocalBindings
 import           OccName
 import           SrcLoc
@@ -22,8 +23,8 @@ import           Wingman.Types
 
 ------------------------------------------------------------------------------
 -- | Given a 'SrcSpan' and a 'Bindings', create a hypothesis.
-hypothesisFromBindings :: RealSrcSpan -> Bindings -> Hypothesis CType
-hypothesisFromBindings span bs = buildHypothesis $ getLocalScope bs span
+hypothesisFromBindings :: Tracked age RealSrcSpan -> Tracked age Bindings -> Hypothesis CType
+hypothesisFromBindings (unTrack -> span) (unTrack -> bs) = buildHypothesis $ getLocalScope bs span
 
 
 ------------------------------------------------------------------------------
