@@ -19,10 +19,6 @@ tests: true
 
 package *
   ghc-options: -haddock
-
-package haskell-language-server
-  test-show-details: direct
-package ghcide
   test-show-details: direct
 
 write-ghc-environment-files: never
