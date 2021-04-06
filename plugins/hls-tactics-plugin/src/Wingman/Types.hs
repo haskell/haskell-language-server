@@ -11,7 +11,6 @@ module Wingman.Types
   , Type
   , TyVar
   , Span
-  , Range
   ) where
 
 import           ConLike (ConLike)
@@ -29,7 +28,6 @@ import qualified Data.Text as T
 import           Data.Tree
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.Types.Location
 import           GHC.Generics
 import           GHC.SourceGen (var)
 import           OccName

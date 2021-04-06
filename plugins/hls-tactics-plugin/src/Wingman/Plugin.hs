@@ -13,11 +13,12 @@ import           Control.Monad.Trans
 import           Control.Monad.Trans.Maybe
 import           Data.Aeson
 import           Data.Bifunctor (first)
+import           Data.Data
 import           Data.Foldable (for_)
 import           Data.Maybe
-import           Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import           Development.IDE.Core.Shake (IdeState (..))
+import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Ide.Types
@@ -39,21 +40,22 @@ import           Wingman.Types
 
 descriptor :: PluginId -> PluginDescriptor IdeState
 descriptor plId = (defaultPluginDescriptor plId)
-    { pluginCommands
-        = fmap (\tc ->
-            PluginCommand
-              (tcCommandId tc)
-              (tacticDesc $ tcCommandName tc)
-              (tacticCmd (commandTactic tc) plId))
-              [minBound .. maxBound]
-    , pluginHandlers =
-        mkPluginHandler STextDocumentCodeAction codeActionProvider
-    , pluginCustomConfig =
-        mkCustomConfig properties
-    }
+  { pluginCommands
+      = fmap (\tc ->
+          PluginCommand
+            (tcCommandId tc)
+            (tacticDesc $ tcCommandName tc)
+            (tacticCmd (commandTactic tc) plId))
+            [minBound .. maxBound]
+  , pluginHandlers =
+      mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginCustomConfig =
+      mkCustomConfig properties
+  }
+
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
+codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) (unsafeMkCurrent -> range) _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
@@ -88,8 +90,9 @@ tacticCmd tac pId state (TacticParams uri range var_name)
       ccs <- getClientCapabilities
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
-        let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
-        pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
+        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
+        TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
+        pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
         timingOut 2e8 $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
@@ -98,7 +101,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkWorkspaceEdits span dflags ccs uri pm rtr
+                _ -> pure $ mkWorkspaceEdits pm_span dflags ccs uri pm rtr
 
       case res of
         Nothing -> do
@@ -130,14 +133,14 @@ mkErr code err = ResponseError code err Nothing
 -- | Turn a 'RunTacticResults' into concrete edits to make in the source
 -- document.
 mkWorkspaceEdits
-    :: RealSrcSpan
+    :: Tracked age RealSrcSpan
     -> DynFlags
     -> ClientCapabilities
     -> Uri
-    -> Annotated ParsedSource
+    -> Tracked age (Annotated ParsedSource)
     -> RunTacticResults
     -> Either UserFacingMessage WorkspaceEdit
-mkWorkspaceEdits span dflags ccs uri pm rtr = do
+mkWorkspaceEdits (unTrack -> span) dflags ccs uri (unTrack -> pm) rtr = do
   for_ (rtr_other_solns rtr) $ \soln -> do
     traceMX "other solution" $ syn_val soln
     traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []
