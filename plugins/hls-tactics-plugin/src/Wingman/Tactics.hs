@@ -11,6 +11,7 @@ import           Control.Monad.Except (throwError)
 import           Control.Monad.Reader.Class (MonadReader (ask))
 import           Control.Monad.State.Strict (StateT(..), runStateT)
 import           Data.Foldable
+import           Data.Functor ((<&>))
 import           Data.Generics.Labels ()
 import           Data.List
 import qualified Data.Map as M
@@ -77,6 +78,16 @@ recursion = requireConcreteHole $ tracing "recursion" $ do
     let hy' = recursiveHypothesis defs
     localTactic (apply $ HyInfo name RecursivePrv ty) (introduce hy')
       <@> fmap (localTactic assumption . filterPosition name) [0..]
+
+
+restrictPositionForApplication :: TacticsM () -> TacticsM () -> TacticsM ()
+restrictPositionForApplication f app = do
+  -- NOTE(sandy): Safe use of head; context is guaranteed to have a defining
+  -- binding
+  name <- head . fmap fst <$> getCurrentDefinitions
+  f <@>
+    fmap
+      (localTactic app . filterPosition name) [0..]
 
 
 ------------------------------------------------------------------------------
@@ -362,4 +373,24 @@ overAlgebraicTerms =
 
 allNames :: Judgement -> Set OccName
 allNames = hyNamesInScope . jHypothesis
+
+
+applyMethod :: Class -> PredType -> OccName -> TacticsM ()
+applyMethod cls df method_name = do
+  case find ((== method_name) . occName) $ classMethods cls of
+    Just method -> do
+      let (_, apps) = splitAppTys df
+      let ty = piResultTys (idType method) apps
+      apply $ HyInfo method_name (ClassMethodPrv $ Uniquely cls) $ CType ty
+    Nothing -> throwError $ NotInScope method_name
+
+
+applyByName :: OccName -> TacticsM ()
+applyByName name = do
+  g <- goal
+  choice $ (unHypothesis (jHypothesis g)) <&> \hi ->
+    case hi_name hi == name of
+      True  -> apply hi
+      False -> empty
+
 

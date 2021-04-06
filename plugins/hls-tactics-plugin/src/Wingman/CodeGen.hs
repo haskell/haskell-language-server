@@ -18,7 +18,6 @@ import           Data.Bool (bool)
 import           Data.Char (isSymbol, isPunctuation)
 import           Data.Generics.Labels ()
 import           Data.List
-import           Data.Maybe (mapMaybe)
 import           Data.Monoid (Endo(..))
 import qualified Data.Set as S
 import           Data.Traversable
@@ -61,7 +60,7 @@ destructMatches f scrut t jdg = do
         [] -> throwError $ GoalMismatch "destruct" g
         _ -> fmap unzipTrace $ for dcs $ \dc -> do
           let con = RealDataCon dc
-              ev = mapMaybe mkEvidence $ dataConInstArgTys dc apps
+              ev = concatMap mkEvidence $ dataConInstArgTys dc apps
               -- We explicitly do not need to add the method hypothesis to
               -- #syn_scoped
               method_hy = foldMap evidenceToHypothesis ev

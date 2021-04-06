@@ -142,6 +142,8 @@ test-suite tests
     , lens
     , mtl
     , text
+    , deepseq
+    , tasty-hunit
   build-tool-depends:
       hspec-discover:hspec-discover
   default-language: Haskell2010

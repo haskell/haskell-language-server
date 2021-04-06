@@ -30,6 +30,7 @@ import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           InstEnv (InstEnvs(..))
 import           OccName
 import           Refinery.Tactic
 import           System.IO.Unsafe (unsafePerformIO)
@@ -392,14 +393,41 @@ data Context = Context
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
   , ctxFeatureSet    :: FeatureSet
+  , ctxKnownThings   :: KnownThings
+  , ctxInstEnvs      :: InstEnvs
+  , ctxTheta         :: Set CType
   }
-  deriving stock (Eq, Ord, Show)
+
+instance Show Context where
+  show (Context {..}) = mconcat
+    [ "Context "
+    , showsPrec 10 ctxDefiningFuncs ""
+    , showsPrec 10 ctxModuleFuncs ""
+    , showsPrec 10 ctxFeatureSet ""
+    , showsPrec 10 ctxTheta ""
+    ]
+
+
+------------------------------------------------------------------------------
+-- | Things we'd like to look up, that don't exist in TysWiredIn.
+data KnownThings = KnownThings
+  { kt_semigroup :: Class
+  , kt_monoid    :: Class
+  }
 
 
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty mempty
+emptyContext
+  = Context
+      { ctxDefiningFuncs = mempty
+      , ctxModuleFuncs = mempty
+      , ctxFeatureSet = mempty
+      , ctxKnownThings = error "empty known things from emptyContext"
+      , ctxInstEnvs = InstEnvs mempty mempty mempty
+      , ctxTheta = mempty
+      }
 
 
 newtype Rose a = Rose (Tree a)
