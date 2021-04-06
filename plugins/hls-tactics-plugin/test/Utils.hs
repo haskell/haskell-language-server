@@ -16,9 +16,11 @@ import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Default (Default (def))
 import           Data.Foldable
+import           Data.Function (on)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Ide.Plugin.Config as Plugin
 import           Language.LSP.Test
@@ -32,8 +34,6 @@ import           Test.Tasty.HUnit (Assertion, HUnitFailure(..))
 import           Wingman.FeatureSet (FeatureSet, allFeatures, prettyFeatureSet)
 import           Wingman.LanguageServer (mkShowMessageParams)
 import           Wingman.Types
-import qualified Data.Text as T
-import Data.Function (on)
 
 
 ------------------------------------------------------------------------------
