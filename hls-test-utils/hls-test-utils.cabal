@@ -34,6 +34,7 @@ library
   hs-source-dirs:   src
   build-depends:
     , aeson
+    , async
     , base
     , blaze-markup
     , bytestring
@@ -42,13 +43,16 @@ library
     , directory
     , extra
     , filepath
+    , ghcide                  ^>=1.1.0.0
+    , hls-plugin-api          ^>=1.1.0.0
     , hspec
     , hspec-core
     , lens
+    , lsp                     ^>=1.2
     , lsp-test                ==0.14.0.0
     , lsp-types               ^>=1.2
+    , shake
     , tasty
-    , tasty-ant-xml           >=1.1.6
     , tasty-expected-failure
     , tasty-golden
     , tasty-hunit

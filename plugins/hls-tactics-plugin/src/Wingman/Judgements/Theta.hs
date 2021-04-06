@@ -15,6 +15,7 @@ import           Control.Applicative (empty)
 import           Data.Maybe (fromMaybe, mapMaybe, maybeToList)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Generics.SYB hiding (tyConName, empty)
 import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe, zipTvSubst)
@@ -66,11 +67,12 @@ evidenceToThetaType evs = S.fromList $ do
 
 ------------------------------------------------------------------------------
 -- | Compute all the 'Evidence' implicitly bound at the given 'SrcSpan'.
-getEvidenceAtHole :: SrcSpan -> LHsBinds GhcTc -> [Evidence]
-getEvidenceAtHole dst
+getEvidenceAtHole :: Tracked age SrcSpan -> Tracked age (LHsBinds GhcTc) -> [Evidence]
+getEvidenceAtHole (unTrack -> dst)
   = concatMap mkEvidence
   . (everything (<>) $
         mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
+  . unTrack
 
 
 ------------------------------------------------------------------------------

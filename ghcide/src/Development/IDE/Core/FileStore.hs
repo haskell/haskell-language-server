@@ -67,6 +67,7 @@ import qualified Development.IDE.Types.Logger                 as L
 
 import qualified Data.Binary                                  as B
 import qualified Data.ByteString.Lazy                         as LBS
+import           Development.IDE.Core.IdeConfiguration        (isWorkspaceFile)
 import           Language.LSP.Server                          hiding
                                                               (getVirtualFile)
 import qualified Language.LSP.Server                          as LSP
@@ -127,16 +128,23 @@ getModificationTimeImpl vfs isWatched missingFileDiags file = do
         let file' = fromNormalizedFilePath file
         let wrap time@(l,s) = (Just $ LBS.toStrict $ B.encode time, ([], Just $ ModificationTime l s))
         mbVirtual <- liftIO $ getVirtualFile vfs $ filePathToUri' file
-        -- we use 'getVirtualFile' to discriminate FOIs so make that
-        -- dependency explicit by using the IsFileOfInterest rule
-        _ <- use_ IsFileOfInterest file
         case mbVirtual of
             Just (virtualFileVersion -> ver) -> do
                 alwaysRerun
                 pure (Just $ LBS.toStrict $ B.encode ver, ([], Just $ VFSVersion ver))
             Nothing -> do
                 isWF <- isWatched file
-                unless (isWF || isInterface file) alwaysRerun
+                if isWF
+                    then -- the file is watched so we can rely on FileWatched notifications,
+                         -- but also need a dependency on IsFileOfInterest to reinstall
+                         -- alwaysRerun when the file becomes VFS
+                        void (use_ IsFileOfInterest file)
+                    else if isInterface file
+                        then -- interface files are tracked specially using the closed world assumption
+                            pure ()
+                        else -- in all other cases we will need to freshly check the file system
+                            alwaysRerun
+
                 liftIO $ fmap wrap (getModTime file')
                     `catch` \(e :: IOException) -> do
                         let err | isDoesNotExistError e = "File does not exist: " ++ file'
