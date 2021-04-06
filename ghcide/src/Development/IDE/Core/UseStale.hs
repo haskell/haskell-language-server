@@ -9,6 +9,7 @@ module Development.IDE.Core.UseStale
   , unTrack
   , PositionMap
   , TrackedStale (..)
+  , untrackedStaleValue
   , unsafeMkStale
   , unsafeMkCurrent
   , unsafeCopyAge
@@ -83,6 +84,10 @@ data TrackedStale a where
 
 instance Functor TrackedStale where
   fmap f (TrackedStale t pm) = TrackedStale (fmap f t) pm
+
+
+untrackedStaleValue :: TrackedStale a -> a
+untrackedStaleValue (TrackedStale ta _) = coerce ta
 
 
 ------------------------------------------------------------------------------

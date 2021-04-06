@@ -12,12 +12,14 @@ import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
+import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Set  as S
 import qualified Data.Text as T
 import           Data.Traversable
+import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), use)
@@ -29,7 +31,7 @@ import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindi
 import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
 import           Ide.PluginUtils (usePropertyLsp)
@@ -156,12 +158,21 @@ judgementForHole state nfp range features = do
     HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
       range' <- liftMaybe $ mapAgeFrom amapping range
       binds <- runStaleIde state nfp GetBindings
-      tcmod <- fmap (fmap tmrTypechecked)
-             $ runStaleIde state nfp TypeCheck
+      tcg <- fmap (fmap tmrTypechecked)
+           $ runStaleIde state nfp TypeCheck
+      hscenv <- runStaleIde state nfp GhcSessionDeps
 
       (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
       new_rss <- liftMaybe $ mapAgeTo amapping rss
-      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext features g binds new_rss tcmod
+
+      -- KnownThings is just the instances in scope. There are no ranges
+      -- involved, so it's not crucial to track ages.
+      let henv = untrackedStaleValue $ hscenv
+      eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
+      kt <- knownThings (untrackedStaleValue tcg) henv
+
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext features g binds new_rss tcg eps kt
+
       dflags <- getIdeDynflags state nfp
       pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
 
@@ -172,8 +183,10 @@ mkJudgementAndContext
     -> TrackedStale Bindings
     -> Tracked 'Current RealSrcSpan
     -> TrackedStale TcGblEnv
+    -> ExternalPackageState
+    -> KnownThings
     -> Maybe (Judgement, Context)
-mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) = do
+mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
   binds_rss <- mapAgeFrom bmap rss
   tcg_rss <- mapAgeFrom tcgmap rss
 
@@ -183,6 +196,9 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
                 $ unTrack
                 $ getDefiningBindings <$> binds <*> binds_rss)
               (unTrack tcg)
+              eps
+              kt
+              evidence
       top_provs = getRhsPosVals tcg_rss tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
@@ -215,9 +231,6 @@ getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
           $ M.keysSet $ nodeIdentifiers info
         pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
-
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe a = MaybeT $ pure a
 
 
 ------------------------------------------------------------------------------

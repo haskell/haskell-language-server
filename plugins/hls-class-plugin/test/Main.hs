@@ -10,6 +10,7 @@ where
 import           Control.Lens            hiding ((<.>))
 import qualified Data.ByteString.Lazy    as BS
 import qualified Data.Text.Encoding      as T
+import qualified Ide.Plugin.Class        as Class
 import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
 import           Test.Hls
@@ -17,11 +18,14 @@ import           Test.Hls
 main :: IO ()
 main = defaultTestRunner tests
 
+plugin :: PluginDescriptor IdeState
+plugin = Class.descriptor "class"
+
 tests :: TestTree
 tests = testGroup
   "class"
   [ testCase "Produces addMinimalMethodPlaceholders code actions for one instance" $ do
-      runSession testCommand fullCaps classPath $ do
+      runSessionWithServer plugin classPath $ do
         doc <- openDoc "T1.hs" "haskell"
         _ <- waitForDiagnosticsFromSource doc "typecheck"
         caResults <- getAllCodeActions doc
@@ -61,7 +65,7 @@ classPath = "test" </> "testdata"
 glodenTest :: String -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 glodenTest name fp deco execute
   = goldenGitDiff name (classPath </> fpWithDeco <.> "expected" <.> "hs")
-    $ runSession testCommand fullCaps classPath
+    $ runSessionWithServer plugin classPath
     $ do
       doc <- openDoc (fp <.> "hs") "haskell"
       _ <- waitForDiagnosticsFromSource doc "typecheck"
