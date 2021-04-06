@@ -14,12 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
+      should_skip_ghcide: ${{ steps.skip_ghcide_check.outputs.should_skip }}
     steps:
       - id: skip_check
         uses: fkirc/skip-duplicate-actions@v3.4.0
         with:
           cancel_others: true
           paths_ignore: '["**/docs/**", "**.md", "**/LICENSE", ".circleci/**", "install/**", "nix/**"]'
+      # If we only change ghcide downstream packages we have not test ghcide itself
+      - id: skip_ghcide_check
+        uses: fkirc/skip-duplicate-actions@v3.4.0
+        with:
+          paths_ignore: '["hls-test-utils/**", "plugins/**", "src/**", "exe/**", "test/**", "shake-bench/**"]'
 
   test:
     needs: pre_job
@@ -115,7 +121,7 @@ jobs:
         # Retry it three times to workaround compiler segfaults in windows
         run: cabal build || cabal build || cabal build
 
-      - if: ${{ needs.pre_job.outputs.should_skip != 'true' &&  matrix.test }}
+      - if: ${{ needs.pre_job.outputs.should_skip != 'true' &&  needs.pre_job.outputs.should_skip_ghcide != 'true' && matrix.test }}
         name: Test ghcide
         # run the tests without parallelism to avoid running out of memory
         run: cabal test ghcide --test-options="-j1 --rerun-update" || cabal test ghcide --test-options="-j1 --rerun" || LSP_TEST_LOG_COLOR=0 LSP_TEST_LOG_MESSAGES=true LSP_TEST_LOG_STDERR=true cabal test ghcide --test-options="-j1 --rerun"
