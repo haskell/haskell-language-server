@@ -25,7 +25,6 @@ import           Data.Hashable
 import qualified Data.Text                  as T
 import           Data.Typeable
 import           Development.IDE            as D
-import           Development.IDE.Core.Rules (useE)
 import           Development.IDE.Core.Shake (getDiagnostics,
                                              getHiddenDiagnostics)
 import           Development.IDE.GHC.Compat (ParsedModule (ParsedModule))

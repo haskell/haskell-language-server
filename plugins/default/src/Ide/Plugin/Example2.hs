@@ -1,38 +1,37 @@
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE TypeFamilies      #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 module Ide.Plugin.Example2
   (
     descriptor
   ) where
 
-import Control.DeepSeq (NFData)
-import Control.Monad.Trans.Maybe
-import Data.Aeson
-import Data.Binary
-import Data.Functor
-import qualified Data.HashMap.Strict as Map
-import Data.Hashable
-import qualified Data.Text as T
-import Data.Typeable
-import Development.IDE as D
-import Development.IDE.Core.Rules
-import Development.IDE.Core.Shake
-import GHC.Generics
-import Ide.PluginUtils
-import Ide.Types
-import Language.LSP.Types
-import Language.LSP.Server
-import Text.Regex.TDFA.Text()
-import Control.Monad.IO.Class
+import           Control.DeepSeq            (NFData)
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Maybe
+import           Data.Aeson
+import           Data.Binary
+import           Data.Functor
+import qualified Data.HashMap.Strict        as Map
+import           Data.Hashable
+import qualified Data.Text                  as T
+import           Data.Typeable
+import           Development.IDE            as D
+import           Development.IDE.Core.Shake
+import           GHC.Generics
+import           Ide.PluginUtils
+import           Ide.Types
+import           Language.LSP.Server
+import           Language.LSP.Types
+import           Text.Regex.TDFA.Text       ()
 
 -- ---------------------------------------------------------------------
 
@@ -132,7 +131,7 @@ codeLens ideState plId CodeLensParams{_textDocument=TextDocumentIdentifier uri} 
 -- ---------------------------------------------------------------------
 -- | Parameters for the addTodo PluginCommand.
 data AddTodoParams = AddTodoParams
-  { file   :: Uri  -- ^ Uri of the file to add the pragma to
+  { file     :: Uri  -- ^ Uri of the file to add the pragma to
   , todoText :: T.Text
   }
   deriving (Show, Eq, Generic, ToJSON, FromJSON)

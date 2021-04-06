@@ -98,7 +98,7 @@ kick = do
     liftIO $ progressUpdate KickStarted
 
     -- Update the exports map for FOIs
-    (results, ()) <- par (uses GenerateCore files) (void $ uses GetHieAst files)
+    results <- uses GenerateCore files <* uses GetHieAst files
 
     -- Update the exports map for non FOIs
     -- We can skip this if checkProject is True, assuming they never change under our feet.
