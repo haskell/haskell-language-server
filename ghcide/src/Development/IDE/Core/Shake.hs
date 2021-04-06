@@ -838,12 +838,14 @@ usesWithStale_ key files = do
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
         Just v  -> return v
 
-newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
-    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
-
 -- | IdeActions are used when we want to return a result immediately, even if it
 -- is stale Useful for UI actions like hover, completion where we don't want to
 -- block.
+--
+-- Run via 'runIdeAction'.
+newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
+    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
+
 runIdeAction :: String -> ShakeExtras -> IdeAction a -> IO a
 runIdeAction _herald s i = runReaderT (runIdeActionT i) s
 

@@ -12,6 +12,7 @@ module Wingman.Judgements.Theta
 import           Data.Maybe (fromMaybe, mapMaybe)
 import           Data.Set (Set)
 import qualified Data.Set as S
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Generics.SYB hiding (tyConName)
 import           GhcPlugins (mkVarOcc, splitTyConApp_maybe, getTyVar_maybe)
@@ -50,11 +51,12 @@ mkEvidence _ = Nothing
 
 ------------------------------------------------------------------------------
 -- | Compute all the 'Evidence' implicitly bound at the given 'SrcSpan'.
-getEvidenceAtHole :: SrcSpan -> LHsBinds GhcTc -> [Evidence]
-getEvidenceAtHole dst
+getEvidenceAtHole :: Tracked age SrcSpan -> Tracked age (LHsBinds GhcTc) -> [Evidence]
+getEvidenceAtHole (unTrack -> dst)
   = mapMaybe mkEvidence
   . (everything (<>) $
         mkQ mempty (absBinds dst) `extQ` wrapperBinds dst `extQ` matchBinds dst)
+  . unTrack
 
 
 ------------------------------------------------------------------------------
