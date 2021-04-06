@@ -11,16 +11,20 @@ module Main
   )
 where
 
-import qualified Data.ByteString.Lazy as LBS
-import           Data.Foldable        (find)
-import           Data.Maybe           (mapMaybe)
-import           Data.Text            (Text)
-import           Data.Text.Encoding   (encodeUtf8)
-import           System.FilePath      ((<.>), (</>))
+import qualified Data.ByteString.Lazy       as LBS
+import           Data.Foldable              (find)
+import           Data.Maybe                 (mapMaybe)
+import           Data.Text                  (Text)
+import           Data.Text.Encoding         (encodeUtf8)
+import qualified Ide.Plugin.HaddockComments as HaddockComments
+import           System.FilePath            ((<.>), (</>))
 import           Test.Hls
 
 main :: IO ()
 main = defaultTestRunner tests
+
+plugin :: PluginDescriptor IdeState
+plugin = HaddockComments.descriptor "haddockComments"
 
 tests :: TestTree
 tests =
@@ -38,7 +42,7 @@ tests =
 
 goldenTest :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 goldenTest fp (toTitle -> expectedTitle) l c = goldenGitDiff (fp <> " (golden)") goldenFilePath $
-  runSession testCommand fullCaps haddockCommentsPath $ do
+  runSessionWithServer plugin haddockCommentsPath $ do
     doc <- openDoc hsFilePath "haskell"
     actions <- getCodeActions doc (Range (Position l c) (Position l $ succ c))
     case find ((== Just expectedTitle) . caTitle) actions of
@@ -52,7 +56,7 @@ goldenTest fp (toTitle -> expectedTitle) l c = goldenGitDiff (fp <> " (golden)")
 
 expectedNothing :: FilePath -> GenCommentsType -> Int -> Int -> TestTree
 expectedNothing fp (toTitle -> expectedTitle) l c = testCase fp $
-  runSession testCommand fullCaps haddockCommentsPath $ do
+  runSessionWithServer plugin haddockCommentsPath $ do
     doc <- openDoc (fp <.> "hs") "haskell"
     titles <- mapMaybe caTitle <$> getCodeActions doc (Range (Position l c) (Position l $ succ c))
     liftIO $ expectedTitle `notElem` titles @? "Unexpected CodeAction"

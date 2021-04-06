@@ -7,12 +7,10 @@
 
 module Utils where
 
-import           Control.Applicative.Combinators (skipManyTill)
 import           Control.Lens hiding (failing, (<.>), (.=))
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default (Default (def))
 import           Data.Foldable
 import qualified Data.Map as M
 import           Data.Maybe
@@ -22,13 +20,15 @@ import qualified Ide.Plugin.Config as Plugin
 import           Wingman.FeatureSet (FeatureSet, allFeatures, prettyFeatureSet)
 import           Wingman.LanguageServer (mkShowMessageParams)
 import           Wingman.Types
-import           Language.LSP.Test
-import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
 import           System.Directory (doesFileExist)
 import           System.FilePath
 import           Test.Hspec
+import           Test.Hls
+import           Ide.Plugin.Tactic as Tactic
 
+plugin :: PluginDescriptor IdeState
+plugin = Tactic.descriptor "tactics"
 
 ------------------------------------------------------------------------------
 -- | Get a range at the given line and column corresponding to having nothing
@@ -63,7 +63,7 @@ mkTest
          ) -- ^ A collection of (un)expected code actions.
     -> SpecWith (Arg Bool)
 mkTest name fp line col ts = it name $ do
-  runSession testCommand fullCaps tacticPath $ do
+  runSessionWithServer plugin tacticPath $ do
     setFeatureSet allFeatures
     doc <- openDoc fp "haskell"
     _ <- waitForDiagnostics
@@ -101,7 +101,7 @@ mkGoldenTest
     -> SpecWith ()
 mkGoldenTest features tc occ line col input =
   it (input <> " (golden)") $ do
-    runSession testCommand fullCaps tacticPath $ do
+    runSessionWithServer plugin tacticPath $ do
       setFeatureSet features
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
@@ -111,7 +111,7 @@ mkGoldenTest features tc occ line col input =
       executeCommand c
       _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
       edited <- documentContents doc
-      let expected_name = tacticPath </> input <.> "expected"
+      let expected_name = input <.> "expected"
       -- Write golden tests if they don't already exist
       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
         T.writeFile expected_name edited
@@ -129,7 +129,7 @@ mkShowMessageTest
     -> SpecWith ()
 mkShowMessageTest features tc occ line col input ufm =
   it (input <> " (golden)") $ do
-    runSession testCommand fullCaps tacticPath $ do
+    runSessionWithServer plugin tacticPath $ do
       setFeatureSet features
       doc <- openDoc input "haskell"
       _ <- waitForDiagnostics
@@ -153,10 +153,6 @@ failing _ _ = pure ()
 
 tacticPath :: FilePath
 tacticPath = "test/golden"
-
-
-testCommand :: String
-testCommand = "test-server"
 
 
 executeCommandWithResp :: Command -> Session (ResponseMessage 'WorkspaceExecuteCommand)
