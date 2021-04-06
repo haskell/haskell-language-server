@@ -890,7 +890,7 @@ parseFileContents env customPreprocessor filename ms = do
                   throwE $ diagFromStrings "parser" DsError errs
 
                let preproc_warnings = diagFromStrings "parser" DsWarning preproc_warns
-               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms (hpm_annotations) parsed
+               parsed' <- liftIO $ applyPluginsParsedResultAction env dflags ms hpm_annotations parsed
 
                -- To get the list of extra source files, we take the list
                -- that the parser gave us,
