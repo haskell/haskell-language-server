@@ -3812,7 +3812,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     bdoc <- createDoc bPath "haskell" bSource
     cdoc <- createDoc cPath "haskell" cSource
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
 
     -- Change th from () to Bool
     let aSource' = T.unlines $ init (T.lines aSource) ++ ["th_a = [d| a = False|]"]
@@ -3824,7 +3824,7 @@ thReloadingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     expectDiagnostics
         [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
         ,("THC.hs", [(DsWarning, (6,0), "Top-level binding")])
-        ,("THB.hs", [(DsWarning, (4,0), "Top-level binding")])
+        ,("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level bindin")])
         ]
 
     closeDoc adoc
@@ -3847,7 +3847,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     adoc <- createDoc aPath "haskell" aSource
     bdoc <- createDoc bPath "haskell" bSource
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
 
     let aSource' = T.unlines $ init (init (T.lines aSource)) ++ ["th :: DecsQ", "th = [d| a = False|]"]
     changeDoc adoc [TextDocumentContentChangeEvent Nothing Nothing aSource']
@@ -3856,7 +3856,7 @@ thLinkingTest unboxed = testCase name $ runWithExtraFiles dir $ \dir -> do
     let bSource' = T.unlines $ init (T.lines bSource) ++ ["$th"]
     changeDoc bdoc [TextDocumentContentChangeEvent Nothing Nothing bSource']
 
-    expectDiagnostics [("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+    expectDiagnostics [("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
 
     closeDoc adoc
     closeDoc bdoc
@@ -4863,7 +4863,7 @@ ifaceTHTest = testCase "iface-th-test" $ runWithExtraFiles "TH" $ \dir -> do
     changeDoc cdoc [TextDocumentContentChangeEvent Nothing Nothing cSource]
     expectDiagnostics
       [("THC.hs", [(DsError, (4, 4), "Couldn't match expected type '()' with actual type 'Bool'")])
-      ,("THB.hs", [(DsWarning, (4,0), "Top-level binding")])]
+      ,("THB.hs", [(DsWarning, (4,thDollarIdx), "Top-level binding")])]
     closeDoc cdoc
 
 ifaceErrorTest :: TestTree
@@ -5679,4 +5679,12 @@ listOfChar :: T.Text
 listOfChar = "String"
 #else
 listOfChar = "[Char]"
+#endif
+
+-- | Ghc 9 doesn't include the $-sign in TH warnings like earlier versions did
+thDollarIdx :: Int
+#if MIN_GHC_API_VERSION(9,0,1)
+thDollarIdx = 1
+#else
+thDollarIdx = 0
 #endif
