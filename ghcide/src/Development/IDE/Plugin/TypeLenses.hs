@@ -255,25 +255,22 @@ rules = do
 gblBindingType :: Maybe DynFlags -> Maybe TcGblEnv -> IO (Maybe GlobalBindingTypeSigsResult)
 gblBindingType (Just dflags) (Just gblEnv) = do
   let exports = availsToNameSet $ tcg_exports gblEnv
-      sigs = tcg_sigs gblEnv
       binds = collectHsBindsBinders $ tcg_binds gblEnv
       patSyns = tcg_patsyns gblEnv
       rdrEnv = tcg_rdr_env gblEnv
       showDoc = showDocRdrEnv dflags rdrEnv
-      hasSig name = name `elemNameSet` sigs
+      tyEnv = tcg_type_env gblEnv
       isExported name = name `elemNameSet` exports
       prettyPrintTy ty = showDoc (pprSigmaType ty)
       bindToSig id
         | name <- idName id
-          , hasSig name
-          , env <- emptyTidyEnv
-          , (_, ty) <- tidyOpenType env (idType id) =
+          , Just ty <- lookupTypeEnv tyEnv name >>= safeTyThingType =
           Just $ GlobalBindingTypeSig name (printName name <> " :: " <> prettyPrintTy ty) (isExported name)
         | otherwise = Nothing
       patToSig p
         | name <- patSynName p
             -- we don't use pprPatSynType, since it always prints forall
-          , Just ty <-lookupTypeEnv (tcg_type_env gblEnv) name >>= safeTyThingType =
+          , Just ty <- lookupTypeEnv tyEnv name >>= safeTyThingType =
           Just $ GlobalBindingTypeSig name ("pattern " <> printName name <> " :: " <> prettyPrintTy ty) (isExported name)
         | otherwise = Nothing
   let bindings = catMaybes $ bindToSig <$> binds
