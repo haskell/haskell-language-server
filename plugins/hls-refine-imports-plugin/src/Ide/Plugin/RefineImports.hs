@@ -125,12 +125,15 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
               _title = "Refine all imports"
               _kind = Just CodeActionQuickFix
               _command = Nothing
-              _edit = Just WorkspaceEdit {_changes, _documentChanges}
+              _edit = Just WorkspaceEdit 
+                {_changes, _documentChanges, _changeAnnotations}
               _changes = Just $ HashMap.singleton _uri $ List edits
               _documentChanges = Nothing
               _diagnostics = Nothing
               _isPreferred = Nothing
               _disabled = Nothing
+              _xdata = Nothing
+              _changeAnnotations = Nothing
           return $ Right $ List [caExplicitImports | not (null edits)]
   | otherwise =
     return $ Right $ List []
@@ -270,7 +273,7 @@ generateLens pId uri edits@TextEdit {_range, _newText} = do
       -- the code lens has no extra data
       _xdata = Nothing
       -- an edit that replaces the whole declaration with the explicit one
-      edit = WorkspaceEdit (Just editsMap) Nothing
+      edit = WorkspaceEdit (Just editsMap) Nothing Nothing
       editsMap = HashMap.fromList [(uri, List [edits])]
       -- the command argument is simply the edit
       _arguments = Just [toJSON $ RefineImportCommandParams edit]
