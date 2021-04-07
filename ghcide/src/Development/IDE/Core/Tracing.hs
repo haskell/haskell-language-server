@@ -1,3 +1,4 @@
+{-# LANGUAGE NoApplicativeDo #-}
 {-# LANGUAGE CPP #-}
 #include "ghc-api-version.h"
 module Development.IDE.Core.Tracing
