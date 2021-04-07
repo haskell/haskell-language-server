@@ -94,7 +94,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
         TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
-        timingOut 2e6 $ join $
+        timingOut (2 * seconds) $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left _ -> Left TacticErrors
             Right rtr ->
@@ -116,6 +116,12 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           pure $ Right Null
 tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
+
+
+------------------------------------------------------------------------------
+-- | The number of microseconds in a second
+seconds :: Num a => a
+seconds = 1e6
 
 
 timingOut
