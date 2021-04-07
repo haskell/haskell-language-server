@@ -7,25 +7,32 @@
 
 module Utils where
 
+import           Control.DeepSeq (deepseq)
+import qualified Control.Exception as E
 import           Control.Lens hiding (failing, (<.>), (.=))
 import           Control.Monad (unless)
 import           Control.Monad.IO.Class
 import           Data.Aeson
 import           Data.Foldable
+import           Data.Function (on)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Ide.Plugin.Config as Plugin
-import           Wingman.FeatureSet (FeatureSet, allFeatures, prettyFeatureSet)
-import           Wingman.LanguageServer (mkShowMessageParams)
-import           Wingman.Types
+import           Ide.Plugin.Tactic as Tactic
+import           Language.LSP.Types
 import           Language.LSP.Types.Lens hiding (actions, applyEdit, capabilities, executeCommand, id, line, message, name, rename, title)
 import           System.Directory (doesFileExist)
 import           System.FilePath
-import           Test.Hspec
 import           Test.Hls
-import           Ide.Plugin.Tactic as Tactic
+import           Test.Hspec
+import           Test.Hspec.Formatters (FailureReason(ExpectedButGot))
+import           Test.Tasty.HUnit (Assertion, HUnitFailure(..))
+import           Wingman.FeatureSet (FeatureSet, allFeatures, prettyFeatureSet)
+import           Wingman.LanguageServer (mkShowMessageParams)
+import           Wingman.Types
 
 plugin :: PluginDescriptor IdeState
 plugin = Tactic.descriptor "tactics"
@@ -92,14 +99,15 @@ setFeatureSet features = do
 
 
 mkGoldenTest
-    :: FeatureSet
+    :: (Text -> Text -> Assertion)
+    -> FeatureSet
     -> TacticCommand
     -> Text
     -> Int
     -> Int
     -> FilePath
     -> SpecWith ()
-mkGoldenTest features tc occ line col input =
+mkGoldenTest eq features tc occ line col input =
   it (input <> " (golden)") $ do
     runSessionWithServer plugin tacticPath $ do
       setFeatureSet features
@@ -116,7 +124,7 @@ mkGoldenTest features tc occ line col input =
       liftIO $ (doesFileExist expected_name >>=) $ flip unless $ do
         T.writeFile expected_name edited
       expected <- liftIO $ T.readFile expected_name
-      liftIO $ edited `shouldBe` expected
+      liftIO $ edited `eq` expected
 
 mkShowMessageTest
     :: FeatureSet
@@ -142,7 +150,40 @@ mkShowMessageTest features tc occ line col input ufm =
 
 
 goldenTest :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
-goldenTest = mkGoldenTest allFeatures
+goldenTest = mkGoldenTest shouldBe allFeatures
+
+goldenTestNoWhitespace :: TacticCommand -> Text -> Int -> Int -> FilePath -> SpecWith ()
+goldenTestNoWhitespace = mkGoldenTest shouldBeIgnoringSpaces allFeatures
+
+
+shouldBeIgnoringSpaces :: Text -> Text -> Assertion
+shouldBeIgnoringSpaces = assertFun f ""
+  where
+    f = (==) `on` T.unwords . T.words
+
+
+assertFun
+    :: Show a
+    => (a -> a -> Bool)
+    -> String -- ^ The message prefix
+    -> a      -- ^ The expected value
+    -> a      -- ^ The actual value
+    -> Assertion
+assertFun eq preface expected actual =
+  unless (eq actual expected) $ do
+    (prefaceMsg
+      `deepseq` expectedMsg
+      `deepseq` actualMsg
+      `deepseq`
+        E.throwIO
+          (HUnitFailure Nothing $ show $ ExpectedButGot prefaceMsg expectedMsg actualMsg))
+  where
+    prefaceMsg
+      | null preface = Nothing
+      | otherwise = Just preface
+    expectedMsg = show expected
+    actualMsg = show actual
+
 
 
 ------------------------------------------------------------------------------
