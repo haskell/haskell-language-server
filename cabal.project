@@ -55,11 +55,11 @@ source-repository-package
 -- https://github.com/mokus0/th-extras/pull/8
 -- https://github.com/mokus0/th-extras/issues/7
 
-source-repository-package
-  type: git
-  location: https://github.com/anka-213/ghc-check
-  tag: 3cad1db8bd6ef0921713913be7e92fe2361bae4d
--- https://github.com/pepeiborra/ghc-check/pull/12
+-- source-repository-package
+--   type: git
+--   location: https://github.com/anka-213/ghc-check
+--   tag: 3cad1db8bd6ef0921713913be7e92fe2361bae4d
+-- -- https://github.com/pepeiborra/ghc-check/pull/12
 
 source-repository-package
   type: git
@@ -81,7 +81,7 @@ source-repository-package
   subdir: lsp-types
   subdir: lsp
   subdir: lsp-test
--- https://github.com/haskell/lsp/pull/312/commits/3bf244fe0cf7ca9b895ae71fb526adba466ceaee
+-- https://github.com/haskell/lsp/pull/312
 
 source-repository-package
   type: git
@@ -91,7 +91,7 @@ source-repository-package
 
 write-ghc-environment-files: never
 
-index-state: 2021-03-29T21:23:14Z
+index-state: 2021-04-07T07:31:23Z
 
 allow-newer:
     *:*,

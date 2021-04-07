@@ -96,7 +96,7 @@ library
         ghc-boot-th,
         ghc-boot,
         ghc >= 8.6,
-        ghc-check >=0.5.0.1,
+        ghc-check >=0.5.0.4,
         ghc-paths,
         ghc-api-compat,
         cryptohash-sha1 >=0.11.100 && <0.12,
