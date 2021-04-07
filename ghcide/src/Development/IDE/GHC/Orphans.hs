@@ -20,7 +20,7 @@ import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Util
 import           GHC                        ()
 import           GhcPlugins
--- import           Retrie.ExactPrint          (Annotated)
+import           Retrie.ExactPrint          (Annotated)
 import qualified StringBuffer               as SB
 
 
@@ -151,11 +151,11 @@ instance NFData ModGuts where
 instance NFData (ImportDecl GhcPs) where
     rnf = rwhnf
 
--- instance Show (Annotated ParsedSource) where
---   show _ = "<Annotated ParsedSource>"
+instance Show (Annotated ParsedSource) where
+  show _ = "<Annotated ParsedSource>"
 
--- instance NFData (Annotated ParsedSource) where
---   rnf = rwhnf
+instance NFData (Annotated ParsedSource) where
+  rnf = rwhnf
 
 #if MIN_GHC_API_VERSION(9,0,1)
 instance (NFData HsModule) where
