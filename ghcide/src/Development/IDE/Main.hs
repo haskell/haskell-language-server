@@ -14,7 +14,8 @@ import           Data.Maybe                            (catMaybes, fromMaybe,
                                                         isJust)
 import qualified Data.Text                             as T
 import qualified Data.Text.IO                          as T
-import           Development.IDE                       (Action, Rules)
+import           Development.IDE                       (Action, Rules,
+                                                        hDuplicateTo')
 import           Development.IDE.Core.Debouncer        (Debouncer,
                                                         newAsyncDebouncer)
 import           Development.IDE.Core.FileStore        (makeVFSHandle)
@@ -53,6 +54,8 @@ import           Development.IDE.Types.Options         (IdeGhcSession,
                                                         defaultIdeOptions)
 import           Development.IDE.Types.Shake           (Key (Key))
 import           Development.Shake                     (action)
+import           GHC.IO.Encoding                       (setLocaleEncoding)
+import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
                                                         Config,
@@ -67,28 +70,31 @@ import           System.Exit                           (ExitCode (ExitFailure),
                                                         exitWith)
 import           System.FilePath                       (takeExtension,
                                                         takeFileName)
-import           System.IO                             (BufferMode (LineBuffering),
+import           System.IO                             (BufferMode (LineBuffering, NoBuffering),
+                                                        Handle, hFlush,
                                                         hPutStrLn,
                                                         hSetBuffering,
                                                         hSetEncoding, stderr,
-                                                        stdout, utf8)
+                                                        stdin, stdout, utf8)
 import           System.Time.Extra                     (offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
 
 data Arguments = Arguments
-    { argsOTMemoryProfiling :: Bool
-    , argFiles :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
-    , argsLogger :: IO Logger
-    , argsRules :: Rules ()
-    , argsHlsPlugins :: IdePlugins IdeState
-    , argsGhcidePlugin :: Plugin Config  -- ^ Deprecated
+    { argsOTMemoryProfiling     :: Bool
+    , argFiles                  :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
+    , argsLogger                :: IO Logger
+    , argsRules                 :: Rules ()
+    , argsHlsPlugins            :: IdePlugins IdeState
+    , argsGhcidePlugin          :: Plugin Config  -- ^ Deprecated
     , argsSessionLoadingOptions :: SessionLoadingOptions
-    , argsIdeOptions :: Maybe Config -> Action IdeGhcSession -> IdeOptions
-    , argsLspOptions :: LSP.Options
-    , argsDefaultHlsConfig :: Config
-    , argsGetHieDbLoc :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
-    , argsDebouncer :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
+    , argsIdeOptions            :: Config -> Action IdeGhcSession -> IdeOptions
+    , argsLspOptions            :: LSP.Options
+    , argsDefaultHlsConfig      :: Config
+    , argsGetHieDbLoc           :: FilePath -> IO FilePath -- ^ Map project roots to the location of the hiedb for the project
+    , argsDebouncer             :: IO (Debouncer NormalizedUri) -- ^ Debouncer used for diagnostics
+    , argsHandleIn              :: IO Handle
+    , argsHandleOut             :: IO Handle
     }
 
 instance Default Arguments where
@@ -105,6 +111,21 @@ instance Default Arguments where
         , argsDefaultHlsConfig = def
         , argsGetHieDbLoc = getHieDbLoc
         , argsDebouncer = newAsyncDebouncer
+        , argsHandleIn = pure stdin
+        , argsHandleOut = do
+                -- Move stdout to another file descriptor and duplicate stderr
+                -- to stdout. This guards against stray prints from corrupting the JSON-RPC
+                -- message stream.
+                newStdout <- hDuplicate stdout
+                stderr `hDuplicateTo'` stdout
+                hSetBuffering stdout NoBuffering
+
+                -- Print out a single space to assert that the above redirection works.
+                -- This is interleaved with the logger, hence we just print a space here in
+                -- order not to mess up the output too much. Verified that this breaks
+                -- the language server tests without the redirection.
+                putStr " " >> hFlush stdout
+                return newStdout
         }
 
 -- | Cheap stderr logger that relies on LineBuffering
@@ -116,25 +137,28 @@ stderrLogger = do
 
 defaultMain :: Arguments -> IO ()
 defaultMain Arguments{..} = do
+    setLocaleEncoding utf8
     pid <- T.pack . show <$> getProcessID
     logger <- argsLogger
     hSetBuffering stderr LineBuffering
 
-    let hlsPlugin = asGhcIdePlugin argsDefaultHlsConfig argsHlsPlugins
+    let hlsPlugin = asGhcIdePlugin argsHlsPlugins
         hlsCommands = allLspCmdIds' pid argsHlsPlugins
         plugins = hlsPlugin <> argsGhcidePlugin
-        options = argsLspOptions { LSP.executeCommandCommands = Just hlsCommands }
-        argsOnConfigChange _ide = pure . getConfigFromNotification argsDefaultHlsConfig
+        options = argsLspOptions { LSP.executeCommandCommands = LSP.executeCommandCommands argsLspOptions <> Just hlsCommands }
+        argsOnConfigChange = getConfigFromNotification
         rules = argsRules >> pluginRules plugins
 
     debouncer <- argsDebouncer
+    inH <- argsHandleIn
+    outH <- argsHandleOut
 
     case argFiles of
         Nothing -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
             hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-            runLanguageServer options argsGetHieDbLoc argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
+            runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
 
@@ -190,7 +214,7 @@ defaultMain Arguments{..} = do
             putStrLn "\nStep 3/4: Initializing the IDE"
             vfs <- makeVFSHandle
             sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions dir
-            let options = (argsIdeOptions Nothing sessionLoader)
+            let options = (argsIdeOptions argsDefaultHlsConfig sessionLoader)
                         { optCheckParents = pure NeverCheck
                         , optCheckProject = pure False
                         }

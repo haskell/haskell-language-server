@@ -6,24 +6,25 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE ViewPatterns          #-}
 
-module Splice (tests) where
+module Main (main) where
 
-import           Control.Applicative.Combinators
 import           Control.Monad
-import           Control.Monad.IO.Class
-import           Data.List                       (find)
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import qualified Data.Text.IO                    as T
+import           Data.List               (find)
+import           Data.Text               (Text)
+import qualified Data.Text               as T
+import qualified Data.Text.IO            as T
+import qualified Ide.Plugin.Splice       as Splice
 import           Ide.Plugin.Splice.Types
-import           Language.LSP.Test
-import           Language.LSP.Types
 import           System.Directory
 import           System.FilePath
-import           System.Time.Extra               (sleep)
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.HUnit
+import           System.Time.Extra       (sleep)
+import           Test.Hls
+
+main :: IO ()
+main = defaultTestRunner tests
+
+plugin :: PluginDescriptor IdeState
+plugin = Splice.descriptor "splice"
 
 tests :: TestTree
 tests =
@@ -67,7 +68,7 @@ tests =
 goldenTest :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
 goldenTest input tc line col =
     testCase (input <> " (golden)") $ do
-        runSession hlsCommand fullCaps spliceTestPath $ do
+        runSessionWithServer plugin spliceTestPath $ do
             doc <- openDoc input "haskell"
             _ <- waitForDiagnostics
             actions <- getCodeActions doc $ pointRange line col
@@ -76,7 +77,7 @@ goldenTest input tc line col =
                     executeCommand c
                     _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
                     edited <- documentContents doc
-                    let expected_name = spliceTestPath </> input <.> "expected"
+                    let expected_name = input <.> "expected"
                     -- Write golden tests if they don't already exist
                     liftIO $
                         (doesFileExist expected_name >>=) $
@@ -89,7 +90,7 @@ goldenTest input tc line col =
 goldenTestWithEdit :: FilePath -> ExpandStyle -> Int -> Int -> TestTree
 goldenTestWithEdit input tc line col =
     testCase (input <> " (golden)") $ do
-        runSession hlsCommand fullCaps spliceTestPath $ do
+        runSessionWithServer plugin spliceTestPath $ do
             doc <- openDoc input "haskell"
             orig <- documentContents doc
             let lns = T.lines orig
@@ -99,7 +100,7 @@ goldenTestWithEdit input tc line col =
                         , _end = Position (length lns + 1) 1
                         }
             liftIO $ sleep 3
-            alt <- liftIO $ T.readFile (spliceTestPath </> input <.> "error")
+            alt <- liftIO $ T.readFile (input <.> "error")
             void $ applyEdit doc $ TextEdit theRange alt
             changeDoc doc [TextDocumentContentChangeEvent (Just theRange) Nothing alt]
             void waitForDiagnostics
@@ -109,7 +110,7 @@ goldenTestWithEdit input tc line col =
                     executeCommand c
                     _resp <- skipManyTill anyMessage (message SWorkspaceApplyEdit)
                     edited <- documentContents doc
-                    let expected_name = spliceTestPath </> input <.> "expected"
+                    let expected_name = input <.> "expected"
                     -- Write golden tests if they don't already exist
                     liftIO $
                         (doesFileExist expected_name >>=) $
@@ -120,7 +121,7 @@ goldenTestWithEdit input tc line col =
                 _ -> liftIO $ assertFailure "No CodeAction detected"
 
 spliceTestPath :: FilePath
-spliceTestPath = "test/testdata/splice"
+spliceTestPath = "test" </> "testdata"
 
 pointRange :: Int -> Int -> Range
 pointRange
@@ -131,4 +132,4 @@ pointRange
 -- | Get the title of a code action.
 codeActionTitle :: (Command |? CodeAction) -> Maybe Text
 codeActionTitle InL{}                               = Nothing
-codeActionTitle (InR(CodeAction title _ _ _ _ _ _)) = Just title
+codeActionTitle (InR(CodeAction title _ _ _ _ _ _ _)) = Just title

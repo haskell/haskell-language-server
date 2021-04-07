@@ -50,7 +50,7 @@ module Development.IDE.Core.Shake(
     getIdeOptions,
     getIdeOptionsIO,
     GlobalIdeOptions(..),
-    getClientConfig,
+    HLS.getClientConfig,
     getPluginConfig,
     garbageCollect,
     knownTargets,
@@ -77,8 +77,8 @@ module Development.IDE.Core.Shake(
     ) where
 
 import           Control.Concurrent.Async
-import           Control.Concurrent.Extra
 import           Control.Concurrent.STM
+import           Control.Concurrent.Strict
 import           Control.DeepSeq
 import           Control.Monad.Extra
 import           Control.Monad.IO.Class
@@ -230,14 +230,10 @@ getShakeExtrasRules = do
     Just x <- getShakeExtraRules @ShakeExtras
     return x
 
-getClientConfig :: LSP.MonadLsp Config m => ShakeExtras -> m Config
-getClientConfig ShakeExtras { defaultConfig } =
-    fromMaybe defaultConfig <$> HLS.getClientConfig
-
 getPluginConfig
-    :: LSP.MonadLsp Config m => ShakeExtras -> PluginId -> m PluginConfig
-getPluginConfig extras plugin = do
-    config <- getClientConfig extras
+    :: LSP.MonadLsp Config m => PluginId -> m PluginConfig
+getPluginConfig plugin = do
+    config <- HLS.getClientConfig
     return $ HLS.configForPlugin config plugin
 
 -- | Register a function that will be called to get the "stale" result of a rule, possibly from disk
@@ -247,9 +243,7 @@ getPluginConfig extras plugin = do
 addPersistentRule :: IdeRule k v => k -> (NormalizedFilePath -> IdeAction (Maybe (v,PositionDelta,TextDocumentVersion))) -> Rules ()
 addPersistentRule k getVal = do
   ShakeExtras{persistentKeys} <- getShakeExtrasRules
-  liftIO $ modifyVar_ persistentKeys $ \hm -> do
-    pure $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal) hm
-  return ()
+  void $ liftIO $ modifyVar' persistentKeys $ HMap.insert (Key k) (fmap (fmap (first3 toDyn)) . getVal)
 
 class Typeable a => IsIdeGlobal a where
 
@@ -273,7 +267,7 @@ addIdeGlobal x = do
 
 addIdeGlobalExtras :: IsIdeGlobal a => ShakeExtras -> a -> IO ()
 addIdeGlobalExtras ShakeExtras{globals} x@(typeOf -> ty) =
-    liftIO $ modifyVar_ globals $ \mp -> case HMap.lookup ty mp of
+    void $ liftIO $ modifyVarIO' globals $ \mp -> case HMap.lookup ty mp of
         Just _ -> errorIO $ "Internal error, addIdeGlobalExtras, got the same type twice for " ++ show ty
         Nothing -> return $! HMap.insert ty (toDyn x) mp
 
@@ -325,10 +319,13 @@ lastValueIO s@ShakeExtras{positionMapping,persistentKeys,state} k file = do
             f <- MaybeT $ pure $ HMap.lookup (Key k) pmap
             (dv,del,ver) <- MaybeT $ runIdeAction "lastValueIO" s $ f file
             MaybeT $ pure $ (,del,ver) <$> fromDynamic dv
-          modifyVar state $ \hm -> pure $ case mv of
-            Nothing -> (HMap.alter (alterValue $ Failed True) (file,Key k) hm,Nothing)
-            Just (v,del,ver) -> (HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (file,Key k) hm
-                                ,Just (v,addDelta del $ mappingForVersion allMappings file ver))
+          case mv of
+            Nothing -> do
+                void $ modifyVar' state $ HMap.alter (alterValue $ Failed True) (file,Key k)
+                return Nothing
+            Just (v,del,ver) -> do
+                void $ modifyVar' state $ HMap.alter (alterValue $ Stale (Just del) ver (toDyn v)) (file,Key k)
+                return $ Just (v,addDelta del $ mappingForVersion allMappings file ver)
 
         -- We got a new stale value from the persistent rule, insert it in the map without affecting diagnostics
         alterValue new Nothing = Just (ValueWithDiagnostics new mempty) -- If it wasn't in the map, give it empty diagnostics
@@ -416,9 +413,9 @@ setValues :: IdeRule k v
           -> Value v
           -> Vector FileDiagnostic
           -> IO ()
-setValues state key file val diags = modifyVar_ state $ \vals -> do
-    -- Force to make sure the old HashMap is not retained
-    evaluate $ HMap.insert (file, Key key) (ValueWithDiagnostics (fmap toDyn val) diags) vals
+setValues state key file val diags =
+    void $ modifyVar' state $ HMap.insert (file, Key key) (ValueWithDiagnostics (fmap toDyn val) diags)
+
 
 -- | Delete the value stored for a given ide build key
 deleteValue
@@ -427,8 +424,7 @@ deleteValue
   -> k
   -> NormalizedFilePath
   -> IO ()
-deleteValue ShakeExtras{state} key file = modifyVar_ state $ \vals ->
-    evaluate $ HMap.delete (file, Key key) vals
+deleteValue ShakeExtras{state} key file = void $ modifyVar' state $ HMap.delete (file, Key key)
 
 -- | We return Nothing if the rule has not run and Just Failed if it has failed to produce a value.
 getValues ::
@@ -503,7 +499,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         let hiedbWriter = HieDbWriter{..}
         progressAsync <- async $
             when reportProgress $
-                progressThread mostRecentProgressEvent inProgress
+                progressThread optProgressStyle mostRecentProgressEvent inProgress
         exportsMap <- newVar mempty
 
         actionQueue <- newQueue
@@ -521,7 +517,10 @@ shakeOpen lspEnv defaultConfig logger debouncer
     shakeDatabaseProfile <- shakeDatabaseProfileIO shakeProfileDir
     let ideState = IdeState{..}
 
-    IdeOptions{ optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled } <- getIdeOptionsIO shakeExtras
+    IdeOptions
+        { optOTMemoryProfiling = IdeOTMemoryProfiling otProfilingEnabled
+        , optProgressStyle
+        } <- getIdeOptionsIO shakeExtras
     startTelemetry otProfilingEnabled logger $ state shakeExtras
 
     return ideState
@@ -532,7 +531,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
         -- And two transitions, modelled by 'ProgressEvent':
         --   1. KickCompleted - transitions from Reporting into Idle
         --   2. KickStarted - transitions from Idle into Reporting
-        progressThread mostRecentProgressEvent inProgress = progressLoopIdle
+        progressThread style mostRecentProgressEvent inProgress = progressLoopIdle
           where
             progressLoopIdle = do
                 atomically $ do
@@ -564,7 +563,7 @@ shakeOpen lspEnv defaultConfig logger debouncer
                 bracket_
                   (start u)
                   (stop u)
-                  (loop u Nothing)
+                  (loop u 0)
                 where
                     start id = LSP.sendNotification LSP.SProgress $
                         LSP.ProgressParams
@@ -589,16 +588,27 @@ shakeOpen lspEnv defaultConfig logger debouncer
                         current <- liftIO $ readVar inProgress
                         let done = length $ filter (== 0) $ HMap.elems current
                         let todo = HMap.size current
-                        let next = Just $ T.pack $ show done <> "/" <> show todo
+                        let next = 100 * fromIntegral done / fromIntegral todo
                         when (next /= prev) $
                           LSP.sendNotification LSP.SProgress $
                           LSP.ProgressParams
                               { _token = id
-                              , _value = LSP.Report $ LSP.WorkDoneProgressReportParams
-                                { _cancellable = Nothing
-                                , _message = next
-                                , _percentage = Nothing
-                                }
+                              , _value = LSP.Report $ case style of
+                                  Explicit -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Just $ T.pack $ show done <> "/" <> show todo
+                                    , _percentage = Nothing
+                                    }
+                                  Percentage -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Nothing
+                                    , _percentage = Just next
+                                    }
+                                  NoProgress -> LSP.WorkDoneProgressReportParams
+                                    { _cancellable = Nothing
+                                    , _message = Nothing
+                                    , _percentage = Nothing
+                                    }
                               }
                         loop id next
 
@@ -783,17 +793,15 @@ garbageCollect :: (NormalizedFilePath -> Bool) -> Action ()
 garbageCollect keep = do
     ShakeExtras{state, diagnostics,hiddenDiagnostics,publishedDiagnostics,positionMapping} <- getShakeExtras
     liftIO $
-        do newState <- modifyVar state $ \values -> do
-               values <- evaluate $ HMap.filterWithKey (\(file, _) _ -> keep file) values
-               return $! dupe values
-           modifyVar_ diagnostics $ \diags -> return $! filterDiagnostics keep diags
-           modifyVar_ hiddenDiagnostics $ \hdiags -> return $! filterDiagnostics keep hdiags
-           modifyVar_ publishedDiagnostics $ \diags -> return $! HMap.filterWithKey (\uri _ -> keep (fromUri uri)) diags
+        do newState <- modifyVar' state $ HMap.filterWithKey (\(file, _) _ -> keep file)
+           void $ modifyVar' diagnostics $ filterDiagnostics keep
+           void $ modifyVar' hiddenDiagnostics $ filterDiagnostics keep
+           void $ modifyVar' publishedDiagnostics $ HMap.filterWithKey (\uri _ -> keep (fromUri uri))
            let versionsForFile =
                    HMap.fromListWith Set.union $
                    mapMaybe (\((file, _key), ValueWithDiagnostics v _) -> (filePathToUri' file,) . Set.singleton <$> valueVersion v) $
                    HMap.toList newState
-           modifyVar_ positionMapping $ \mappings -> return $! filterVersionMap versionsForFile mappings
+           void $ modifyVar' positionMapping $ filterVersionMap versionsForFile
 
 -- | Define a new Rule without early cutoff
 define
@@ -830,12 +838,14 @@ usesWithStale_ key files = do
         Nothing -> liftIO $ throwIO $ BadDependency (show key)
         Just v  -> return v
 
-newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
-    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
-
 -- | IdeActions are used when we want to return a result immediately, even if it
 -- is stale Useful for UI actions like hover, completion where we don't want to
 -- block.
+--
+-- Run via 'runIdeAction'.
+newtype IdeAction a = IdeAction { runIdeActionT  :: (ReaderT ShakeExtras IO) a }
+    deriving newtype (MonadReader ShakeExtras, MonadIO, Functor, Applicative, Monad)
+
 runIdeAction :: String -> ShakeExtras -> IdeAction a -> IO a
 runIdeAction _herald s i = runReaderT (runIdeActionT i) s
 
@@ -994,7 +1004,7 @@ defineEarlyCutoff' doDiagnostics key file old mode action = do
             -- This functions are deliberately eta-expanded to avoid space leaks.
             -- Do not remove the eta-expansion without profiling a session with at
             -- least 1000 modifications.
-            where f shift = modifyVar_ var $ \x -> evaluate $ HMap.insertWith (\_ x -> shift x) file (shift 0) x
+            where f shift = void $ modifyVar' var $ HMap.insertWith (\_ x -> shift x) file (shift 0)
 
 isSuccess :: RunResult (A v) -> Bool
 isSuccess (RunResult _ _ (A Failed{})) = False
@@ -1086,17 +1096,17 @@ updateFileDiagnostics fp k ShakeExtras{logger, diagnostics, hiddenDiagnostics, p
     let (currentShown, currentHidden) = partition ((== ShowDiag) . fst) current
         uri = filePathToUri' fp
         ver = vfsVersion =<< modTime
-        updateDiagnosticsWithForcing new store = do
-            store' <- evaluate $ setStageDiagnostics uri ver (T.pack $ show k) new store
-            new' <- evaluate $ getUriDiagnostics uri store'
-            return (store', new')
+        update new store =
+            let store' = setStageDiagnostics uri ver (T.pack $ show k) new store
+                new' = getUriDiagnostics uri store'
+            in (store', new')
     mask_ $ do
         -- Mask async exceptions to ensure that updated diagnostics are always
         -- published. Otherwise, we might never publish certain diagnostics if
         -- an exception strikes between modifyVar but before
         -- publishDiagnosticsNotification.
-        newDiags <- modifyVar diagnostics $ updateDiagnosticsWithForcing $ map snd currentShown
-        _ <- modifyVar hiddenDiagnostics $  updateDiagnosticsWithForcing $ map snd currentHidden
+        newDiags <- modifyVar diagnostics $ pure . update (map snd currentShown)
+        _ <- modifyVar hiddenDiagnostics $  pure . update (map snd currentHidden)
         let uri = filePathToUri' fp
         let delay = if null newDiags then 0.1 else 0
         registerEvent debouncer delay uri $ do
@@ -1182,6 +1192,6 @@ updatePositionMapping IdeState{shakeExtras = ShakeExtras{positionMapping}} Versi
                 Map.mapAccumRWithKey (\acc _k (delta, _) -> let new = addDelta delta acc in (new, (delta, acc)))
                   zeroMapping
                   (Map.insert _version (shared_change, zeroMapping) mappingForUri)
-        pure $! HMap.insert uri updatedMapping allMappings
+        pure $ HMap.insert uri updatedMapping allMappings
   where
     shared_change = mkDelta changes

@@ -52,10 +52,8 @@ data Config =
     , checkProject                :: !Bool
     , hlintOn                     :: !Bool
     , diagnosticsOnChange         :: !Bool
-    , maxNumberOfProblems         :: !Int
     , diagnosticsDebounceDuration :: !Int
     , liquidOn                    :: !Bool
-    , completionSnippetsOn        :: !Bool
     , formatOnImportOn            :: !Bool
     , formattingProvider          :: !T.Text
     , maxCompletions              :: !Int
@@ -68,10 +66,8 @@ instance Default Config where
     , checkProject                = True
     , hlintOn                     = True
     , diagnosticsOnChange         = True
-    , maxNumberOfProblems         = 100
     , diagnosticsDebounceDuration = 350000
     , liquidOn                    = False
-    , completionSnippetsOn        = True
     , formatOnImportOn            = True
     -- , formattingProvider          = "brittany"
     , formattingProvider          = "ormolu"
@@ -94,10 +90,8 @@ parseConfig defValue = A.withObject "Config" $ \v -> do
         <*> (o .:? "checkProject" <|> v .:? "checkProject") .!= checkProject defValue
         <*> o .:? "hlintOn"                                 .!= hlintOn defValue
         <*> o .:? "diagnosticsOnChange"                     .!= diagnosticsOnChange defValue
-        <*> o .:? "maxNumberOfProblems"                     .!= maxNumberOfProblems defValue
         <*> o .:? "diagnosticsDebounceDuration"             .!= diagnosticsDebounceDuration defValue
         <*> o .:? "liquidOn"                                .!= liquidOn defValue
-        <*> o .:? "completionSnippetsOn"                    .!= completionSnippetsOn defValue
         <*> o .:? "formatOnImportOn"                        .!= formatOnImportOn defValue
         <*> o .:? "formattingProvider"                      .!= formattingProvider defValue
         <*> o .:? "maxCompletions"                          .!= maxCompletions defValue
@@ -111,10 +105,8 @@ instance A.ToJSON Config where
                  , "checkProject"                .= checkProject
                  , "hlintOn"                     .= hlintOn
                  , "diagnosticsOnChange"         .= diagnosticsOnChange
-                 , "maxNumberOfProblems"         .= maxNumberOfProblems
                  , "diagnosticsDebounceDuration" .= diagnosticsDebounceDuration
                  , "liquidOn"                    .= liquidOn
-                 , "completionSnippetsOn"        .= completionSnippetsOn
                  , "formatOnImportOn"            .= formatOnImportOn
                  , "formattingProvider"          .= formattingProvider
                  , "maxCompletions"              .= maxCompletions

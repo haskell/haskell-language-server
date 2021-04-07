@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Wingman.LanguageServer.TacticProviders
   ( commandProvider
   , commandTactic
   , tcCommandId
   , TacticParams (..)
+  , TacticProviderData (..)
   ) where
 
 import           Control.Monad
@@ -18,21 +20,22 @@ import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
 import           DataCon (dataConName)
+import           Development.IDE.Core.UseStale (Tracked, Age(..))
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
-import           Wingman.Auto
-import           Wingman.FeatureSet
-import           Wingman.GHC
-import           Wingman.Judgements
-import           Wingman.Tactics
-import           Wingman.Types
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           Refinery.Tactic (goal)
+import           Wingman.Auto
+import           Wingman.FeatureSet
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Tactics
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -140,18 +143,22 @@ guardLength f as = bool [] as $ f $ length as
 -- | A 'TacticProvider' is a way of giving context-sensitive actions to the LS
 -- UI.
 type TacticProvider
-     = DynFlags
-    -> Config
-    -> PluginId
-    -> Uri
-    -> Range
-    -> Judgement
+     = TacticProviderData
     -> IO [Command |? CodeAction]
+
+data TacticProviderData = TacticProviderData
+  { tpd_dflags :: DynFlags
+  , tpd_config :: Config
+  , tpd_plid   :: PluginId
+  , tpd_uri    :: Uri
+  , tpd_range  :: Tracked 'Current Range
+  , tpd_jdg    :: Judgement
+  }
 
 
 data TacticParams = TacticParams
     { tp_file     :: Uri    -- ^ Uri of the file to fill the hole in
-    , tp_range    :: Range  -- ^ The range of the hole
+    , tp_range    :: Tracked 'Current Range  -- ^ The range of the hole
     , tp_var_name :: T.Text
     }
   deriving stock (Show, Eq, Generic)
@@ -162,9 +169,9 @@ data TacticParams = TacticParams
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- 'Feature' is in the feature set.
 requireFeature :: Feature -> TacticProvider -> TacticProvider
-requireFeature f tp dflags cfg plId uri range jdg = do
-  case hasFeature f $ cfg_feature_set cfg of
-    True  -> tp dflags cfg plId uri range jdg
+requireFeature f tp tpd =
+  case hasFeature f $ cfg_feature_set $ tpd_config tpd of
+    True  -> tp tpd
     False -> pure []
 
 
@@ -172,9 +179,9 @@ requireFeature f tp dflags cfg plId uri range jdg = do
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 requireExtension :: Extension -> TacticProvider -> TacticProvider
-requireExtension ext tp dflags cfg plId uri range jdg =
-  case xopt ext dflags of
-    True  -> tp dflags cfg plId uri range jdg
+requireExtension ext tp tpd =
+  case xopt ext $ tpd_dflags tpd of
+    True  -> tp tpd
     False -> pure []
 
 
@@ -182,9 +189,9 @@ requireExtension ext tp dflags cfg plId uri range jdg =
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 filterGoalType :: (Type -> Bool) -> TacticProvider -> TacticProvider
-filterGoalType p tp dflags cfg plId uri range jdg =
-  case p $ unCType $ jGoal jdg of
-    True  -> tp dflags cfg plId uri range jdg
+filterGoalType p tp tpd =
+  case p $ unCType $ jGoal $ tpd_jdg tpd of
+    True  -> tp tpd
     False -> pure []
 
 
@@ -192,8 +199,7 @@ filterGoalType p tp dflags cfg plId uri range jdg =
 -- | Restrict a 'TacticProvider', making sure it appears only when the given
 -- predicate holds for the goal.
 withJudgement :: (Judgement -> TacticProvider) -> TacticProvider
-withJudgement tp dflags fs plId uri range jdg =
-  tp jdg dflags fs plId uri range jdg
+withJudgement tp tpd = tp (tpd_jdg tpd) tpd
 
 
 ------------------------------------------------------------------------------
@@ -203,13 +209,14 @@ filterBindingType
     :: (Type -> Type -> Bool)  -- ^ Goal and then binding types.
     -> (OccName -> Type -> TacticProvider)
     -> TacticProvider
-filterBindingType p tp dflags cfg plId uri range jdg =
-  let hy = jHypothesis jdg
-      g  = jGoal jdg
+filterBindingType p tp tpd =
+  let jdg = tpd_jdg tpd
+      hy  = jHypothesis jdg
+      g   = jGoal jdg
    in fmap join $ for (unHypothesis hy) $ \hi ->
         let ty = unCType $ hi_type hi
          in case p (unCType g) ty of
-              True  -> tp (hi_name hi) ty dflags cfg plId uri range jdg
+              True  -> tp (hi_name hi) ty tpd
               False -> pure []
 
 
@@ -220,15 +227,15 @@ filterTypeProjection
     :: (Type -> [a])  -- ^ Features of the goal to look into further
     -> (a -> TacticProvider)
     -> TacticProvider
-filterTypeProjection p tp dflags cfg plId uri range jdg =
-  fmap join $ for (p $ unCType $ jGoal jdg) $ \a ->
-      tp a dflags cfg plId uri range jdg
+filterTypeProjection p tp tpd =
+  fmap join $ for (p $ unCType $ jGoal $ tpd_jdg tpd) $ \a ->
+      tp a tpd
 
 
 ------------------------------------------------------------------------------
 -- | Get access to the 'Config' when building a 'TacticProvider'.
 withConfig :: (Config -> TacticProvider) -> TacticProvider
-withConfig tp dflags cfg plId uri range jdg = tp cfg dflags cfg plId uri range jdg
+withConfig tp tpd = tp (tpd_config tpd) tpd
 
 
 
@@ -247,21 +254,23 @@ useNameFromHypothesis f name = do
 -- | Terminal constructor for providing context-sensitive tactics. Tactics
 -- given by 'provide' are always available.
 provide :: TacticCommand -> T.Text -> TacticProvider
-provide tc name _ _ plId uri range _ = do
+provide tc name TacticProviderData{..} = do
   let title = tacticTitle tc name
-      params = TacticParams { tp_file = uri , tp_range = range , tp_var_name = name }
-      cmd = mkLspCommand plId (tcCommandId tc) title (Just [toJSON params])
+      params = TacticParams { tp_file = tpd_uri , tp_range = tpd_range , tp_var_name = name }
+      cmd = mkLspCommand tpd_plid (tcCommandId tc) title (Just [toJSON params])
   pure
     $ pure
     $ InR
     $ CodeAction
-        title
-        (Just $ mkTacticKind tc)
-        Nothing
-        (Just $ tacticPreferred tc)
-        Nothing
-        Nothing
-    $ Just cmd
+        { _title       = title
+        , _kind        = Just $ mkTacticKind tc
+        , _diagnostics = Nothing
+        , _isPreferred = Just $ tacticPreferred tc
+        , _disabled    = Nothing
+        , _edit        = Nothing
+        , _command     = Just cmd
+        , _xdata       = Nothing
+        }
 
 
 ------------------------------------------------------------------------------

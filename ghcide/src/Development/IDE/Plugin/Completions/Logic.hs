@@ -9,7 +9,6 @@ module Development.IDE.Plugin.Completions.Logic (
   CachedCompletions
 , cacheDataProducer
 , localCompletionsForParsedModule
-, WithSnippets(..)
 , getCompletions
 ) where
 
@@ -56,8 +55,7 @@ import           Development.IDE.Types.Options
 import           GhcPlugins                               (flLabel, unpackFS)
 import           Ide.PluginUtils                          (mkLspCommand)
 import           Ide.Types                                (CommandId (..),
-                                                           PluginId,
-                                                           WithSnippets (..))
+                                                           PluginId)
 import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
@@ -145,7 +143,7 @@ occNameToComKind ty oc
   | isTcOcc   oc = case ty of
                      Just t
                        | "Constraint" `T.isSuffixOf` t
-                       -> CiClass
+                       -> CiInterface
                      _ -> CiStruct
   | isDataOcc oc = CiConstructor
   | otherwise    = CiVariable
@@ -188,6 +186,7 @@ mkCompl
                   _filterText = Nothing,
                   _insertText = Just insertText,
                   _insertTextFormat = Just Snippet,
+                  _insertTextMode = Nothing,
                   _textEdit = Nothing,
                   _additionalTextEdits = Nothing,
                   _commitCharacters = Nothing,
@@ -274,13 +273,13 @@ mkModCompl :: T.Text -> CompletionItem
 mkModCompl label =
   CompletionItem label (Just CiModule) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
 
 mkImportCompl :: T.Text -> T.Text -> CompletionItem
 mkImportCompl enteredQual label =
   CompletionItem m (Just CiModule) Nothing (Just label)
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
   where
     m = fromMaybe "" (T.stripPrefix enteredQual label)
 
@@ -288,13 +287,13 @@ mkExtCompl :: T.Text -> CompletionItem
 mkExtCompl label =
   CompletionItem label (Just CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing Nothing Nothing
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
 
 mkPragmaCompl :: T.Text -> T.Text -> CompletionItem
 mkPragmaCompl label insertText =
   CompletionItem label (Just CiKeyword) Nothing Nothing
     Nothing Nothing Nothing Nothing Nothing (Just insertText) (Just Snippet)
-    Nothing Nothing Nothing Nothing Nothing
+    Nothing Nothing Nothing Nothing Nothing Nothing
 
 
 cacheDataProducer :: Uri -> HscEnvEq -> Module -> GlobalRdrEnv-> GlobalRdrEnv -> [LImportDecl GhcPs] -> IO CachedCompletions
@@ -406,7 +405,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
                 [mkComp id CiVariable Nothing
                 | VarPat _ id <- listify (\(_ :: Pat GhcPs) -> True) pat_lhs]
             TyClD _ ClassDecl{tcdLName, tcdSigs} ->
-                mkComp tcdLName CiClass Nothing :
+                mkComp tcdLName CiInterface Nothing :
                 [ mkComp id CiFunction (Just $ ppr typ)
                 | L _ (TypeSig _ ids typ) <- tcdSigs
                 , id <- ids]
@@ -428,7 +427,7 @@ localCompletionsForParsedModule uri pm@ParsedModule{pm_parsed_source = L _ HsMod
         ]
 
     mkComp n ctyp ty =
-        CI ctyp pn (Right thisModName) ty pn Nothing doc (ctyp `elem` [CiStruct, CiClass]) Nothing
+        CI ctyp pn (Right thisModName) ty pn Nothing doc (ctyp `elem` [CiStruct, CiInterface]) Nothing
       where
         pn = ppr n
         doc = SpanDocText (getDocumentation [pm] n) (SpanDocUris Nothing Nothing)
@@ -465,12 +464,16 @@ findRecordCompl _ _ _ _ = []
 ppr :: Outputable a => a -> T.Text
 ppr = T.pack . prettyPrint
 
-toggleSnippets :: ClientCapabilities -> WithSnippets -> CompletionItem -> CompletionItem
-toggleSnippets ClientCapabilities {_textDocument} (WithSnippets with) =
+toggleSnippets :: ClientCapabilities -> CompletionsConfig -> CompletionItem -> CompletionItem
+toggleSnippets ClientCapabilities {_textDocument} (CompletionsConfig with _) =
   removeSnippetsWhen (not $ with && supported)
   where
     supported =
       Just True == (_textDocument >>= _completion >>= _completionItem >>= _snippetSupport)
+
+toggleAutoExtend :: CompletionsConfig -> CompItem -> CompItem
+toggleAutoExtend (CompletionsConfig _ False) x = x {additionalTextEdits = Nothing}
+toggleAutoExtend _ x = x
 
 removeSnippetsWhen :: Bool -> CompletionItem -> CompletionItem
 removeSnippetsWhen condition x =
@@ -491,10 +494,10 @@ getCompletions
     -> (Bindings, PositionMapping)
     -> VFS.PosPrefixInfo
     -> ClientCapabilities
-    -> WithSnippets
+    -> CompletionsConfig
     -> IO [CompletionItem]
 getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, importableModules}
-               maybe_parsed (localBindings, bmapping) prefixInfo caps withSnippets = do
+               maybe_parsed (localBindings, bmapping) prefixInfo caps config = do
   let VFS.PosPrefixInfo { fullLine, prefixModule, prefixText } = prefixInfo
       enteredQual = if T.null prefixModule then "" else prefixModule <> "."
       fullPrefix  = enteredQual <> prefixText
@@ -530,7 +533,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
                         Just ValueContext -> filter (not . isTypeCompl) compls
                         Just _            -> filter (not . isTypeCompl) compls
           -- Add whether the text to insert has backticks
-          ctxCompls = map (\comp -> comp { isInfix = infixCompls }) ctxCompls'
+          ctxCompls = map (\comp -> toggleAutoExtend config $ comp { isInfix = infixCompls }) ctxCompls'
 
           infixCompls :: Maybe Backtick
           infixCompls = isUsedAsInfix fullLine prefixModule prefixText pos
@@ -562,7 +565,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
         ]
 
       filtListWithSnippet f list suffix =
-        [ toggleSnippets caps withSnippets (f label (snippet <> suffix))
+        [ toggleSnippets caps config (f label (snippet <> suffix))
         | (snippet, label) <- list
         , Fuzzy.test fullPrefix label
         ]
@@ -596,7 +599,7 @@ getCompletions plId ideOpts CC {allModNamesAsNS, unqualCompls, qualCompls, impor
         compls <- mapM (mkCompl plId ideOpts) uniqueFiltCompls
         return $ filtModNameCompls
               ++ filtKeywordCompls
-              ++ map ( toggleSnippets caps withSnippets) compls
+              ++ map (toggleSnippets caps config) compls
 
 
 -- ---------------------------------------------------------------------

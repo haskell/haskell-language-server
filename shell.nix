@@ -4,9 +4,7 @@
 # Maintaining this file:
 #
 #     - Bump the nixpkgs version using `niv update nixpkgs`
-#     - To edit the set of local packages:
-#       1. Declare them in nix/default.nix
-#       2. Edit the list of packages below
+#     - Edit `ourSources` (in nix/default.nix) to update the set of local packages
 #
 # For more details: https://github.com/NixOS/nixpkgs/blob/20.03/pkgs/development/haskell-modules/make-package-set.nix#L256
 
@@ -24,21 +22,7 @@ let defaultCompiler = "ghc" + lib.replaceStrings ["."] [""] haskellPackages.ghc.
             then ourHaskell.packages.${defaultCompiler}
             else ourHaskell.packages.${compiler};
 
-    packages = p: [ p.haskell-language-server
-                    p.ghcide
-                    p.shake-bench
-                    p.hie-compat
-                    p.hls-plugin-api
-                    p.hls-brittany-plugin
-                    p.hls-class-plugin
-                    p.hls-haddock-comments-plugin
-                    p.hls-eval-plugin
-                    p.hls-explicit-imports-plugin
-                    p.hls-hlint-plugin
-                    p.hls-retrie-plugin
-                    p.hls-splice-plugin
-                    p.hls-tactics-plugin
-                  ];
+    packages = p: with builtins; map (name: p.${name}) (attrNames ourSources);
 
     isSupported = compiler == "default" || compiler == defaultCompiler;
 in

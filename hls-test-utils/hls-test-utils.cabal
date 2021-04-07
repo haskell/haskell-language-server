@@ -1,0 +1,69 @@
+cabal-version: 2.4
+name:          hls-test-utils
+version:       1.0.0.0
+synopsis:      Utilities used in the tests of Haskell Language Server
+description:
+  Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
+
+homepage:
+  https://github.com/haskell/haskell-language-server/hls-test-utils
+
+bug-reports:   https://github.com/haskell/haskell-language-server/issues
+license:       Apache-2.0
+license-file:  LICENSE
+author:        The Haskell IDE Team
+maintainer:    alan.zimm@gmail.com
+copyright:     The Haskell IDE Team
+category:      Development
+build-type:    Simple
+
+flag pedantic
+  description: Enable -Werror
+  default:     False
+  manual:      True
+
+source-repository head
+  type:     git
+  location: https://github.com/haskell/haskell-language-server
+
+library
+  exposed-modules:
+    Test.Hls
+    Test.Hls.Util
+
+  hs-source-dirs:   src
+  build-depends:
+    , aeson
+    , async
+    , base
+    , blaze-markup
+    , bytestring
+    , containers
+    , data-default
+    , directory
+    , extra
+    , filepath
+    , ghcide                  ^>=1.1.0.0
+    , hls-plugin-api          ^>=1.1.0.0
+    , hspec
+    , hspec-core
+    , lens
+    , lsp                     ^>=1.2
+    , lsp-test                ==0.14.0.0
+    , lsp-types               ^>=1.2
+    , shake
+    , tasty
+    , tasty-expected-failure
+    , tasty-golden
+    , tasty-hunit
+    , tasty-rerun
+    , temporary
+    , text
+    , unordered-containers
+
+  ghc-options:      -Wall
+
+  if flag(pedantic)
+    ghc-options: -Werror
+
+  default-language: Haskell2010

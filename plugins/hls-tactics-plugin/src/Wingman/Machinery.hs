@@ -87,7 +87,7 @@ runTactic ctx jdg t =
               RunTacticResults
                 { rtr_trace = syn_trace syn
                 , rtr_extract = simplify $ syn_val syn
-                , rtr_other_solns = reverse . fmap fst $ take 5 sorted
+                , rtr_other_solns = reverse . fmap fst $ sorted
                 , rtr_jdg = jdg
                 , rtr_ctx = ctx
                 }
@@ -166,7 +166,7 @@ scoreSolution ext goal holes
     initial_scope = hyByName $ jEntireHypothesis goal
     intro_vals = M.keysSet $ hyByName $ syn_scoped ext
     used_vals = S.intersection intro_vals $ syn_used_vals ext
-    used_user_vals = filter (isUserProv . hi_provenance)
+    used_user_vals = filter (isLocalHypothesis . hi_provenance)
                    $ mapMaybe (flip M.lookup initial_scope)
                    $ S.toList
                    $ syn_used_vals ext
@@ -224,6 +224,16 @@ unify goal inst = do
 
 
 ------------------------------------------------------------------------------
+-- | Prefer the first tactic to the second, if the bool is true. Otherwise, just run the second tactic.
+--
+-- This is useful when you have a clever pruning solution that isn't always
+-- applicable.
+attemptWhen :: TacticsM a -> TacticsM a -> Bool -> TacticsM a
+attemptWhen _  t2 False = t2
+attemptWhen t1 t2 True  = commit t1 t2
+
+
+------------------------------------------------------------------------------
 -- | Get the class methods of a 'PredType', correctly dealing with
 -- instantiation of quantified class types.
 methodHypothesis :: PredType -> Maybe [HyInfo CType]
@@ -233,10 +243,7 @@ methodHypothesis ty = do
   let methods = classMethods cls
       tvs     = classTyVars cls
       subst   = zipTvSubst tvs apps
-  sc_methods <- fmap join
-              $ traverse (methodHypothesis . substTy subst)
-              $ classSCTheta cls
-  pure $ mappend sc_methods $ methods <&> \method ->
+  pure $ methods <&> \method ->
     let (_, _, ty) = tcSplitSigmaTy $ idType method
     in ( HyInfo (occName method) (ClassMethodPrv $ Uniquely cls) $ CType $ substTy subst ty
        )

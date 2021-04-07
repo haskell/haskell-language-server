@@ -4,8 +4,10 @@ packages:
          ./shake-bench
          ./ghcide
          ./hls-plugin-api
+         ./hls-test-utils
          ./plugins/hls-tactics-plugin
          ./plugins/hls-brittany-plugin
+         ./plugins/hls-stylish-haskell-plugin
          ./plugins/hls-class-plugin
          ./plugins/hls-eval-plugin
          ./plugins/hls-explicit-imports-plugin
@@ -17,15 +19,11 @@ tests: true
 
 package *
   ghc-options: -haddock
-
-package haskell-language-server
-  test-show-details: direct
-package ghcide
   test-show-details: direct
 
 write-ghc-environment-files: never
 
-index-state: 2021-03-02T21:23:14Z
+index-state: 2021-03-29T21:23:14Z
 
 allow-newer:
 	active:base,

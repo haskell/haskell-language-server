@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name:          hls-retrie-plugin
-version:       1.0.0.0
+version:       1.0.0.1
 synopsis:      Retrie integration plugin for Haskell Language Server
 license:       Apache-2.0
 license-file:  LICENSE
@@ -23,9 +23,9 @@ library
                ,    extra
                ,    lsp
                ,    lsp-types
-               ,    hls-plugin-api       ^>= 1.0.0.0
+               ,    hls-plugin-api       >= 1.0 && < 1.2
                ,    ghc
-               ,    ghcide               ^>= 1.1.0.0
+               ,    ghcide               ^>= 1.1
                ,    hashable
                ,    retrie               >=0.1.1.0
                ,    safe-exceptions

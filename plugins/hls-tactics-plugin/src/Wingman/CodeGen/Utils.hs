@@ -1,33 +1,45 @@
 module Wingman.CodeGen.Utils where
 
-import           Data.List
-import           DataCon
-import           Development.IDE.GHC.Compat
-import           GHC.Exts
-import           GHC.SourceGen              (RdrNameStr, recordConE)
-import           GHC.SourceGen.Overloaded
-import           Wingman.GHC      (getRecordFields)
-import           Name
+import ConLike (ConLike(RealDataCon), conLikeName)
+import Data.List
+import DataCon
+import Development.IDE.GHC.Compat
+import GHC.Exts
+import GHC.SourceGen (RdrNameStr, recordConE, string)
+import GHC.SourceGen.Overloaded
+import GhcPlugins (nilDataCon, charTy, eqType)
+import Name
+import Wingman.GHC (getRecordFields)
 
 
 ------------------------------------------------------------------------------
 -- | Make a data constructor with the given arguments.
-mkCon :: DataCon -> [LHsExpr GhcPs] -> LHsExpr GhcPs
-mkCon dcon (fmap unLoc -> args)
-  | isTupleDataCon dcon =
+mkCon :: ConLike -> [Type] -> [LHsExpr GhcPs] -> LHsExpr GhcPs
+mkCon con apps (fmap unLoc -> args)
+  | RealDataCon dcon <- con
+  , dcon == nilDataCon
+  , [ty] <- apps
+  , ty `eqType` charTy = noLoc $ string ""
+
+  | RealDataCon dcon <- con
+  , isTupleDataCon dcon =
       noLoc $ tuple args
-  | dataConIsInfix dcon
+
+  | RealDataCon dcon <- con
+  , dataConIsInfix dcon
   , (lhs : rhs : args') <- args =
-      noLoc $ foldl' (@@) (op lhs (coerceName dcon_name) rhs) args'
-  | Just fields <- getRecordFields dcon
+      noLoc $ foldl' (@@) (op lhs (coerceName con_name) rhs) args'
+
+  | Just fields <- getRecordFields con
   , length fields >= 2 =  --  record notation is unnatural on single field ctors
-      noLoc $ recordConE (coerceName dcon_name) $ do
+      noLoc $ recordConE (coerceName con_name) $ do
         (arg, (field, _)) <- zip args fields
         pure (coerceName field, arg)
+
   | otherwise =
-      noLoc $ foldl' (@@) (bvar' $ occName dcon_name) args
+      noLoc $ foldl' (@@) (bvar' $ occName con_name) args
   where
-    dcon_name = dataConName dcon
+    con_name = conLikeName con
 
 
 coerceName :: HasOccName a => a -> RdrNameStr

@@ -1,16 +1,16 @@
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE ExtendedDefaultRules #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DuplicateRecordFields     #-}
+{-# LANGUAGE ExtendedDefaultRules      #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE NamedFieldPuns            #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE RecordWildCards           #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeApplications          #-}
+{-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 
 {- |
@@ -23,166 +23,123 @@ module Ide.Plugin.Eval.CodeLens (
     evalCommand,
 ) where
 
-import Control.Applicative (Alternative ((<|>)))
-import Control.Arrow (second, (>>>))
-import qualified Control.Exception as E
-import Control.Monad
-    ( void,
-      when, guard,
-      join
-    )
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Trans.Except
-    ( ExceptT (..),
-    )
-import Data.Aeson (toJSON)
-import Data.Char (isSpace)
-import qualified Data.HashMap.Strict as HashMap
-import Data.List
-    (dropWhileEnd,
-      find, intercalate
-    )
-import qualified Data.Map.Strict as Map
-import Data.Maybe
-    ( catMaybes,
-      fromMaybe,
-    )
-import Data.String (IsString)
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Time (getCurrentTime)
-import Data.Typeable (Typeable)
-import Development.IDE
-    ( Action,
-      realSrcSpanToRange,  GetModSummary (..),
-      GetParsedModuleWithComments (..),
-      HscEnvEq,
-      IdeState,
-      evalGhcEnv,
-      hscEnvWithImportPaths,
-      runAction,
-      textToStringBuffer,
-      toNormalizedFilePath',
-      uriToFilePath',
-      useWithStale_,
-      prettyPrint,
-      use_, useNoFile_, uses_,
-      GhcSessionIO(..), GetDependencies(..), GetModIface(..),
-      HiFileResult (hirHomeMod, hirModSummary),
-      ModSummaryResult(..)
-    )
-import Development.IDE.Core.Rules (TransitiveDependencies(transitiveModuleDeps))
-import Development.IDE.Core.Compile (setupFinderCache, loadModulesHome)
-import Development.IDE.GHC.Compat (AnnotationComment(AnnBlockComment, AnnLineComment), GenLocated (L), HscEnv, ParsedModule (..), SrcSpan (RealSrcSpan, UnhelpfulSpan), srcSpanFile, GhcException, setInteractiveDynFlags)
-import Development.IDE.Types.Options
-import DynamicLoading (initializePlugins)
-import FastString (unpackFS)
-import GHC
-    (ExecOptions
-        ( execLineNumber,
-          execSourceFile
-        ),
-      ExecResult (..),
-      GeneralFlag (..),
-      Ghc,
-      GhcLink (LinkInMemory),
-      GhcMode (CompManager),
-      GhcMonad (getSession),
-      HscTarget (HscInterpreted),
-      LoadHowMuch (LoadAllTargets),
-      ModSummary (ms_hspp_opts),
-      Module (moduleName),
-      SuccessFlag (Failed, Succeeded),
-      TcRnExprMode (..),
-      execOptions,
-      execStmt,
-      exprType,
-      getInteractiveDynFlags,
-      getSessionDynFlags,
-      isImport,
-      isStmt,
-      load,
-      runDecls,
-      setContext,
-      setLogAction,
-      setSessionDynFlags,
-      setTargets,
-      typeKind,
-    )
-import GhcPlugins
-    ( DynFlags (..),
-      hsc_dflags,
-      defaultLogActionHPutStrDoc,
-      gopt_set,
-      gopt_unset,
-      interpWays,
-      targetPlatform,
-      updateWays,
-      wayGeneralFlags,
-      wayUnsetGeneralFlags,
-      xopt_set, parseDynamicFlagsCmdLine
-    )
-import HscTypes
-    ( InteractiveImport (IIModule),
-      ModSummary (ms_mod),
-      Target (Target),
-      TargetId (TargetFile),
-    )
-import Ide.Plugin.Eval.Code
-    ( Statement,
-      asStatements,
-      evalExpr,
-      evalExtensions,
-      evalSetup,
-      propSetup,
-      resultRange,
-      testCheck,
-      testRanges,
-    )
-import Ide.Plugin.Eval.GHC
-    ( addImport,
-      addPackages,
-      hasPackage,
-      isExpr,
-      showDynFlags,
-    )
-import Ide.Plugin.Eval.Parse.Comments (commentsToSections)
-import Ide.Plugin.Eval.Parse.Option (parseSetFlags)
-import Ide.Plugin.Eval.Types
-import Ide.Plugin.Eval.Util
-    ( asS,
-      gStrictTry,
-      handleMaybe,
-      handleMaybeM,
-      isLiterate,
-      logWith,
-      response,
-      response',
-      timed,
-    )
-import Ide.Types
-import Language.LSP.Server
-import Language.LSP.Types
-import Language.LSP.VFS (virtualFileText)
-import Outputable
-    ( nest,
-      ppr,
-      showSDoc,
-      text,
-      ($$),
-      (<+>),
-    )
-import System.FilePath (takeFileName)
-import System.IO (hClose)
-import UnliftIO.Temporary (withSystemTempFile)
-import Util (OverridingBool (Never))
-import Development.IDE.Core.PositionMapping (toCurrentRange)
-import qualified Data.DList as DL
-import Control.Lens ((^.), _1, (%~), (<&>), _3)
-import Language.LSP.Types.Lens (line, end)
-import CmdLineParser
-import qualified Development.IDE.GHC.Compat as SrcLoc
-import Control.Exception (try)
+import           CmdLineParser
+import           Control.Applicative                  (Alternative ((<|>)))
+import           Control.Arrow                        (second, (>>>))
+import           Control.Exception                    (try)
+import qualified Control.Exception                    as E
+import           Control.Lens                         (_1, _3, (%~), (<&>),
+                                                       (^.))
+import           Control.Monad                        (guard, join, void, when)
+import           Control.Monad.IO.Class               (MonadIO (liftIO))
+import           Control.Monad.Trans.Except           (ExceptT (..))
+import           Data.Aeson                           (toJSON)
+import           Data.Char                            (isSpace)
+import qualified Data.DList                           as DL
+import qualified Data.HashMap.Strict                  as HashMap
+import           Data.List                            (dropWhileEnd, find,
+                                                       intercalate)
+import qualified Data.Map.Strict                      as Map
+import           Data.Maybe                           (catMaybes, fromMaybe)
+import           Data.String                          (IsString)
+import           Data.Text                            (Text)
+import qualified Data.Text                            as T
+import           Data.Time                            (getCurrentTime)
+import           Data.Typeable                        (Typeable)
+import           Development.IDE                      (Action,
+                                                       GetDependencies (..),
+                                                       GetModIface (..),
+                                                       GetModSummary (..),
+                                                       GetParsedModuleWithComments (..),
+                                                       GhcSessionIO (..),
+                                                       HiFileResult (hirHomeMod, hirModSummary),
+                                                       HscEnvEq, IdeState,
+                                                       ModSummaryResult (..),
+                                                       evalGhcEnv,
+                                                       hscEnvWithImportPaths,
+                                                       prettyPrint,
+                                                       realSrcSpanToRange,
+                                                       runAction,
+                                                       textToStringBuffer,
+                                                       toNormalizedFilePath',
+                                                       uriToFilePath',
+                                                       useNoFile_,
+                                                       useWithStale_, use_,
+                                                       uses_)
+import           Development.IDE.Core.Compile         (loadModulesHome,
+                                                       setupFinderCache)
+import           Development.IDE.Core.PositionMapping (toCurrentRange)
+import           Development.IDE.Core.Rules           (TransitiveDependencies (transitiveModuleDeps))
+import           Development.IDE.GHC.Compat           (AnnotationComment (AnnBlockComment, AnnLineComment),
+                                                       GenLocated (L),
+                                                       GhcException, HscEnv,
+                                                       ParsedModule (..),
+                                                       SrcSpan (RealSrcSpan, UnhelpfulSpan),
+                                                       setInteractiveDynFlags,
+                                                       srcSpanFile)
+import qualified Development.IDE.GHC.Compat           as SrcLoc
+import           Development.IDE.Types.Options
+import           DynamicLoading                       (initializePlugins)
+import           FastString                           (unpackFS)
+import           GHC                                  (ExecOptions (execLineNumber, execSourceFile),
+                                                       GeneralFlag (..), Ghc,
+                                                       GhcLink (LinkInMemory),
+                                                       GhcMode (CompManager),
+                                                       GhcMonad (getSession),
+                                                       HscTarget (HscInterpreted),
+                                                       LoadHowMuch (LoadAllTargets),
+                                                       ModSummary (ms_hspp_opts),
+                                                       Module (moduleName),
+                                                       SuccessFlag (Failed, Succeeded),
+                                                       TcRnExprMode (..),
+                                                       execOptions, exprType,
+                                                       getInteractiveDynFlags,
+                                                       getSessionDynFlags,
+                                                       isImport, isStmt, load,
+                                                       runDecls, setContext,
+                                                       setLogAction,
+                                                       setSessionDynFlags,
+                                                       setTargets, typeKind)
+import           GhcPlugins                           (DynFlags (..),
+                                                       defaultLogActionHPutStrDoc,
+                                                       gopt_set, gopt_unset,
+                                                       hsc_dflags, interpWays,
+                                                       parseDynamicFlagsCmdLine,
+                                                       targetPlatform,
+                                                       updateWays,
+                                                       wayGeneralFlags,
+                                                       wayUnsetGeneralFlags,
+                                                       xopt_set)
+import           HscTypes                             (InteractiveImport (IIModule),
+                                                       ModSummary (ms_mod),
+                                                       Target (Target),
+                                                       TargetId (TargetFile))
+import           Ide.Plugin.Eval.Code                 (Statement, asStatements,
+                                                       evalExtensions,
+                                                       evalSetup, myExecStmt,
+                                                       propSetup, resultRange,
+                                                       testCheck, testRanges)
+import           Ide.Plugin.Eval.GHC                  (addImport, addPackages,
+                                                       hasPackage, showDynFlags)
+import           Ide.Plugin.Eval.Parse.Comments       (commentsToSections)
+import           Ide.Plugin.Eval.Parse.Option         (parseSetFlags)
+import           Ide.Plugin.Eval.Types
+import           Ide.Plugin.Eval.Util                 (asS, gStrictTry,
+                                                       handleMaybe,
+                                                       handleMaybeM, isLiterate,
+                                                       logWith, response,
+                                                       response', timed)
+import           Ide.Types
+import           Language.LSP.Server
+import           Language.LSP.Types
+import           Language.LSP.Types.Lens              (end, line)
+import           Language.LSP.VFS                     (virtualFileText)
+import           Outputable                           (nest, ppr, showSDoc,
+                                                       text, ($$), (<+>))
+import           System.FilePath                      (takeFileName)
+import           System.IO                            (hClose)
+import           UnliftIO.Temporary                   (withSystemTempFile)
+import           Util                                 (OverridingBool (Never))
 
 {- | Code Lens provider
  NOTE: Invoked every time the document is modified, not just when the document is saved.
@@ -224,9 +181,9 @@ codeLens st plId CodeLensParams{_textDocument} =
                     foldMap
                     (foldMap $ \(L a b) ->
                         case b of
-                            AnnLineComment{} -> mempty
+                            AnnLineComment{}  -> mempty
                             AnnBlockComment{} -> mempty
-                            _ -> DL.singleton (a, b)
+                            _                 -> DL.singleton (a, b)
                     )
                     $ snd pm_annotations
                 dbg "comments" $ show comments
@@ -375,7 +332,7 @@ runEvalCmd st EvalParams{..} =
                                 tests
 
             let workspaceEditsMap = HashMap.fromList [(_uri, List $ addFinalReturn mdlText edits)]
-            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing
+            let workspaceEdits = WorkspaceEdit (Just workspaceEditsMap) Nothing Nothing
 
             return workspaceEdits
      in perf "evalCmd" $
@@ -555,27 +512,14 @@ evals (st, fp) df stmts = do
         | -- A type/kind command
           Just (cmd, arg) <- parseGhciLikeCmd $ T.pack stmt =
             evalGhciLikeCmd cmd arg
-        | -- An expression
-          isExpr df stmt =
-            do
-                dbg "{EXPR" stmt
-                eres <- gStrictTry $ evalExpr stmt
-                dbg "RES ->" eres
-                let res = case eres of
-                        Left err -> errorLines err
-                        Right rs -> [T.pack rs]
-                dbg "EXPR} ->" res
-                return . Just $ res
         | -- A statement
           isStmt df stmt =
             do
                 dbg "{STMT " stmt
                 res <- exec stmt l
                 r <- case res of
-                    ExecComplete (Left err) _ -> return . Just . errorLines . show $ err
-                    ExecComplete (Right _) _ -> return Nothing
-                    ExecBreak{} ->
-                        return . Just . singleLine $ "breakpoints are not supported"
+                    Left err -> return . Just . errorLines $ err
+                    Right x  -> return $ singleLine <$> x
                 dbg "STMT} -> " r
                 return r
         | -- An import
@@ -592,7 +536,7 @@ evals (st, fp) df stmts = do
                 return Nothing
     exec stmt l =
         let opts = execOptions{execSourceFile = fp, execLineNumber = l}
-         in execStmt stmt opts
+         in myExecStmt stmt opts
 
 prettyWarn :: Warn -> String
 prettyWarn Warn{..} =
@@ -638,8 +582,7 @@ singleLine s = [T.pack s]
 -}
 errorLines :: String -> [Text]
 errorLines =
-    map (\e -> fromMaybe e (T.stripSuffix "arising from a use of ‘asPrint’" e))
-        . dropWhileEnd T.null
+        dropWhileEnd T.null
         . takeWhile (not . ("CallStack" `T.isPrefixOf`))
         . T.lines
         . T.pack
@@ -658,7 +601,7 @@ convertBlank x
 
 padPrefix :: IsString p => Format -> p
 padPrefix SingleLine = "-- "
-padPrefix _ = ""
+padPrefix _          = ""
 
 {- | Resulting @Text@ MUST NOT prefix each line with @--@
    Such comment-related post-process will be taken place
@@ -716,11 +659,11 @@ parseExprMode :: Text -> (TcRnExprMode, T.Text)
 parseExprMode rawArg = case T.break isSpace rawArg of
     ("+v", rest) -> (TM_NoInst, T.strip rest)
     ("+d", rest) -> (TM_Default, T.strip rest)
-    _ -> (TM_Inst, rawArg)
+    _            -> (TM_Inst, rawArg)
 
 data GhciLikeCmdException = GhciLikeCmdNotImplemented
     { ghciCmdName :: Text
-    , ghciCmdArg :: Text
+    , ghciCmdArg  :: Text
     }
     deriving (Typeable)
 

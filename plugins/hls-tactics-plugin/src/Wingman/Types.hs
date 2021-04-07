@@ -11,18 +11,16 @@ module Wingman.Types
   , Type
   , TyVar
   , Span
-  , Range
   ) where
 
-import           Control.Lens hiding (Context, (.=))
+import           ConLike (ConLike)
+import           Control.Lens hiding (Context)
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.Aeson
 import           Data.Coerce
 import           Data.Function
 import           Data.Generics.Product (field)
 import           Data.List.NonEmpty (NonEmpty (..))
-import           Data.Maybe (fromMaybe)
 import           Data.Semigroup
 import           Data.Set (Set)
 import           Data.Text (Text)
@@ -30,9 +28,9 @@ import qualified Data.Text as T
 import           Data.Tree
 import           Development.IDE.GHC.Compat hiding (Node)
 import           Development.IDE.GHC.Orphans ()
-import           Development.IDE.Types.Location
 import           GHC.Generics
 import           GHC.SourceGen (var)
+import           InstEnv (InstEnvs(..))
 import           OccName
 import           Refinery.Tactic
 import           System.IO.Unsafe (unsafePerformIO)
@@ -81,25 +79,6 @@ data Config = Config
   , cfg_max_use_ctor_actions :: Int
   }
 
-emptyConfig :: Config
-emptyConfig = Config defaultFeatures 5
-
-
-instance ToJSON Config where
-  toJSON Config{..} = object
-    [ "features" .= prettyFeatureSet cfg_feature_set
-    , "max_use_ctor_actions" .= cfg_max_use_ctor_actions
-    ]
-
-instance FromJSON Config where
-  parseJSON = withObject "Config" $ \obj -> do
-    cfg_feature_set          <-
-      parseFeatureSet . fromMaybe "" <$> obj .:? "features"
-    cfg_max_use_ctor_actions <-
-      fromMaybe 5 <$> obj .:? "max_use_ctor_actions"
-    pure $ Config{..}
-
-
 ------------------------------------------------------------------------------
 -- | A wrapper around 'Type' which supports equality and ordering.
 newtype CType = CType { unCType :: Type }
@@ -147,6 +126,9 @@ instance Show (LHsSigType GhcPs) where
   show  = unsafeRender
 
 instance Show TyCon where
+  show  = unsafeRender
+
+instance Show ConLike where
   show  = unsafeRender
 
 
@@ -237,7 +219,7 @@ data PatVal = PatVal
   , pv_ancestry  :: Set OccName
     -- ^ The set of values which had to be destructed to discover this term.
     -- Always contains the scrutinee.
-  , pv_datacon   :: Uniquely DataCon
+  , pv_datacon   :: Uniquely ConLike
     -- ^ The datacon which introduced this term.
   , pv_position  :: Int
     -- ^ The position of this binding in the datacon's arguments.
@@ -257,6 +239,10 @@ instance Uniquable a => Ord (Uniquely a) where
   compare = nonDetCmpUnique `on` getUnique . getViaUnique
 
 
+-- NOTE(sandy): The usage of list here is mostly for convenience, but if it's
+-- ever changed, make sure to correspondingly update
+-- 'jAcceptableDestructTargets' so that it correctly identifies newly
+-- introduced terms.
 newtype Hypothesis a = Hypothesis
   { unHypothesis :: [HyInfo a]
   }
@@ -407,14 +393,41 @@ data Context = Context
   , ctxModuleFuncs   :: [(OccName, CType)]
     -- ^ Everything defined in the current module
   , ctxFeatureSet    :: FeatureSet
+  , ctxKnownThings   :: KnownThings
+  , ctxInstEnvs      :: InstEnvs
+  , ctxTheta         :: Set CType
   }
-  deriving stock (Eq, Ord, Show)
+
+instance Show Context where
+  show (Context {..}) = mconcat
+    [ "Context "
+    , showsPrec 10 ctxDefiningFuncs ""
+    , showsPrec 10 ctxModuleFuncs ""
+    , showsPrec 10 ctxFeatureSet ""
+    , showsPrec 10 ctxTheta ""
+    ]
+
+
+------------------------------------------------------------------------------
+-- | Things we'd like to look up, that don't exist in TysWiredIn.
+data KnownThings = KnownThings
+  { kt_semigroup :: Class
+  , kt_monoid    :: Class
+  }
 
 
 ------------------------------------------------------------------------------
 -- | An empty context
 emptyContext :: Context
-emptyContext  = Context mempty mempty mempty
+emptyContext
+  = Context
+      { ctxDefiningFuncs = mempty
+      , ctxModuleFuncs = mempty
+      , ctxFeatureSet = mempty
+      , ctxKnownThings = error "empty known things from emptyContext"
+      , ctxInstEnvs = InstEnvs mempty mempty mempty
+      , ctxTheta = mempty
+      }
 
 
 newtype Rose a = Rose (Tree a)

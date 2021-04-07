@@ -3,7 +3,10 @@
 
 module Wingman.GHC where
 
+import           ConLike
+import           Control.Applicative (empty)
 import           Control.Monad.State
+import           Control.Monad.Trans.Maybe (MaybeT(..))
 import           Data.Function (on)
 import           Data.Functor ((<&>))
 import           Data.List (isPrefixOf)
@@ -13,10 +16,14 @@ import           Data.Set (Set)
 import qualified Data.Set as S
 import           Data.Traversable
 import           DataCon
+import           Development.IDE (HscEnvEq (hscEnv))
+import           Development.IDE.Core.Compile (lookupName)
 import           Development.IDE.GHC.Compat
 import           GHC.SourceGen (case', lambda, match)
 import           Generics.SYB (Data, everything, everywhere, listify, mkQ, mkT)
+import           GhcPlugins (extractModule, GlobalRdrElt (gre_name))
 import           OccName
+import           TcRnMonad
 import           TcType
 import           TyCoRep
 import           Type
@@ -106,12 +113,12 @@ freshTyvars t = do
 ------------------------------------------------------------------------------
 -- | Given a datacon, extract its record fields' names and types. Returns
 -- nothing if the datacon is not a record.
-getRecordFields :: DataCon -> Maybe [(OccName, CType)]
+getRecordFields :: ConLike -> Maybe [(OccName, CType)]
 getRecordFields dc =
-  case dataConFieldLabels dc of
+  case conLikeFieldLabels dc of
     [] -> Nothing
     lbls -> for lbls $ \lbl -> do
-      (_, ty) <- dataConFieldType_maybe dc $ flLabel lbl
+      let ty = conLikeFieldType dc $ flLabel lbl
       pure (mkVarOccFS $ flLabel lbl, CType ty)
 
 
@@ -292,4 +299,41 @@ unXPat :: Pat GhcPs -> Pat GhcPs
 unXPat (XPat (L _ pat)) = unXPat pat
 #endif
 unXPat pat              = pat
+
+
+------------------------------------------------------------------------------
+-- | Build a 'KnownThings'.
+knownThings :: TcGblEnv -> HscEnvEq -> MaybeT IO KnownThings
+knownThings tcg hscenv= do
+  let cls = knownClass tcg hscenv
+  KnownThings
+    <$> cls (mkClsOcc "Semigroup")
+    <*> cls (mkClsOcc "Monoid")
+
+
+------------------------------------------------------------------------------
+-- | Like 'knownThing' but specialized to classes.
+knownClass :: TcGblEnv -> HscEnvEq -> OccName -> MaybeT IO Class
+knownClass = knownThing $ \case
+  ATyCon tc -> tyConClass_maybe tc
+  _         -> Nothing
+
+
+------------------------------------------------------------------------------
+-- | Helper function for defining 'knownThings'.
+knownThing :: (TyThing -> Maybe a) -> TcGblEnv -> HscEnvEq -> OccName -> MaybeT IO a
+knownThing f tcg hscenv occ = do
+  let modul = extractModule tcg
+      rdrenv = tcg_rdr_env tcg
+
+  case lookupOccEnv rdrenv occ of
+    Nothing -> empty
+    Just elts -> do
+      mvar <- lift $ lookupName (hscEnv hscenv) modul $ gre_name $ head elts
+      case mvar of
+        Just tt -> liftMaybe $ f tt
+        _ -> empty
+
+liftMaybe :: Monad m => Maybe a -> MaybeT m a
+liftMaybe a = MaybeT $ pure a
 

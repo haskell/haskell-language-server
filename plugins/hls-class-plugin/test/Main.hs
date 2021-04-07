@@ -2,30 +2,30 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators       #-}
-module Class
-  ( tests
+module Main
+  ( main
   )
 where
 
-import           Control.Applicative.Combinators
-import           Control.Lens                    hiding ((<.>))
-import           Control.Monad.IO.Class          (MonadIO (liftIO))
-import qualified Data.ByteString.Lazy            as BS
-import qualified Data.Text.Encoding              as T
-import           Language.LSP.Test
-import           Language.LSP.Types              hiding (_command, _title)
-import qualified Language.LSP.Types.Lens         as J
+import           Control.Lens            hiding ((<.>))
+import qualified Data.ByteString.Lazy    as BS
+import qualified Data.Text.Encoding      as T
+import qualified Ide.Plugin.Class        as Class
+import qualified Language.LSP.Types.Lens as J
 import           System.FilePath
-import           Test.Hls.Util
-import           Test.Tasty
-import           Test.Tasty.Golden
-import           Test.Tasty.HUnit
+import           Test.Hls
+
+main :: IO ()
+main = defaultTestRunner tests
+
+plugin :: PluginDescriptor IdeState
+plugin = Class.descriptor "class"
 
 tests :: TestTree
 tests = testGroup
   "class"
   [ testCase "Produces addMinimalMethodPlaceholders code actions for one instance" $ do
-      runSession hlsCommand fullCaps classPath $ do
+      runSessionWithServer plugin classPath $ do
         doc <- openDoc "T1.hs" "haskell"
         _ <- waitForDiagnosticsFromSource doc "typecheck"
         caResults <- getAllCodeActions doc
@@ -33,7 +33,6 @@ tests = testGroup
           @?=
           [ Just "Add placeholders for '=='"
           , Just "Add placeholders for '/='"
-          , Just "Disable \"missing-methods\" warnings"
           ]
   , glodenTest "Creates a placeholder for '=='" "T1" "eq"
     $ \(eqAction:_) -> do
@@ -61,22 +60,19 @@ _CACodeAction = prism' InR $ \case
   _          -> Nothing
 
 classPath :: FilePath
-classPath = "test" </> "testdata" </> "class"
+classPath = "test" </> "testdata"
 
 glodenTest :: String -> FilePath -> FilePath -> ([CodeAction] -> Session ()) -> TestTree
 glodenTest name fp deco execute
-  = goldenVsStringDiff name goldenGitDiff (classPath </> fpWithDeco <.> "expected" <.> "hs")
-    $ runSession hlsCommand fullCaps classPath
+  = goldenGitDiff name (classPath </> fpWithDeco <.> "expected" <.> "hs")
+    $ runSessionWithServer plugin classPath
     $ do
       doc <- openDoc (fp <.> "hs") "haskell"
       _ <- waitForDiagnosticsFromSource doc "typecheck"
       actions <- concatMap (^.. _CACodeAction) <$> getAllCodeActions doc
       execute actions
-      BS.fromStrict . T.encodeUtf8 <$> (skipManyTill anyMessage $ getDocumentEdit doc)
+      BS.fromStrict . T.encodeUtf8 <$> skipManyTill anyMessage (getDocumentEdit doc)
   where
     fpWithDeco
       | deco == "" = fp
       | otherwise  = fp <.> deco
-
-goldenGitDiff :: FilePath -> FilePath -> [String]
-goldenGitDiff fRef fNew = ["git", "diff", "--no-index", "--text", "--exit-code", fRef, fNew]

@@ -25,8 +25,12 @@ import           Language.LSP.Types                           (CodeActionKind (C
 import           Retrie                                       (Annotated (astA))
 import           Retrie.ExactPrint                            (annsA)
 
+type CodeActionTitle = T.Text
+
+type CodeActionPreferred = Bool
+
 -- | A compact representation of 'Language.LSP.Types.CodeAction's
-type GhcideCodeActions = [(T.Text, Maybe CodeActionKind, Maybe Bool, [TextEdit])]
+type GhcideCodeActions = [(CodeActionTitle, Maybe CodeActionKind, Maybe CodeActionPreferred, [TextEdit])]
 
 class ToTextEdit a where
   toTextEdit :: CodeActionArgs -> a -> [TextEdit]
@@ -105,16 +109,16 @@ instance ToCodeAction a => ToCodeAction [a] where
 instance ToCodeAction a => ToCodeAction (Maybe a) where
   toCodeAction caa = maybe [] (toCodeAction caa)
 
-instance ToTextEdit a => ToCodeAction (T.Text, a) where
+instance ToTextEdit a => ToCodeAction (CodeActionTitle, a) where
   toCodeAction caa (title, te) = [(title, Just CodeActionQuickFix, Nothing, toTextEdit caa te)]
 
-instance ToTextEdit a => ToCodeAction (T.Text, CodeActionKind, a) where
+instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, a) where
   toCodeAction caa (title, kind, te) = [(title, Just kind, Nothing, toTextEdit caa te)]
 
-instance ToTextEdit a => ToCodeAction (T.Text, Bool, a) where
-  toCodeAction caa (title, isPreferred, te) = [(title, Nothing, Just isPreferred, toTextEdit caa te)]
+instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionPreferred, a) where
+  toCodeAction caa (title, isPreferred, te) = [(title, Just CodeActionQuickFix, Just isPreferred, toTextEdit caa te)]
 
-instance ToTextEdit a => ToCodeAction (T.Text, CodeActionKind, Bool, a) where
+instance ToTextEdit a => ToCodeAction (CodeActionTitle, CodeActionKind, CodeActionPreferred, a) where
   toCodeAction caa (title, kind, isPreferred, te) = [(title, Just kind, Just isPreferred, toTextEdit caa te)]
 
 -------------------------------------------------------------------------------------------------

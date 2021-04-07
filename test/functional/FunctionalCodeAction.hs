@@ -6,30 +6,23 @@
 
 module FunctionalCodeAction (tests) where
 
-import           Control.Applicative.Combinators
 import           Control.Lens                    hiding (List)
 import           Control.Monad
-import           Control.Monad.IO.Class
 import           Data.Aeson
-import           Data.Default
 import qualified Data.HashMap.Strict             as HM
 import           Data.List
 import           Data.Maybe
 import qualified Data.Text                       as T
 import           Ide.Plugin.Config
 import           Language.LSP.Test               as Test
-import           Language.LSP.Types
 import qualified Language.LSP.Types.Capabilities as C
 import qualified Language.LSP.Types.Lens         as L
-import           Test.Hls.Util
+import           Test.Hls
 import           Test.Hspec.Expectations
 
 import           System.FilePath                 ((</>))
 import           System.IO.Extra                 (withTempDir)
-import           Test.Tasty
-import           Test.Tasty.ExpectedFailure      (expectFailBecause,
-                                                  ignoreTestBecause)
-import           Test.Tasty.HUnit
+import           Test.Hls.Command
 
 {-# ANN module ("HLint: ignore Reduce duplication"::String) #-}
 
@@ -275,8 +268,6 @@ importTests = testGroup "import suggestions" [
         importControlMonad <- liftIO $ inspectCodeAction actionsOrCommands ["import Control.Monad"]
         liftIO $ do
             expectCodeAction actionsOrCommands ["import Control.Monad (when)"]
-            forM_ actns $ \a -> do
-                a ^. L.kind @?= Just CodeActionQuickFix
             length actns >= 10 @? "There are some actions"
 
         executeCodeAction importControlMonad
@@ -381,7 +372,8 @@ redundantImportTests = testGroup "redundant import code actions" [
     , testCase "doesn't touch other imports" $ runSession hlsCommand noLiteralCaps "test/testdata/redundantImportTest/" $ do
         doc <- openDoc "src/MultipleImports.hs" "haskell"
         _   <- waitForDiagnosticsFromSource doc "typecheck"
-        InL cmd : _ <- getAllCodeActions doc
+        cas <- getAllCodeActions doc
+        cmd <- liftIO $ inspectCommand cas ["redundant import"]
         executeCommand cmd
         _ <- anyRequest
         contents <- documentContents doc
@@ -448,11 +440,12 @@ signatureTests = testGroup "missing top level signature code actions" [
         doc <- openDoc "TopLevelSignature.hs" "haskell"
 
         _ <- waitForDiagnosticsFromSource doc "typecheck"
-        cas <- map fromAction <$> getAllCodeActions doc
+        cas <- getAllCodeActions doc
 
-        liftIO $ "add signature: main :: IO ()" `elem` map (^. L.title) cas @? "Contains code action"
+        liftIO $ expectCodeAction cas ["add signature: main :: IO ()"]
 
-        executeCodeAction $ head cas
+        replaceWithStuff <- liftIO $ inspectCodeAction cas ["add signature"]
+        executeCodeAction replaceWithStuff
 
         contents <- documentContents doc
 
@@ -633,7 +626,7 @@ disableWarningTests =
       <&> \(warning, initialContent, expectedContent) -> testSession (T.unpack warning) $ do
         doc <- createDoc "Module.hs" "haskell" initialContent
         _ <- waitForDiagnostics
-        codeActs <- mapMaybe caResultToCodeAct <$> getCodeActions doc (Range (Position 0 0) (Position 0 0))
+        codeActs <- mapMaybe caResultToCodeAct <$> getAllCodeActions doc
         case find (\CodeAction{_title} -> _title == "Disable \"" <> warning <> "\" warnings") codeActs of
           Nothing -> liftIO $ assertFailure "No code action with expected title"
           Just action -> do
@@ -700,7 +693,7 @@ noLiteralCaps :: C.ClientCapabilities
 noLiteralCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing
+    codeActionCaps = CodeActionClientCapabilities (Just True) Nothing Nothing Nothing Nothing Nothing Nothing
 
 testSession :: String -> Session () -> TestTree
 testSession name s = testCase name $ withTempDir $ \dir ->

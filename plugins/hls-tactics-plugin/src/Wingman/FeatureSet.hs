@@ -24,6 +24,7 @@ data Feature
   = FeatureDestructAll
   | FeatureUseDataCon
   | FeatureRefineHole
+  | FeatureKnownMonoid
   deriving (Eq, Ord, Show, Read, Enum, Bounded)
 
 
