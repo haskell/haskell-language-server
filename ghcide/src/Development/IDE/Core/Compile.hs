@@ -239,7 +239,7 @@ mkHiFileResultNoCompile session tcm = do
 #else
   (iface, _) <- mkIfaceTc hsc_env_tmp Nothing sf details tcGblEnv
 #endif
-  let mod_info = HomeModInfo iface details Nothing
+  mod_info <- mkDetailsFromIface session iface Nothing
   pure $! mkHiFileResult ms mod_info
 
 mkHiFileResultCompile
