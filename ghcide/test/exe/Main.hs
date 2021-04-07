@@ -2209,14 +2209,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
     [ (DsWarning, (6, 8), "Defaulting the following constraint")
     , (DsWarning, (6, 16), "Defaulting the following constraint")
     ]
-    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
                , "module A (f) where"
                , ""
                , "import Debug.Trace"
                , ""
-               , "f = seq (\"debug\" :: [Char]) traceShow \"debug\""
+               , "f = seq (\"debug\" :: " <> listOfChar <> ") traceShow \"debug\""
                ])
   , testSession "add default type to satisfy two contraints" $
     testFor
@@ -2229,14 +2229,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f a = traceShow \"debug\" a"
                ])
     [ (DsWarning, (6, 6), "Defaulting the following constraint") ]
-    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
                , "module A (f) where"
                , ""
                , "import Debug.Trace"
                , ""
-               , "f a = traceShow (\"debug\" :: [Char]) a"
+               , "f a = traceShow (\"debug\" :: " <> listOfChar <> ") a"
                ])
   , testSession "add default type to satisfy two contraints with duplicate literals" $
     testFor
@@ -2249,14 +2249,14 @@ addTypeAnnotationsToLiteralsTest = testGroup "add type annotations to literals t
                , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow \"debug\"))"
                ])
     [ (DsWarning, (6, 54), "Defaulting the following constraint") ]
-    "Add type annotation ‘[Char]’ to ‘\"debug\"’"
+    ("Add type annotation ‘" <> listOfChar <> "’ to ‘\"debug\"’")
     (T.unlines [ "{-# OPTIONS_GHC -Wtype-defaults #-}"
                , "{-# LANGUAGE OverloadedStrings #-}"
                , "module A (f) where"
                , ""
                , "import Debug.Trace"
                , ""
-               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: [Char])))"
+               , "f = seq (\"debug\" :: [Char]) (seq (\"debug\" :: [Char]) (traceShow (\"debug\" :: " <> listOfChar <> ")))"
                ])
   ]
   where
@@ -3374,7 +3374,7 @@ addSigLensesTests =
         , ("pattern Some a = Just a", "pattern Some :: a -> Maybe a")
         , ("qualifiedSigTest= C.realPart", "qualifiedSigTest :: C.Complex a -> a")
         , ("head = 233", "head :: Integer")
-        , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, [Char])")
+        , ("rank2Test (k :: forall a . a -> a) = (k 233 :: Int, k \"QAQ\")", "rank2Test :: (forall a. a -> a) -> (Int, " <> listOfChar <> ")")
         , ("symbolKindTest = Proxy @\"qwq\"", "symbolKindTest :: Proxy \"qwq\"")
         , ("promotedKindTest = Proxy @Nothing", "promotedKindTest :: Proxy 'Nothing")
         , ("typeOperatorTest = Refl", "typeOperatorTest :: a :~: a")
@@ -4313,10 +4313,11 @@ highlightTests = testGroup "highlight"
     highlights <- getHighlights doc (Position 4 15)
     liftIO $ highlights @?= List
       -- Span is just the .. on 8.10, but Rec{..} before
+            [
 #if MIN_GHC_API_VERSION(8,10,0)
-            [ DocumentHighlight (R 4 8 4 10) (Just HkWrite)
+              DocumentHighlight (R 4 8 4 10) (Just HkWrite)
 #else
-            [ DocumentHighlight (R 4 4 4 11) (Just HkWrite)
+              DocumentHighlight (R 4 4 4 11) (Just HkWrite)
 #endif
             , DocumentHighlight (R 4 14 4 20) (Just HkRead)
             ]
@@ -5671,3 +5672,11 @@ assertJust :: MonadIO m => String -> Maybe a -> m a
 assertJust s = \case
   Nothing -> liftIO $ assertFailure s
   Just x  -> pure x
+
+-- | Before ghc9, lists of Char is displayed as [Char], but with ghc9 and up, it's displayed as String
+listOfChar :: T.Text
+#if MIN_GHC_API_VERSION(9,0,1)
+listOfChar = "String"
+#else
+listOfChar = "[Char]"
+#endif
