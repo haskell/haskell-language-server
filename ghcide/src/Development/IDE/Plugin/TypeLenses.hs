@@ -42,10 +42,8 @@ import           Development.IDE.Types.Location      (Position (Position, _chara
 import           Development.Shake.Classes
 import           GHC.Generics                        (Generic)
 import           GhcPlugins                          (GlobalRdrEnv, SDoc,
-                                                      elemNameSet, emptyTidyEnv,
-                                                      getSrcSpan, idName,
-                                                      lookupTypeEnv,
-                                                      tidyOpenType)
+                                                      elemNameSet, getSrcSpan,
+                                                      idName, lookupTypeEnv)
 import           HscTypes                            (mkPrintUnqualified)
 import           Ide.Plugin.Config                   (Config)
 import           Ide.Plugin.Properties
