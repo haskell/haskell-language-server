@@ -109,9 +109,13 @@ unsafeRunStaleIde state nfp a = do
 ------------------------------------------------------------------------------
 
 properties :: Properties
-  '[ 'PropertyKey "max_use_ctor_actions" 'TInteger,
-     'PropertyKey "features" 'TString]
+  '[ 'PropertyKey "max_use_ctor_actions" 'TInteger
+   , 'PropertyKey "features" 'TString
+   , 'PropertyKey "timeout_duration" 'TInteger
+   ]
 properties = emptyProperties
+  & defineIntegerProperty #timeout_duration
+    "The timeout for Wingman actions, in seconds" 2
   & defineStringProperty #features
     "Feature set used by Wingman" ""
   & defineIntegerProperty #max_use_ctor_actions
@@ -124,6 +128,7 @@ getTacticConfig pId =
   Config
     <$> (parseFeatureSet <$> usePropertyLsp #features pId properties)
     <*> usePropertyLsp #max_use_ctor_actions pId properties
+    <*> usePropertyLsp #timeout_duration pId properties
 
 ------------------------------------------------------------------------------
 -- | Get the current feature set from the plugin config.

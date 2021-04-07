@@ -77,6 +77,7 @@ tacticTitle = (mappend "Wingman: " .) . go
 data Config = Config
   { cfg_feature_set          :: FeatureSet
   , cfg_max_use_ctor_actions :: Int
+  , cfg_timeout_seconds      :: Int
   }
 
 ------------------------------------------------------------------------------
