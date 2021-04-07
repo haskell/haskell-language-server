@@ -94,7 +94,7 @@ tacticCmd tac pId state (TacticParams uri range var_name)
         TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
-        timingOut 2e8 $ join $
+        timingOut 2e6 $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left _ -> Left TacticErrors
             Right rtr ->
