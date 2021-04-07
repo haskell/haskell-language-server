@@ -1,1 +1,8 @@
-{-# OPTIONS_GHC -F -pgmF hspec-discover -optF --module-name=Main #-}
+module Main where
+
+import qualified Spec
+import Test.Hls
+import Test.Tasty.Hspec
+
+main :: IO ()
+main = testSpecs Spec.spec >>= defaultTestRunner . testGroup "tactics"
