@@ -11,7 +11,6 @@ import           Data.Default          (def)
 import qualified Data.Dependent.Map    as DMap
 import qualified Data.Dependent.Sum    as DSum
 import qualified Data.HashMap.Lazy     as HMap
-import qualified Data.Map              as Map
 import           Ide.Plugin.Config
 import           Ide.Plugin.Properties (toDefaultJSON, toVSCodeExtensionSchema)
 import           Ide.Types
@@ -36,7 +35,7 @@ pluginsToDefaultConfig IdePlugins {..} =
     defaultConfig@Config {} = def
     unsafeValueToObject (A.Object o) = o
     unsafeValueToObject _            = error "impossible"
-    elems = A.object $ mconcat $ singlePlugin <$> Map.elems ipMap
+    elems = A.object $ mconcat $ singlePlugin <$> map snd ipMap
     -- Splice genericDefaultConfig and dedicatedDefaultConfig
     -- Example:
     --
@@ -100,7 +99,7 @@ pluginsToDefaultConfig IdePlugins {..} =
 -- | Generates json schema used in haskell vscode extension
 -- Similar to 'pluginsToDefaultConfig' but simpler, since schema has a flatten structure
 pluginsToVSCodeExtensionSchema :: IdePlugins a -> A.Value
-pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> Map.elems ipMap
+pluginsToVSCodeExtensionSchema IdePlugins {..} = A.object $ mconcat $ singlePlugin <$> map snd ipMap
   where
     singlePlugin PluginDescriptor {..} = genericSchema <> dedicatedSchema
       where

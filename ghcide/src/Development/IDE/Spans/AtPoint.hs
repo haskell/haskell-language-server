@@ -344,7 +344,7 @@ toUri = fromNormalizedUri . filePathToUri' . toNormalizedFilePath'
 
 defRowToSymbolInfo :: Res DefRow -> Maybe SymbolInformation
 defRowToSymbolInfo (DefRow{..}:.(modInfoSrcFile -> Just srcFile))
-  = Just $ SymbolInformation (showGhc defNameOcc) kind Nothing loc Nothing
+  = Just $ SymbolInformation (showGhc defNameOcc) kind Nothing Nothing loc Nothing
   where
     kind
       | isVarOcc defNameOcc = SkVariable

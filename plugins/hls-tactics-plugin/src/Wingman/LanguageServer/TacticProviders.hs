@@ -20,21 +20,22 @@ import           Data.Monoid
 import qualified Data.Text as T
 import           Data.Traversable
 import           DataCon (dataConName)
+import           Development.IDE.Core.UseStale (Tracked, Age(..))
 import           Development.IDE.GHC.Compat
 import           GHC.Generics
 import           GHC.LanguageExtensions.Type (Extension (LambdaCase))
-import           Wingman.Auto
-import           Wingman.FeatureSet
-import           Wingman.GHC
-import           Wingman.Judgements
-import           Wingman.Tactics
-import           Wingman.Types
 import           Ide.PluginUtils
 import           Ide.Types
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           Refinery.Tactic (goal)
+import           Wingman.Auto
+import           Wingman.FeatureSet
+import           Wingman.GHC
+import           Wingman.Judgements
+import           Wingman.Tactics
+import           Wingman.Types
 
 
 ------------------------------------------------------------------------------
@@ -150,14 +151,14 @@ data TacticProviderData = TacticProviderData
   , tpd_config :: Config
   , tpd_plid   :: PluginId
   , tpd_uri    :: Uri
-  , tpd_range  :: Range
+  , tpd_range  :: Tracked 'Current Range
   , tpd_jdg    :: Judgement
   }
 
 
 data TacticParams = TacticParams
     { tp_file     :: Uri    -- ^ Uri of the file to fill the hole in
-    , tp_range    :: Range  -- ^ The range of the hole
+    , tp_range    :: Tracked 'Current Range  -- ^ The range of the hole
     , tp_var_name :: T.Text
     }
   deriving stock (Show, Eq, Generic)
@@ -261,13 +262,15 @@ provide tc name TacticProviderData{..} = do
     $ pure
     $ InR
     $ CodeAction
-        title
-        (Just $ mkTacticKind tc)
-        Nothing
-        (Just $ tacticPreferred tc)
-        Nothing
-        Nothing
-    $ Just cmd
+        { _title       = title
+        , _kind        = Just $ mkTacticKind tc
+        , _diagnostics = Nothing
+        , _isPreferred = Just $ tacticPreferred tc
+        , _disabled    = Nothing
+        , _edit        = Nothing
+        , _command     = Just cmd
+        , _xdata       = Nothing
+        }
 
 
 ------------------------------------------------------------------------------

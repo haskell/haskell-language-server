@@ -16,6 +16,7 @@ module Development.IDE.Types.Options
   , IdeResult
   , IdeGhcSession(..)
   , OptHaddockParse(..)
+  , ProgressReportingStyle(..)
   ,optShakeFiles) where
 
 import qualified Data.Text                         as T
@@ -78,6 +79,7 @@ data IdeOptions = IdeOptions
   , optShakeOptions       :: ShakeOptions
   , optSkipProgress       :: forall a. Typeable a => a -> Bool
       -- ^ Predicate to select which rule keys to exclude from progress reporting.
+  , optProgressStyle      :: ProgressReportingStyle
   }
 
 optShakeFiles :: IdeOptions -> Maybe FilePath
@@ -103,6 +105,12 @@ newtype IdeReportProgress    = IdeReportProgress Bool
 newtype IdeDefer             = IdeDefer          Bool
 newtype IdeTesting           = IdeTesting        Bool
 newtype IdeOTMemoryProfiling = IdeOTMemoryProfiling    Bool
+
+data ProgressReportingStyle
+    = Percentage -- ^ Report using the LSP @_percentage@ field
+    | Explicit   -- ^ Report using explicit 123/456 text
+    | NoProgress -- ^ Do not report any percentage
+
 
 clientSupportsProgress :: LSP.ClientCapabilities -> IdeReportProgress
 clientSupportsProgress caps = IdeReportProgress $ Just True ==
@@ -131,6 +139,7 @@ defaultIdeOptions session = IdeOptions
     ,optHaddockParse = HaddockParse
     ,optCustomDynFlags = id
     ,optSkipProgress = defaultSkipProgress
+    ,optProgressStyle = Explicit
     }
 
 defaultSkipProgress :: Typeable a => a -> Bool

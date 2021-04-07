@@ -12,33 +12,36 @@ import           Data.Coerce
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
+import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.Set  as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE.Core.PositionMapping
+import           Development.IDE (hscEnv)
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), useWithStale)
+import           Development.IDE.Core.Shake (IdeState (..), use)
+import qualified Development.IDE.Core.Shake as IDE
+import           Development.IDE.Core.UseStale
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
 import           Development.Shake (Action, RuleResult)
 import           Development.Shake.Classes (Typeable, Binary, Hashable, NFData)
 import qualified FastString
-import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
-import           Ide.Types (PluginId)
+import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope, ExternalPackageState, HscEnv (hsc_EPS), liftIO)
 import qualified Ide.Plugin.Config as Plugin
-import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Plugin.Properties
+import           Ide.PluginUtils (usePropertyLsp)
+import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
 import           OccName
 import           Prelude hiding (span)
 import           SrcLoc (containsSpan)
-import           TcRnTypes (tcg_binds)
+import           TcRnTypes (tcg_binds, TcGblEnv)
 import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
@@ -62,6 +65,19 @@ runIde :: IdeState -> Action a -> IO a
 runIde state = runAction "tactic" state
 
 
+runCurrentIde
+    :: forall a r
+     . ( r ~ RuleResult a
+       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Show r, Typeable r, NFData r
+       )
+    => IdeState
+    -> NormalizedFilePath
+    -> a
+    -> MaybeT IO (Tracked 'Current r)
+runCurrentIde state nfp a = MaybeT $ fmap (fmap unsafeMkCurrent) $ runIde state $ use a nfp
+
+
 runStaleIde
     :: forall a r
      . ( r ~ RuleResult a
@@ -71,8 +87,23 @@ runStaleIde
     => IdeState
     -> NormalizedFilePath
     -> a
-    -> MaybeT IO (r, PositionMapping)
+    -> MaybeT IO (TrackedStale r)
 runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
+
+
+unsafeRunStaleIde
+    :: forall a r
+     . ( r ~ RuleResult a
+       , Eq a , Hashable a , Binary a , Show a , Typeable a , NFData a
+       , Show r, Typeable r, NFData r
+       )
+    => IdeState
+    -> NormalizedFilePath
+    -> a
+    -> MaybeT IO r
+unsafeRunStaleIde state nfp a = do
+  (r, _) <- MaybeT $ runIde state $ IDE.useWithStale a nfp
+  pure r
 
 
 ------------------------------------------------------------------------------
@@ -107,7 +138,7 @@ getIdeDynflags
 getIdeDynflags state nfp = do
   -- Ok to use the stale 'ModIface', since all we need is its 'DynFlags'
   -- which don't change very often.
-  (msr, _) <- runStaleIde state nfp GetModSummaryWithoutTimestamps
+  msr <- unsafeRunStaleIde state nfp GetModSummaryWithoutTimestamps
   pure $ ms_hspp_opts $ msrModSummary msr
 
 
@@ -117,60 +148,79 @@ getIdeDynflags state nfp = do
 judgementForHole
     :: IdeState
     -> NormalizedFilePath
-    -> Range
+    -> Tracked 'Current Range
     -> FeatureSet
-    -> MaybeT IO (Range, Judgement, Context, DynFlags)
+    -> MaybeT IO (Tracked 'Current Range, Judgement, Context, DynFlags)
 judgementForHole state nfp range features = do
-  (asts, amapping) <- runStaleIde state nfp GetHieAst
-  case asts of
+  TrackedStale asts amapping  <- runStaleIde state nfp GetHieAst
+  case unTrack asts of
     HAR _ _  _ _ (HieFromDisk _) -> fail "Need a fresh hie file"
-    HAR _ hf _ _ HieFresh -> do
-      (binds, _) <- runStaleIde state nfp GetBindings
-      (tcmod, _) <- runStaleIde state nfp TypeCheck
-      (rss, g)   <- liftMaybe $ getSpanAndTypeAtHole amapping range hf
-      resulting_range <- liftMaybe $ toCurrentRange amapping $ realSrcSpanToRange rss
-      let (jdg, ctx) = mkJudgementAndContext features g binds rss tcmod
+    HAR _ (unsafeCopyAge asts -> hf) _ _ HieFresh -> do
+      range' <- liftMaybe $ mapAgeFrom amapping range
+      binds <- runStaleIde state nfp GetBindings
+      tcg <- fmap (fmap tmrTypechecked)
+           $ runStaleIde state nfp TypeCheck
+      hscenv <- runStaleIde state nfp GhcSessionDeps
+
+      (rss, g) <- liftMaybe $ getSpanAndTypeAtHole range' hf
+      new_rss <- liftMaybe $ mapAgeTo amapping rss
+
+      -- KnownThings is just the instances in scope. There are no ranges
+      -- involved, so it's not crucial to track ages.
+      let henv = untrackedStaleValue $ hscenv
+      eps <- liftIO $ readIORef $ hsc_EPS $ hscEnv henv
+      kt <- knownThings (untrackedStaleValue tcg) henv
+
+      (jdg, ctx) <- liftMaybe $ mkJudgementAndContext features g binds new_rss tcg eps kt
+
       dflags <- getIdeDynflags state nfp
-      pure (resulting_range, jdg, ctx, dflags)
+      pure (fmap realSrcSpanToRange new_rss, jdg, ctx, dflags)
 
 
 mkJudgementAndContext
     :: FeatureSet
     -> Type
-    -> Bindings
-    -> RealSrcSpan
-    -> TcModuleResult
-    -> (Judgement, Context)
-mkJudgementAndContext features g binds rss tcmod = do
-      let tcg = tmrTypechecked tcmod
-          tcs = tcg_binds tcg
-          ctx = mkContext features
-                  (mapMaybe (sequenceA . (occName *** coerce))
-                    $ getDefiningBindings binds rss)
-                  tcg
-          top_provs = getRhsPosVals rss tcs
-          local_hy = spliceProvenance top_provs
-                   $ hypothesisFromBindings rss binds
-          evidence = getEvidenceAtHole (RealSrcSpan rss) tcs
-          cls_hy = foldMap evidenceToHypothesis evidence
-          subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
-       in ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
-              (local_hy <> cls_hy)
-              (isRhsHole rss tcs)
-              g
-          , ctx
-          )
+    -> TrackedStale Bindings
+    -> Tracked 'Current RealSrcSpan
+    -> TrackedStale TcGblEnv
+    -> ExternalPackageState
+    -> KnownThings
+    -> Maybe (Judgement, Context)
+mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg tcgmap) eps kt = do
+  binds_rss <- mapAgeFrom bmap rss
+  tcg_rss <- mapAgeFrom tcgmap rss
+
+  let tcs = fmap tcg_binds tcg
+      ctx = mkContext features
+              (mapMaybe (sequenceA . (occName *** coerce))
+                $ unTrack
+                $ getDefiningBindings <$> binds <*> binds_rss)
+              (unTrack tcg)
+              eps
+              kt
+              evidence
+      top_provs = getRhsPosVals tcg_rss tcs
+      local_hy = spliceProvenance top_provs
+               $ hypothesisFromBindings binds_rss binds
+      evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
+      cls_hy = foldMap evidenceToHypothesis evidence
+      subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
+  pure
+    ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+          (local_hy <> cls_hy)
+          (isRhsHole tcg_rss tcs)
+          g
+    , ctx
+    )
 
 
 getSpanAndTypeAtHole
-    :: PositionMapping
-    -> Range
-    -> HieASTs b
-    -> Maybe (Span, b)
-getSpanAndTypeAtHole amapping range hf = do
-  range' <- fromCurrentRange amapping range
+    :: Tracked age Range
+    -> Tracked age (HieASTs b)
+    -> Maybe (Tracked age RealSrcSpan, b)
+getSpanAndTypeAtHole r@(unTrack -> range) (unTrack -> hf) = do
   join $ listToMaybe $ M.elems $ flip M.mapWithKey (getAsts hf) $ \fs ast ->
-    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range') ast of
+    case selectSmallestContaining (rangeToRealSrcSpan (FastString.unpackFS fs) range) ast of
       Nothing -> Nothing
       Just ast' -> do
         let info = nodeInfo ast'
@@ -179,11 +229,8 @@ getSpanAndTypeAtHole amapping range hf = do
         -- Ensure we're actually looking at a hole here
         guard $ all (either (const False) $ isHole . occName)
           $ M.keysSet $ nodeIdentifiers info
-        pure (nodeSpan ast', ty)
+        pure (unsafeCopyAge r $ nodeSpan ast', ty)
 
-
-liftMaybe :: Monad m => Maybe a -> MaybeT m a
-liftMaybe a = MaybeT $ pure a
 
 
 ------------------------------------------------------------------------------
@@ -200,8 +247,11 @@ spliceProvenance top x =
 
 ------------------------------------------------------------------------------
 -- | Compute top-level position vals of a function
-getRhsPosVals :: RealSrcSpan -> TypecheckedSource -> Hypothesis CType
-getRhsPosVals rss tcs
+getRhsPosVals
+    :: Tracked age RealSrcSpan
+    -> Tracked age TypecheckedSource
+    -> Hypothesis CType
+getRhsPosVals (unTrack -> rss) (unTrack -> tcs)
   = everything (<>) (mkQ mempty $ \case
       TopLevelRHS name ps
           (L (RealSrcSpan span)  -- body with no guards and a single defn
@@ -344,11 +394,12 @@ mkIdHypothesis (splitId -> (name, ty)) prov =
 
 ------------------------------------------------------------------------------
 -- | Is this hole immediately to the right of an equals sign?
-isRhsHole :: RealSrcSpan -> TypecheckedSource -> Bool
-isRhsHole rss tcs = everything (||) (mkQ False $ \case
-  TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
-  _                                        -> False
-  ) tcs
+isRhsHole :: Tracked age RealSrcSpan -> Tracked age TypecheckedSource -> Bool
+isRhsHole (unTrack -> rss) (unTrack -> tcs) =
+  everything (||) (mkQ False $ \case
+      TopLevelRHS _ _ (L (RealSrcSpan span) _) -> containsSpan rss span
+      _                                        -> False
+    ) tcs
 
 
 ufmSeverity :: UserFacingMessage -> MessageType
@@ -364,3 +415,4 @@ mkShowMessageParams ufm = ShowMessageParams (ufmSeverity ufm) $ T.pack $ show uf
 
 showLspMessage :: MonadLsp cfg m => ShowMessageParams -> m ()
 showLspMessage = sendNotification SWindowShowMessage
+

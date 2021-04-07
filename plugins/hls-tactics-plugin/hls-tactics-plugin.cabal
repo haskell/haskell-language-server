@@ -107,22 +107,6 @@ library
     TypeOperators,
     ViewPatterns
 
-
-executable test-server
-  default-language:   Haskell2010
-  build-depends:
-    , base
-    , data-default
-    , ghcide
-    , hls-tactics-plugin
-    , hls-plugin-api
-    , shake
-  main-is: Server.hs
-  hs-source-dirs: test
-  ghc-options:
-    "-with-rtsopts=-I0 -A128M"
-    -threaded -Wall -Wno-name-shadowing -Wredundant-constraints
-
 test-suite tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
@@ -144,34 +128,23 @@ test-suite tests
       QuickCheck
     , aeson
     , base
-    , bytestring
-    , checkers
     , containers
-    , data-default
-    , deepseq
     , directory
     , filepath
     , ghc
     , ghcide                >= 0.7.5.0
-    , hie-bios
     , hls-plugin-api
     , hls-tactics-plugin
+    , hls-test-utils
+    , lsp-types
     , hspec
     , hspec-expectations
     , lens
-    , lsp-test
-    , lsp-types
-    , megaparsec
     , mtl
-    , tasty
-    , tasty-ant-xml           >=1.1.6
-    , tasty-expected-failure
-    , tasty-golden
-    , tasty-hunit
-    , tasty-rerun
     , text
+    , deepseq
+    , tasty-hunit
   build-tool-depends:
       hspec-discover:hspec-discover
-    , hls-tactics-plugin:test-server -any
   default-language: Haskell2010
 
