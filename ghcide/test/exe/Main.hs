@@ -535,12 +535,17 @@ diagnosticTests = testGroup "diagnostics"
             , "foo = 1 {-|-}"
             ]
       _ <- createDoc "Foo.hs" "haskell" fooContent
+#if MIN_GHC_API_VERSION(9,0,1)
+      -- Haddock parse errors are ignored on ghc-9.0.1
+      pure ()
+#else
       expectDiagnostics
         [ ( "Foo.hs"
           , [(DsWarning, (2, 8), "Haddock parse error on input")
             ]
           )
         ]
+#endif
   , testSessionWait "strip file path" $ do
       let
           name = "Testing"
@@ -3770,6 +3775,8 @@ thTests =
               T.unlines
                 [ "{-# LANGUAGE TemplateHaskell #-}"
                 , "module A (a) where"
+                , "import Language.Haskell.TH (ExpQ)"
+                , "a :: ExpQ" -- TH 2.17 requires an explicit type signature since splices are polymorphic
                 , "a = [| glorifiedID |]"
                 , "glorifiedID :: a -> a"
                 , "glorifiedID = id" ]
