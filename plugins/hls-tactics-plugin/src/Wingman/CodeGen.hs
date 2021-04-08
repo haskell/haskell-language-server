@@ -10,12 +10,10 @@ module Wingman.CodeGen
 
 
 import           ConLike
-import           Control.Applicative (liftA2)
 import           Control.Lens ((%~), (<>~), (&))
 import           Control.Monad.Except
 import           Control.Monad.State
 import           Data.Bool (bool)
-import           Data.Char (isSymbol, isPunctuation)
 import           Data.Generics.Labels ()
 import           Data.List
 import           Data.Monoid (Endo(..))
@@ -28,7 +26,7 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
-import           GhcPlugins (occNameString)
+import           GhcPlugins (isSymOcc)
 import           PatSyn
 import           Type hiding (Var)
 import           Wingman.CodeGen.Utils
@@ -211,7 +209,7 @@ buildDataCon should_blacklist jdg dc tyapps = do
 -- | Make a function application, correctly handling the infix case.
 mkApply :: OccName -> [HsExpr GhcPs] -> LHsExpr GhcPs
 mkApply occ (lhs : rhs : more)
-  | all (liftA2 (||) isSymbol isPunctuation) (occNameString occ)
+  | isSymOcc occ
   = noLoc $ foldl' (@@) (op lhs (coerceName occ) rhs) more
 mkApply occ args = noLoc $ foldl' (@@) (var' occ) args
 
