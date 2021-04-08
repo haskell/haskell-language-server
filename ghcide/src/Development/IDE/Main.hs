@@ -1,4 +1,12 @@
-module Development.IDE.Main (Arguments(..), defaultMain) where
+{-# OPTIONS_GHC -Wno-orphans #-}
+module Development.IDE.Main
+(Arguments(..)
+,Command(..)
+,IdeCommand(..)
+,isLSP
+,commandP
+,defaultMain
+) where
 import           Control.Concurrent.Extra              (newLock, readVar,
                                                         withLock)
 import           Control.Exception.Safe                (Exception (displayException),
@@ -57,6 +65,7 @@ import           Development.Shake                     (action)
 import           GHC.IO.Encoding                       (setLocaleEncoding)
 import           GHC.IO.Handle                         (hDuplicate)
 import           HIE.Bios.Cradle                       (findCradle)
+import qualified HieDb.Run                             as HieDb
 import           Ide.Plugin.Config                     (CheckParents (NeverCheck),
                                                         Config,
                                                         getConfigFromNotification)
@@ -65,6 +74,7 @@ import           Ide.PluginUtils                       (allLspCmdIds',
                                                         pluginDescToIdePlugins)
 import           Ide.Types                             (IdePlugins)
 import qualified Language.LSP.Server                   as LSP
+import           Options.Applicative                   hiding (action)
 import qualified System.Directory.Extra                as IO
 import           System.Exit                           (ExitCode (ExitFailure),
                                                         exitWith)
@@ -80,9 +90,41 @@ import           System.Time.Extra                     (offsetTime,
                                                         showDuration)
 import           Text.Printf                           (printf)
 
+data Command
+    = Check [FilePath]  -- ^ Typecheck some paths and print diagnostics. Exit code is the number of failures
+    | Db {projectRoot :: FilePath, hieOptions ::  HieDb.Options, hieCommand :: HieDb.Command}
+     -- ^ Run a command in the hiedb
+    | LSP   -- ^ Run the LSP server
+    | Custom {projectRoot :: FilePath, ideCommand :: IdeCommand} -- ^ User defined
+    deriving Show
+
+newtype IdeCommand = IdeCommand (IdeState -> IO ())
+
+instance Show IdeCommand where show _ = "<ide command>"
+
+-- TODO move these to hiedb
+deriving instance Show HieDb.Command
+deriving instance Show HieDb.Options
+
+isLSP :: Command -> Bool
+isLSP LSP = True
+isLSP _   = False
+
+commandP :: Parser Command
+commandP = hsubparser (command "typecheck" (info (Check <$> fileCmd) fileInfo)
+                    <> command "hiedb" (info (Db "." <$> HieDb.optParser "" True <*> HieDb.cmdParser <**> helper) hieInfo)
+                    <> command "lsp" (info (pure LSP <**> helper) lspInfo)
+                    )
+  where
+    fileCmd = many (argument str (metavar "FILES/DIRS..."))
+    lspInfo = fullDesc <> progDesc "Start talking to an LSP client"
+    fileInfo = fullDesc <> progDesc "Used as a test bed to check your IDE will work"
+    hieInfo = fullDesc <> progDesc "Query .hie files"
+
+
 data Arguments = Arguments
     { argsOTMemoryProfiling     :: Bool
-    , argFiles                  :: Maybe [FilePath]   -- ^ Nothing: lsp server ;  Just: typecheck and exit
+    , argCommand                :: Command
     , argsLogger                :: IO Logger
     , argsRules                 :: Rules ()
     , argsHlsPlugins            :: IdePlugins IdeState
@@ -100,7 +142,7 @@ data Arguments = Arguments
 instance Default Arguments where
     def = Arguments
         { argsOTMemoryProfiling = False
-        , argFiles = Nothing
+        , argCommand = LSP
         , argsLogger = stderrLogger
         , argsRules = mainRule >> action kick
         , argsGhcidePlugin = mempty
@@ -153,11 +195,11 @@ defaultMain Arguments{..} = do
     inH <- argsHandleIn
     outH <- argsHandleOut
 
-    case argFiles of
-        Nothing -> do
+    case argCommand of
+        LSP -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
-            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
+            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
             runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
@@ -188,7 +230,7 @@ defaultMain Arguments{..} = do
                     vfs
                     hiedb
                     hieChan
-        Just argFiles -> do
+        Check argFiles -> do
           dir <- IO.getCurrentDirectory
           dbLoc <- getHieDbLoc dir
           runWithDb dbLoc $ \hiedb hieChan -> do
@@ -249,7 +291,29 @@ defaultMain Arguments{..} = do
                 measureMemory logger [keys] consoleObserver valuesRef
 
             unless (null failed) (exitWith $ ExitFailure (length failed))
+        Db dir opts cmd -> do
+            dbLoc <- getHieDbLoc dir
+            hPutStrLn stderr $ "Using hiedb at: " ++ dbLoc
+            mlibdir <- setInitialDynFlags def
+            case mlibdir of
+                Nothing     -> exitWith $ ExitFailure 1
+                Just libdir -> HieDb.runCommand libdir opts{HieDb.database = dbLoc} cmd
+        Custom projectRoot (IdeCommand c) -> do
+          dbLoc <- getHieDbLoc projectRoot
+          runWithDb dbLoc $ \hiedb hieChan -> do
+            vfs <- makeVFSHandle
+            sessionLoader <- loadSessionWithOptions argsSessionLoadingOptions "."
+            let options =
+                  (argsIdeOptions argsDefaultHlsConfig sessionLoader)
+                    { optCheckParents = pure NeverCheck,
+                      optCheckProject = pure False
+                    }
+            ide <- initialise argsDefaultHlsConfig rules Nothing logger debouncer options vfs hiedb hieChan
+            registerIdeConfiguration (shakeExtras ide) $ IdeConfiguration mempty (hashed Nothing)
+            c ide
+
 {-# ANN defaultMain ("HLint: ignore Use nubOrd" :: String) #-}
+
 
 expandFiles :: [FilePath] -> IO [FilePath]
 expandFiles = concatMapM $ \x -> do

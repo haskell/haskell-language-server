@@ -119,6 +119,7 @@ test-suite tests
     CodeAction.IntrosSpec
     CodeAction.UseDataConSpec
     ProviderSpec
+    Spec
     UnificationSpec
     Utils
   hs-source-dirs:
@@ -144,6 +145,7 @@ test-suite tests
     , text
     , deepseq
     , tasty-hunit
+    , tasty-hspec
   build-tool-depends:
       hspec-discover:hspec-discover
   default-language: Haskell2010
