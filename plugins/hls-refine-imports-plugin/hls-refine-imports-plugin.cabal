@@ -17,13 +17,14 @@ library
                ,    containers
                ,    deepseq
                ,    lsp
-               ,    haskell-lsp-types
+               ,    lsp-types
                ,    hls-plugin-api >= 1.0 && < 1.2
                ,    ghc
                ,    ghcide         ^>= 1.1.0.0
                ,    shake
                ,    text
                ,    unordered-containers
+               ,    hls-explicit-imports-plugin ^>= 1.0.0.0
 
   default-language: Haskell2010
   default-extensions: DataKinds, TypeOperators

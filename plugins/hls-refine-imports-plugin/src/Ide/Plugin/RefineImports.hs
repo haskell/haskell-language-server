@@ -1,39 +1,46 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveAnyClass        #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE NamedFieldPuns        #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TypeFamilies          #-}
 
 module Ide.Plugin.RefineImports (descriptor) where
 
-import Avail (AvailInfo (Avail), availName, availNames, availNamesWithSelectors)
-import Control.Arrow (Arrow (second))
-import Control.DeepSeq (rwhnf)
-import Control.Monad (join)
-import Control.Monad.IO.Class (liftIO)
-import Data.Aeson.Types
-import qualified Data.HashMap.Strict as HashMap
-import Data.IORef (readIORef)
-import Data.List (intercalate)
-import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromMaybe)
-import qualified Data.Text as T
-import Data.Traversable (forM)
-import Development.IDE
-import Development.IDE.Core.PositionMapping
-import Development.IDE.GHC.Compat
-import Development.Shake.Classes
-import GHC.Generics (Generic)
-import Ide.PluginUtils (mkLspCommand)
-import Ide.Types
-import Language.LSP.Server
-import Language.LSP.Types
-import PrelNames (pRELUDE)
-import RnNames (findImportUsage, getMinimalImports)
-import TcRnMonad (initTcWithGbl, tcg_rn_exports, tcg_used_gres)
+import           Avail                                (AvailInfo (Avail),
+                                                       availName, availNames,
+                                                       availNamesWithSelectors)
+import           Control.Arrow                        (Arrow (second))
+import           Control.DeepSeq                      (rwhnf)
+import           Control.Monad                        (join)
+import           Control.Monad.IO.Class               (liftIO)
+import           Data.Aeson.Types
+import qualified Data.HashMap.Strict                  as HashMap
+import           Data.IORef                           (readIORef)
+import           Data.List                            (intercalate)
+import qualified Data.Map.Strict                      as Map
+import           Data.Maybe                           (catMaybes, fromMaybe)
+import qualified Data.Text                            as T
+import           Data.Traversable                     (forM)
+import           Development.IDE
+import           Development.IDE.Core.PositionMapping
+import           Development.IDE.GHC.Compat
+import           Development.Shake.Classes
+import           GHC.Generics                         (Generic)
+import           Ide.Plugin.ExplicitImports           (extractMinimalImports,
+                                                       within)
+import           Ide.PluginUtils                      (mkLspCommand)
+import           Ide.Types
+import           Language.LSP.Server
+import           Language.LSP.Types
+import           PrelNames                            (pRELUDE)
+import           RnNames                              (findImportUsage,
+                                                       getMinimalImports)
+import           TcRnMonad                            (initTcWithGbl,
+                                                       tcg_rn_exports,
+                                                       tcg_used_gres)
 
 -- | plugin declaration
 descriptor :: PluginId -> PluginDescriptor IdeState
@@ -48,7 +55,7 @@ descriptor plId = (defaultPluginDescriptor plId)
       ]
   }
 
-refineImportCommandId :: CommandId 
+refineImportCommandId :: CommandId
 refineImportCommandId = "RefineImportLensCommand"
 
 newtype RefineImportCommandParams = RefineImportCommandParams WorkspaceEdit
@@ -57,7 +64,7 @@ newtype RefineImportCommandParams = RefineImportCommandParams WorkspaceEdit
 
 -- | The command descriptor
 refineImportCommand :: PluginCommand IdeState
-refineImportCommand = 
+refineImportCommand =
   PluginCommand
     { commandId = refineImportCommandId
     , commandDesc = "Directly use the imports as oppose to using aggregation module"
@@ -74,13 +81,13 @@ runRefineImportCommand _state (RefineImportCommandParams edit) = do
 lensProvider :: PluginMethodHandler IdeState TextDocumentCodeLens
 lensProvider
   state -- ghcide state
-  pId -- plugin Id
+  pId
   CodeLensParams {_textDocument = TextDocumentIdentifier {_uri}}
     -- VSCode uses URIs instead of file paths
     -- haskell-lsp provides conversion functions
     | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri _uri = liftIO $
       do
-        mbRefinedImports <- 
+        mbRefinedImports <-
           runIde state $ useWithStale RefineImports nfp
         case mbRefinedImports of
           -- Implement the provider logic:
@@ -125,7 +132,7 @@ codeActionProvider ideState _pId (CodeActionParams _ _ docId range _context)
               _title = "Refine all imports"
               _kind = Just CodeActionQuickFix
               _command = Nothing
-              _edit = Just WorkspaceEdit 
+              _edit = Just WorkspaceEdit
                 {_changes, _documentChanges, _changeAnnotations}
               _changes = Just $ HashMap.singleton _uri $ List edits
               _documentChanges = Nothing
@@ -165,7 +172,7 @@ refineImportsRule = define $ \RefineImports nfp -> do
   import2Map <- do
     -- first layer is from current(editing) module to its imports
     ImportMap currIm <- use_ GetImportMap nfp
-    forM currIm $ \path -> do  
+    forM currIm $ \path -> do
       -- second layer is from the imports of first layer to their imports
       ImportMap importIm <- use_ GetImportMap path
       forM importIm $ \imp_path -> do
@@ -174,25 +181,25 @@ refineImportsRule = define $ \RefineImports nfp -> do
 
   -- Use the GHC api to extract the "minimal" imports
   -- We shouldn't blindly refine imports
-  -- instead we should generate imports statements 
+  -- instead we should generate imports statements
   -- for modules/symbols actually got used
   (imports, mbMinImports) <- liftIO $ extractMinimalImports hsc tmr
 
-  let filterByImport 
-        :: LImportDecl GhcRn 
-        -> Map.Map ModuleName [AvailInfo] 
+  let filterByImport
+        :: LImportDecl GhcRn
+        -> Map.Map ModuleName [AvailInfo]
         -> Map.Map ModuleName [AvailInfo]
       filterByImport (L _ ImportDecl{ideclHiding = Just (_, L _ names)}) avails =
         let importedNames = map (prettyPrint . ieName . unLoc) names
         in flip Map.filter avails $ \a ->
-              any ((`elem` importedNames) . prettyPrint) 
+              any ((`elem` importedNames) . prettyPrint)
                 $ concatMap availNamesWithSelectors a
       filterByImport _ _ = mempty
-  let constructImport 
-        :: LImportDecl GhcRn 
-        -> (ModuleName, [AvailInfo]) 
+  let constructImport
+        :: LImportDecl GhcRn
+        -> (ModuleName, [AvailInfo])
         -> LImportDecl GhcRn
-      constructImport 
+      constructImport
         i@(L lim id@ImportDecl
                   {ideclName = L _ mn, ideclHiding = Just (hiding, L _ names)})
         (newModuleName, avails) = L lim id
@@ -203,9 +210,9 @@ refineImportsRule = define $ \RefineImports nfp -> do
       constructImport lim _ = lim
   let res =
         [ (i, Just
-                . T.intercalate "\n" 
-                . map (T.pack . prettyPrint . constructImport i) 
-                . Map.toList 
+                . T.intercalate "\n"
+                . map (T.pack . prettyPrint . constructImport i)
+                . Map.toList
                 $ filteredInnerImports)
         -- for every minimal imports
         | Just minImports <- [mbMinImports]
@@ -222,36 +229,11 @@ refineImportsRule = define $ \RefineImports nfp -> do
   where
     -- Check if a name is exposed by AvailInfo (the available information of a module)
     containsAvail :: LIE GhcRn -> AvailInfo -> Bool
-    containsAvail name avail = 
-      any (\an -> prettyPrint an == (prettyPrint . ieName . unLoc $ name)) 
+    containsAvail name avail =
+      any (\an -> prettyPrint an == (prettyPrint . ieName . unLoc $ name))
         $ availNamesWithSelectors avail
 
 --------------------------------------------------------------------------------
-
--- | Use the ghc api to extract a minimal, explicit set of imports for this module
-extractMinimalImports ::
-  Maybe HscEnvEq ->
-  Maybe TcModuleResult ->
-  IO ([LImportDecl GhcRn], Maybe [LImportDecl GhcRn])
-extractMinimalImports (Just hsc) (Just TcModuleResult {..}) = do
-  -- extract the original imports and the typechecking environment
-  let tcEnv = tmrTypechecked
-      (_, imports, _, _) = tmrRenamed
-      ParsedModule {pm_parsed_source = L loc _} = tmrParsed
-      span = fromMaybe (error "expected real") $ realSpan loc
-
-  -- GHC is secretly full of mutable state
-  gblElts <- readIORef (tcg_used_gres tcEnv)
-
-  -- call findImportUsage does exactly what we need
-  -- GHC is full of treats like this
-  let usage = findImportUsage imports gblElts
-  (_, minimalImports) <- 
-    initTcWithGbl (hscEnv hsc) tcEnv span $ getMinimalImports usage
-
-  -- return both the original imports and the computed minimal ones
-  return (imports, minimalImports)
-extractMinimalImports _ _ = return ([], Nothing)
 
 mkExplicitEdit :: PositionMapping -> LImportDecl pass -> T.Text -> Maybe TextEdit
 mkExplicitEdit posMapping (L src imp) explicit
@@ -287,7 +269,3 @@ generateLens pId uri edits@TextEdit {_range, _newText} = do
 -- | A helper to run ide actions
 runIde :: IdeState -> Action a -> IO a
 runIde = runAction "RefineImports"
-
-within :: Range -> SrcSpan -> Bool
-within (Range start end) span =
-  isInsideSrcSpan start span || isInsideSrcSpan end span
