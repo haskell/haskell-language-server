@@ -678,15 +678,21 @@ suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillHole Diagnostic{_range=_range,..}
     | Just holeName <- extractHoleName _message
     , (holeFits, refFits) <- processHoleSuggestions (T.lines _message)
-    = map (proposeHoleFit holeName False) holeFits
-    ++ map (proposeHoleFit holeName True) refFits
+    = let hasInfixBackquote = checkInfixBackquote holeName _message in
+       map (proposeHoleFit holeName False hasInfixBackquote) holeFits
+    ++ map (proposeHoleFit holeName True hasInfixBackquote) refFits
     | otherwise = []
     where
       extractHoleName = fmap head . flip matchRegexUnifySpaces "Found hole: ([^ ]*)"
-      proposeHoleFit holeName parenthise name =
+      checkInfixBackquote holeName message = message =~ T.concat [T.singleton '`', holeName, T.singleton '`'] :: Bool
+      proposeHoleFit holeName parenthise hasInfixBackquote name =
           ( "replace " <> holeName <> " with " <> name
-          , TextEdit _range $ if parenthise then parens name else name)
+          , TextEdit (if hasInfixBackquote then fixInfixBackquoteRange _range else _range)
+                     (if parenthise then parens name else name)
+          )
       parens x = "(" <> x <> ")"
+      fixInfixBackquoteRange (Range (Position x1 y1) (Position x2 y2)) =
+          Range (Position x1 (y1 + 1)) (Position x2 (y2 - 1))
 
 processHoleSuggestions :: [T.Text] -> ([T.Text], [T.Text])
 processHoleSuggestions mm = (holeSuggestions, refSuggestions)

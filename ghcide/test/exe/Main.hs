@@ -2386,6 +2386,22 @@ fillTypedHoleTests = let
       executeCodeAction chosen
       modifiedCode <- documentContents doc
       liftIO $ mkDoc "E.toException" @=? modifiedCode
+  , testSession "fill hole with infix backquote keeps" $ do
+      let mkDoc x = T.unlines
+            [ "module Testing where"
+            , "data A = A"
+            , "foo :: A -> A -> A"
+            , "foo A A = A"
+            , "test :: A -> A -> A"
+            , "test a1 a2 = a1 `" <> x <> "` a2"
+            ]
+      doc <- createDoc "Test.hs" "haskell" $ mkDoc "_"
+      _ <- waitForDiagnostics 
+      actions <- getCodeActions doc (Range (Position 5 16) (Position 5 19))
+      chosen <- liftIO $ pickActionWithTitle "replace _ with foo" actions
+      executeCodeAction chosen
+      modifiedCode <- documentContents doc
+      liftIO $ mkDoc "foo" @=? modifiedCode
   ]
 
 addInstanceConstraintTests :: TestTree
