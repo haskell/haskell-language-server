@@ -304,7 +304,7 @@ suggestRemoveRedundantImport :: ParsedModule -> Maybe T.Text -> Diagnostic -> [(
 suggestRemoveRedundantImport ParsedModule{pm_parsed_source = L _  HsModule{hsmodImports}} contents Diagnostic{_range=_range,..}
 --     The qualified import of ‘many’ from module ‘Control.Applicative’ is redundant
     | Just [_, bindings] <- matchRegexUnifySpaces _message "The( qualified)? import of ‘([^’]*)’ from module [^ ]* is redundant"
-    , Just (L _ impDecl) <- find (\(L l _) -> srcSpanToRange l == Just _range ) hsmodImports
+    , Just (L _ impDecl) <- find (\(L l _) -> _start _range `isInsideSrcSpan` l && _end _range `isInsideSrcSpan` l ) hsmodImports
     , Just c <- contents
     , ranges <- map (rangesForBindingImport impDecl . T.unpack) (T.splitOn ", " bindings)
     , ranges' <- extendAllToIncludeCommaIfPossible False (indexedByPosition $ T.unpack c) (concat ranges)
