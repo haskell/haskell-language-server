@@ -5294,7 +5294,7 @@ testSessionWithExtraFiles prefix name = testCase name . runWithExtraFiles prefix
 testSession' :: String -> (FilePath -> Session ()) -> TestTree
 testSession' name = testCase name . run'
 
-testSessionWait :: String -> Session () -> TestTree
+testSessionWait :: HasCallStack => String -> Session () -> TestTree
 testSessionWait name = testSession name .
       -- Check that any diagnostics produced were already consumed by the test case.
       --
