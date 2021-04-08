@@ -190,7 +190,7 @@ rules plugin = do
 
 getIdeas :: NormalizedFilePath -> Action (Either ParseError [Idea])
 getIdeas nfp = do
-  logm $ "hlint:getIdeas:file:" ++ show nfp
+  debugm $ "hlint:getIdeas:file:" ++ show nfp
   (flags, classify, hint) <- useNoFile_ GetHlintSettings
 
   let applyHints' (Just (Right modEx)) = Right $ applyHints classify hint [modEx]
@@ -222,7 +222,7 @@ getIdeas nfp = do
 
         setExtensions flags = do
           hlintExts <- getExtensions flags nfp
-          logm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
+          debugm $ "hlint:getIdeas:setExtensions:" ++ show hlintExts
           return $ flags { enabledExtensions = hlintExts }
 
 getExtensions :: ParseFlags -> NormalizedFilePath -> Action [Extension]
