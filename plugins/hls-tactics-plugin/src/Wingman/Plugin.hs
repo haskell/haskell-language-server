@@ -88,13 +88,14 @@ tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       features <- getFeatureSet pId
       ccs <- getClientCapabilities
+      cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
         let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
         TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
         pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
-        timingOut 2e8 $ join $
+        timingOut (cfg_timeout_seconds cfg * seconds) $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left _ -> Left TacticErrors
             Right rtr ->
@@ -116,6 +117,12 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           pure $ Right Null
 tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
+
+
+------------------------------------------------------------------------------
+-- | The number of microseconds in a second
+seconds :: Num a => a
+seconds = 1e6
 
 
 timingOut
