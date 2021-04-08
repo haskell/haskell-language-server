@@ -52,6 +52,7 @@ spec = do
     autoTest  2 28 "AutoZip.hs"
     autoTest  2 17 "AutoInfixApply.hs"
     autoTest  2 19 "AutoInfixApplyMany.hs"
+    autoTest  2 25 "AutoInfixInfix.hs"
 
     failing "flaky in CI" $
       autoTest 2 11 "GoldenApplicativeThen.hs"
