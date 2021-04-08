@@ -199,7 +199,7 @@ defaultMain Arguments{..} = do
         LSP -> do
             t <- offsetTime
             hPutStrLn stderr "Starting LSP server..."
-            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
+            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run WITHOUT the --lsp option!"
             runLanguageServer options inH outH argsGetHieDbLoc argsDefaultHlsConfig argsOnConfigChange (pluginHandlers plugins) $ \env vfs rootPath hiedb hieChan -> do
                 t <- t
                 hPutStrLn stderr $ "Started LSP server in " ++ showDuration t
