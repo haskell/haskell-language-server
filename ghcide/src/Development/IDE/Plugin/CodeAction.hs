@@ -678,7 +678,7 @@ suggestFillHole :: Diagnostic -> [(T.Text, TextEdit)]
 suggestFillHole Diagnostic{_range=_range,..}
     | Just holeName <- extractHoleName _message
     , (holeFits, refFits) <- processHoleSuggestions (T.lines _message) =
-      let isInfixHole     = _message =~ addBackticks holeName :: Bool in
+      let isInfixHole = _message =~ addBackticks holeName :: Bool in
         map (proposeHoleFit holeName False isInfixHole) holeFits
         ++ map (proposeHoleFit holeName True isInfixHole) refFits
     | otherwise = []
