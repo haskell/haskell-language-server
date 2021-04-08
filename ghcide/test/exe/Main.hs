@@ -36,7 +36,7 @@ import           Development.IDE.Core.PositionMapping     (PositionResult (..),
                                                            positionResultToMaybe,
                                                            toCurrent)
 import           Development.IDE.Core.Shake               (Q (..))
-import           Development.IDE.Main                     as IDE
+import qualified Development.IDE.Main                     as IDE
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types (extendImportCommandId)
 import           Development.IDE.Plugin.TypeLenses        (typeLensCommandId)
@@ -1390,7 +1390,7 @@ extendImportTests = testGroup "extend import actions"
                     ])
         , expectFailBecause "importing pattern synonyms is unsupported"
           $ testSession "extend import list with pattern synonym" $ template
-            [("ModuleA.hs", T.unlines 
+            [("ModuleA.hs", T.unlines
                     [ "{-# LANGUAGE PatternSynonyms #-}"
                       , "module ModuleA where"
                       , "pattern Some x = Just x"
@@ -5294,7 +5294,7 @@ unitTests = do
                     | i <- [(1::Int)..20]
                 ] ++ Ghcide.descriptors
 
-        testIde def{argsHlsPlugins = plugins} $ do
+        testIde def{IDE.argsHlsPlugins = plugins} $ do
             _ <- createDoc "haskell" "A.hs" "module A where"
             waitForProgressDone
             actualOrder <- liftIO $ readIORef orderRef
@@ -5302,14 +5302,14 @@ unitTests = do
             liftIO $ actualOrder @?= reverse [(1::Int)..20]
      ]
 
-testIde :: Arguments -> Session () -> IO ()
+testIde :: IDE.Arguments -> Session () -> IO ()
 testIde arguments session = do
     config <- getConfigFromEnv
     (hInRead, hInWrite) <- createPipe
     (hOutRead, hOutWrite) <- createPipe
     let server = IDE.defaultMain arguments
-            { argsHandleIn = pure hInRead
-            , argsHandleOut = pure hOutWrite
+            { IDE.argsHandleIn = pure hInRead
+            , IDE.argsHandleOut = pure hOutWrite
             }
 
     withAsync server $ \_ ->
