@@ -120,7 +120,7 @@ arguments = GhcideArguments
       <*> switch (long "project-ghc-version"
                   <> help "Work out the project GHC version and print it")
     where
-        lspCommand = LSP <$ switch (long "lsp" <> help "Start talking to an LSP server")
+        lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP server")
         checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
 
 -- ---------------------------------------------------------------------

@@ -86,7 +86,6 @@ runLspMode ghcideArgs@GhcideArguments{..} idePlugins = do
         hPutStrLn stderr $ "  with arguments: " <> show ghcideArgs
         hPutStrLn stderr $ "  with plugins: " <> show (map fst $ ipMap idePlugins)
         hPutStrLn stderr $ "  in directory: " <> dir
-        hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
 
     Main.defaultMain def
       { Main.argCommand = argsCommand

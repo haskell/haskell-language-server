@@ -42,4 +42,4 @@ arguments = Arguments
       <*> (commandP <|> lspCommand <|> checkCommand)
       where
           checkCommand = Check <$> many (argument str (metavar "FILES/DIRS..."))
-          lspCommand = LSP <$ switch (long "lsp" <> help "Start talking to an LSP client")
+          lspCommand = LSP <$ flag' True (long "lsp" <> help "Start talking to an LSP client")

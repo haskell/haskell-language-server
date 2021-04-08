@@ -22,7 +22,6 @@ import           Development.IDE                   (Logger (Logger),
                                                     Priority (Info), action)
 import           Development.IDE.Core.OfInterest   (kick)
 import           Development.IDE.Core.Rules        (mainRule)
-import           Development.IDE.Main              (Command (LSP))
 import qualified Development.IDE.Main              as Main
 import qualified Development.IDE.Plugin.HLS.GhcIde as GhcIde
 import qualified Development.IDE.Plugin.Test       as Test
@@ -76,12 +75,6 @@ main = do
     let logger = Logger $ \pri msg -> when (pri >= logLevel) $ withLock lock $
             T.putStrLn $ T.pack ("[" ++ upper (show pri) ++ "] ") <> msg
         logLevel = if argsVerbose then minBound else Info
-
-    case argsCommand of
-        LSP -> do
-            hPutStrLn stderr "Starting LSP server..."
-            hPutStrLn stderr "If you are seeing this in a terminal, you probably should have run ghcide WITHOUT the --lsp option!"
-        _ -> return ()
 
     Main.defaultMain def
         {Main.argCommand = argsCommand
