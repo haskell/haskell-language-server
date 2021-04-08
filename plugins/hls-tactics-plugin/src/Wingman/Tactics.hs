@@ -297,6 +297,7 @@ destructAll = do
                 _ -> Nothing
                 )
            $ fmap (\hi -> (hi, hi_provenance hi))
+           $ filter (isAlgType . unCType . hi_type)
            $ unHypothesis
            $ jHypothesis jdg
   for_ args destruct
