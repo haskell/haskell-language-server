@@ -22,7 +22,6 @@ import           DataCon
 import           Development.IDE.GHC.Compat
 import           GHC.Exts
 import           GHC.SourceGen.Expr
-import           GHC.SourceGen.Overloaded
 import           Name (occNameString, occName)
 import           Refinery.Tactic
 import           Refinery.Tactic.Internal
@@ -204,7 +203,7 @@ apply hi = requireConcreteHole $ tracing ("apply' " <> show (hi_name hi)) $ do
     pure $
       ext
         & #syn_used_vals %~ S.insert func
-        & #syn_val       %~ noLoc . foldl' (@@) (var' func) . fmap unLoc
+        & #syn_val       %~ mkApply func . fmap unLoc
 
 
 ------------------------------------------------------------------------------
