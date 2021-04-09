@@ -26,6 +26,7 @@ import           GHC.SourceGen.Binds
 import           GHC.SourceGen.Expr
 import           GHC.SourceGen.Overloaded
 import           GHC.SourceGen.Pat
+import           GhcPlugins (isSymOcc)
 import           PatSyn
 import           Type hiding (Var)
 import           Wingman.CodeGen.Utils
@@ -202,4 +203,13 @@ buildDataCon should_blacklist jdg dc tyapps = do
   pure $ ext
     & #syn_trace %~ rose (show dc) . pure
     & #syn_val   %~ mkCon dc tyapps
+
+
+------------------------------------------------------------------------------
+-- | Make a function application, correctly handling the infix case.
+mkApply :: OccName -> [HsExpr GhcPs] -> LHsExpr GhcPs
+mkApply occ (lhs : rhs : more)
+  | isSymOcc occ
+  = noLoc $ foldl' (@@) (op lhs (coerceName occ) rhs) more
+mkApply occ args = noLoc $ foldl' (@@) (var' occ) args
 
