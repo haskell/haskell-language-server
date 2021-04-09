@@ -81,6 +81,7 @@ library
     , text
     , transformers
     , deepseq
+    , unordered-containers
 
   default-language: Haskell2010
   default-extensions:
