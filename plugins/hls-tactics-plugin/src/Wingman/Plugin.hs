@@ -30,6 +30,7 @@ import           Prelude hiding (span)
 import           System.Timeout
 import           Wingman.CaseSplit
 import           Wingman.GHC
+import           Wingman.Judgements (jNeedsToBindArgs)
 import           Wingman.LanguageServer
 import           Wingman.LanguageServer.TacticProviders
 import           Wingman.Machinery (scoreSolution)
@@ -167,18 +168,34 @@ graftHole
     -> Graft (Either String) ParsedSource
 graftHole span rtr
   | _jIsTopHole (rtr_jdg rtr)
-      = genericGraftWithSmallestM (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span $ \dflags ->
-        everywhereM'
-          $ mkBindListT $ \ix ->
-            graftDecl dflags span ix $ \name pats ->
-            splitToDecl (occName name)
-          $ iterateSplit
-          $ mkFirstAgda (fmap unXPat pats)
-          $ unLoc
-          $ rtr_extract rtr
+      = genericGraftWithSmallestM
+            (Proxy @(Located [LMatch GhcPs (LHsExpr GhcPs)])) span
+      $ \dflags matches ->
+          everywhereM'
+            $ mkBindListT $ \ix ->
+              graftDecl dflags span ix $ \name pats ->
+              splitToDecl
+                (case not $ jNeedsToBindArgs (rtr_jdg rtr) of
+                   -- If the user has explicitly bound arguments, use the
+                   -- fixity they wrote.
+                   True -> matchContextFixity . m_ctxt . unLoc
+                             =<< listToMaybe matches
+                   -- Otherwise, choose based on the name of the function.
+                   False -> Nothing
+                )
+                (occName name)
+            $ iterateSplit
+            $ mkFirstAgda (fmap unXPat pats)
+            $ unLoc
+            $ rtr_extract rtr
 graftHole span rtr
   = graft span
   $ rtr_extract rtr
+
+
+matchContextFixity :: HsMatchContext p -> Maybe LexicalFixity
+matchContextFixity (FunRhs _ l _) = Just l
+matchContextFixity _ = Nothing
 
 
 ------------------------------------------------------------------------------
