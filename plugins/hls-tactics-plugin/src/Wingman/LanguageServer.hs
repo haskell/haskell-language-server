@@ -12,7 +12,6 @@ import           Control.Monad
 import           Control.Monad.State (State, get, put, evalState)
 import           Control.Monad.Trans.Maybe
 import           Data.Coerce
-import           Data.Default (def)
 import           Data.Functor ((<&>))
 import           Data.Generics.Aliases (mkQ)
 import           Data.Generics.Schemes (everything)
@@ -23,9 +22,10 @@ import           Data.Monoid
 import qualified Data.Set  as S
 import qualified Data.Text as T
 import           Data.Traversable
-import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange, getClientConfigAction)
+import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
+import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)
 import           Development.IDE.Core.Shake (IdeState (..), useWithStale, uses, define, use)
 import           Development.IDE.GHC.Compat
@@ -38,7 +38,7 @@ import           GHC.Generics (Generic)
 import           GhcPlugins (tupleDataCon, consDataCon, substTyAddInScope)
 import qualified Ide.Plugin.Config as Plugin
 import           Ide.Plugin.Properties
-import           Ide.PluginUtils (usePropertyLsp, configForPlugin)
+import           Ide.PluginUtils (usePropertyLsp)
 import           Ide.Types (PluginId)
 import           Language.LSP.Server (MonadLsp, sendNotification)
 import           Language.LSP.Types
@@ -85,7 +85,7 @@ runStaleIde state nfp a = MaybeT $ runIde state $ useWithStale a nfp
 ------------------------------------------------------------------------------
 
 properties :: Properties
-  '[ 'PropertyKey "hole_severity" ('TEnum DiagnosticSeverity)
+  '[ 'PropertyKey "hole_severity" ('TEnum (Maybe DiagnosticSeverity))
    , 'PropertyKey "max_use_ctor_actions" 'TInteger
    , 'PropertyKey "features" 'TString
    ]
@@ -96,12 +96,13 @@ properties = emptyProperties
     "Maximum number of `Use constructor <x>` code actions that can appear" 5
   & defineEnumProperty #hole_severity
     "The severity to use when showing hole diagnostics. These are noisy, but some editors don't allow jumping to all severities."
-    [ (DsError,   "error")
-    , (DsWarning, "warning")
-    , (DsInfo,    "info")
-    , (DsHint,    "hint")
+    [ (Just DsError,   "error")
+    , (Just DsWarning, "warning")
+    , (Just DsInfo,    "info")
+    , (Just DsHint,    "hint")
+    , (Nothing,        "none")
     ]
-    DsWarning
+    Nothing
 
 
 -- | Get the the plugin config
@@ -396,39 +397,34 @@ type instance RuleResult WriteDiagnostics = ()
 
 wingmanRules :: PluginId -> Rules ()
 wingmanRules plId = do
-
-
-  define $ \WriteDiagnostics nfp -> do
-    config <- getClientConfigAction def
-    let pluginConfig = configForPlugin config plId
-    let severity = useProperty #hole_severity properties
-                 $ Just $ Plugin.plcConfig pluginConfig
-
-    x <- use GetParsedModule nfp
-    case x of
-      Nothing ->
-        pure ([], Nothing)
-      Just pm -> do
-        let holes :: [Range]
-            holes =
-              everything (<>)
-                (mkQ mempty $ \case
-                  L span (HsVar _ (L _ name))
-                    | isHole (occName name) ->
-                        maybeToList $ srcSpanToRange span
-                  L span (HsUnboundVar _ (TrueExprHole occ))
-                    | isHole occ ->
-                        maybeToList $ srcSpanToRange span
+  define $ \WriteDiagnostics nfp ->
+    usePropertyAction #hole_severity plId properties >>= \case
+      Nothing -> pure (mempty, Just ())
+      Just severity ->
+        use GetParsedModule nfp >>= \case
+          Nothing ->
+            pure ([], Nothing)
+          Just pm -> do
+            let holes :: [Range]
+                holes =
+                  everything (<>)
+                    (mkQ mempty $ \case
+                      L span (HsVar _ (L _ name))
+                        | isHole (occName name) ->
+                            maybeToList $ srcSpanToRange span
+                      L span (HsUnboundVar _ (TrueExprHole occ))
+                        | isHole occ ->
+                            maybeToList $ srcSpanToRange span
 #if __GLASGOW_HASKELL__ <= 808
-                  L span (EWildPat _) ->
-                    maybeToList $ srcSpanToRange span
+                      L span (EWildPat _) ->
+                        maybeToList $ srcSpanToRange span
 #endif
-                  (_ :: LHsExpr GhcPs) -> mempty
-                ) $ pm_parsed_source pm
-        pure
-          ( fmap (\r -> (nfp, ShowDiag, mkDiagnostic severity r)) holes
-          , Just ()
-          )
+                      (_ :: LHsExpr GhcPs) -> mempty
+                    ) $ pm_parsed_source pm
+            pure
+              ( fmap (\r -> (nfp, ShowDiag, mkDiagnostic severity r)) holes
+              , Just ()
+              )
 
   action $ do
     files <- getFilesOfInterest
