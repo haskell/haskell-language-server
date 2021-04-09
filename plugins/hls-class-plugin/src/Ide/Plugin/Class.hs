@@ -163,10 +163,9 @@ codeAction state plId (CodeActionParams _ _ docId _ context) = liftIO $ fmap (fr
 
         mkCmdParams methodGroup = [toJSON (AddMinimalMethodsParams uri range (List methodGroup))]
 
-        mkCodeAction title
+        mkCodeAction title cmd
           = InR
-          . CodeAction title (Just CodeActionQuickFix) (Just (List [])) Nothing Nothing Nothing
-          . Just
+          $ CodeAction title (Just CodeActionQuickFix) (Just (List [])) Nothing Nothing Nothing (Just cmd) Nothing
 
     findClassIdentifier docPath range = do
       (hieAstResult, pmap) <- MaybeT . runAction "classplugin" state $ useWithStale GetHieAst docPath

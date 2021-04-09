@@ -18,6 +18,7 @@ import           Data.Foldable (for_)
 import           Data.Maybe
 import qualified Data.Text as T
 import           Development.IDE.Core.Shake (IdeState (..))
+import           Development.IDE.Core.UseStale (Tracked, TrackedStale(..), unTrack, mapAgeFrom, unsafeMkCurrent)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.ExactPrint
 import           Ide.Types
@@ -55,7 +56,7 @@ descriptor plId = (defaultPluginDescriptor plId)
 
 
 codeActionProvider :: PluginMethodHandler IdeState TextDocumentCodeAction
-codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) range _ctx)
+codeActionProvider state plId (CodeActionParams _ _ (TextDocumentIdentifier uri) (unsafeMkCurrent -> range) _ctx)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       cfg <- getTacticConfig plId
       liftIO $ fromMaybeT (Right $ List []) $ do
@@ -88,19 +89,21 @@ tacticCmd tac pId state (TacticParams uri range var_name)
   | Just nfp <- uriToNormalizedFilePath $ toNormalizedUri uri = do
       features <- getFeatureSet pId
       ccs <- getClientCapabilities
+      cfg <- getTacticConfig pId
       res <- liftIO $ runMaybeT $ do
         (range', jdg, ctx, dflags) <- judgementForHole state nfp range features
-        let span = rangeToRealSrcSpan (fromNormalizedFilePath nfp) range'
-        pm <- MaybeT $ useAnnotatedSource "tacticsCmd" state nfp
+        let span = fmap (rangeToRealSrcSpan (fromNormalizedFilePath nfp)) range'
+        TrackedStale pm pmmap <- runStaleIde state nfp GetAnnotatedParsedSource
+        pm_span <- liftMaybe $ mapAgeFrom pmmap span
 
-        timingOut 2e8 $ join $
+        timingOut (cfg_timeout_seconds cfg * seconds) $ join $
           case runTactic ctx jdg $ tac $ mkVarOcc $ T.unpack var_name of
             Left _ -> Left TacticErrors
             Right rtr ->
               case rtr_extract rtr of
                 L _ (HsVar _ (L _ rdr)) | isHole (occName rdr) ->
                   Left NothingToDo
-                _ -> pure $ mkWorkspaceEdits span dflags ccs uri pm rtr
+                _ -> pure $ mkWorkspaceEdits pm_span dflags ccs uri pm rtr
 
       case res of
         Nothing -> do
@@ -115,6 +118,12 @@ tacticCmd tac pId state (TacticParams uri range var_name)
           pure $ Right Null
 tacticCmd _ _ _ _ =
   pure $ Left $ mkErr InvalidRequest "Bad URI"
+
+
+------------------------------------------------------------------------------
+-- | The number of microseconds in a second
+seconds :: Num a => a
+seconds = 1e6
 
 
 timingOut
@@ -132,14 +141,14 @@ mkErr code err = ResponseError code err Nothing
 -- | Turn a 'RunTacticResults' into concrete edits to make in the source
 -- document.
 mkWorkspaceEdits
-    :: RealSrcSpan
+    :: Tracked age RealSrcSpan
     -> DynFlags
     -> ClientCapabilities
     -> Uri
-    -> Annotated ParsedSource
+    -> Tracked age (Annotated ParsedSource)
     -> RunTacticResults
     -> Either UserFacingMessage WorkspaceEdit
-mkWorkspaceEdits span dflags ccs uri pm rtr = do
+mkWorkspaceEdits (unTrack -> span) dflags ccs uri (unTrack -> pm) rtr = do
   for_ (rtr_other_solns rtr) $ \soln -> do
     traceMX "other solution" $ syn_val soln
     traceMX "with score" $ scoreSolution soln (rtr_jdg rtr) []

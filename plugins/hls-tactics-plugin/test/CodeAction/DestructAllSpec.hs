@@ -38,4 +38,5 @@ spec = do
     destructAllTest 2 11 "DestructAllAnd.hs"
     destructAllTest 4 23 "DestructAllMany.hs"
     destructAllTest 2 18 "DestructAllNonVarTopMatch.hs"
+    destructAllTest 2 18 "DestructAllFunc.hs"
 

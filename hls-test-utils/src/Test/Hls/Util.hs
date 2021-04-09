@@ -66,7 +66,7 @@ codeActionSupportCaps :: C.ClientCapabilities
 codeActionSupportCaps = def { C._textDocument = Just textDocumentCaps }
   where
     textDocumentCaps = def { C._codeAction = Just codeActionCaps }
-    codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True)
+    codeActionCaps = CodeActionClientCapabilities (Just True) (Just literalSupport) (Just True) Nothing Nothing Nothing Nothing
     literalSupport = CodeActionLiteralSupport def
 
 -- ---------------------------------------------------------------------

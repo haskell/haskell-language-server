@@ -507,7 +507,9 @@ spliceExpresions Splices{..} =
 -- can just increment the 'indexCompleted' TVar and exit.
 --
 indexHieFile :: ShakeExtras -> ModSummary -> NormalizedFilePath -> Fingerprint -> Compat.HieFile -> IO ()
-indexHieFile se mod_summary srcPath hash hf = atomically $ do
+indexHieFile se mod_summary srcPath hash hf = do
+ IdeOptions{optProgressStyle} <- getIdeOptionsIO se
+ atomically $ do
   pending <- readTVar indexPending
   case HashMap.lookup srcPath pending of
     Just pendingHash | pendingHash == hash -> pure () -- An index is already scheduled
@@ -523,7 +525,7 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
             -- If the hash in the pending list doesn't match the current hash, then skip
             Just pendingHash -> pendingHash /= hash
         unless newerScheduled $ do
-          pre
+          pre optProgressStyle
           addRefsFromLoaded db targetPath (RealFile $ fromNormalizedFilePath srcPath) hash hf
           post
   where
@@ -532,7 +534,7 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
     HieDbWriter{..} = hiedbWriter se
 
     -- Get a progress token to report progress and update it for the current file
-    pre = do
+    pre style = do
       tok <- modifyVar indexProgressToken $ fmap dupe . \case
         x@(Just _) -> pure x
         -- Create a token if we don't already have one
@@ -545,7 +547,7 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
               _ <- LSP.sendRequest LSP.SWindowWorkDoneProgressCreate (LSP.WorkDoneProgressCreateParams u) (const $ pure ())
               LSP.sendNotification LSP.SProgress $ LSP.ProgressParams u $
                 LSP.Begin $ LSP.WorkDoneProgressBeginParams
-                  { _title = "Indexing references from:"
+                  { _title = "Indexing"
                   , _cancellable = Nothing
                   , _message = Nothing
                   , _percentage = Nothing
@@ -557,15 +559,26 @@ indexHieFile se mod_summary srcPath hash hf = atomically $ do
         remaining <- HashMap.size <$> readTVar indexPending
         pure (done, remaining)
 
-      let progress = " (" <> T.pack (show done) <> "/" <> T.pack (show $ done + remaining) <> ")..."
-
       whenJust (lspEnv se) $ \env -> whenJust tok $ \tok -> LSP.runLspT env $
         LSP.sendNotification LSP.SProgress $ LSP.ProgressParams tok $
-          LSP.Report $ LSP.WorkDoneProgressReportParams
-            { _cancellable = Nothing
-            , _message = Just $ T.pack (fromNormalizedFilePath srcPath) <> progress
-            , _percentage = Nothing
-            }
+          LSP.Report $
+            case style of
+                Percentage -> LSP.WorkDoneProgressReportParams
+                    { _cancellable = Nothing
+                    , _message = Nothing
+                    , _percentage = Just (100 * fromIntegral done / fromIntegral (done + remaining) )
+                    }
+                Explicit -> LSP.WorkDoneProgressReportParams
+                    { _cancellable = Nothing
+                    , _message = Just $
+                        T.pack " (" <> T.pack (show done) <> "/" <> T.pack (show $ done + remaining) <> ")..."
+                    , _percentage = Nothing
+                    }
+                NoProgress -> LSP.WorkDoneProgressReportParams
+                  { _cancellable = Nothing
+                  , _message = Nothing
+                  , _percentage = Nothing
+                  }
 
     -- Report the progress once we are done indexing this file
     post = do
