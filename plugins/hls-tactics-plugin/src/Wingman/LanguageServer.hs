@@ -2,9 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Wingman.LanguageServer where
 
-import Control.Monad.IO.Class
 import           ConLike
 import           Control.Arrow
 import           Control.Monad
@@ -26,7 +27,7 @@ import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag),
 import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Service (runAction)
-import           Development.IDE.Core.Shake (IdeState (..), useWithStale, uses, define, use, getDiagnosticsAction)
+import           Development.IDE.Core.Shake (IdeState (..), useWithStale, uses, define, use)
 import           Development.IDE.GHC.Compat
 import           Development.IDE.GHC.Error (realSrcSpanToRange)
 import           Development.IDE.Spans.LocalBindings (Bindings, getDefiningBindings)
@@ -395,15 +396,14 @@ type instance RuleResult WriteDiagnostics = ()
 
 wingmanRules :: PluginId -> Rules ()
 wingmanRules plId = do
+
+
   define $ \WriteDiagnostics nfp -> do
-    cfg <- flip configForPlugin plId <$> getClientConfigAction def
+    config <- getClientConfigAction def
+    let pluginConfig = configForPlugin config plId
     let severity = useProperty #hole_severity properties
-#if __GLASGOW_HASKELL__ <= 810
-                 $ Just
-#endif
-                 $ Plugin.plcConfig cfg
-    diags <- getDiagnosticsAction
-    _
+                 $ Just $ Plugin.plcConfig pluginConfig
+
     x <- use GetParsedModule nfp
     case x of
       Nothing ->
