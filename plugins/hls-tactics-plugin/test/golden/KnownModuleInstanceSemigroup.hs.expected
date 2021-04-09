@@ -7,5 +7,5 @@ instance Semigroup Foo where
 data Bar = Bar Foo Foo
 
 instance Semigroup Bar where
-  (<>) (Bar f4 f5) (Bar f f3) = Bar (f4 <> f) (f5 <> f3)
+  (Bar f4 f5) <> (Bar f f3) = Bar (f4 <> f) (f5 <> f3)
 
