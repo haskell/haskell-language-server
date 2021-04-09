@@ -35,3 +35,7 @@ spec = do
     destructTest "a"  7 17 "LayoutSplitPattern.hs"
     destructTest "a"  8 26 "LayoutSplitPatSyn.hs"
 
+    -- test layouts that maintain user-written fixities
+    destructTest "b"  3 13 "LayoutInfixKeep.hs"
+    destructTest "b"  2 12 "LayoutPrefixKeep.hs"
+
