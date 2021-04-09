@@ -141,11 +141,6 @@ import           Language.LSP.VFS
 import           Module
 import           TcRnMonad                                    (tcg_dependent_files)
 
-import qualified Data.Aeson.Types                             as A
-import qualified HieDb
-import           Ide.Plugin.Config
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Binary as B
 import           Ide.Plugin.Properties (HasProperty, KeyNameProxy, Properties, ToHsType, useProperty)
 import           Ide.Types (PluginId)
 import           Data.Default (def)
