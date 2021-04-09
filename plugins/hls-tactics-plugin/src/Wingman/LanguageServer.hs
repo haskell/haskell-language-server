@@ -2,8 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies      #-}
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Wingman.LanguageServer where
 
 import           ConLike
