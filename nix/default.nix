@@ -48,15 +48,15 @@ let
         inherit gitignoreSource;
         inherit ourSources;
 
-        genChangelogs = with pkgs;
+        gen-hls-changelogs = with pkgs;
           let myGHC = haskellPackages.ghcWithPackages (p: with p; [ github ]);
-          in runCommand "genChangelogs" {
+          in runCommand "gen-hls-changelogs" {
               passAsFile = [ "text" ];
               preferLocalBuild = true;
               allowSubstitutes = false;
               buildInputs = [ git myGHC ];
             } ''
-              dest=$out/bin/genChangelogs
+              dest=$out/bin/gen-hls-changelogs
               mkdir -p $out/bin
               echo "#!${runtimeShell}" >> $dest
               echo "${myGHC}/bin/runghc ${../GenChangelogs.hs}" >> $dest

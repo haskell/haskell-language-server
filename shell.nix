@@ -37,7 +37,7 @@ haskellPackagesForProject.shellFor {
     capstone
     tracy
 
-    genChangelogs
+    gen-hls-changelogs
 
     haskellPackages.cabal-install
     haskellPackages.hlint
