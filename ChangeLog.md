@@ -1,5 +1,264 @@
 # Changelog for haskell-language-server
 
+## 1.1.0
+
+Haskell Language Server 1.1.0 has finally come! Many thanks to all contributors -- since the last release, we have merged over 100 PRs! As always, there are many internal bug fixes and performance improvements in ghcide. Apart from that,
+
+* Wingman gets a comprehensive evolution, thanks to @isovector for this epic work!
+* hlint plugin not working in some cases gets fixed
+* scary but unharmful log message "haskell-lsp:incoming message parse error" is fixed in `lsp-1.2`
+* eval plugin now supports `it` variable, like GHCi
+* verbose message "No cradle found for ... Proceeding with implicit cradle" is gone
+* type lenses plugin now has its custom config `mode` (enum) to control its working mode:
+  * `always`: always displays type signature lenses of global bindings
+
+  * `exported`: similar to `always`, but only displays for exported global bindings
+
+  * `diagnostics`: follows diagnostic messages produced by GHC
+* top-level LSP option `completionSnippetsOn` and `maxNumberOfProblems` are deprecated
+* completions plugin now has its custom config:
+  * `autoExtendOn` (boolean): whether to enable auto extending import lists
+  * `snippetsOn` (boolean): wheter to enable completion snippets, taking the place of `completionSnippetsOn`
+* LSP symbols of typeclass and type families are more appropriate
+* test suite of plugins are reorganized, which no longer need to be run with `test-server` executable
+* two new packages `hls-test-utils` and `hls-stylish-haskell-plugin` are extracted
+
+### Pull requests merged for 1.1.0
+
+\- Wingman: "Destruct all" only on ADTs
+([#1695](https://github.com/haskell/haskell-language-server/pull/1695)) by @isovector
+\- Fix ghcide and HLS enter lsp mode by default
+([#1692](https://github.com/haskell/haskell-language-server/pull/1692)) by @berberman
+\- Decrease Wingman timeout from 3.3 minutes to 2 seconds (configurable)
+([#1688](https://github.com/haskell/haskell-language-server/pull/1688)) by @isovector
+\- Wrap test suite of tactics plugin into tasty test tree
+([#1676](https://github.com/haskell/haskell-language-server/pull/1676)) by @berberman
+\- Wingman: Use infix notation for operator applications
+([#1675](https://github.com/haskell/haskell-language-server/pull/1675)) by @isovector
+\- Ignore ghcide tests by paths
+([#1673](https://github.com/haskell/haskell-language-server/pull/1673)) by @jneira
+\- Ignore nix job steps by path
+([#1672](https://github.com/haskell/haskell-language-server/pull/1672)) by @jneira
+\- Intelligent derivations of Semigroup and Monoid for Wingman
+([#1671](https://github.com/haskell/haskell-language-server/pull/1671)) by @isovector
+\- optimize ambiguity import suggestions
+([#1669](https://github.com/haskell/haskell-language-server/pull/1669)) by @July541
+\- Replace Barrier with MVar in lsp main
+([#1668](https://github.com/haskell/haskell-language-server/pull/1668)) by @berberman
+\- ghcide - enable ApplicativeDo everywhere
+([#1667](https://github.com/haskell/haskell-language-server/pull/1667)) by @pepeiborra
+\- support custom Ide commands
+([#1666](https://github.com/haskell/haskell-language-server/pull/1666)) by @pepeiborra
+\- Add bounds for Diff
+([#1665](https://github.com/haskell/haskell-language-server/pull/1665)) by @berberman
+\- Update shake bounds of install script
+([#1664](https://github.com/haskell/haskell-language-server/pull/1664)) by @berberman
+\- Avoid creating IsFileOfInterest keys for non workspace files
+([#1661](https://github.com/haskell/haskell-language-server/pull/1661)) by @pepeiborra
+\- additional .gitignore entries
+([#1659](https://github.com/haskell/haskell-language-server/pull/1659)) by @pepeiborra
+\- Skip tracing unless eventlog is enabled
+([#1658](https://github.com/haskell/haskell-language-server/pull/1658)) by @pepeiborra
+\- Fix a wingman bug caused by mismanaged stale data
+([#1657](https://github.com/haskell/haskell-language-server/pull/1657)) by @isovector
+\- Fix ignore paths
+([#1656](https://github.com/haskell/haskell-language-server/pull/1656)) by @jneira
+\- Shut the Shake session on exit, instead of restarting it
+([#1655](https://github.com/haskell/haskell-language-server/pull/1655)) by @pepeiborra
+\- Emit holes as diagnostics
+([#1653](https://github.com/haskell/haskell-language-server/pull/1653)) by @isovector
+\- log exceptions before killing the server
+([#1651](https://github.com/haskell/haskell-language-server/pull/1651)) by @pepeiborra
+\- Do not override custom commands
+([#1650](https://github.com/haskell/haskell-language-server/pull/1650)) by @pepeiborra
+\- Fix importing type operators
+([#1644](https://github.com/haskell/haskell-language-server/pull/1644)) by @berberman
+\- Add haskell-language-server-bin to Arch Linux section
+([#1642](https://github.com/haskell/haskell-language-server/pull/1642)) by @marcin-rzeznicki
+\- Update ISSUE_TEMPLATE.md
+([#1640](https://github.com/haskell/haskell-language-server/pull/1640)) by @Ailrun
+\- Civilized indexing progress reporting
+([#1633](https://github.com/haskell/haskell-language-server/pull/1633)) by @pepeiborra
+\- Update to lsp-1.2
+([#1631](https://github.com/haskell/haskell-language-server/pull/1631)) by @wz1000
+\- Avoid reordering plugins
+([#1629](https://github.com/haskell/haskell-language-server/pull/1629)) by @pepeiborra
+\- Run plugins' test suites with server in the same process
+([#1628](https://github.com/haskell/haskell-language-server/pull/1628)) by @berberman
+\- Remove ignored paths
+([#1623](https://github.com/haskell/haskell-language-server/pull/1623)) by @jneira
+\- Update formatting hooks to not include Wingman
+([#1622](https://github.com/haskell/haskell-language-server/pull/1622)) by @Ailrun
+\- Add CPP Options for Stylish Haskell & Brittany Formatters
+([#1620](https://github.com/haskell/haskell-language-server/pull/1620)) by @prikhi
+\- Use custom config for completions plugin
+([#1619](https://github.com/haskell/haskell-language-server/pull/1619)) by @berberman
+\- Configurable I/O handles
+([#1617](https://github.com/haskell/haskell-language-server/pull/1617)) by @pepeiborra
+\- Add installation instructions for Arch Linux
+([#1616](https://github.com/haskell/haskell-language-server/pull/1616)) by @berberman
+\- Properly pass argFiles into defaultMain
+([#1613](https://github.com/haskell/haskell-language-server/pull/1613)) by @mpickering
+\- Migrate tests of plugins
+([#1612](https://github.com/haskell/haskell-language-server/pull/1612)) by @berberman
+\- Allow for customizable Haskell views of Property types
+([#1608](https://github.com/haskell/haskell-language-server/pull/1608)) by @isovector
+\- Extract hls-test-utils
+([#1606](https://github.com/haskell/haskell-language-server/pull/1606)) by @berberman
+\- Add test data files to extra-source-files
+([#1605](https://github.com/haskell/haskell-language-server/pull/1605)) by @jneira
+\- Extract stylish-haskell plugin into a standalone package
+([#1604](https://github.com/haskell/haskell-language-server/pull/1604)) by @berberman
+\- Eval plugin: evaluate expressions as statements
+([#1603](https://github.com/haskell/haskell-language-server/pull/1603)) by @berberman
+\- Bump haddock-library to 1.10.0
+([#1598](https://github.com/haskell/haskell-language-server/pull/1598)) by @berberman
+\- Relax ghcides upper bound on base16-bytestring
+([#1595](https://github.com/haskell/haskell-language-server/pull/1595)) by @maralorn
+\- Use CiInterface/SkInterface for typeclass symbols
+([#1592](https://github.com/haskell/haskell-language-server/pull/1592)) by @fwcd
+\- Avoid duplicating known targets and import paths
+([#1590](https://github.com/haskell/haskell-language-server/pull/1590)) by @pepeiborra
+\- Add ability for plugins to handle file change notifications
+([#1588](https://github.com/haskell/haskell-language-server/pull/1588)) by @pepeiborra
+\- Ensure eval plugin Print class doesn't rely on Prelude being in scope
+([#1587](https://github.com/haskell/haskell-language-server/pull/1587)) by @akrmn
+\- Give a canonical ordering for destructing terms in Wingman
+([#1586](https://github.com/haskell/haskell-language-server/pull/1586)) by @isovector
+\- Try a homomorphic destruct before a standard destruct
+([#1582](https://github.com/haskell/haskell-language-server/pull/1582)) by @isovector
+\- Update homepage and other urls for ghcide
+([#1580](https://github.com/haskell/haskell-language-server/pull/1580)) by @felixonmars
+\- Regularize custom config of plugins
+([#1576](https://github.com/haskell/haskell-language-server/pull/1576)) by @berberman
+\- Cleanup the TacticProviders interface
+([#1572](https://github.com/haskell/haskell-language-server/pull/1572)) by @isovector
+\- Add custom code action kinds for import related code actions
+([#1570](https://github.com/haskell/haskell-language-server/pull/1570)) by @berberman
+\- bump retrie plugin version
+([#1569](https://github.com/haskell/haskell-language-server/pull/1569)) by @pepeiborra
+\- Use ConLikes instead of DataCons
+([#1568](https://github.com/haskell/haskell-language-server/pull/1568)) by @isovector
+\- Remove max number of problems config option
+([#1567](https://github.com/haskell/haskell-language-server/pull/1567)) by @jneira
+\- Prepare ghcide 1.1.0
+([#1566](https://github.com/haskell/haskell-language-server/pull/1566)) by @pepeiborra
+\- Use string literals to synthesize the empty string
+([#1564](https://github.com/haskell/haskell-language-server/pull/1564)) by @isovector
+\- Add wingman branding to code actions
+([#1555](https://github.com/haskell/haskell-language-server/pull/1555)) by @isovector
+\- Use TextEdit to insert new imports
+([#1554](https://github.com/haskell/haskell-language-server/pull/1554)) by @berberman
+\- Introduce strict versions of modifyVar to improve contention
+([#1553](https://github.com/haskell/haskell-language-server/pull/1553)) by @pepeiborra
+\- Improve how wingman uses evidence
+([#1549](https://github.com/haskell/haskell-language-server/pull/1549)) by @isovector
+\- Review early cutoff fingerprints
+([#1547](https://github.com/haskell/haskell-language-server/pull/1547)) by @pepeiborra
+\- Improve thread contention around diagnostics
+([#1546](https://github.com/haskell/haskell-language-server/pull/1546)) by @pepeiborra
+\- Be much more intelligent about splitting matches
+([#1543](https://github.com/haskell/haskell-language-server/pull/1543)) by @isovector
+\- Update nixpkgs to ghc 8.10.4
+([#1538](https://github.com/haskell/haskell-language-server/pull/1538)) by @berberman
+\- Log a warning for every diagnostic received when doDiagnostics=False
+([#1537](https://github.com/haskell/haskell-language-server/pull/1537)) by @pepeiborra
+\- Fix missing parens of auto extending imports
+([#1526](https://github.com/haskell/haskell-language-server/pull/1526)) by @berberman
+\- Change Wingman module structure, address -Wall
+([#1519](https://github.com/haskell/haskell-language-server/pull/1519)) by @isovector
+\- Pull Wingman's method hypotheses directly from in-scope dicts
+([#1517](https://github.com/haskell/haskell-language-server/pull/1517)) by @isovector
+\- Avoid redundant work in diagnostics pass
+([#1514](https://github.com/haskell/haskell-language-server/pull/1514)) by @pepeiborra
+\- Add an option to control progress reporting
+([#1513](https://github.com/haskell/haskell-language-server/pull/1513)) by @pepeiborra
+\- Package ghcide code actions
+([#1512](https://github.com/haskell/haskell-language-server/pull/1512)) by @berberman
+\- Demote implicit cradle warn to logging
+([#1511](https://github.com/haskell/haskell-language-server/pull/1511)) by @jneira
+\- Set all plugin flags to manual
+([#1510](https://github.com/haskell/haskell-language-server/pull/1510)) by @jneira
+\- Avoid always rerunning GetModificationTime for interface files too
+([#1506](https://github.com/haskell/haskell-language-server/pull/1506)) by @pepeiborra
+\- Let Wingman's apply tactic run endomorphisms
+([#1505](https://github.com/haskell/haskell-language-server/pull/1505)) by @isovector
+\- Make Wingman produce user-facing error messages
+([#1502](https://github.com/haskell/haskell-language-server/pull/1502)) by @isovector
+\- Disable HLS benchmarks
+([#1501](https://github.com/haskell/haskell-language-server/pull/1501)) by @wz1000
+\- Add kind and preferred flag for all Wingman code actions
+([#1499](https://github.com/haskell/haskell-language-server/pull/1499)) by @isovector
+\- Organize Wingman tests
+([#1498](https://github.com/haskell/haskell-language-server/pull/1498)) by @isovector
+\- Register IDE configuration when called via the command line
+([#1495](https://github.com/haskell/haskell-language-server/pull/1495)) by @wz1000
+\- Haddock upper bound
+([#1492](https://github.com/haskell/haskell-language-server/pull/1492)) by @jneira
+\- Make type lenses plugin configurable
+([#1491](https://github.com/haskell/haskell-language-server/pull/1491)) by @berberman
+\- Context-aware ExactPrint grafting for HsExpr
+([#1489](https://github.com/haskell/haskell-language-server/pull/1489)) by @isovector
+\- Drive GetModificationTime using watched file events
+([#1487](https://github.com/haskell/haskell-language-server/pull/1487)) by @pepeiborra
+\- Faster ModSummary fingerprints
+([#1485](https://github.com/haskell/haskell-language-server/pull/1485)) by @pepeiborra
+\- Revert all changes to hie-compat since 11b5c2e
+([#1484](https://github.com/haskell/haskell-language-server/pull/1484)) by @wz1000
+\- Fix non-determinism in boot-def test
+([#1483](https://github.com/haskell/haskell-language-server/pull/1483)) by @wz1000
+\- Hackage needs autogen-modules
+([#1481](https://github.com/haskell/haskell-language-server/pull/1481)) by @jneira
+\- Ignore ci for some subdirectories and files
+([#1480](https://github.com/haskell/haskell-language-server/pull/1480)) by @jneira
+\- Split plugin tests into two cabal projects
+([#1479](https://github.com/haskell/haskell-language-server/pull/1479)) by @wz1000
+\- Less aggressive refine tactic
+([#1475](https://github.com/haskell/haskell-language-server/pull/1475)) by @isovector
+\- Enable hls-tactics-plugin tests in CI
+([#1474](https://github.com/haskell/haskell-language-server/pull/1474)) by @isovector
+\- Generate a more robust top-level binding Provenance
+([#1473](https://github.com/haskell/haskell-language-server/pull/1473)) by @isovector
+\- Add new variables to the extract when doing intros
+([#1472](https://github.com/haskell/haskell-language-server/pull/1472)) by @isovector
+\- Bump up hlint plugin version
+([#1469](https://github.com/haskell/haskell-language-server/pull/1469)) by @jneira
+\- Make sure split respects GADT equalities
+([#1466](https://github.com/haskell/haskell-language-server/pull/1466)) by @isovector
+\- Add "Split all function arguments" code action
+([#1464](https://github.com/haskell/haskell-language-server/pull/1464)) by @isovector
+\- Add "Refine hole" code action
+([#1463](https://github.com/haskell/haskell-language-server/pull/1463)) by @isovector
+\- Implement "use constructor" code action
+([#1461](https://github.com/haskell/haskell-language-server/pull/1461)) by @isovector
+\- Remove tactics src-dir from func-test
+([#1460](https://github.com/haskell/haskell-language-server/pull/1460)) by @isovector
+\- Make sure to give the correct DynFlags to the recompilation checker
+([#1459](https://github.com/haskell/haskell-language-server/pull/1459)) by @pepeiborra
+\- Don't use record notation for single-field datacons in tactics
+([#1456](https://github.com/haskell/haskell-language-server/pull/1456)) by @isovector
+\- update IRC channel name in plugin tutorial
+([#1455](https://github.com/haskell/haskell-language-server/pull/1455)) by @shapr
+\- Update readme and cabal for Wingman
+([#1454](https://github.com/haskell/haskell-language-server/pull/1454)) by @isovector
+\- Remove recursion tracking from TacticState
+([#1453](https://github.com/haskell/haskell-language-server/pull/1453)) by @isovector
+\- Use runtime ghc libdir for ghc-exactprint and ghc-8.10
+([#1451](https://github.com/haskell/haskell-language-server/pull/1451)) by @jneira
+\- Simplify tactics state structure
+([#1449](https://github.com/haskell/haskell-language-server/pull/1449)) by @isovector
+\- Extract the qualified name from already imported module
+([#1445](https://github.com/haskell/haskell-language-server/pull/1445)) by @berberman
+\- Correct megaparsec lower bound
+([#1441](https://github.com/haskell/haskell-language-server/pull/1441)) by @jneira
+\- Reformat all files
+([#1439](https://github.com/haskell/haskell-language-server/pull/1439)) by @Ailrun
+\- Customize the unitId used for the fake internal component
+([#1435](https://github.com/haskell/haskell-language-server/pull/1435)) by @pepeiborra
+\- Minor performance optimizations
+([#1432](https://github.com/haskell/haskell-language-server/pull/1432)) by @pepeiborra
+
+
 ## 1.0.0
 
 This is the celebratory release of Haskell Language Server 1.0.0!
@@ -120,7 +379,7 @@ Among others,
 ([#1343](https://github.com/haskell/haskell-language-server/pull/1343)) by @konn
 - Cancel earlier queued benchmarks
 ([#1339](https://github.com/haskell/haskell-language-server/pull/1339)) by @pepeiborra
-- Default main for ghcide 
+- Default main for ghcide
 ([#1338](https://github.com/haskell/haskell-language-server/pull/1338)) by @pepeiborra
 - Fix duplication of code actions for adding NamedFieldPuns
 ([#1334](https://github.com/haskell/haskell-language-server/pull/1334)) by @berberman
