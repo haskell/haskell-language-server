@@ -51,5 +51,5 @@ test-suite tests
     , bytestring
     , filepath
     , hls-haddock-comments-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , text

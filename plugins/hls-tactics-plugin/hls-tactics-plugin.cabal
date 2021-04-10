@@ -140,7 +140,7 @@ test-suite tests
     , ghcide
     , hls-plugin-api
     , hls-tactics-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , hspec
     , hspec-expectations
     , lens

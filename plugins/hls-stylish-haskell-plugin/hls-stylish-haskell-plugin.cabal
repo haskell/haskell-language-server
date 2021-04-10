@@ -41,5 +41,5 @@ test-suite tests
     , base
     , bytestring
     , hls-stylish-haskell-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , text

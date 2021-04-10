@@ -65,7 +65,7 @@ library
     , ghc
     , ghcide                ^>= 1.1.0.0
     , gitrev
-    , lsp                   ^>= 1.2
+    , lsp
     , hie-bios
     , hiedb
     , hls-plugin-api        ^>= 1.1

@@ -69,5 +69,5 @@ test-suite tests
     , extra
     , filepath
     , hls-splice-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , text
