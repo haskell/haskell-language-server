@@ -48,16 +48,20 @@ let
         inherit gitignoreSource;
         inherit ourSources;
 
-        # tracy-0.7.6 is broken on macOS
-        tracy = pkgs.tracy.overrideAttrs (_old: rec {
-          version = "0.7.5";
-          src = pkgs.fetchFromGitHub {
-            owner = "wolfpld";
-            repo = "tracy";
-            rev = "v${version}";
-            sha256 = "0qfb30k6a8vi8vn65vv927wd9nynwwvc9crbmi7a55kp20hzg06r";
-          };
-        });
+        genChangelogs = with pkgs;
+          let myGHC = haskellPackages.ghcWithPackages (p: with p; [ github ]);
+          in runCommand "genChangelogs" {
+              passAsFile = [ "text" ];
+              preferLocalBuild = true;
+              allowSubstitutes = false;
+              buildInputs = [ git myGHC ];
+            } ''
+              dest=$out/bin/genChangelogs
+              mkdir -p $out/bin
+              echo "#!${runtimeShell}" >> $dest
+              echo "${myGHC}/bin/runghc ${../GenChangelogs.hs}" >> $dest
+              chmod +x $dest
+            '';
 
         ourHaskell = pkgs.haskell // {
             packages = pkgs.haskell.packages // {

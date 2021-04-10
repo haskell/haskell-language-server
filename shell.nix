@@ -37,6 +37,8 @@ haskellPackagesForProject.shellFor {
     capstone
     tracy
 
+    genChangelogs
+
     haskellPackages.cabal-install
     haskellPackages.hlint
     haskellPackages.ormolu
