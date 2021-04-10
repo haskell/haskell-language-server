@@ -5,9 +5,7 @@ synopsis:      Haskell Language Server API for plugin communication
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
-homepage:
-  https://github.com/haskell/haskell-language-server/hls-plugin-api
-
+homepage:      https://github.com/haskell/haskell-language-server#readme
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0
 license-file:  LICENSE
@@ -48,7 +46,7 @@ library
     , hashable
     , hslogger
     , lens
-    , lsp                   ^>=1.2.0
+    , lsp                   ^>=1.2
     , opentelemetry
     , process
     , regex-tdfa            >=1.3.1.0

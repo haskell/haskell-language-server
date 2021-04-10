@@ -44,5 +44,5 @@ test-suite tests
     , base
     , bytestring
     , hls-brittany-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , text
