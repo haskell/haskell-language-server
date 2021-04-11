@@ -247,7 +247,7 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
       where
         argTypes = getArgs typ
         argText :: T.Text
-        argText =  mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
+        argText = mconcat $ List.intersperse " " $ zipWithFrom (\i t -> T.pack "(_ :: " <> snippet i t <> T.pack ")") 1 argTypes
         snippet :: Int -> Type -> T.Text
         snippet i t = "${" <> T.pack (show i) <> ":" <> showGhc t <> "}"
         getArgs :: Type -> [Type]
