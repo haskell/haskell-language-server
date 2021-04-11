@@ -769,4 +769,3 @@ getImportQual :: LImportDecl GhcPs -> Maybe T.Text
 getImportQual (L _ imp)
     | isQualifiedImport imp = Just $ T.pack $ moduleNameString $ maybe (unLoc $ ideclName imp) unLoc (ideclAs imp)
     | otherwise = Nothing
-
