@@ -26,7 +26,7 @@ library
     , ghc
     , ghc-boot-th
     , ghcide          ^>=1.2.0.0
-    , hls-plugin-api  >=1.0      && <1.2
+    , hls-plugin-api  ^>=1.1
     , lens
     , lsp-types
     , text
@@ -44,5 +44,5 @@ test-suite tests
     , base
     , bytestring
     , hls-brittany-plugin
-    , hls-test-utils  ^>= 1.0.0.0
+    , hls-test-utils       ^>=1.0.0.0
     , text
