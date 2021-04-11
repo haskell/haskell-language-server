@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               hls-haddock-comments-plugin
-version:            1.0.0.0
+version:            1.0.0.1
 synopsis:           Haddock comments plugin for Haskell Language Server
 description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server>
