@@ -49,6 +49,7 @@ descriptor plId = (defaultPluginDescriptor plId)
             [minBound .. maxBound]
   , pluginHandlers =
       mkPluginHandler STextDocumentCodeAction codeActionProvider
+  , pluginRules = wingmanRules plId
   , pluginCustomConfig =
       mkCustomConfig properties
   }

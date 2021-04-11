@@ -6,7 +6,7 @@ description:
   Please see the README on GitHub at <https://github.com/haskell/haskell-language-server#readme>
 
 homepage:
-  https://github.com/haskell/haskell-language-server/hls-test-utils
+  https://github.com/haskell/haskell-language-server#readme
 
 bug-reports:   https://github.com/haskell/haskell-language-server/issues
 license:       Apache-2.0

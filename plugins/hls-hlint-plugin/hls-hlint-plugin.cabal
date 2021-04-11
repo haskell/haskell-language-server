@@ -44,7 +44,7 @@ library
     , ghcide                ^>=1.1.0.0
     , hashable
     , hlint                 >=3.2
-    , hls-plugin-api        >=1.0     && <1.2
+    , hls-plugin-api        ^>=1.1
     , hslogger
     , lens
     , lsp
