@@ -63,12 +63,12 @@ library
     , cryptohash-sha1
     , data-default
     , ghc
-    , ghcide                ^>= 1.1.0.0
+    , ghcide                ^>= 1.2.0.0
     , gitrev
     , lsp
     , hie-bios
     , hiedb
-    , hls-plugin-api        >= 1.0 && < 1.2
+    , hls-plugin-api        ^>= 1.1
     , hslogger
     , optparse-applicative
     , optparse-simple
@@ -332,7 +332,7 @@ executable haskell-language-server
     , mtl
     , regex-tdfa
     , safe-exceptions
-    , shake                    >=0.17.5
+    , shake
     , sqlite-simple
     , temporary
     , transformers
@@ -387,11 +387,11 @@ test-suite func-test
     , hspec-expectations
     , lens
     , ghcide
-    , hls-test-utils
+    , hls-test-utils ^>= 1.0.0.0
     , lsp-types
     , aeson
-    , hls-plugin-api        >= 1.0 && < 1.2
-    , lsp-test              == 0.14.0.0
+    , hls-plugin-api
+    , lsp-test
     , containers
     , unordered-containers
 

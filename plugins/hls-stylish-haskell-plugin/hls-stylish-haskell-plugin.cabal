@@ -22,8 +22,8 @@ library
     , filepath
     , ghc
     , ghc-boot-th
-    , ghcide           ^>=1.1.0.0
-    , hls-plugin-api   >=1.0     && <1.2
+    , ghcide           ^>=1.2.0.0
+    , hls-plugin-api   ^>=1.1
     , lsp-types
     , mtl
     , stylish-haskell  ^>=0.12
@@ -41,5 +41,5 @@ test-suite tests
     , base
     , bytestring
     , hls-stylish-haskell-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , text
