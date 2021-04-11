@@ -29,8 +29,8 @@ library
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.1.0.0
-    , hls-plugin-api        >=1.0     && <1.2
+    , ghcide                ^>=1.2.0.0
+    , hls-plugin-api        ^>=1.1
     , lsp-types
     , text
     , unordered-containers
@@ -51,5 +51,5 @@ test-suite tests
     , bytestring
     , filepath
     , hls-haddock-comments-plugin
-    , hls-test-utils
+    , hls-test-utils  ^>= 1.0.0.0
     , text
