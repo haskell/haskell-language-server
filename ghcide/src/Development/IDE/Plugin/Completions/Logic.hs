@@ -770,4 +770,3 @@ getImportQual (L _ imp)
     | isQualifiedImport imp = Just $ T.pack $ moduleNameString $ maybe (unLoc $ ideclName imp) unLoc (ideclAs imp)
     | otherwise = Nothing
 
---foo = CI CompletionItemKind Text Either SrcSpan Text Maybe Text Text Maybe Backtick SpanDoc Bool Maybe ExtendImport
