@@ -43,7 +43,7 @@ import           Data.Functor
 import qualified Data.Set                                 as Set
 import           Development.IDE.Core.Compile
 import           Development.IDE.Core.PositionMapping
-import           Development.IDE.GHC.Compat               as GHC
+import           Development.IDE.GHC.Compat               as GHC hiding (FunTy)
 import           Development.IDE.GHC.Error
 import           Development.IDE.GHC.Util
 import           Development.IDE.Plugin.Completions.Types
@@ -60,6 +60,7 @@ import           Language.LSP.Types
 import           Language.LSP.Types.Capabilities
 import qualified Language.LSP.VFS                         as VFS
 import           Outputable                               (Outputable)
+import           TyCoRep
 
 -- From haskell-ide-engine/hie-plugin-api/Haskell/Ide/Engine/Context.hs
 
@@ -247,9 +248,15 @@ mkNameCompItem doc thingParent origName origMod thingType isInfix docs !imp = CI
       where
         argTypes = getArgs typ
         argText :: T.Text
-        argText = mconcat $ List.intersperse " " $ zipWithFrom (\i t -> T.pack "(_ :: " <> snippet i t <> T.pack ")") 1 argTypes
+        argText = mconcat $ List.intersperse " " $ zipWithFrom snippet 1 argTypes
         snippet :: Int -> Type -> T.Text
-        snippet i t = "${" <> T.pack (show i) <> ":" <> showGhc t <> "}"
+        snippet i t = case t of
+            (TyVarTy _) -> noParensSnippet
+            (LitTy _)   -> noParensSnippet
+            _           -> snippetText i (T.pack "(" <> showGhc t <> T.pack ")")
+            where
+                snippetText i t = "${" <> T.pack (show i) <> ":" <> t <> "}"
+                noParensSnippet = snippetText i (showGhc t)
         getArgs :: Type -> [Type]
         getArgs t
           | isPredTy t = []
@@ -762,3 +769,5 @@ getImportQual :: LImportDecl GhcPs -> Maybe T.Text
 getImportQual (L _ imp)
     | isQualifiedImport imp = Just $ T.pack $ moduleNameString $ maybe (unLoc $ ideclName imp) unLoc (ideclAs imp)
     | otherwise = Nothing
+
+--foo = CI CompletionItemKind Text Either SrcSpan Text Maybe Text Text Maybe Backtick SpanDoc Bool Maybe ExtendImport
