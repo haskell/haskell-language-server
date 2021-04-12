@@ -56,6 +56,10 @@ mkQ1 :: forall a r f
      -> r
 mkQ1 proxy r br a =
     case l_con == a_con && sameTypeModuloLastApp @a @(f ()) of
+      -- We have proven that the two values share the same constructor, and
+      -- that they have the same type if you ignore the final application.
+      -- Therefore, it is safe to coerce @a@ to @f b@, since @br@ is universal
+      -- over @b@ and can't inspect it.
       True  -> br $ unsafeCoerce @_ @(f Any) a
       False -> r
   where
