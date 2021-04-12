@@ -302,18 +302,8 @@ genericIsSubspan ::
     Proxy (Located ast) ->
     SrcSpan ->
     GenericQ (Maybe Bool)
-genericIsSubspan _ dst =
-  (mkQ Nothing $ \case
-    (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
-  ) `ext1Q`
-  \case
-    -- If we're looking at a @Located e@ (anything that is not @Located ast@),
-    -- we can fail fast if we don't contain the span.
-    L span _ ->
-      if dst `isSubspanOf` span
-        then Nothing
-        else Just False
-
+genericIsSubspan _ dst = mkQ Nothing $ \case
+  (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
 
 -- | Run the given transformation only on the smallest node in the tree that
 -- contains the 'SrcSpan'.
