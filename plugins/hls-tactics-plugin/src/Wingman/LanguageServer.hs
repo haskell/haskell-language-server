@@ -23,7 +23,6 @@ import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
 import           Development.IDE (hscEnv)
-import           Development.IDE.Core.PositionMapping
 import           Development.IDE.Core.RuleTypes
 import           Development.IDE.Core.Rules (usePropertyAction)
 import           Development.IDE.Core.Service (runAction)

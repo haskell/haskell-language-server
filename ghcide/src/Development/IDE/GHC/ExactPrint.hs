@@ -302,8 +302,18 @@ genericIsSubspan ::
     Proxy (Located ast) ->
     SrcSpan ->
     GenericQ (Maybe Bool)
-genericIsSubspan _ dst = mkQ Nothing $ \case
-  (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
+genericIsSubspan _ dst =
+  (mkQ Nothing $ \case
+    (L span _ :: Located ast) -> Just $ dst `isSubspanOf` span
+  ) `ext1Q`
+  \case
+    -- If we're looking at a @Located e@ (anything that is not @Located ast@),
+    -- we can fail fast if we don't contain the span.
+    L span _ ->
+      if dst `isSubspanOf` span
+        then Nothing
+        else Just False
+
 
 -- | Run the given transformation only on the smallest node in the tree that
 -- contains the 'SrcSpan'.
@@ -337,7 +347,7 @@ genericGraftWithLargestM proxy dst trans = Graft $ \dflags ->
 -- 'everywhereM' or friends.
 --
 -- The 'Int' argument is the index in the list being bound.
-mkBindListT :: forall b m. (Typeable b, Data b, Monad m) => (Int -> b -> m [b]) -> GenericM m
+mkBindListT :: forall b m. (Data b, Monad m) => (Int -> b -> m [b]) -> GenericM m
 mkBindListT f = mkM $ fmap join . traverse (uncurry f) . zip [0..]
 
 
