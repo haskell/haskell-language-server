@@ -29,7 +29,7 @@ library
     , containers
     , ghc
     , ghc-exactprint
-    , ghcide                ^>=1.1.0.0
+    , ghcide                ^>=1.2.0.0
     , hls-plugin-api        ^>=1.1
     , lens
     , lsp
