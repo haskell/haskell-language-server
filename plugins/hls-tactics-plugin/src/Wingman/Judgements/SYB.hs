@@ -5,7 +5,7 @@ module Wingman.Judgements.SYB where
 
 import Data.Generics
 import Data.Foldable (foldl')
-import Development.IDE.GHC.Compat (SrcSpan, GenLocated (L), isSubspanOf)
+import Development.IDE.GHC.Compat
 
 
 everythingWithin
@@ -26,6 +26,6 @@ everythingWithin dst f = go
 genericIsSubspan
     :: SrcSpan
     -> GenericQ (Maybe Bool)
-genericIsSubspan dst =
-  const empty `ext1Q` \case L span _ -> Just $ dst `isSubspanOf` span
+genericIsSubspan dst = mkQ Nothing $ \case
+  (L span _ :: LHsExpr GhcTc) -> Just $ dst `isSubspanOf` span
 
