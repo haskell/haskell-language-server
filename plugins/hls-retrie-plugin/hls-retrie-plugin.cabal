@@ -23,7 +23,7 @@ library
     , directory
     , extra
     , ghc
-    , ghcide                ^>=1.1
+    , ghcide                ^>=1.2
     , hashable
     , hls-plugin-api        ^>=1.1
     , lsp
