@@ -52,3 +52,21 @@ spec = do
     [ (not, DestructLambdaCase, "")
     ]
 
+  mkTest
+    "Doesn't suggest destruct if already destructed"
+    "ProvideAlreadyDestructed.hs" 6 18
+    [ (not, Destruct, "x")
+    ]
+
+  mkTest
+    "...but does suggest destruct if destructed in a different branch"
+    "ProvideAlreadyDestructed.hs" 9 7
+    [ (id, Destruct, "x")
+    ]
+
+  mkTest
+    "Doesn't suggest destruct on class methods"
+    "ProvideLocalHyOnly.hs" 2 12
+    [ (not, Destruct, "mempty")
+    ]
+
