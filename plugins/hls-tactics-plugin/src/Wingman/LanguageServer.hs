@@ -18,7 +18,8 @@ import           Data.IORef (readIORef)
 import qualified Data.Map as M
 import           Data.Maybe
 import           Data.Monoid
-import qualified Data.Set  as S
+import           Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Data.Traversable
 import           Development.IDE (getFilesOfInterest, ShowDiagnostic (ShowDiag), srcSpanToRange)
@@ -51,6 +52,7 @@ import           Wingman.Context
 import           Wingman.FeatureSet
 import           Wingman.GHC
 import           Wingman.Judgements
+import           Wingman.Judgements.SYB (everythingWithin)
 import           Wingman.Judgements.Theta
 import           Wingman.Range
 import           Wingman.Types
@@ -220,18 +222,33 @@ mkJudgementAndContext features g (TrackedStale binds bmap) rss (TrackedStale tcg
               kt
               evidence
       top_provs = getRhsPosVals tcg_rss tcs
+      already_destructed = getAlreadyDestructed (fmap RealSrcSpan tcg_rss) tcs
       local_hy = spliceProvenance top_provs
                $ hypothesisFromBindings binds_rss binds
       evidence = getEvidenceAtHole (fmap RealSrcSpan tcg_rss) tcs
       cls_hy = foldMap evidenceToHypothesis evidence
       subst = ts_unifier $ appEndo (foldMap (Endo . evidenceToSubst) evidence) defaultTacticState
-  pure
-    ( fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
+  pure $
+    ( disallowing AlreadyDestructed already_destructed
+    $ fmap (CType . substTyAddInScope subst . unCType) $ mkFirstJudgement
           (local_hy <> cls_hy)
           (isRhsHole tcg_rss tcs)
           g
     , ctx
     )
+
+
+getAlreadyDestructed
+    :: Tracked age SrcSpan
+    -> Tracked age (LHsBinds GhcTc)
+    -> Set OccName
+getAlreadyDestructed (unTrack -> span) (unTrack -> binds) =
+  everythingWithin span
+    (mkQ mempty $ \case
+      Case (HsVar _ (L _ (occName -> var))) _ ->
+        S.singleton var
+      (_ :: HsExpr GhcTc) -> mempty
+    ) binds
 
 
 getSpanAndTypeAtHole
